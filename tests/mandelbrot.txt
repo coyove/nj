@@ -1,0 +1,121 @@
+#[import org.coyove.eugine.lib.Image]
+#[import org.coyove.eugine.lib.system.thread]
+#[import org.coyove.eugine.lib.system.out]
+ 
+
+[var limit 4.0]
+[var maxIter 50]
+
+[var rows 0]
+[var bytesPerRow 0]
+[var initial_r 0]
+[var initial_i 0]
+
+[var ctr 0]
+[var renderRow [lambda [y0]
+    [var i [var j [var x 0]]]
+    [var res [var b 0]]
+    [var Zr1 [var Zr2 [var Zi1 [var Zi2 [var Tr1 [var Tr2 [var Ti1 [var Ti2 0]]]]]]]]
+    [var row [bytes bytesPerRow]]
+
+    [var xByte 0]
+    [while [< xByte bytesPerRow]
+        [set res 0]
+        [var Ci [load initial_i y0]]
+
+        [set i 0]
+        [while [< i 8]
+            [set x [b/lsh xByte 3]]
+            [var Cr1 [load initial_r [+ x i]]]
+            [var Cr2 [load initial_r [+ x i 1]]]
+            [set Zr1 Cr1]
+            [set Zi1 Ci]
+
+            [set Zr2 Cr2]
+            [set Zi2 Ci]
+
+            [set b 0]
+
+            [set j 0]
+            [while [< j maxIter]
+                [set Tr1 [* Zr1 Zr1]]
+                [set Ti1 [* Zi1 Zi1]]
+                [set Zi1 [+ [* 2 Zr1 Zi1] Ci]]
+                [set Zr1 [+ [- Tr1 Ti1] Cr1]]
+
+                [if [> [+ Tr1 Ti1] limit]
+                    [set b [b/or b 2]]
+                    [if [eq b 3] [break]]
+                ]
+
+                [set Tr2 [* Zr2 Zr2]]
+                [set Ti2 [* Zi2 Zi2]]
+                [set Zi2 [+ [* 2 Zr2 Zi2] Ci]]
+                [set Zr2 [+ [- Tr2 Ti2] Cr2]]
+
+                [if [> [+ Tr2 Ti2] limit]
+                    [set b [b/or b 1]]
+                    [if [eq b 3] [break]]
+                ]
+                [inc j 1]
+            ]
+
+            [set res [b/or [b/lsh res 2] b]]
+            [inc i 2]
+        ]
+
+        [store row xByte [b/not res]]
+        [inc xByte 1]
+    ]
+
+    [ret row]
+]]
+
+[var size 16000  ]
+[set bytesPerRow [b/rsh size 3]]
+[set initial_r [list/make-len size]]
+[set initial_i [list/make-len size]]
+
+[var inv [/ 2.0 size]]
+[var xy 0]
+
+[while [< xy size]
+    [var i [* inv xy]]
+    [set (initial_r:xy) [- i 1.5]]
+    [set (initial_i:xy) [- i 1.0]]
+    [inc xy 1]
+]
+
+[set rows [list/make-len size]]
+
+[var y -1]
+[var mux [mutex/new]]
+
+[var wg [wait-group/new]]
+[wait-group/add wg 8]
+
+[var worker [lambda [] 
+    [while [< y size]
+        [mutex/lock mux]
+        [var y0 [inc y 1]]
+        [mutex/unlock mux]
+        [if [< y0 size] [set (rows:y0) [renderRow y0]]]
+    ]
+    [wait-group/done wg]
+]]
+
+[go worker] 
+[go worker] 
+[go worker] 
+[go worker] 
+[go worker] 
+[go worker] 
+[go worker] 
+[go worker] 
+[wait-group/wait wg]
+
+[stdout/write [bytes [+ "P4\n " [num/to-string size] " " [num/to-string size] "\n"]]]
+
+[for-each rows [lambda [i row]
+    [stdout/write row]
+]]

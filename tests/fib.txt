@@ -1,0 +1,7 @@
+[var fib 0]
+[set fib [lambda [n]
+    [if [< n 2] [ret n]]
+    [ret [+ [fib [- n 2]] [fib [- n 1]]]]
+]]
+
+[stdout/println [fib 35]]

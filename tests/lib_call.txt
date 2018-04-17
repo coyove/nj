@@ -1,0 +1,5 @@
+[var make [list/make-len]]
+[var l [ make 256]]
+[assert [len l] 256]
+[set [l:12] [lambda [] [ret 1]]]
+[stdout/println l]
