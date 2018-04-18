@@ -93,3 +93,7 @@ type ReturnStmt struct {
 type BreakStmt struct {
 	StmtBase
 }
+
+type ContinueStmt struct {
+	StmtBase
+}

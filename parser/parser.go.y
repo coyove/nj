@@ -48,7 +48,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TAnd TBreak TDo TElse TElseIf TEnd TFalse TFor TFunction TIf TIn TLocal TNil TNot TOr TReturn TRepeat TThen TTrue TUntil TWhile 
+%token<token> TAnd TBreak TContinue TDo TElse TElseIf TEnd TFalse TFor TFunction TIf TIn TLocal TNil TNot TOr TReturn TRepeat TThen TTrue TUntil TWhile 
 
 /* Literals */
 %token<token> TEqeq TNeq TLte TGte T2Comma T3Comma TIdent TNumber TString '{' '('
@@ -115,20 +115,10 @@ stat:
               $$.SetLine($1.Line())
             }
         } |
-        TDo block TEnd {
-            $$ = &DoBlockStmt{Stmts: $2}
-            $$.SetLine($1.Pos.Line)
-            $$.SetLastLine($3.Pos.Line)
-        } |
         TWhile expr TDo block TEnd {
             $$ = &WhileStmt{Condition: $2, Stmts: $4}
             $$.SetLine($1.Pos.Line)
             $$.SetLastLine($5.Pos.Line)
-        } |
-        TRepeat block TUntil expr {
-            $$ = &RepeatStmt{Condition: $4, Stmts: $2}
-            $$.SetLine($1.Pos.Line)
-            $$.SetLastLine($4.Line())
         } |
         TIf expr TThen block elseifs TEnd {
             $$ = &IfStmt{Condition: $2, Then: $4}
@@ -150,21 +140,6 @@ stat:
             cur.(*IfStmt).Else = $7
             $$.SetLine($1.Pos.Line)
             $$.SetLastLine($8.Pos.Line)
-        } |
-        TFor TIdent '=' expr ',' expr TDo block TEnd {
-            $$ = &NumberForStmt{Name: $2.Str, Init: $4, Limit: $6, Stmts: $8}
-            $$.SetLine($1.Pos.Line)
-            $$.SetLastLine($9.Pos.Line)
-        } |
-        TFor TIdent '=' expr ',' expr ',' expr TDo block TEnd {
-            $$ = &NumberForStmt{Name: $2.Str, Init: $4, Limit: $6, Step:$8, Stmts: $10}
-            $$.SetLine($1.Pos.Line)
-            $$.SetLastLine($11.Pos.Line)
-        } |
-        TFor namelist TIn exprlist TDo block TEnd {
-            $$ = &GenericForStmt{Names:$2, Exprs:$4, Stmts: $6}
-            $$.SetLine($1.Pos.Line)
-            $$.SetLastLine($7.Pos.Line)
         } |
         TFunction funcname funcbody {
             $$ = &FuncDefStmt{Name: $2, Func: $3}
@@ -205,6 +180,10 @@ laststat:
         } |
         TBreak  {
             $$ = &BreakStmt{}
+            $$.SetLine($1.Pos.Line)
+        } |
+        TContinue  {
+            $$ = &ContinueStmt{}
             $$.SetLine($1.Pos.Line)
         }
 
@@ -285,10 +264,6 @@ expr:
         TNumber {
             $$ = &NumberExpr{Value: $1.Str}
             $$.SetLine($1.Pos.Line)
-        } | 
-        T3Comma {
-            $$ = &Comma3Expr{}
-            $$.SetLine($1.Pos.Line)
         } |
         function {
             $$ = $1
@@ -297,9 +272,6 @@ expr:
             $$ = $1
         } |
         string {
-            $$ = $1
-        } |
-        tableconstructor {
             $$ = $1
         } |
         expr TOr expr {
@@ -368,10 +340,6 @@ expr:
         } |
         TNot expr %prec UNARY {
             $$ = &UnaryNotOpExpr{Expr: $2}
-            $$.SetLine($2.Line())
-        } |
-        '#' expr %prec UNARY {
-            $$ = &UnaryLenOpExpr{Expr: $2}
             $$.SetLine($2.Line())
         }
 
@@ -452,18 +420,10 @@ funcbody:
         }
 
 parlist:
-        T3Comma {
-            $$ = &ParList{HasVargs: true, Names: []string{}}
-        } | 
         namelist {
           $$ = &ParList{HasVargs: false, Names: []string{}}
           $$.Names = append($$.Names, $1...)
-        } | 
-        namelist ',' T3Comma {
-          $$ = &ParList{HasVargs: true, Names: []string{}}
-          $$.Names = append($$.Names, $1...)
         }
-
 
 tableconstructor:
         '{' '}' {

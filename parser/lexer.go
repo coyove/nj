@@ -279,7 +279,7 @@ finally:
 }
 
 var reservedWords = map[string]int{
-	"and": TAnd, "break": TBreak, "do": TDo, "else": TElse, "elseif": TElseIf,
+	"and": TAnd, "break": TBreak, "continue": TContinue, "do": TDo, "else": TElse, "elseif": TElseIf,
 	"end": TEnd, "false": TFalse, "for": TFor, "function": TFunction,
 	"if": TIf, "in": TIn, "local": TLocal, "nil": TNil, "not": TNot, "or": TOr,
 	"return": TReturn, "repeat": TRepeat, "then": TThen, "true": TTrue,
