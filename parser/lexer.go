@@ -281,9 +281,8 @@ finally:
 var reservedWords = map[string]int{
 	"and": TAnd, "break": TBreak, "continue": TContinue, "do": TDo, "else": TElse, "elseif": TElseIf,
 	"end": TEnd, "false": TFalse, "for": TFor, "function": TFunction,
-	"if": TIf, "in": TIn, "local": TLocal, "nil": TNil, "not": TNot, "or": TOr,
-	"return": TReturn, "repeat": TRepeat, "then": TThen, "true": TTrue,
-	"until": TUntil, "while": TWhile}
+	"if": TIf, "in": TIn, "set": TSet, "nil": TNil, "not": TNot, "or": TOr,
+	"return": TReturn, "then": TThen, "true": TTrue, "while": TWhile}
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
 redo:
@@ -392,15 +391,6 @@ redo:
 				tok.Type = TNumber
 				err = sc.scanNumber(ch, buf)
 				tok.Str = buf.String()
-			case ch2 == '.':
-				writeChar(buf, ch)
-				writeChar(buf, sc.Next())
-				if sc.Peek() == '.' {
-					writeChar(buf, sc.Next())
-					tok.Type = T3Comma
-				} else {
-					tok.Type = T2Comma
-				}
 			default:
 				tok.Type = '.'
 			}
@@ -424,7 +414,7 @@ finally:
 
 type Lexer struct {
 	scanner       *Scanner
-	Stmts         []Stmt
+	Stmts         []interface{}
 	PNewLine      bool
 	Token         Token
 	PrevTokenType int
@@ -452,7 +442,7 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 	panic(lx.scanner.TokenError(tok, message))
 }
 
-func Parse(reader io.Reader, name string) (chunk []Stmt, err error) {
+func Parse(reader io.Reader, name string) (chunk []interface{}, err error) {
 	lexer := &Lexer{NewScanner(reader, name), nil, false, Token{Str: ""}, TNil}
 	chunk = nil
 	defer func() {

@@ -1,3 +1,6 @@
 .DS_Store
 *.pbm
 yacc.exe
+goyacc
+*.y
+y.output

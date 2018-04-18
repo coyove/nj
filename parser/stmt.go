@@ -14,15 +14,15 @@ func (stmt *StmtBase) stmtMarker() {}
 type AssignStmt struct {
 	StmtBase
 
-	Lhs []Expr
-	Rhs []Expr
+	L Expr
+	R Expr
 }
 
-type LocalAssignStmt struct {
+type DeclareStmt struct {
 	StmtBase
 
-	Names []string
-	Exprs []Expr
+	Name string
+	Expr Expr
 }
 
 type FuncCallStmt struct {
