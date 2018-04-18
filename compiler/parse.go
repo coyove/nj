@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/coyove/eugine/base"
+	"github.com/coyove/bracket/base"
 )
 
 const (

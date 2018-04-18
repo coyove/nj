@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github.com/coyove/eugine/base"
+	"github.com/coyove/bracket/base"
 )
 
 var lib_numlongbits = LibFunc{

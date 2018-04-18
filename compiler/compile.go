@@ -3,8 +3,8 @@ package compiler
 import (
 	"fmt"
 
-	"github.com/coyove/eugine/base"
-	"github.com/coyove/eugine/vm"
+	"github.com/coyove/bracket/base"
+	"github.com/coyove/bracket/vm"
 )
 
 var opMapping map[string]func(int16, []*token, *base.CMap) ([]byte, int32, int16, error)

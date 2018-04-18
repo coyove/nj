@@ -1,0 +1,3010 @@
+
+state 0
+	$accept: .chunk $end 
+	chunk1: .    (4)
+
+	.  reduce 4 (src line 88)
+
+	chunk  goto 1
+	chunk1  goto 2
+
+state 1
+	$accept:  chunk.$end 
+
+	$end  accept
+	.  error
+
+
+state 2
+	chunk:  chunk1.    (1)
+	chunk:  chunk1.laststat 
+	chunk:  chunk1.laststat ';' 
+	chunk1:  chunk1.stat 
+	chunk1:  chunk1.';' 
+
+	TBreak  shift 7
+	TDo  shift 10
+	TFor  shift 14
+	TFunction  shift 15
+	TIf  shift 13
+	TLocal  shift 16
+	TReturn  shift 6
+	TRepeat  shift 12
+	TWhile  shift 11
+	TIdent  shift 21
+	'('  shift 20
+	';'  shift 5
+	.  reduce 1 (src line 68)
+
+	stat  goto 4
+	laststat  goto 3
+	varlist  goto 8
+	var  goto 17
+	prefixexp  goto 9
+	functioncall  goto 19
+	afunctioncall  goto 18
+
+state 3
+	chunk:  chunk1 laststat.    (2)
+	chunk:  chunk1 laststat.';' 
+
+	';'  shift 22
+	.  reduce 2 (src line 74)
+
+
+state 4
+	chunk1:  chunk1 stat.    (5)
+
+	.  reduce 5 (src line 91)
+
+
+state 5
+	chunk1:  chunk1 ';'.    (6)
+
+	.  reduce 6 (src line 94)
+
+
+state 6
+	laststat:  TReturn.    (24)
+	laststat:  TReturn.exprlist 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  reduce 24 (src line 197)
+
+	var  goto 38
+	exprlist  goto 23
+	expr  goto 24
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 7
+	laststat:  TBreak.    (26)
+
+	.  reduce 26 (src line 205)
+
+
+state 8
+	stat:  varlist.'=' exprlist 
+	varlist:  varlist.',' var 
+
+	'='  shift 41
+	','  shift 42
+	.  error
+
+
+9: shift/reduce conflict (shift 47(0), red'n 9(0)) on '('
+state 9
+	stat:  prefixexp.    (9)
+	var:  prefixexp.'[' expr ']' 
+	var:  prefixexp.'.' TIdent 
+	functioncall:  prefixexp.args 
+	functioncall:  prefixexp.':' TIdent args 
+
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 47
+	':'  shift 46
+	'.'  shift 44
+	'['  shift 43
+	.  reduce 9 (src line 108)
+
+	string  goto 49
+	args  goto 45
+	tableconstructor  goto 48
+
+state 10
+	stat:  TDo.block TEnd 
+	chunk1: .    (4)
+
+	.  reduce 4 (src line 88)
+
+	chunk  goto 51
+	chunk1  goto 2
+	block  goto 50
+
+state 11
+	stat:  TWhile.expr TDo block TEnd 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 52
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 12
+	stat:  TRepeat.block TUntil expr 
+	chunk1: .    (4)
+
+	.  reduce 4 (src line 88)
+
+	chunk  goto 51
+	chunk1  goto 2
+	block  goto 53
+
+state 13
+	stat:  TIf.expr TThen block elseifs TEnd 
+	stat:  TIf.expr TThen block elseifs TElse block TEnd 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 54
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 14
+	stat:  TFor.TIdent '=' expr ',' expr TDo block TEnd 
+	stat:  TFor.TIdent '=' expr ',' expr ',' expr TDo block TEnd 
+	stat:  TFor.namelist TIn exprlist TDo block TEnd 
+
+	TIdent  shift 55
+	.  error
+
+	namelist  goto 56
+
+state 15
+	stat:  TFunction.funcname funcbody 
+
+	TIdent  shift 59
+	.  error
+
+	funcname  goto 57
+	funcname1  goto 58
+
+state 16
+	stat:  TLocal.TFunction TIdent funcbody 
+	stat:  TLocal.namelist '=' exprlist 
+	stat:  TLocal.namelist 
+
+	TFunction  shift 60
+	TIdent  shift 62
+	.  error
+
+	namelist  goto 61
+
+state 17
+	varlist:  var.    (31)
+	prefixexp:  var.    (68)
+
+	'='  reduce 31 (src line 232)
+	','  reduce 31 (src line 232)
+	.  reduce 68 (src line 384)
+
+
+state 18
+	prefixexp:  afunctioncall.    (69)
+
+	.  reduce 69 (src line 387)
+
+
+state 19
+	prefixexp:  functioncall.    (70)
+
+	.  reduce 70 (src line 390)
+
+
+state 20
+	prefixexp:  '('.expr ')' 
+	afunctioncall:  '('.functioncall ')' 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 63
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 64
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 21
+	var:  TIdent.    (33)
+
+	.  reduce 33 (src line 240)
+
+
+state 22
+	chunk:  chunk1 laststat ';'.    (3)
+
+	.  reduce 3 (src line 80)
+
+
+state 23
+	laststat:  TReturn exprlist.    (25)
+	exprlist:  exprlist.',' expr 
+
+	','  shift 65
+	.  reduce 25 (src line 201)
+
+
+state 24
+	exprlist:  expr.    (38)
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	TAnd  shift 67
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 38 (src line 264)
+
+
+state 25
+	expr:  TNil.    (40)
+
+	.  reduce 40 (src line 272)
+
+
+state 26
+	expr:  TFalse.    (41)
+
+	.  reduce 41 (src line 276)
+
+
+state 27
+	expr:  TTrue.    (42)
+
+	.  reduce 42 (src line 280)
+
+
+state 28
+	expr:  TNumber.    (43)
+
+	.  reduce 43 (src line 284)
+
+
+state 29
+	expr:  T3Comma.    (44)
+
+	.  reduce 44 (src line 288)
+
+
+state 30
+	expr:  function.    (45)
+
+	.  reduce 45 (src line 292)
+
+
+31: shift/reduce conflict (shift 47(0), red'n 46(0)) on '('
+state 31
+	var:  prefixexp.'[' expr ']' 
+	var:  prefixexp.'.' TIdent 
+	expr:  prefixexp.    (46)
+	functioncall:  prefixexp.args 
+	functioncall:  prefixexp.':' TIdent args 
+
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 47
+	':'  shift 46
+	'.'  shift 44
+	'['  shift 43
+	.  reduce 46 (src line 295)
+
+	string  goto 49
+	args  goto 45
+	tableconstructor  goto 48
+
+state 32
+	expr:  string.    (47)
+
+	.  reduce 47 (src line 298)
+
+
+state 33
+	expr:  tableconstructor.    (48)
+
+	.  reduce 48 (src line 301)
+
+
+state 34
+	expr:  '-'.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 81
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 35
+	expr:  TNot.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 82
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 36
+	expr:  '#'.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 83
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 37
+	function:  TFunction.funcbody 
+
+	'('  shift 85
+	.  error
+
+	funcbody  goto 84
+
+state 38
+	prefixexp:  var.    (68)
+
+	.  reduce 68 (src line 384)
+
+
+state 39
+	string:  TString.    (67)
+
+	.  reduce 67 (src line 378)
+
+
+state 40
+	tableconstructor:  '{'.'}' 
+	tableconstructor:  '{'.fieldlist '}' 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 89
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'['  shift 90
+	'#'  shift 36
+	'}'  shift 86
+	.  error
+
+	var  goto 38
+	expr  goto 91
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+	fieldlist  goto 87
+	field  goto 88
+
+state 41
+	stat:  varlist '='.exprlist 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	exprlist  goto 92
+	expr  goto 24
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 42
+	varlist:  varlist ','.var 
+
+	TIdent  shift 21
+	'('  shift 20
+	.  error
+
+	var  goto 93
+	prefixexp  goto 94
+	functioncall  goto 19
+	afunctioncall  goto 18
+
+state 43
+	var:  prefixexp '['.expr ']' 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 95
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 44
+	var:  prefixexp '.'.TIdent 
+
+	TIdent  shift 96
+	.  error
+
+
+state 45
+	functioncall:  prefixexp args.    (73)
+
+	.  reduce 73 (src line 405)
+
+
+state 46
+	functioncall:  prefixexp ':'.TIdent args 
+
+	TIdent  shift 97
+	.  error
+
+
+state 47
+	args:  '('.')' 
+	args:  '('.exprlist ')' 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	')'  shift 98
+	.  error
+
+	var  goto 38
+	exprlist  goto 99
+	expr  goto 24
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 48
+	args:  tableconstructor.    (77)
+
+	.  reduce 77 (src line 427)
+
+
+state 49
+	args:  string.    (78)
+
+	.  reduce 78 (src line 430)
+
+
+state 50
+	stat:  TDo block.TEnd 
+
+	TEnd  shift 100
+	.  error
+
+
+state 51
+	block:  chunk.    (7)
+
+	.  reduce 7 (src line 99)
+
+
+state 52
+	stat:  TWhile expr.TDo block TEnd 
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	TAnd  shift 67
+	TDo  shift 101
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  error
+
+
+state 53
+	stat:  TRepeat block.TUntil expr 
+
+	TUntil  shift 102
+	.  error
+
+
+state 54
+	stat:  TIf expr.TThen block elseifs TEnd 
+	stat:  TIf expr.TThen block elseifs TElse block TEnd 
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	TAnd  shift 67
+	TOr  shift 66
+	TThen  shift 103
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  error
+
+
+state 55
+	stat:  TFor TIdent.'=' expr ',' expr TDo block TEnd 
+	stat:  TFor TIdent.'=' expr ',' expr ',' expr TDo block TEnd 
+	namelist:  TIdent.    (36)
+
+	'='  shift 104
+	.  reduce 36 (src line 256)
+
+
+state 56
+	stat:  TFor namelist.TIn exprlist TDo block TEnd 
+	namelist:  namelist.',' TIdent 
+
+	TIn  shift 105
+	','  shift 106
+	.  error
+
+
+state 57
+	stat:  TFunction funcname.funcbody 
+
+	'('  shift 85
+	.  error
+
+	funcbody  goto 107
+
+state 58
+	funcname:  funcname1.    (27)
+	funcname:  funcname1.':' TIdent 
+	funcname1:  funcname1.'.' TIdent 
+
+	':'  shift 108
+	'.'  shift 109
+	.  reduce 27 (src line 211)
+
+
+state 59
+	funcname1:  TIdent.    (29)
+
+	.  reduce 29 (src line 219)
+
+
+state 60
+	stat:  TLocal TFunction.TIdent funcbody 
+
+	TIdent  shift 110
+	.  error
+
+
+state 61
+	stat:  TLocal namelist.'=' exprlist 
+	stat:  TLocal namelist.    (21)
+	namelist:  namelist.',' TIdent 
+
+	'='  shift 111
+	','  shift 106
+	.  reduce 21 (src line 182)
+
+
+state 62
+	namelist:  TIdent.    (36)
+
+	.  reduce 36 (src line 256)
+
+
+state 63
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+	prefixexp:  '(' expr.')' 
+
+	TAnd  shift 67
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	')'  shift 112
+	.  error
+
+
+64: shift/reduce conflict (shift 113(0), red'n 70(0)) on ')'
+state 64
+	prefixexp:  functioncall.    (70)
+	afunctioncall:  '(' functioncall.')' 
+
+	')'  shift 113
+	.  reduce 70 (src line 390)
+
+
+state 65
+	exprlist:  exprlist ','.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 114
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 66
+	expr:  expr TOr.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 115
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 67
+	expr:  expr TAnd.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 116
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 68
+	expr:  expr '>'.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 117
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 69
+	expr:  expr '<'.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 118
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 70
+	expr:  expr TGte.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 119
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 71
+	expr:  expr TLte.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 120
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 72
+	expr:  expr TEqeq.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 121
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 73
+	expr:  expr TNeq.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 122
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 74
+	expr:  expr T2Comma.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 123
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 75
+	expr:  expr '+'.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 124
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 76
+	expr:  expr '-'.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 125
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 77
+	expr:  expr '*'.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 126
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 78
+	expr:  expr '/'.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 127
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 79
+	expr:  expr '%'.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 128
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 80
+	expr:  expr '^'.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 129
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 81
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+	expr:  '-' expr.    (64)
+
+	'^'  shift 80
+	.  reduce 64 (src line 364)
+
+
+state 82
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+	expr:  TNot expr.    (65)
+
+	'^'  shift 80
+	.  reduce 65 (src line 368)
+
+
+state 83
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+	expr:  '#' expr.    (66)
+
+	'^'  shift 80
+	.  reduce 66 (src line 372)
+
+
+state 84
+	function:  TFunction funcbody.    (79)
+
+	.  reduce 79 (src line 435)
+
+
+state 85
+	funcbody:  '('.parlist ')' block TEnd 
+	funcbody:  '('.')' block TEnd 
+
+	T3Comma  shift 132
+	TIdent  shift 62
+	')'  shift 131
+	.  error
+
+	namelist  goto 133
+	parlist  goto 130
+
+state 86
+	tableconstructor:  '{' '}'.    (85)
+
+	.  reduce 85 (src line 468)
+
+
+state 87
+	tableconstructor:  '{' fieldlist.'}' 
+	fieldlist:  fieldlist.fieldsep field 
+	fieldlist:  fieldlist.fieldsep 
+
+	';'  shift 137
+	','  shift 136
+	'}'  shift 134
+	.  error
+
+	fieldsep  goto 135
+
+state 88
+	fieldlist:  field.    (87)
+
+	.  reduce 87 (src line 479)
+
+
+state 89
+	var:  TIdent.    (33)
+	field:  TIdent.'=' expr 
+
+	'='  shift 138
+	.  reduce 33 (src line 240)
+
+
+state 90
+	field:  '['.expr ']' '=' expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 139
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 91
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+	field:  expr.    (92)
+
+	TAnd  shift 67
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 92 (src line 497)
+
+
+state 92
+	stat:  varlist '=' exprlist.    (8)
+	exprlist:  exprlist.',' expr 
+
+	','  shift 65
+	.  reduce 8 (src line 104)
+
+
+state 93
+	varlist:  varlist ',' var.    (32)
+	prefixexp:  var.    (68)
+
+	'='  reduce 32 (src line 235)
+	','  reduce 32 (src line 235)
+	.  reduce 68 (src line 384)
+
+
+state 94
+	var:  prefixexp.'[' expr ']' 
+	var:  prefixexp.'.' TIdent 
+	functioncall:  prefixexp.args 
+	functioncall:  prefixexp.':' TIdent args 
+
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 47
+	':'  shift 46
+	'.'  shift 44
+	'['  shift 43
+	.  error
+
+	string  goto 49
+	args  goto 45
+	tableconstructor  goto 48
+
+state 95
+	var:  prefixexp '[' expr.']' 
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	TAnd  shift 67
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	']'  shift 140
+	.  error
+
+
+state 96
+	var:  prefixexp '.' TIdent.    (35)
+
+	.  reduce 35 (src line 248)
+
+
+state 97
+	functioncall:  prefixexp ':' TIdent.args 
+
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 47
+	.  error
+
+	string  goto 49
+	args  goto 141
+	tableconstructor  goto 48
+
+state 98
+	args:  '(' ')'.    (75)
+
+	.  reduce 75 (src line 415)
+
+
+state 99
+	exprlist:  exprlist.',' expr 
+	args:  '(' exprlist.')' 
+
+	','  shift 65
+	')'  shift 142
+	.  error
+
+
+state 100
+	stat:  TDo block TEnd.    (10)
+
+	.  reduce 10 (src line 117)
+
+
+state 101
+	stat:  TWhile expr TDo.block TEnd 
+	chunk1: .    (4)
+
+	.  reduce 4 (src line 88)
+
+	chunk  goto 51
+	chunk1  goto 2
+	block  goto 143
+
+state 102
+	stat:  TRepeat block TUntil.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 144
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 103
+	stat:  TIf expr TThen.block elseifs TEnd 
+	stat:  TIf expr TThen.block elseifs TElse block TEnd 
+	chunk1: .    (4)
+
+	.  reduce 4 (src line 88)
+
+	chunk  goto 51
+	chunk1  goto 2
+	block  goto 145
+
+state 104
+	stat:  TFor TIdent '='.expr ',' expr TDo block TEnd 
+	stat:  TFor TIdent '='.expr ',' expr ',' expr TDo block TEnd 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 146
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 105
+	stat:  TFor namelist TIn.exprlist TDo block TEnd 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	exprlist  goto 147
+	expr  goto 24
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 106
+	namelist:  namelist ','.TIdent 
+
+	TIdent  shift 148
+	.  error
+
+
+state 107
+	stat:  TFunction funcname funcbody.    (18)
+
+	.  reduce 18 (src line 168)
+
+
+state 108
+	funcname:  funcname1 ':'.TIdent 
+
+	TIdent  shift 149
+	.  error
+
+
+state 109
+	funcname1:  funcname1 '.'.TIdent 
+
+	TIdent  shift 150
+	.  error
+
+
+state 110
+	stat:  TLocal TFunction TIdent.funcbody 
+
+	'('  shift 85
+	.  error
+
+	funcbody  goto 151
+
+state 111
+	stat:  TLocal namelist '='.exprlist 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	exprlist  goto 152
+	expr  goto 24
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 112
+	prefixexp:  '(' expr ')'.    (71)
+
+	.  reduce 71 (src line 393)
+
+
+state 113
+	afunctioncall:  '(' functioncall ')'.    (72)
+
+	.  reduce 72 (src line 399)
+
+
+state 114
+	exprlist:  exprlist ',' expr.    (39)
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	TAnd  shift 67
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 39 (src line 267)
+
+
+state 115
+	expr:  expr.TOr expr 
+	expr:  expr TOr expr.    (49)
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	TAnd  shift 67
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 49 (src line 304)
+
+
+state 116
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr TAnd expr.    (50)
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 50 (src line 308)
+
+
+state 117
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr '>' expr.    (51)
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	T2Comma  shift 74
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 51 (src line 312)
+
+
+state 118
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr '<' expr.    (52)
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	T2Comma  shift 74
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 52 (src line 316)
+
+
+state 119
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr TGte expr.    (53)
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	T2Comma  shift 74
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 53 (src line 320)
+
+
+state 120
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr TLte expr.    (54)
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	T2Comma  shift 74
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 54 (src line 324)
+
+
+state 121
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr TEqeq expr.    (55)
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	T2Comma  shift 74
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 55 (src line 328)
+
+
+state 122
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr TNeq expr.    (56)
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	T2Comma  shift 74
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 56 (src line 332)
+
+
+state 123
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr T2Comma expr.    (57)
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	T2Comma  shift 74
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 57 (src line 336)
+
+
+state 124
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr '+' expr.    (58)
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 58 (src line 340)
+
+
+state 125
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr '-' expr.    (59)
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 59 (src line 344)
+
+
+state 126
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr '*' expr.    (60)
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	'^'  shift 80
+	.  reduce 60 (src line 348)
+
+
+state 127
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr '/' expr.    (61)
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	'^'  shift 80
+	.  reduce 61 (src line 352)
+
+
+state 128
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr '%' expr.    (62)
+	expr:  expr.'^' expr 
+
+	'^'  shift 80
+	.  reduce 62 (src line 356)
+
+
+state 129
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+	expr:  expr '^' expr.    (63)
+
+	'^'  shift 80
+	.  reduce 63 (src line 360)
+
+
+state 130
+	funcbody:  '(' parlist.')' block TEnd 
+
+	')'  shift 153
+	.  error
+
+
+state 131
+	funcbody:  '(' ')'.block TEnd 
+	chunk1: .    (4)
+
+	.  reduce 4 (src line 88)
+
+	chunk  goto 51
+	chunk1  goto 2
+	block  goto 154
+
+state 132
+	parlist:  T3Comma.    (82)
+
+	.  reduce 82 (src line 454)
+
+
+state 133
+	namelist:  namelist.',' TIdent 
+	parlist:  namelist.    (83)
+	parlist:  namelist.',' T3Comma 
+
+	','  shift 155
+	.  reduce 83 (src line 457)
+
+
+state 134
+	tableconstructor:  '{' fieldlist '}'.    (86)
+
+	.  reduce 86 (src line 472)
+
+
+state 135
+	fieldlist:  fieldlist fieldsep.field 
+	fieldlist:  fieldlist fieldsep.    (89)
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 89
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'['  shift 90
+	'#'  shift 36
+	.  reduce 89 (src line 485)
+
+	var  goto 38
+	expr  goto 91
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+	field  goto 156
+
+state 136
+	fieldsep:  ','.    (93)
+
+	.  reduce 93 (src line 502)
+
+
+state 137
+	fieldsep:  ';'.    (94)
+
+	.  reduce 94 (src line 505)
+
+
+state 138
+	field:  TIdent '='.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 157
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 139
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+	field:  '[' expr.']' '=' expr 
+
+	TAnd  shift 67
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	']'  shift 158
+	.  error
+
+
+state 140
+	var:  prefixexp '[' expr ']'.    (34)
+
+	.  reduce 34 (src line 244)
+
+
+state 141
+	functioncall:  prefixexp ':' TIdent args.    (74)
+
+	.  reduce 74 (src line 409)
+
+
+state 142
+	args:  '(' exprlist ')'.    (76)
+
+	.  reduce 76 (src line 421)
+
+
+state 143
+	stat:  TWhile expr TDo block.TEnd 
+
+	TEnd  shift 159
+	.  error
+
+
+state 144
+	stat:  TRepeat block TUntil expr.    (12)
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	TAnd  shift 67
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 12 (src line 127)
+
+
+state 145
+	stat:  TIf expr TThen block.elseifs TEnd 
+	stat:  TIf expr TThen block.elseifs TElse block TEnd 
+	elseifs: .    (22)
+
+	.  reduce 22 (src line 188)
+
+	elseifs  goto 160
+
+state 146
+	stat:  TFor TIdent '=' expr.',' expr TDo block TEnd 
+	stat:  TFor TIdent '=' expr.',' expr ',' expr TDo block TEnd 
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	TAnd  shift 67
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	','  shift 161
+	.  error
+
+
+state 147
+	stat:  TFor namelist TIn exprlist.TDo block TEnd 
+	exprlist:  exprlist.',' expr 
+
+	TDo  shift 162
+	','  shift 65
+	.  error
+
+
+state 148
+	namelist:  namelist ',' TIdent.    (37)
+
+	.  reduce 37 (src line 259)
+
+
+state 149
+	funcname:  funcname1 ':' TIdent.    (28)
+
+	.  reduce 28 (src line 214)
+
+
+state 150
+	funcname1:  funcname1 '.' TIdent.    (30)
+
+	.  reduce 30 (src line 223)
+
+
+state 151
+	stat:  TLocal TFunction TIdent funcbody.    (19)
+
+	.  reduce 19 (src line 173)
+
+
+state 152
+	stat:  TLocal namelist '=' exprlist.    (20)
+	exprlist:  exprlist.',' expr 
+
+	','  shift 65
+	.  reduce 20 (src line 178)
+
+
+state 153
+	funcbody:  '(' parlist ')'.block TEnd 
+	chunk1: .    (4)
+
+	.  reduce 4 (src line 88)
+
+	chunk  goto 51
+	chunk1  goto 2
+	block  goto 163
+
+state 154
+	funcbody:  '(' ')' block.TEnd 
+
+	TEnd  shift 164
+	.  error
+
+
+state 155
+	namelist:  namelist ','.TIdent 
+	parlist:  namelist ','.T3Comma 
+
+	T3Comma  shift 165
+	TIdent  shift 148
+	.  error
+
+
+state 156
+	fieldlist:  fieldlist fieldsep field.    (88)
+
+	.  reduce 88 (src line 482)
+
+
+state 157
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+	field:  TIdent '=' expr.    (90)
+
+	TAnd  shift 67
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 90 (src line 490)
+
+
+state 158
+	field:  '[' expr ']'.'=' expr 
+
+	'='  shift 166
+	.  error
+
+
+state 159
+	stat:  TWhile expr TDo block TEnd.    (11)
+
+	.  reduce 11 (src line 122)
+
+
+state 160
+	stat:  TIf expr TThen block elseifs.TEnd 
+	stat:  TIf expr TThen block elseifs.TElse block TEnd 
+	elseifs:  elseifs.TElseIf expr TThen block 
+
+	TElse  shift 168
+	TElseIf  shift 169
+	TEnd  shift 167
+	.  error
+
+
+state 161
+	stat:  TFor TIdent '=' expr ','.expr TDo block TEnd 
+	stat:  TFor TIdent '=' expr ','.expr ',' expr TDo block TEnd 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 170
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 162
+	stat:  TFor namelist TIn exprlist TDo.block TEnd 
+	chunk1: .    (4)
+
+	.  reduce 4 (src line 88)
+
+	chunk  goto 51
+	chunk1  goto 2
+	block  goto 171
+
+state 163
+	funcbody:  '(' parlist ')' block.TEnd 
+
+	TEnd  shift 172
+	.  error
+
+
+state 164
+	funcbody:  '(' ')' block TEnd.    (81)
+
+	.  reduce 81 (src line 447)
+
+
+state 165
+	parlist:  namelist ',' T3Comma.    (84)
+
+	.  reduce 84 (src line 461)
+
+
+state 166
+	field:  '[' expr ']' '='.expr 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 173
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 167
+	stat:  TIf expr TThen block elseifs TEnd.    (13)
+
+	.  reduce 13 (src line 132)
+
+
+state 168
+	stat:  TIf expr TThen block elseifs TElse.block TEnd 
+	chunk1: .    (4)
+
+	.  reduce 4 (src line 88)
+
+	chunk  goto 51
+	chunk1  goto 2
+	block  goto 174
+
+state 169
+	elseifs:  elseifs TElseIf.expr TThen block 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 175
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 170
+	stat:  TFor TIdent '=' expr ',' expr.TDo block TEnd 
+	stat:  TFor TIdent '=' expr ',' expr.',' expr TDo block TEnd 
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	TAnd  shift 67
+	TDo  shift 176
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	','  shift 177
+	.  error
+
+
+state 171
+	stat:  TFor namelist TIn exprlist TDo block.TEnd 
+
+	TEnd  shift 178
+	.  error
+
+
+state 172
+	funcbody:  '(' parlist ')' block TEnd.    (80)
+
+	.  reduce 80 (src line 442)
+
+
+state 173
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+	field:  '[' expr ']' '=' expr.    (91)
+
+	TAnd  shift 67
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  reduce 91 (src line 494)
+
+
+state 174
+	stat:  TIf expr TThen block elseifs TElse block.TEnd 
+
+	TEnd  shift 179
+	.  error
+
+
+state 175
+	elseifs:  elseifs TElseIf expr.TThen block 
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	TAnd  shift 67
+	TOr  shift 66
+	TThen  shift 180
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  error
+
+
+state 176
+	stat:  TFor TIdent '=' expr ',' expr TDo.block TEnd 
+	chunk1: .    (4)
+
+	.  reduce 4 (src line 88)
+
+	chunk  goto 51
+	chunk1  goto 2
+	block  goto 181
+
+state 177
+	stat:  TFor TIdent '=' expr ',' expr ','.expr TDo block TEnd 
+
+	TFalse  shift 26
+	TFunction  shift 37
+	TNil  shift 25
+	TNot  shift 35
+	TTrue  shift 27
+	T3Comma  shift 29
+	TIdent  shift 21
+	TNumber  shift 28
+	TString  shift 39
+	'{'  shift 40
+	'('  shift 20
+	'-'  shift 34
+	'#'  shift 36
+	.  error
+
+	var  goto 38
+	expr  goto 182
+	string  goto 32
+	prefixexp  goto 31
+	functioncall  goto 19
+	afunctioncall  goto 18
+	function  goto 30
+	tableconstructor  goto 33
+
+state 178
+	stat:  TFor namelist TIn exprlist TDo block TEnd.    (17)
+
+	.  reduce 17 (src line 163)
+
+
+state 179
+	stat:  TIf expr TThen block elseifs TElse block TEnd.    (14)
+
+	.  reduce 14 (src line 142)
+
+
+state 180
+	elseifs:  elseifs TElseIf expr TThen.block 
+	chunk1: .    (4)
+
+	.  reduce 4 (src line 88)
+
+	chunk  goto 51
+	chunk1  goto 2
+	block  goto 183
+
+state 181
+	stat:  TFor TIdent '=' expr ',' expr TDo block.TEnd 
+
+	TEnd  shift 184
+	.  error
+
+
+state 182
+	stat:  TFor TIdent '=' expr ',' expr ',' expr.TDo block TEnd 
+	expr:  expr.TOr expr 
+	expr:  expr.TAnd expr 
+	expr:  expr.'>' expr 
+	expr:  expr.'<' expr 
+	expr:  expr.TGte expr 
+	expr:  expr.TLte expr 
+	expr:  expr.TEqeq expr 
+	expr:  expr.TNeq expr 
+	expr:  expr.T2Comma expr 
+	expr:  expr.'+' expr 
+	expr:  expr.'-' expr 
+	expr:  expr.'*' expr 
+	expr:  expr.'/' expr 
+	expr:  expr.'%' expr 
+	expr:  expr.'^' expr 
+
+	TAnd  shift 67
+	TDo  shift 185
+	TOr  shift 66
+	TEqeq  shift 72
+	TNeq  shift 73
+	TLte  shift 71
+	TGte  shift 70
+	T2Comma  shift 74
+	'>'  shift 68
+	'<'  shift 69
+	'+'  shift 75
+	'-'  shift 76
+	'*'  shift 77
+	'/'  shift 78
+	'%'  shift 79
+	'^'  shift 80
+	.  error
+
+
+state 183
+	elseifs:  elseifs TElseIf expr TThen block.    (23)
+
+	.  reduce 23 (src line 191)
+
+
+state 184
+	stat:  TFor TIdent '=' expr ',' expr TDo block TEnd.    (15)
+
+	.  reduce 15 (src line 153)
+
+
+state 185
+	stat:  TFor TIdent '=' expr ',' expr ',' expr TDo.block TEnd 
+	chunk1: .    (4)
+
+	.  reduce 4 (src line 88)
+
+	chunk  goto 51
+	chunk1  goto 2
+	block  goto 186
+
+state 186
+	stat:  TFor TIdent '=' expr ',' expr ',' expr TDo block.TEnd 
+
+	TEnd  shift 187
+	.  error
+
+
+state 187
+	stat:  TFor TIdent '=' expr ',' expr ',' expr TDo block TEnd.    (16)
+
+	.  reduce 16 (src line 158)
+
+
+54 terminals, 26 nonterminals
+95 grammar rules, 188/8000 states
+3 shift/reduce, 0 reduce/reduce conflicts reported
+75 working sets used
+memory: parser 478/120000
+155 extra closures
+914 shift entries, 5 exceptions
+92 goto entries
+289 entries saved by goto default
+Optimizer space used: output 579/120000
+579 table entries, 158 zero
+maximum spread: 54, maximum offset: 185

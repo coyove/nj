@@ -12,7 +12,7 @@ func AddI(env *Env) {
 		for i := 1; i < env.SizeR(); i++ {
 			v += env.R(i).Number()
 		}
-		env.SetA(NewNumberValue(v))
+		env.SetANumber(v)
 	case TY_string:
 		buf := &bytes.Buffer{}
 		for i := 0; i < env.SizeR(); i++ {
@@ -35,7 +35,7 @@ func SubI(env *Env) {
 	for i := 1; i < env.SizeR(); i++ {
 		v -= env.R(i).Number()
 	}
-	env.SetA(NewNumberValue(v))
+	env.SetANumber(v)
 }
 
 func MulI(env *Env) {
@@ -43,7 +43,7 @@ func MulI(env *Env) {
 	for i := 1; i < env.SizeR(); i++ {
 		v *= env.R(i).Number()
 	}
-	env.SetA(NewNumberValue(v))
+	env.SetANumber(v)
 }
 
 func DivI(env *Env) {
@@ -51,7 +51,7 @@ func DivI(env *Env) {
 	for i := 1; i < env.SizeR(); i++ {
 		v /= env.R(i).Number()
 	}
-	env.SetA(NewNumberValue(v))
+	env.SetANumber(v)
 }
 
 func ModI(env *Env) {

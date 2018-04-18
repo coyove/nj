@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/coyove/eugine/base"
+	"github.com/coyove/bracket/base"
 )
 
 var staticWhileHack struct {

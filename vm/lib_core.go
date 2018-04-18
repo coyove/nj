@@ -1,7 +1,7 @@
 package vm
 
 import (
-	"github.com/coyove/eugine/base"
+	"github.com/coyove/bracket/base"
 )
 
 var lib_foreach = LibFunc{

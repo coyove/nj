@@ -3,7 +3,7 @@ package compiler
 import (
 	"fmt"
 
-	"github.com/coyove/eugine/base"
+	"github.com/coyove/bracket/base"
 )
 
 func truncLastByte(b []byte) []byte {

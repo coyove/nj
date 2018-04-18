@@ -3,7 +3,7 @@ package vm
 import (
 	"hash/crc32"
 
-	"github.com/coyove/eugine/base"
+	"github.com/coyove/bracket/base"
 )
 
 type LibFunc struct {

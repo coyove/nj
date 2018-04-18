@@ -5,9 +5,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/coyove/eugine/base"
-	"github.com/coyove/eugine/compiler"
-	"github.com/coyove/eugine/vm"
+	"github.com/coyove/bracket/base"
+	"github.com/coyove/bracket/compiler"
+	"github.com/coyove/bracket/vm"
 
 	"net/http"
 	_ "net/http/pprof"
@@ -38,6 +38,5 @@ func main() {
 	// }
 
 	// f.Close()
-	time.Sleep(time.Minute)
 	log.Println(time.Now().Sub(start).Nanoseconds() / 1e6)
 }
