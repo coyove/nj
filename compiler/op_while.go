@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/coyove/bracket/base"
+	"github.com/coyove/bracket/parser"
 )
 
 var staticWhileHack struct {
@@ -18,13 +19,13 @@ var staticWhileHack struct {
 
 func compileContinueBreakOp(
 	stackPtr int16,
-	atoms []*token,
+	atoms []*parser.Node,
 	varLookup *base.CMap,
 ) (code []byte, yx int32, newStackPtr int16, err error) {
 	staticWhileHack.Lock()
 	defer staticWhileHack.Unlock()
 
-	if atoms[0].v.(string) == "continue" {
+	if atoms[0].Value.(string) == "continue" {
 		if staticWhileHack.continueFlag == nil {
 			staticWhileHack.continueFlag = make([]byte, 9)
 			if _, err := rand.Read(staticWhileHack.continueFlag); err != nil {
@@ -43,7 +44,7 @@ func compileContinueBreakOp(
 	return staticWhileHack.breakFlag, base.REG_A, stackPtr, nil
 }
 
-func compileWhileOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+func compileWhileOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 	if len(atoms) < 3 {
 		err = fmt.Errorf("while statement should have condition and body: %+v", atoms[0])
 		return
@@ -53,22 +54,22 @@ func compileWhileOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code 
 	buf := base.NewBytesBuffer()
 	var varIndex int32
 
-	switch condition.ty {
-	case TK_addr:
-		varIndex = condition.v.(int32)
-	case TK_number:
+	switch condition.Type {
+	case parser.NTAddr:
+		varIndex = condition.Value.(int32)
+	case parser.NTNumber:
 		buf.WriteByte(base.OP_SET_NUM)
 		varIndex = int32(stackPtr)
 		stackPtr++
 		buf.WriteInt32(varIndex)
-		buf.WriteDouble(condition.v.(float64))
-	case TK_string:
+		buf.WriteDouble(condition.Value.(float64))
+	case parser.NTString:
 		buf.WriteByte(base.OP_SET_STR)
 		varIndex = int32(stackPtr)
 		stackPtr++
 		buf.WriteInt32(varIndex)
-		buf.WriteString(condition.v.(string))
-	case TK_compound, TK_atomic:
+		buf.WriteString(condition.Value.(string))
+	case parser.NTCompound, parser.NTAtom:
 		code, yx, stackPtr, err = extract(stackPtr, condition, varLookup)
 		if err != nil {
 			return
@@ -77,12 +78,10 @@ func compileWhileOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code 
 		varIndex = yx
 	}
 
-	code, yx, stackPtr, err = compile(stackPtr, atoms[2:], varLookup)
+	code, yx, stackPtr, err = compileChainOp(stackPtr, atoms[2], varLookup)
 	if err != nil {
 		return
 	}
-
-	code = truncLastByte(code)
 
 	buf.WriteByte(base.OP_IF)
 	buf.WriteInt32(varIndex)

@@ -4,8 +4,6 @@ package parser
 %type<stmts> block
 %type<stmt>  stat
 %type<stmts> elseifs
-%type<funcname> funcname
-%type<funcname> funcname1
 %type<expr> var
 %type<namelist> namelist
 %type<exprlist> exprlist
@@ -16,27 +14,24 @@ package parser
 %type<expr> afunctioncall
 %type<exprlist> args
 %type<expr> function
-%type<funcexpr> funcbody
-%type<parlist> parlist
 
 %union {
   token  Token
 
-  stmts    []interface{}
-  stmt     interface{}
+  stmts    *Node
+  stmt     *Node
 
   funcname interface{}
   funcexpr interface{}
 
-  exprlist []interface{} 
-  expr   interface{}
+  exprlist *Node
+  expr     *Node
 
-  namelist []interface{}
-  parlist  interface{}
+  namelist *Node
 }
 
 /* Reserved words */
-%token<token> TAnd TBreak TContinue TDo TElse TElseIf TEnd TFalse TFor TFunction TIf TIn TNil TNot TOr TReturn TSet TThen TTrue TWhile
+%token<token> TAnd TBreak TContinue TDo TElse TElseIf TEnd TFalse TFor TFunction TIf TIn TNil TNot TOr TReturn TSet TThen TTrue TWhile TXor
 
 /* Literals */
 %token<token> TEqeq TNeq TLte TGte TIdent TNumber TString '{' '('
@@ -54,13 +49,14 @@ package parser
 
 block: 
         {
-            $$ = []interface{}{"chain"}
+            $$ = NewCompoundNode("chain")
             if l, ok := yylex.(*Lexer); ok {
                 l.Stmts = $$
             }
         } |
         block stat {
-            $$ = append($1, $2)
+            $1.Compound = append($1.Compound, $2)
+            $$ = $1
             if l, ok := yylex.(*Lexer); ok {
                 l.Stmts = $$
             }
@@ -74,7 +70,7 @@ block:
 
 stat:
         var '=' expr {
-            $$ = []interface{}{"set", $1, $3}
+            $$ = NewCompoundNode("move", $1, $3)
         } |
         /* 'stat = functioncal' causes a reduce/reduce conflict */
         prefixexp {
@@ -85,102 +81,95 @@ stat:
             // }
         } |
         TWhile expr TDo block TEnd {
-            $$ = []interface{}{"while", $2, $4}
+            $$ = NewCompoundNode("while", $2, $4)
         } |
         TIf expr TThen block elseifs TEnd {
-            $$ = []interface{}{"if", $2, $4, nil}
-            if len($5) > 0 {
-                cur := $$
-                for _, e := range $5 {
-                    cur.([]interface{})[3] = e
-                    cur = e
-                }
+            $$ = NewCompoundNode("if", $2, $4, NewCompoundNode())
+            cur := $$
+            for _, e := range $5.Compound {
+                cur.Compound[3] = e
+                cur = e
             }
         } |
         TIf expr TThen block elseifs TElse block TEnd {
-            $$ = []interface{}{"if", $2, $4, nil}
+            $$ = NewCompoundNode("if", $2, $4, NewCompoundNode())
             cur := $$
-            if len($5) > 0 {
-                for _, e := range $5 {
-                    cur.([]interface{})[3] = e
-                    cur = e
-                }
+            for _, e := range $5.Compound {
+                cur.Compound[3] = e
+                cur = e
             }
-            cur.([]interface{})[3] = $7
+            cur.Compound[3] = $7
         } |
         TSet TIdent '=' expr {
-            $$ = []interface{}{"var", $2.Str, $4}
+            $$ = NewCompoundNode("set", $2.Str, $4)
         } |
         TReturn {
-            $$ = []interface{}{"ret"}
+            $$ = NewCompoundNode("ret")
         } |
-        TReturn exprlist {
-            $$ = []interface{}{"ret", $2}
+        TReturn expr {
+            $$ = NewCompoundNode("ret", $2)
         } |
         TBreak  {
-            $$ = "break"
+            $$ = NewCompoundNode("break")
         } |
         TContinue  {
-            $$ = "continue"
+            $$ = NewCompoundNode("continue")
         }
 
 elseifs: 
         {
-            $$ = []interface{}{}
+            $$ = NewCompoundNode()
         } | 
         elseifs TElseIf expr TThen block {
-            $$ = append($$, []interface{}{"if", $3, $5, nil})
-        }
-
-funcname: 
-        funcname1 {
-            $$ = $1
-        }
-
-funcname1:
-        TIdent {
-            $$ = $1.Str
+            $$.Compound = append($$.Compound, NewCompoundNode("if", $3, $5, NewCompoundNode()))
         }
 
 var:
         TIdent {
-            $$ = $1.Str
+            $$ = NewAtomNode($1)
         } |
         prefixexp '[' expr ']' {
-            $$ = []interface{}{$1, ":", $3}
+            $$ = NewCompoundNode($1, ":", $3)
         } | 
         prefixexp '.' TIdent {
-            $$ = []interface{}{$1, ":", $3.Str}
+            $$ = NewCompoundNode($1, ":", $3.Str)
         }
 
 namelist:
         TIdent {
-            $$ = []interface{}{$1.Str}
+            $$ = NewCompoundNode($1.Str)
         } | 
         namelist ','  TIdent {
-            $$ = append($1, $3.Str)
+            $1.Compound = append($1.Compound, NewAtomNode($3))
+            $$ = $1
         }
 
 exprlist:
         expr {
-            $$ = []interface{}{$1}
+            $$ = NewCompoundNode($1)
+            $$.Pos = $1.Pos
         } |
         exprlist ',' expr {
-            $$ = append($1, $3)
+            $1.Compound = append($1.Compound, $3)
+            $$ = $1
         }
 
 expr:
         TNil {
-            $$ = "nil"
+            $$ = NewCompoundNode("nil")
+            $$.Pos = $1.Pos
         } | 
         TFalse {
-            $$ = "false"
+            $$ = NewCompoundNode("false")
+            $$.Pos = $1.Pos
         } | 
         TTrue {
-            $$ = "true"
+            $$ = NewCompoundNode("true")
+            $$.Pos = $1.Pos
         } | 
         TNumber {
-            $$ = $1.Str
+            $$ = NewNumberNode($1.Str)
+            $$.Pos = $1.Pos
         } |
         function {
             $$ = $1
@@ -192,57 +181,78 @@ expr:
             $$ = $1
         } |
         expr TOr expr {
-            $$ = []interface{}{"or", $1,$3}
+            $$ = NewCompoundNode("or", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr TAnd expr {
-            $$ = []interface{}{"and", $1,$3}
+            $$ = NewCompoundNode("and", $1,$3)
+            $$.Pos = $1.Pos
+        } |
+        expr TXor expr {
+            $$ = NewCompoundNode("xor", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr '>' expr {
-            $$ = []interface{}{">", $1,$3}
+            $$ = NewCompoundNode(">", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr '<' expr {
-            $$ = []interface{}{"<", $1,$3}
+            $$ = NewCompoundNode("<", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr TGte expr {
-            $$ = []interface{}{">=", $1,$3}
+            $$ = NewCompoundNode(">=", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr TLte expr {
-            $$ = []interface{}{"<=", $1,$3}
+            $$ = NewCompoundNode("<=", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr TEqeq expr {
-            $$ = []interface{}{"==", $1,$3}
+            $$ = NewCompoundNode("eq", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr TNeq expr {
-            $$ = []interface{}{"!=", $1,$3}
+            $$ = NewCompoundNode("neq", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr '+' expr {
-            $$ = []interface{}{"+", $1,$3}
+            $$ = NewCompoundNode("+", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr '-' expr {
-            $$ = []interface{}{"-", $1,$3}
+            $$ = NewCompoundNode("-", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr '*' expr {
-            $$ = []interface{}{"*", $1,$3}
+            $$ = NewCompoundNode("*", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr '/' expr {
-            $$ = []interface{}{"/", $1,$3}
+            $$ = NewCompoundNode("/", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr '%' expr {
-            $$ = []interface{}{"%", $1,$3}
+            $$ = NewCompoundNode("%", $1,$3)
+            $$.Pos = $1.Pos
         } |
         expr '^' expr {
-            $$ = []interface{}{"^", $1,$3}
+            $$ = NewCompoundNode("^", $1,$3)
+            $$.Pos = $1.Pos
         } |
         '-' expr %prec UNARY {
-            $$ = []interface{}{"-", $2}
+            $$ = NewCompoundNode("-", $2)
+            $$.Pos = $2.Pos
         } |
         TNot expr %prec UNARY {
-            $$ = []interface{}{"not", $2}
+            $$ = NewCompoundNode("not", $2)
+            $$.Pos = $2.Pos
         }
 
 string: 
         TString {
-            $$ = $1.Str
+            $$ = NewStringNode($1.Str)
+            $$.Pos = $1.Pos
         } 
 
 prefixexp:
@@ -266,7 +276,7 @@ afunctioncall:
 
 functioncall:
         prefixexp args {
-            $$ = []interface{}{"call", $1, $2}
+            $$ = NewCompoundNode("call", $1, $2)
         }
 
 args:
@@ -274,7 +284,7 @@ args:
             if yylex.(*Lexer).PNewLine {
                yylex.(*Lexer).TokenError($1, "ambiguous syntax (function call x new statement)")
             }
-            $$ = []interface{}{}
+            $$ = NewCompoundNode()
         } |
         '(' exprlist ')' {
             if yylex.(*Lexer).PNewLine {
@@ -284,21 +294,13 @@ args:
         }
 
 function:
-        TFunction funcbody {
-            $$ = []interface{}{"lambda", $2.([]interface{})[0], $2.([]interface{})[1]}
-        }
-
-funcbody:
-        '(' parlist ')' block TEnd {
-            $$ = []interface{}{$2, $4}
-        } | 
-        '(' ')' block TEnd {
-            $$ = []interface{}{nil, $3}
-        }
-
-parlist:
-        namelist {
-          $$ = $1
+        TFunction '(' ')' block TEnd {
+            $$ = NewCompoundNode("lambda", NewCompoundNode(), $4)
+            $$.Pos = $1.Pos
+        } |
+        TFunction '(' namelist ')' block TEnd {
+            $$ = NewCompoundNode("lambda", $3, $5)
+            $$.Pos = $1.Pos
         }
 
 %%

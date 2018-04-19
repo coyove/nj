@@ -4,17 +4,17 @@ import (
 	"fmt"
 
 	"github.com/coyove/bracket/base"
-	"github.com/coyove/bracket/vm"
+	"github.com/coyove/bracket/parser"
 )
 
-var opMapping map[string]func(int16, []*token, *base.CMap) ([]byte, int32, int16, error)
+var opMapping map[string]func(int16, []*parser.Node, *base.CMap) ([]byte, int32, int16, error)
 
 var flatOpMapping map[string]bool
 
 func init() {
-	opMapping = make(map[string]func(int16, []*token, *base.CMap) ([]byte, int32, int16, error))
-	opMapping["var"] = compileSetOp
+	opMapping = make(map[string]func(int16, []*parser.Node, *base.CMap) ([]byte, int32, int16, error))
 	opMapping["set"] = compileSetOp
+	opMapping["move"] = compileSetOp
 	opMapping["ret"] = compileRetOp
 	opMapping["inc"] = compileIncOp
 	opMapping["lambda"] = compileLambdaOp
@@ -23,6 +23,7 @@ func init() {
 	opMapping["continue"] = compileContinueBreakOp
 	opMapping["break"] = compileContinueBreakOp
 	opMapping["typeof"] = compileTypeofOp
+	opMapping["call"] = compileCallOp
 
 	flatOpMapping = make(map[string]bool)
 	flatOpMapping["+"] = true
@@ -59,41 +60,41 @@ func init() {
 	flatOpMapping["false"] = true
 }
 
-func fill1(buf *base.BytesReader, atom *token, varLookup *base.CMap, a, i, s byte) (err error) {
-	switch atom.ty {
-	case TK_atomic:
-		varIndex := varLookup.GetRelPosition(atom.v.(string))
+func fill1(buf *base.BytesReader, n *parser.Node, varLookup *base.CMap, a, i, s byte) (err error) {
+	switch n.Type {
+	case parser.NTAtom:
+		varIndex := varLookup.GetRelPosition(n.Value.(string))
 		if varIndex == -1 {
-			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, atom)
+			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
 			return
 		}
 		buf.WriteByte(a)
 		buf.WriteInt32(varIndex)
-	case TK_number:
+	case parser.NTNumber:
 		buf.WriteByte(i)
-		buf.WriteDouble(atom.v.(float64))
-	case TK_string:
+		buf.WriteDouble(n.Value.(float64))
+	case parser.NTString:
 		buf.WriteByte(s)
-		buf.WriteString(atom.v.(string))
-	case TK_addr:
+		buf.WriteString(n.Value.(string))
+	case parser.NTAddr:
 		buf.WriteByte(a)
-		buf.WriteInt32(atom.v.(int32))
+		buf.WriteInt32(n.Value.(int32))
 	default:
-		return fmt.Errorf("fill1 unknown type")
+		return fmt.Errorf("fill1 unknown type: %d", n.Type)
 	}
 	return nil
 }
 
 func compileCompoundIntoVariable(
 	stackPtr int16,
-	compound *token,
+	compound *parser.Node,
 	varLookup *base.CMap,
 	intoNewVar bool,
 	intoExistedVar int32,
 ) (code []byte, yx int32, newStackPtr int16, err error) {
 	buf := base.NewBytesBuffer()
 	if isStoreLoadSugar(compound) {
-		code, yx, stackPtr, err = flatWrite(stackPtr, expandStoreLoadSugar(compound).v.([]*token), varLookup, base.OP_LOAD)
+		code, yx, stackPtr, err = flatWrite(stackPtr, expandStoreLoadSugar(compound).Compound, varLookup, base.OP_LOAD)
 		buf.Write(code)
 		buf.WriteByte(base.OP_SET)
 		if intoNewVar {
@@ -108,7 +109,7 @@ func compileCompoundIntoVariable(
 	}
 
 	var newYX int32
-	code, newYX, stackPtr, err = compileImpl(stackPtr, compound.v.([]*token), varLookup)
+	code, newYX, stackPtr, err = compile(stackPtr, compound.Compound, varLookup)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -126,23 +127,23 @@ func compileCompoundIntoVariable(
 	return buf.Bytes(), yx, stackPtr, nil
 }
 
-func extract(stackPtr int16, atom *token, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+func extract(stackPtr int16, n *parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 	var varIndex int32
 
-	switch atom.ty {
-	case TK_atomic:
-		varIndex = varLookup.GetRelPosition(atom.v.(string))
+	switch n.Type {
+	case parser.NTAtom:
+		varIndex = varLookup.GetRelPosition(n.Value.(string))
 		if varIndex == -1 {
-			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, atom)
+			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
 			return
 		}
-	case TK_addr:
-		varIndex = atom.v.(int32)
+	case parser.NTAddr:
+		varIndex = n.Value.(int32)
 	default:
-		if isStoreLoadSugar(atom) {
-			code, yx, stackPtr, err = flatWrite(stackPtr, expandStoreLoadSugar(atom).v.([]*token), varLookup, base.OP_LOAD)
+		if isStoreLoadSugar(n) {
+			code, yx, stackPtr, err = flatWrite(stackPtr, expandStoreLoadSugar(n).Compound, varLookup, base.OP_LOAD)
 		} else {
-			code, yx, stackPtr, err = compileImpl(stackPtr, atom.v.([]*token), varLookup)
+			code, yx, stackPtr, err = compile(stackPtr, n.Compound, varLookup)
 		}
 		if err != nil {
 			return
@@ -152,41 +153,35 @@ func extract(stackPtr int16, atom *token, varLookup *base.CMap) (code []byte, yx
 	return code, varIndex, stackPtr, nil
 }
 
-func compileImpl(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
-	if len(atoms) == 0 {
+func compile(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+	if len(nodes) == 0 {
 		return nil, base.REG_A, stackPtr, nil
 	}
 
-	if name, ok := atoms[0].v.(string); ok {
+	if name, ok := nodes[0].Value.(string); ok {
 		f := opMapping[name]
 		if f == nil {
 			if flatOpMapping[name] {
-				return compileFlatOp(stackPtr, atoms, varLookup)
+				return compileFlatOp(stackPtr, nodes, varLookup)
 			}
-
-			if _, ok := vm.LibLookup[name]; ok {
-				return compileFlatOp(stackPtr, atoms, varLookup)
-			}
-
-			return compileCallOp(stackPtr, atoms, varLookup)
+			panic(name)
 		}
 
-		return f(stackPtr, atoms, varLookup)
+		return f(stackPtr, nodes, varLookup)
 	}
-	return compileCallOp(stackPtr, atoms, varLookup)
+
+	panic(1)
 }
 
-func compile(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+func compileChainOp(stackPtr int16, chain *parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 	buf := base.NewBytesBuffer()
 
-	for i := 0; i < len(atoms); i++ {
-		a := atoms[i]
-		if a.ty != TK_compound {
-			err = fmt.Errorf("every atom in the chain must be a compound: %+v", a)
-			return
+	for _, a := range chain.Compound {
+		if a.Type != parser.NTCompound {
+			continue
 		}
 
-		code, yx, stackPtr, err = compileImpl(stackPtr, a.v.([]*token), varLookup)
+		code, yx, stackPtr, err = compile(stackPtr, a.Compound, varLookup)
 		if err != nil {
 			return
 		}
@@ -194,6 +189,5 @@ func compile(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []byte,
 		buf.Write(code)
 	}
 
-	buf.WriteByte(base.OP_EOB)
 	return buf.Bytes(), yx, stackPtr, err
 }

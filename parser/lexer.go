@@ -282,7 +282,7 @@ var reservedWords = map[string]int{
 	"and": TAnd, "break": TBreak, "continue": TContinue, "do": TDo, "else": TElse, "elseif": TElseIf,
 	"end": TEnd, "false": TFalse, "for": TFor, "function": TFunction,
 	"if": TIf, "in": TIn, "set": TSet, "nil": TNil, "not": TNot, "or": TOr,
-	"return": TReturn, "then": TThen, "true": TTrue, "while": TWhile}
+	"return": TReturn, "then": TThen, "true": TTrue, "while": TWhile, "xor": TXor}
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
 redo:
@@ -414,7 +414,7 @@ finally:
 
 type Lexer struct {
 	scanner       *Scanner
-	Stmts         []interface{}
+	Stmts         *Node
 	PNewLine      bool
 	Token         Token
 	PrevTokenType int
@@ -442,7 +442,7 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 	panic(lx.scanner.TokenError(tok, message))
 }
 
-func Parse(reader io.Reader, name string) (chunk []interface{}, err error) {
+func Parse(reader io.Reader, name string) (chunk *Node, err error) {
 	lexer := &Lexer{NewScanner(reader, name), nil, false, Token{Str: ""}, TNil}
 	chunk = nil
 	defer func() {
@@ -517,10 +517,6 @@ func dump(node interface{}, level int, s string) string {
 		buf = append(buf, strings.Repeat(s, level)+fmt.Sprint(node))
 	}
 	return strings.Join(buf, "\n")
-}
-
-func Dump(chunk []Stmt) string {
-	return dump(chunk, 0, "   ")
 }
 
 // }}

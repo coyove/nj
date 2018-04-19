@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/coyove/bracket/base"
+	"github.com/coyove/bracket/parser"
 )
 
 func truncLastByte(b []byte) []byte {
@@ -13,15 +14,10 @@ func truncLastByte(b []byte) []byte {
 	return b
 }
 
-func compileIfOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+func compileIfOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 	/* [if [condition]
-			[true branch code]
-			[true branch code]
-			...
-		else
-			[false branch code]
-			[false branch code]
-			...
+			[true branch]
+			[false branch]
 	   ] */
 	if len(atoms) < 3 {
 		err = fmt.Errorf("if statement should have at least a true branch: %+v", atoms[0])
@@ -29,43 +25,29 @@ func compileIfOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []b
 	}
 
 	condition := atoms[1]
-	trueBranch, falseBranch := make([]*token, 0, 16), make([]*token, 0, 16)
-	currentBranch := &trueBranch
+	trueBranch, falseBranch := atoms[2], atoms[3]
 
-	for i := 2; i < len(atoms); i++ {
-		l := atoms[i]
-		if equalI("else", l.v) {
-			if currentBranch == &falseBranch {
-				err = fmt.Errorf("if already has an else: %+v", atoms[0])
-				return
-			}
-			currentBranch = &falseBranch
-		} else {
-			*currentBranch = append(*currentBranch, l)
-		}
-	}
+	switch condition.Type {
+	case parser.NTNumber, parser.NTString:
+		// fflag := false
+		// if condition.ty == TK_number && condition.Value.(float64) == 0 {
+		// 	fflag = true
+		// } else if condition.ty == TK_string && condition.Value.(string) == "" {
+		// 	fflag = true
+		// }
 
-	switch condition.ty {
-	case TK_number, TK_string:
-		fflag := false
-		if condition.ty == TK_number && condition.v.(float64) == 0 {
-			fflag = true
-		} else if condition.ty == TK_string && condition.v.(string) == "" {
-			fflag = true
-		}
+		// if fflag {
+		// 	if len(falseBranch) > 0 {
+		// 		code, yx, stackPtr, err = compile(stackPtr, falseBranch, varLookup)
+		// 	}
+		// } else {
+		// 	code, yx, stackPtr, err = compile(stackPtr, trueBranch, varLookup)
+		// }
 
-		if fflag {
-			if len(falseBranch) > 0 {
-				code, yx, stackPtr, err = compile(stackPtr, falseBranch, varLookup)
-			}
-		} else {
-			code, yx, stackPtr, err = compile(stackPtr, trueBranch, varLookup)
-		}
-
-		code = truncLastByte(code)
-		yx = base.REG_A
-		return
-	case TK_atomic, TK_compound:
+		// code = truncLastByte(code)
+		// yx = base.REG_A
+		// return
+	case parser.NTAtom, parser.NTCompound:
 		buf := base.NewBytesBuffer()
 		code, yx, stackPtr, err = extract(stackPtr, condition, varLookup)
 		if err != nil {
@@ -77,11 +59,8 @@ func compileIfOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []b
 		buf.WriteInt32(yx)
 
 		var trueCode, falseCode []byte
-		trueCode, yx, stackPtr, err = compile(stackPtr, trueBranch, varLookup)
-		trueCode = truncLastByte(trueCode)
-
-		falseCode, yx, stackPtr, err = compile(stackPtr, falseBranch, varLookup)
-		falseCode = truncLastByte(falseCode)
+		trueCode, yx, stackPtr, err = compileChainOp(stackPtr, trueBranch, varLookup)
+		falseCode, yx, stackPtr, err = compileChainOp(stackPtr, falseBranch, varLookup)
 
 		if len(falseCode) > 0 {
 			buf.WriteInt32(int32(len(trueCode)) + 5) // jmp (1b) + offset (4b)

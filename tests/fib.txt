@@ -1,7 +1,7 @@
-[var fib 0]
-[set fib [lambda [n]
-    [if [< n 2] [ret n]]
-    [ret [+ [fib [- n 2]] [fib [- n 1]]]]
-]]
+set fib = 0
+fib = function(n)
+    if n < 2 then return n end
+    return fib(n-2)+fib(n-1)
+end
 
-[stdout/println [fib 35]]
+return fib(15)

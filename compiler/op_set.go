@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/coyove/bracket/base"
+	"github.com/coyove/bracket/parser"
 )
 
 const (
@@ -15,16 +16,16 @@ const (
 	ERR_UNDECLARED_VARIABLE = "undeclared variable: %+v"
 )
 
-func isStoreLoadSugar(t *token) bool {
+func isStoreLoadSugar(t *parser.Node) bool {
 	ans := false
-	if t.ty == TK_compound {
-		tokens := t.v.([]*token)
+	if t.Type == parser.NTCompound {
+		tokens := t.Compound
 		if len(tokens) >= 3 {
 			ans = true
 
 			// form: [a : b : c : d ...]
 			for i := 1; i < len(tokens); i += 2 {
-				if r, ok := tokens[i].v.(rune); ok && r == ':' {
+				if r, ok := tokens[i].Value.(string); ok && r == ":" {
 				} else {
 					ans = false
 					break
@@ -35,18 +36,22 @@ func isStoreLoadSugar(t *token) bool {
 	return ans
 }
 
-func expandStoreLoadSugar(t *token) *token {
-	ts := t.v.([]*token)
-	tokens := make([]*token, 0, len(ts))
+func expandStoreLoadSugar(t *parser.Node) *parser.Node {
+	ts := t.Compound
+	tokens := make([]*parser.Node, 0, len(ts))
 	tokens = append(tokens, nil)
 	for i := 0; i < len(ts); i += 2 {
 		tokens = append(tokens, ts[i])
 	}
 
-	return &token{ty: TK_compound, v: tokens}
+	return &parser.Node{
+		Type:     parser.NTCompound,
+		Pos:      t.Pos,
+		Compound: tokens,
+	}
 }
 
-func compileSetOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+func compileSetOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 	aVar := atoms[1]
 	varIndex := int32(0)
 	if len(atoms) < 3 {
@@ -56,21 +61,21 @@ func compileSetOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []
 
 	aValue := atoms[2]
 	storeSugar := false
-	if atoms[0].v.(string) == "set" && isStoreLoadSugar(aVar) {
+	if atoms[0].Value.(string) == "move" && isStoreLoadSugar(aVar) {
 		storeSugar = true
 	}
 
 	buf := base.NewBytesBuffer()
 	if !storeSugar {
 		var newYX int32
-		if atoms[0].v.(string) == "var" {
+		if atoms[0].Value.(string) == "set" {
 			// compound has its own logic, we won't incr stack here
-			if aValue.ty != TK_compound {
+			if aValue.Type != parser.NTCompound {
 				newYX = int32(stackPtr)
 				stackPtr++
 			}
 		} else {
-			varIndex = varLookup.GetRelPosition(aVar.v.(string))
+			varIndex = varLookup.GetRelPosition(aVar.Value.(string))
 			if varIndex == -1 {
 				err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, aVar)
 				return
@@ -78,9 +83,9 @@ func compileSetOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []
 			newYX = varIndex
 		}
 
-		switch aValue.ty {
-		case TK_atomic:
-			valueIndex := varLookup.GetRelPosition(aValue.v.(string))
+		switch aValue.Type {
+		case parser.NTAtom:
+			valueIndex := varLookup.GetRelPosition(aValue.Value.(string))
 			if valueIndex == -1 {
 				err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, aValue)
 				return
@@ -89,46 +94,46 @@ func compileSetOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []
 			buf.WriteByte(base.OP_SET)
 			buf.WriteInt32(newYX)
 			buf.WriteInt32(valueIndex)
-		case TK_number:
+		case parser.NTNumber:
 			buf.WriteByte(base.OP_SET_NUM)
 			buf.WriteInt32(newYX)
-			buf.WriteDouble(aValue.v.(float64))
-		case TK_string:
+			buf.WriteDouble(aValue.Value.(float64))
+		case parser.NTString:
 			buf.WriteByte(base.OP_SET_STR)
 			buf.WriteInt32(newYX)
-			buf.WriteString(aValue.v.(string))
-		case TK_compound:
+			buf.WriteString(aValue.Value.(string))
+		case parser.NTCompound:
 			code, newYX, stackPtr, err = compileCompoundIntoVariable(stackPtr, aValue, varLookup,
-				atoms[0].v.(string) == "var", varIndex)
+				atoms[0].Value.(string) == "set", varIndex)
 			if err != nil {
 				return
 			}
 			buf.Write(code)
 		}
 
-		if atoms[0].v.(string) == "var" {
-			varLookup.M[aVar.v.(string)] = int16(newYX)
+		if atoms[0].Value.(string) == "set" {
+			varLookup.M[aVar.Value.(string)] = int16(newYX)
 		}
 
 		return buf.Bytes(), newYX, stackPtr, nil
 	}
 
-	fatoms := expandStoreLoadSugar(aVar).v.([]*token)
+	fatoms := expandStoreLoadSugar(aVar).Compound
 	fatoms = append(fatoms, aValue)
 	return flatWrite(stackPtr, fatoms, varLookup, base.OP_STORE)
 }
 
-func compileRetOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+func compileRetOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 	atom := atoms[1]
 	buf := base.NewBytesBuffer()
 
-	switch atom.ty {
-	case TK_atomic, TK_number, TK_string, TK_addr:
+	switch atom.Type {
+	case parser.NTAtom, parser.NTNumber, parser.NTString, parser.NTAddr:
 		err = fill1(buf, atom, varLookup, base.OP_RET, base.OP_RET_NUM, base.OP_RET_STR)
 		if err != nil {
 			return
 		}
-	case TK_compound:
+	case parser.NTCompound:
 		code, yx, stackPtr, err = extract(stackPtr, atom, varLookup)
 		buf.Write(code)
 		buf.WriteByte(base.OP_RET)

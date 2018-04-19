@@ -26,7 +26,6 @@ func main() {
 	log.Println(err, b)
 	log.Println(base.NewBytesReader(b).Prettify(0))
 
-	vm.Exec(base.NewEnv(nil), b)
 	// f, _ := os.Create("1.pbm")
 	// f.Write([]byte("P4\n 1600 1600\n"))
 
@@ -37,6 +36,6 @@ func main() {
 	// 	}
 	// }
 
-	// f.Close()
+	log.Println(vm.Exec(base.NewEnv(nil), b).I())
 	log.Println(time.Now().Sub(start).Nanoseconds() / 1e6)
 }

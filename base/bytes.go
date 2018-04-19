@@ -196,11 +196,11 @@ func (b *BytesReader) Prettify(tab int) string {
 		case OP_SET_STR:
 			sb.WriteString("sets " + xy(b.ReadInt32()) + " " + b.ReadString())
 		case OP_PUSHF:
-			sb.WriteString("pushf " + xy(b.ReadInt32()))
+			sb.WriteString("r " + xy(b.ReadInt32()))
 		case OP_PUSHF_NUM:
-			sb.WriteString("pushfi " + readDouble())
+			sb.WriteString("rn " + readDouble())
 		case OP_PUSHF_STR:
-			sb.WriteString("pushfs " + b.ReadString())
+			sb.WriteString("rs " + b.ReadString())
 		case OP_PUSH:
 			sb.WriteString("push " + xy(b.ReadInt32()))
 		case OP_PUSH_NUM:

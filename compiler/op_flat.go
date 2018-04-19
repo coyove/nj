@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/coyove/bracket/parser"
 	"github.com/coyove/bracket/vm"
 
 	"github.com/coyove/bracket/base"
@@ -11,23 +12,23 @@ import (
 
 func flatWrite(
 	stackPtr int16,
-	atoms []*token,
+	atoms []*parser.Node,
 	varLookup *base.CMap,
 	bop byte,
 ) (code []byte, yx int32, newStackPtr int16, err error) {
 
-	replacedAtoms := []*token{}
+	replacedAtoms := []*parser.Node{}
 	buf := base.NewBytesBuffer()
 
 	for i := 1; i < len(atoms); i++ {
 		atom := atoms[i]
 
-		if atom.ty == TK_compound {
+		if atom.Type == parser.NTCompound {
 			code, yx, stackPtr, err = compileCompoundIntoVariable(stackPtr, atom, varLookup, true, 0)
 			if err != nil {
 				return
 			}
-			atoms[i] = &token{ty: TK_addr, v: yx}
+			atoms[i] = &parser.Node{Type: parser.NTAddr, Value: yx}
 			replacedAtoms = append(replacedAtoms, atoms[i])
 			buf.Write(code)
 		}
@@ -35,7 +36,7 @@ func flatWrite(
 
 	if len(replacedAtoms) == 1 {
 		buf.SetCursor(buf.Len() - 4)
-		replacedAtoms[0].v = buf.ReadInt32()
+		replacedAtoms[0].Value = buf.ReadInt32()
 		buf.Truncate(9)
 		stackPtr--
 	}
@@ -52,10 +53,10 @@ func flatWrite(
 
 	if extflag {
 		l, r := atoms[1], atoms[2]
-		lf := l.ty == TK_atomic || l.ty == TK_compound || l.ty == TK_addr
-		rf := r.ty == TK_atomic || r.ty == TK_compound || r.ty == TK_addr
+		lf := l.Type == parser.NTAtom || l.Type == parser.NTCompound || l.Type == parser.NTAddr
+		rf := r.Type == parser.NTAtom || r.Type == parser.NTCompound || r.Type == parser.NTAddr
 
-		extractWrite := func(atom *token) (int32, error) {
+		extractWrite := func(atom *parser.Node) (int32, error) {
 			code, yx, stackPtr, err = extract(stackPtr, atom, varLookup)
 			buf.Write(code)
 			return yx, err
@@ -77,7 +78,7 @@ func flatWrite(
 			buf.WriteByte(bop)
 			buf.WriteInt32(la)
 			buf.WriteInt32(ra)
-		} else if lf && r.ty == TK_number {
+		} else if lf && r.Type == parser.NTNumber {
 			la, err = extractWrite(l)
 			if err != nil {
 				return
@@ -86,8 +87,8 @@ func flatWrite(
 			buf.WriteByte(base.OP_EXT_F_IMM)
 			buf.WriteByte(bop)
 			buf.WriteInt32(la)
-			buf.WriteDouble(r.v.(float64))
-		} else if l.ty == TK_number && rf {
+			buf.WriteDouble(r.Value.(float64))
+		} else if l.Type == parser.NTNumber && rf {
 			ra, err = extractWrite(r)
 			if err != nil {
 				return
@@ -95,7 +96,7 @@ func flatWrite(
 
 			buf.WriteByte(base.OP_EXT_IMM_F)
 			buf.WriteByte(bop)
-			buf.WriteDouble(l.v.(float64))
+			buf.WriteDouble(l.Value.(float64))
 			buf.WriteInt32(ra)
 		} else {
 			extflag = false
@@ -134,7 +135,7 @@ func flatWrite(
 }
 
 func flatCompile(stackPtr int16,
-	atoms []*token,
+	atoms []*parser.Node,
 	varLookup *base.CMap,
 	bop byte, bop2 uint32,
 	expectedArgsCount int,
@@ -146,7 +147,7 @@ func flatCompile(stackPtr int16,
 		missingArgsCount := expectedArgsCount - argsCount
 		bodyStackPtr := int16(missingArgsCount)
 		for i := 0; i < missingArgsCount; i++ {
-			atoms = append(atoms, &token{ty: TK_addr, v: int32(i)})
+			atoms = append(atoms, &parser.Node{Type: parser.NTAddr, Value: int32(i)})
 		}
 
 		m := base.NewCMap()
@@ -184,10 +185,10 @@ func flatCompile(stackPtr int16,
 }
 
 // @Override
-func compileFlatOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+func compileFlatOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 
 	head := atoms[0]
-	switch head.v.(string) {
+	switch head.Value.(string) {
 	case "+":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_ADD, 0, 2)
 	case "-":
@@ -256,7 +257,7 @@ func compileFlatOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code [
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_BYTES, 0, 0)
 	}
 
-	if lib, ok := vm.LibLookup[head.v.(string)]; ok {
+	if lib, ok := vm.LibLookup[head.Value.(string)]; ok {
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_LIB_CALL, uint32(lib), vm.Lib[lib].Args())
 	}
 

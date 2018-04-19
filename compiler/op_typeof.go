@@ -4,9 +4,10 @@ import (
 	"fmt"
 
 	"github.com/coyove/bracket/base"
+	"github.com/coyove/bracket/parser"
 )
 
-func compileTypeofOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+func compileTypeofOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 	if len(atoms) < 3 {
 		err = fmt.Errorf("typeof needs 2 arguments: %+v", atoms[0])
 		return
@@ -14,15 +15,15 @@ func compileTypeofOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code
 
 	atom := atoms[1]
 	buf := base.NewBytesBuffer()
-	switch atom.ty {
-	case TK_string, TK_number:
+	switch atom.Type {
+	case parser.NTString, parser.NTNumber:
 		err = fmt.Errorf("no need to assert the type of an immediate value: %+v", atom)
 		return
-	case TK_addr:
+	case parser.NTAddr:
 		buf.WriteByte(base.OP_TYPEOF)
-		buf.WriteInt32(atom.v.(int32))
+		buf.WriteInt32(atom.Value.(int32))
 		break
-	case TK_compound, TK_atomic:
+	case parser.NTCompound, parser.NTAtom:
 		code, yx, stackPtr, err = extract(stackPtr, atom, varLookup)
 		if err != nil {
 			return nil, 0, 0, err
@@ -33,12 +34,12 @@ func compileTypeofOp(stackPtr int16, atoms []*token, varLookup *base.CMap) (code
 	}
 
 	t := atoms[2]
-	if t.ty != TK_atomic {
+	if t.Type != parser.NTAtom {
 		err = fmt.Errorf("typeof needs an atom to test: %+v", t)
 		return
 	}
 
-	switch t.v.(string) {
+	switch t.Value.(string) {
 	case "number":
 		buf.WriteInt32(base.TY_number)
 	case "string":

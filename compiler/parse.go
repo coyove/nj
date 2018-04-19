@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/coyove/bracket/base"
+	"github.com/coyove/bracket/parser"
 )
 
 const (
@@ -257,36 +259,15 @@ func (f *tokenReader) parseNext(t *token) (*token, error) {
 	}
 }
 
-func (f *tokenReader) parse() (code []byte, err error) {
-	// tokens := make([]*token, 0, 16)
-	buf := base.NewBytesBuffer()
+func parse(n *parser.Node) (code []byte, err error) {
 	varLookup := base.NewCMap()
-
-	var stackPtr int16
-	var a *token
-
-	for t := f.nextToken(); t != nil; t = f.nextToken() {
-		a, err = f.parseNext(t)
-		if err != nil {
-			return nil, err
-		}
-		// tokens = append(tokens, ts)
-
-		if a.ty != TK_compound {
-			err = fmt.Errorf("every atom in the chain must be a compound: %+v", a)
-			return
-		}
-
-		code, _, stackPtr, err = compileImpl(stackPtr, a.v.([]*token), varLookup)
-		if err != nil {
-			return
-		}
-
-		buf.Write(code)
+	code, _, _, err = compileChainOp(0, n, varLookup)
+	if err != nil {
+		return
 	}
 
-	buf.WriteByte(base.OP_EOB)
-	return buf.Bytes(), nil
+	code = append(code, base.OP_EOB)
+	return code, nil
 }
 
 func equalI(l, r interface{}) bool {
@@ -300,11 +281,16 @@ func equalI(l, r interface{}) bool {
 }
 
 func LoadFile(path string) ([]byte, error) {
-	tr, err := newTokenReader(path, false)
+	code, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	defer tr.Close()
-	return tr.parse()
+	n, err := parser.Parse(bytes.NewReader(code), path)
+	if err != nil {
+		return nil, err
+	}
+
+	n.Dump(os.Stderr)
+	return parse(n)
 }
