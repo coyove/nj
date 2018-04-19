@@ -42,13 +42,30 @@ func flatWrite(
 	}
 
 	extflag := false
-	if len(atoms) == 3 {
-		switch bop {
-		case base.OP_SUB, base.OP_MUL, base.OP_DIV, base.OP_MOD,
-			base.OP_LESS, base.OP_LESS_EQ, base.OP_MORE, base.OP_MORE_EQ,
-			base.OP_BIT_LSH, base.OP_BIT_RSH, base.OP_BIT_AND, base.OP_BIT_OR:
-			extflag = true
-		}
+	switch bop {
+	case
+		base.OP_ADD,
+		base.OP_SUB,
+		base.OP_MUL,
+		base.OP_DIV,
+		base.OP_MOD,
+		base.OP_EQ,
+		base.OP_NEQ,
+		base.OP_LESS,
+		base.OP_LESS_EQ,
+		base.OP_MORE,
+		base.OP_MORE_EQ,
+		base.OP_NOT,
+		base.OP_AND,
+		base.OP_OR,
+		base.OP_XOR,
+		base.OP_BIT_NOT,
+		base.OP_BIT_AND,
+		base.OP_BIT_OR,
+		base.OP_BIT_XOR,
+		base.OP_BIT_LSH,
+		base.OP_BIT_RSH:
+		extflag = true
 	}
 
 	if extflag {
@@ -209,18 +226,12 @@ func compileFlatOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_MORE, 0, 2)
 	case ">=":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_MORE_EQ, 0, 2)
-	case "eq", "==":
+	case "eq":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_EQ, 0, 2)
 	case "neq":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_NEQ, 0, 2)
 	case "assert":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_ASSERT, 0, 1)
-	case "list":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_LIST, 0, 0)
-	case "map":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_MAP, 0, 0)
-	case "expand":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_EXPAND, 0, 1)
 	case "not":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_NOT, 0, 1)
 	case "and":
@@ -229,22 +240,18 @@ func compileFlatOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_OR, 0, 2)
 	case "xor":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_XOR, 0, 2)
-	case "b/not":
+	case "~":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_NOT, 0, 1)
-	case "b/and":
+	case "&":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_AND, 0, 2)
-	case "b/or":
+	case "|":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_OR, 0, 2)
-	case "b/xor":
+	case "^":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_XOR, 0, 2)
-	case "b/lsh":
+	case "<<":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_LSH, 0, 2)
-	case "b/rsh":
+	case ">>":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_RSH, 0, 2)
-	case "store":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_STORE, 0, 3)
-	case "load":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_LOAD, 0, 2)
 	case "len":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_LEN, 0, 1)
 	case "nil":
@@ -255,6 +262,14 @@ func compileFlatOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_FALSE, 0, 0)
 	case "bytes":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_BYTES, 0, 0)
+	case "store":
+		return flatCompile(stackPtr, atoms, varLookup, base.OP_STORE, 0, 3)
+	case "load":
+		return flatCompile(stackPtr, atoms, varLookup, base.OP_LOAD, 0, 2)
+	case "list":
+		return flatCompile(stackPtr, atoms, varLookup, base.OP_LIST, 0, 0)
+	case "map":
+		return flatCompile(stackPtr, atoms, varLookup, base.OP_MAP, 0, 0)
 	}
 
 	if lib, ok := vm.LibLookup[head.Value.(string)]; ok {

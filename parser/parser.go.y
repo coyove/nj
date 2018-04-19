@@ -31,7 +31,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TAnd TBreak TContinue TDo TElse TElseIf TEnd TFalse TFor TFunction TIf TIn TNil TNot TOr TReturn TSet TThen TTrue TWhile TXor
+%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TFor TFunction TIf TIn TNil TNot TOr TReturn TSet TThen TTrue TTypeIs TWhile TXor
 
 /* Literals */
 %token<token> TEqeq TNeq TLte TGte TIdent TNumber TString '{' '('
@@ -180,6 +180,14 @@ expr:
         string {
             $$ = $1
         } |
+        TAssert expr %prec UNARY {
+            $$ = NewCompoundNode("assert", $2)
+            $$.Pos = $2.Pos
+        } |
+        expr TTypeIs TIdent {
+            $$ = NewCompoundNode("typeof", $1, $3)
+            $$.Pos = $1.Pos
+        } |
         expr TOr expr {
             $$ = NewCompoundNode("or", $1,$3)
             $$.Pos = $1.Pos
@@ -242,6 +250,10 @@ expr:
         } |
         '-' expr %prec UNARY {
             $$ = NewCompoundNode("-", $2)
+            $$.Pos = $2.Pos
+        } |
+        '~' expr %prec UNARY {
+            $$ = NewCompoundNode("~", $2)
             $$.Pos = $2.Pos
         } |
         TNot expr %prec UNARY {

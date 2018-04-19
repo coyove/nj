@@ -4,4 +4,4 @@ fib = function(n)
     return fib(n-2)+fib(n-1)
 end
 
-return fib(15)
+return fib(35)
