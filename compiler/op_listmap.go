@@ -9,13 +9,13 @@ import (
 
 func compileListOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 	var buf *base.BytesReader
-	buf, stackPtr, err = flaten(stackPtr, atoms[2:], varLookup)
+	buf, stackPtr, err = flaten(stackPtr, atoms[2].Compound, varLookup)
 	if err != nil {
 		return
 	}
 
-	for i := 2; i < len(atoms); i++ {
-		err = fill1(buf, atoms[i], varLookup, base.OP_PUSH, base.OP_PUSH_NUM, base.OP_PUSH_STR)
+	for _, atom := range atoms[2].Compound {
+		err = fill1(buf, atom, varLookup, base.OP_PUSH, base.OP_PUSH_NUM, base.OP_PUSH_STR)
 		if err != nil {
 			return
 		}
@@ -31,13 +31,13 @@ func compileMapOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (c
 	}
 
 	var buf *base.BytesReader
-	buf, stackPtr, err = flaten(stackPtr, atoms[2:], varLookup)
+	buf, stackPtr, err = flaten(stackPtr, atoms[2].Compound, varLookup)
 	if err != nil {
 		return
 	}
 
-	for i := 2; i < len(atoms); i++ {
-		err = fill1(buf, atoms[i], varLookup, base.OP_PUSH, base.OP_PUSH_NUM, base.OP_PUSH_STR)
+	for _, atom := range atoms[2].Compound {
+		err = fill1(buf, atom, varLookup, base.OP_PUSH, base.OP_PUSH_NUM, base.OP_PUSH_STR)
 		if err != nil {
 			return
 		}

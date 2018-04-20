@@ -1,5 +1,7 @@
 %{
 package parser
+
+import "github.com/coyove/bracket/vm"
 %}
 %type<stmts> block
 %type<stmt>  stat
@@ -31,10 +33,10 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TFor TFunction TIf TIn TNil TNot TOr TReturn TSet TThen TTrue TTypeIs TWhile TXor
+%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TFor TIf TIn TLambda TNil TNot TOr TReturn TSet TThen TTrue TWhile TXor
 
 /* Literals */
-%token<token> TEqeq TNeq TLte TGte TIdent TNumber TString '{' '('
+%token<token> TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '(' '|' '&'
 
 /* Operators */
 %left TOr
@@ -42,6 +44,8 @@ package parser
 %left '>' '<' TGte TLte TEqeq TNeq
 %left '+' '-'
 %left '*' '/' '%'
+%left TLsh TRsh
+%left '|' '&'
 %right UNARY /* not # -(unary) */
 %right '^'
 
@@ -104,8 +108,17 @@ stat:
             }
             cur.Compound[3] = $7
         } |
-        TSet TIdent '=' expr {
-            $$ = NewCompoundNode("set", $2.Str, $4)
+        TSet namelist '=' exprlist {
+            $$ = NewCompoundNode("chain")
+            for i, name := range $2.Compound {
+                var e *Node
+                if i < len($4.Compound) {
+                    e = $4.Compound[i]
+                } else {
+                    e = $4.Compound[len($4.Compound) - 1]
+                }
+                $$.Compound = append($$.Compound, NewCompoundNode("set", name, e))
+            }
         } |
         TReturn {
             $$ = NewCompoundNode("ret")
@@ -135,12 +148,13 @@ elseifs:
 var:
         TIdent {
             $$ = NewAtomNode($1)
+            _, $$.LibWH = vm.LibLookup[$1.Str]
         } |
         prefixexp '[' expr ']' {
             $$ = NewCompoundNode("load", $1, $3)
         } | 
         prefixexp '.' TIdent {
-            $$ = NewCompoundNode("load", $1, $3.Str)
+            $$ = NewCompoundNode("load", $1, NewStringNode($3.Str))
         }
 
 namelist:
@@ -187,10 +201,6 @@ expr:
         } |
         string {
             $$ = $1
-        } |
-        expr TTypeIs TIdent {
-            $$ = NewCompoundNode("typeof", $1, $3)
-            $$.Pos = $1.Pos
         } |
         expr TOr expr {
             $$ = NewCompoundNode("or", $1,$3)
@@ -252,8 +262,24 @@ expr:
             $$ = NewCompoundNode("^", $1,$3)
             $$.Pos = $1.Pos
         } |
+        expr TLsh expr {
+            $$ = NewCompoundNode("<<", $1,$3)
+            $$.Pos = $1.Pos
+        } |
+        expr TRsh expr {
+            $$ = NewCompoundNode(">>", $1,$3)
+            $$.Pos = $1.Pos
+        } |
+        expr '|' expr {
+            $$ = NewCompoundNode("|", $1,$3)
+            $$.Pos = $1.Pos
+        } |
+        expr '&' expr {
+            $$ = NewCompoundNode("&", $1,$3)
+            $$.Pos = $1.Pos
+        } |
         '-' expr %prec UNARY {
-            $$ = NewCompoundNode("-", $2)
+            $$ = NewCompoundNode("-", NewNumberNode("0"), $2)
             $$.Pos = $2.Pos
         } |
         '~' expr %prec UNARY {
@@ -310,11 +336,11 @@ args:
         }
 
 function:
-        TFunction '(' ')' block TEnd {
+        TLambda '(' ')' block TEnd {
             $$ = NewCompoundNode("lambda", NewCompoundNode(), $4)
             $$.Pos = $1.Pos
         } |
-        TFunction '(' namelist ')' block TEnd {
+        TLambda '(' namelist ')' block TEnd {
             $$ = NewCompoundNode("lambda", $3, $5)
             $$.Pos = $1.Pos
         }

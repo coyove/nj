@@ -8,7 +8,6 @@ import (
 
 const (
 	TY_nil = iota
-	TY_phantom
 	TY_number
 	TY_string
 	TY_bool
@@ -60,10 +59,6 @@ func NewBoolValue(b bool) Value {
 		v.ptr = unsafe.Pointer(uintptr(falseValue))
 	}
 	return v
-}
-
-func NewPhantomValue() Value {
-	return Value{ty: TY_phantom, ptr: nil}
 }
 
 func NewArrayValue(a []Value) Value {

@@ -90,9 +90,9 @@ func stdWrite(f *os.File, ex bool) func(env *base.Env) base.Value {
 	}
 }
 
-var lib_outprint = LibFunc{name: "stdout/print", args: 0, ff: stdPrint(os.Stdout, true)}
-var lib_outprintln = LibFunc{name: "stdout/println", args: 0, ff: stdPrintln(os.Stdout, true)}
-var lib_outwrite = LibFunc{name: "stdout/write", args: 0, ff: stdWrite(os.Stdout, true)}
-var lib_errprint = LibFunc{name: "stderr/print", args: 0, ff: stdPrint(os.Stderr, true)}
-var lib_errprintln = LibFunc{name: "stderr/println", args: 0, ff: stdPrintln(os.Stderr, true)}
-var lib_errwrite = LibFunc{name: "stderr/write", args: 0, ff: stdWrite(os.Stderr, true)}
+var lib_outprint = LibFunc{name: "out_print", args: 0, ff: stdPrint(os.Stdout, true)}
+var lib_outprintln = LibFunc{name: "out_println", args: 0, ff: stdPrintln(os.Stdout, true)}
+var lib_outwrite = LibFunc{name: "out_write", args: 0, ff: stdWrite(os.Stdout, true)}
+var lib_errprint = LibFunc{name: "err_print", args: 0, ff: stdPrint(os.Stderr, true)}
+var lib_errprintln = LibFunc{name: "err_println", args: 0, ff: stdPrintln(os.Stderr, true)}
+var lib_errwrite = LibFunc{name: "err_write", args: 0, ff: stdWrite(os.Stderr, true)}

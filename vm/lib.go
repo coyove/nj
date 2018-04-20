@@ -2,6 +2,7 @@ package vm
 
 import (
 	"hash/crc32"
+	"log"
 
 	"github.com/coyove/bracket/base"
 )
@@ -9,9 +10,11 @@ import (
 type LibFunc struct {
 	name string
 	args int
-	f    func(env *base.Env) base.Value
 
-	// If we have more than 8 arguments, call ff instead
+	// Arugments are passed by registers
+	f func(env *base.Env) base.Value
+
+	// Arguments are passed by stack
 	ff func(env *base.Env) base.Value
 }
 
@@ -23,6 +26,10 @@ func (l *LibFunc) Args() int {
 	return l.args
 }
 
+func (l *LibFunc) IsFF() bool {
+	return l.ff != nil
+}
+
 var LibLookup map[string]int
 var Lib []LibFunc
 var LibHash uint32
@@ -30,6 +37,7 @@ var LibHash uint32
 func init() {
 	Lib = []LibFunc{
 		lib_foreach,
+		lib_typeof,
 		lib_go,
 
 		lib_outprint,
@@ -56,6 +64,10 @@ func init() {
 	LibLookup = make(map[string]int)
 	c := crc32.New(crc32.IEEETable)
 	for i, l := range Lib {
+		if l.ff != nil && l.f != nil {
+			log.Panicf("%s: can't implement f and ff both at same time", l.name)
+		}
+
 		LibLookup[l.name] = i
 		c.Write([]byte(l.name))
 	}

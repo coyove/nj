@@ -59,7 +59,7 @@ func flatWrite(
 	stackPtr int16,
 	atoms []*parser.Node,
 	varLookup *base.CMap,
-	bop byte,
+	bop byte, bop2 uint32,
 ) (code []byte, yx int32, newStackPtr int16, err error) {
 
 	var buf *base.BytesReader
@@ -68,17 +68,23 @@ func flatWrite(
 		return
 	}
 
-	if len(atoms) > 9 {
-		if bop == base.OP_LIB_CALL {
-			for i := 1; i < len(atoms); i++ {
+	if bop == base.OP_LIB_CALL {
+		ff := vm.Lib[bop2].IsFF()
+		for i := 1; i < len(atoms); i++ {
+			if ff {
 				err = fill1(buf, atoms[i], varLookup, base.OP_PUSH, base.OP_PUSH_NUM, base.OP_PUSH_STR)
-				if err != nil {
-					return
-				}
+			} else {
+				err = fill1(buf, atoms[i], varLookup, indexToOpR(i-1)...)
 			}
+			if err != nil {
+				return
+			}
+		}
+
+		if ff {
 			buf.WriteByte(base.OP_LIB_CALL_EX)
 		} else {
-			panic("shouldn't happen")
+			buf.WriteByte(base.OP_LIB_CALL)
 		}
 	} else {
 		for i := 1; i < len(atoms); i++ {
@@ -115,7 +121,7 @@ func flatCompile(stackPtr int16,
 
 		m := base.NewCMap()
 		m.Parent = varLookup
-		code, yx, _, err = flatWrite(bodyStackPtr, atoms, m, bop)
+		code, yx, _, err = flatWrite(bodyStackPtr, atoms, m, bop, bop2)
 		if err != nil {
 			return
 		}
@@ -139,7 +145,7 @@ func flatCompile(stackPtr int16,
 		return buf.Bytes(), base.REG_A, stackPtr, nil
 	}
 
-	code, yx, stackPtr, err = flatWrite(stackPtr, atoms, varLookup, bop)
+	code, yx, stackPtr, err = flatWrite(stackPtr, atoms, varLookup, bop, bop2)
 	if err == nil && bop == base.OP_LIB_CALL {
 		code = append(code, 0, 0, 0, 0)
 		binary.LittleEndian.PutUint32(code[len(code)-4:], bop2)
@@ -207,15 +213,11 @@ func compileFlatOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (
 	case "false":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_FALSE, 0, 0)
 	case "bytes":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_BYTES, 0, 0)
+		return flatCompile(stackPtr, atoms, varLookup, base.OP_BYTES, 0, 1)
 	case "store":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_STORE, 0, 3)
 	case "load":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_LOAD, 0, 2)
-	case "list":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_LIST, 0, 0)
-	case "map":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_MAP, 0, 0)
 	}
 
 	if lib, ok := vm.LibLookup[head.Value.(string)]; ok {

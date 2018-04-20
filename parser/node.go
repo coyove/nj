@@ -19,6 +19,7 @@ type Node struct {
 	Value    interface{}
 	Pos      Position
 	Compound []*Node
+	LibWH    bool
 }
 
 func NewCompoundNode(args ...interface{}) *Node {

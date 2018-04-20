@@ -9,17 +9,16 @@ import (
 var lib_go = LibFunc{
 	name: "go",
 	args: 1,
-	f: func(env *base.Env) base.Value {
-		newEnv := base.NewEnv(env)
-		cls := env.R0.Closure()
-		args := env.R1.Array()
+	ff: func(env *base.Env) base.Value {
+		newEnv := base.NewEnv(env.Parent())
+		cls := env.Get(0).Closure()
 
-		if cls.ArgsCount() != len(args) {
+		if cls.ArgsCount() < env.Size()-1 {
 			panic("not enough arguments to start")
 		}
 
-		for _, arg := range args {
-			newEnv.Push(arg)
+		for i := 1; i < env.Size(); i++ {
+			newEnv.Push(env.Get(int32(i)))
 		}
 
 		go Exec(newEnv, cls.Code())
@@ -28,7 +27,7 @@ var lib_go = LibFunc{
 }
 
 var lib_syncwaitgroupnew = LibFunc{
-	name: "wait-group/new",
+	name: "wait_group_new",
 	args: 0,
 	f: func(env *base.Env) base.Value {
 		return base.NewGenericValue(&sync.WaitGroup{})
@@ -36,7 +35,7 @@ var lib_syncwaitgroupnew = LibFunc{
 }
 
 var lib_syncwaitgroupadd = LibFunc{
-	name: "wait-group/add",
+	name: "wait_group_add",
 	args: 2,
 	f: func(env *base.Env) base.Value {
 		wg := env.R0.Generic().(*sync.WaitGroup)
@@ -46,7 +45,7 @@ var lib_syncwaitgroupadd = LibFunc{
 }
 
 var lib_syncwaitgroupdone = LibFunc{
-	name: "wait-group/done",
+	name: "wait_group_done",
 	args: 1,
 	f: func(env *base.Env) base.Value {
 		env.R0.Generic().(*sync.WaitGroup).Done()
@@ -55,7 +54,7 @@ var lib_syncwaitgroupdone = LibFunc{
 }
 
 var lib_syncwaitgroupwait = LibFunc{
-	name: "wait-group/wait",
+	name: "wait_group_wait",
 	args: 1,
 	f: func(env *base.Env) base.Value {
 		wg := env.R0.Generic().(*sync.WaitGroup)
@@ -65,7 +64,7 @@ var lib_syncwaitgroupwait = LibFunc{
 }
 
 var lib_syncmutexnew = LibFunc{
-	name: "mutex/new",
+	name: "mutex_new",
 	args: 0,
 	f: func(env *base.Env) base.Value {
 		return base.NewGenericValue(&sync.Mutex{})
@@ -73,7 +72,7 @@ var lib_syncmutexnew = LibFunc{
 }
 
 var lib_syncmutexlock = LibFunc{
-	name: "mutex/lock",
+	name: "mutex_lock",
 	args: 1,
 	f: func(env *base.Env) base.Value {
 		env.R0.Generic().(*sync.Mutex).Lock()
@@ -82,7 +81,7 @@ var lib_syncmutexlock = LibFunc{
 }
 
 var lib_syncmutexunlock = LibFunc{
-	name: "mutex/unlock",
+	name: "mutex_unlock",
 	args: 1,
 	f: func(env *base.Env) base.Value {
 		env.R0.Generic().(*sync.Mutex).Unlock()

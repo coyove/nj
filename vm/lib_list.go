@@ -5,7 +5,7 @@ import (
 )
 
 var lib_listmakelen = LibFunc{
-	name: "list/make-len",
+	name: "list_make_len",
 	args: 1,
 	f: func(env *base.Env) base.Value {
 		list := make([]base.Value, int(env.R0.Number()))

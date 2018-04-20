@@ -12,6 +12,7 @@ import (
 
 	"github.com/coyove/bracket/base"
 	"github.com/coyove/bracket/parser"
+	"github.com/coyove/bracket/vm"
 )
 
 const (
@@ -291,6 +292,48 @@ func LoadFile(path string) ([]byte, error) {
 		return nil, err
 	}
 
+	PatchLibWH(n)
 	n.Dump(os.Stderr)
 	return parse(n)
+}
+
+func PatchLibWH(n *parser.Node) {
+	if n.Type != parser.NTCompound {
+		return
+	}
+
+	for i := 0; i < len(n.Compound); i++ {
+		if n.Compound[i].LibWH {
+			if call := n.Compound[0]; call.Type == parser.NTAtom && call.Value.(string) == "call" {
+				// [call LibWH [...]]
+				// no need to patch
+				continue
+			}
+
+			name := n.Compound[i].Value.(string)
+			idx := vm.LibLookup[name]
+			args := vm.Lib[idx].Args()
+
+			arglist := parser.NewCompoundNode()
+			for i := 0; i < args; i++ {
+				arglist.Compound = append(arglist.Compound, &parser.Node{
+					Type:  parser.NTAtom,
+					Value: "a" + strconv.Itoa(i),
+				})
+			}
+
+			n.Compound[i] = parser.NewCompoundNode(&parser.Node{
+				Type: parser.NTAtom, Value: "lambda",
+			}, arglist,
+				parser.NewCompoundNode("chain",
+					parser.NewCompoundNode("ret",
+						parser.NewCompoundNode("call", name, arglist))))
+
+			continue
+		}
+
+		if n.Compound[i].Type == parser.NTCompound {
+			PatchLibWH(n.Compound[i])
+		}
+	}
 }

@@ -48,7 +48,18 @@ func Exec(env *base.Env, code []byte) base.Value {
 		case base.OP_SET_STR:
 			env.Set(c.ReadInt32(), base.NewStringValue(c.ReadString()))
 		case base.OP_ADD:
-			base.AddI(env)
+			switch l := env.R0; l.Type() {
+			case base.TY_number:
+				env.A = base.NewNumberValue(l.Number() + env.R1.Number())
+			case base.TY_string:
+				env.A = base.NewStringValue(l.String() + env.R1.String())
+			case base.TY_array:
+				v := l.Array()
+				v = append(v, env.R1)
+				env.A = base.NewArrayValue(v)
+			default:
+				log.Panicf("can't add %v", l)
+			}
 		case base.OP_SUB:
 			env.A = base.NewNumberValue(env.R0.Number() - env.R1.Number())
 		case base.OP_MUL:
@@ -79,6 +90,26 @@ func Exec(env *base.Env, code []byte) base.Value {
 			env.A = base.NewBoolValue(env.R0.LessEqual(env.R1))
 		case base.OP_MORE:
 			env.A = base.NewBoolValue(!env.R0.LessEqual(env.R1))
+		case base.OP_NOT:
+			env.A = base.NewBoolValue(!env.R0.Bool())
+		case base.OP_AND:
+			env.A = base.NewBoolValue(!env.R0.IsFalse() && !env.R1.IsFalse())
+		case base.OP_OR:
+			env.A = base.NewBoolValue(!env.R0.IsFalse() || !env.R1.IsFalse())
+		case base.OP_XOR:
+			env.A = base.NewBoolValue(env.R0.IsFalse() != env.R1.IsFalse())
+		case base.OP_BIT_NOT:
+			env.A = base.NewNumberValue(float64(^int64(env.R0.Number())))
+		case base.OP_BIT_AND:
+			env.A = base.NewNumberValue(float64(int64(env.R0.Number()) & int64(env.R1.Number())))
+		case base.OP_BIT_OR:
+			env.A = base.NewNumberValue(float64(int64(env.R0.Number()) | int64(env.R1.Number())))
+		case base.OP_BIT_XOR:
+			env.A = base.NewNumberValue(float64(int64(env.R0.Number()) ^ int64(env.R1.Number())))
+		case base.OP_BIT_LSH:
+			env.A = base.NewNumberValue(float64(uint64(env.R0.Number()) << uint64(env.R1.Number())))
+		case base.OP_BIT_RSH:
+			env.A = base.NewNumberValue(float64(uint64(env.R0.Number()) >> uint64(env.R1.Number())))
 		case base.OP_ASSERT:
 			loc := "assertion failed: " + c.ReadString()
 			if env.R0.IsFalse() {
@@ -136,7 +167,7 @@ func Exec(env *base.Env, code []byte) base.Value {
 			case base.TY_array:
 				v = env.R0.Array()[int(env.R1.Number())]
 			case base.TY_map:
-				v = env.R0.Map()[env.R2.String()]
+				v = env.R0.Map()[env.R1.String()]
 			default:
 				log.Panicf("can't load from %v", env.R0)
 			}
@@ -191,30 +222,63 @@ func Exec(env *base.Env, code []byte) base.Value {
 			buf := c.Read(int(c.ReadInt32()))
 			env.A = base.NewClosureValue(base.NewClosure(buf, env, argsCount))
 		case base.OP_CALL:
-			cls := env.Get(c.ReadInt32()).Closure()
-			if newEnv == nil {
-				newEnv = base.NewEnv(nil)
-			}
+			v := env.Get(c.ReadInt32())
+			if v.Type() == base.TY_closure {
+				cls := v.Closure()
+				if newEnv == nil {
+					newEnv = base.NewEnv(nil)
+				}
 
-			if newEnv.Size() < cls.ArgsCount() {
-				if newEnv.Size() == 0 {
-					env.A = (base.NewClosureValue(cls))
+				if newEnv.Size() < cls.ArgsCount() {
+					if newEnv.Size() == 0 {
+						env.A = (base.NewClosureValue(cls))
+					} else {
+						curry := cls.Dup()
+						curry.AppendPreArgs(newEnv.Stack().Values())
+						env.A = (base.NewClosureValue(curry))
+					}
 				} else {
-					curry := cls.Dup()
-					curry.AppendPreArgs(newEnv.Stack().Values())
-					env.A = (base.NewClosureValue(curry))
+					if cls.PreArgs() != nil && len(cls.PreArgs()) > 0 {
+						newEnv.Stack().Insert(0, cls.PreArgs())
+					}
+
+					newEnv.SetParent(cls.Env())
+					env.A = (Exec(newEnv, cls.Code()))
 				}
+
+				newEnv = nil
+			} else if v.Type() == base.TY_array {
+				if newEnv.Size() == 1 {
+					env.A = v.Array()[int(newEnv.Get(0).Number())]
+				} else if newEnv.Size() == 2 {
+					env.A = base.NewArrayValue(v.Array()[int(newEnv.Get(0).Number()):int(newEnv.Get(1).Number())])
+				} else {
+					log.Panicf("too many (or few) arguments to call on list")
+				}
+				newEnv.Stack().Clear()
+			} else if v.Type() == base.TY_bytes {
+				if newEnv.Size() == 1 {
+					env.A = base.NewNumberValue(float64(v.Bytes()[int(newEnv.Get(0).Number())]))
+				} else if newEnv.Size() == 2 {
+					env.A = base.NewBytesValue(v.Bytes()[int(newEnv.Get(0).Number()):int(newEnv.Get(1).Number())])
+				} else {
+					log.Panicf("too many (or few) arguments to call on bytes")
+				}
+				newEnv.Stack().Clear()
+			} else if v.Type() == base.TY_string {
+				if newEnv.Size() == 1 {
+					env.A = base.NewNumberValue(float64(v.String()[int(newEnv.Get(0).Number())]))
+				} else if newEnv.Size() == 2 {
+					env.A = base.NewStringValue(v.String()[int(newEnv.Get(0).Number()):int(newEnv.Get(1).Number())])
+				} else {
+					log.Panicf("too many (or few) arguments to call on string")
+				}
+				newEnv.Stack().Clear()
 			} else {
-				if cls.PreArgs() != nil && len(cls.PreArgs()) > 0 {
-					newEnv.Stack().Insert(0, cls.PreArgs())
-				}
-
-				newEnv.SetParent(cls.Env())
-				env.A = (Exec(newEnv, cls.Code()))
+				log.Panicf("invalid callee")
 			}
-
-			newEnv = nil
-
+		case base.OP_VARARGS:
+			env.A = base.NewArrayValue(env.Stack().Values())
 		case base.OP_JMP:
 			off := int(c.ReadInt32())
 			c.SetCursor(c.GetCursor() + off)
@@ -224,26 +288,6 @@ func Exec(env *base.Env, code []byte) base.Value {
 			if cond.IsFalse() {
 				c.SetCursor(c.GetCursor() + off)
 			}
-		case base.OP_NOT:
-			env.A = base.NewBoolValue(!env.R0.Bool())
-		case base.OP_AND:
-			env.A = base.NewBoolValue(!env.R0.IsFalse() && !env.R1.IsFalse())
-		case base.OP_OR:
-			env.A = base.NewBoolValue(!env.R0.IsFalse() || !env.R1.IsFalse())
-		case base.OP_XOR:
-			env.A = base.NewBoolValue(env.R0.IsFalse() != env.R1.IsFalse())
-		case base.OP_BIT_NOT:
-			env.A = base.NewNumberValue(float64(^int64(env.R0.Number())))
-		case base.OP_BIT_AND:
-			env.A = base.NewNumberValue(float64(int64(env.R0.Number()) & int64(env.R1.Number())))
-		case base.OP_BIT_OR:
-			env.A = base.NewNumberValue(float64(int64(env.R0.Number()) | int64(env.R1.Number())))
-		case base.OP_BIT_XOR:
-			env.A = base.NewNumberValue(float64(int64(env.R0.Number()) ^ int64(env.R1.Number())))
-		case base.OP_BIT_LSH:
-			env.A = base.NewNumberValue(float64(uint64(env.R0.Number()) << uint64(env.R1.Number())))
-		case base.OP_BIT_RSH:
-			env.A = base.NewNumberValue(float64(uint64(env.R0.Number()) >> uint64(env.R1.Number())))
 		case base.OP_TYPEOF:
 			v, t := env.Get(c.ReadInt32()), c.ReadInt32()
 			env.A = base.NewBoolValue(v.Type() == byte(t))
@@ -259,7 +303,7 @@ func Exec(env *base.Env, code []byte) base.Value {
 				panic("lib call index overflows")
 			}
 			if newEnv == nil {
-				panic("shouldn't happen")
+				newEnv = base.NewEnv(nil)
 			}
 			newEnv.SetParent(env)
 			env.A = (Lib[libidx].ff(newEnv))

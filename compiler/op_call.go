@@ -19,6 +19,9 @@ func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (
 	if name == "map" {
 		return compileMapOp(stackPtr, nodes, varLookup)
 	}
+	if name == "varargs" {
+		return []byte{base.OP_VARARGS}, base.REG_A, stackPtr, nil
+	}
 	if flatOpMapping[name] {
 		return compileFlatOp(stackPtr, append(nodes[1:2], nodes[2].Compound...), varLookup)
 	}

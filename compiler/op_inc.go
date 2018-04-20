@@ -53,37 +53,6 @@ func compileIncOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (c
 		err = fmt.Errorf("can't inc an immediate value: %+v", atoms[0])
 		return
 	case parser.NTCompound:
-		if isStoreLoadSugar(aSrc) {
-			fatoms := expandStoreLoadSugar(aSrc).Compound
-			code, yx, stackPtr, err = flatWrite(stackPtr, fatoms, varLookup, base.OP_LOAD)
-			if err != nil {
-				return
-			}
-
-			buf := base.NewBytesBuffer()
-			buf.Write(code)
-			// To prevent inc $a $a
-			buf.WriteByte(base.OP_SET)
-			yx = int32(stackPtr)
-			stackPtr++
-			buf.WriteInt32(yx)
-			buf.WriteInt32(base.REG_A)
-
-			code, yx, stackPtr, err = inc(stackPtr, yx, atoms[2], varLookup)
-			if err != nil {
-				return
-			}
-			buf.Write(code)
-
-			fatoms = append(fatoms, &parser.Node{Type: parser.NTAddr, Value: int32(base.REG_A)})
-			code, yx, stackPtr, err = flatWrite(stackPtr, fatoms, varLookup, base.OP_STORE)
-			if err != nil {
-				return
-			}
-			buf.Write(code)
-
-			return buf.Bytes(), base.REG_A, stackPtr, nil
-		}
 		err = fmt.Errorf("can't inc a compound: %+v", atoms[0])
 		return
 	case parser.NTAtom:

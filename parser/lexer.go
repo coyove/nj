@@ -108,17 +108,6 @@ func (sc *Scanner) skipWhiteSpace(whitespace int64) int {
 }
 
 func (sc *Scanner) skipComments(ch int) error {
-	// multiline comment
-	if sc.Peek() == '[' {
-		ch = sc.Next()
-		if sc.Peek() == '[' || sc.Peek() == '=' {
-			var buf bytes.Buffer
-			if err := sc.scanMultilineString(sc.Next(), &buf); err != nil {
-				return sc.Error(buf.String(), "invalid multiline comment")
-			}
-			return nil
-		}
-	}
 	for {
 		if ch == '\n' || ch == '\r' || ch < 0 {
 			break
@@ -280,9 +269,9 @@ finally:
 
 var reservedWords = map[string]int{
 	"and": TAnd, "assert": TAssert, "break": TBreak, "continue": TContinue, "do": TDo, "else": TElse, "elseif": TElseIf,
-	"end": TEnd, "false": TFalse, "for": TFor, "function": TFunction,
-	"if": TIf, "in": TIn, "set": TSet, "nil": TNil, "not": TNot, "or": TOr,
-	"return": TReturn, "then": TThen, "true": TTrue, "is": TTypeIs, "while": TWhile, "xor": TXor}
+	"end": TEnd, "false": TFalse, "for": TFor, "lambda": TLambda,
+	"if": TIf, "set": TSet, "nil": TNil, "not": TNot, "or": TOr,
+	"return": TReturn, "then": TThen, "true": TTrue, "while": TWhile, "xor": TXor}
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
 redo:
@@ -325,17 +314,12 @@ redo:
 		switch ch {
 		case EOF:
 			tok.Type = EOF
-		case '-':
-			if sc.Peek() == '-' {
-				err = sc.skipComments(sc.Next())
-				if err != nil {
-					goto finally
-				}
-				goto redo
-			} else {
-				tok.Type = ch
-				tok.Str = string(ch)
+		case '#':
+			err = sc.skipComments(sc.Next())
+			if err != nil {
+				goto finally
 			}
+			goto redo
 		case '"', '\'':
 			tok.Type = TString
 			err = sc.scanString(ch, buf)
@@ -358,18 +342,22 @@ redo:
 				tok.Type = ch
 				tok.Str = string(ch)
 			}
-		case '~':
+		case '!':
 			if sc.Peek() == '=' {
 				tok.Type = TNeq
-				tok.Str = "~="
+				tok.Str = "!="
 				sc.Next()
 			} else {
-				err = sc.Error("~", "Invalid '~' token")
+				err = sc.Error("!", "Invalid '!' token")
 			}
 		case '<':
 			if sc.Peek() == '=' {
 				tok.Type = TLte
 				tok.Str = "<="
+				sc.Next()
+			} else if sc.Peek() == '<' {
+				tok.Type = TLsh
+				tok.Str = "<<"
 				sc.Next()
 			} else {
 				tok.Type = ch
@@ -379,6 +367,10 @@ redo:
 			if sc.Peek() == '=' {
 				tok.Type = TGte
 				tok.Str = ">="
+				sc.Next()
+			} else if sc.Peek() == '>' {
+				tok.Type = TRsh
+				tok.Str = ">>"
 				sc.Next()
 			} else {
 				tok.Type = ch
@@ -395,7 +387,7 @@ redo:
 				tok.Type = '.'
 			}
 			tok.Str = buf.String()
-		case '+', '*', '/', '%', '^', '#', '(', ')', '{', '}', ']', ';', ':', ',':
+		case '-', '+', '*', '/', '%', '^', '(', ')', '{', '}', ']', ';', ':', ',', '|', '&', '~':
 			tok.Type = ch
 			tok.Str = string(ch)
 		default:

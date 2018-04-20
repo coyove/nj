@@ -22,7 +22,6 @@ func init() {
 	opMapping["while"] = compileWhileOp
 	opMapping["continue"] = compileContinueBreakOp
 	opMapping["break"] = compileContinueBreakOp
-	opMapping["typeof"] = compileTypeofOp
 	opMapping["call"] = compileCallOp
 
 	flatOpMapping = make(map[string]bool)
@@ -41,25 +40,20 @@ func init() {
 	flatOpMapping["and"] = true
 	flatOpMapping["or"] = true
 	flatOpMapping["xor"] = true
-	flatOpMapping["b/not"] = true
-	flatOpMapping["b/and"] = true
-	flatOpMapping["b/or"] = true
-	flatOpMapping["b/xor"] = true
-	flatOpMapping["b/lsh"] = true
-	flatOpMapping["b/rsh"] = true
-	flatOpMapping["list"] = true
-	flatOpMapping["map"] = true
+	flatOpMapping["~"] = true
+	flatOpMapping["&"] = true
+	flatOpMapping["|"] = true
+	flatOpMapping["^"] = true
+	flatOpMapping["<<"] = true
+	flatOpMapping[">>"] = true
 	flatOpMapping["len"] = true
 	flatOpMapping["store"] = true
 	flatOpMapping["load"] = true
 	flatOpMapping["assert"] = true
-	flatOpMapping["expand"] = true
 	flatOpMapping["nil"] = true
 	flatOpMapping["bytes"] = true
 	flatOpMapping["true"] = true
 	flatOpMapping["false"] = true
-	flatOpMapping["list"] = true
-	flatOpMapping["map"] = true
 }
 
 func fill1(buf *base.BytesReader, n *parser.Node, varLookup *base.CMap, ops ...byte) (err error) {
@@ -95,20 +89,6 @@ func compileCompoundIntoVariable(
 	intoExistedVar int32,
 ) (code []byte, yx int32, newStackPtr int16, err error) {
 	buf := base.NewBytesBuffer()
-	if isStoreLoadSugar(compound) {
-		code, yx, stackPtr, err = flatWrite(stackPtr, expandStoreLoadSugar(compound).Compound, varLookup, base.OP_LOAD)
-		buf.Write(code)
-		buf.WriteByte(base.OP_SET)
-		if intoNewVar {
-			yx = int32(stackPtr)
-			stackPtr++
-		} else {
-			yx = intoExistedVar
-		}
-		buf.WriteInt32(yx)
-		buf.WriteInt32(base.REG_A)
-		return buf.Bytes(), yx, stackPtr, err
-	}
 
 	var newYX int32
 	code, newYX, stackPtr, err = compile(stackPtr, compound.Compound, varLookup)
@@ -142,11 +122,7 @@ func extract(stackPtr int16, n *parser.Node, varLookup *base.CMap) (code []byte,
 	case parser.NTAddr:
 		varIndex = n.Value.(int32)
 	default:
-		if isStoreLoadSugar(n) {
-			code, yx, stackPtr, err = flatWrite(stackPtr, expandStoreLoadSugar(n).Compound, varLookup, base.OP_LOAD)
-		} else {
-			code, yx, stackPtr, err = compile(stackPtr, n.Compound, varLookup)
-		}
+		code, yx, stackPtr, err = compile(stackPtr, n.Compound, varLookup)
 		if err != nil {
 			return
 		}
@@ -161,6 +137,13 @@ func compile(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (code [
 	}
 	name, ok := nodes[0].Value.(string)
 	if ok {
+		if name == "chain" {
+			return compileChainOp(stackPtr, &parser.Node{
+				Type:     parser.NTCompound,
+				Compound: nodes,
+			}, varLookup)
+		}
+
 		f := opMapping[name]
 		if f == nil {
 			if flatOpMapping[name] {
@@ -172,7 +155,7 @@ func compile(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (code [
 		return f(stackPtr, nodes, varLookup)
 	}
 
-	panic(nodes[0].Type)
+	panic(nodes[0].Value)
 }
 
 func compileChainOp(stackPtr int16, chain *parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
