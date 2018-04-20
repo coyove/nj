@@ -10,18 +10,29 @@ import (
 	"github.com/coyove/bracket/base"
 )
 
-func flatWrite(
-	stackPtr int16,
-	atoms []*parser.Node,
-	varLookup *base.CMap,
-	bop byte,
-) (code []byte, yx int32, newStackPtr int16, err error) {
+func indexToOpR(index int) []byte {
+	switch index {
+	case 0:
+		return []byte{base.OP_R0, base.OP_R0_NUM, base.OP_R0_STR}
+	case 1:
+		return []byte{base.OP_R1, base.OP_R1_NUM, base.OP_R1_STR}
+	case 2:
+		return []byte{base.OP_R2, base.OP_R2_NUM, base.OP_R2_STR}
+	case 3:
+		return []byte{base.OP_R3, base.OP_R3_NUM, base.OP_R3_STR}
+	}
+	panic("shouldn't happen")
+}
+
+func flaten(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (buf *base.BytesReader, newStackPtr int16, err error) {
 
 	replacedAtoms := []*parser.Node{}
-	buf := base.NewBytesBuffer()
+	buf = base.NewBytesBuffer()
 
-	for i := 1; i < len(atoms); i++ {
-		atom := atoms[i]
+	for i, atom := range atoms {
+
+		var yx int32
+		var code []byte
 
 		if atom.Type == parser.NTCompound {
 			code, yx, stackPtr, err = compileCompoundIntoVariable(stackPtr, atom, varLookup, true, 0)
@@ -41,107 +52,42 @@ func flatWrite(
 		stackPtr--
 	}
 
-	extflag := false
-	switch bop {
-	case
-		base.OP_ADD,
-		base.OP_SUB,
-		base.OP_MUL,
-		base.OP_DIV,
-		base.OP_MOD,
-		base.OP_EQ,
-		base.OP_NEQ,
-		base.OP_LESS,
-		base.OP_LESS_EQ,
-		base.OP_MORE,
-		base.OP_MORE_EQ,
-		base.OP_NOT,
-		base.OP_AND,
-		base.OP_OR,
-		base.OP_XOR,
-		base.OP_BIT_NOT,
-		base.OP_BIT_AND,
-		base.OP_BIT_OR,
-		base.OP_BIT_XOR,
-		base.OP_BIT_LSH,
-		base.OP_BIT_RSH:
-		extflag = true
+	return buf, stackPtr, nil
+}
+
+func flatWrite(
+	stackPtr int16,
+	atoms []*parser.Node,
+	varLookup *base.CMap,
+	bop byte,
+) (code []byte, yx int32, newStackPtr int16, err error) {
+
+	var buf *base.BytesReader
+	buf, stackPtr, err = flaten(stackPtr, atoms[1:], varLookup)
+	if err != nil {
+		return
 	}
 
-	if extflag {
-		l, r := atoms[1], atoms[2]
-		lf := l.Type == parser.NTAtom || l.Type == parser.NTCompound || l.Type == parser.NTAddr
-		rf := r.Type == parser.NTAtom || r.Type == parser.NTCompound || r.Type == parser.NTAddr
-
-		extractWrite := func(atom *parser.Node) (int32, error) {
-			code, yx, stackPtr, err = extract(stackPtr, atom, varLookup)
-			buf.Write(code)
-			return yx, err
-		}
-
-		var la, ra int32
-		if lf && rf {
-			la, err = extractWrite(l)
-			if err != nil {
-				return
-			}
-
-			ra, err = extractWrite(r)
-			if err != nil {
-				return
-			}
-
-			buf.WriteByte(base.OP_EXT_F_F)
-			buf.WriteByte(bop)
-			buf.WriteInt32(la)
-			buf.WriteInt32(ra)
-		} else if lf && r.Type == parser.NTNumber {
-			la, err = extractWrite(l)
-			if err != nil {
-				return
-			}
-
-			buf.WriteByte(base.OP_EXT_F_IMM)
-			buf.WriteByte(bop)
-			buf.WriteInt32(la)
-			buf.WriteDouble(r.Value.(float64))
-		} else if l.Type == parser.NTNumber && rf {
-			ra, err = extractWrite(r)
-			if err != nil {
-				return
-			}
-
-			buf.WriteByte(base.OP_EXT_IMM_F)
-			buf.WriteByte(bop)
-			buf.WriteDouble(l.Value.(float64))
-			buf.WriteInt32(ra)
-		} else {
-			extflag = false
-		}
-	}
-
-	if !extflag {
-		if len(atoms) > 9 {
-			if bop == base.OP_LIB_CALL {
-				for i := 1; i < len(atoms); i++ {
-					err = fill1(buf, atoms[i], varLookup, base.OP_PUSH, base.OP_PUSH_NUM, base.OP_PUSH_STR)
-					if err != nil {
-						return
-					}
-				}
-				buf.WriteByte(base.OP_LIB_CALL_EX)
-			} else {
-				panic("shouldn't happen")
-			}
-		} else {
+	if len(atoms) > 9 {
+		if bop == base.OP_LIB_CALL {
 			for i := 1; i < len(atoms); i++ {
-				err = fill1(buf, atoms[i], varLookup, base.OP_PUSHF, base.OP_PUSHF_NUM, base.OP_PUSHF_STR)
+				err = fill1(buf, atoms[i], varLookup, base.OP_PUSH, base.OP_PUSH_NUM, base.OP_PUSH_STR)
 				if err != nil {
 					return
 				}
 			}
-			buf.WriteByte(bop)
+			buf.WriteByte(base.OP_LIB_CALL_EX)
+		} else {
+			panic("shouldn't happen")
 		}
+	} else {
+		for i := 1; i < len(atoms); i++ {
+			err = fill1(buf, atoms[i], varLookup, indexToOpR(i-1)...)
+			if err != nil {
+				return
+			}
+		}
+		buf.WriteByte(bop)
 	}
 
 	if bop == base.OP_ASSERT {

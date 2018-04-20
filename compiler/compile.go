@@ -58,9 +58,11 @@ func init() {
 	flatOpMapping["bytes"] = true
 	flatOpMapping["true"] = true
 	flatOpMapping["false"] = true
+	flatOpMapping["list"] = true
+	flatOpMapping["map"] = true
 }
 
-func fill1(buf *base.BytesReader, n *parser.Node, varLookup *base.CMap, a, i, s byte) (err error) {
+func fill1(buf *base.BytesReader, n *parser.Node, varLookup *base.CMap, ops ...byte) (err error) {
 	switch n.Type {
 	case parser.NTAtom:
 		varIndex := varLookup.GetRelPosition(n.Value.(string))
@@ -68,16 +70,16 @@ func fill1(buf *base.BytesReader, n *parser.Node, varLookup *base.CMap, a, i, s 
 			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
 			return
 		}
-		buf.WriteByte(a)
+		buf.WriteByte(ops[0])
 		buf.WriteInt32(varIndex)
 	case parser.NTNumber:
-		buf.WriteByte(i)
+		buf.WriteByte(ops[1])
 		buf.WriteDouble(n.Value.(float64))
 	case parser.NTString:
-		buf.WriteByte(s)
+		buf.WriteByte(ops[2])
 		buf.WriteString(n.Value.(string))
 	case parser.NTAddr:
-		buf.WriteByte(a)
+		buf.WriteByte(ops[0])
 		buf.WriteInt32(n.Value.(int32))
 	default:
 		return fmt.Errorf("fill1 unknown type: %d", n.Type)
@@ -157,8 +159,8 @@ func compile(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (code [
 	if len(nodes) == 0 {
 		return nil, base.REG_A, stackPtr, nil
 	}
-
-	if name, ok := nodes[0].Value.(string); ok {
+	name, ok := nodes[0].Value.(string)
+	if ok {
 		f := opMapping[name]
 		if f == nil {
 			if flatOpMapping[name] {
@@ -170,7 +172,7 @@ func compile(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (code [
 		return f(stackPtr, nodes, varLookup)
 	}
 
-	panic(1)
+	panic(nodes[0].Type)
 }
 
 func compileChainOp(stackPtr int16, chain *parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {

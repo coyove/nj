@@ -4,4 +4,8 @@ fib = function(n)
     return fib(n-2)+fib(n-1)
 end
 
-return fib(35)
+set ans = fib(10)
+assert ans == 55
+
+set l = list(1,2,3)
+assert l[1+1]==3

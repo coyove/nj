@@ -11,14 +11,15 @@ var lib_go = LibFunc{
 	args: 1,
 	f: func(env *base.Env) base.Value {
 		newEnv := base.NewEnv(env)
-		cls := env.R0().Closure()
+		cls := env.R0.Closure()
+		args := env.R1.Array()
 
-		if cls.ArgsCount() != env.SizeR()-1 {
+		if cls.ArgsCount() != len(args) {
 			panic("not enough arguments to start")
 		}
 
-		for i := 1; i < env.SizeR(); i++ {
-			newEnv.Push(env.R(i))
+		for _, arg := range args {
+			newEnv.Push(arg)
 		}
 
 		go Exec(newEnv, cls.Code())
@@ -38,8 +39,8 @@ var lib_syncwaitgroupadd = LibFunc{
 	name: "wait-group/add",
 	args: 2,
 	f: func(env *base.Env) base.Value {
-		wg := env.R0().Generic().(*sync.WaitGroup)
-		wg.Add(int(env.R1().Number()))
+		wg := env.R0.Generic().(*sync.WaitGroup)
+		wg.Add(int(env.R1.Number()))
 		return base.NewValue()
 	},
 }
@@ -48,7 +49,7 @@ var lib_syncwaitgroupdone = LibFunc{
 	name: "wait-group/done",
 	args: 1,
 	f: func(env *base.Env) base.Value {
-		env.R0().Generic().(*sync.WaitGroup).Done()
+		env.R0.Generic().(*sync.WaitGroup).Done()
 		return base.NewValue()
 	},
 }
@@ -57,7 +58,7 @@ var lib_syncwaitgroupwait = LibFunc{
 	name: "wait-group/wait",
 	args: 1,
 	f: func(env *base.Env) base.Value {
-		wg := env.R0().Generic().(*sync.WaitGroup)
+		wg := env.R0.Generic().(*sync.WaitGroup)
 		wg.Wait()
 		return base.NewValue()
 	},
@@ -75,7 +76,7 @@ var lib_syncmutexlock = LibFunc{
 	name: "mutex/lock",
 	args: 1,
 	f: func(env *base.Env) base.Value {
-		env.R0().Generic().(*sync.Mutex).Lock()
+		env.R0.Generic().(*sync.Mutex).Lock()
 		return base.NewValue()
 	},
 }
@@ -84,7 +85,7 @@ var lib_syncmutexunlock = LibFunc{
 	name: "mutex/unlock",
 	args: 1,
 	f: func(env *base.Env) base.Value {
-		env.R0().Generic().(*sync.Mutex).Unlock()
+		env.R0.Generic().(*sync.Mutex).Unlock()
 		return base.NewValue()
 	},
 }

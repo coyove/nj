@@ -195,12 +195,30 @@ func (b *BytesReader) Prettify(tab int) string {
 
 		case OP_SET_STR:
 			sb.WriteString("sets " + xy(b.ReadInt32()) + " " + b.ReadString())
-		case OP_PUSHF:
-			sb.WriteString("r " + xy(b.ReadInt32()))
-		case OP_PUSHF_NUM:
-			sb.WriteString("rn " + readDouble())
-		case OP_PUSHF_STR:
-			sb.WriteString("rs " + b.ReadString())
+		case OP_R0:
+			sb.WriteString("r0 " + xy(b.ReadInt32()))
+		case OP_R0_NUM:
+			sb.WriteString("r0n " + strconv.FormatFloat(b.ReadDouble(), 'f', 9, 64))
+		case OP_R0_STR:
+			sb.WriteString("r0s " + b.ReadString())
+		case OP_R1:
+			sb.WriteString("r1 " + xy(b.ReadInt32()))
+		case OP_R1_NUM:
+			sb.WriteString("r1n " + strconv.FormatFloat(b.ReadDouble(), 'f', 9, 64))
+		case OP_R1_STR:
+			sb.WriteString("r1s " + b.ReadString())
+		case OP_R2:
+			sb.WriteString("r2 " + xy(b.ReadInt32()))
+		case OP_R2_NUM:
+			sb.WriteString("r2n " + strconv.FormatFloat(b.ReadDouble(), 'f', 9, 64))
+		case OP_R2_STR:
+			sb.WriteString("r2s " + b.ReadString())
+		case OP_R3:
+			sb.WriteString("r3 " + xy(b.ReadInt32()))
+		case OP_R3_NUM:
+			sb.WriteString("r3n " + strconv.FormatFloat(b.ReadDouble(), 'f', 9, 64))
+		case OP_R3_STR:
+			sb.WriteString("r3s " + b.ReadString())
 		case OP_PUSH:
 			sb.WriteString("push " + xy(b.ReadInt32()))
 		case OP_PUSH_NUM:
@@ -239,15 +257,6 @@ func (b *BytesReader) Prettify(tab int) string {
 
 		case OP_TYPEOF:
 			sb.WriteString("typeof " + xy(b.ReadInt32()) + " " + strconv.Itoa(int(b.ReadInt32())))
-
-		case OP_EXT_F_F:
-			sb.WriteString("ext " + singleOp[b.ReadByte()] + " " + xy(b.ReadInt32()) + " " + xy(b.ReadInt32()))
-
-		case OP_EXT_F_IMM:
-			sb.WriteString("ext " + singleOp[b.ReadByte()] + " " + xy(b.ReadInt32()) + " " + readDouble())
-
-		case OP_EXT_IMM_F:
-			sb.WriteString("ext " + singleOp[b.ReadByte()] + " " + readDouble() + " " + xy(b.ReadInt32()))
 
 		case OP_NOP:
 			sb.WriteString("nop")

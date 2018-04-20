@@ -70,7 +70,11 @@ block:
 
 stat:
         var '=' expr {
-            $$ = NewCompoundNode("move", $1, $3)
+            if len($1.Compound) > 0 && $1.Compound[0].Value.(string) == "load" {
+                $$ = NewCompoundNode("store", $1.Compound[1], $1.Compound[2], $3)
+            } else {
+                $$ = NewCompoundNode("move", $1, $3)
+            }
         } |
         /* 'stat = functioncal' causes a reduce/reduce conflict */
         prefixexp {
@@ -114,6 +118,10 @@ stat:
         } |
         TContinue  {
             $$ = NewCompoundNode("continue")
+        } |
+        TAssert expr {
+            $$ = NewCompoundNode("assert", $2)
+            $$.Pos = $2.Pos
         }
 
 elseifs: 
@@ -129,10 +137,10 @@ var:
             $$ = NewAtomNode($1)
         } |
         prefixexp '[' expr ']' {
-            $$ = NewCompoundNode($1, ":", $3)
+            $$ = NewCompoundNode("load", $1, $3)
         } | 
         prefixexp '.' TIdent {
-            $$ = NewCompoundNode($1, ":", $3.Str)
+            $$ = NewCompoundNode("load", $1, $3.Str)
         }
 
 namelist:
@@ -179,10 +187,6 @@ expr:
         } |
         string {
             $$ = $1
-        } |
-        TAssert expr %prec UNARY {
-            $$ = NewCompoundNode("assert", $2)
-            $$.Pos = $2.Pos
         } |
         expr TTypeIs TIdent {
             $$ = NewCompoundNode("typeof", $1, $3)

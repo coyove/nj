@@ -13,10 +13,15 @@ func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (
 	callee := nodes[1]
 
 	name, _ := callee.Value.(string)
+	if name == "list" {
+		return compileListOp(stackPtr, nodes, varLookup)
+	}
+	if name == "map" {
+		return compileMapOp(stackPtr, nodes, varLookup)
+	}
 	if flatOpMapping[name] {
 		return compileFlatOp(stackPtr, append(nodes[1:2], nodes[2].Compound...), varLookup)
 	}
-
 	if _, ok := vm.LibLookup[name]; ok {
 		return compileFlatOp(stackPtr, append(nodes[1:2], nodes[2].Compound...), varLookup)
 	}

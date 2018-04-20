@@ -98,6 +98,22 @@ func Exec(env *base.Env, code []byte) base.Value {
 			default:
 				log.Panicf("can't evaluate the length of %v", v)
 			}
+		case base.OP_LIST:
+			size := newEnv.Stack().Size()
+			list := make([]base.Value, size)
+			for i := 0; i < size; i++ {
+				list[i] = newEnv.Get(int32(i))
+			}
+			newEnv.Stack().Clear()
+			env.A = base.NewArrayValue(list)
+		case base.OP_MAP:
+			size := newEnv.Stack().Size()
+			m := make(map[string]base.Value)
+			for i := 0; i < size; i += 2 {
+				m[newEnv.Get(int32(i)).String()] = newEnv.Get(int32(i + 1))
+			}
+			newEnv.Stack().Clear()
+			env.A = base.NewMapValue(m)
 		case base.OP_STORE:
 			switch env.R0.Type() {
 			case base.TY_bytes:
@@ -125,6 +141,30 @@ func Exec(env *base.Env, code []byte) base.Value {
 				log.Panicf("can't load from %v", env.R0)
 			}
 			env.A = v
+		case base.OP_R0:
+			env.R0 = env.Get(c.ReadInt32())
+		case base.OP_R0_NUM:
+			env.R0 = base.NewNumberValue(c.ReadDouble())
+		case base.OP_R0_STR:
+			env.R0 = base.NewStringValue(c.ReadString())
+		case base.OP_R1:
+			env.R1 = env.Get(c.ReadInt32())
+		case base.OP_R1_NUM:
+			env.R1 = base.NewNumberValue(c.ReadDouble())
+		case base.OP_R1_STR:
+			env.R1 = base.NewStringValue(c.ReadString())
+		case base.OP_R2:
+			env.R2 = env.Get(c.ReadInt32())
+		case base.OP_R2_NUM:
+			env.R2 = base.NewNumberValue(c.ReadDouble())
+		case base.OP_R2_STR:
+			env.R2 = base.NewStringValue(c.ReadString())
+		case base.OP_R3:
+			env.R3 = env.Get(c.ReadInt32())
+		case base.OP_R3_NUM:
+			env.R3 = base.NewNumberValue(c.ReadDouble())
+		case base.OP_R3_STR:
+			env.R3 = base.NewStringValue(c.ReadString())
 		case base.OP_PUSH:
 			if newEnv == nil {
 				newEnv = base.NewEnv(nil)

@@ -60,16 +60,9 @@ func vtoString(v base.Value) string {
 
 func stdPrint(f *os.File, ex bool) func(env *base.Env) base.Value {
 	return func(env *base.Env) base.Value {
-		if ex {
-			s := env.Stack()
-			for i := 0; i < s.Size(); i++ {
-				f.WriteString(vtoString(s.Get(i)))
-			}
-		} else {
-			for i := 0; i < env.SizeR(); i++ {
-				arg := env.R(i)
-				f.WriteString(vtoString(arg))
-			}
+		s := env.Stack()
+		for i := 0; i < s.Size(); i++ {
+			f.WriteString(vtoString(s.Get(i)))
 		}
 
 		return base.NewValue()
@@ -78,16 +71,9 @@ func stdPrint(f *os.File, ex bool) func(env *base.Env) base.Value {
 
 func stdPrintln(f *os.File, ex bool) func(env *base.Env) base.Value {
 	return func(env *base.Env) base.Value {
-		if ex {
-			s := env.Stack()
-			for i := 0; i < s.Size(); i++ {
-				f.WriteString(vtoString(s.Get(i)) + " ")
-			}
-		} else {
-			for i := 0; i < env.SizeR(); i++ {
-				arg := env.R(i)
-				f.WriteString(vtoString(arg) + " ")
-			}
+		s := env.Stack()
+		for i := 0; i < s.Size(); i++ {
+			f.WriteString(vtoString(s.Get(i)) + " ")
 		}
 		f.WriteString("\n")
 		return base.NewValue()
@@ -96,24 +82,17 @@ func stdPrintln(f *os.File, ex bool) func(env *base.Env) base.Value {
 
 func stdWrite(f *os.File, ex bool) func(env *base.Env) base.Value {
 	return func(env *base.Env) base.Value {
-		if ex {
-			s := env.Stack()
-			for i := 0; i < s.Size(); i++ {
-				f.Write(s.Get(i).Bytes())
-			}
-		} else {
-			for i := 0; i < env.SizeR(); i++ {
-				arg := env.R(i)
-				f.Write(arg.Bytes())
-			}
+		s := env.Stack()
+		for i := 0; i < s.Size(); i++ {
+			f.Write(s.Get(i).Bytes())
 		}
 		return base.NewValue()
 	}
 }
 
-var lib_outprint = LibFunc{name: "stdout/print", args: 0, f: stdPrint(os.Stdout, false), ff: stdPrint(os.Stdout, true)}
-var lib_outprintln = LibFunc{name: "stdout/println", args: 0, f: stdPrintln(os.Stdout, false), ff: stdPrintln(os.Stdout, true)}
-var lib_outwrite = LibFunc{name: "stdout/write", args: 0, f: stdWrite(os.Stdout, false), ff: stdWrite(os.Stdout, true)}
-var lib_errprint = LibFunc{name: "stderr/print", args: 0, f: stdPrint(os.Stderr, false), ff: stdPrint(os.Stderr, true)}
-var lib_errprintln = LibFunc{name: "stderr/println", args: 0, f: stdPrintln(os.Stderr, false), ff: stdPrintln(os.Stderr, true)}
-var lib_errwrite = LibFunc{name: "stderr/write", args: 0, f: stdWrite(os.Stderr, false), ff: stdWrite(os.Stderr, true)}
+var lib_outprint = LibFunc{name: "stdout/print", args: 0, ff: stdPrint(os.Stdout, true)}
+var lib_outprintln = LibFunc{name: "stdout/println", args: 0, ff: stdPrintln(os.Stdout, true)}
+var lib_outwrite = LibFunc{name: "stdout/write", args: 0, ff: stdWrite(os.Stdout, true)}
+var lib_errprint = LibFunc{name: "stderr/print", args: 0, ff: stdPrint(os.Stderr, true)}
+var lib_errprintln = LibFunc{name: "stderr/println", args: 0, ff: stdPrintln(os.Stderr, true)}
+var lib_errwrite = LibFunc{name: "stderr/write", args: 0, ff: stdWrite(os.Stderr, true)}
