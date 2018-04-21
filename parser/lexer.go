@@ -325,14 +325,8 @@ redo:
 			err = sc.scanString(ch, buf)
 			tok.Str = buf.String()
 		case '[':
-			if c := sc.Peek(); c == '[' || c == '=' {
-				tok.Type = TString
-				err = sc.scanMultilineString(sc.Next(), buf)
-				tok.Str = buf.String()
-			} else {
-				tok.Type = ch
-				tok.Str = string(ch)
-			}
+			tok.Type = ch
+			tok.Str = string(ch)
 		case '=':
 			if sc.Peek() == '=' {
 				tok.Type = TEqeq

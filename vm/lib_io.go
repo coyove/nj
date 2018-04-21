@@ -2,58 +2,72 @@ package vm
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"strconv"
 
 	"github.com/coyove/bracket/base"
 )
 
-func vtoString(v base.Value) string {
+func vtoString(v base.Value, lv int) string {
+	if lv > 32 {
+		return "<omit deep nesting>"
+	}
+
 	switch v.Type() {
-	case base.TY_bool:
-		return strconv.FormatBool(v.Bool())
-	case base.TY_number:
-		n := v.Number()
+	case base.Tbool:
+		return strconv.FormatBool(v.AsBool())
+	case base.Tnumber:
+		n := v.AsNumber()
 		if float64(int64(n)) == n {
 			return strconv.FormatInt(int64(n), 10)
 		}
 		return strconv.FormatFloat(n, 'f', 9, 64)
-	case base.TY_string:
-		return "string (" + v.String() + ")"
-	case base.TY_array:
-		arr := v.Array()
+	case base.Tstring:
+		return strconv.Quote(v.AsString())
+	case base.Tlist:
+		arr := v.AsList()
 		buf := &bytes.Buffer{}
-		buf.WriteString("list (")
+		buf.WriteString("[")
 		for _, v := range arr {
-			buf.WriteString(vtoString(v))
-			buf.WriteString(" ")
+			buf.WriteString(vtoString(v, lv+1))
+			buf.WriteString(",")
 		}
-		buf.WriteString(")")
+		if len(arr) > 0 {
+			buf.Truncate(buf.Len() - 1)
+		}
+		buf.WriteString("]")
 		return buf.String()
-	case base.TY_map:
-		m := v.Map()
+	case base.Tmap:
+		m := v.AsMap()
 		buf := &bytes.Buffer{}
-		buf.WriteString("map (")
+		buf.WriteString("{")
 		for k, v := range m {
 			buf.WriteString(k)
 			buf.WriteString(":")
-			buf.WriteString(vtoString(v))
-			buf.WriteString(" ")
+			buf.WriteString(vtoString(v, lv+1))
+			buf.WriteString(",")
 		}
-		buf.WriteString(")")
+		if len(m) > 0 {
+			buf.Truncate(buf.Len() - 1)
+		}
+		buf.WriteString("}")
 		return buf.String()
-	case base.TY_bytes:
-		arr := v.Bytes()
+	case base.Tbytes:
+		arr := v.AsBytes()
 		buf := &bytes.Buffer{}
-		buf.WriteString("bytes (")
+		buf.WriteString("[")
 		for _, v := range arr {
-			buf.WriteString(strconv.Itoa(int(v)))
-			buf.WriteString(" ")
+			buf.WriteString(fmt.Sprintf("%02x", int(v)))
+			buf.WriteString(",")
 		}
-		buf.WriteString(")")
+		if len(arr) > 0 {
+			buf.Truncate(buf.Len() - 1)
+		}
+		buf.WriteString("]")
 		return buf.String()
-	case base.TY_closure:
-		return v.Closure().String()
+	case base.Tclosure:
+		return "<" + v.AsClosure().String() + ">"
 	}
 	return "nil"
 }
@@ -62,7 +76,7 @@ func stdPrint(f *os.File, ex bool) func(env *base.Env) base.Value {
 	return func(env *base.Env) base.Value {
 		s := env.Stack()
 		for i := 0; i < s.Size(); i++ {
-			f.WriteString(vtoString(s.Get(i)))
+			f.WriteString(vtoString(s.Get(i), 0))
 		}
 
 		return base.NewValue()
@@ -73,7 +87,7 @@ func stdPrintln(f *os.File, ex bool) func(env *base.Env) base.Value {
 	return func(env *base.Env) base.Value {
 		s := env.Stack()
 		for i := 0; i < s.Size(); i++ {
-			f.WriteString(vtoString(s.Get(i)) + " ")
+			f.WriteString(vtoString(s.Get(i), 0) + " ")
 		}
 		f.WriteString("\n")
 		return base.NewValue()
@@ -84,7 +98,7 @@ func stdWrite(f *os.File, ex bool) func(env *base.Env) base.Value {
 	return func(env *base.Env) base.Value {
 		s := env.Stack()
 		for i := 0; i < s.Size(); i++ {
-			f.Write(s.Get(i).Bytes())
+			f.Write(s.Get(i).AsBytes())
 		}
 		return base.NewValue()
 	}

@@ -44,8 +44,8 @@ import "github.com/coyove/bracket/vm"
 %left '>' '<' TGte TLte TEqeq TNeq
 %left '+' '-'
 %left '*' '/' '%'
-%left TLsh TRsh
 %left '|' '&'
+%left TLsh TRsh
 %right UNARY /* not # -(unary) */
 %right '^'
 
@@ -76,6 +76,8 @@ stat:
         var '=' expr {
             if len($1.Compound) > 0 && $1.Compound[0].Value.(string) == "load" {
                 $$ = NewCompoundNode("store", $1.Compound[1], $1.Compound[2], $3)
+            } else if len($1.Compound) > 0 && $1.Compound[0].Value.(string) == "safeload" {
+                $$ = NewCompoundNode("safestore", $1.Compound[1], $1.Compound[2], $3)
             } else {
                 $$ = NewCompoundNode("move", $1, $3)
             }
@@ -152,6 +154,9 @@ var:
         } |
         prefixexp '[' expr ']' {
             $$ = NewCompoundNode("load", $1, $3)
+        } | 
+        prefixexp '{' expr '}' {
+            $$ = NewCompoundNode("safeload", $1, $3)
         } | 
         prefixexp '.' TIdent {
             $$ = NewCompoundNode("load", $1, NewStringNode($3.Str))

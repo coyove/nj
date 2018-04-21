@@ -49,6 +49,8 @@ func init() {
 	flatOpMapping["len"] = true
 	flatOpMapping["store"] = true
 	flatOpMapping["load"] = true
+	flatOpMapping["safestore"] = true
+	flatOpMapping["safeload"] = true
 	flatOpMapping["assert"] = true
 	flatOpMapping["nil"] = true
 	flatOpMapping["bytes"] = true

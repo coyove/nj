@@ -22,19 +22,9 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	start := time.Now()
 
-	b, err := compiler.LoadFile("tests/fib.txt")
+	b, err := compiler.LoadFile("tests/mandelbrot.txt")
 	log.Println(err, b)
 	log.Println(base.NewBytesReader(b).Prettify(0))
-
-	// f, _ := os.Create("1.pbm")
-	// f.Write([]byte("P4\n 1600 1600\n"))
-
-	// for i := range ln {
-	// 	a := ln[i].Array()
-	// 	for j := range a {
-	// 		f.Write([]byte{byte(a[j].Number())})
-	// 	}
-	// }
 
 	log.Println(vm.Exec(base.NewEnv(nil), b).I())
 	log.Println(time.Now().Sub(start).Nanoseconds() / 1e6)

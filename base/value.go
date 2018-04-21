@@ -2,20 +2,22 @@ package base
 
 import (
 	"bytes"
+	"fmt"
 	"log"
+	"strconv"
 	"unsafe"
 )
 
 const (
-	TY_nil = iota
-	TY_number
-	TY_string
-	TY_bool
-	TY_array
-	TY_bytes
-	TY_map
-	TY_closure
-	TY_generic
+	Tnil = iota
+	Tnumber
+	Tstring
+	Tbool
+	Tlist
+	Tbytes
+	Tmap
+	Tclosure
+	Tgeneric
 )
 
 const (
@@ -31,28 +33,35 @@ type Value struct {
 	// to get around of runtime barrier check
 	ext bool
 
+	p2 byte
+	p3 byte
+	p4 byte
+	p5 byte
+	p6 byte
+	p7 byte
+
 	ptr unsafe.Pointer
 }
 
 func NewValue() Value {
-	return Value{ty: TY_nil}
+	return Value{ty: Tnil}
 }
 
 func NewNumberValue(f float64) Value {
 	i := *(*uintptr)(unsafe.Pointer(&f))
 	if i < minPhysPageSize {
 		i += minPhysPageSize
-		return Value{ty: TY_number, ext: true, ptr: unsafe.Pointer(i)}
+		return Value{ty: Tnumber, ext: true, ptr: unsafe.Pointer(i)}
 	}
-	return Value{ty: TY_number, ptr: unsafe.Pointer(i)}
+	return Value{ty: Tnumber, ptr: unsafe.Pointer(i)}
 }
 
 func NewStringValue(s string) Value {
-	return Value{ty: TY_string, ptr: unsafe.Pointer(&s)}
+	return Value{ty: Tstring, ptr: unsafe.Pointer(&s)}
 }
 
 func NewBoolValue(b bool) Value {
-	v := Value{ty: TY_bool}
+	v := Value{ty: Tbool}
 	if b {
 		v.ptr = unsafe.Pointer(uintptr(trueValue))
 	} else {
@@ -61,110 +70,114 @@ func NewBoolValue(b bool) Value {
 	return v
 }
 
-func NewArrayValue(a []Value) Value {
-	return Value{ty: TY_array, ptr: unsafe.Pointer(&a)}
+func NewListValue(a []Value) Value {
+	return Value{ty: Tlist, ptr: unsafe.Pointer(&a)}
 }
 
 func NewMapValue(m map[string]Value) Value {
-	return Value{ty: TY_map, ptr: unsafe.Pointer(&m)}
+	return Value{ty: Tmap, ptr: unsafe.Pointer(&m)}
 }
 
 func NewClosureValue(c *Closure) Value {
-	return Value{ty: TY_closure, ptr: unsafe.Pointer(c)}
+	return Value{ty: Tclosure, ptr: unsafe.Pointer(c)}
 }
 
 func NewBytesValue(buf []byte) Value {
-	if buf == nil {
-		return Value{ty: TY_bytes, ptr: nil}
-	}
-	return Value{ty: TY_bytes, ptr: unsafe.Pointer(&buf)}
+	return Value{ty: Tbytes, ptr: unsafe.Pointer(&buf)}
 }
 
 func NewGenericValue(g interface{}) Value {
-	return Value{ty: TY_generic, ptr: unsafe.Pointer(&g)}
+	return Value{ty: Tgeneric, ptr: unsafe.Pointer(&g)}
 }
 
 func (v Value) Type() byte {
 	return v.ty
 }
 
-func (v Value) Bool() bool {
-	if v.ty != TY_bool {
-		log.Panicf("not a boolean: %d", v.ty)
+func (v Value) AsBool() bool {
+	if v.ty != Tbool {
+		log.Panicf("not a boolean: %+v", v)
 	}
 	return uintptr(v.ptr) == trueValue
 }
 
-func (v Value) Number() float64 {
-	if v.ty != TY_number {
-		log.Panicf("not a number: %d", v.ty)
+func (v Value) AsBoolUnsafe() bool {
+	return uintptr(v.ptr) == trueValue
+}
+
+func (v Value) AsNumber() float64 {
+	if v.ty != Tnumber {
+		log.Panicf("not a number: %+v", v)
 	}
+	return v.AsNumberUnsafe()
+}
+
+func (v Value) AsNumberUnsafe() float64 {
 	i := uintptr(v.ptr)
 	if v.ext {
 		i -= minPhysPageSize
 	}
-
 	return *(*float64)(unsafe.Pointer(&i))
 }
 
-func (v Value) String() string {
-	if v.ty != TY_string {
-		log.Panicf("not a string: %d", v.ty)
+func (v Value) AsString() string {
+	if v.ty != Tstring {
+		log.Panicf("not a string: %+v", v)
 	}
 	return *(*string)(v.ptr)
 }
 
-func (v Value) Array() []Value {
-	if v.ty != TY_array {
-		log.Panicf("not an array: %d", v.ty)
+func (v Value) AsStringUnsafe() string {
+	return *(*string)(v.ptr)
+}
+
+func (v Value) AsList() []Value {
+	if v.ty != Tlist {
+		log.Panicf("not an array: %+v", v)
 	}
 	return *(*[]Value)(v.ptr)
 }
 
-func (v Value) Map() map[string]Value {
-	if v.ty != TY_map {
-		log.Panicf("not a map: %d", v.ty)
+func (v Value) AsListUnsafe() []Value {
+	return *(*[]Value)(v.ptr)
+}
+
+func (v Value) AsMap() map[string]Value {
+	if v.ty != Tmap {
+		log.Panicf("not a map: %+v", v)
 	}
 	return *(*map[string]Value)(v.ptr)
 }
 
-func (v Value) Closure() *Closure {
-	if v.ty != TY_closure {
-		log.Panicf("not a closure: %d", v.ty)
+func (v Value) AsMapUnsafe() map[string]Value {
+	return *(*map[string]Value)(v.ptr)
+}
+
+func (v Value) AsClosure() *Closure {
+	if v.ty != Tclosure {
+		log.Panicf("not a closure: %+v", v)
 	}
 	return (*Closure)(v.ptr)
 }
 
-func (v Value) Generic() interface{} {
-	if v.ty != TY_generic {
-		log.Panicf("not a generic: %d", v.ty)
+func (v Value) AsClosureUnsafe() *Closure {
+	return (*Closure)(v.ptr)
+}
+
+func (v Value) AsGeneric() interface{} {
+	if v.ty != Tgeneric {
+		log.Panicf("not a generic: %+v", v)
 	}
 	return *(*interface{})(v.ptr)
 }
 
-func (v Value) I() interface{} {
-	switch v.Type() {
-	case TY_bool:
-		return v.Bool()
-	case TY_number:
-		return v.Number()
-	case TY_string:
-		return v.String()
-	case TY_array:
-		return v.Array()
-	case TY_map:
-		return v.Map()
-	case TY_bytes:
-		return v.Bytes()
-	case TY_closure:
-		return v.Closure()
-	}
-	return nil
+func (v Value) AsGenericUnsafe() interface{} {
+	return *(*interface{})(v.ptr)
 }
 
-func (v Value) Bytes() []byte {
-	if v.ty != TY_bytes {
-		log.Panicf("not a bytes type: %d", v.ty)
+func (v Value) AsBytes() []byte {
+	if v.ty != Tbytes {
+		log.Panicf("not a bytes type: %+v", v)
 	}
 	if v.ptr == nil {
 		return nil
@@ -172,46 +185,98 @@ func (v Value) Bytes() []byte {
 	return *(*[]byte)(v.ptr)
 }
 
-func (v Value) IsFalse() bool {
-	if v.ty == TY_nil {
-		return true
-	}
+func (v Value) AsBytesUnsafe() []byte {
+	return *(*[]byte)(v.ptr)
+}
+
+func (v Value) I() interface{} {
 	switch v.Type() {
-	case TY_bool:
-		return v.Bool() == false
-	case TY_number:
-		return v.Number() == 0.0
-	case TY_string:
-		return v.String() == ""
-	case TY_array:
-		return len(v.Array()) == 0
+	case Tbool:
+		return v.AsBoolUnsafe()
+	case Tnumber:
+		return v.AsNumberUnsafe()
+	case Tstring:
+		return v.AsStringUnsafe()
+	case Tlist:
+		return v.AsListUnsafe()
+	case Tmap:
+		return v.AsMapUnsafe()
+	case Tbytes:
+		return v.AsBytesUnsafe()
+	case Tclosure:
+		return v.AsClosureUnsafe()
+	case Tgeneric:
+		return v.AsGenericUnsafe()
+	}
+	return nil
+}
+
+func (v Value) String() string {
+	switch v.Type() {
+	case Tbool:
+		return "<bool:" + strconv.FormatBool(v.AsBoolUnsafe()) + ">"
+	case Tnumber:
+		return "<number:" + strconv.FormatFloat(v.AsNumberUnsafe(), 'f', 9, 64) + ">"
+	case Tstring:
+		return "<string:" + strconv.Quote(v.AsStringUnsafe()) + ">"
+	case Tlist:
+		return "<list:[" + strconv.Itoa(len(v.AsListUnsafe())) + "]>"
+	case Tmap:
+		return "<map:[" + strconv.Itoa(len(v.AsMapUnsafe())) + "]>"
+	case Tbytes:
+		return "<bytes:[" + strconv.Itoa(len(v.AsBytesUnsafe())) + "]>"
+	case Tclosure:
+		return "<closure:[" + strconv.Itoa(v.AsClosureUnsafe().argsCount) +
+			"/" + strconv.Itoa(len(v.AsClosureUnsafe().preArgs)) + "]>"
+	case Tgeneric:
+		return fmt.Sprintf("<generic:%+v>", v.AsGenericUnsafe())
+	}
+	return "<nil>"
+}
+
+func (v Value) IsFalse() bool {
+	switch v.Type() {
+	case Tnil:
+		return true
+	case Tbool:
+		return v.AsBoolUnsafe() == false
+	case Tnumber:
+		return v.AsNumberUnsafe() == 0.0
+	case Tstring:
+		return v.AsStringUnsafe() == ""
+	case Tlist:
+		return len(v.AsListUnsafe()) == 0
+	case Tbytes:
+		return len(v.AsBytesUnsafe()) == 0
+	case Tmap:
+		return len(v.AsMapUnsafe()) == 0
 	}
 	return false
 }
 
 func (v Value) Equal(r Value) bool {
-	if v.ty == TY_nil || r.ty == TY_nil {
+	if v.ty == Tnil || r.ty == Tnil {
 		return v.ty == r.ty
 	}
 
 	switch v.ty {
-	case TY_number:
-		if r.ty == TY_number {
-			return r.Number() == v.Number()
+	case Tnumber:
+		if r.ty == Tnumber {
+			return r.AsNumberUnsafe() == v.AsNumberUnsafe()
 		}
-	case TY_string:
-		if r.ty == TY_string {
-			return r.String() == v.String()
-		} else if r.ty == TY_bytes {
-			return bytes.Equal(r.Bytes(), []byte(v.String()))
+	case Tstring:
+		if r.ty == Tstring {
+			return r.AsStringUnsafe() == v.AsStringUnsafe()
+		} else if r.ty == Tbytes {
+			return bytes.Equal(r.AsBytesUnsafe(), []byte(v.AsStringUnsafe()))
 		}
-	case TY_bool:
-		if r.ty == TY_bool {
-			return r.Bool() == v.Bool()
+	case Tbool:
+		if r.ty == Tbool {
+			return r.AsBoolUnsafe() == v.AsBoolUnsafe()
 		}
-	case TY_array:
-		if r.ty == TY_array {
-			lf, rf := v.Array(), r.Array()
+	case Tlist:
+		if r.ty == Tlist {
+			lf, rf := v.AsListUnsafe(), r.AsListUnsafe()
 
 			if len(lf) != len(rf) {
 				return false
@@ -225,11 +290,11 @@ func (v Value) Equal(r Value) bool {
 
 			return true
 		}
-	case TY_bytes:
-		if r.ty == TY_bytes {
-			return bytes.Equal(v.Bytes(), r.Bytes())
-		} else if r.ty == TY_string {
-			return bytes.Equal(v.Bytes(), []byte(r.String()))
+	case Tbytes:
+		if r.ty == Tbytes {
+			return bytes.Equal(v.AsBytesUnsafe(), r.AsBytesUnsafe())
+		} else if r.ty == Tstring {
+			return bytes.Equal(v.AsBytesUnsafe(), []byte(r.AsStringUnsafe()))
 		}
 	}
 
@@ -238,30 +303,30 @@ func (v Value) Equal(r Value) bool {
 
 func (v Value) Less(r Value) bool {
 	switch v.ty {
-	case TY_number:
-		if r.ty == TY_number {
-			return v.Number() < r.Number()
+	case Tnumber:
+		if r.ty == Tnumber {
+			return v.AsNumberUnsafe() < r.AsNumberUnsafe()
 		}
-	case TY_string:
-		if r.ty == TY_string {
-			return v.String() < r.String()
+	case Tstring:
+		if r.ty == Tstring {
+			return v.AsStringUnsafe() < r.AsStringUnsafe()
 		}
 	}
-	log.Panicf("can't compare ty:%d and ty:%d", v.ty, r.ty)
+	log.Panicf("can't compare %+v and %+v", v, r)
 	return false
 }
 
 func (v Value) LessEqual(r Value) bool {
 	switch v.ty {
-	case TY_number:
-		if r.ty == TY_number {
-			return v.Number() <= r.Number()
+	case Tnumber:
+		if r.ty == Tnumber {
+			return v.AsNumberUnsafe() <= r.AsNumberUnsafe()
 		}
-	case TY_string:
-		if r.ty == TY_string {
-			return v.String() <= r.String()
+	case Tstring:
+		if r.ty == Tstring {
+			return v.AsStringUnsafe() <= r.AsStringUnsafe()
 		}
 	}
-	log.Panicf("can't compare ty:%d and ty:%d", v.ty, r.ty)
+	log.Panicf("can't compare %+v and %+v", v, r)
 	return false
 }

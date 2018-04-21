@@ -39,6 +39,7 @@ func init() {
 		lib_foreach,
 		lib_typeof,
 		lib_go,
+		lib_dup,
 
 		lib_outprint,
 		lib_outprintln,
@@ -57,8 +58,16 @@ func init() {
 
 		lib_numlongbits,
 		lib_numtostring,
+		lib_stringtonum,
 		lib_listmakelen,
 		lib_mathsqrt,
+
+		lib_osargs,
+		lib_startprocess,
+		lib_startprocessbg,
+		lib_createfile,
+		lib_writefile,
+		lib_closefile,
 	}
 
 	LibLookup = make(map[string]int)
