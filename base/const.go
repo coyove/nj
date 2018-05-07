@@ -49,6 +49,8 @@ const (
 	OP_JMP
 	OP_LAMBDA
 	OP_CALL
+	OP_WHO
+	OP_DUP
 	OP_R0
 	OP_R0_NUM
 	OP_R0_STR

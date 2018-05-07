@@ -136,7 +136,7 @@ stat:
         } |
         TAssert expr {
             $$ = NewCompoundNode("assert", $2)
-            $$.Pos = $2.Pos
+            $$.Compound[0].Pos = $2.Pos
         }
 
 elseifs: 
@@ -174,7 +174,6 @@ namelist:
 exprlist:
         expr {
             $$ = NewCompoundNode($1)
-            $$.Pos = $1.Pos
         } |
         exprlist ',' expr {
             $1.Compound = append($1.Compound, $3)
@@ -184,15 +183,15 @@ exprlist:
 expr:
         TNil {
             $$ = NewCompoundNode("nil")
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } | 
         TFalse {
             $$ = NewCompoundNode("false")
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } | 
         TTrue {
             $$ = NewCompoundNode("true")
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } | 
         TNumber {
             $$ = NewNumberNode($1.Str)
@@ -209,91 +208,91 @@ expr:
         } |
         expr TOr expr {
             $$ = NewCompoundNode("or", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr TAnd expr {
             $$ = NewCompoundNode("and", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr TXor expr {
             $$ = NewCompoundNode("xor", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr '>' expr {
             $$ = NewCompoundNode(">", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr '<' expr {
             $$ = NewCompoundNode("<", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr TGte expr {
             $$ = NewCompoundNode(">=", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr TLte expr {
             $$ = NewCompoundNode("<=", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr TEqeq expr {
             $$ = NewCompoundNode("eq", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr TNeq expr {
             $$ = NewCompoundNode("neq", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr '+' expr {
             $$ = NewCompoundNode("+", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr '-' expr {
             $$ = NewCompoundNode("-", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr '*' expr {
             $$ = NewCompoundNode("*", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr '/' expr {
             $$ = NewCompoundNode("/", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr '%' expr {
             $$ = NewCompoundNode("%", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr '^' expr {
             $$ = NewCompoundNode("^", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr TLsh expr {
             $$ = NewCompoundNode("<<", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr TRsh expr {
             $$ = NewCompoundNode(">>", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr '|' expr {
             $$ = NewCompoundNode("|", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         expr '&' expr {
             $$ = NewCompoundNode("&", $1,$3)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         '-' expr %prec UNARY {
             $$ = NewCompoundNode("-", NewNumberNode("0"), $2)
-            $$.Pos = $2.Pos
+            $$.Compound[0].Pos = $2.Pos
         } |
         '~' expr %prec UNARY {
             $$ = NewCompoundNode("~", $2)
-            $$.Pos = $2.Pos
+            $$.Compound[0].Pos = $2.Pos
         } |
         TNot expr %prec UNARY {
             $$ = NewCompoundNode("not", $2)
-            $$.Pos = $2.Pos
+            $$.Compound[0].Pos = $2.Pos
         }
 
 string: 
@@ -343,11 +342,11 @@ args:
 function:
         TLambda '(' ')' block TEnd {
             $$ = NewCompoundNode("lambda", NewCompoundNode(), $4)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         } |
         TLambda '(' namelist ')' block TEnd {
             $$ = NewCompoundNode("lambda", $3, $5)
-            $$.Pos = $1.Pos
+            $$.Compound[0].Pos = $1.Pos
         }
 
 %%

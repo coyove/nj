@@ -56,6 +56,7 @@ func init() {
 	flatOpMapping["bytes"] = true
 	flatOpMapping["true"] = true
 	flatOpMapping["false"] = true
+	flatOpMapping["dup"] = true
 }
 
 func fill1(buf *base.BytesReader, n *parser.Node, varLookup *base.CMap, ops ...byte) (err error) {

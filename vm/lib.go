@@ -39,7 +39,6 @@ func init() {
 		lib_foreach,
 		lib_typeof,
 		lib_go,
-		lib_dup,
 
 		lib_outprint,
 		lib_outprintln,

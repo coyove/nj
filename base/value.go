@@ -34,7 +34,9 @@ type Value struct {
 	// to get around of runtime barrier check
 	ext bool
 
-	p2 byte
+	// used in red-black tree
+	c color
+
 	p3 byte
 	p4 byte
 	p5 byte

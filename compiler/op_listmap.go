@@ -26,8 +26,9 @@ func compileListOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (
 }
 
 func compileMapOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
-	if len(atoms)%2 != 0 {
+	if len(atoms[2].Compound)%2 != 0 {
 		err = fmt.Errorf("every key in map must have a value: %+v", atoms[1])
+		return
 	}
 
 	var buf *base.BytesReader

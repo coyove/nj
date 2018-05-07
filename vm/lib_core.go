@@ -65,32 +65,3 @@ var lib_typeof = LibFunc{
 		panic("shouldn't happen")
 	},
 }
-
-var lib_dup = LibFunc{
-	name: "dup",
-	args: 1,
-	f: func(env *base.Env) base.Value {
-		switch env.R0.Type() {
-		case base.Tnil, base.Tnumber, base.Tstring, base.Tbool, base.Tclosure, base.Tgeneric:
-			env.A = env.R0
-		case base.Tlist:
-			list0 := env.R0.AsListUnsafe()
-			list1 := make([]base.Value, len(list0))
-			copy(list1, list0)
-			env.A = base.NewListValue(list1)
-		case base.Tmap:
-			map0 := env.R0.AsMapUnsafe()
-			map1 := make(map[string]base.Value)
-			for k, v := range map0 {
-				map1[k] = v
-			}
-			env.A = base.NewMapValue(map1)
-		case base.Tbytes:
-			bytes0 := env.R0.AsBytesUnsafe()
-			bytes1 := make([]byte, len(bytes0))
-			copy(bytes1, bytes0)
-			env.A = base.NewBytesValue(bytes1)
-		}
-		panic("shouldn't happen")
-	},
-}

@@ -222,6 +222,8 @@ func compileFlatOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_SAFE_STORE, 0, 3)
 	case "safeload":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_SAFE_LOAD, 0, 2)
+	case "dup":
+		return flatCompile(stackPtr, atoms, varLookup, base.OP_DUP, 0, 1)
 	}
 
 	if lib, ok := vm.LibLookup[head.Value.(string)]; ok {

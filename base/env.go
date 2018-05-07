@@ -5,7 +5,7 @@ type Env struct {
 	stack  *Stack
 	creg   int
 
-	A, R0, R1, R2, R3 Value
+	A, C, R0, R1, R2, R3 Value
 }
 
 func NewEnv(parent *Env) *Env {

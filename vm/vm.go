@@ -27,6 +27,8 @@ func Exec(env *base.Env, code []byte) base.Value {
 		// log.Println(c.GetCursor())
 		switch bop {
 		case base.OP_NOP:
+		case base.OP_WHO:
+			env.A = env.C
 		case base.OP_NIL:
 			env.A = base.NewValue()
 		case base.OP_TRUE:
@@ -54,9 +56,7 @@ func Exec(env *base.Env, code []byte) base.Value {
 			case base.Tstring:
 				env.A = base.NewStringValue(l.AsStringUnsafe() + env.R1.AsString())
 			case base.Tlist:
-				v := l.AsListUnsafe()
-				v = append(v, env.R1)
-				env.A = base.NewListValue(v)
+				env.A = base.NewListValue(append(l.AsListUnsafe(), env.R1))
 			default:
 				log.Panicf("can't add %+v", l)
 			}
@@ -189,13 +189,20 @@ func Exec(env *base.Env, code []byte) base.Value {
 					v = base.NewNumberValue(float64(b[len(b)+idx]))
 				}
 			case base.Tlist:
-				if b, idx := env.R0.AsListUnsafe(), int(env.R1.AsNumber()); idx >= 0 {
+				b, idx := env.R0.AsListUnsafe(), int(env.R1.AsNumber())
+				if idx >= 0 {
 					v = b[idx]
 				} else {
 					v = b[len(b)+idx]
 				}
+				if v.Type() == base.Tclosure {
+					v.AsClosureUnsafe().SetCaller(env.R0)
+				}
 			case base.Tmap:
 				v = env.R0.AsMapUnsafe()[env.R1.AsString()]
+				if v.Type() == base.Tclosure {
+					v.AsClosureUnsafe().SetCaller(env.R0)
+				}
 			default:
 				log.Panicf("can't load from %+v", env.R0)
 			}
@@ -224,6 +231,14 @@ func Exec(env *base.Env, code []byte) base.Value {
 			case base.Tlist:
 				bb := env.R0.AsListUnsafe()
 				v = bb[(idx+len(bb))%len(bb)]
+				if v.Type() == base.Tclosure {
+					v.AsClosureUnsafe().SetCaller(env.R0)
+				}
+			case base.Tmap:
+				v = env.R0.AsMapUnsafe()[env.R1.AsString()]
+				if v.Type() == base.Tclosure {
+					v.AsClosureUnsafe().SetCaller(env.R0)
+				}
 			default:
 				log.Panicf("can't safe load from %+v", env.R0)
 			}
@@ -299,7 +314,8 @@ func Exec(env *base.Env, code []byte) base.Value {
 					}
 
 					newEnv.SetParent(cls.Env())
-					env.A = (Exec(newEnv, cls.Code()))
+					newEnv.C = cls.Caller()
+					env.A = Exec(newEnv, cls.Code())
 				}
 
 				newEnv = nil
@@ -361,6 +377,28 @@ func Exec(env *base.Env, code []byte) base.Value {
 			newEnv.SetParent(env)
 			env.A = (Lib[libidx].ff(newEnv))
 			newEnv.Stack().Clear()
+		case base.OP_DUP:
+			switch env.R0.Type() {
+			case base.Tnil, base.Tnumber, base.Tstring, base.Tbool, base.Tclosure, base.Tgeneric:
+				env.A = env.R0
+			case base.Tlist:
+				list0 := env.R0.AsListUnsafe()
+				list1 := make([]base.Value, len(list0))
+				copy(list1, list0)
+				env.A = base.NewListValue(list1)
+			case base.Tmap:
+				map0 := env.R0.AsMapUnsafe()
+				map1 := make(map[string]base.Value)
+				for k, v := range map0 {
+					map1[k] = v
+				}
+				env.A = base.NewMapValue(map1)
+			case base.Tbytes:
+				bytes0 := env.R0.AsBytesUnsafe()
+				bytes1 := make([]byte, len(bytes0))
+				copy(bytes1, bytes0)
+				env.A = base.NewBytesValue(bytes1)
+			}
 		}
 	}
 

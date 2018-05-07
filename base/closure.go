@@ -8,6 +8,7 @@ type Closure struct {
 	code      []byte
 	env       *Env
 	argsCount int
+	caller    Value
 	preArgs   []Value
 }
 
@@ -43,6 +44,14 @@ func (c *Closure) Code() []byte {
 	return c.code
 }
 
+func (c *Closure) SetCaller(cr Value) {
+	c.caller = cr
+}
+
+func (c *Closure) Caller() Value {
+	return c.caller
+}
+
 func (c *Closure) ArgsCount() int {
 	return c.argsCount
 }
@@ -53,7 +62,7 @@ func (c *Closure) Env() *Env {
 
 func (c *Closure) Dup() *Closure {
 	cls := NewClosure(c.code, c.env, c.argsCount)
-	//     cls.preArgs = preArgs == null ? null : preArgs.clone();
+	cls.caller = c.caller
 	if c.preArgs != nil {
 		cls.preArgs = make([]Value, len(c.preArgs))
 		copy(cls.preArgs, c.preArgs)

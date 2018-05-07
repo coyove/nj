@@ -13,13 +13,14 @@ func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (
 	callee := nodes[1]
 
 	name, _ := callee.Value.(string)
-	if name == "list" {
+	switch name {
+	case "list":
 		return compileListOp(stackPtr, nodes, varLookup)
-	}
-	if name == "map" {
+	case "map":
 		return compileMapOp(stackPtr, nodes, varLookup)
-	}
-	if name == "varargs" {
+	case "who":
+		return []byte{base.OP_WHO}, base.REG_A, stackPtr, nil
+	case "varargs":
 		return []byte{base.OP_VARARGS}, base.REG_A, stackPtr, nil
 	}
 	if flatOpMapping[name] {
@@ -63,8 +64,11 @@ func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (
 	case parser.NTAddr:
 		varIndex = callee.Value.(int32)
 	case parser.NTString:
-		err = fmt.Errorf("invalid callee: %+v", callee)
-		return
+		buf.WriteByte(base.OP_SET_STR)
+		buf.WriteInt32(int32(stackPtr))
+		buf.WriteString(callee.Value.(string))
+		varIndex = int32(stackPtr)
+		stackPtr++
 	default:
 		err = fmt.Errorf("invalid callee: %+v", callee)
 		return
