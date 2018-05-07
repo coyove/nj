@@ -2,15 +2,14 @@ package main
 
 import (
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"runtime"
 	"time"
 
 	"github.com/coyove/bracket/base"
 	"github.com/coyove/bracket/compiler"
 	"github.com/coyove/bracket/vm"
-
-	"net/http"
-	_ "net/http/pprof"
 )
 
 func main() {
@@ -26,6 +25,13 @@ func main() {
 	log.Println(err, b)
 	log.Println(base.NewBytesReader(b).Prettify(0))
 
-	log.Println(vm.Exec(base.NewEnv(nil), b).I())
+	i := vm.Exec(base.NewEnv(nil), b)
+	log.Println(i.I())
+
+	t := i.AsMap()
+	t.Begin()
+	for t.Next() {
+		log.Println(t.Key(), t.Value())
+	}
 	log.Println(time.Now().Sub(start).Nanoseconds() / 1e6)
 }

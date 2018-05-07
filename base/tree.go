@@ -17,14 +17,24 @@ import (
 
 type color bool
 
+type position byte
+
+const (
+	begin, between, end position = 0, 1, 2
+)
+
 const (
 	black, red color = true, false
 )
 
 // Tree holds elements of the red-black tree
+// and also records the state of iteration, so it is not thread safe
 type Tree struct {
-	Root *Node
-	size int
+	Root     *Node
+	size     int
+	tree     *Tree
+	iter     *Node
+	position position
 }
 
 // Node is a single element within the tree
@@ -34,6 +44,28 @@ type Node struct {
 	Left   *Node
 	Right  *Node
 	Parent *Node
+}
+
+// Dup duplicates the node
+func (n *Node) Dup() *Node {
+	n2 := &Node{Key: n.Key, Value: n.Value}
+	if n.Left != nil {
+		n2.Left = n.Left.Dup()
+		n2.Left.Parent = n2
+	}
+	if n.Right != nil {
+		n2.Right = n.Right.Dup()
+		n2.Right.Parent = n2
+	}
+	return n2
+}
+
+// Dup duplicates the tree
+func (tree *Tree) Dup() *Tree {
+	return &Tree{
+		Root: tree.Root.Dup(),
+		size: tree.size,
+	}
 }
 
 // Put inserts node into the tree.
@@ -82,12 +114,12 @@ func (tree *Tree) Put(key string, value Value) {
 // Get searches the node in the tree by key and returns its value or nil if key is not found in tree.
 // Second return parameter is true if key was found, otherwise false.
 // Key should adhere to the comparator's type assertion, otherwise method panics.
-func (tree *Tree) Get(key string) (value interface{}, found bool) {
+func (tree *Tree) Get(key string) (value Value, found bool) {
 	node := tree.lookup(key)
 	if node != nil {
 		return node.Value, true
 	}
-	return nil, false
+	return NewValue(), false
 }
 
 // Remove remove the node from the tree by key.
@@ -162,26 +194,25 @@ func (tree *Tree) Right() *Node {
 // all nodes in the tree is larger than the given node.
 //
 // Key should adhere to the comparator's type assertion, otherwise method panics.
-// func (tree *Tree) Floor(key interface{}) (floor *Node, found bool) {
-// 	found = false
-// 	node := tree.Root
-// 	for node != nil {
-// 		compare := tree.Comparator(key, node.Key)
-// 		switch {
-// 		case compare == 0:
-// 			return node, true
-// 		case compare < 0:
-// 			node = node.Left
-// 		case compare > 0:
-// 			floor, found = node, true
-// 			node = node.Right
-// 		}
-// 	}
-// 	if found {
-// 		return floor, true
-// 	}
-// 	return nil, false
-// }
+func (tree *Tree) Floor(key string) (floor *Node, found bool) {
+	found = false
+	node := tree.Root
+	for node != nil {
+		switch {
+		case key == node.Key:
+			return node, true
+		case key < node.Key:
+			node = node.Left
+		case key > node.Key:
+			floor, found = node, true
+			node = node.Right
+		}
+	}
+	if found {
+		return floor, true
+	}
+	return nil, false
+}
 
 // Ceiling finds ceiling node of the input key, return the ceiling node or nil if no ceiling is found.
 // Second return parameter is true if ceiling was found, otherwise false.
@@ -191,26 +222,25 @@ func (tree *Tree) Right() *Node {
 // all nodes in the tree is smaller than the given node.
 //
 // Key should adhere to the comparator's type assertion, otherwise method panics.
-// func (tree *Tree) Ceiling(key interface{}) (ceiling *Node, found bool) {
-// 	found = false
-// 	node := tree.Root
-// 	for node != nil {
-// 		compare := tree.Comparator(key, node.Key)
-// 		switch {
-// 		case compare == 0:
-// 			return node, true
-// 		case compare < 0:
-// 			ceiling, found = node, true
-// 			node = node.Left
-// 		case compare > 0:
-// 			node = node.Right
-// 		}
-// 	}
-// 	if found {
-// 		return ceiling, true
-// 	}
-// 	return nil, false
-// }
+func (tree *Tree) Ceiling(key string) (ceiling *Node, found bool) {
+	found = false
+	node := tree.Root
+	for node != nil {
+		switch {
+		case key == node.Key:
+			return node, true
+		case key < node.Key:
+			ceiling, found = node, true
+			node = node.Left
+		case key > node.Key:
+			node = node.Right
+		}
+	}
+	if found {
+		return ceiling, true
+	}
+	return nil, false
+}
 
 // Clear removes all nodes from the tree.
 func (tree *Tree) Clear() {
@@ -476,4 +506,131 @@ func nodeColor(node *Node) color {
 		return black
 	}
 	return node.Value.c
+}
+
+// Next moves the iterator to the next element and returns true if there was a next element in the container.
+// If Next() returns true, then next element's key and value can be retrieved by Key() and Value().
+// If Next() was called for the first time, then it will point the iterator to the first element if it exists.
+// Modifies the state of the iterator.
+func (tree *Tree) Next() bool {
+	if tree.position == end {
+		goto end
+	}
+	if tree.position == begin {
+		left := tree.Left()
+		if left == nil {
+			goto end
+		}
+		tree.iter = left
+		goto between
+	}
+	if tree.iter.Right != nil {
+		tree.iter = tree.iter.Right
+		for tree.iter.Left != nil {
+			tree.iter = tree.iter.Left
+		}
+		goto between
+	}
+	if tree.iter.Parent != nil {
+		node := tree.iter
+		for tree.iter.Parent != nil {
+			tree.iter = tree.iter.Parent
+			if node.Key <= tree.iter.Key {
+				goto between
+			}
+		}
+	}
+
+end:
+	tree.iter = nil
+	tree.position = end
+	return false
+
+between:
+	tree.position = between
+	return true
+}
+
+// Prev moves the iterator to the previous element and returns true if there was a previous element in the container.
+// If Prev() returns true, then previous element's key and value can be retrieved by Key() and Value().
+// Modifies the state of the iterator.
+func (tree *Tree) Prev() bool {
+	if tree.position == begin {
+		goto begin
+	}
+	if tree.position == end {
+		right := tree.Right()
+		if right == nil {
+			goto begin
+		}
+		tree.iter = right
+		goto between
+	}
+	if tree.iter.Left != nil {
+		tree.iter = tree.iter.Left
+		for tree.iter.Right != nil {
+			tree.iter = tree.iter.Right
+		}
+		goto between
+	}
+	if tree.iter.Parent != nil {
+		node := tree.iter
+		for tree.iter.Parent != nil {
+			tree.iter = tree.iter.Parent
+			if node.Key >= tree.iter.Key {
+				goto between
+			}
+		}
+	}
+
+begin:
+	tree.iter = nil
+	tree.position = begin
+	return false
+
+between:
+	tree.position = between
+	return true
+}
+
+// Value returns the current element's value.
+// Does not modify the state of the iterator.
+func (tree *Tree) Value() Value {
+	return tree.iter.Value
+}
+
+// Key returns the current element's key.
+// Does not modify the state of the iterator.
+func (tree *Tree) Key() string {
+	return tree.iter.Key
+}
+
+// Begin resets the iterator to its initial state (one-before-first)
+// Call Next() to fetch the first element if any.
+func (tree *Tree) Begin() {
+	tree.iter = nil
+	tree.position = begin
+}
+
+// End moves the iterator past the last element (one-past-the-end).
+// Call Prev() to fetch the last element if any.
+func (tree *Tree) End() {
+	tree.iter = nil
+	tree.position = end
+}
+
+// First moves the iterator to the first element and returns true if there was a first element in the container.
+// If First() returns true, then first element's key and value can be retrieved by Key() and Value().
+// Modifies the state of the iterator
+func (tree *Tree) First() bool {
+	tree.Begin()
+	return tree.Next()
+}
+
+// Last moves the iterator to the last element and returns true if there was a last element in the container.
+// If Last() returns true, then last element's key and value can be retrieved by Key() and Value().
+// Modifies the state of the iterator.
+func (tree *Tree) Last() bool {
+	tree.End()
+	return tree.Prev()
 }

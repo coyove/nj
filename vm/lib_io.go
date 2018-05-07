@@ -42,13 +42,13 @@ func vtoString(v base.Value, lv int) string {
 		m := v.AsMap()
 		buf := &bytes.Buffer{}
 		buf.WriteString("{")
-		for k, v := range m {
-			buf.WriteString(k)
-			buf.WriteString(":")
-			buf.WriteString(vtoString(v, lv+1))
-			buf.WriteString(",")
-		}
-		if len(m) > 0 {
+		// for k, v := range m {
+		// 	buf.WriteString(k)
+		// 	buf.WriteString(":")
+		// 	buf.WriteString(vtoString(v, lv+1))
+		// 	buf.WriteString(",")
+		// }
+		if m.Size() > 0 {
 			buf.Truncate(buf.Len() - 1)
 		}
 		buf.WriteString("}")

@@ -77,8 +77,8 @@ func NewListValue(a []Value) Value {
 	return Value{ty: Tlist, ptr: unsafe.Pointer(&a)}
 }
 
-func NewMapValue(m map[string]Value) Value {
-	return Value{ty: Tmap, ptr: unsafe.Pointer(&m)}
+func NewMapValue(m *Tree) Value {
+	return Value{ty: Tmap, ptr: unsafe.Pointer(m)}
 }
 
 func NewClosureValue(c *Closure) Value {
@@ -152,15 +152,15 @@ func (v Value) AsListUnsafe() []Value {
 	return *(*[]Value)(v.ptr)
 }
 
-func (v Value) AsMap() map[string]Value {
+func (v Value) AsMap() *Tree {
 	if v.ty != Tmap {
 		log.Panicf("not a map: %+v", v)
 	}
-	return *(*map[string]Value)(v.ptr)
+	return (*Tree)(v.ptr)
 }
 
-func (v Value) AsMapUnsafe() map[string]Value {
-	return *(*map[string]Value)(v.ptr)
+func (v Value) AsMapUnsafe() *Tree {
+	return (*Tree)(v.ptr)
 }
 
 func (v Value) AsClosure() *Closure {
@@ -232,7 +232,7 @@ func (v Value) String() string {
 	case Tlist:
 		return "<list:[" + strconv.Itoa(len(v.AsListUnsafe())) + "]>"
 	case Tmap:
-		return "<map:[" + strconv.Itoa(len(v.AsMapUnsafe())) + "]>"
+		return "<map:[" + strconv.Itoa(v.AsMapUnsafe().Size()) + "]>"
 	case Tbytes:
 		return "<bytes:[" + strconv.Itoa(len(v.AsBytesUnsafe())) + "]>"
 	case Tclosure:
@@ -259,7 +259,7 @@ func (v Value) IsFalse() bool {
 	case Tbytes:
 		return len(v.AsBytesUnsafe()) == 0
 	case Tmap:
-		return len(v.AsMapUnsafe()) == 0
+		return v.AsMapUnsafe().Size() == 0
 	}
 	return false
 }

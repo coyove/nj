@@ -20,12 +20,12 @@ var lib_foreach = LibFunc{
 				Exec(newEnv, cls.Code())
 			}
 		case base.Tmap:
-			for k, v := range env.R0.AsMapUnsafe() {
-				newEnv.Stack().Clear()
-				newEnv.Push(base.NewStringValue(k))
-				newEnv.Push(v)
-				Exec(newEnv, cls.Code())
-			}
+			// for k, v := range env.R0.AsMapUnsafe() {
+			// 	newEnv.Stack().Clear()
+			// 	newEnv.Push(base.NewStringValue(k))
+			// 	newEnv.Push(v)
+			// 	Exec(newEnv, cls.Code())
+			// }
 		case base.Tbytes:
 			for i, v := range env.R0.AsBytesUnsafe() {
 				newEnv.Stack().Clear()

@@ -1,8 +1,8 @@
-set m = map("c", 123, "incr", lambda()
+set m = map("c", 123, "a", "a", "incr", lambda()
     set c = who()
     c.c = c.c + 1
     return c
-end, "zzz")
+end )
 set mp = m
 set  m2 = dup(m)
 
@@ -15,3 +15,5 @@ m2.incr().incr()
 
 assert m.c == 125
 assert m2.c == 125
+
+return m

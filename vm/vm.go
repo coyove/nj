@@ -131,7 +131,7 @@ func Exec(env *base.Env, code []byte) base.Value {
 			case base.Tlist:
 				env.A = base.NewNumberValue(float64(len(v.AsListUnsafe())))
 			case base.Tmap:
-				env.A = base.NewNumberValue(float64(len(v.AsMapUnsafe())))
+				env.A = base.NewNumberValue(float64(v.AsMapUnsafe().Size()))
 			case base.Tbytes:
 				env.A = base.NewNumberValue(float64(len(v.AsBytesUnsafe())))
 			default:
@@ -147,9 +147,9 @@ func Exec(env *base.Env, code []byte) base.Value {
 			env.A = base.NewListValue(list)
 		case base.OP_MAP:
 			size := newEnv.Stack().Size()
-			m := make(map[string]base.Value)
+			m := new(base.Tree)
 			for i := 0; i < size; i += 2 {
-				m[newEnv.Get(int32(i)).AsString()] = newEnv.Get(int32(i + 1))
+				m.Put(newEnv.Get(int32(i)).AsString(), newEnv.Get(int32(i+1)))
 			}
 			newEnv.Stack().Clear()
 			env.A = base.NewMapValue(m)
@@ -168,7 +168,7 @@ func Exec(env *base.Env, code []byte) base.Value {
 					b[len(b)+idx] = env.R2
 				}
 			case base.Tmap:
-				env.R0.AsMapUnsafe()[env.R1.AsString()] = env.R2
+				env.R0.AsMapUnsafe().Put(env.R1.AsString(), env.R2)
 			default:
 				log.Panicf("can't store into %+v", env.R0)
 			}
@@ -199,7 +199,7 @@ func Exec(env *base.Env, code []byte) base.Value {
 					v.AsClosureUnsafe().SetCaller(env.R0)
 				}
 			case base.Tmap:
-				v = env.R0.AsMapUnsafe()[env.R1.AsString()]
+				v, _ = env.R0.AsMapUnsafe().Get(env.R1.AsString())
 				if v.Type() == base.Tclosure {
 					v.AsClosureUnsafe().SetCaller(env.R0)
 				}
@@ -235,7 +235,7 @@ func Exec(env *base.Env, code []byte) base.Value {
 					v.AsClosureUnsafe().SetCaller(env.R0)
 				}
 			case base.Tmap:
-				v = env.R0.AsMapUnsafe()[env.R1.AsString()]
+				v, _ = env.R0.AsMapUnsafe().Get(env.R1.AsString())
 				if v.Type() == base.Tclosure {
 					v.AsClosureUnsafe().SetCaller(env.R0)
 				}
@@ -387,12 +387,7 @@ func Exec(env *base.Env, code []byte) base.Value {
 				copy(list1, list0)
 				env.A = base.NewListValue(list1)
 			case base.Tmap:
-				map0 := env.R0.AsMapUnsafe()
-				map1 := make(map[string]base.Value)
-				for k, v := range map0 {
-					map1[k] = v
-				}
-				env.A = base.NewMapValue(map1)
+				env.A = base.NewMapValue(env.R0.AsMapUnsafe().Dup())
 			case base.Tbytes:
 				bytes0 := env.R0.AsBytesUnsafe()
 				bytes1 := make([]byte, len(bytes0))
