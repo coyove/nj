@@ -16,4 +16,7 @@ m2.incr().incr()
 assert m.c == 125
 assert m2.c == 125
 
-return m
+
+set i = iter(m) while next(i) do
+    ioprintln(val(i))
+end

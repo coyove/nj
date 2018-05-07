@@ -68,6 +68,7 @@ func init() {
 	}
 
 	Lib = append(Lib, lib_math...)
+	Lib = append(Lib, lib_map...)
 
 	LibLookup = make(map[string]int)
 	c := crc32.New(crc32.IEEETable)

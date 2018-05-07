@@ -27,11 +27,5 @@ func main() {
 
 	i := vm.Exec(base.NewEnv(nil), b)
 	log.Println(i.I())
-
-	t := i.AsMap()
-	t.Begin()
-	for t.Next() {
-		log.Println(t.Key(), t.Value())
-	}
 	log.Println(time.Now().Sub(start).Nanoseconds() / 1e6)
 }

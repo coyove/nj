@@ -18,6 +18,7 @@ const (
 	Tbytes
 	Tmap
 	Tclosure
+	Tpair
 	Tgeneric
 )
 
@@ -75,6 +76,11 @@ func NewBoolValue(b bool) Value {
 
 func NewListValue(a []Value) Value {
 	return Value{ty: Tlist, ptr: unsafe.Pointer(&a)}
+}
+
+func NewPairValue(a, b Value) Value {
+	p := [2]Value{a, b}
+	return Value{ty: Tpair, ptr: unsafe.Pointer(&p)}
 }
 
 func NewMapValue(m *Tree) Value {
@@ -150,6 +156,18 @@ func (v Value) AsList() []Value {
 
 func (v Value) AsListUnsafe() []Value {
 	return *(*[]Value)(v.ptr)
+}
+
+func (v Value) AsPair() (Value, Value) {
+	if v.ty != Tpair {
+		log.Panicf("not an array: %+v", v)
+	}
+	return v.AsPairUnsafe()
+}
+
+func (v Value) AsPairUnsafe() (Value, Value) {
+	p := *(*[2]Value)(v.ptr)
+	return p[0], p[1]
 }
 
 func (v Value) AsMap() *Tree {
@@ -260,6 +278,9 @@ func (v Value) IsFalse() bool {
 		return len(v.AsBytesUnsafe()) == 0
 	case Tmap:
 		return v.AsMapUnsafe().Size() == 0
+	case Tpair:
+		a, b := v.AsPairUnsafe()
+		return a.IsFalse() && b.IsFalse()
 	}
 	return false
 }
@@ -305,6 +326,12 @@ func (v Value) Equal(r Value) bool {
 			return bytes.Equal(v.AsBytesUnsafe(), r.AsBytesUnsafe())
 		} else if r.ty == Tstring {
 			return bytes.Equal(v.AsBytesUnsafe(), []byte(r.AsStringUnsafe()))
+		}
+	case Tpair:
+		if r.ty == Tpair {
+			la, lb := v.AsPairUnsafe()
+			ra, rb := r.AsPairUnsafe()
+			return (la == ra) && (lb == rb)
 		}
 	}
 

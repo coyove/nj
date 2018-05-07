@@ -4,6 +4,15 @@ import (
 	"github.com/coyove/bracket/base"
 )
 
+var lib_map = []LibFunc{
+	LibFunc{name: "iter", args: 1, f: func(env *base.Env) base.Value { return base.NewGenericValue(env.R0.AsMap().Iterator()) }},
+	LibFunc{name: "iterend", args: 1, f: func(env *base.Env) base.Value { return base.NewGenericValue(env.R0.AsMap().Iterator().End()) }},
+	LibFunc{name: "next", args: 1, f: func(env *base.Env) base.Value { return _bvalue2(env.R0.AsGeneric().(*base.Iterator).Next()) }},
+	LibFunc{name: "prev", args: 1, f: func(env *base.Env) base.Value { return _bvalue2(env.R0.AsGeneric().(*base.Iterator).Prev()) }},
+	LibFunc{name: "key", args: 1, f: func(env *base.Env) base.Value { return base.NewStringValue(env.R0.AsGeneric().(*base.Iterator).Key()) }},
+	LibFunc{name: "val", args: 1, f: func(env *base.Env) base.Value { return env.R0.AsGeneric().(*base.Iterator).Value() }},
+}
+
 var lib_foreach = LibFunc{
 	name: "foreach",
 	args: 2,
@@ -61,6 +70,8 @@ var lib_typeof = LibFunc{
 			env.A = base.NewStringValue("map")
 		case base.Tbytes:
 			env.A = base.NewStringValue("bytes")
+		case base.Tpair:
+			env.A = base.NewStringValue("pair")
 		}
 		panic("shouldn't happen")
 	},

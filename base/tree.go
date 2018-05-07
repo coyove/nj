@@ -17,18 +17,11 @@ import (
 
 type color bool
 
-type position byte
-
-const (
-	begin, between, end position = 0, 1, 2
-)
-
 const (
 	black, red color = true, false
 )
 
 // Tree holds elements of the red-black tree
-// and also records the state of iteration, so it is not thread safe
 type Tree struct {
 	Root     *Node
 	size     int
@@ -508,129 +501,148 @@ func nodeColor(node *Node) color {
 	return node.Value.c
 }
 
+type Iterator struct {
+	tree     *Tree
+	node     *Node
+	position position
+}
+
+type position byte
+
+const (
+	begin, between, end position = 0, 1, 2
+)
+
+// Iterator returns a stateful iterator whose elements are key/value pairs.
+func (tree *Tree) Iterator() *Iterator {
+	return &Iterator{tree: tree, node: nil, position: begin}
+}
+
 // Next moves the iterator to the next element and returns true if there was a next element in the container.
 // If Next() returns true, then next element's key and value can be retrieved by Key() and Value().
 // If Next() was called for the first time, then it will point the iterator to the first element if it exists.
 // Modifies the state of the iterator.
-func (tree *Tree) Next() bool {
-	if tree.position == end {
+func (iterator *Iterator) Next() bool {
+	if iterator.position == end {
 		goto end
 	}
-	if tree.position == begin {
-		left := tree.Left()
+	if iterator.position == begin {
+		left := iterator.tree.Left()
 		if left == nil {
 			goto end
 		}
-		tree.iter = left
+		iterator.node = left
 		goto between
 	}
-	if tree.iter.Right != nil {
-		tree.iter = tree.iter.Right
-		for tree.iter.Left != nil {
-			tree.iter = tree.iter.Left
+	if iterator.node.Right != nil {
+		iterator.node = iterator.node.Right
+		for iterator.node.Left != nil {
+			iterator.node = iterator.node.Left
 		}
 		goto between
 	}
-	if tree.iter.Parent != nil {
-		node := tree.iter
-		for tree.iter.Parent != nil {
-			tree.iter = tree.iter.Parent
-			if node.Key <= tree.iter.Key {
+	if iterator.node.Parent != nil {
+		node := iterator.node
+		for iterator.node.Parent != nil {
+			iterator.node = iterator.node.Parent
+			if node.Key <= iterator.node.Key {
 				goto between
 			}
 		}
 	}
 
 end:
-	tree.iter = nil
-	tree.position = end
+	iterator.node = nil
+	iterator.position = end
 	return false
 
 between:
-	tree.position = between
+	iterator.position = between
 	return true
 }
 
 // Prev moves the iterator to the previous element and returns true if there was a previous element in the container.
 // If Prev() returns true, then previous element's key and value can be retrieved by Key() and Value().
 // Modifies the state of the iterator.
-func (tree *Tree) Prev() bool {
-	if tree.position == begin {
+func (iterator *Iterator) Prev() bool {
+	if iterator.position == begin {
 		goto begin
 	}
-	if tree.position == end {
-		right := tree.Right()
+	if iterator.position == end {
+		right := iterator.tree.Right()
 		if right == nil {
 			goto begin
 		}
-		tree.iter = right
+		iterator.node = right
 		goto between
 	}
-	if tree.iter.Left != nil {
-		tree.iter = tree.iter.Left
-		for tree.iter.Right != nil {
-			tree.iter = tree.iter.Right
+	if iterator.node.Left != nil {
+		iterator.node = iterator.node.Left
+		for iterator.node.Right != nil {
+			iterator.node = iterator.node.Right
 		}
 		goto between
 	}
-	if tree.iter.Parent != nil {
-		node := tree.iter
-		for tree.iter.Parent != nil {
-			tree.iter = tree.iter.Parent
-			if node.Key >= tree.iter.Key {
+	if iterator.node.Parent != nil {
+		node := iterator.node
+		for iterator.node.Parent != nil {
+			iterator.node = iterator.node.Parent
+			if node.Key >= iterator.node.Key {
 				goto between
 			}
 		}
 	}
 
 begin:
-	tree.iter = nil
-	tree.position = begin
+	iterator.node = nil
+	iterator.position = begin
 	return false
 
 between:
-	tree.position = between
+	iterator.position = between
 	return true
 }
 
 // Value returns the current element's value.
 // Does not modify the state of the iterator.
-func (tree *Tree) Value() Value {
-	return tree.iter.Value
+func (iterator *Iterator) Value() Value {
+	return iterator.node.Value
 }
 
 // Key returns the current element's key.
 // Does not modify the state of the iterator.
-func (tree *Tree) Key() string {
-	return tree.iter.Key
+func (iterator *Iterator) Key() string {
+	return iterator.node.Key
 }
 
 // Begin resets the iterator to its initial state (one-before-first)
 // Call Next() to fetch the first element if any.
-func (tree *Tree) Begin() {
-	tree.iter = nil
-	tree.position = begin
+func (iterator *Iterator) Begin() *Iterator {
+	iterator.node = nil
+	iterator.position = begin
+	return iterator
 }
 
 // End moves the iterator past the last element (one-past-the-end).
 // Call Prev() to fetch the last element if any.
-func (tree *Tree) End() {
-	tree.iter = nil
-	tree.position = end
+func (iterator *Iterator) End() *Iterator {
+	iterator.node = nil
+	iterator.position = end
+	return iterator
 }
 
 // First moves the iterator to the first element and returns true if there was a first element in the container.
 // If First() returns true, then first element's key and value can be retrieved by Key() and Value().
 // Modifies the state of the iterator
-func (tree *Tree) First() bool {
-	tree.Begin()
-	return tree.Next()
+func (iterator *Iterator) First() bool {
+	iterator.Begin()
+	return iterator.Next()
 }
 
 // Last moves the iterator to the last element and returns true if there was a last element in the container.
 // If Last() returns true, then last element's key and value can be retrieved by Key() and Value().
 // Modifies the state of the iterator.
-func (tree *Tree) Last() bool {
-	tree.End()
-	return tree.Prev()
+func (iterator *Iterator) Last() bool {
+	iterator.End()
+	return iterator.Prev()
 }
