@@ -85,8 +85,14 @@ func compileSetOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (c
 }
 
 func compileRetOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
-	atom := atoms[1]
 	buf := base.NewBytesBuffer()
+	if len(atoms) == 1 {
+		buf.WriteByte(base.OP_RET)
+		buf.WriteInt32(base.REG_A)
+		return buf.Bytes(), yx, stackPtr, nil
+	}
+
+	atom := atoms[1]
 
 	switch atom.Type {
 	case parser.NTAtom, parser.NTNumber, parser.NTString, parser.NTAddr:

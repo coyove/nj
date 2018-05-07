@@ -1,9 +1,12 @@
 package parser
 
 import (
-	"bytes"
+	"fmt"
 	"io"
+	"log"
+	"math"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -62,9 +65,38 @@ func NewStringNode(arg string) *Node {
 }
 
 func NewNumberNode(arg string) *Node {
+	if arg[0] == '0' && len(arg) > 1 {
+		var num uint64
+		var err error
+		switch arg[1] {
+		case 'x', 'X':
+			num, err = strconv.ParseUint(arg[2:], 16, 64)
+		case 'b', 'B':
+			num, err = strconv.ParseUint(arg[2:], 2, 64)
+		case 'i', 'I':
+			num, err = strconv.ParseUint(arg[2:], 16, 64)
+			if err == nil {
+				return &Node{
+					Type:  NTNumber,
+					Value: math.Float64frombits(uint64(num)),
+				}
+			}
+		default:
+			num, err = strconv.ParseUint(arg[1:], 8, 64)
+		}
+		if err == nil {
+			return &Node{
+				Type:  NTNumber,
+				Value: float64(num),
+			}
+		}
+
+		log.Panicf("invalid number: %s, %+v", arg, err)
+	}
+
 	num, err := strconv.ParseFloat(arg, 64)
 	if err != nil {
-		panic(err)
+		log.Panicf("invalid number: %s, %+v", arg, err)
 	}
 
 	return &Node{
@@ -92,21 +124,20 @@ func (n *Node) Dump(w io.Writer) {
 }
 
 func (n *Node) String() string {
+	pos := fmt.Sprintf("@%s:%d:%d", n.Pos.Source, n.Pos.Line, n.Pos.Column)
 	switch n.Type {
 	case NTNumber:
-		return "<" + strconv.FormatFloat(n.Value.(float64), 'f', 9, 64) + ">"
+		return strconv.FormatFloat(n.Value.(float64), 'f', 9, 64) + pos
 	case NTString:
-		return strconv.Quote(n.Value.(string))
+		return strconv.Quote(n.Value.(string)) + pos
 	case NTAtom:
-		return n.Value.(string)
+		return n.Value.(string) + pos
 	case NTCompound:
-		buf := &bytes.Buffer{}
-		buf.WriteString("[")
-		for _, a := range n.Compound {
-			buf.WriteString(a.String() + " ")
+		buf := make([]string, len(n.Compound))
+		for i, a := range n.Compound {
+			buf[i] = a.String()
 		}
-		buf.WriteString("]")
-		return buf.String()
+		return "[" + strings.Join(buf, " ") + "]" + pos
 	}
-	panic(1)
+	panic("shouldn't happen")
 }

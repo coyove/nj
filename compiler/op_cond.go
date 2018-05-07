@@ -60,8 +60,13 @@ func compileIfOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (co
 
 		var trueCode, falseCode []byte
 		trueCode, yx, stackPtr, err = compileChainOp(stackPtr, trueBranch, varLookup)
+		if err != nil {
+			return
+		}
 		falseCode, yx, stackPtr, err = compileChainOp(stackPtr, falseBranch, varLookup)
-
+		if err != nil {
+			return
+		}
 		if len(falseCode) > 0 {
 			buf.WriteInt32(int32(len(trueCode)) + 5) // jmp (1b) + offset (4b)
 			buf.Write(trueCode)

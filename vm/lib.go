@@ -56,11 +56,9 @@ func init() {
 		lib_syncmutexlock,
 		lib_syncmutexunlock,
 
-		lib_numlongbits,
 		lib_numtostring,
 		lib_stringtonum,
 		lib_listmakelen,
-		lib_mathsqrt,
 
 		lib_osargs,
 		lib_startprocess,
@@ -69,6 +67,8 @@ func init() {
 		lib_writefile,
 		lib_closefile,
 	}
+
+	Lib = append(Lib, lib_math...)
 
 	LibLookup = make(map[string]int)
 	c := crc32.New(crc32.IEEETable)

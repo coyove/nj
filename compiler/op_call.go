@@ -62,6 +62,9 @@ func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (
 		buf.Write(code)
 	case parser.NTAddr:
 		varIndex = callee.Value.(int32)
+	case parser.NTString:
+		err = fmt.Errorf("invalid callee: %+v", callee)
+		return
 	default:
 		err = fmt.Errorf("invalid callee: %+v", callee)
 		return

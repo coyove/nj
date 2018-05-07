@@ -1,3 +1,8 @@
+if true then 
+    ioprintln(("123")(1,2))
+    return
+end
+
 set limit = 4.0
 set maxIter = 50
 set rows = 0
@@ -60,7 +65,6 @@ end
 
 set size = 1600
 bytesPerRow = size >> 3
-out_println(bytesPerRow, size >> 3)
 
 initial_r = list_make_len(size)
 initial_i = list_make_len(size)
@@ -97,7 +101,7 @@ go(worker)
 wait_group_wait(wg)
 
 
-out_write(bytes("P4\n" + to_string(size) + " " + to_string(size) + "\n"))
+iowrite(bytes("P4\n" + tostring(size) + " " + tostring(size) + "\n"))
 foreach(rows, lambda(i,row) 
-    out_write(row)
+    iowrite(row)
 end) 

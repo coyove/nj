@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"math"
 	"strconv"
 	"unsafe"
 )
@@ -110,6 +111,13 @@ func (v Value) AsNumber() float64 {
 		log.Panicf("not a number: %+v", v)
 	}
 	return v.AsNumberUnsafe()
+}
+
+func (v Value) AsUint64() uint64 {
+	if v.ty != Tnumber {
+		log.Panicf("not a number: %+v", v)
+	}
+	return math.Float64bits(v.AsNumberUnsafe())
 }
 
 func (v Value) AsNumberUnsafe() float64 {

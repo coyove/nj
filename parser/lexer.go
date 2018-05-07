@@ -135,7 +135,8 @@ func (sc *Scanner) scanDecimal(ch int, buf *bytes.Buffer) error {
 
 func (sc *Scanner) scanNumber(ch int, buf *bytes.Buffer) error {
 	if ch == '0' { // octal
-		if sc.Peek() == 'x' || sc.Peek() == 'X' {
+		switch sc.Peek() {
+		case 'x', 'X', 'b', 'B', 'i', 'I':
 			writeChar(buf, ch)
 			writeChar(buf, sc.Next())
 			hasvalue := false
@@ -144,11 +145,9 @@ func (sc *Scanner) scanNumber(ch int, buf *bytes.Buffer) error {
 				hasvalue = true
 			}
 			if !hasvalue {
-				return sc.Error(buf.String(), "illegal hexadecimal number")
+				return sc.Error(buf.String(), "illegal number")
 			}
 			return nil
-		} else if sc.Peek() != '.' && isDecimal(sc.Peek()) {
-			ch = sc.Next()
 		}
 	}
 	sc.scanDecimal(ch, buf)
