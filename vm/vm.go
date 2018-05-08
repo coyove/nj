@@ -68,16 +68,6 @@ func Exec(env *base.Env, code []byte) base.Value {
 			env.A = base.NewNumberValue(env.R0.AsNumber() / env.R1.AsNumber())
 		case base.OP_MOD:
 			env.A = base.NewNumberValue(float64(int64(env.R0.AsNumber()) % int64(env.R1.AsNumber())))
-		case base.OP_INC:
-			id := c.ReadInt32()
-			v := env.Get(id).AsNumber() + env.Get(c.ReadInt32()).AsNumber()
-			env.Set(id, base.NewNumberValue(v))
-			env.A = base.NewNumberValue(v)
-		case base.OP_INC_NUM:
-			id := c.ReadInt32()
-			v := env.Get(id).AsNumber() + c.ReadDouble()
-			env.Set(id, base.NewNumberValue(v))
-			env.A = base.NewNumberValue(v)
 		case base.OP_EQ:
 			env.A = base.NewBoolValue(env.R0.Equal(env.R1))
 		case base.OP_NEQ:
@@ -357,9 +347,6 @@ func Exec(env *base.Env, code []byte) base.Value {
 			if cond.IsFalse() {
 				c.SetCursor(c.GetCursor() + off)
 			}
-		case base.OP_TYPEOF:
-			v, t := env.Get(c.ReadInt32()), c.ReadInt32()
-			env.A = base.NewBoolValue(v.Type() == byte(t))
 		case base.OP_LIB_CALL:
 			libidx := int(uint32(c.ReadInt32()))
 			if libidx >= len(Lib) {

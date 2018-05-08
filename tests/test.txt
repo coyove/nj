@@ -19,4 +19,10 @@ assert m2.c == 125
 
 set i = iter(m) while next(i) do
     ioprintln(val(i))
-end
+end 
+
+
+set av = attach(12, false)
+assert av == 12
+assert not detach(av)
+assert detach(av) == nil

@@ -2,6 +2,7 @@ package base
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
@@ -18,7 +19,6 @@ const (
 	Tbytes
 	Tmap
 	Tclosure
-	Tpair
 	Tgeneric
 )
 
@@ -38,11 +38,8 @@ type Value struct {
 	// used in red-black tree
 	c color
 
-	p3 byte
-	p4 byte
-	p5 byte
-	p6 byte
-	p7 byte
+	i byte
+	p [4]byte
 
 	ptr unsafe.Pointer
 }
@@ -76,11 +73,6 @@ func NewBoolValue(b bool) Value {
 
 func NewListValue(a []Value) Value {
 	return Value{ty: Tlist, ptr: unsafe.Pointer(&a)}
-}
-
-func NewPairValue(a, b Value) Value {
-	p := [2]Value{a, b}
-	return Value{ty: Tpair, ptr: unsafe.Pointer(&p)}
 }
 
 func NewMapValue(m *Tree) Value {
@@ -156,18 +148,6 @@ func (v Value) AsList() []Value {
 
 func (v Value) AsListUnsafe() []Value {
 	return *(*[]Value)(v.ptr)
-}
-
-func (v Value) AsPair() (Value, Value) {
-	if v.ty != Tpair {
-		log.Panicf("not an array: %+v", v)
-	}
-	return v.AsPairUnsafe()
-}
-
-func (v Value) AsPairUnsafe() (Value, Value) {
-	p := *(*[2]Value)(v.ptr)
-	return p[0], p[1]
 }
 
 func (v Value) AsMap() *Tree {
@@ -278,9 +258,6 @@ func (v Value) IsFalse() bool {
 		return len(v.AsBytesUnsafe()) == 0
 	case Tmap:
 		return v.AsMapUnsafe().Size() == 0
-	case Tpair:
-		a, b := v.AsPairUnsafe()
-		return a.IsFalse() && b.IsFalse()
 	}
 	return false
 }
@@ -327,12 +304,6 @@ func (v Value) Equal(r Value) bool {
 		} else if r.ty == Tstring {
 			return bytes.Equal(v.AsBytesUnsafe(), []byte(r.AsStringUnsafe()))
 		}
-	case Tpair:
-		if r.ty == Tpair {
-			la, lb := v.AsPairUnsafe()
-			ra, rb := r.AsPairUnsafe()
-			return (la == ra) && (lb == rb)
-		}
 	}
 
 	return false
@@ -366,4 +337,99 @@ func (v Value) LessEqual(r Value) bool {
 	}
 	log.Panicf("can't compare %+v and %+v", v, r)
 	return false
+}
+
+func (v *Value) Attachments() int {
+	if v.i<<6 > 0 {
+		return 4
+	}
+	if v.i<<4 > 0 {
+		return 3
+	}
+	if v.i<<2 > 0 {
+		return 2
+	}
+	if v.i > 0 {
+		return 1
+	}
+	return 0
+}
+
+func (v *Value) Attach(va Value) {
+	switch va.ty {
+	case Tbool:
+		bu := va.AsBoolUnsafe()
+		b := *(*byte)(unsafe.Pointer(&bu))
+		if v.i == 0 {
+			v.p[0] = b
+			v.i |= 0x40
+		} else if v.i<<2 == 0 {
+			v.p[1] = b
+			v.i |= 0x10
+		} else if v.i<<4 == 0 {
+			v.p[2] = b
+			v.i |= 0x04
+		} else if v.i<<6 == 0 {
+			v.p[3] = b
+			v.i |= 0x01
+		}
+	case Tnumber:
+		n := va.AsNumberUnsafe()
+		if u := uint64(n); float64(u) == n && u < 256 {
+			if v.i == 0 {
+				v.p[0] = byte(u)
+				v.i |= 0x80
+			} else if v.i<<2 == 0 {
+				v.p[1] = byte(u)
+				v.i |= 0x20
+			} else if v.i<<4 == 0 {
+				v.p[2] = byte(u)
+				v.i |= 0x08
+			} else if v.i<<6 == 0 {
+				v.p[3] = byte(u)
+				v.i |= 0x02
+			}
+		} else {
+			if v.i == 0 {
+				binary.LittleEndian.PutUint32(v.p[:], math.Float32bits(float32(n)))
+				v.i = 0xFF
+			}
+		}
+	}
+}
+
+func (v *Value) Detach() Value {
+	if v.i == 0xFF {
+		v.i = 0
+		return NewNumberValue(float64(math.Float32frombits(binary.LittleEndian.Uint32(v.p[:]))))
+	}
+
+	ret := func(i, m byte) Value {
+		if m == 0x40 {
+			return NewBoolValue(*(*bool)(unsafe.Pointer(&v.p[i])))
+		}
+		return NewNumberValue(float64(v.p[i]))
+	}
+
+	if m := v.i << 6; m > 0 {
+		v.i &= 0xFC
+		return ret(3, m)
+	}
+
+	if m := v.i >> 2 << 6; m > 0 {
+		v.i &= 0xF3
+		return ret(2, m)
+	}
+
+	if m := v.i >> 4 << 6; m > 0 {
+		v.i &= 0xCF
+		return ret(1, m)
+	}
+
+	if m := v.i >> 6 << 6; m > 0 {
+		v.i &= 0x3F
+		return ret(0, m)
+	}
+
+	return NewValue()
 }

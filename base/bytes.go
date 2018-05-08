@@ -251,15 +251,6 @@ func (b *BytesReader) Prettify(tab int) string {
 		case OP_IF:
 			sb.WriteString("if " + xy(b.ReadInt32()) + " " + strconv.Itoa(int(b.ReadInt32())))
 
-		case OP_INC:
-			sb.WriteString("inc " + xy(b.ReadInt32()) + " " + xy(b.ReadInt32()))
-
-		case OP_INC_NUM:
-			sb.WriteString("inci " + xy(b.ReadInt32()) + " " + readDouble())
-
-		case OP_TYPEOF:
-			sb.WriteString("typeof " + xy(b.ReadInt32()) + " " + strconv.Itoa(int(b.ReadInt32())))
-
 		case OP_NOP:
 			sb.WriteString("nop")
 		case OP_LIB_CALL:

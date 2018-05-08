@@ -24,7 +24,7 @@ func vtoString(v base.Value, lv int) string {
 		}
 		return strconv.FormatFloat(n, 'f', 9, 64)
 	case base.Tstring:
-		return strconv.Quote(v.AsString())
+		return v.AsString()
 	case base.Tlist:
 		arr := v.AsList()
 		buf := &bytes.Buffer{}

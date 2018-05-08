@@ -16,7 +16,6 @@ func init() {
 	opMapping["set"] = compileSetOp
 	opMapping["move"] = compileSetOp
 	opMapping["ret"] = compileRetOp
-	opMapping["inc"] = compileIncOp
 	opMapping["lambda"] = compileLambdaOp
 	opMapping["if"] = compileIfOp
 	opMapping["while"] = compileWhileOp

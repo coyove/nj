@@ -166,8 +166,6 @@ func compileFlatOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_MUL, 0, 2)
 	case "/":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_DIV, 0, 2)
-	case "inc":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_INC, 0, 2)
 	case "%":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_MOD, 0, 2)
 	case "<":

@@ -211,6 +211,28 @@ func (sc *Scanner) scanEscape(ch int, buf *bytes.Buffer) error {
 	case '\r':
 		buf.WriteByte('\n')
 		sc.Newline('\r')
+	case 'u':
+		ubuf := make([]byte, 4)
+		for i := 0; i < 4; i++ {
+			if isDigit(sc.Peek()) {
+				ubuf[i] = byte(sc.Next())
+			} else {
+				return sc.Error(buf.String(), "invalid unicode escape sequence")
+			}
+		}
+		val, _ := strconv.ParseInt(string(ubuf), 16, 32)
+		buf.WriteRune(rune(val))
+	case 'x':
+		bbuf := make([]byte, 2)
+		for i := 0; i < 2; i++ {
+			if isDigit(sc.Peek()) {
+				bbuf[i] = byte(sc.Next())
+			} else {
+				return sc.Error(buf.String(), "invalid hex escape sequence")
+			}
+		}
+		val, _ := strconv.ParseInt(string(bbuf), 16, 32)
+		buf.WriteByte(byte(val))
 	default:
 		if '0' <= ch && ch <= '9' {
 			bytes := []byte{byte(ch)}
@@ -222,7 +244,7 @@ func (sc *Scanner) scanEscape(ch int, buf *bytes.Buffer) error {
 		} else {
 			buf.WriteByte('\\')
 			writeChar(buf, ch)
-			return sc.Error(buf.String(), "Invalid escape sequence")
+			return sc.Error(buf.String(), "invalid escape sequence")
 		}
 	}
 	return nil

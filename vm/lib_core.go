@@ -70,8 +70,6 @@ var lib_typeof = LibFunc{
 			env.A = base.NewStringValue("map")
 		case base.Tbytes:
 			env.A = base.NewStringValue("bytes")
-		case base.Tpair:
-			env.A = base.NewStringValue("pair")
 		}
 		panic("shouldn't happen")
 	},

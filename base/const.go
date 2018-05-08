@@ -4,7 +4,6 @@ const REG_A = -1
 
 const (
 	OP_ASSERT = iota
-	OP_TYPEOF
 	OP_NIL
 	OP_TRUE
 	OP_FALSE
@@ -20,8 +19,6 @@ const (
 	OP_LOAD
 	OP_SAFE_STORE
 	OP_SAFE_LOAD
-	OP_INC
-	OP_INC_NUM
 
 	OP_ADD
 	OP_SUB
