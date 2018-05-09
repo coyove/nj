@@ -2,7 +2,6 @@ package base
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
@@ -339,97 +338,16 @@ func (v Value) LessEqual(r Value) bool {
 	return false
 }
 
-func (v *Value) Attachments() int {
-	if v.i<<6 > 0 {
-		return 4
-	}
-	if v.i<<4 > 0 {
-		return 3
-	}
-	if v.i<<2 > 0 {
-		return 2
-	}
-	if v.i > 0 {
-		return 1
-	}
-	return 0
-}
-
-func (v *Value) Attach(va Value) {
+func (v *Value) Attach(i int, va Value) {
 	switch va.ty {
 	case Tbool:
 		bu := va.AsBoolUnsafe()
-		b := *(*byte)(unsafe.Pointer(&bu))
-		if v.i == 0 {
-			v.p[0] = b
-			v.i |= 0x40
-		} else if v.i<<2 == 0 {
-			v.p[1] = b
-			v.i |= 0x10
-		} else if v.i<<4 == 0 {
-			v.p[2] = b
-			v.i |= 0x04
-		} else if v.i<<6 == 0 {
-			v.p[3] = b
-			v.i |= 0x01
-		}
+		v.p[i] = *(*byte)(unsafe.Pointer(&bu))
 	case Tnumber:
-		n := va.AsNumberUnsafe()
-		if u := uint64(n); float64(u) == n && u < 256 {
-			if v.i == 0 {
-				v.p[0] = byte(u)
-				v.i |= 0x80
-			} else if v.i<<2 == 0 {
-				v.p[1] = byte(u)
-				v.i |= 0x20
-			} else if v.i<<4 == 0 {
-				v.p[2] = byte(u)
-				v.i |= 0x08
-			} else if v.i<<6 == 0 {
-				v.p[3] = byte(u)
-				v.i |= 0x02
-			}
-		} else {
-			if v.i == 0 {
-				binary.LittleEndian.PutUint32(v.p[:], math.Float32bits(float32(n)))
-				v.i = 0xFF
-			}
-		}
+		v.p[i] = byte(va.AsNumberUnsafe())
 	}
 }
 
-func (v *Value) Detach() Value {
-	if v.i == 0xFF {
-		v.i = 0
-		return NewNumberValue(float64(math.Float32frombits(binary.LittleEndian.Uint32(v.p[:]))))
-	}
-
-	ret := func(i, m byte) Value {
-		if m == 0x40 {
-			return NewBoolValue(*(*bool)(unsafe.Pointer(&v.p[i])))
-		}
-		return NewNumberValue(float64(v.p[i]))
-	}
-
-	if m := v.i << 6; m > 0 {
-		v.i &= 0xFC
-		return ret(3, m)
-	}
-
-	if m := v.i >> 2 << 6; m > 0 {
-		v.i &= 0xF3
-		return ret(2, m)
-	}
-
-	if m := v.i >> 4 << 6; m > 0 {
-		v.i &= 0xCF
-		return ret(1, m)
-	}
-
-	if m := v.i >> 6 << 6; m > 0 {
-		v.i &= 0x3F
-		return ret(0, m)
-	}
-
-	return NewValue()
+func (v *Value) Attached(i int) Value {
+	return NewNumberValue(float64(v.p[i]))
 }

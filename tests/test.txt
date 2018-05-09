@@ -1,28 +1,24 @@
-set m = map("c", 123, "a", "a", "incr", lambda()
-    set c = who()
-    c.c = c.c + 1
-    return c
-end )
-set mp = m
-set  m2 = dup(m)
+#set m = map("c", 123, "a", "a", "incr", lambda()
+#    set c = who()
+#    c.c = c.c + 1
+#    return c
+#end )
+#set mp = m
+#set  m2 = dup(m)
+#
+#m.incr()
+#assert m.c == 124
+#mp.incr()
+#assert m.c == 125
+#
+#m2.incr().incr()
+#
+#assert m.c == 125
+#assert m2.c == 125
+#
+#
+#set i = iter(m) while next(i) do
+#    ioprintln(val(i))
+#end 
 
-m.incr()
-assert m.c == 124
-mp.incr()
-assert m.c == 125
-
-m2.incr().incr()
-
-assert m.c == 125
-assert m2.c == 125
-
-
-set i = iter(m) while next(i) do
-    ioprintln(val(i))
-end 
-
-
-set av = attach(12, false)
-assert av == 12
-assert not detach(av)
-assert detach(av) == nil
+set a = (("123")!1 = 2)

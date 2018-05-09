@@ -55,6 +55,63 @@ func flaten(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (buf *ba
 	return buf, stackPtr, nil
 }
 
+func flatWriteRStoreCase(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+	buf := base.NewBytesBuffer()
+	var varIndex int32
+	switch atoms[1].Type {
+	case parser.NTNumber:
+		buf.WriteByte(base.OP_SET_NUM)
+		buf.WriteInt32(int32(stackPtr))
+		buf.WriteDouble(atoms[1].Value.(float64))
+		varIndex = int32(stackPtr)
+		stackPtr++
+	case parser.NTString:
+		buf.WriteByte(base.OP_SET_STR)
+		buf.WriteInt32(int32(stackPtr))
+		buf.WriteString(atoms[1].Value.(string))
+		varIndex = int32(stackPtr)
+		stackPtr++
+	case parser.NTAtom:
+		varIndex = varLookup.GetRelPosition(atoms[1].Value.(string))
+		if varIndex == -1 {
+			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, atoms[1])
+			return
+		}
+	case parser.NTCompound:
+		code, varIndex, stackPtr, err = compileCompoundIntoVariable(stackPtr, atoms[1], varLookup, true, 0)
+		if err != nil {
+			return
+		}
+		buf.Write(code)
+	}
+
+	i := byte(atoms[2].Value.(float64))
+	if i >= 4 {
+		err = fmt.Errorf("r-index can only be 0, 1, 2 ,3")
+		return
+	}
+
+	if atoms[3].Type == parser.NTCompound {
+		code, yx, stackPtr, err = compile(stackPtr, atoms[3].Compound, varLookup)
+		if err != nil {
+			return
+		}
+		buf.Write(code)
+		atoms[3] = &parser.Node{Type: parser.NTAddr, Value: yx}
+	}
+
+	err = fill1(buf, atoms[3], varLookup, indexToOpR(0)...)
+	if err != nil {
+		return
+	}
+
+	buf.WriteByte(base.OP_RSTORE)
+	buf.WriteInt32(varIndex)
+	buf.WriteByte(i)
+
+	return buf.Bytes(), varIndex, stackPtr, nil
+}
+
 func flatWrite(
 	stackPtr int16,
 	atoms []*parser.Node,
@@ -202,16 +259,12 @@ func compileFlatOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_LSH, 0, 2)
 	case ">>":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_RSH, 0, 2)
-	case "len":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_LEN, 0, 1)
 	case "nil":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_NIL, 0, 0)
 	case "true":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_TRUE, 0, 0)
 	case "false":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_FALSE, 0, 0)
-	case "bytes":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_BYTES, 0, 1)
 	case "store":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_STORE, 0, 3)
 	case "load":
@@ -220,6 +273,14 @@ func compileFlatOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_SAFE_STORE, 0, 3)
 	case "safeload":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_SAFE_LOAD, 0, 2)
+	case "rstore":
+		return flatWriteRStoreCase(stackPtr, atoms, varLookup)
+	case "rload":
+		return flatCompile(stackPtr, atoms, varLookup, base.OP_RLOAD, 0, 2)
+	case "bytes":
+		return flatCompile(stackPtr, atoms, varLookup, base.OP_BYTES, 0, 1)
+	case "len":
+		return flatCompile(stackPtr, atoms, varLookup, base.OP_LEN, 0, 1)
 	case "dup":
 		return flatCompile(stackPtr, atoms, varLookup, base.OP_DUP, 0, 1)
 	}

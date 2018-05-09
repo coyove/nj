@@ -74,10 +74,15 @@ block:
 
 stat:
         var '=' expr {
-            if len($1.Compound) > 0 && $1.Compound[0].Value.(string) == "load" {
-                $$ = NewCompoundNode("store", $1.Compound[1], $1.Compound[2], $3)
-            } else if len($1.Compound) > 0 && $1.Compound[0].Value.(string) == "safeload" {
-                $$ = NewCompoundNode("safestore", $1.Compound[1], $1.Compound[2], $3)
+            if len($1.Compound) > 0 {
+                switch $1.Compound[0].Value.(string) {
+                case "load":
+                    $$ = NewCompoundNode("store", $1.Compound[1], $1.Compound[2], $3)
+                case "rload":
+                    $$ = NewCompoundNode("rstore", $1.Compound[1], $1.Compound[2], $3)
+                case "safeload":
+                    $$ = NewCompoundNode("safestore", $1.Compound[1], $1.Compound[2], $3)
+                }
             } else {
                 $$ = NewCompoundNode("move", $1, $3)
             }
@@ -160,6 +165,9 @@ var:
         } | 
         prefixexp '.' TIdent {
             $$ = NewCompoundNode("load", $1, NewStringNode($3.Str))
+        } | 
+        prefixexp '!' TNumber {
+            $$ = NewCompoundNode("rload", $1, NewNumberNode($3.Str))
         }
 
 namelist:

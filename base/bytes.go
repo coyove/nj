@@ -137,6 +137,7 @@ var singleOp = map[byte]string{
 	OP_MAP:        "array",
 	OP_LOAD:       "load",
 	OP_STORE:      "store",
+	OP_RLOAD:      "rload",
 	OP_SAFE_LOAD:  "sload",
 	OP_SAFE_STORE: "sstore",
 	OP_NOT:        "not",
@@ -250,7 +251,8 @@ func (b *BytesReader) Prettify(tab int) string {
 
 		case OP_IF:
 			sb.WriteString("if " + xy(b.ReadInt32()) + " " + strconv.Itoa(int(b.ReadInt32())))
-
+		case OP_RSTORE:
+			sb.WriteString("rstore " + xy(b.ReadInt32()) + " " + strconv.Itoa(int(b.ReadByte())) + " r0")
 		case OP_NOP:
 			sb.WriteString("nop")
 		case OP_LIB_CALL:

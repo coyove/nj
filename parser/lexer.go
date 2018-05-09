@@ -363,7 +363,8 @@ redo:
 				tok.Str = "!="
 				sc.Next()
 			} else {
-				err = sc.Error("!", "Invalid '!' token")
+				tok.Type = ch
+				tok.Str = string(ch)
 			}
 		case '<':
 			if sc.Peek() == '=' {
