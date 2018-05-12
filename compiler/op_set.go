@@ -84,27 +84,29 @@ func compileSetOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (c
 	return buf.Bytes(), newYX, stackPtr, nil
 }
 
-func compileRetOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
-	buf := base.NewBytesBuffer()
-	if len(atoms) == 1 {
-		buf.WriteByte(base.OP_RET)
-		buf.WriteInt32(base.REG_A)
+func compileRetOp(r, n, s byte) func(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+	return func(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+		buf := base.NewBytesBuffer()
+		if len(atoms) == 1 {
+			buf.WriteByte(r)
+			buf.WriteInt32(base.REG_A)
+			return buf.Bytes(), yx, stackPtr, nil
+		}
+
+		atom := atoms[1]
+
+		switch atom.Type {
+		case parser.NTAtom, parser.NTNumber, parser.NTString, parser.NTAddr:
+			err = fill1(buf, atom, varLookup, r, n, s)
+			if err != nil {
+				return
+			}
+		case parser.NTCompound:
+			code, yx, stackPtr, err = extract(stackPtr, atom, varLookup)
+			buf.Write(code)
+			buf.WriteByte(r)
+			buf.WriteInt32(yx)
+		}
 		return buf.Bytes(), yx, stackPtr, nil
 	}
-
-	atom := atoms[1]
-
-	switch atom.Type {
-	case parser.NTAtom, parser.NTNumber, parser.NTString, parser.NTAddr:
-		err = fill1(buf, atom, varLookup, base.OP_RET, base.OP_RET_NUM, base.OP_RET_STR)
-		if err != nil {
-			return
-		}
-	case parser.NTCompound:
-		code, yx, stackPtr, err = extract(stackPtr, atom, varLookup)
-		buf.Write(code)
-		buf.WriteByte(base.OP_RET)
-		buf.WriteInt32(yx)
-	}
-	return buf.Bytes(), yx, stackPtr, nil
 }

@@ -290,9 +290,9 @@ finally:
 
 var reservedWords = map[string]int{
 	"and": TAnd, "assert": TAssert, "break": TBreak, "continue": TContinue, "do": TDo, "else": TElse, "elseif": TElseIf,
-	"end": TEnd, "false": TFalse, "lambda": TLambda, "list": TList,
+	"end": TEnd, "false": TFalse, "function": TLambda, "list": TList,
 	"if": TIf, "set": TSet, "nil": TNil, "not": TNot, "map": TMap, "or": TOr,
-	"return": TReturn, "then": TThen, "true": TTrue, "while": TWhile, "xor": TXor,
+	"return": TReturn, "then": TThen, "true": TTrue, "while": TWhile, "xor": TXor, "yield": TYield,
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {

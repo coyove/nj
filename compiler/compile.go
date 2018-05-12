@@ -1,7 +1,10 @@
 package compiler
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
+	"os"
 
 	"github.com/coyove/bracket/base"
 	"github.com/coyove/bracket/parser"
@@ -15,7 +18,8 @@ func init() {
 	opMapping = make(map[string]func(int16, []*parser.Node, *base.CMap) ([]byte, int32, int16, error))
 	opMapping["set"] = compileSetOp
 	opMapping["move"] = compileSetOp
-	opMapping["ret"] = compileRetOp
+	opMapping["ret"] = compileRetOp(base.OP_RET, base.OP_RET_NUM, base.OP_RET_STR)
+	opMapping["yield"] = compileRetOp(base.OP_YIELD, base.OP_YIELD_NUM, base.OP_YIELD_STR)
 	opMapping["lambda"] = compileLambdaOp
 	opMapping["if"] = compileIfOp
 	opMapping["while"] = compileWhileOp
@@ -54,7 +58,6 @@ func init() {
 	flatOpMapping["safeload"] = true
 	flatOpMapping["assert"] = true
 	flatOpMapping["nil"] = true
-	flatOpMapping["bytes"] = true
 	flatOpMapping["true"] = true
 	flatOpMapping["false"] = true
 	flatOpMapping["dup"] = true
@@ -179,4 +182,34 @@ func compileChainOp(stackPtr int16, chain *parser.Node, varLookup *base.CMap) (c
 	}
 
 	return buf.Bytes(), yx, stackPtr, err
+}
+
+func compileNode(n *parser.Node) (code []byte, err error) {
+	varLookup := base.NewCMap()
+	for i, n := range base.CoreLibNames {
+		varLookup.M[n] = int16(i)
+	}
+
+	code, _, _, err = compileChainOp(int16(len(varLookup.M)), n, varLookup)
+	if err != nil {
+		return
+	}
+
+	code = append(code, base.OP_EOB)
+	return code, nil
+}
+
+func LoadFile(path string) ([]byte, error) {
+	code, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	n, err := parser.Parse(bytes.NewReader(code), path)
+	if err != nil {
+		return nil, err
+	}
+
+	n.Dump(os.Stderr)
+	return compileNode(n)
 }

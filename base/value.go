@@ -245,7 +245,7 @@ func (v Value) String() string {
 	case Tbytes:
 		return "<bytes:[" + strconv.Itoa(len(v.AsBytesUnsafe())) + "]>"
 	case Tclosure:
-		return "<closure:[" + strconv.Itoa(v.AsClosureUnsafe().argsCount) +
+		return "<closure:[" + strconv.Itoa(v.AsClosureUnsafe().ArgsCount()) +
 			"/" + strconv.Itoa(len(v.AsClosureUnsafe().preArgs)) + "]>"
 	case Tgeneric:
 		return fmt.Sprintf("<generic:%+v>", v.AsGenericUnsafe())

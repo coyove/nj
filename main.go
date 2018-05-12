@@ -20,9 +20,9 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	start := time.Now()
 
-	b, err := compiler.LoadFile("tests/mandelbrot.txt")
+	b, err := compiler.LoadFile("tests/test.txt")
 	log.Println(err, b)
-	log.Println(base.NewBytesReader(b).Prettify(0))
+	log.Println(base.Prettify(b))
 
 	e := base.NewEnv(nil)
 	for _, name := range base.CoreLibNames {

@@ -13,17 +13,20 @@ func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (
 
 	name, _ := callee.Value.(string)
 	switch name {
-	case "list":
-		return compileListOp(stackPtr, nodes, varLookup)
-	case "map":
-		return compileMapOp(stackPtr, nodes, varLookup)
+	case "len", "dup":
+		atoms := append(nodes[1:2], nodes[2].Compound...)
+		if len(atoms) != 2 {
+			err = fmt.Errorf("missing argument to call %s at %v", name, callee)
+			return
+		}
+		if name == "len" {
+			return flatWrite(stackPtr, atoms, varLookup, base.OP_LEN)
+		}
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_DUP)
 	case "who":
 		return []byte{base.OP_WHO}, base.REG_A, stackPtr, nil
 	case "varargs":
 		return []byte{base.OP_VARARGS}, base.REG_A, stackPtr, nil
-	}
-	if flatOpMapping[name] {
-		return compileFlatOp(stackPtr, append(nodes[1:2], nodes[2].Compound...), varLookup)
 	}
 
 	atoms := nodes[2].Compound

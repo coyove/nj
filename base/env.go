@@ -157,23 +157,26 @@ func (e *Env) Stack() *Stack {
 type Closure struct {
 	code      []byte
 	env       *Env
-	argsCount int
 	caller    Value
 	preArgs   []Value
 	native    func(env *Env) Value
+	argsCount int16
+	status    byte
+	lastp     uint32
+	lastenv   *Env
 }
 
 func NewClosure(code []byte, env *Env, argsCount int) *Closure {
 	return &Closure{
 		code:      code,
 		env:       env,
-		argsCount: argsCount,
+		argsCount: int16(argsCount),
 	}
 }
 
 func NewNativeClosureValue(argsCount int, f func(env *Env) Value) Value {
 	return NewClosureValue(&Closure{
-		argsCount: argsCount,
+		argsCount: int16(argsCount),
 		native:    f,
 	})
 }
@@ -184,7 +187,7 @@ func (c *Closure) AppendPreArgs(preArgs []Value) {
 	}
 
 	c.preArgs = append(c.preArgs, preArgs...)
-	c.argsCount -= len(preArgs)
+	c.argsCount -= int16(len(preArgs))
 	if c.argsCount < 0 {
 		panic("negative args count")
 	}
@@ -211,7 +214,7 @@ func (c *Closure) Caller() Value {
 }
 
 func (c *Closure) ArgsCount() int {
-	return c.argsCount
+	return int(c.argsCount)
 }
 
 func (c *Closure) Env() *Env {
@@ -219,8 +222,9 @@ func (c *Closure) Env() *Env {
 }
 
 func (c *Closure) Dup() *Closure {
-	cls := NewClosure(c.code, c.env, c.argsCount)
+	cls := NewClosure(c.code, c.env, int(c.argsCount))
 	cls.caller = c.caller
+	cls.lastp = c.lastp
 	if c.preArgs != nil {
 		cls.preArgs = make([]Value, len(c.preArgs))
 		copy(cls.preArgs, c.preArgs)
@@ -230,16 +234,30 @@ func (c *Closure) Dup() *Closure {
 
 func (c *Closure) String() string {
 	if c.native == nil {
-		return fmt.Sprintf("closure %d (\n", c.argsCount) + NewBytesReader(c.code).Prettify(4) + ")"
+		return fmt.Sprintf("closure %d (\n", c.argsCount) + crPrettify(c.code, 4) + ")"
 	}
 	return fmt.Sprintf("native %d (...)", c.argsCount)
 }
 
 func (c *Closure) Exec(newEnv *Env) Value {
-	newEnv.SetParent(c.env)
-	newEnv.C = c.caller
+
+	if c.lastenv != nil {
+		newEnv = c.lastenv
+	} else {
+		newEnv.SetParent(c.env)
+		newEnv.C = c.caller
+	}
+
 	if c.native == nil {
-		return Exec(newEnv, c.code)
+		v, np, yield := ExecCursor(newEnv, c.code, c.lastp)
+		if yield {
+			c.lastp = np
+			c.lastenv = newEnv
+		} else {
+			c.lastp = 0
+			c.lastenv = nil
+		}
+		return v
 	}
 	return c.native(newEnv)
 }

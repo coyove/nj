@@ -17,6 +17,7 @@ func init() {
 	lcore := new(Tree)
 	lcore.Put("listn", NewNativeClosureValue(1, func(env *Env) Value { return NewListValue(make([]Value, int(env.stack.Get(0).AsNumber()))) }))
 	lcore.Put("typeof", NewNativeClosureValue(1, func(env *Env) Value { return NewStringValue(TMapping[env.stack.Get(0).Type()]) }))
+	lcore.Put("yreset", NewNativeClosureValue(1, func(env *Env) Value { env.stack.Get(0).AsClosure().lastenv = nil; return NewValue() }))
 	lcore.Put("bytes", NewNativeClosureValue(1, func(env *Env) Value {
 		if n := env.stack.Get(0); n.Type() == Tstring {
 			return NewBytesValue([]byte(n.AsStringUnsafe()))

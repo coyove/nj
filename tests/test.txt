@@ -21,10 +21,28 @@
 #    ioprintln(val(i))
 #end 
 
-io.println("123")
-set l = list  end
-io.println(l)
-
-set a = 0 while a < 2 then a = a + 1 do
-    io.println(a)
+function fib(n)
+    if n < 2 then
+        return n
+    else
+        return fib(n - 2) + fib(n-1)
+    end
 end
+
+io.println(fib(10))
+
+set fib2 = function()
+    set a, b = 0, 1
+    while true do
+        set c = a + b
+        a = b
+        b = c
+        yield c
+    end
+end
+
+set fib3 = dup(fib2)
+
+set i = 0 while i < 33 then i = i + 1 do fib2() end
+io.println(fib2())
+io.println(fib3(),fib3(),fib3(),fib3())

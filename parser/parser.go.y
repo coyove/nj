@@ -1,5 +1,5 @@
 %{
-package parser
+package parser 
 %}
 %type<stmts> block
 %type<stmt>  stat
@@ -15,6 +15,7 @@ package parser
 %type<expr> afunctioncall
 %type<exprlist> args
 %type<expr> function
+%type<expr> functionargnames
 %type<expr> listgen
 %type<expr> mapgen
 
@@ -34,7 +35,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TIf TLambda TList TNil TNot TMap TOr TReturn TSet TThen TTrue TWhile TXor
+%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TIf TLambda TList TNil TNot TMap TOr TReturn TSet TThen TTrue TWhile TXor TYield
 
 /* Literals */
 %token<token> TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
@@ -103,6 +104,10 @@ stat:
             $6.Compound = append($6.Compound, $4)
             $$ = NewCompoundNode("while", $2, $6)
         } |
+        TLambda TIdent functionargnames block TEnd {
+            funcname := NewAtomNode($2)
+            $$ = NewCompoundNode("chain", NewCompoundNode("set", funcname, NewCompoundNode("nil")), NewCompoundNode("move", funcname, NewCompoundNode("lambda", $3, $4)))
+        } |
         TIf expr TThen block elseifs TEnd {
             $$ = NewCompoundNode("if", $2, $4, NewCompoundNode())
             cur := $$
@@ -137,6 +142,12 @@ stat:
         } |
         TReturn expr {
             $$ = NewCompoundNode("ret", $2)
+        } |
+        TYield {
+            $$ = NewCompoundNode("yield")
+        } |
+        TYield expr {
+            $$ = NewCompoundNode("yield", $2)
         } |
         TBreak  {
             $$ = NewCompoundNode("break")
@@ -364,13 +375,17 @@ args:
         }
 
 function:
-        TLambda '(' ')' block TEnd {
-            $$ = NewCompoundNode("lambda", NewCompoundNode(), $4)
+        TLambda functionargnames block TEnd {
+            $$ = NewCompoundNode("lambda", $2, $3)
             $$.Compound[0].Pos = $1.Pos
+        }
+
+functionargnames:
+        '(' ')' {
+            $$ = NewCompoundNode()
         } |
-        TLambda '(' namelist ')' block TEnd {
-            $$ = NewCompoundNode("lambda", $3, $5)
-            $$.Compound[0].Pos = $1.Pos
+        '(' namelist ')' {
+            $$ = $2
         }
 
 listgen:

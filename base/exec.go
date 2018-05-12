@@ -7,24 +7,27 @@ import (
 )
 
 func Exec(env *Env, code []byte) Value {
-	var newEnv *Env
-	c := NewBytesReader(code)
+	v, _, _ := ExecCursor(env, code, 0)
+	return v
+}
 
+func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
+	var newEnv *Env
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println(r)
-			log.Println(fmt.Sprintf("%x", NewBytesReader(code).Hash()))
-			log.Println("cursor:", c.GetCursor())
+			log.Println(fmt.Sprintf("%x", crHash(code)))
+			log.Println("cursor:", cursor)
 			os.Exit(1)
 		}
 	}()
 
 	for {
-		bop := c.ReadByte()
+		bop := crReadByte(code, &cursor)
 		if bop == OP_EOB {
 			break
 		}
-		// log.Println(c.GetCursor())
+		// log.Println(c.Get&cursor())
 		switch bop {
 		case OP_NOP:
 		case OP_WHO:
@@ -36,11 +39,11 @@ func Exec(env *Env, code []byte) Value {
 		case OP_FALSE:
 			env.A = NewBoolValue(false)
 		case OP_SET:
-			env.Set(c.ReadInt32(), env.Get(c.ReadInt32()))
+			env.Set(crReadInt32(code, &cursor), env.Get(crReadInt32(code, &cursor)))
 		case OP_SET_NUM:
-			env.Set(c.ReadInt32(), NewNumberValue(c.ReadDouble()))
+			env.Set(crReadInt32(code, &cursor), NewNumberValue(crReadDouble(code, &cursor)))
 		case OP_SET_STR:
-			env.Set(c.ReadInt32(), NewStringValue(c.ReadString()))
+			env.Set(crReadInt32(code, &cursor), NewStringValue(crReadString(code, &cursor)))
 		case OP_ADD:
 			switch l := env.R0; l.Type() {
 			case Tnumber:
@@ -105,7 +108,7 @@ func Exec(env *Env, code []byte) Value {
 		case OP_BIT_RSH:
 			env.A = NewNumberValue(float64(uint64(env.R0.AsNumber()) >> uint64(env.R1.AsNumber())))
 		case OP_ASSERT:
-			loc := "assertion failed: " + c.ReadString()
+			loc := "assertion failed: " + crReadString(code, &cursor)
 			if env.R0.IsFalse() {
 				panic(loc)
 			}
@@ -238,56 +241,62 @@ func Exec(env *Env, code []byte) Value {
 			}
 			env.A = v
 		case OP_R0:
-			env.R0 = env.Get(c.ReadInt32())
+			env.R0 = env.Get(crReadInt32(code, &cursor))
 		case OP_R0_NUM:
-			env.R0 = NewNumberValue(c.ReadDouble())
+			env.R0 = NewNumberValue(crReadDouble(code, &cursor))
 		case OP_R0_STR:
-			env.R0 = NewStringValue(c.ReadString())
+			env.R0 = NewStringValue(crReadString(code, &cursor))
 		case OP_R1:
-			env.R1 = env.Get(c.ReadInt32())
+			env.R1 = env.Get(crReadInt32(code, &cursor))
 		case OP_R1_NUM:
-			env.R1 = NewNumberValue(c.ReadDouble())
+			env.R1 = NewNumberValue(crReadDouble(code, &cursor))
 		case OP_R1_STR:
-			env.R1 = NewStringValue(c.ReadString())
+			env.R1 = NewStringValue(crReadString(code, &cursor))
 		case OP_R2:
-			env.R2 = env.Get(c.ReadInt32())
+			env.R2 = env.Get(crReadInt32(code, &cursor))
 		case OP_R2_NUM:
-			env.R2 = NewNumberValue(c.ReadDouble())
+			env.R2 = NewNumberValue(crReadDouble(code, &cursor))
 		case OP_R2_STR:
-			env.R2 = NewStringValue(c.ReadString())
+			env.R2 = NewStringValue(crReadString(code, &cursor))
 		case OP_R3:
-			env.R3 = env.Get(c.ReadInt32())
+			env.R3 = env.Get(crReadInt32(code, &cursor))
 		case OP_R3_NUM:
-			env.R3 = NewNumberValue(c.ReadDouble())
+			env.R3 = NewNumberValue(crReadDouble(code, &cursor))
 		case OP_R3_STR:
-			env.R3 = NewStringValue(c.ReadString())
+			env.R3 = NewStringValue(crReadString(code, &cursor))
 		case OP_PUSH:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.Push(env.Get(c.ReadInt32()))
+			newEnv.Push(env.Get(crReadInt32(code, &cursor)))
 		case OP_PUSH_NUM:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.Push(NewNumberValue(c.ReadDouble()))
+			newEnv.Push(NewNumberValue(crReadDouble(code, &cursor)))
 		case OP_PUSH_STR:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.Push(NewStringValue(c.ReadString()))
+			newEnv.Push(NewStringValue(crReadString(code, &cursor)))
 		case OP_RET:
-			return env.Get(c.ReadInt32())
+			return env.Get(crReadInt32(code, &cursor)), 0, false
 		case OP_RET_NUM:
-			return NewNumberValue(c.ReadDouble())
+			return NewNumberValue(crReadDouble(code, &cursor)), 0, false
 		case OP_RET_STR:
-			return NewStringValue(c.ReadString())
+			return NewStringValue(crReadString(code, &cursor)), 0, false
+		case OP_YIELD:
+			return env.Get(crReadInt32(code, &cursor)), cursor, true
+		case OP_YIELD_NUM:
+			return NewNumberValue(crReadDouble(code, &cursor)), cursor, true
+		case OP_YIELD_STR:
+			return NewStringValue(crReadString(code, &cursor)), cursor, true
 		case OP_LAMBDA:
-			argsCount := int(c.ReadInt32())
-			buf := c.Read(int(c.ReadInt32()))
+			argsCount := int(crReadInt32(code, &cursor))
+			buf := crReadBytes(code, &cursor, int(crReadInt32(code, &cursor)))
 			env.A = NewClosureValue(NewClosure(buf, env, argsCount))
 		case OP_CALL:
-			v := env.Get(c.ReadInt32())
+			v := env.Get(crReadInt32(code, &cursor))
 			switch v.Type() {
 			case Tclosure:
 				cls := v.AsClosureUnsafe()
@@ -341,18 +350,20 @@ func Exec(env *Env, code []byte) Value {
 			copy(list1, list0)
 			env.A = NewListValue(list1)
 		case OP_JMP:
-			off := int(c.ReadInt32())
-			c.SetCursor(c.GetCursor() + off)
+			off := int(crReadInt32(code, &cursor))
+			*&cursor += uint32(off)
 		case OP_IF:
-			cond := env.Get(c.ReadInt32())
-			off := int(c.ReadInt32())
+			cond := env.Get(crReadInt32(code, &cursor))
+			off := int(crReadInt32(code, &cursor))
 			if cond.IsFalse() {
-				c.SetCursor(c.GetCursor() + off)
+				*&cursor += uint32(off)
 			}
 		case OP_DUP:
 			switch env.R0.Type() {
-			case Tnil, Tnumber, Tstring, Tbool, Tclosure, Tgeneric:
+			case Tnil, Tnumber, Tstring, Tbool, Tgeneric:
 				env.A = env.R0
+			case Tclosure:
+				env.A = NewClosureValue(env.R0.AsClosureUnsafe().Dup())
 			case Tlist:
 				list0 := env.R0.AsListUnsafe()
 				list1 := make([]Value, len(list0))
@@ -369,7 +380,7 @@ func Exec(env *Env, code []byte) Value {
 		}
 	}
 
-	return NewValue()
+	return NewValue(), 0, false
 }
 
 func shiftIndex(index Value, len int) int {

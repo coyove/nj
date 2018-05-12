@@ -45,8 +45,8 @@ func flaten(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (buf *ba
 	}
 
 	if len(replacedAtoms) == 1 {
-		buf.SetCursor(buf.Len() - 4)
-		replacedAtoms[0].Value = buf.ReadInt32()
+		cursor := buf.Len() - 4
+		replacedAtoms[0].Value = int32(binary.LittleEndian.Uint32(buf.Bytes()[:cursor]))
 		buf.Truncate(9)
 		stackPtr--
 	}
@@ -54,12 +54,7 @@ func flaten(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (buf *ba
 	return buf, stackPtr, nil
 }
 
-func flatWrite(
-	stackPtr int16,
-	atoms []*parser.Node,
-	varLookup *base.CMap,
-	bop byte, bop2 uint32,
-) (code []byte, yx int32, newStackPtr int16, err error) {
+func flatWrite(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap, bop byte) (code []byte, yx int32, newStackPtr int16, err error) {
 
 	var buf *base.BytesReader
 	buf, stackPtr, err = flaten(stackPtr, atoms[1:], varLookup)
@@ -82,125 +77,68 @@ func flatWrite(
 	return buf.Bytes(), base.REG_A, stackPtr, nil
 }
 
-func flatCompile(stackPtr int16,
-	atoms []*parser.Node,
-	varLookup *base.CMap,
-	bop byte, bop2 uint32,
-	expectedArgsCount int,
-) (code []byte, yx int32, newStackPtr int16, err error) {
-	argsCount := len(atoms) - 1
-	if argsCount < expectedArgsCount {
-		//          0       1
-		// (lambda (x1) (ret (op x0)))
-		missingArgsCount := expectedArgsCount - argsCount
-		bodyStackPtr := int16(missingArgsCount)
-		for i := 0; i < missingArgsCount; i++ {
-			atoms = append(atoms, &parser.Node{Type: parser.NTAddr, Value: int32(i)})
-		}
-
-		m := base.NewCMap()
-		m.Parent = varLookup
-		code, yx, _, err = flatWrite(bodyStackPtr, atoms, m, bop, bop2)
-		if err != nil {
-			return
-		}
-
-		body, buf := base.NewBytesBuffer(), base.NewBytesBuffer()
-		body.Write(code)
-
-		if bop == base.OP_LIB_CALL {
-			body.WriteInt32(int32(bop2))
-		}
-
-		body.WriteByte(base.OP_RET)
-		body.WriteInt32(base.REG_A)
-		body.WriteByte(base.OP_EOB)
-
-		buf.WriteByte(base.OP_LAMBDA)
-		buf.WriteInt32(int32(missingArgsCount))
-		buf.WriteInt32(int32(body.Len()))
-		buf.Write(body.Bytes())
-
-		return buf.Bytes(), base.REG_A, stackPtr, nil
-	}
-
-	code, yx, stackPtr, err = flatWrite(stackPtr, atoms, varLookup, bop, bop2)
-	if err == nil && bop == base.OP_LIB_CALL {
-		code = append(code, 0, 0, 0, 0)
-		binary.LittleEndian.PutUint32(code[len(code)-4:], bop2)
-	}
-	return code, yx, stackPtr, err
-}
-
-// @Override
 func compileFlatOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 
 	head := atoms[0]
 	switch head.Value.(string) {
 	case "+":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_ADD, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_ADD)
 	case "-":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_SUB, 0, 1)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_SUB)
 	case "*":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_MUL, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_MUL)
 	case "/":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_DIV, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_DIV)
 	case "%":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_MOD, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_MOD)
 	case "<":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_LESS, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_LESS)
 	case "<=":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_LESS_EQ, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_LESS_EQ)
 	case ">":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_MORE, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_MORE)
 	case ">=":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_MORE_EQ, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_MORE_EQ)
 	case "eq":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_EQ, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_EQ)
 	case "neq":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_NEQ, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_NEQ)
 	case "assert":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_ASSERT, 0, 1)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_ASSERT)
 	case "not":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_NOT, 0, 1)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_NOT)
 	case "and":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_AND, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_AND)
 	case "or":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_OR, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_OR)
 	case "xor":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_XOR, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_XOR)
 	case "~":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_NOT, 0, 1)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_BIT_NOT)
 	case "&":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_AND, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_BIT_AND)
 	case "|":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_OR, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_BIT_OR)
 	case "^":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_XOR, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_BIT_XOR)
 	case "<<":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_LSH, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_BIT_LSH)
 	case ">>":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_BIT_RSH, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_BIT_RSH)
 	case "nil":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_NIL, 0, 0)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_NIL)
 	case "true":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_TRUE, 0, 0)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_TRUE)
 	case "false":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_FALSE, 0, 0)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_FALSE)
 	case "store":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_STORE, 0, 3)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_STORE)
 	case "load":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_LOAD, 0, 2)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_LOAD)
 	case "safestore":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_SAFE_STORE, 0, 3)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_SAFE_STORE)
 	case "safeload":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_SAFE_LOAD, 0, 2)
-	case "bytes":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_BYTES, 0, 1)
-	case "len":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_LEN, 0, 1)
-	case "dup":
-		return flatCompile(stackPtr, atoms, varLookup, base.OP_DUP, 0, 1)
+		return flatWrite(stackPtr, atoms, varLookup, base.OP_SAFE_LOAD)
 	}
 
 	err = fmt.Errorf("invalid flat op %+v", head)
