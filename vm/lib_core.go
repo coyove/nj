@@ -74,3 +74,14 @@ var lib_typeof = LibFunc{
 		panic("shouldn't happen")
 	},
 }
+
+var lib_attach = []LibFunc{
+	LibFunc{name: "attach", args: 2, f: func(env *base.Env) base.Value { return env.R0.Attach(0, env.R1) }},
+	LibFunc{name: "detach", args: 1, f: func(env *base.Env) base.Value { return env.R0.Detach(0) }},
+	LibFunc{name: "attach1", args: 2, f: func(env *base.Env) base.Value { return env.R0.Attach(1, env.R1) }},
+	LibFunc{name: "detach1", args: 1, f: func(env *base.Env) base.Value { return env.R0.Detach(1) }},
+	LibFunc{name: "attach2", args: 2, f: func(env *base.Env) base.Value { return env.R0.Attach(2, env.R1) }},
+	LibFunc{name: "detach2", args: 1, f: func(env *base.Env) base.Value { return env.R0.Detach(2) }},
+	LibFunc{name: "attach3", args: 2, f: func(env *base.Env) base.Value { return env.R0.Attach(3, env.R1) }},
+	LibFunc{name: "detach3", args: 1, f: func(env *base.Env) base.Value { return env.R0.Detach(3) }},
+}

@@ -9,7 +9,6 @@ import (
 
 	"github.com/coyove/bracket/base"
 	"github.com/coyove/bracket/compiler"
-	"github.com/coyove/bracket/vm"
 )
 
 func main() {
@@ -21,11 +20,16 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	start := time.Now()
 
-	b, err := compiler.LoadFile("tests/test.txt")
+	b, err := compiler.LoadFile("tests/mandelbrot.txt")
 	log.Println(err, b)
 	log.Println(base.NewBytesReader(b).Prettify(0))
 
-	i := vm.Exec(base.NewEnv(nil), b)
+	e := base.NewEnv(nil)
+	for _, name := range base.CoreLibNames {
+		e.Push(base.CoreLibs[name])
+	}
+
+	i := base.Exec(e, b)
 	log.Println(i.I())
 	log.Println(time.Now().Sub(start).Nanoseconds() / 1e6)
 }

@@ -1,9 +1,89 @@
 package base
 
+import (
+	"fmt"
+)
+
+const (
+	INIT_CAPACITY = 16
+)
+
+type Stack struct {
+	data []Value
+}
+
+func NewStack() *Stack {
+	return &Stack{
+		data: make([]Value, 0, INIT_CAPACITY),
+	}
+}
+
+func (s *Stack) grow(newSize int) {
+	if newSize > cap(s.data) {
+		old := s.data
+		s.data = make([]Value, newSize, newSize*3/2)
+		copy(s.data, old)
+	}
+	s.data = s.data[:newSize]
+}
+
+func (s *Stack) Size() int {
+	return len(s.data)
+}
+
+func (s *Stack) Get(index int) Value {
+	// if (shouldLock) rw.lock();
+	// if (shouldLock) rw.unlock();
+	if index >= len(s.data) {
+		return NewValue()
+	}
+
+	return s.data[index]
+}
+
+func (s *Stack) Set(index int, value Value) {
+	// if (shouldLock) rw.lock();
+
+	if index >= len(s.data) {
+		s.grow(index + 1)
+	}
+
+	s.data[index] = value
+	// if (shouldLock) rw.unlock();
+}
+
+func (s *Stack) Add(value Value) {
+	s.Set(len(s.data), value)
+}
+
+func (s *Stack) Clear() {
+	s.data = s.data[:0]
+}
+
+func (s *Stack) InsertStack(index int, s2 *Stack) {
+	s.Insert(index, s2.data)
+}
+
+func (s *Stack) Insert(index int, data []Value) {
+	// if (shouldLock) rw.lock();
+	if index <= len(s.data) {
+		ln := len(s.data)
+		s.grow(ln + len(data))
+		copy(s.data[len(s.data)-(ln-index):], s.data[index:])
+	} else {
+		s.grow(index + len(data))
+	}
+	copy(s.data[index:], data)
+	// if (shouldLock) rw.unlock();
+}
+
+func (s *Stack) Values() []Value {
+	return s.data
+}
+
 type Env struct {
 	parent *Env
 	stack  *Stack
-	creg   int
 
 	A, C, R0, R1, R2, R3 Value
 }
@@ -18,7 +98,6 @@ func NewEnv(parent *Env) *Env {
 
 func (e *Env) Reset() {
 	e.stack.Clear()
-	e.creg = 0
 	e.A = NewValue()
 }
 
@@ -73,4 +152,122 @@ func (e *Env) Set(yx int32, v Value) {
 
 func (e *Env) Stack() *Stack {
 	return e.stack
+}
+
+type Closure struct {
+	code      []byte
+	env       *Env
+	argsCount int
+	caller    Value
+	preArgs   []Value
+	native    func(env *Env) Value
+}
+
+func NewClosure(code []byte, env *Env, argsCount int) *Closure {
+	return &Closure{
+		code:      code,
+		env:       env,
+		argsCount: argsCount,
+	}
+}
+
+func NewNativeClosureValue(argsCount int, f func(env *Env) Value) Value {
+	return NewClosureValue(&Closure{
+		argsCount: argsCount,
+		native:    f,
+	})
+}
+
+func (c *Closure) AppendPreArgs(preArgs []Value) {
+	if c.preArgs == nil {
+		c.preArgs = make([]Value, 0, 4)
+	}
+
+	c.preArgs = append(c.preArgs, preArgs...)
+	c.argsCount -= len(preArgs)
+	if c.argsCount < 0 {
+		panic("negative args count")
+	}
+}
+
+func (c *Closure) PreArgs() []Value {
+	return c.preArgs
+}
+
+func (c *Closure) SetCode(code []byte) {
+	c.code = code
+}
+
+func (c *Closure) Code() []byte {
+	return c.code
+}
+
+func (c *Closure) SetCaller(cr Value) {
+	c.caller = cr
+}
+
+func (c *Closure) Caller() Value {
+	return c.caller
+}
+
+func (c *Closure) ArgsCount() int {
+	return c.argsCount
+}
+
+func (c *Closure) Env() *Env {
+	return c.env
+}
+
+func (c *Closure) Dup() *Closure {
+	cls := NewClosure(c.code, c.env, c.argsCount)
+	cls.caller = c.caller
+	if c.preArgs != nil {
+		cls.preArgs = make([]Value, len(c.preArgs))
+		copy(cls.preArgs, c.preArgs)
+	}
+	return cls
+}
+
+func (c *Closure) String() string {
+	if c.native == nil {
+		return fmt.Sprintf("closure %d (\n", c.argsCount) + NewBytesReader(c.code).Prettify(4) + ")"
+	}
+	return fmt.Sprintf("native %d (...)", c.argsCount)
+}
+
+func (c *Closure) Exec(newEnv *Env) Value {
+	newEnv.SetParent(c.env)
+	newEnv.C = c.caller
+	if c.native == nil {
+		return Exec(newEnv, c.code)
+	}
+	return c.native(newEnv)
+}
+
+type CMap struct {
+	Parent *CMap
+	M      map[string]int16
+}
+
+func NewCMap() *CMap {
+	return &CMap{
+		M: make(map[string]int16),
+	}
+}
+
+func (c *CMap) GetRelPosition(key string) int32 {
+	m := c
+	depth := int32(0)
+
+	for m != nil {
+		k, e := m.M[key]
+		if e {
+			return (depth << 16) | int32(k)
+		}
+
+		depth++
+		m = m.Parent
+	}
+
+	return -1
 }

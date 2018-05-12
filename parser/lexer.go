@@ -290,9 +290,10 @@ finally:
 
 var reservedWords = map[string]int{
 	"and": TAnd, "assert": TAssert, "break": TBreak, "continue": TContinue, "do": TDo, "else": TElse, "elseif": TElseIf,
-	"end": TEnd, "false": TFalse, "for": TFor, "lambda": TLambda,
-	"if": TIf, "set": TSet, "nil": TNil, "not": TNot, "or": TOr,
-	"return": TReturn, "then": TThen, "true": TTrue, "while": TWhile, "xor": TXor}
+	"end": TEnd, "false": TFalse, "lambda": TLambda, "list": TList,
+	"if": TIf, "set": TSet, "nil": TNil, "not": TNot, "map": TMap, "or": TOr,
+	"return": TReturn, "then": TThen, "true": TTrue, "while": TWhile, "xor": TXor,
+}
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
 redo:
@@ -363,8 +364,7 @@ redo:
 				tok.Str = "!="
 				sc.Next()
 			} else {
-				tok.Type = ch
-				tok.Str = string(ch)
+				err = sc.Error("!", "invalid '!' token")
 			}
 		case '<':
 			if sc.Peek() == '=' {

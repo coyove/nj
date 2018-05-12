@@ -21,6 +21,18 @@ const (
 	Tgeneric
 )
 
+var TMapping = map[byte]string{
+	Tnil:     "nil",
+	Tnumber:  "number",
+	Tstring:  "string",
+	Tbool:    "bool",
+	Tclosure: "closure",
+	Tgeneric: "generic",
+	Tlist:    "list",
+	Tmap:     "map",
+	Tbytes:   "bytes",
+}
+
 const (
 	minPhysPageSize = 4096 // (0x1000) in mheap.go
 	trueValue       = minPhysPageSize + 1
@@ -30,15 +42,11 @@ const (
 type Value struct {
 	ty byte
 
-	// if set true, ptr = ptr + minPhysPageSize
-	// to get around of runtime barrier check
-	ext bool
-
 	// used in red-black tree
 	c color
 
 	i byte
-	p [4]byte
+	p [5]byte
 
 	ptr unsafe.Pointer
 }
@@ -48,12 +56,15 @@ func NewValue() Value {
 }
 
 func NewNumberValue(f float64) Value {
-	i := *(*uintptr)(unsafe.Pointer(&f))
-	if i < minPhysPageSize {
-		i += minPhysPageSize
-		return Value{ty: Tnumber, ext: true, ptr: unsafe.Pointer(i)}
-	}
-	return Value{ty: Tnumber, ptr: unsafe.Pointer(i)}
+	// i := *(*uintptr)(unsafe.Pointer(&f))
+	// if i < minPhysPageSize {
+	// 	i += minPhysPageSize
+	// 	return Value{ty: Tnumber, ext: true, ptr: unsafe.Pointer(i)}
+	// }
+	// return Value{ty: Tnumber, ptr: unsafe.Pointer(i)}
+	v := Value{ty: Tnumber}
+	*(*float64)(unsafe.Pointer(&v.i)) = f
+	return v
 }
 
 func NewStringValue(s string) Value {
@@ -120,11 +131,12 @@ func (v Value) AsUint64() uint64 {
 }
 
 func (v Value) AsNumberUnsafe() float64 {
-	i := uintptr(v.ptr)
-	if v.ext {
-		i -= minPhysPageSize
-	}
-	return *(*float64)(unsafe.Pointer(&i))
+	// i := uintptr(v.ptr)
+	// if v.ext {
+	// 	i -= minPhysPageSize
+	// }
+	// return *(*float64)(unsafe.Pointer(&i))
+	return *(*float64)(unsafe.Pointer(&v.i))
 }
 
 func (v Value) AsString() string {
@@ -338,7 +350,7 @@ func (v Value) LessEqual(r Value) bool {
 	return false
 }
 
-func (v *Value) Attach(i int, va Value) {
+func (v Value) Attach(i int, va Value) Value {
 	switch va.ty {
 	case Tbool:
 		bu := va.AsBoolUnsafe()
@@ -346,8 +358,78 @@ func (v *Value) Attach(i int, va Value) {
 	case Tnumber:
 		v.p[i] = byte(va.AsNumberUnsafe())
 	}
+	return v
 }
 
-func (v *Value) Attached(i int) Value {
+func (v Value) Detach(i int) Value {
 	return NewNumberValue(float64(v.p[i]))
+}
+
+func (v Value) ToPrintString() string {
+	return v.toString(0)
+}
+
+func (v Value) toString(lv int) string {
+	if lv > 32 {
+		return "<omit deep nesting>"
+	}
+
+	switch v.Type() {
+	case Tbool:
+		return strconv.FormatBool(v.AsBool())
+	case Tnumber:
+		n := v.AsNumber()
+		if float64(int64(n)) == n {
+			return strconv.FormatInt(int64(n), 10)
+		}
+		return strconv.FormatFloat(n, 'f', 9, 64)
+	case Tstring:
+		return v.AsString()
+	case Tlist:
+		arr := v.AsList()
+		buf := &bytes.Buffer{}
+		buf.WriteString("[")
+		for _, v := range arr {
+			buf.WriteString(v.toString(lv + 1))
+			buf.WriteString(",")
+		}
+		if len(arr) > 0 {
+			buf.Truncate(buf.Len() - 1)
+		}
+		buf.WriteString("]")
+		return buf.String()
+	case Tmap:
+		m := v.AsMap()
+		buf, iter := &bytes.Buffer{}, m.Iterator()
+		buf.WriteString("{")
+		for iter.Next() {
+			buf.WriteString(iter.Key())
+			buf.WriteString(":")
+			buf.WriteString(iter.Value().toString(lv + 1))
+			buf.WriteString(",")
+		}
+		if m.Size() > 0 {
+			buf.Truncate(buf.Len() - 1)
+		}
+		buf.WriteString("}")
+		return buf.String()
+	case Tbytes:
+		arr := v.AsBytes()
+		buf := &bytes.Buffer{}
+		buf.WriteString("[")
+		for _, v := range arr {
+			buf.WriteString(fmt.Sprintf("%02x", int(v)))
+			buf.WriteString(",")
+		}
+		if len(arr) > 0 {
+			buf.Truncate(buf.Len() - 1)
+		}
+		buf.WriteString("]")
+		return buf.String()
+	case Tclosure:
+		return "<" + v.AsClosure().String() + ">"
+	case Tgeneric:
+		return fmt.Sprintf("%v", v.AsGenericUnsafe())
+	}
+	return "nil"
 }

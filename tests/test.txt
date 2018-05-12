@@ -21,4 +21,10 @@
 #    ioprintln(val(i))
 #end 
 
-set a = (("123")!1 = 2)
+io.println("123")
+set l = list  end
+io.println(l)
+
+set a = 0 while a < 2 then a = a + 1 do
+    io.println(a)
+end

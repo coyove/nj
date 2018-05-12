@@ -5,7 +5,6 @@ import (
 
 	"github.com/coyove/bracket/base"
 	"github.com/coyove/bracket/parser"
-	"github.com/coyove/bracket/vm"
 )
 
 func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
@@ -24,9 +23,6 @@ func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (
 		return []byte{base.OP_VARARGS}, base.REG_A, stackPtr, nil
 	}
 	if flatOpMapping[name] {
-		return compileFlatOp(stackPtr, append(nodes[1:2], nodes[2].Compound...), varLookup)
-	}
-	if _, ok := vm.LibLookup[name]; ok {
 		return compileFlatOp(stackPtr, append(nodes[1:2], nodes[2].Compound...), varLookup)
 	}
 

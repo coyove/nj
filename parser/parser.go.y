@@ -1,7 +1,5 @@
 %{
 package parser
-
-import "github.com/coyove/bracket/vm"
 %}
 %type<stmts> block
 %type<stmt>  stat
@@ -9,6 +7,7 @@ import "github.com/coyove/bracket/vm"
 %type<expr> var
 %type<namelist> namelist
 %type<exprlist> exprlist
+%type<exprlist> exprlistassign
 %type<expr> expr
 %type<expr> string
 %type<expr> prefixexp
@@ -16,6 +15,8 @@ import "github.com/coyove/bracket/vm"
 %type<expr> afunctioncall
 %type<exprlist> args
 %type<expr> function
+%type<expr> listgen
+%type<expr> mapgen
 
 %union {
   token  Token
@@ -33,21 +34,21 @@ import "github.com/coyove/bracket/vm"
 }
 
 /* Reserved words */
-%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TFor TIf TIn TLambda TNil TNot TOr TReturn TSet TThen TTrue TWhile TXor
+%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TIf TLambda TList TNil TNot TMap TOr TReturn TSet TThen TTrue TWhile TXor
 
 /* Literals */
-%token<token> TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '(' '|' '&'
+%token<token> TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
 
 /* Operators */
 %left TOr
 %left TAnd
+%left '|' '&' '^'
 %left '>' '<' TGte TLte TEqeq TNeq
+%left TLsh TRsh
 %left '+' '-'
 %left '*' '/' '%'
-%left '|' '&'
-%left TLsh TRsh
 %right UNARY /* not # -(unary) */
-%right '^'
+%right '~'
 
 %% 
 
@@ -97,6 +98,10 @@ stat:
         } |
         TWhile expr TDo block TEnd {
             $$ = NewCompoundNode("while", $2, $4)
+        } |
+        TWhile expr TThen stat TDo block TEnd {
+            $6.Compound = append($6.Compound, $4)
+            $$ = NewCompoundNode("while", $2, $6)
         } |
         TIf expr TThen block elseifs TEnd {
             $$ = NewCompoundNode("if", $2, $4, NewCompoundNode())
@@ -155,7 +160,6 @@ elseifs:
 var:
         TIdent {
             $$ = NewAtomNode($1)
-            _, $$.LibWH = vm.LibLookup[$1.Str]
         } |
         prefixexp '[' expr ']' {
             $$ = NewCompoundNode("load", $1, $3)
@@ -165,9 +169,6 @@ var:
         } | 
         prefixexp '.' TIdent {
             $$ = NewCompoundNode("load", $1, NewStringNode($3.Str))
-        } | 
-        prefixexp '!' TNumber {
-            $$ = NewCompoundNode("rload", $1, NewNumberNode($3.Str))
         }
 
 namelist:
@@ -185,6 +186,15 @@ exprlist:
         } |
         exprlist ',' expr {
             $1.Compound = append($1.Compound, $3)
+            $$ = $1
+        }
+
+exprlistassign:
+        expr '=' expr {
+            $$ = NewCompoundNode($1, $3)
+        } |
+        exprlistassign ',' expr '=' expr {
+            $1.Compound = append($1.Compound, $3, $5)
             $$ = $1
         }
 
@@ -206,6 +216,12 @@ expr:
             $$.Pos = $1.Pos
         } |
         function {
+            $$ = $1
+        } | 
+        listgen {
+            $$ = $1
+        } | 
+        mapgen {
             $$ = $1
         } | 
         prefixexp {
@@ -354,6 +370,26 @@ function:
         } |
         TLambda '(' namelist ')' block TEnd {
             $$ = NewCompoundNode("lambda", $3, $5)
+            $$.Compound[0].Pos = $1.Pos
+        }
+
+listgen:
+        TList TEnd {
+            $$ = NewCompoundNode("list", NewCompoundNode())
+            $$.Compound[0].Pos = $1.Pos
+        } |
+        TList exprlist TEnd {
+            $$ = NewCompoundNode("list", $2)
+            $$.Compound[0].Pos = $1.Pos
+        }
+
+mapgen:
+        TMap TEnd {
+            $$ = NewCompoundNode("map", NewCompoundNode())
+            $$.Compound[0].Pos = $1.Pos
+        } |
+        TMap exprlistassign TEnd {
+            $$ = NewCompoundNode("map", $2)
             $$.Compound[0].Pos = $1.Pos
         }
 
