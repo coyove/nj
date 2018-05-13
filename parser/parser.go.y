@@ -88,6 +88,7 @@ stat:
             } else {
                 $$ = NewCompoundNode("move", $1, $3)
             }
+            $$.Compound[0].Pos = $1.Pos
         } |
         /* 'stat = functioncal' causes a reduce/reduce conflict */
         prefixexp {
@@ -99,10 +100,12 @@ stat:
         } |
         TWhile expr TDo block TEnd {
             $$ = NewCompoundNode("while", $2, $4)
+            $$.Compound[0].Pos = $1.Pos
         } |
         TWhile expr TThen stat TDo block TEnd {
             $6.Compound = append($6.Compound, $4)
             $$ = NewCompoundNode("while", $2, $6)
+            $$.Compound[0].Pos = $1.Pos
         } |
         TLambda TIdent functionargnames block TEnd {
             funcname := NewAtomNode($2)
@@ -110,6 +113,7 @@ stat:
         } |
         TIf expr TThen block elseifs TEnd {
             $$ = NewCompoundNode("if", $2, $4, NewCompoundNode())
+            $$.Compound[0].Pos = $1.Pos
             cur := $$
             for _, e := range $5.Compound {
                 cur.Compound[3] = e
@@ -118,6 +122,7 @@ stat:
         } |
         TIf expr TThen block elseifs TElse block TEnd {
             $$ = NewCompoundNode("if", $2, $4, NewCompoundNode())
+            $$.Compound[0].Pos = $1.Pos
             cur := $$
             for _, e := range $5.Compound {
                 cur.Compound[3] = e
@@ -134,26 +139,34 @@ stat:
                 } else {
                     e = $4.Compound[len($4.Compound) - 1]
                 }
-                $$.Compound = append($$.Compound, NewCompoundNode("set", name, e))
+                c := NewCompoundNode("set", name, e)
+                c.Compound[0].Pos = $1.Pos
+                $$.Compound = append($$.Compound, c)
             }
         } |
         TReturn {
             $$ = NewCompoundNode("ret")
+            $$.Compound[0].Pos = $1.Pos
         } |
         TReturn expr {
             $$ = NewCompoundNode("ret", $2)
+            $$.Compound[0].Pos = $1.Pos
         } |
         TYield {
             $$ = NewCompoundNode("yield")
+            $$.Compound[0].Pos = $1.Pos
         } |
         TYield expr {
             $$ = NewCompoundNode("yield", $2)
+            $$.Compound[0].Pos = $1.Pos
         } |
         TBreak  {
             $$ = NewCompoundNode("break")
+            $$.Compound[0].Pos = $1.Pos
         } |
         TContinue  {
             $$ = NewCompoundNode("continue")
+            $$.Compound[0].Pos = $1.Pos
         } |
         TAssert expr {
             $$ = NewCompoundNode("assert", $2)

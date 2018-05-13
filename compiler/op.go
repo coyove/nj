@@ -8,11 +8,6 @@ import (
 )
 
 const (
-	c_set = iota + 1
-	c_declare
-)
-
-const (
 	ERR_UNDECLARED_VARIABLE = "undeclared variable: %+v"
 )
 
@@ -20,7 +15,7 @@ func compileSetOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (c
 	aVar := atoms[1]
 	varIndex := int32(0)
 	if len(atoms) < 3 {
-		err = fmt.Errorf("can't set/declare without value %+v", atoms[0])
+		err = fmt.Errorf("can't set/move without value %+v", atoms[0])
 		return
 	}
 
@@ -109,4 +104,45 @@ func compileRetOp(r, n, s byte) func(stackPtr int16, atoms []*parser.Node, varLo
 		}
 		return buf.Bytes(), yx, stackPtr, nil
 	}
+}
+
+func compileListOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+	var buf *base.BytesReader
+	buf, stackPtr, err = flaten(stackPtr, atoms[1].Compound, varLookup)
+	if err != nil {
+		return
+	}
+
+	for _, atom := range atoms[1].Compound {
+		err = fill1(buf, atom, varLookup, base.OP_PUSH, base.OP_PUSH_NUM, base.OP_PUSH_STR)
+		if err != nil {
+			return
+		}
+	}
+
+	buf.WriteByte(base.OP_LIST)
+	return buf.Bytes(), base.REG_A, stackPtr, nil
+}
+
+func compileMapOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+	if len(atoms[1].Compound)%2 != 0 {
+		err = fmt.Errorf("every key in map must have a value: %+v", atoms[1])
+		return
+	}
+
+	var buf *base.BytesReader
+	buf, stackPtr, err = flaten(stackPtr, atoms[1].Compound, varLookup)
+	if err != nil {
+		return
+	}
+
+	for _, atom := range atoms[1].Compound {
+		err = fill1(buf, atom, varLookup, base.OP_PUSH, base.OP_PUSH_NUM, base.OP_PUSH_STR)
+		if err != nil {
+			return
+		}
+	}
+
+	buf.WriteByte(base.OP_MAP)
+	return buf.Bytes(), base.REG_A, stackPtr, nil
 }

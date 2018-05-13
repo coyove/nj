@@ -107,8 +107,6 @@ func NewNumberNode(arg string) *Node {
 				Value: float64(num),
 			}
 		}
-
-		log.Panicf("invalid number: %s, %+v", arg, err)
 	}
 
 	num, err := strconv.ParseFloat(arg, 64)

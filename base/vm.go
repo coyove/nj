@@ -2,13 +2,14 @@ package base
 
 import (
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"sync"
 )
 
 var CoreLibNames = []string{
-	"core", "io", "os",
+	"core", "io", "os", "math",
 }
 
 var CoreLibs = map[string]Value{}
@@ -121,6 +122,10 @@ func init() {
 
 	los := new(Tree)
 	CoreLibs["os"] = NewMapValue(los)
+
+	lmath := new(Tree)
+	lmath.Put("sqrt", NewNativeClosureValue(1, func(env *Env) Value { return NewNumberValue(math.Sqrt(env.stack.Get(0).AsNumber())) }))
+	CoreLibs["math"] = NewMapValue(lmath)
 }
 
 func stdPrint(f *os.File) func(env *Env) Value {

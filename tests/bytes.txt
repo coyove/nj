@@ -1,5 +1,0 @@
-[assert ["abc":2] ["cab":0]]
-[var b [bytes "hello world"]]
-[assert [b:1] 101] # 'e'
-[inc [b:1] -1]
-[assert b [bytes "hdllo world"]]

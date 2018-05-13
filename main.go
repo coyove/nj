@@ -20,7 +20,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	start := time.Now()
 
-	b, err := compiler.LoadFile("tests/test.txt")
+	b, err := compiler.LoadFile("tests/n-body.txt")
 	log.Println(err, b)
 	log.Println(base.Prettify(b))
 

@@ -38,15 +38,20 @@ func flaten(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (buf *ba
 			if err != nil {
 				return
 			}
-			atoms[i] = &parser.Node{Type: parser.NTAddr, Value: yx}
-			replacedAtoms = append(replacedAtoms, atoms[i])
-			buf.Write(code)
+			if varLookup.I != nil {
+				atoms[i] = &parser.Node{Type: parser.NTNumber, Value: *varLookup.I}
+				varLookup.I = nil
+			} else {
+				atoms[i] = &parser.Node{Type: parser.NTAddr, Value: yx}
+				replacedAtoms = append(replacedAtoms, atoms[i])
+				buf.Write(code)
+			}
 		}
 	}
 
 	if len(replacedAtoms) == 1 {
 		cursor := buf.Len() - 4
-		replacedAtoms[0].Value = int32(binary.LittleEndian.Uint32(buf.Bytes()[:cursor]))
+		replacedAtoms[0].Value = int32(binary.LittleEndian.Uint32(buf.Bytes()[cursor:]))
 		buf.Truncate(9)
 		stackPtr--
 	}
@@ -60,6 +65,47 @@ func flatWrite(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap, bop b
 	buf, stackPtr, err = flaten(stackPtr, atoms[1:], varLookup)
 	if err != nil {
 		return
+	}
+
+	immediateRet := func(n float64) {
+		buf.Clear()
+		buf.WriteByte(base.OP_SET_NUM)
+		buf.WriteInt32(base.REG_A)
+		varLookup.I = &n
+		buf.WriteDouble(n)
+	}
+
+	v1 := func() float64 { return atoms[1].Value.(float64) }
+	v2 := func() float64 { return atoms[2].Value.(float64) }
+
+	switch bop {
+	case base.OP_ADD:
+		if atoms[1].Type == parser.NTString && atoms[2].Type == parser.NTString {
+			buf.Clear()
+			buf.WriteByte(base.OP_SET_STR)
+			buf.WriteInt32(base.REG_A)
+			buf.WriteString(atoms[1].Value.(string) + atoms[2].Value.(string))
+			return buf.Bytes(), base.REG_A, stackPtr, nil
+		}
+		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {
+			immediateRet(v1() + v2())
+			return buf.Bytes(), base.REG_A, stackPtr, nil
+		}
+	case base.OP_SUB:
+		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {
+			immediateRet(v1() - v2())
+			return buf.Bytes(), base.REG_A, stackPtr, nil
+		}
+	case base.OP_MUL:
+		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {
+			immediateRet(v1() * v2())
+			return buf.Bytes(), base.REG_A, stackPtr, nil
+		}
+	case base.OP_DIV:
+		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {
+			immediateRet(v1() / v2())
+			return buf.Bytes(), base.REG_A, stackPtr, nil
+		}
 	}
 
 	for i := 1; i < len(atoms); i++ {

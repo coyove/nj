@@ -33,6 +33,10 @@ func (b *BytesReader) Dup() *BytesReader {
 	return &b2
 }
 
+func (b *BytesReader) Clear() {
+	b.data = b.data[:0]
+}
+
 func (b *BytesReader) Bytes() []byte {
 	return b.data
 }

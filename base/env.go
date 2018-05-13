@@ -265,6 +265,8 @@ func (c *Closure) Exec(newEnv *Env) Value {
 type CMap struct {
 	Parent *CMap
 	M      map[string]int16
+	I      *float64
+	D      bool
 }
 
 func NewCMap() *CMap {
