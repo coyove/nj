@@ -277,7 +277,6 @@ func (v Value) Equal(r Value) bool {
 	if v.ty == Tnil || r.ty == Tnil {
 		return v.ty == r.ty
 	}
-
 	switch v.ty {
 	case Tnumber:
 		if r.ty == Tnumber {

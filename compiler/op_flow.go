@@ -55,6 +55,7 @@ func compileIfOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (co
 			buf.WriteInt32(int32(len(trueCode)))
 			buf.Write(trueCode)
 		}
+		varLookup.I = nil
 		return buf.Bytes(), base.REG_A, stackPtr, nil
 	}
 
@@ -139,6 +140,7 @@ func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (
 	buf.WriteByte(base.OP_CALL)
 	buf.WriteInt32(varIndex)
 
+	varLookup.I = nil
 	return buf.Bytes(), base.REG_A, stackPtr, nil
 }
 
@@ -170,6 +172,7 @@ func compileLambdaOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap)
 	buf.WriteInt32(int32(len(code)))
 	buf.Write(code)
 
+	varLookup.I = nil
 	return buf.Bytes(), base.REG_A, stackPtr, nil
 }
 
@@ -183,7 +186,6 @@ var staticWhileHack struct {
 func compileContinueBreakOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 	staticWhileHack.Lock()
 	defer staticWhileHack.Unlock()
-
 	if atoms[0].Value.(string) == "continue" {
 		if staticWhileHack.continueFlag == nil {
 			staticWhileHack.continueFlag = make([]byte, 9)
@@ -200,6 +202,7 @@ func compileContinueBreakOp(stackPtr int16, atoms []*parser.Node, varLookup *bas
 			panic(err)
 		}
 	}
+	varLookup.I = nil
 	return staticWhileHack.breakFlag, base.REG_A, stackPtr, nil
 }
 
@@ -209,7 +212,6 @@ func compileWhileOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) 
 		err = fmt.Errorf("while statement should have condition and body: %+v", atoms[0])
 		return
 	}
-
 	condition := atoms[1]
 	buf := base.NewBytesBuffer()
 	var varIndex int32
@@ -280,5 +282,6 @@ func compileWhileOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) 
 		i = idx + 9
 	}
 
+	varLookup.I = nil
 	return code, base.REG_A, stackPtr, nil
 }

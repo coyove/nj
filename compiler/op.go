@@ -76,6 +76,7 @@ func compileSetOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (c
 		varLookup.M[aVar.Value.(string)] = int16(newYX)
 	}
 
+	varLookup.I = nil
 	return buf.Bytes(), newYX, stackPtr, nil
 }
 
@@ -85,6 +86,7 @@ func compileRetOp(r, n, s byte) func(stackPtr int16, atoms []*parser.Node, varLo
 		if len(atoms) == 1 {
 			buf.WriteByte(r)
 			buf.WriteInt32(base.REG_A)
+			varLookup.I = nil
 			return buf.Bytes(), yx, stackPtr, nil
 		}
 
@@ -102,6 +104,7 @@ func compileRetOp(r, n, s byte) func(stackPtr int16, atoms []*parser.Node, varLo
 			buf.WriteByte(r)
 			buf.WriteInt32(yx)
 		}
+		varLookup.I = nil
 		return buf.Bytes(), yx, stackPtr, nil
 	}
 }
@@ -121,6 +124,7 @@ func compileListOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (
 	}
 
 	buf.WriteByte(base.OP_LIST)
+	varLookup.I = nil
 	return buf.Bytes(), base.REG_A, stackPtr, nil
 }
 
@@ -144,5 +148,6 @@ func compileMapOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (c
 	}
 
 	buf.WriteByte(base.OP_MAP)
+	varLookup.I = nil
 	return buf.Bytes(), base.REG_A, stackPtr, nil
 }

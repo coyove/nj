@@ -52,8 +52,10 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 				env.A = NewStringValue(l.AsStringUnsafe() + env.R1.AsString())
 			case Tlist:
 				env.A = NewListValue(append(l.AsListUnsafe(), env.R1))
+			case Tbytes:
+				env.A = NewBytesValue(append(l.AsBytesUnsafe(), byte(env.R1.AsNumber())))
 			default:
-				log.Panicf("can't add %+v", l)
+				log.Panicf("can't apply 'add' on %+v", l)
 			}
 		case OP_SUB:
 			env.A = NewNumberValue(env.R0.AsNumber() - env.R1.AsNumber())
@@ -98,7 +100,22 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 		case OP_BIT_NOT:
 			env.A = NewNumberValue(float64(^int64(env.R0.AsNumber())))
 		case OP_BIT_AND:
-			env.A = NewNumberValue(float64(int64(env.R0.AsNumber()) & int64(env.R1.AsNumber())))
+			switch env.R0.Type() {
+			case Tnumber:
+				env.A = NewNumberValue(float64(int64(env.R0.AsNumberUnsafe()) & int64(env.R1.AsNumber())))
+			case Tlist:
+				env.A = NewListValue(append(env.R0.AsListUnsafe(), env.R1.AsList()...))
+			case Tbytes:
+				env.A = NewBytesValue(append(env.R0.AsBytesUnsafe(), env.R1.AsBytes()...))
+			case Tmap:
+				tr, m := env.R0.AsMapUnsafe().Dup(), env.R1.AsMap()
+				for iter := m.Iterator(); iter.Next(); {
+					tr.Put(iter.Key(), iter.Value())
+				}
+				env.A = NewMapValue(tr)
+			default:
+				log.Panicf("can't apply bit 'and' on %+v", env.R0)
+			}
 		case OP_BIT_OR:
 			env.A = NewNumberValue(float64(int64(env.R0.AsNumber()) | int64(env.R1.AsNumber())))
 		case OP_BIT_XOR:
@@ -207,11 +224,15 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 		case OP_SAFE_STORE:
 			switch idx := int(env.R1.AsNumber()); env.R0.Type() {
 			case Tbytes:
-				bb := env.R0.AsBytesUnsafe()
-				bb[(idx+len(bb))%len(bb)] = byte(env.R2.AsNumber())
+				if bb := env.R0.AsBytesUnsafe(); idx < len(bb) {
+					bb[idx] = byte(env.R2.AsNumber())
+				}
 			case Tlist:
-				bb := env.R0.AsListUnsafe()
-				bb[(idx+len(bb))%len(bb)] = env.R2
+				if bb := env.R0.AsListUnsafe(); idx < len(bb) {
+					bb[idx] = env.R2
+				}
+			case Tmap:
+				env.R0.AsMapUnsafe().Put(env.R1.AsString(), env.R2)
 			default:
 				log.Panicf("can't safe store into %+v", env.R0)
 			}
@@ -220,16 +241,19 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 			v := NewValue()
 			switch idx := int(env.R1.AsNumber()); env.R0.Type() {
 			case Tbytes:
-				bb := env.R0.AsBytesUnsafe()
-				v = NewNumberValue(float64(bb[(idx+len(bb))%len(bb)]))
+				if bb := env.R0.AsBytesUnsafe(); idx < len(bb) {
+					v = NewNumberValue(float64(bb[idx]))
+				}
 			case Tstring:
-				bb := env.R0.AsStringUnsafe()
-				v = NewNumberValue(float64(bb[(idx+len(bb))%len(bb)]))
+				if bb := env.R0.AsStringUnsafe(); idx < len(bb) {
+					v = NewNumberValue(float64(bb[idx]))
+				}
 			case Tlist:
-				bb := env.R0.AsListUnsafe()
-				v = bb[(idx+len(bb))%len(bb)]
-				if v.Type() == Tclosure {
-					v.AsClosureUnsafe().SetCaller(env.R0)
+				if bb := env.R0.AsListUnsafe(); idx < len(bb) {
+					v = bb[idx]
+					if v.Type() == Tclosure {
+						v.AsClosureUnsafe().SetCaller(env.R0)
+					}
 				}
 			case Tmap:
 				v, _ = env.R0.AsMapUnsafe().Get(env.R1.AsString())
@@ -323,6 +347,8 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 			case Tlist:
 				if bb := v.AsListUnsafe(); newEnv.Size() == 2 {
 					env.A = NewListValue(bb[shiftIndex(newEnv.Get(0), len(bb)):shiftIndex(newEnv.Get(1), len(bb))])
+				} else if newEnv.Size() == 1 {
+					env.A = bb[shiftIndex(newEnv.Get(0), len(bb))]
 				} else {
 					log.Panicf("too many (or few) arguments to call on list")
 				}
@@ -330,6 +356,8 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 			case Tbytes:
 				if bb := v.AsBytesUnsafe(); newEnv.Size() == 2 {
 					env.A = NewBytesValue(bb[shiftIndex(newEnv.Get(0), len(bb)):shiftIndex(newEnv.Get(1), len(bb))])
+				} else if newEnv.Size() == 1 {
+					env.A = NewNumberValue(float64(bb[shiftIndex(newEnv.Get(0), len(bb))]))
 				} else {
 					log.Panicf("too many (or few) arguments to call on bytes")
 				}
@@ -337,6 +365,8 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 			case Tstring:
 				if bb := v.AsStringUnsafe(); newEnv.Size() == 2 {
 					env.A = NewStringValue(bb[shiftIndex(newEnv.Get(0), len(bb)):shiftIndex(newEnv.Get(1), len(bb))])
+				} else if newEnv.Size() == 1 {
+					env.A = NewNumberValue(float64(bb[shiftIndex(newEnv.Get(0), len(bb))]))
 				} else {
 					log.Panicf("too many (or few) arguments to call on string")
 				}

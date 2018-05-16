@@ -117,12 +117,13 @@ func (tree *Tree) Get(key string) (value Value, found bool) {
 
 // Remove remove the node from the tree by key.
 // Key should adhere to the comparator's type assertion, otherwise method panics.
-func (tree *Tree) Remove(key string) {
+func (tree *Tree) Remove(key string) Value {
 	var child *Node
 	node := tree.lookup(key)
 	if node == nil {
-		return
+		return NewValue()
 	}
+	v := node.Value
 	if node.Left != nil && node.Right != nil {
 		pred := node.Left.maximumNode()
 		node.Key = pred.Key
@@ -145,6 +146,7 @@ func (tree *Tree) Remove(key string) {
 		}
 	}
 	tree.size--
+	return v
 }
 
 // Empty returns true if tree does not contain any nodes

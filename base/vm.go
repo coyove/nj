@@ -56,6 +56,35 @@ func init() {
 			return NewValue()
 		}
 	}))
+	lcore.Put("del", NewNativeClosureValue(2, func(env *Env) Value {
+		switch s := env.Get(0); s.ty {
+		case Tmap:
+			return s.AsMapUnsafe().Remove(env.Get(1).AsString())
+		case Tlist:
+			l := s.AsListUnsafe()
+			if env.Size() == 2 {
+				idx := int(env.Get(1).AsNumber())
+				l = append(l[:idx], l[idx+1:]...)
+			} else {
+				idx, ln := int(env.Get(1).AsNumber()), int(env.Get(2).AsNumber())
+				l = append(l[:idx], l[idx+ln:]...)
+			}
+			return NewListValue(l)
+		case Tbytes:
+			l := s.AsBytesUnsafe()
+			if env.Size() == 2 {
+				idx := int(env.Get(1).AsNumber())
+				l = append(l[:idx], l[idx+1:]...)
+			} else {
+				idx, ln := int(env.Get(1).AsNumber()), int(env.Get(2).AsNumber())
+				l = append(l[:idx], l[idx+ln:]...)
+			}
+			return NewBytesValue(l)
+		default:
+			log.Panicf("can't delete soemthing from %+v", s)
+			return NewValue()
+		}
+	}))
 	lcore.Put("go", NewNativeClosureValue(1, func(env *Env) Value {
 		cls := env.Get(0).AsClosure()
 		newEnv := NewEnv(cls.env)

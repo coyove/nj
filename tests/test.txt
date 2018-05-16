@@ -51,3 +51,8 @@ set a = 2
 assert 1 + 2 *3/5 == 2.2
 assert 1 /2+ 2.2 * 5 * (a + 1) == 33.5
 assert 1 /2+ 2.2 * (a + 1) * 5 == 33.5
+
+set l, l2 = list 1,2,3 end, list "1","2","3" end
+assert (l + l2) == list 1,2,3, list "1", "2", "3" end end
+assert (l & l2) == list 1,2,3, "1", "2", "3" end 
+assert l == list 1,2,3 end and l2(1,-1) == list "2" end

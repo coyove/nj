@@ -167,6 +167,7 @@ func compile(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (code [
 
 func compileChainOp(stackPtr int16, chain *parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 	buf := base.NewBytesBuffer()
+	varLookup.I = nil
 
 	for _, a := range chain.Compound {
 		if a.Type != parser.NTCompound {
