@@ -235,10 +235,12 @@ func crPrettify(data []byte, tab int) string {
 		case OP_LAMBDA:
 			sb.WriteString("lambda ")
 			sb.WriteString(strconv.Itoa(int(crReadInt32(data, &cursor))))
+			if crReadByte(data, &cursor) == 1 {
+				sb.WriteString(" yield")
+			}
 			sb.WriteString(" (\n")
 			sb.WriteString(crPrettify(crReadBytes(data, &cursor, int(crReadInt32(data, &cursor))), tab+4))
 			sb.WriteString(pre + ")")
-
 		case OP_CALL:
 			sb.WriteString("call " + xy(crReadInt32(data, &cursor)))
 

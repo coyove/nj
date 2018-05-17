@@ -162,15 +162,17 @@ type Closure struct {
 	native    func(env *Env) Value
 	argsCount int16
 	status    byte
+	yieldable bool
 	lastp     uint32
 	lastenv   *Env
 }
 
-func NewClosure(code []byte, env *Env, argsCount int) *Closure {
+func NewClosure(code []byte, env *Env, argsCount int, yieldable bool) *Closure {
 	return &Closure{
 		code:      code,
 		env:       env,
 		argsCount: int16(argsCount),
+		yieldable: yieldable,
 	}
 }
 
@@ -222,7 +224,7 @@ func (c *Closure) Env() *Env {
 }
 
 func (c *Closure) Dup() *Closure {
-	cls := NewClosure(c.code, c.env, int(c.argsCount))
+	cls := NewClosure(c.code, c.env, int(c.argsCount), c.yieldable)
 	cls.caller = c.caller
 	cls.lastp = c.lastp
 	if c.preArgs != nil {
@@ -234,7 +236,7 @@ func (c *Closure) Dup() *Closure {
 
 func (c *Closure) String() string {
 	if c.native == nil {
-		return fmt.Sprintf("closure %d (\n", c.argsCount) + crPrettify(c.code, 4) + ")"
+		return fmt.Sprintf("closure %d [%d] %v (\n", c.argsCount, len(c.preArgs), c.yieldable) + crPrettify(c.code, 4) + ")"
 	}
 	return fmt.Sprintf("native %d (...)", c.argsCount)
 }
@@ -262,12 +264,18 @@ func (c *Closure) Exec(newEnv *Env) Value {
 	return c.native(newEnv)
 }
 
+// CMap is responsible for recording extra states of compilation
 type CMap struct {
+	// variable name lookup
 	Parent *CMap
 	M      map[string]int16
-	I      *float64
-	Is     *string
-	D      bool
+
+	// flat op immediate value
+	I  *float64
+	Is *string
+
+	// has yield op
+	Y bool
 }
 
 func NewCMap() *CMap {

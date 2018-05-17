@@ -38,7 +38,7 @@ func main() {
 	}))
 	base.CoreLibs["http"] = (base.NewMapValue(m))
 
-	b, err := compiler.LoadFile("tests/fib.txt")
+	b, err := compiler.LoadFile("tests/test.txt")
 	log.Println(err, b)
 	log.Println(base.Prettify(b))
 

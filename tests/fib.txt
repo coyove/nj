@@ -4,5 +4,5 @@ fib = function(n)
     return fib(n-2)+fib(n-1)
 end
 
-set ans = fib(10)
-io.println(ans)
+set ans = fib(35 )
+return ans

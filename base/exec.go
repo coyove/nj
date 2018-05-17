@@ -22,12 +22,28 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 		}
 	}()
 
+	type ret struct {
+		cursor uint32
+		env    *Env
+		code   []byte
+	}
+
+	var retStack []ret
+
+	returnUpperWorld := func(v Value) {
+		r := retStack[len(retStack)-1]
+		cursor = r.cursor
+		code = r.code
+		env = r.env
+		env.A = v
+		retStack = retStack[:len(retStack)-1]
+	}
+
 	for {
 		bop := crReadByte(code, &cursor)
 		if bop == OP_EOB {
 			break
 		}
-		// log.Println(c.Get&cursor())
 		switch bop {
 		case OP_NOP:
 		case OP_WHO:
@@ -304,11 +320,23 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 			}
 			newEnv.Push(NewStringValue(crReadString(code, &cursor)))
 		case OP_RET:
-			return env.Get(crReadInt32(code, &cursor)), 0, false
+			v := env.Get(crReadInt32(code, &cursor))
+			if len(retStack) == 0 {
+				return v, 0, false
+			}
+			returnUpperWorld(v)
 		case OP_RET_NUM:
-			return NewNumberValue(crReadDouble(code, &cursor)), 0, false
+			v := NewNumberValue(crReadDouble(code, &cursor))
+			if len(retStack) == 0 {
+				return v, 0, false
+			}
+			returnUpperWorld(v)
 		case OP_RET_STR:
-			return NewStringValue(crReadString(code, &cursor)), 0, false
+			v := NewStringValue(crReadString(code, &cursor))
+			if len(retStack) == 0 {
+				return v, 0, false
+			}
+			returnUpperWorld(v)
 		case OP_YIELD:
 			return env.Get(crReadInt32(code, &cursor)), cursor, true
 		case OP_YIELD_NUM:
@@ -317,8 +345,9 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 			return NewStringValue(crReadString(code, &cursor)), cursor, true
 		case OP_LAMBDA:
 			argsCount := int(crReadInt32(code, &cursor))
+			yieldable := crReadByte(code, &cursor) == 1
 			buf := crReadBytes(code, &cursor, int(crReadInt32(code, &cursor)))
-			env.A = NewClosureValue(NewClosure(buf, env, argsCount))
+			env.A = NewClosureValue(NewClosure(buf, env, argsCount, yieldable))
 		case OP_CALL:
 			v := env.Get(crReadInt32(code, &cursor))
 			switch v.Type() {
@@ -340,7 +369,28 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 					if cls.PreArgs() != nil && len(cls.PreArgs()) > 0 {
 						newEnv.Stack().Insert(0, cls.PreArgs())
 					}
-					env.A = cls.Exec(newEnv)
+
+					if cls.yieldable || cls.native != nil {
+						env.A = cls.Exec(newEnv)
+					} else {
+						if retStack == nil {
+							retStack = make([]ret, 0, 1)
+						}
+
+						last := ret{
+							cursor: cursor,
+							env:    env,
+							code:   code,
+						}
+
+						// switch to the env of cls
+						cursor = 0
+						newEnv.parent = cls.env
+						env = newEnv
+						code = cls.code
+
+						retStack = append(retStack, last)
+					}
 				}
 
 				newEnv = nil

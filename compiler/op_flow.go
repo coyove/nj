@@ -169,10 +169,14 @@ func compileLambdaOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap)
 	buf := base.NewBytesWriter()
 	buf.WriteByte(base.OP_LAMBDA)
 	buf.WriteInt32(int32(ln))
+	if newLookup.Y {
+		buf.WriteByte(1)
+	} else {
+		buf.WriteByte(0)
+	}
 	buf.WriteInt32(int32(len(code)))
 	buf.Write(code)
 
-	varLookup.I = nil
 	return buf.Bytes(), base.REG_A, stackPtr, nil
 }
 
@@ -202,7 +206,6 @@ func compileContinueBreakOp(stackPtr int16, atoms []*parser.Node, varLookup *bas
 			panic(err)
 		}
 	}
-	varLookup.I = nil
 	return staticWhileHack.breakFlag, base.REG_A, stackPtr, nil
 }
 
@@ -282,6 +285,5 @@ func compileWhileOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) 
 		i = idx + 9
 	}
 
-	varLookup.I = nil
 	return code, base.REG_A, stackPtr, nil
 }

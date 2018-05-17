@@ -80,7 +80,7 @@ func compileSetOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (c
 	return buf.Bytes(), newYX, stackPtr, nil
 }
 
-func compileRetOp(r, n, s byte) func(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
+func compileRetOp(r, n, s byte) compileFunc {
 	return func(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 		buf := base.NewBytesWriter()
 		if len(atoms) == 1 {
@@ -104,7 +104,11 @@ func compileRetOp(r, n, s byte) func(stackPtr int16, atoms []*parser.Node, varLo
 			buf.WriteByte(r)
 			buf.WriteInt32(yx)
 		}
-		varLookup.I = nil
+
+		if r == base.OP_YIELD {
+			varLookup.Y = true
+		}
+
 		return buf.Bytes(), yx, stackPtr, nil
 	}
 }

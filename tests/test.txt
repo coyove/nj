@@ -1,35 +1,27 @@
+function add(a,b) return a + b end
 
-#
-#
-#set i = iter(m) while next(i) do
-#    ioprintln(val(i))
-#end 
+set fib2 = function()
+    set a, b = 0, 1
+    while true do
+        set c = add(a, b)
+        a = b
+        b = c
+        yield c
+    end
+end
+ 
+ set fib3 = dup(fib2)
+ 
+set i = 0 while i < 33 then i = i + 1 do fib2() end
+assert (fib2())==9227465 
+assert (fib3()+fib3()+fib3()+fib3()) == 11
 
-#function fib(n)
-#    if n < 2 then
-#        return n
-#    else
-#        return fib(n - 2) + fib(n-1)
-#    end
-#end
-#
-#io.println(fib(10))
-#
-#set fib2 = function()
-#    set a, b = 0, 1
-#    while true do
-#        set c = a + b
-#        a = b
-#        b = c
-#        yield c
-#    end
-#end
-#
-#set fib3 = dup(fib2)
-#
-#set i = 0 while i < 33 then i = i + 1 do fib2() end
-#io.println(fib2())
-#io.println(fib3(),fib3(),fib3(),fib3())
+function deepadd(a)
+    if a <= 0 then return 0 end
+    return add(a)(deepadd(a - 1))
+end
+
+assert deepadd(100000) == 5000050000 
  
 set a = 2
 assert 1 + 2 *3/5 == 2.2
