@@ -10,60 +10,46 @@ import (
 	"github.com/coyove/bracket/parser"
 )
 
-var opMapping map[string]func(int16, []*parser.Node, *base.CMap) ([]byte, int32, int16, error)
+type compileFunc func(int16, []*parser.Node, *base.CMap) ([]byte, int32, int16, error)
+
+var opMapping map[string]compileFunc
 
 var flatOpMapping map[string]bool
 
 func init() {
-	opMapping = make(map[string]func(int16, []*parser.Node, *base.CMap) ([]byte, int32, int16, error))
-	opMapping["set"] = compileSetOp
-	opMapping["move"] = compileSetOp
-	opMapping["ret"] = compileRetOp(base.OP_RET, base.OP_RET_NUM, base.OP_RET_STR)
-	opMapping["yield"] = compileRetOp(base.OP_YIELD, base.OP_YIELD_NUM, base.OP_YIELD_STR)
-	opMapping["lambda"] = compileLambdaOp
-	opMapping["if"] = compileIfOp
-	opMapping["while"] = compileWhileOp
-	opMapping["continue"] = compileContinueBreakOp
-	opMapping["break"] = compileContinueBreakOp
-	opMapping["call"] = compileCallOp
-	opMapping["list"] = compileListOp
-	opMapping["map"] = compileMapOp
+	clearI := func(f compileFunc) compileFunc {
+		return func(s int16, n []*parser.Node, v *base.CMap) ([]byte, int32, int16, error) {
+			a, b, c, d := f(s, n, v)
+			v.I = nil
+			v.Is = nil
+			return a, b, c, d
+		}
+	}
 
-	flatOpMapping = make(map[string]bool)
-	flatOpMapping["+"] = true
-	flatOpMapping["-"] = true
-	flatOpMapping["*"] = true
-	flatOpMapping["/"] = true
-	flatOpMapping["%"] = true
-	flatOpMapping["<"] = true
-	flatOpMapping["<="] = true
-	flatOpMapping[">"] = true
-	flatOpMapping[">="] = true
-	flatOpMapping["eq"] = true
-	flatOpMapping["neq"] = true
-	flatOpMapping["not"] = true
-	flatOpMapping["and"] = true
-	flatOpMapping["or"] = true
-	flatOpMapping["xor"] = true
-	flatOpMapping["~"] = true
-	flatOpMapping["&"] = true
-	flatOpMapping["|"] = true
-	flatOpMapping["^"] = true
-	flatOpMapping["<<"] = true
-	flatOpMapping[">>"] = true
-	flatOpMapping["len"] = true
-	flatOpMapping["store"] = true
-	flatOpMapping["load"] = true
-	flatOpMapping["safestore"] = true
-	flatOpMapping["safeload"] = true
-	flatOpMapping["assert"] = true
-	flatOpMapping["nil"] = true
-	flatOpMapping["true"] = true
-	flatOpMapping["false"] = true
-	flatOpMapping["dup"] = true
+	opMapping = make(map[string]compileFunc)
+	opMapping["set"] = clearI(compileSetOp)
+	opMapping["move"] = clearI(compileSetOp)
+	opMapping["ret"] = clearI(compileRetOp(base.OP_RET, base.OP_RET_NUM, base.OP_RET_STR))
+	opMapping["yield"] = clearI(compileRetOp(base.OP_YIELD, base.OP_YIELD_NUM, base.OP_YIELD_STR))
+	opMapping["lambda"] = clearI(compileLambdaOp)
+	opMapping["if"] = clearI(compileIfOp)
+	opMapping["while"] = clearI(compileWhileOp)
+	opMapping["continue"] = clearI(compileContinueBreakOp)
+	opMapping["break"] = clearI(compileContinueBreakOp)
+	opMapping["call"] = clearI(compileCallOp)
+	opMapping["list"] = clearI(compileListOp)
+	opMapping["map"] = clearI(compileMapOp)
+
+	flatOpMapping = map[string]bool{
+		"+": true, "-": true, "*": true, "/": true, "%": true,
+		"<": true, "<=": true, ">": true, ">=": true, "eq": true, "neq": true, "not": true, "and": true, "or": true, "xor": true,
+		"~": true, "&": true, "|": true, "^": true, "<<": true, ">>": true,
+		"store": true, "load": true, "safestore": true, "safeload": true,
+		"assert": true, "nil": true, "true": true, "false": true,
+	}
 }
 
-func fill1(buf *base.BytesReader, n *parser.Node, varLookup *base.CMap, ops ...byte) (err error) {
+func fill1(buf *base.BytesWriter, n *parser.Node, varLookup *base.CMap, ops ...byte) (err error) {
 	switch n.Type {
 	case parser.NTAtom:
 		varIndex := varLookup.GetRelPosition(n.Value.(string))
@@ -95,7 +81,7 @@ func compileCompoundIntoVariable(
 	intoNewVar bool,
 	intoExistedVar int32,
 ) (code []byte, yx int32, newStackPtr int16, err error) {
-	buf := base.NewBytesBuffer()
+	buf := base.NewBytesWriter()
 
 	var newYX int32
 	code, newYX, stackPtr, err = compile(stackPtr, compound.Compound, varLookup)
@@ -166,7 +152,7 @@ func compile(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (code [
 }
 
 func compileChainOp(stackPtr int16, chain *parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
-	buf := base.NewBytesBuffer()
+	buf := base.NewBytesWriter()
 	varLookup.I = nil
 
 	for _, a := range chain.Compound {

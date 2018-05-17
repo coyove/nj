@@ -266,6 +266,7 @@ type CMap struct {
 	Parent *CMap
 	M      map[string]int16
 	I      *float64
+	Is     *string
 	D      bool
 }
 

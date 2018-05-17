@@ -10,7 +10,8 @@ import (
 	"unsafe"
 )
 
-type BytesReader struct {
+// BytesWriter writes complex values into bytes slice
+type BytesWriter struct {
 	data []byte
 }
 
@@ -18,66 +19,60 @@ const (
 	defaultBufferSize = 128
 )
 
-func NewBytesReader(data []byte) *BytesReader {
-	return &BytesReader{
-		data: data,
-	}
+func NewBytesWriter() *BytesWriter {
+	return &BytesWriter{make([]byte, 0, defaultBufferSize)}
 }
 
-func NewBytesBuffer() *BytesReader {
-	return NewBytesReader(make([]byte, 0, defaultBufferSize))
-}
-
-func (b *BytesReader) Dup() *BytesReader {
+func (b *BytesWriter) Dup() *BytesWriter {
 	b2 := *b
 	return &b2
 }
 
-func (b *BytesReader) Clear() {
+func (b *BytesWriter) Clear() {
 	b.data = b.data[:0]
 }
 
-func (b *BytesReader) Bytes() []byte {
+func (b *BytesWriter) Bytes() []byte {
 	return b.data
 }
 
-func (b *BytesReader) Write(buf []byte) {
+func (b *BytesWriter) Write(buf []byte) {
 	b.data = append(b.data, buf...)
 }
 
-func (b *BytesReader) WriteByte(v byte) {
+func (b *BytesWriter) WriteByte(v byte) {
 	b.data = append(b.data, v)
 }
 
-func (b *BytesReader) WriteInt32(v int32) {
+func (b *BytesWriter) WriteInt32(v int32) {
 	buf := make([]byte, 4)
 	binary.LittleEndian.PutUint32(buf, uint32(v))
 	b.data = append(b.data, buf...)
 }
 
-func (b *BytesReader) WriteInt64(v int64) {
+func (b *BytesWriter) WriteInt64(v int64) {
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, uint64(v))
 	b.data = append(b.data, buf...)
 }
 
-func (b *BytesReader) WriteDouble(v float64) {
+func (b *BytesWriter) WriteDouble(v float64) {
 	d := *(*int64)(unsafe.Pointer(&v))
 	b.WriteInt64(d)
 }
 
-func (b *BytesReader) WriteString(v string) {
+func (b *BytesWriter) WriteString(v string) {
 	b.WriteInt32(int32(len(v)))
 	b.Write([]byte(v))
 }
 
-func (b *BytesReader) Truncate(n int) {
+func (b *BytesWriter) TruncateLastBytes(n int) {
 	if len(b.data) > n {
 		b.data = b.data[:len(b.data)-n]
 	}
 }
 
-func (b *BytesReader) Len() int {
+func (b *BytesWriter) Len() int {
 	return len(b.data)
 }
 
@@ -127,7 +122,6 @@ var singleOp = map[byte]string{
 	OP_LEN:        "len",
 	OP_DUP:        "dup",
 	OP_WHO:        "who",
-	OP_VARARGS:    "varargs",
 	OP_MAP:        "map",
 	OP_LOAD:       "load",
 	OP_STORE:      "store",
@@ -146,6 +140,7 @@ var singleOp = map[byte]string{
 	OP_NIL:        "nil",
 	OP_TRUE:       "true",
 	OP_FALSE:      "false",
+	OP_STACK:      "stack",
 }
 
 func crHash(data []byte) uint32 {
@@ -154,8 +149,9 @@ func crHash(data []byte) uint32 {
 	return e.Sum32()
 }
 
-func Prettify(data []byte) string {
-	return crPrettify(data, 0)
+// Prettify prettifies the code to somehow human readable
+func Prettify(code []byte) string {
+	return crPrettify(code, 0)
 }
 
 func crPrettify(data []byte, tab int) string {
@@ -253,10 +249,6 @@ func crPrettify(data []byte, tab int) string {
 			sb.WriteString("if " + xy(crReadInt32(data, &cursor)) + " " + strconv.Itoa(int(crReadInt32(data, &cursor))))
 		case OP_NOP:
 			sb.WriteString("nop")
-		case OP_LIB_CALL:
-			sb.WriteString("libcall " + strconv.Itoa(int(uint32(crReadInt32(data, &cursor)))))
-		case OP_LIB_CALL_EX:
-			sb.WriteString("libcallex " + strconv.Itoa(int(uint32(crReadInt32(data, &cursor)))))
 		default:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs)

@@ -374,11 +374,8 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 			default:
 				log.Panicf("invalid callee: %+v", v)
 			}
-		case OP_VARARGS:
-			list0 := env.Stack().Values()
-			list1 := make([]Value, len(list0))
-			copy(list1, list0)
-			env.A = NewListValue(list1)
+		case OP_STACK:
+			env.A = NewListValue(env.Stack().data)
 		case OP_JMP:
 			off := int(crReadInt32(code, &cursor))
 			*&cursor += uint32(off)

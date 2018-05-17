@@ -23,10 +23,10 @@ func indexToOpR(index int) []byte {
 	panic("shouldn't happen")
 }
 
-func flaten(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (buf *base.BytesReader, newStackPtr int16, err error) {
+func flaten(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (buf *base.BytesWriter, newStackPtr int16, err error) {
 
 	replacedAtoms := []*parser.Node{}
-	buf = base.NewBytesBuffer()
+	buf = base.NewBytesWriter()
 
 	for i, atom := range atoms {
 
@@ -41,6 +41,9 @@ func flaten(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (buf *ba
 			if varLookup.I != nil {
 				atoms[i] = &parser.Node{Type: parser.NTNumber, Value: *varLookup.I}
 				varLookup.I = nil
+			} else if varLookup.Is != nil {
+				atoms[i] = &parser.Node{Type: parser.NTString, Value: *varLookup.Is}
+				varLookup.Is = nil
 			} else {
 				atoms[i] = &parser.Node{Type: parser.NTAddr, Value: yx}
 				replacedAtoms = append(replacedAtoms, atoms[i])
@@ -52,7 +55,7 @@ func flaten(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (buf *ba
 	if len(replacedAtoms) == 1 {
 		cursor := buf.Len() - 4
 		replacedAtoms[0].Value = int32(binary.LittleEndian.Uint32(buf.Bytes()[cursor:]))
-		buf.Truncate(9)
+		buf.TruncateLastBytes(9)
 		stackPtr--
 	}
 
@@ -61,7 +64,7 @@ func flaten(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (buf *ba
 
 func flatWrite(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap, bop byte) (code []byte, yx int32, newStackPtr int16, err error) {
 
-	var buf *base.BytesReader
+	var buf *base.BytesWriter
 	buf, stackPtr, err = flaten(stackPtr, atoms[1:], varLookup)
 	if err != nil {
 		return
@@ -84,7 +87,9 @@ func flatWrite(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap, bop b
 			buf.Clear()
 			buf.WriteByte(base.OP_SET_STR)
 			buf.WriteInt32(base.REG_A)
-			buf.WriteString(atoms[1].Value.(string) + atoms[2].Value.(string))
+			str := atoms[1].Value.(string) + atoms[2].Value.(string)
+			buf.WriteString(str)
+			varLookup.Is = &str
 			return buf.Bytes(), base.REG_A, stackPtr, nil
 		}
 		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {

@@ -26,7 +26,7 @@ func compileIfOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (co
 		err = fmt.Errorf("can't use immediate value as if condition: %+v", atoms[0])
 		return
 	case parser.NTAtom, parser.NTCompound:
-		buf := base.NewBytesBuffer()
+		buf := base.NewBytesWriter()
 		code, yx, stackPtr, err = extract(stackPtr, condition, varLookup)
 		if err != nil {
 			return nil, 0, 0, err
@@ -65,7 +65,7 @@ func compileIfOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (co
 
 // [call func-name [args ...]]
 func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
-	buf := base.NewBytesBuffer()
+	buf := base.NewBytesWriter()
 	callee := nodes[1]
 
 	name, _ := callee.Value.(string)
@@ -82,8 +82,8 @@ func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (
 		return flatWrite(stackPtr, atoms, varLookup, base.OP_DUP)
 	case "who":
 		return []byte{base.OP_WHO}, base.REG_A, stackPtr, nil
-	case "varargs":
-		return []byte{base.OP_VARARGS}, base.REG_A, stackPtr, nil
+	case "stack":
+		return []byte{base.OP_STACK}, base.REG_A, stackPtr, nil
 	}
 
 	atoms := nodes[2].Compound
@@ -166,7 +166,7 @@ func compileLambdaOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap)
 	}
 
 	code = append(code, base.OP_EOB)
-	buf := base.NewBytesBuffer()
+	buf := base.NewBytesWriter()
 	buf.WriteByte(base.OP_LAMBDA)
 	buf.WriteInt32(int32(ln))
 	buf.WriteInt32(int32(len(code)))
@@ -213,7 +213,7 @@ func compileWhileOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) 
 		return
 	}
 	condition := atoms[1]
-	buf := base.NewBytesBuffer()
+	buf := base.NewBytesWriter()
 	var varIndex int32
 
 	switch condition.Type {

@@ -20,7 +20,25 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	start := time.Now()
 
-	b, err := compiler.LoadFile("tests/test.txt")
+	base.CoreLibNames = append(base.CoreLibNames, "http")
+	m := new(base.Tree)
+	m.Put("handle", base.NewNativeClosureValue(2, func(env *base.Env) base.Value {
+		pattern := env.Get(0).AsString()
+		http.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			q := r.FormValue("q")
+			newEnv := base.NewEnv(nil)
+			newEnv.Push(base.NewStringValue(q))
+			w.Write(env.Get(1).AsClosure().Exec(newEnv).AsBytes())
+		})
+		return base.NewValue()
+	}))
+	m.Put("listen", base.NewNativeClosureValue(1, func(env *base.Env) base.Value {
+		http.ListenAndServe(env.Get(0).AsString(), nil)
+		return base.NewValue()
+	}))
+	base.CoreLibs["http"] = (base.NewMapValue(m))
+
+	b, err := compiler.LoadFile("tests/fib.txt")
 	log.Println(err, b)
 	log.Println(base.Prettify(b))
 

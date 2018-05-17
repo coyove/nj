@@ -1,0 +1,43 @@
+function foo1(c)
+    set a = 3 * c
+    set b = 2 * c
+    return stack()
+end
+
+set ans = foo1()(2)
+assert ans[-1] == 4 and ans[-2] == 6
+
+function sum()
+    set x = dup(stack())
+    set s = 0
+    if core.typeof(x[0]) == "string" then s = "" end
+
+    core.foreach(x, function(i, n) s = s + n end)
+    return s
+end
+
+assert sum(1, -1) == 0
+assert sum(1, 2, 3) == 6
+assert sum("1", "2") == ("123")(0,2)
+
+set m = map 
+    "c" = 123, 
+    "a" = "a",
+    "incr" = function()
+        set c = who()
+        c.c = c.c + 1
+        return c
+    end
+end
+set mp = m
+set  m2 = dup(m)
+
+m.incr()
+assert m.c == 124
+mp.incr()
+assert m.c == 125
+
+m2.incr().incr()
+
+assert m.c == 125
+assert m2.c == 125

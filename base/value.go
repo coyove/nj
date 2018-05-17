@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"reflect"
 	"strconv"
 	"unsafe"
 )
@@ -39,22 +40,30 @@ const (
 	falseValue      = minPhysPageSize + 2
 )
 
+// Value is the basic value used by VM
 type Value struct {
 	ty byte
 
 	// used in red-black tree
 	c color
 
+	// float64 will be stored at &i
+	// it can't be stored in ptr because pointer value smaller than minPhysPageSize will violate the heap
+	// for ty == Tstring and len(str) <= 10, i == len(str) + 1
 	i byte
-	p [5]byte
+
+	// for ty == Tstring and i > 0, 10 bytes starting from p[0] will be used to store small strings
+	p [4]byte
 
 	ptr unsafe.Pointer
 }
 
+// NewValue returns a nil value
 func NewValue() Value {
 	return Value{ty: Tnil}
 }
 
+// NewNumberValue returns a number value
 func NewNumberValue(f float64) Value {
 	// i := *(*uintptr)(unsafe.Pointer(&f))
 	// if i < minPhysPageSize {
@@ -67,10 +76,21 @@ func NewNumberValue(f float64) Value {
 	return v
 }
 
+// NewStringValue returns a string value
 func NewStringValue(s string) Value {
-	return Value{ty: Tstring, ptr: unsafe.Pointer(&s)}
+	v := NewValue()
+	v.ty = Tstring
+
+	if len(s) < 11 {
+		copy((*(*[10]byte)(unsafe.Pointer(&v.p[0])))[:], s)
+		v.i = byte(len(s) + 1)
+	} else {
+		v.ptr = unsafe.Pointer(&s)
+	}
+	return v
 }
 
+// NewBoolValue returns a boolean value
 func NewBoolValue(b bool) Value {
 	v := Value{ty: Tbool}
 	if b {
@@ -81,26 +101,32 @@ func NewBoolValue(b bool) Value {
 	return v
 }
 
+// NewListValue returns a list value
 func NewListValue(a []Value) Value {
 	return Value{ty: Tlist, ptr: unsafe.Pointer(&a)}
 }
 
+// NewMapValue returns a map value
 func NewMapValue(m *Tree) Value {
 	return Value{ty: Tmap, ptr: unsafe.Pointer(m)}
 }
 
+// NewClosureValue returns a closure value
 func NewClosureValue(c *Closure) Value {
 	return Value{ty: Tclosure, ptr: unsafe.Pointer(c)}
 }
 
+// NewBytesValue returns a bytes value
 func NewBytesValue(buf []byte) Value {
 	return Value{ty: Tbytes, ptr: unsafe.Pointer(&buf)}
 }
 
+// NewGenericValue returns a generic value
 func NewGenericValue(g interface{}) Value {
 	return Value{ty: Tgeneric, ptr: unsafe.Pointer(&g)}
 }
 
+// Type returns the type of value
 func (v Value) Type() byte {
 	return v.ty
 }
@@ -143,10 +169,16 @@ func (v Value) AsString() string {
 	if v.ty != Tstring {
 		log.Panicf("not a string: %+v", v)
 	}
-	return *(*string)(v.ptr)
+	return v.AsStringUnsafe()
 }
 
 func (v Value) AsStringUnsafe() string {
+	if v.i > 0 {
+		hdr := reflect.StringHeader{}
+		hdr.Len = int(v.i - 1)
+		hdr.Data = uintptr(unsafe.Pointer(&v.p[0]))
+		return *(*string)(unsafe.Pointer(&hdr))
+	}
 	return *(*string)(v.ptr)
 }
 
@@ -277,6 +309,7 @@ func (v Value) Equal(r Value) bool {
 	if v.ty == Tnil || r.ty == Tnil {
 		return v.ty == r.ty
 	}
+
 	switch v.ty {
 	case Tnumber:
 		if r.ty == Tnumber {
@@ -347,21 +380,6 @@ func (v Value) LessEqual(r Value) bool {
 	}
 	log.Panicf("can't compare %+v and %+v", v, r)
 	return false
-}
-
-func (v Value) Attach(i int, va Value) Value {
-	switch va.ty {
-	case Tbool:
-		bu := va.AsBoolUnsafe()
-		v.p[i] = *(*byte)(unsafe.Pointer(&bu))
-	case Tnumber:
-		v.p[i] = byte(va.AsNumberUnsafe())
-	}
-	return v
-}
-
-func (v Value) Detach(i int) Value {
-	return NewNumberValue(float64(v.p[i]))
 }
 
 func (v Value) ToPrintString() string {

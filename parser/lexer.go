@@ -23,9 +23,9 @@ type Error struct {
 func (e *Error) Error() string {
 	pos := e.Pos
 	if pos.Line == EOF {
-		return fmt.Sprintf("%v at EOF:   %s\n", pos.Source, e.Message)
+		return fmt.Sprintf("%v:eof: %s\n", pos.Source, e.Message)
 	} else {
-		return fmt.Sprintf("%v line:%d(column:%d) near '%v':   %s\n", pos.Source, pos.Line, pos.Column, e.Token, e.Message)
+		return fmt.Sprintf("%v@%v:%d:%d: %s\n", e.Token, pos.Source, pos.Line, pos.Column, e.Message)
 	}
 }
 
@@ -258,33 +258,36 @@ func (sc *Scanner) countSep(ch int) (int, int) {
 	return count, ch
 }
 
-func (sc *Scanner) scanMultilineString(ch int, buf *bytes.Buffer) error {
-	var count1, count2 int
-	count1, ch = sc.countSep(ch)
-	if ch != '[' {
-		return sc.Error(string(ch), "invalid multiline string")
-	}
-	ch = sc.Next()
-	if ch == '\n' || ch == '\r' {
-		ch = sc.Next()
-	}
+func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 	for {
-		if ch < 0 {
-			return sc.Error(buf.String(), "unterminated multiline string")
-		} else if ch == ']' {
-			count2, ch = sc.countSep(sc.Next())
-			if count1 == count2 && ch == ']' {
-				goto finally
-			}
-			buf.WriteByte(']')
-			buf.WriteString(strings.Repeat("=", count2))
-			continue
+		ch := sc.Next()
+		if ch == EOF {
+			return sc.Error(buf.String(), "unexpected end of string block")
+		}
+		if ch == ' ' || ch == '\t' || ch == '\n' {
+			break
 		}
 		writeChar(buf, ch)
-		ch = sc.Next()
 	}
 
-finally:
+	flag := append([]byte("end"), buf.Bytes()...)
+	buf.Reset()
+
+	for {
+		ch := sc.Next()
+		if ch == EOF {
+			if bytes.HasSuffix(buf.Bytes(), flag) {
+				break
+			}
+			return sc.Error(buf.String(), "unexpected end of string block")
+		}
+		writeChar(buf, ch)
+		if bytes.HasSuffix(buf.Bytes(), flag) {
+			break
+		}
+	}
+
+	buf.Truncate(buf.Len() - len(flag))
 	return nil
 }
 
@@ -319,6 +322,20 @@ redo:
 
 	switch {
 	case isIdent(ch, 0):
+		if ch == 's' && sc.Peek() == 't' {
+			if sc.Next(); sc.Peek() == 'r' {
+				sc.Next()
+				tok.Type = TString
+				err = sc.scanBlockString(buf)
+				tok.Str = buf.String()
+				break
+			} else {
+				writeChar(buf, 's')
+				ch = 't'
+				// continue normal identifier scanning
+			}
+		}
+
 		tok.Type = TIdent
 		err = sc.scanIdent(ch, buf)
 		tok.Str = buf.String()
@@ -408,7 +425,7 @@ redo:
 			tok.Str = string(ch)
 		default:
 			writeChar(buf, ch)
-			err = sc.Error(buf.String(), "Invalid token")
+			err = sc.Error(buf.String(), "invalid token")
 			goto finally
 		}
 	}

@@ -21,7 +21,7 @@ func compileSetOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (c
 
 	aValue := atoms[2]
 
-	buf := base.NewBytesBuffer()
+	buf := base.NewBytesWriter()
 	var newYX int32
 	if atoms[0].Value.(string) == "set" {
 		// compound has its own logic, we won't incr stack here
@@ -82,7 +82,7 @@ func compileSetOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (c
 
 func compileRetOp(r, n, s byte) func(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
 	return func(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
-		buf := base.NewBytesBuffer()
+		buf := base.NewBytesWriter()
 		if len(atoms) == 1 {
 			buf.WriteByte(r)
 			buf.WriteInt32(base.REG_A)
@@ -110,7 +110,7 @@ func compileRetOp(r, n, s byte) func(stackPtr int16, atoms []*parser.Node, varLo
 }
 
 func compileListOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (code []byte, yx int32, newStackPtr int16, err error) {
-	var buf *base.BytesReader
+	var buf *base.BytesWriter
 	buf, stackPtr, err = flaten(stackPtr, atoms[1].Compound, varLookup)
 	if err != nil {
 		return
@@ -134,7 +134,7 @@ func compileMapOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap) (c
 		return
 	}
 
-	var buf *base.BytesReader
+	var buf *base.BytesWriter
 	buf, stackPtr, err = flaten(stackPtr, atoms[1].Compound, varLookup)
 	if err != nil {
 		return

@@ -3,14 +3,11 @@ package base
 const REG_A = -1
 
 const (
+	// basic flat op
 	OP_ASSERT = iota
 	OP_NIL
 	OP_TRUE
 	OP_FALSE
-	OP_LIST
-	OP_MAP
-	OP_BYTES
-	OP_LEN
 	OP_SET
 	OP_SET_NUM
 	OP_SET_STR
@@ -18,7 +15,6 @@ const (
 	OP_LOAD
 	OP_SAFE_STORE
 	OP_SAFE_LOAD
-
 	OP_ADD
 	OP_SUB
 	OP_MUL
@@ -41,12 +37,15 @@ const (
 	OP_BIT_LSH
 	OP_BIT_RSH
 
+	// complex structure op
+	OP_LIST
+	OP_MAP
+
+	// flow control op
 	OP_IF
 	OP_JMP
 	OP_LAMBDA
 	OP_CALL
-	OP_WHO
-	OP_DUP
 	OP_R0
 	OP_R0_NUM
 	OP_R0_STR
@@ -68,10 +67,12 @@ const (
 	OP_YIELD
 	OP_YIELD_NUM
 	OP_YIELD_STR
-	OP_VARARGS
 
-	OP_LIB_CALL
-	OP_LIB_CALL_EX
+	// special builtin op
+	OP_WHO
+	OP_DUP
+	OP_LEN
+	OP_STACK
 
 	OP_NOP = 0xFE
 	OP_EOB = 0xFF

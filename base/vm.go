@@ -36,6 +36,11 @@ func init() {
 				return NewStringValue(strconv.FormatInt(int64(num), 10))
 			}
 			return NewStringValue(strconv.FormatFloat(num, 'f', 9, 64))
+		case Tbool:
+			if n.AsBoolUnsafe() {
+				return NewStringValue("true")
+			}
+			return NewStringValue("false")
 		case Tstring:
 			return n
 		default:
@@ -52,6 +57,11 @@ func init() {
 				return NewValue()
 			}
 			return NewNumberValue(num)
+		case Tbool:
+			if n.AsBoolUnsafe() {
+				return NewNumberValue(1)
+			}
+			return NewNumberValue(0)
 		default:
 			return NewValue()
 		}
@@ -81,7 +91,7 @@ func init() {
 			}
 			return NewBytesValue(l)
 		default:
-			log.Panicf("can't delete soemthing from %+v", s)
+			log.Panicf("can't delete from %+v", s)
 			return NewValue()
 		}
 	}))
