@@ -1,5 +1,12 @@
 %{
-package parser 
+package parser
+
+import (
+    "bytes"
+    "io/ioutil"
+    "path/filepath"
+)
+
 %}
 %type<stmts> block
 %type<stmt>  stat
@@ -35,7 +42,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TIf TLambda TList TNil TNot TMap TOr TReturn TSet TThen TTrue TWhile TXor TYield
+%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TIf TLambda TList TNil TNot TMap TOr TReturn TRequire TSet TThen TTrue TWhile TXor TYield
 
 /* Literals */
 %token<token> TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
@@ -61,6 +68,9 @@ block:
             }
         } |
         block stat {
+            if $2.IsIsolatedDupCall() {
+                $2.Compound[2].Compound[0] = NewNumberNode("0")
+            }
             $1.Compound = append($1.Compound, $2)
             $$ = $1
             if l, ok := yylex.(*Lexer); ok {
@@ -77,7 +87,7 @@ block:
 stat:
         var '=' expr {
             if len($1.Compound) > 0 {
-                switch $1.Compound[0].Value.(string) {
+                switch c, _ := $1.Compound[0].Value.(string); c {
                 case "load":
                     $$ = NewCompoundNode("store", $1.Compound[1], $1.Compound[2], $3)
                 case "rload":
@@ -171,6 +181,26 @@ stat:
         TAssert expr {
             $$ = NewCompoundNode("assert", $2)
             $$.Compound[0].Pos = $2.Pos
+        } |
+        TRequire TString {
+            path := filepath.Dir($1.Pos.Source)
+            path = filepath.Join(path, $2.Str)
+            filename := filepath.Base($2.Str)
+            filename = filename[:len(filename) - len(filepath.Ext(filename))]
+
+            code, err := ioutil.ReadFile(path)
+            if err != nil {
+                yylex.(*Lexer).Error(err.Error())
+            }
+            n, err := Parse(bytes.NewReader(code), path)
+            if err != nil {
+                yylex.(*Lexer).Error(err.Error())
+            }
+
+            // now the required code is loaded, for naming scope we will wrap them into a closure
+            cls := NewCompoundNode("lambda", NewCompoundNode(), n)
+            call := NewCompoundNode("call", cls, NewCompoundNode())
+            $$ = NewCompoundNode("set", filename, call)
         }
 
 elseifs: 
@@ -370,7 +400,24 @@ afunctioncall:
 
 functioncall:
         prefixexp args {
-            $$ = NewCompoundNode("call", $1, $2)
+            if c, _ := $1.Value.(string); c == "dup" {
+                switch len($2.Compound) {
+                case 0:
+                    yylex.(*Lexer).Error("dup takes at least 1 argument")
+                case 1:
+                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), $2.Compound[0], NewNumberNode("0")))
+                default:
+                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), $2.Compound[0], $2.Compound[1]))
+                }
+            } else if c == "error" {
+                if len($2.Compound) == 0 {
+                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewCompoundNode("nil")))
+                } else {
+                    $$ = NewCompoundNode("call", $1, $2)
+                }
+            } else {
+                $$ = NewCompoundNode("call", $1, $2)
+            }
         }
 
 args:

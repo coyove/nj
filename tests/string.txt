@@ -20,3 +20,20 @@ assert str
 
 set stR = 1 # normal var name starts with 'st' should not be affected
 assert stR == 1
+
+set dupcheck = list 97,98,99,32452 end
+dup(dup("abc组织者"), function (i, r) 
+    assert dupcheck[i] == r 
+    if i == 3 then error(true) end
+ end)
+
+
+set m = map end
+set i = 0 while i < 100 then i = i +1 do m[core.tostring(i)] = i end
+dup(m, function(k,v)
+    if k == "50" then
+        core.del(m, k)
+        core.del(m, "51")
+    end 
+end)
+io.println(m)

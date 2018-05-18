@@ -156,3 +156,19 @@ func (n *Node) String() string {
 	}
 	panic("shouldn't happen")
 }
+
+func (n *Node) IsIsolatedDupCall() bool {
+	if n.Type != NTCompound || len(n.Compound) < 3 {
+		return false
+	}
+	if c, _ := n.Compound[0].Value.(string); c != "call" {
+		return false
+	}
+	if c, _ := n.Compound[1].Value.(string); c != "dup" {
+		return false
+	}
+	if n.Compound[2].Type != NTCompound || len(n.Compound[2].Compound) < 3 {
+		return false
+	}
+	return true
+}

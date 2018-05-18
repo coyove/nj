@@ -118,11 +118,9 @@ var singleOp = map[byte]string{
 	OP_LESS_EQ:    "less-eq",
 	OP_MORE:       "more",
 	OP_MORE_EQ:    "more-eq",
-	OP_LIST:       "list",
 	OP_LEN:        "len",
 	OP_DUP:        "dup",
 	OP_WHO:        "who",
-	OP_MAP:        "map",
 	OP_LOAD:       "load",
 	OP_STORE:      "store",
 	OP_SAFE_LOAD:  "sload",
@@ -137,10 +135,7 @@ var singleOp = map[byte]string{
 	OP_BIT_XOR:    "bit-xor",
 	OP_BIT_LSH:    "bit-lsh",
 	OP_BIT_RSH:    "bit-rsh",
-	OP_NIL:        "nil",
-	OP_TRUE:       "true",
-	OP_FALSE:      "false",
-	OP_STACK:      "stack",
+	OP_ERROR:      "error",
 }
 
 func crHash(data []byte) uint32 {
@@ -161,105 +156,153 @@ func crPrettify(data []byte, tab int) string {
 	sb.WriteString(fmt.Sprintf("<%x>\n", crHash(data)))
 
 	var cursor uint32
-	xy := func(in int32) string {
-		if in == REG_A {
-			return "$a"
-		}
-		return fmt.Sprintf("$%d$%d", in>>16, int16(in))
-	}
 
 	readDouble := func() string {
-		return strconv.FormatFloat(crReadDouble(data, &cursor), 'f', 9, 64)
+		n := crReadDouble(data, &cursor)
+		if float64(int64(n)) == n {
+			return strconv.Itoa(int(n))
+		}
+		return strconv.FormatFloat(n, 'f', 9, 64)
+	}
+	readString := func() string {
+		return strconv.Quote(crReadString(data, &cursor))
+	}
+	readAddr := func() string {
+		if a := crReadInt32(data, &cursor); a == REG_A {
+			return "$a"
+		} else {
+			return fmt.Sprintf("$%d$%d", a>>16, int16(a))
+		}
 	}
 
+	lastBop := byte(OP_EOB)
+MAIN:
 	for {
 		bop := crReadByte(data, &cursor)
-		if bop == OP_EOB {
-			break
-		}
 
+		lastIdx := sb.Len() - 1
 		sb.WriteString(pre + "[")
 		sb.WriteString(strconv.Itoa(int(cursor) - 1))
 		sb.WriteString("] ")
 		switch bop {
+		case OP_EOB:
+			sb.WriteString("end\n")
+			break MAIN
 		case OP_SET:
-			sb.WriteString("set " + xy(crReadInt32(data, &cursor)) + " " + xy(crReadInt32(data, &cursor)))
+			sb.WriteString(readAddr() + " = " + readAddr())
 		case OP_SET_NUM:
-			sb.WriteString("seti " + xy(crReadInt32(data, &cursor)) + " " + readDouble())
+			sb.WriteString(readAddr() + " = " + readDouble())
 		case OP_SET_STR:
-			sb.WriteString("sets " + xy(crReadInt32(data, &cursor)) + " " + crReadString(data, &cursor))
+			sb.WriteString(readAddr() + " = " + readString())
 		case OP_R0:
-			sb.WriteString("r0 " + xy(crReadInt32(data, &cursor)))
+			sb.WriteString("r0 = " + readAddr())
 		case OP_R0_NUM:
-			sb.WriteString("r0n " + readDouble())
+			sb.WriteString("r0 = " + readDouble())
 		case OP_R0_STR:
-			sb.WriteString("r0s " + crReadString(data, &cursor))
+			sb.WriteString("r0 = " + readString())
 		case OP_R1:
-			sb.WriteString("r1 " + xy(crReadInt32(data, &cursor)))
+			sb.Truncate(lastIdx)
+			sb.WriteString(", r1 = " + readAddr())
 		case OP_R1_NUM:
-			sb.WriteString("r1n " + readDouble())
+			sb.Truncate(lastIdx)
+			sb.WriteString(", r1 = " + readDouble())
 		case OP_R1_STR:
-			sb.WriteString("r1s " + crReadString(data, &cursor))
+			sb.Truncate(lastIdx)
+			sb.WriteString(", r1 = " + readString())
 		case OP_R2:
-			sb.WriteString("r2 " + xy(crReadInt32(data, &cursor)))
+			sb.Truncate(lastIdx)
+			sb.WriteString(", r2 = " + readAddr())
 		case OP_R2_NUM:
-			sb.WriteString("r2n " + readDouble())
+			sb.Truncate(lastIdx)
+			sb.WriteString(", r2 = " + readDouble())
 		case OP_R2_STR:
-			sb.WriteString("r2s " + crReadString(data, &cursor))
+			sb.Truncate(lastIdx)
+			sb.WriteString(", r2 = " + readString())
 		case OP_R3:
-			sb.WriteString("r3 " + xy(crReadInt32(data, &cursor)))
+			sb.Truncate(lastIdx)
+			sb.WriteString(", r3 = " + readAddr())
 		case OP_R3_NUM:
-			sb.WriteString("r3n " + readDouble())
+			sb.Truncate(lastIdx)
+			sb.WriteString(", r3 = " + readDouble())
 		case OP_R3_STR:
-			sb.WriteString("r3s " + crReadString(data, &cursor))
-		case OP_PUSH:
-			sb.WriteString("push " + xy(crReadInt32(data, &cursor)))
-		case OP_PUSH_NUM:
-			sb.WriteString("pushi " + readDouble())
-		case OP_PUSH_STR:
-			sb.WriteString("pushs " + crReadString(data, &cursor))
-		case OP_ASSERT:
-			sb.WriteString("assert " + crReadString(data, &cursor))
-		case OP_RET:
-			sb.WriteString("ret " + xy(crReadInt32(data, &cursor)))
-		case OP_RET_NUM:
-			sb.WriteString("reti " + readDouble())
-		case OP_RET_STR:
-			sb.WriteString("rets " + crReadString(data, &cursor))
-		case OP_YIELD:
-			sb.WriteString("yield " + xy(crReadInt32(data, &cursor)))
-		case OP_YIELD_NUM:
-			sb.WriteString("yieldi " + readDouble())
-		case OP_YIELD_STR:
-			sb.WriteString("yields " + crReadString(data, &cursor))
-		case OP_LAMBDA:
-			sb.WriteString("lambda ")
-			sb.WriteString(strconv.Itoa(int(crReadInt32(data, &cursor))))
-			if crReadByte(data, &cursor) == 1 {
-				sb.WriteString(" yield")
+			sb.Truncate(lastIdx)
+			sb.WriteString(", r3 = " + readString())
+		case OP_PUSH, OP_PUSH_NUM, OP_PUSH_STR:
+			if lastBop == OP_PUSH || lastBop == OP_PUSH_NUM || lastBop == OP_PUSH_STR {
+				sb.Truncate(lastIdx)
+				sb.WriteString(", ")
+			} else {
+				sb.WriteString("push ")
 			}
-			sb.WriteString(" (\n")
+			switch bop {
+			case OP_PUSH:
+				sb.WriteString(readAddr())
+			case OP_PUSH_NUM:
+				sb.WriteString(readDouble())
+			case OP_PUSH_STR:
+				sb.WriteString(readString())
+			}
+		case OP_ASSERT:
+			sb.Truncate(lastIdx)
+			sb.WriteString(" -> " + crReadString(data, &cursor))
+		case OP_RET:
+			sb.WriteString("ret " + readAddr())
+		case OP_RET_NUM:
+			sb.WriteString("ret " + readDouble())
+		case OP_RET_STR:
+			sb.WriteString("ret " + readString())
+		case OP_YIELD:
+			sb.WriteString("yield " + readAddr())
+		case OP_YIELD_NUM:
+			sb.WriteString("yield " + readDouble())
+		case OP_YIELD_STR:
+			sb.WriteString("yield " + readString())
+		case OP_LAMBDA:
+			sb.WriteString("$a = lambda (\n")
+			sb.WriteString(strings.Repeat(" ", tab+4) + "<" + strconv.Itoa(int(crReadInt32(data, &cursor))) + " args>\n")
+			if crReadByte(data, &cursor) == 1 {
+				sb.WriteString(strings.Repeat(" ", tab+4) + "<yieldable>\n")
+			}
 			sb.WriteString(crPrettify(crReadBytes(data, &cursor, int(crReadInt32(data, &cursor))), tab+4))
 			sb.WriteString(pre + ")")
 		case OP_CALL:
-			sb.WriteString("call " + xy(crReadInt32(data, &cursor)))
-
+			sb.WriteString("call " + readAddr())
 		case OP_JMP:
-			sb.WriteString("jmp " + strconv.Itoa(int(crReadInt32(data, &cursor))))
-
+			pos := crReadInt32(data, &cursor)
+			pos2 := cursor + uint32(pos)
+			sb.WriteString("jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_IF:
-			sb.WriteString("if " + xy(crReadInt32(data, &cursor)) + " " + strconv.Itoa(int(crReadInt32(data, &cursor))))
+			addr := readAddr()
+			pos := crReadInt32(data, &cursor)
+			pos2 := cursor + uint32(pos)
+			sb.WriteString("if not " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_NOP:
 			sb.WriteString("nop")
+		case OP_NIL:
+			sb.WriteString("$a = nil")
+		case OP_TRUE:
+			sb.WriteString("$a = true")
+		case OP_FALSE:
+			sb.WriteString("$a = false")
+		case OP_WHO:
+			sb.WriteString("$a = who")
+		case OP_STACK:
+			sb.WriteString("$a = stack")
+		case OP_MAP:
+			sb.WriteString("$a = map")
+		case OP_LIST:
+			sb.WriteString("$a = list")
 		default:
 			if bs, ok := singleOp[bop]; ok {
-				sb.WriteString(bs)
+				sb.Truncate(lastIdx)
+				sb.WriteString(" -> [" + bs + "]")
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))
 			}
 		}
 
 		sb.WriteString("\n")
+		lastBop = bop
 	}
 
 	return sb.String()

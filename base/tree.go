@@ -40,23 +40,26 @@ type Node struct {
 }
 
 // Dup duplicates the node
-func (n *Node) Dup() *Node {
+func (n *Node) Dup(duper func(string, Value) Value) *Node {
 	n2 := &Node{Key: n.Key, Value: n.Value}
+	if duper != nil {
+		n2.Value = duper(n.Key, n.Value)
+	}
 	if n.Left != nil {
-		n2.Left = n.Left.Dup()
+		n2.Left = n.Left.Dup(duper)
 		n2.Left.Parent = n2
 	}
 	if n.Right != nil {
-		n2.Right = n.Right.Dup()
+		n2.Right = n.Right.Dup(duper)
 		n2.Right.Parent = n2
 	}
 	return n2
 }
 
 // Dup duplicates the tree
-func (tree *Tree) Dup() *Tree {
+func (tree *Tree) Dup(duper func(string, Value) Value) *Tree {
 	return &Tree{
-		Root: tree.Root.Dup(),
+		Root: tree.Root.Dup(duper),
 		size: tree.size,
 	}
 }

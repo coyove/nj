@@ -5,7 +5,7 @@ set bytesPerRow = 0
 set initial_r = 0
 set initial_i = 0
 set ctr = 0
-set renderRow = lambda(y0)
+set renderRow = function(y0)
     set i,j,x,res,b,Zr1,Zr2,Zi1,Zi2,Tr1,Tr2,Ti1,Ti2 = 0
     set row = core.bytes(bytesPerRow) 
     set xByte = 0 while xByte < bytesPerRow do
@@ -77,7 +77,7 @@ set mux = core.mutex()
 set wg = core.waitgroup()
 wg.add(4)
 
-set worker = lambda()
+set worker = function()
     while y < size do
         mux.lock()
         y = y + 1
@@ -96,6 +96,6 @@ wg.wait()
 
 set tostring = core.tostring
 io.write("P4\n" + tostring(size) + " " + tostring(size) + "\n")
-core.foreach(rows, lambda(i,row) 
+dup(rows, function(i,row) 
     io.write(row)
 end) 

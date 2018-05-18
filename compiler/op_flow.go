@@ -70,16 +70,21 @@ func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (
 
 	name, _ := callee.Value.(string)
 	switch name {
-	case "len", "dup":
+	case "len", "dup", "error":
 		atoms := append(nodes[1:2], nodes[2].Compound...)
-		if len(atoms) != 2 {
+		if name == "error" {
+			return flatWrite(stackPtr, atoms, varLookup, base.OP_ERROR)
+		}
+		if len(atoms) < 2 {
 			err = fmt.Errorf("missing subject to call %s: %v", name, callee)
 			return
 		}
-		if name == "len" {
+		switch name {
+		case "len":
 			return flatWrite(stackPtr, atoms, varLookup, base.OP_LEN)
+		case "dup":
+			return flatWrite(stackPtr, atoms, varLookup, base.OP_DUP)
 		}
-		return flatWrite(stackPtr, atoms, varLookup, base.OP_DUP)
 	case "who":
 		return []byte{base.OP_WHO}, base.REG_A, stackPtr, nil
 	case "stack":

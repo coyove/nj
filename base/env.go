@@ -85,7 +85,7 @@ type Env struct {
 	parent *Env
 	stack  *Stack
 
-	A, C, R0, R1, R2, R3 Value
+	A, C, E, R0, R1, R2, R3 Value
 }
 
 func NewEnv(parent *Env) *Env {

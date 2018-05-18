@@ -34,8 +34,8 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 		r := retStack[len(retStack)-1]
 		cursor = r.cursor
 		code = r.code
+		r.env.A, r.env.E = v, env.E
 		env = r.env
-		env.A = v
 		retStack = retStack[:len(retStack)-1]
 	}
 
@@ -124,7 +124,7 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 			case Tbytes:
 				env.A = NewBytesValue(append(env.R0.AsBytesUnsafe(), env.R1.AsBytes()...))
 			case Tmap:
-				tr, m := env.R0.AsMapUnsafe().Dup(), env.R1.AsMap()
+				tr, m := env.R0.AsMapUnsafe().Dup(nil), env.R1.AsMap()
 				for iter := m.Iterator(); iter.Next(); {
 					tr.Put(iter.Key(), iter.Value())
 				}
@@ -158,6 +158,13 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 				env.A = NewNumberValue(float64(len(v.AsBytesUnsafe())))
 			default:
 				log.Panicf("can't evaluate the length of %+v", v)
+			}
+		case OP_ERROR:
+			if env.R0.Type() != Tnil {
+				env.E = env.R0
+			} else {
+				env.A = env.E
+				env.E = NewValue()
 			}
 		case OP_LIST:
 			if newEnv == nil {
@@ -372,6 +379,7 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 
 					if cls.yieldable || cls.native != nil {
 						env.A = cls.Exec(newEnv)
+						env.E = newEnv.E
 					} else {
 						if retStack == nil {
 							retStack = make([]ret, 0, 1)
@@ -386,6 +394,7 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 						// switch to the env of cls
 						cursor = 0
 						newEnv.parent = cls.env
+						newEnv.C = cls.caller
 						env = newEnv
 						code = cls.code
 
@@ -436,24 +445,7 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 				*&cursor += uint32(off)
 			}
 		case OP_DUP:
-			switch env.R0.Type() {
-			case Tnil, Tnumber, Tstring, Tbool, Tgeneric:
-				env.A = env.R0
-			case Tclosure:
-				env.A = NewClosureValue(env.R0.AsClosureUnsafe().Dup())
-			case Tlist:
-				list0 := env.R0.AsListUnsafe()
-				list1 := make([]Value, len(list0))
-				copy(list1, list0)
-				env.A = NewListValue(list1)
-			case Tmap:
-				env.A = NewMapValue(env.R0.AsMapUnsafe().Dup())
-			case Tbytes:
-				bytes0 := env.R0.AsBytesUnsafe()
-				bytes1 := make([]byte, len(bytes0))
-				copy(bytes1, bytes0)
-				env.A = NewBytesValue(bytes1)
-			}
+			doDup(env)
 		}
 	}
 
@@ -466,4 +458,150 @@ func shiftIndex(index Value, len int) int {
 		return i
 	}
 	return i + len
+}
+
+// OP_DUP takes 3 arguments:
+//   1. number: 0 means the dup result will be discarded, 1 means the result will be stored into somewhere
+//   2. any: the subject to be duplicated
+//   3. number/closure: 0 means no predicator, otherwise the closure will be used
+func doDup(env *Env) {
+	alloc := env.R0.AsNumber() == 1
+	// immediate value and generic will be returned directly since they can't be truly duplicated
+	// however string is an exception
+	switch env.R1.Type() {
+	case Tnil, Tnumber, Tbool, Tgeneric:
+		env.A = env.R1
+		return
+	case Tclosure:
+		env.A = NewClosureValue(env.R1.AsClosureUnsafe().Dup())
+		return
+	case Tstring:
+		if alloc {
+			if env.R2.Type() != Tclosure {
+				env.A = env.R1
+			} else {
+				cls := env.R2.AsClosure()
+				newEnv := NewEnv(cls.Env())
+				var str = env.R1.AsStringUnsafe()
+				var newstr []rune
+				newstr = make([]rune, 0, len(str))
+				for i, v := range str {
+					newEnv.Stack().Clear()
+					newEnv.Push(NewNumberValue(float64(i)))
+					newEnv.Push(NewNumberValue(float64(v)))
+					newstr = append(newstr, rune(Exec(newEnv, cls.Code()).AsNumber()))
+				}
+				env.A = NewStringValue(string(newstr))
+			}
+		} else if env.R2.Type() == Tclosure {
+			cls := env.R2.AsClosure()
+			newEnv := NewEnv(cls.Env())
+			for i, v := range env.R1.AsStringUnsafe() {
+				newEnv.Stack().Clear()
+				newEnv.Push(NewNumberValue(float64(i)))
+				newEnv.Push(NewNumberValue(float64(v)))
+				Exec(newEnv, cls.Code())
+				if newEnv.E.Type() != Tnil {
+					break
+				}
+			}
+		}
+		return
+	}
+
+	if alloc && env.R2.Type() != Tclosure {
+		// plain dup of list, map and bytes
+		switch env.R1.Type() {
+		case Tlist:
+			list0 := env.R1.AsListUnsafe()
+			list1 := make([]Value, len(list0))
+			copy(list1, list0)
+			env.A = NewListValue(list1)
+			return
+		case Tmap:
+			env.A = NewMapValue(env.R1.AsMapUnsafe().Dup(nil))
+			return
+		case Tbytes:
+			bytes0 := env.R1.AsBytesUnsafe()
+			bytes1 := make([]byte, len(bytes0))
+			copy(bytes1, bytes0)
+			env.A = NewBytesValue(bytes1)
+			return
+		}
+	}
+
+	if !alloc && env.R2.Type() != Tclosure {
+		// call dup(a), but its value is discarded
+		// so nothing to do here
+		return
+	}
+
+	// now R2 should be closure
+	cls := env.R2.AsClosure()
+	newEnv := NewEnv(cls.Env())
+	switch env.R1.Type() {
+	case Tlist:
+		var list0 = env.R1.AsListUnsafe()
+		var list1 []Value
+		if alloc {
+			list1 = make([]Value, len(list0))
+		}
+		for i, v := range list0 {
+			newEnv.Stack().Clear()
+			newEnv.Push(NewNumberValue(float64(i)))
+			newEnv.Push(v)
+			ret := Exec(newEnv, cls.Code())
+			if alloc {
+				list1[i] = ret
+			} else {
+				if newEnv.E.Type() != Tnil {
+					break
+				}
+			}
+		}
+		if alloc {
+			env.A = NewListValue(list1)
+		}
+	case Tmap:
+		if alloc {
+			env.A = NewMapValue(env.R1.AsMapUnsafe().Dup(func(k string, v Value) Value {
+				newEnv.Stack().Clear()
+				newEnv.Push(NewStringValue(k))
+				newEnv.Push(v)
+				return Exec(newEnv, cls.Code())
+			}))
+		} else {
+			for iter := env.R1.AsMapUnsafe().Iterator(); iter.Next(); {
+				newEnv.Stack().Clear()
+				newEnv.Push(NewStringValue(iter.Key()))
+				newEnv.Push(iter.Value())
+				Exec(newEnv, cls.Code())
+				if newEnv.E.Type() != Tnil {
+					break
+				}
+			}
+		}
+	case Tbytes:
+		var list0 = env.R1.AsBytesUnsafe()
+		var list1 []byte
+		if alloc {
+			list1 = make([]byte, len(list0))
+		}
+		for i, v := range list0 {
+			newEnv.Stack().Clear()
+			newEnv.Push(NewNumberValue(float64(i)))
+			newEnv.Push(NewNumberValue(float64(v)))
+			ret := Exec(newEnv, cls.Code())
+			if alloc {
+				list1[i] = byte(ret.AsNumber())
+			} else {
+				if newEnv.E.Type() != Tnil {
+					break
+				}
+			}
+		}
+		if alloc {
+			env.A = NewBytesValue(list1)
+		}
+	}
 }

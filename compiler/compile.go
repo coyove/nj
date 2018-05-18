@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"os"
 
 	"github.com/coyove/bracket/base"
 	"github.com/coyove/bracket/parser"
@@ -197,6 +196,6 @@ func LoadFile(path string) ([]byte, error) {
 		return nil, err
 	}
 
-	n.Dump(os.Stderr)
+	// n.Dump(os.Stderr)
 	return compileNode(n)
 }
