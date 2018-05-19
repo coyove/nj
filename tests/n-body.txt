@@ -124,7 +124,7 @@ offsetMomentum()
 # assert [energy] -0.16907516382527074
 io.println(energy())
 
-set i = 0 while i < 5000000 then i = i + 1 do
+set i = 0 while i < 500000 then i = i + 1 do
     advance(0.01)
 end
 

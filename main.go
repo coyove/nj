@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
-	_ "net/http/pprof"
+	// _ "net/http/pprof"
 	"runtime"
 	"time"
 
@@ -13,9 +13,9 @@ import (
 
 func main() {
 
-	go func() {
-		http.ListenAndServe("0.0.0.0:8080", nil)
-	}()
+	// go func() {
+	// 	http.ListenAndServe("0.0.0.0:8080", nil)
+	// }()
 
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	start := time.Now()
@@ -38,7 +38,7 @@ func main() {
 	}))
 	base.CoreLibs["http"] = (base.NewMapValue(m))
 
-	b, err := compiler.LoadFile("tests/mandelbrot.txt")
+	b, err := compiler.LoadFile("tests/builtin.txt")
 	log.Println(err)
 	log.Println(base.Prettify(b))
 

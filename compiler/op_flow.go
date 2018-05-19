@@ -70,9 +70,10 @@ func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (
 
 	name, _ := callee.Value.(string)
 	switch name {
-	case "len", "dup", "error":
+	case "len", "dup", "error", "typeof":
 		atoms := append(nodes[1:2], nodes[2].Compound...)
 		if name == "error" {
+			varLookup.E = true
 			return flatWrite(stackPtr, atoms, varLookup, base.OP_ERROR)
 		}
 		if len(atoms) < 2 {
@@ -84,6 +85,8 @@ func compileCallOp(stackPtr int16, nodes []*parser.Node, varLookup *base.CMap) (
 			return flatWrite(stackPtr, atoms, varLookup, base.OP_LEN)
 		case "dup":
 			return flatWrite(stackPtr, atoms, varLookup, base.OP_DUP)
+		case "typeof":
+			return flatWrite(stackPtr, atoms, varLookup, base.OP_TYPEOF)
 		}
 	case "who":
 		return []byte{base.OP_WHO}, base.REG_A, stackPtr, nil
@@ -175,6 +178,11 @@ func compileLambdaOp(stackPtr int16, atoms []*parser.Node, varLookup *base.CMap)
 	buf.WriteByte(base.OP_LAMBDA)
 	buf.WriteInt32(int32(ln))
 	if newLookup.Y {
+		buf.WriteByte(1)
+	} else {
+		buf.WriteByte(0)
+	}
+	if newLookup.E {
 		buf.WriteByte(1)
 	} else {
 		buf.WriteByte(0)

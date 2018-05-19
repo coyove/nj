@@ -1,9 +1,9 @@
-//line parser.go.y:1
+//line parser.go.y:2
 package parser
 
 import __yyfmt__ "fmt"
 
-//line parser.go.y:3
+//line parser.go.y:2
 import (
 	"bytes"
 	"io/ioutil"
@@ -128,7 +128,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line parser.go.y:471
+//line parser.go.y:502
 
 func TokenName(c int) string {
 	if c >= TAnd && c-TAnd < len(yyToknames) {
@@ -1207,7 +1207,8 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		//line parser.go.y:402
 		{
-			if c, _ := yyDollar[1].expr.Value.(string); c == "dup" {
+			switch c, _ := yyDollar[1].expr.Value.(string); c {
+			case "dup":
 				switch len(yyDollar[2].exprlist.Compound) {
 				case 0:
 					yylex.(*Lexer).Error("dup takes at least 1 argument")
@@ -1216,19 +1217,49 @@ yydefault:
 				default:
 					yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(NewNumberNode("1"), yyDollar[2].exprlist.Compound[0], yyDollar[2].exprlist.Compound[1]))
 				}
-			} else if c == "error" {
+			case "error":
 				if len(yyDollar[2].exprlist.Compound) == 0 {
 					yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(NewCompoundNode("nil")))
 				} else {
 					yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, yyDollar[2].exprlist)
 				}
-			} else {
+			case "typeof":
+				switch len(yyDollar[2].exprlist.Compound) {
+				case 0:
+					yylex.(*Lexer).Error("typeof takes at least 1 argument")
+				case 1:
+					yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("255")))
+				default:
+					switch x, _ := yyDollar[2].exprlist.Compound[1].Value.(string); x {
+					case "nil":
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("0")))
+					case "number":
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("1")))
+					case "string":
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("2")))
+					case "bool":
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("3")))
+					case "list":
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("4")))
+					case "bytes":
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("5")))
+					case "map":
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("6")))
+					case "closure":
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("7")))
+					case "generic":
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("8")))
+					default:
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], yyDollar[2].exprlist.Compound[1]))
+					}
+				}
+			default:
 				yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, yyDollar[2].exprlist)
 			}
 		}
 	case 70:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line parser.go.y:424
+		//line parser.go.y:455
 		{
 			if yylex.(*Lexer).PNewLine {
 				yylex.(*Lexer).TokenError(yyDollar[1].token, "ambiguous syntax (function call x new statement)")
@@ -1237,7 +1268,7 @@ yydefault:
 		}
 	case 71:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line parser.go.y:430
+		//line parser.go.y:461
 		{
 			if yylex.(*Lexer).PNewLine {
 				yylex.(*Lexer).TokenError(yyDollar[1].token, "ambiguous syntax (function call x new statement)")
@@ -1246,47 +1277,47 @@ yydefault:
 		}
 	case 72:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line parser.go.y:438
+		//line parser.go.y:469
 		{
 			yyVAL.expr = NewCompoundNode("lambda", yyDollar[2].expr, yyDollar[3].stmts)
 			yyVAL.expr.Compound[0].Pos = yyDollar[1].token.Pos
 		}
 	case 73:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line parser.go.y:444
+		//line parser.go.y:475
 		{
 			yyVAL.expr = NewCompoundNode()
 		}
 	case 74:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line parser.go.y:447
+		//line parser.go.y:478
 		{
 			yyVAL.expr = yyDollar[2].namelist
 		}
 	case 75:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line parser.go.y:452
+		//line parser.go.y:483
 		{
 			yyVAL.expr = NewCompoundNode("list", NewCompoundNode())
 			yyVAL.expr.Compound[0].Pos = yyDollar[1].token.Pos
 		}
 	case 76:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line parser.go.y:456
+		//line parser.go.y:487
 		{
 			yyVAL.expr = NewCompoundNode("list", yyDollar[2].exprlist)
 			yyVAL.expr.Compound[0].Pos = yyDollar[1].token.Pos
 		}
 	case 77:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line parser.go.y:462
+		//line parser.go.y:493
 		{
 			yyVAL.expr = NewCompoundNode("map", NewCompoundNode())
 			yyVAL.expr.Compound[0].Pos = yyDollar[1].token.Pos
 		}
 	case 78:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line parser.go.y:466
+		//line parser.go.y:497
 		{
 			yyVAL.expr = NewCompoundNode("map", yyDollar[2].exprlist)
 			yyVAL.expr.Compound[0].Pos = yyDollar[1].token.Pos

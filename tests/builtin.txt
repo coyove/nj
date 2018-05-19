@@ -11,7 +11,7 @@ assert ans[-1] == 4 and ans[-2] == 6
 function sum()
     set x = dup(stack())
     set s = 0
-    if core.typeof(x[0]) == "string" then s = "" end
+    if typeof(x[0]) == "string" then s = "" end
 
     dup(x, function(i, n) s = s + n end)
     return s
@@ -66,3 +66,7 @@ dup(a, upper)
 assert a == "hello world"
 a = dup(a, upper)
 assert a == "Hello world"
+
+assert typeof(a) == "string"
+a = core.bytes(a)
+assert typeof(a, bytes)

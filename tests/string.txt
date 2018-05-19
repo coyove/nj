@@ -1,21 +1,21 @@
 assert "abc" == "abc"
 set b = core.bytes(3)
-core.foreach(b, function (i) b[i] = 97 + i end )
+dup(b, function (i) b[i] = 97 + i end )
 assert "abc" == b
 assert "abc" == "\97\98\99"
 assert "abc" == "\x61\x62\x63"
 assert "abc吱吱吱" == "abc" + "吱吱" + "吱"
 assert "abc吱吱吱" == "abc\u5431\u5431\u5431"
 
-assert strzzz
+assert ssszzz
  text block \n
 endzzz == " " + "text block \\n" + "\n"
 
-assert str一 
+assert sss一 
  text block \n
 end一 == "\n " + "text block \\n" + "\n"
 
-assert str 
+assert sss 
  text block \nend == "\n " + "text block \\n"
 
 set stR = 1 # normal var name starts with 'st' should not be affected

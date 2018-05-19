@@ -322,18 +322,18 @@ redo:
 
 	switch {
 	case isIdent(ch, 0):
-		if ch == 's' && sc.Peek() == 't' {
-			if sc.Next(); sc.Peek() == 'r' {
+		if ch == 's' && sc.Peek() == 's' {
+			if sc.Next(); sc.Peek() == 's' {
 				sc.Next()
 				tok.Type = TString
 				err = sc.scanBlockString(buf)
 				tok.Str = buf.String()
 				break
-			} else {
-				writeChar(buf, 's')
-				ch = 't'
-				// continue normal identifier scanning
 			}
+
+			writeChar(buf, 's')
+			ch = 's'
+			// continue normal identifier scanning
 		}
 
 		tok.Type = TIdent

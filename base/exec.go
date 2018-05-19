@@ -13,11 +13,12 @@ func Exec(env *Env, code []byte) Value {
 
 func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 	var newEnv *Env
+	var lastCursor uint32
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println(r)
 			log.Println(fmt.Sprintf("%x", crHash(code)))
-			log.Println("cursor:", cursor)
+			log.Println("cursor:", lastCursor)
 			os.Exit(1)
 		}
 	}()
@@ -38,13 +39,13 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 		env = r.env
 		retStack = retStack[:len(retStack)-1]
 	}
-
+MAIN:
 	for {
+		lastCursor = cursor
 		bop := crReadByte(code, &cursor)
-		if bop == OP_EOB {
-			break
-		}
 		switch bop {
+		case OP_EOB:
+			break MAIN
 		case OP_NOP:
 		case OP_WHO:
 			env.A = env.C
@@ -353,8 +354,9 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 		case OP_LAMBDA:
 			argsCount := int(crReadInt32(code, &cursor))
 			yieldable := crReadByte(code, &cursor) == 1
+			errorable := crReadByte(code, &cursor) == 1
 			buf := crReadBytes(code, &cursor, int(crReadInt32(code, &cursor)))
-			env.A = NewClosureValue(NewClosure(buf, env, argsCount, yieldable))
+			env.A = NewClosureValue(NewClosure(buf, env, argsCount, yieldable, errorable))
 		case OP_CALL:
 			v := env.Get(crReadInt32(code, &cursor))
 			switch v.Type() {
@@ -446,9 +448,23 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 			}
 		case OP_DUP:
 			doDup(env)
+		case OP_TYPEOF:
+			if env.R1.ty == Tnumber {
+				if n := byte(env.R1.AsNumberUnsafe()); n == 255 {
+					env.A = NewStringValue(TMapping[env.R0.ty])
+				} else {
+					env.A = NewBoolValue(env.R0.ty == n)
+				}
+			} else {
+				env.A = NewBoolValue(TMapping[env.R0.ty] == env.R1.AsString())
+			}
 		}
 	}
 
+	if len(retStack) > 0 {
+		returnUpperWorld(NewValue())
+		goto MAIN
+	}
 	return NewValue(), 0, false
 }
 
@@ -482,14 +498,16 @@ func doDup(env *Env) {
 			} else {
 				cls := env.R2.AsClosure()
 				newEnv := NewEnv(cls.Env())
-				var str = env.R1.AsStringUnsafe()
-				var newstr []rune
-				newstr = make([]rune, 0, len(str))
+				str := env.R1.AsStringUnsafe()
+				newstr := make([]rune, 0, len(str))
 				for i, v := range str {
 					newEnv.Stack().Clear()
 					newEnv.Push(NewNumberValue(float64(i)))
 					newEnv.Push(NewNumberValue(float64(v)))
 					newstr = append(newstr, rune(Exec(newEnv, cls.Code()).AsNumber()))
+					if newEnv.E.Type() != Tnil {
+						break
+					}
 				}
 				env.A = NewStringValue(string(newstr))
 			}
@@ -510,7 +528,7 @@ func doDup(env *Env) {
 	}
 
 	if alloc && env.R2.Type() != Tclosure {
-		// plain dup of list, map and bytes
+		// simple dup of list, map and bytes
 		switch env.R1.Type() {
 		case Tlist:
 			list0 := env.R1.AsListUnsafe()
@@ -531,7 +549,7 @@ func doDup(env *Env) {
 	}
 
 	if !alloc && env.R2.Type() != Tclosure {
-		// call dup(a), but its value is discarded
+		// simple dup(a), but its value is discarded
 		// so nothing to do here
 		return
 	}
@@ -544,19 +562,19 @@ func doDup(env *Env) {
 		var list0 = env.R1.AsListUnsafe()
 		var list1 []Value
 		if alloc {
-			list1 = make([]Value, len(list0))
+			list1 = make([]Value, 0, len(list0))
 		}
 		for i, v := range list0 {
 			newEnv.Stack().Clear()
 			newEnv.Push(NewNumberValue(float64(i)))
 			newEnv.Push(v)
+			// log.Println("==", i, cls)
 			ret := Exec(newEnv, cls.Code())
+			if newEnv.E.Type() != Tnil {
+				break
+			}
 			if alloc {
-				list1[i] = ret
-			} else {
-				if newEnv.E.Type() != Tnil {
-					break
-				}
+				list1 = append(list1, ret)
 			}
 		}
 		if alloc {
@@ -564,12 +582,29 @@ func doDup(env *Env) {
 		}
 	case Tmap:
 		if alloc {
-			env.A = NewMapValue(env.R1.AsMapUnsafe().Dup(func(k string, v Value) Value {
-				newEnv.Stack().Clear()
-				newEnv.Push(NewStringValue(k))
-				newEnv.Push(v)
-				return Exec(newEnv, cls.Code())
-			}))
+			if cls.errorable {
+				// the predicator may return error and interrupt the dup, so full copy is not used here
+				m2 := new(Tree)
+				for iter := env.R1.AsMapUnsafe().Iterator(); iter.Next(); {
+					newEnv.Stack().Clear()
+					newEnv.Push(NewStringValue(iter.Key()))
+					newEnv.Push(iter.Value())
+					ret := Exec(newEnv, cls.Code())
+					if newEnv.E.Type() != Tnil {
+						break
+					}
+					m2.Put(iter.Key(), ret)
+				}
+				env.A = NewMapValue(m2)
+			} else {
+				// full copy
+				env.A = NewMapValue(env.R1.AsMapUnsafe().Dup(func(k string, v Value) Value {
+					newEnv.Stack().Clear()
+					newEnv.Push(NewStringValue(k))
+					newEnv.Push(v)
+					return Exec(newEnv, cls.Code())
+				}))
+			}
 		} else {
 			for iter := env.R1.AsMapUnsafe().Iterator(); iter.Next(); {
 				newEnv.Stack().Clear()
@@ -585,19 +620,18 @@ func doDup(env *Env) {
 		var list0 = env.R1.AsBytesUnsafe()
 		var list1 []byte
 		if alloc {
-			list1 = make([]byte, len(list0))
+			list1 = make([]byte, 0, len(list0))
 		}
 		for i, v := range list0 {
 			newEnv.Stack().Clear()
 			newEnv.Push(NewNumberValue(float64(i)))
 			newEnv.Push(NewNumberValue(float64(v)))
 			ret := Exec(newEnv, cls.Code())
+			if newEnv.E.Type() != Tnil {
+				break
+			}
 			if alloc {
-				list1[i] = byte(ret.AsNumber())
-			} else {
-				if newEnv.E.Type() != Tnil {
-					break
-				}
+				list1 = append(list1, byte(ret.AsNumber()))
 			}
 		}
 		if alloc {

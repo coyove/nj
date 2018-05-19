@@ -74,6 +74,7 @@ const (
 	OP_ERROR
 	OP_LEN
 	OP_STACK
+	OP_TYPEOF
 
 	OP_NOP = 0xFE
 	OP_EOB = 0xFF

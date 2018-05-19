@@ -400,7 +400,8 @@ afunctioncall:
 
 functioncall:
         prefixexp args {
-            if c, _ := $1.Value.(string); c == "dup" {
+            switch c, _ := $1.Value.(string); c {
+            case "dup":
                 switch len($2.Compound) {
                 case 0:
                     yylex.(*Lexer).Error("dup takes at least 1 argument")
@@ -409,13 +410,43 @@ functioncall:
                 default:
                     $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), $2.Compound[0], $2.Compound[1]))
                 }
-            } else if c == "error" {
+            case "error":
                 if len($2.Compound) == 0 {
                     $$ = NewCompoundNode("call", $1, NewCompoundNode(NewCompoundNode("nil")))
                 } else {
                     $$ = NewCompoundNode("call", $1, $2)
                 }
-            } else {
+            case "typeof":
+                switch len($2.Compound) {
+                case 0:
+                    yylex.(*Lexer).Error("typeof takes at least 1 argument")
+                case 1:
+                    $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("255")))
+                default:
+                    switch x, _ := $2.Compound[1].Value.(string); x {
+                    case "nil":
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("0")))
+                    case "number":
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("1")))
+                    case "string":
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("2")))
+                    case "bool":
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("3")))
+                    case "list":
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("4")))
+                    case "bytes":
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("5")))
+                    case "map":
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("6")))
+                    case "closure":
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("7")))
+                    case "generic":
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("8")))
+                    default:
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], $2.Compound[1]))
+                    }
+                }
+            default:
                 $$ = NewCompoundNode("call", $1, $2)
             }
         }

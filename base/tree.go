@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package redblacktree implements a red-black tree.
+// Package base redblacktree implements a red-black tree.
 //
 // Used by TreeSet and TreeMap.
 //
@@ -66,7 +66,7 @@ func (tree *Tree) Dup(duper func(string, Value) Value) *Tree {
 
 // Put inserts node into the tree.
 // Key should adhere to the comparator's type assertion, otherwise method panics.
-func (tree *Tree) Put(key string, value Value) {
+func (tree *Tree) Put(key string, value Value) *Tree {
 	var insertedNode *Node
 	if tree.Root == nil {
 		tree.Root = &Node{Key: key, Value: value}
@@ -80,7 +80,7 @@ func (tree *Tree) Put(key string, value Value) {
 			case key == node.Key:
 				node.Key = key
 				node.Value = value
-				return
+				return tree
 			case key < node.Key:
 				if node.Left == nil {
 					node.Left = &Node{Key: key, Value: value}
@@ -105,6 +105,7 @@ func (tree *Tree) Put(key string, value Value) {
 	}
 	tree.insertCase1(insertedNode)
 	tree.size++
+	return tree
 }
 
 // Get searches the node in the tree by key and returns its value or nil if key is not found in tree.

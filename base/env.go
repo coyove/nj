@@ -160,25 +160,31 @@ type Closure struct {
 	caller    Value
 	preArgs   []Value
 	native    func(env *Env) Value
-	argsCount int16
+	argsCount byte
 	status    byte
 	yieldable bool
+	errorable bool
 	lastp     uint32
 	lastenv   *Env
 }
 
-func NewClosure(code []byte, env *Env, argsCount int, yieldable bool) *Closure {
+func NewClosure(code []byte, env *Env, argsCount int, yieldable, errorable bool) *Closure {
+	if argsCount > 255 {
+		panic("really?")
+	}
+
 	return &Closure{
 		code:      code,
 		env:       env,
-		argsCount: int16(argsCount),
+		argsCount: byte(argsCount),
 		yieldable: yieldable,
+		errorable: errorable,
 	}
 }
 
 func NewNativeClosureValue(argsCount int, f func(env *Env) Value) Value {
 	return NewClosureValue(&Closure{
-		argsCount: int16(argsCount),
+		argsCount: byte(argsCount),
 		native:    f,
 	})
 }
@@ -189,7 +195,7 @@ func (c *Closure) AppendPreArgs(preArgs []Value) {
 	}
 
 	c.preArgs = append(c.preArgs, preArgs...)
-	c.argsCount -= int16(len(preArgs))
+	c.argsCount -= byte(len(preArgs))
 	if c.argsCount < 0 {
 		panic("negative args count")
 	}
@@ -224,7 +230,7 @@ func (c *Closure) Env() *Env {
 }
 
 func (c *Closure) Dup() *Closure {
-	cls := NewClosure(c.code, c.env, int(c.argsCount), c.yieldable)
+	cls := NewClosure(c.code, c.env, int(c.argsCount), c.yieldable, c.errorable)
 	cls.caller = c.caller
 	cls.lastp = c.lastp
 	if c.preArgs != nil {
@@ -276,6 +282,9 @@ type CMap struct {
 
 	// has yield op
 	Y bool
+
+	// has error op
+	E bool
 }
 
 func NewCMap() *CMap {

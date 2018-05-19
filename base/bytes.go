@@ -136,6 +136,7 @@ var singleOp = map[byte]string{
 	OP_BIT_LSH:    "bit-lsh",
 	OP_BIT_RSH:    "bit-rsh",
 	OP_ERROR:      "error",
+	OP_TYPEOF:     "typeof",
 }
 
 func crHash(data []byte) uint32 {
@@ -262,6 +263,9 @@ MAIN:
 			sb.WriteString(strings.Repeat(" ", tab+4) + "<" + strconv.Itoa(int(crReadInt32(data, &cursor))) + " args>\n")
 			if crReadByte(data, &cursor) == 1 {
 				sb.WriteString(strings.Repeat(" ", tab+4) + "<yieldable>\n")
+			}
+			if crReadByte(data, &cursor) == 1 {
+				sb.WriteString(strings.Repeat(" ", tab+4) + "<errorable>\n")
 			}
 			sb.WriteString(crPrettify(crReadBytes(data, &cursor, int(crReadInt32(data, &cursor))), tab+4))
 			sb.WriteString(pre + ")")

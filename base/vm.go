@@ -17,7 +17,6 @@ var CoreLibs = map[string]Value{}
 func init() {
 	lcore := new(Tree)
 	lcore.Put("listn", NewNativeClosureValue(1, func(env *Env) Value { return NewListValue(make([]Value, int(env.stack.Get(0).AsNumber()))) }))
-	lcore.Put("typeof", NewNativeClosureValue(1, func(env *Env) Value { return NewStringValue(TMapping[env.stack.Get(0).Type()]) }))
 	lcore.Put("yreset", NewNativeClosureValue(1, func(env *Env) Value { env.stack.Get(0).AsClosure().lastenv = nil; return NewValue() }))
 	lcore.Put("bytes", NewNativeClosureValue(1, func(env *Env) Value {
 		if n := env.stack.Get(0); n.Type() == Tstring {
@@ -41,6 +40,8 @@ func init() {
 				return NewStringValue("true")
 			}
 			return NewStringValue("false")
+		case Tbytes:
+			return NewStringValue(string(n.AsBytesUnsafe()))
 		case Tstring:
 			return n
 		default:
@@ -105,34 +106,6 @@ func init() {
 			newEnv.Push(env.Get(int32(i)))
 		}
 		go Exec(newEnv, cls.Code())
-		return NewValue()
-	}))
-	lcore.Put("foreach", NewNativeClosureValue(2, func(env *Env) Value {
-		cls := env.stack.Get(1).AsClosure()
-		newEnv := NewEnv(cls.Env())
-		switch env.stack.Get(0).Type() {
-		case Tlist:
-			for i, v := range env.stack.Get(0).AsListUnsafe() {
-				newEnv.Stack().Clear()
-				newEnv.Push(NewNumberValue(float64(i)))
-				newEnv.Push(v)
-				Exec(newEnv, cls.Code())
-			}
-		case Tmap:
-			for iter := env.stack.Get(0).AsMapUnsafe().Iterator(); iter.Next(); {
-				newEnv.Stack().Clear()
-				newEnv.Push(NewStringValue(iter.Key()))
-				newEnv.Push(iter.Value())
-				Exec(newEnv, cls.Code())
-			}
-		case Tbytes:
-			for i, v := range env.stack.Get(0).AsBytesUnsafe() {
-				newEnv.Stack().Clear()
-				newEnv.Push(NewNumberValue(float64(i)))
-				newEnv.Push(NewNumberValue(float64(v)))
-				Exec(newEnv, cls.Code())
-			}
-		}
 		return NewValue()
 	}))
 	lcore.Put("mutex", NewNativeClosureValue(0, func(env *Env) Value {

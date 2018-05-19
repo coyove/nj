@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	// the order can't be changed, for any new type, please add it in parser.go.y typeof
 	Tnil = iota
 	Tnumber
 	Tstring
@@ -23,15 +24,8 @@ const (
 )
 
 var TMapping = map[byte]string{
-	Tnil:     "nil",
-	Tnumber:  "number",
-	Tstring:  "string",
-	Tbool:    "bool",
-	Tclosure: "closure",
-	Tgeneric: "generic",
-	Tlist:    "list",
-	Tmap:     "map",
-	Tbytes:   "bytes",
+	Tnil: "nil", Tnumber: "number", Tstring: "string", Tbool: "bool",
+	Tclosure: "closure", Tgeneric: "generic", Tlist: "list", Tmap: "map", Tbytes: "bytes",
 }
 
 const (
