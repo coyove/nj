@@ -1,4 +1,4 @@
-package base
+package potatolang
 
 import (
 	"math/rand"

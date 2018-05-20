@@ -1,4 +1,4 @@
-package base
+package potatolang
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ const (
 	INIT_CAPACITY = 16
 )
 
+// Stack is a special structure which will automatically grow when index overflows
 type Stack struct {
 	data []Value
 }
@@ -32,24 +33,17 @@ func (s *Stack) Size() int {
 }
 
 func (s *Stack) Get(index int) Value {
-	// if (shouldLock) rw.lock();
-	// if (shouldLock) rw.unlock();
 	if index >= len(s.data) {
 		return NewValue()
 	}
-
 	return s.data[index]
 }
 
 func (s *Stack) Set(index int, value Value) {
-	// if (shouldLock) rw.lock();
-
 	if index >= len(s.data) {
 		s.grow(index + 1)
 	}
-
 	s.data[index] = value
-	// if (shouldLock) rw.unlock();
 }
 
 func (s *Stack) Add(value Value) {
@@ -65,7 +59,6 @@ func (s *Stack) InsertStack(index int, s2 *Stack) {
 }
 
 func (s *Stack) Insert(index int, data []Value) {
-	// if (shouldLock) rw.lock();
 	if index <= len(s.data) {
 		ln := len(s.data)
 		s.grow(ln + len(data))
@@ -74,7 +67,6 @@ func (s *Stack) Insert(index int, data []Value) {
 		s.grow(index + len(data))
 	}
 	copy(s.data[index:], data)
-	// if (shouldLock) rw.unlock();
 }
 
 func (s *Stack) Values() []Value {
@@ -86,6 +78,14 @@ type Env struct {
 	stack  *Stack
 
 	A, C, E, R0, R1, R2, R3 Value
+}
+
+func NewTopEnv() *Env {
+	e := NewEnv(nil)
+	for _, name := range CoreLibNames {
+		e.Push(CoreLibs[name])
+	}
+	return e
 }
 
 func NewEnv(parent *Env) *Env {
@@ -168,21 +168,17 @@ type Closure struct {
 	lastenv   *Env
 }
 
-func NewClosure(code []byte, env *Env, argsCount int, yieldable, errorable bool) *Closure {
-	if argsCount > 255 {
-		panic("really?")
-	}
-
+func NewClosure(code []byte, env *Env, argsCount byte, yieldable, errorable bool) *Closure {
 	return &Closure{
 		code:      code,
 		env:       env,
-		argsCount: byte(argsCount),
+		argsCount: argsCount,
 		yieldable: yieldable,
 		errorable: errorable,
 	}
 }
 
-func NewNativeClosureValue(argsCount int, f func(env *Env) Value) Value {
+func NewNativeValue(argsCount int, f func(env *Env) Value) Value {
 	return NewClosureValue(&Closure{
 		argsCount: byte(argsCount),
 		native:    f,
@@ -230,7 +226,7 @@ func (c *Closure) Env() *Env {
 }
 
 func (c *Closure) Dup() *Closure {
-	cls := NewClosure(c.code, c.env, int(c.argsCount), c.yieldable, c.errorable)
+	cls := NewClosure(c.code, c.env, c.argsCount, c.yieldable, c.errorable)
 	cls.caller = c.caller
 	cls.lastp = c.lastp
 	if c.preArgs != nil {
@@ -242,6 +238,9 @@ func (c *Closure) Dup() *Closure {
 
 func (c *Closure) String() string {
 	if c.native == nil {
+		code := NewBytesWriter()
+		code.WriteByte(OP_LAMBDA)
+		code.WriteByte(c.argsCount)
 		return fmt.Sprintf("closure %d [%d] %v (\n", c.argsCount, len(c.preArgs), c.yieldable) + crPrettify(c.code, 4) + ")"
 	}
 	return fmt.Sprintf("native %d (...)", c.argsCount)
@@ -270,10 +269,10 @@ func (c *Closure) Exec(newEnv *Env) Value {
 	return c.native(newEnv)
 }
 
-// CMap is responsible for recording extra states of compilation
-type CMap struct {
+// symtable is responsible for recording extra states of compilation
+type symtable struct {
 	// variable name lookup
-	Parent *CMap
+	Parent *symtable
 	M      map[string]int16
 
 	// flat op immediate value
@@ -287,13 +286,7 @@ type CMap struct {
 	E bool
 }
 
-func NewCMap() *CMap {
-	return &CMap{
-		M: make(map[string]int16),
-	}
-}
-
-func (c *CMap) GetRelPosition(key string) int32 {
+func (c *symtable) GetRelPosition(key string) int32 {
 	m := c
 	depth := int32(0)
 

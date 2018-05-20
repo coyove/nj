@@ -3,7 +3,6 @@ package parser
 import (
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"strconv"
 	"strings"
@@ -81,7 +80,7 @@ func NewStringNode(arg string) *Node {
 	}
 }
 
-func NewNumberNode(arg string) *Node {
+func StringToNumber(arg string) (float64, error) {
 	if arg[0] == '0' && len(arg) > 1 {
 		var num uint64
 		var err error
@@ -93,27 +92,29 @@ func NewNumberNode(arg string) *Node {
 		case 'i', 'I':
 			num, err = strconv.ParseUint(arg[2:], 16, 64)
 			if err == nil {
-				return &Node{
-					Type:  NTNumber,
-					Value: math.Float64frombits(uint64(num)),
-				}
+				return math.Float64frombits(uint64(num)), nil
 			}
 		default:
 			num, err = strconv.ParseUint(arg[1:], 8, 64)
 		}
 		if err == nil {
-			return &Node{
-				Type:  NTNumber,
-				Value: float64(num),
-			}
+			return float64(num), nil
 		}
 	}
 
 	num, err := strconv.ParseFloat(arg, 64)
 	if err != nil {
-		log.Panicf("invalid number: %s, %+v", arg, err)
+		return 0, err
 	}
 
+	return num, nil
+}
+
+func NewNumberNode(arg string) *Node {
+	num, err := StringToNumber(arg)
+	if err != nil {
+		panic(err)
+	}
 	return &Node{
 		Type:  NTNumber,
 		Value: num,

@@ -159,6 +159,11 @@ stat:
             $$.Compound[0].Pos = $1.Pos
         } |
         TReturn expr {
+            if $2.IsIsolatedDupCall() {
+                if h, _ := $2.Compound[2].Compound[2].Value.(float64); h == 1 {
+                    $2.Compound[2].Compound[2] = NewNumberNode("2")
+                }
+            }
             $$ = NewCompoundNode("ret", $2)
             $$.Compound[0].Pos = $1.Pos
         } |
@@ -404,11 +409,15 @@ functioncall:
             case "dup":
                 switch len($2.Compound) {
                 case 0:
-                    yylex.(*Lexer).Error("dup takes at least 1 argument")
+                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), NewNumberNode("1"), NewNumberNode("1")))
                 case 1:
                     $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), $2.Compound[0], NewNumberNode("0")))
                 default:
-                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), $2.Compound[0], $2.Compound[1]))
+                    p := $2.Compound[1]
+                    if p.Type != NTCompound && p.Type != NTAtom {
+                        yylex.(*Lexer).Error("the second argument of dup must be a closure")
+                    }
+                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), $2.Compound[0], p))
                 }
             case "error":
                 if len($2.Compound) == 0 {
@@ -445,6 +454,13 @@ functioncall:
                     default:
                         $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], $2.Compound[1]))
                     }
+                }
+            case "len":
+                switch len($2.Compound) {
+                case 0:
+                    yylex.(*Lexer).Error("len takes 1 argument")
+                default:
+                    $$ = NewCompoundNode("call", $1, $2)
                 }
             default:
                 $$ = NewCompoundNode("call", $1, $2)

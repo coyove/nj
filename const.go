@@ -1,4 +1,4 @@
-package base
+package potatolang
 
 const REG_A = -1
 
@@ -73,7 +73,6 @@ const (
 	OP_DUP
 	OP_ERROR
 	OP_LEN
-	OP_STACK
 	OP_TYPEOF
 
 	OP_NOP = 0xFE

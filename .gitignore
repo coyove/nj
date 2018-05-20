@@ -4,3 +4,4 @@ yacc.exe
 goyacc
 *.y
 y.output
+.vscode

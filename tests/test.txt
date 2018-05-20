@@ -37,6 +37,6 @@ set mul = (function(a) set b = 1 return function() b = b * a return b end end)(2
 
 assert mul() == 2 and mul() == 4 and mul() == 8
 
-require "fib.txt"
+#require "fib.txt"
 
-io.println(fib)
+#io.println(fib)

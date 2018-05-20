@@ -1,4 +1,4 @@
-package base
+package potatolang
 
 import (
 	"bytes"
@@ -10,16 +10,20 @@ import (
 	"unsafe"
 )
 
+func btob(b bool) byte {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // BytesWriter writes complex values into bytes slice
 type BytesWriter struct {
 	data []byte
 }
 
-const (
-	defaultBufferSize = 128
-)
-
 func NewBytesWriter() *BytesWriter {
+	const defaultBufferSize = 128
 	return &BytesWriter{make([]byte, 0, defaultBufferSize)}
 }
 
@@ -163,7 +167,11 @@ func crPrettify(data []byte, tab int) string {
 		if float64(int64(n)) == n {
 			return strconv.Itoa(int(n))
 		}
-		return strconv.FormatFloat(n, 'f', 9, 64)
+		a := strconv.FormatFloat(n, 'f', -1, 64)
+		if len(a) > 16 {
+			a = a[:8] + "{...}" + a[len(a)-8:]
+		}
+		return a
 	}
 	readString := func() string {
 		return strconv.Quote(crReadString(data, &cursor))
@@ -260,7 +268,7 @@ MAIN:
 			sb.WriteString("yield " + readString())
 		case OP_LAMBDA:
 			sb.WriteString("$a = lambda (\n")
-			sb.WriteString(strings.Repeat(" ", tab+4) + "<" + strconv.Itoa(int(crReadInt32(data, &cursor))) + " args>\n")
+			sb.WriteString(strings.Repeat(" ", tab+4) + "<" + strconv.Itoa(int(crReadByte(data, &cursor))) + " args>\n")
 			if crReadByte(data, &cursor) == 1 {
 				sb.WriteString(strings.Repeat(" ", tab+4) + "<yieldable>\n")
 			}
@@ -290,8 +298,6 @@ MAIN:
 			sb.WriteString("$a = false")
 		case OP_WHO:
 			sb.WriteString("$a = who")
-		case OP_STACK:
-			sb.WriteString("$a = stack")
 		case OP_MAP:
 			sb.WriteString("$a = map")
 		case OP_LIST:

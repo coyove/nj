@@ -1,4 +1,4 @@
-package base
+package potatolang
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	// the order can't be changed, for any new type, please add it in parser.go.y typeof
+	// the order can't be changed, for any new type, please also add it in parser.go.y typeof
 	Tnil = iota
 	Tnumber
 	Tstring
@@ -127,7 +127,7 @@ func (v Value) Type() byte {
 
 func (v Value) AsBool() bool {
 	if v.ty != Tbool {
-		log.Panicf("not a boolean: %+v", v)
+		log.Panicf("expecting boolean, got %+v", v)
 	}
 	return uintptr(v.ptr) == trueValue
 }
@@ -138,14 +138,14 @@ func (v Value) AsBoolUnsafe() bool {
 
 func (v Value) AsNumber() float64 {
 	if v.ty != Tnumber {
-		log.Panicf("not a number: %+v", v)
+		log.Panicf("expecting number, got %+v", v)
 	}
 	return v.AsNumberUnsafe()
 }
 
-func (v Value) AsUint64() uint64 {
+func (v Value) u64() uint64 {
 	if v.ty != Tnumber {
-		log.Panicf("not a number: %+v", v)
+		log.Panicf("expecting number, got %+v", v)
 	}
 	return math.Float64bits(v.AsNumberUnsafe())
 }
@@ -161,7 +161,7 @@ func (v Value) AsNumberUnsafe() float64 {
 
 func (v Value) AsString() string {
 	if v.ty != Tstring {
-		log.Panicf("not a string: %+v", v)
+		log.Panicf("expecting string, got %+v", v)
 	}
 	return v.AsStringUnsafe()
 }
@@ -178,7 +178,7 @@ func (v Value) AsStringUnsafe() string {
 
 func (v Value) AsList() []Value {
 	if v.ty != Tlist {
-		log.Panicf("not an array: %+v", v)
+		log.Panicf("expecting array, got %+v", v)
 	}
 	return *(*[]Value)(v.ptr)
 }
@@ -189,7 +189,7 @@ func (v Value) AsListUnsafe() []Value {
 
 func (v Value) AsMap() *Tree {
 	if v.ty != Tmap {
-		log.Panicf("not a map: %+v", v)
+		log.Panicf("expecting map, got %+v", v)
 	}
 	return (*Tree)(v.ptr)
 }
@@ -200,7 +200,7 @@ func (v Value) AsMapUnsafe() *Tree {
 
 func (v Value) AsClosure() *Closure {
 	if v.ty != Tclosure {
-		log.Panicf("not a closure: %+v", v)
+		log.Panicf("expecting closure, got %+v", v)
 	}
 	return (*Closure)(v.ptr)
 }
@@ -211,7 +211,7 @@ func (v Value) AsClosureUnsafe() *Closure {
 
 func (v Value) AsGeneric() interface{} {
 	if v.ty != Tgeneric {
-		log.Panicf("not a generic: %+v", v)
+		log.Panicf("expecting generic, got %+v", v)
 	}
 	return *(*interface{})(v.ptr)
 }
@@ -222,7 +222,7 @@ func (v Value) AsGenericUnsafe() interface{} {
 
 func (v Value) AsBytes() []byte {
 	if v.ty != Tbytes {
-		log.Panicf("not a bytes type: %+v", v)
+		log.Panicf("expecting bytes, got %+v", v)
 	}
 	if v.ptr == nil {
 		return nil

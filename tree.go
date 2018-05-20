@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package base redblacktree implements a red-black tree.
+// Package potatolang redblacktree implements a red-black tree.
 //
 // Used by TreeSet and TreeMap.
 //
 // Structure is not thread safe.
 //
 // References: http://en.wikipedia.org/wiki/Red%E2%80%93black_tree
-package base
+package potatolang
 
 import (
 	"fmt"
@@ -54,6 +54,10 @@ func (n *Node) Dup(duper func(string, Value) Value) *Node {
 		n2.Right.Parent = n2
 	}
 	return n2
+}
+
+func NewMap() *Tree {
+	return new(Tree)
 }
 
 // Dup duplicates the tree

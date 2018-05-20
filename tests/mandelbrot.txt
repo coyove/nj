@@ -7,7 +7,7 @@ set initial_i = 0
 set ctr = 0
 set renderRow = function(y0)
     set i,j,x,res,b,Zr1,Zr2,Zi1,Zi2,Tr1,Tr2,Ti1,Ti2 = 0
-    set row = core.bytes(bytesPerRow) 
+    set row = core.genbytes(bytesPerRow) 
     set xByte = 0 while xByte < bytesPerRow do
         res = 0
         set Ci = initial_i[y0]
@@ -61,8 +61,8 @@ end
 set size = 1600
 bytesPerRow = size >> 3
 
-initial_r = core.listn(size)
-initial_i = core.listn(size)
+initial_r = core.genlist(size)
+initial_i = core.genlist(size)
 
 set inv = 2 / size
 set xy = 0 while xy < size then xy = xy + 1 do
@@ -71,7 +71,7 @@ set xy = 0 while xy < size then xy = xy + 1 do
     initial_i[xy] = i - 1.0
 end
 
-rows = core.listn(size)
+rows = core.genlist(size)
 set y = -1
 set mux = core.mutex()
 set wg = core.waitgroup()
@@ -93,9 +93,8 @@ core.go(worker)
 core.go(worker) 
 core.go(worker)
 wg.wait()
-
-set tostring = core.tostring
-io.write("P4\n" + tostring(size) + " " + tostring(size) + "\n")
+ 
+io.write("P4\n" & size & " " & size & "\n")
 dup(rows, function(i,row) 
     io.write(row)
 end) 

@@ -1,5 +1,5 @@
 assert "abc" == "abc"
-set b = core.bytes(3)
+set b = core.genbytes(3)
 dup(b, function (i) b[i] = 97 + i end )
 assert "abc" == b
 assert "abc" == "\97\98\99"
@@ -29,7 +29,7 @@ dup(dup("abc组织者"), function (i, r)
 
 
 set m = map end
-set i = 0 while i < 100 then i = i +1 do m[core.tostring(i)] = i end
+set i = 0 while i < 100 then i = i +1 do m["" & i] = i end
 dup(m, function(k,v)
     if k == "50" then
         core.del(m, k)
@@ -37,3 +37,5 @@ dup(m, function(k,v)
     end 
 end)
 io.println(m)
+
+assert "" & 1 & true == "1true"

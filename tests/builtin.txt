@@ -1,24 +1,23 @@
-
 function foo1(c)
     set a = 3 * c
     set b = 2 * c
-    return stack()
+    return dup()
 end
 
 set ans = foo1()(2)
 assert ans[-1] == 4 and ans[-2] == 6
 
 function sum()
-    set x = dup(stack())
+    set x = dup() 
     set s = 0
-    if typeof(x[0]) == "string" then s = "" end
+    if typeof(x{0}, string) then s = "" end
 
     dup(x, function(i, n) s = s + n end)
     return s
 end
 
-assert sum(1, -1) == 0
-assert sum(1, 2, 3) == 6
+assert sum(1, -1) == sum()
+assert sum(1, 2, 3) == 6 
 assert sum("1", "2") == ("123")(0,2)
 
 set m = map 
@@ -67,6 +66,23 @@ assert a == "hello world"
 a = dup(a, upper)
 assert a == "Hello world"
 
-assert typeof(a) == "string"
-a = core.bytes(a)
+assert typeof(a) == "bytes"
 assert typeof(a, bytes)
+
+a = dup(a, function(i,b) if i == 5 then error(true) end return b end)
+assert a == "Hello"
+
+a = map
+    (function() return "key" end)() = "value"
+end
+assert a.key == "value" and a["key"] == "value"
+
+assert(core.tonumber("0x0")) == 0
+assert(core.tonumber("0xa")) == 10
+assert(core.tonumber("0xA")) == 10
+assert(core.tonumber("1")) == 1
+assert(core.tonumber("+0.0")) == 0.0
+assert(core.tonumber("0i12345678")) == 0i12345678
+assert(core.tonumber("-10e-2")) == -10e-2
+assert(core.tonumber("1.2a")) == nil
+assert(core.tonumber("0xabcdefg")) == nil

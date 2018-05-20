@@ -1,9 +1,11 @@
-package base
+package potatolang
 
 import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"unicode/utf8"
 )
 
 func Exec(env *Env, code []byte) Value {
@@ -130,6 +132,24 @@ MAIN:
 					tr.Put(iter.Key(), iter.Value())
 				}
 				env.A = NewMapValue(tr)
+			case Tstring:
+				switch ss := env.R0.AsStringUnsafe(); env.R1.ty {
+				case Tnumber:
+					num := env.R1.AsNumberUnsafe()
+					if float64(int64(num)) == num {
+						env.A = NewStringValue(ss + strconv.FormatInt(int64(num), 10))
+					} else {
+						env.A = NewStringValue(ss + strconv.FormatFloat(num, 'f', -1, 64))
+					}
+				case Tbool:
+					env.A = NewStringValue(ss + strconv.FormatBool(env.R1.AsBoolUnsafe()))
+				case Tstring:
+					env.A = NewStringValue(ss + env.R1.AsStringUnsafe())
+				case Tbytes:
+					env.A = NewStringValue(ss + string(env.R1.AsBytesUnsafe()))
+				default:
+					env.A = NewStringValue(ss + env.R1.ToPrintString())
+				}
 			default:
 				log.Panicf("can't apply bit 'and' on %+v", env.R0)
 			}
@@ -352,7 +372,7 @@ MAIN:
 		case OP_YIELD_STR:
 			return NewStringValue(crReadString(code, &cursor)), cursor, true
 		case OP_LAMBDA:
-			argsCount := int(crReadInt32(code, &cursor))
+			argsCount := crReadByte(code, &cursor)
 			yieldable := crReadByte(code, &cursor) == 1
 			errorable := crReadByte(code, &cursor) == 1
 			buf := crReadBytes(code, &cursor, int(crReadInt32(code, &cursor)))
@@ -435,8 +455,6 @@ MAIN:
 			default:
 				log.Panicf("invalid callee: %+v", v)
 			}
-		case OP_STACK:
-			env.A = NewListValue(env.Stack().data)
 		case OP_JMP:
 			off := int(crReadInt32(code, &cursor))
 			*&cursor += uint32(off)
@@ -479,9 +497,32 @@ func shiftIndex(index Value, len int) int {
 // OP_DUP takes 3 arguments:
 //   1. number: 0 means the dup result will be discarded, 1 means the result will be stored into somewhere
 //   2. any: the subject to be duplicated
-//   3. number/closure: 0 means no predicator, otherwise the closure will be used
+//   3. number/closure: 0 means no predicator, 1 means dup stack, 2 means return stack, otherwise the closure will be used
 func doDup(env *Env) {
 	alloc := env.R0.AsNumber() == 1
+	nopred := false
+
+	if env.R2.ty == Tnumber {
+		switch env.R2.AsNumberUnsafe() {
+		case 0:
+			// dup(a)
+			nopred = true
+		case 1:
+			// dup()
+			stack := env.Stack().data
+			ret := make([]Value, len(stack))
+			copy(ret, stack)
+			env.A = NewListValue(ret)
+			return
+		case 2:
+			// return dup()
+			env.A = NewListValue(env.Stack().data)
+			return
+		default:
+			panic("serious error")
+		}
+	}
+
 	// immediate value and generic will be returned directly since they can't be truly duplicated
 	// however string is an exception
 	switch env.R1.Type() {
@@ -492,42 +533,39 @@ func doDup(env *Env) {
 		env.A = NewClosureValue(env.R1.AsClosureUnsafe().Dup())
 		return
 	case Tstring:
-		if alloc {
-			if env.R2.Type() != Tclosure {
-				env.A = env.R1
-			} else {
-				cls := env.R2.AsClosure()
-				newEnv := NewEnv(cls.Env())
-				str := env.R1.AsStringUnsafe()
-				newstr := make([]rune, 0, len(str))
-				for i, v := range str {
-					newEnv.Stack().Clear()
-					newEnv.Push(NewNumberValue(float64(i)))
-					newEnv.Push(NewNumberValue(float64(v)))
-					newstr = append(newstr, rune(Exec(newEnv, cls.Code()).AsNumber()))
-					if newEnv.E.Type() != Tnil {
-						break
-					}
-				}
-				env.A = NewStringValue(string(newstr))
-			}
-		} else if env.R2.Type() == Tclosure {
+		if nopred {
+			env.A = env.R1
+		} else {
 			cls := env.R2.AsClosure()
 			newEnv := NewEnv(cls.Env())
-			for i, v := range env.R1.AsStringUnsafe() {
+			str := env.R1.AsStringUnsafe()
+			var newstr []byte
+			if alloc {
+				newstr = make([]byte, 0, len(str))
+			}
+			for i, v := range str {
 				newEnv.Stack().Clear()
 				newEnv.Push(NewNumberValue(float64(i)))
 				newEnv.Push(NewNumberValue(float64(v)))
-				Exec(newEnv, cls.Code())
+				newEnv.Push(NewNumberValue(float64(len(newstr))))
 				if newEnv.E.Type() != Tnil {
 					break
 				}
+				if alloc {
+					r := rune(Exec(newEnv, cls.Code()).AsNumber())
+					idx := len(newstr)
+					newstr = append(newstr, 0, 0, 0, 0)
+					newstr = newstr[:idx+utf8.EncodeRune(newstr[idx:], r)]
+				}
+			}
+			if alloc {
+				env.A = NewBytesValue(newstr)
 			}
 		}
 		return
 	}
 
-	if alloc && env.R2.Type() != Tclosure {
+	if alloc && nopred {
 		// simple dup of list, map and bytes
 		switch env.R1.Type() {
 		case Tlist:
@@ -548,7 +586,7 @@ func doDup(env *Env) {
 		}
 	}
 
-	if !alloc && env.R2.Type() != Tclosure {
+	if !alloc && nopred {
 		// simple dup(a), but its value is discarded
 		// so nothing to do here
 		return
@@ -584,6 +622,8 @@ func doDup(env *Env) {
 		if alloc {
 			if cls.errorable {
 				// the predicator may return error and interrupt the dup, so full copy is not used here
+				// however cls.errorable is not 100% accurate because calling error() (to check error) and
+				// calling error(...) (to throw error) are different behaviors, but i will left this as a TODO
 				m2 := new(Tree)
 				for iter := env.R1.AsMapUnsafe().Iterator(); iter.Next(); {
 					newEnv.Stack().Clear()
