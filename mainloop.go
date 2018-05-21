@@ -7,6 +7,12 @@ import (
 	"unicode/utf8"
 )
 
+func init() {
+	if strconv.IntSize != 64 {
+		panic("potatolang only run under 64bit")
+	}
+}
+
 type ExecError struct {
 	r      interface{}
 	hash   uint32
@@ -125,8 +131,14 @@ MAIN:
 				env.A = NewBytesValue(append(env.R0.AsBytesUnsafe(), env.R1.AsBytes()...))
 			case Tmap:
 				tr, m := env.R0.AsMapUnsafe().Dup(nil), env.R1.AsMap()
-				for iter := m.Iterator(); iter.Next(); {
-					tr.Put(iter.Key(), iter.Value())
+				if m.t != nil {
+					for _, x := range m.t {
+						tr.Put(x.k, x.v)
+					}
+				} else {
+					for k, v := range m.m {
+						tr.Put(k, v)
+					}
 				}
 				env.A = NewMapValue(tr)
 			case Tstring:
@@ -198,10 +210,10 @@ MAIN:
 			}
 		case OP_MAP:
 			if newEnv == nil {
-				env.A = NewMapValue(new(Tree))
+				env.A = NewMapValue(NewMap())
 			} else {
 				size := newEnv.Stack().Size()
-				m := new(Tree)
+				m := NewMap()
 				for i := 0; i < size; i += 2 {
 					m.Put(newEnv.Get(int32(i)).AsString(), newEnv.Get(int32(i+1)))
 				}
@@ -257,6 +269,7 @@ MAIN:
 				var found bool
 				v, found = env.R0.AsMapUnsafe().Get(env.R1.AsString())
 				if v.Type() == Tclosure {
+					log.Println("=====", env.R0.AsMapUnsafe().t)
 					v.AsClosureUnsafe().SetCaller(env.R0)
 				}
 				if !found {
@@ -588,16 +601,30 @@ func doDup(env *Env) {
 				// the predicator may return error and interrupt the dup, so full copy is not used here
 				// however cls.errorable is not 100% accurate because calling error() (to check error) and
 				// calling error(...) (to throw error) are different behaviors, but i will left this as a TODO
-				m2 := new(Tree)
-				for iter := env.R1.AsMapUnsafe().Iterator(); iter.Next(); {
-					newEnv.Stack().Clear()
-					newEnv.Push(NewStringValue(iter.Key()))
-					newEnv.Push(iter.Value())
-					ret := Exec(newEnv, cls.Code())
-					if newEnv.E.Type() != Tnil {
-						break
+				m2 := NewMap()
+				m := env.R1.AsMapUnsafe()
+				if m.t != nil {
+					for _, x := range m.t {
+						newEnv.Stack().Clear()
+						newEnv.Push(NewStringValue(x.k))
+						newEnv.Push(x.v)
+						ret := Exec(newEnv, cls.Code())
+						if newEnv.E.Type() != Tnil {
+							break
+						}
+						m2.Put(x.k, ret)
 					}
-					m2.Put(iter.Key(), ret)
+				} else {
+					for k, v := range m.m {
+						newEnv.Stack().Clear()
+						newEnv.Push(NewStringValue(k))
+						newEnv.Push(v)
+						ret := Exec(newEnv, cls.Code())
+						if newEnv.E.Type() != Tnil {
+							break
+						}
+						m2.Put(k, ret)
+					}
 				}
 				env.A = NewMapValue(m2)
 			} else {
@@ -610,10 +637,20 @@ func doDup(env *Env) {
 				}))
 			}
 		} else {
-			for iter := env.R1.AsMapUnsafe().Iterator(); iter.Next(); {
+			m := env.R1.AsMapUnsafe()
+			for _, x := range m.t {
 				newEnv.Stack().Clear()
-				newEnv.Push(NewStringValue(iter.Key()))
-				newEnv.Push(iter.Value())
+				newEnv.Push(NewStringValue(x.k))
+				newEnv.Push(x.v)
+				Exec(newEnv, cls.Code())
+				if newEnv.E.Type() != Tnil {
+					break
+				}
+			}
+			for k, v := range m.m {
+				newEnv.Stack().Clear()
+				newEnv.Push(NewStringValue(k))
+				newEnv.Push(v)
 				Exec(newEnv, cls.Code())
 				if newEnv.E.Type() != Tnil {
 					break

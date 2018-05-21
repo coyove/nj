@@ -38,6 +38,8 @@ var TMapping = map[byte]string{
 	Tclosure: "closure", Tgeneric: "generic", Tlist: "list", Tmap: "map", Tbytes: "bytes",
 }
 
+var safePointerAddr = unsafe.Pointer(uintptr(0x4000000000000000))
+
 const (
 	minPhysPageSize = 4096 // (0x1000) in mheap.go
 	trueValue       = minPhysPageSize + 1
@@ -47,9 +49,6 @@ const (
 // Value is the basic value used by VM
 type Value struct {
 	ty byte
-
-	// used in red-black tree
-	c color
 
 	// float64 will be stored at &i
 	// it can't be stored in ptr because pointer value smaller than minPhysPageSize will violate the heap
@@ -70,6 +69,7 @@ func NewValue() Value {
 // NewNumberValue returns a number value
 func NewNumberValue(f float64) Value {
 	v := Value{ty: Tnumber}
+	v.ptr = safePointerAddr
 	*(*float64)(unsafe.Pointer(&v.i)) = f
 	return v
 }
@@ -80,6 +80,7 @@ func NewStringValue(s string) Value {
 	v.ty = Tstring
 
 	if len(s) < 11 {
+		v.ptr = safePointerAddr
 		copy((*(*[10]byte)(unsafe.Pointer(&v.p[0])))[:], s)
 		v.i = byte(len(s) + 1)
 	} else {
@@ -105,7 +106,7 @@ func NewListValue(a []Value) Value {
 }
 
 // NewMapValue returns a map value
-func NewMapValue(m *Tree) Value {
+func NewMapValue(m *Map) Value {
 	return Value{ty: Tmap, ptr: unsafe.Pointer(m)}
 }
 
@@ -195,16 +196,16 @@ func (v Value) AsListUnsafe() []Value {
 }
 
 // AsMap cast value to map of values
-func (v Value) AsMap() *Tree {
+func (v Value) AsMap() *Map {
 	if v.ty != Tmap {
 		log.Panicf("expecting map, got %+v", v)
 	}
-	return (*Tree)(v.ptr)
+	return (*Map)(v.ptr)
 }
 
 // AsMapUnsafe cast value to map of values without checking
-func (v Value) AsMapUnsafe() *Tree {
-	return (*Tree)(v.ptr)
+func (v Value) AsMapUnsafe() *Map {
+	return (*Map)(v.ptr)
 }
 
 // AsClosure cast value to closure
@@ -418,13 +419,18 @@ func (v Value) toString(lv int) string {
 		buf.WriteString("]")
 		return buf.String()
 	case Tmap:
-		m := v.AsMap()
-		buf, iter := &bytes.Buffer{}, m.Iterator()
+		m, buf := v.AsMap(), &bytes.Buffer{}
 		buf.WriteString("{")
-		for iter.Next() {
-			buf.WriteString(iter.Key())
+		for _, x := range m.t {
+			buf.WriteString(x.k)
 			buf.WriteString(":")
-			buf.WriteString(iter.Value().toString(lv + 1))
+			buf.WriteString(x.v.toString(lv + 1))
+			buf.WriteString(",")
+		}
+		for k, v := range m.m {
+			buf.WriteString(k)
+			buf.WriteString(":")
+			buf.WriteString(v.toString(lv + 1))
 			buf.WriteString(",")
 		}
 		if m.Size() > 0 {

@@ -77,12 +77,12 @@ a = map
 end
 assert a.key == "value" and a["key"] == "value"
 
-assert(core.tonumber("0x0")) == 0
-assert(core.tonumber("0xa")) == 10
-assert(core.tonumber("0xA")) == 10
-assert(core.tonumber("1")) == 1
-assert(core.tonumber("+0.0")) == 0.0
-assert(core.tonumber("0i12345678")) == 0i12345678
-assert(core.tonumber("-10e-2")) == -10e-2
-assert(core.tonumber("1.2a")) == nil
-assert(core.tonumber("0xabcdefg")) == nil
+assert(std.tonumber("0x0")) == 0
+assert(std.tonumber("0xa")) == 10
+assert(std.tonumber("0xA")) == 10
+assert(std.tonumber("1")) == 1
+assert(std.tonumber("+0.0")) == 0.0
+assert(std.tonumber("0i12345678")) == 0i12345678
+assert(std.tonumber("-10e-2")) == -10e-2
+assert(std.tonumber("1.2a")) == nil
+assert(std.tonumber("0xabcdefg")) == nil

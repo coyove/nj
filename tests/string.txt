@@ -1,5 +1,5 @@
 assert "abc" == "abc"
-set b = core.genbytes(3)
+set b = std.genbytes(3)
 dup(b, function (i) b[i] = 97 + i end )
 assert "abc" == b
 assert "abc" == "\97\98\99"
@@ -32,8 +32,8 @@ set m = map end
 set i = 0 while i < 100 then i = i +1 do m["" & i] = i end
 dup(m, function(k,v)
     if k == "50" then
-        core.del(m, k)
-        core.del(m, "51")
+        std.remove(m, k)
+        std.remove(m, "51")
     end 
 end)
 io.println(m)

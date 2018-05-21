@@ -55,12 +55,11 @@ end
 
 set cond = map
     "counter" = 0,
-    "test" = function()
+    "test" = function() 
         who().counter = who().counter + 1
         return who().counter % 2 == 0
     end
-end
-
+end 
 assert cond.test() or cond.test() # false or true
 cond.test()
 assert cond.test() and not cond.test() # true and not false
@@ -87,3 +86,7 @@ m2.key1 = "value1"
 m2.key2 = list end
 i = 1 while i < 4 then i = i + 1 do m2.key2 = m2.key2 + i end
 assert m2 == m
+
+a = 0i0
+set b = 0iffffffffffffffff
+assert std.u64.ieq(std.u64.ixor(a, b), b)

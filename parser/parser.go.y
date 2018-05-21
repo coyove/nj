@@ -42,7 +42,7 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TIf TLambda TList TNil TNot TMap TOr TReturn TRequire TSet TThen TTrue TWhile TXor TYield
+%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TIf TLambda TList TNil TNot TMap TOr TReturn TRequire TSet TThen TTrue TWhile TYield
 
 /* Literals */
 %token<token> TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
@@ -236,7 +236,7 @@ namelist:
         TIdent {
             $$ = NewCompoundNode($1.Str)
         } | 
-        namelist ','  TIdent {
+        namelist ',' TIdent {
             $1.Compound = append($1.Compound, NewAtomNode($3))
             $$ = $1
         }
@@ -297,10 +297,6 @@ expr:
         } |
         expr TAnd expr {
             $$ = NewCompoundNode("and", $1,$3)
-            $$.Compound[0].Pos = $1.Pos
-        } |
-        expr TXor expr {
-            $$ = NewCompoundNode("xor", $1,$3)
             $$.Compound[0].Pos = $1.Pos
         } |
         expr '>' expr {

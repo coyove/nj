@@ -241,9 +241,16 @@ func (c *Closure) String() string {
 		code := NewBytesWriter()
 		code.WriteByte(OP_LAMBDA)
 		code.WriteByte(c.argsCount)
-		return fmt.Sprintf("closure %d [%d] %v (\n", c.argsCount, len(c.preArgs), c.yieldable) + crPrettify(c.code, 4) + ")"
+		tag := ""
+		if c.yieldable {
+			tag = "y"
+		}
+		if c.errorable {
+			tag += "e"
+		}
+		return fmt.Sprintf("closure%d%s [curry:%d] (\n", c.argsCount, tag, len(c.preArgs)) + crPrettify(c.code, 4) + ")"
 	}
-	return fmt.Sprintf("native %d (...)", c.argsCount)
+	return fmt.Sprintf("native%d (...)", c.argsCount)
 }
 
 func (c *Closure) Exec(newEnv *Env) Value {

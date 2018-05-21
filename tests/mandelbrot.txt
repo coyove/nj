@@ -7,7 +7,7 @@ set initial_i = 0
 set ctr = 0
 set renderRow = function(y0)
     set i,j,x,res,b,Zr1,Zr2,Zi1,Zi2,Tr1,Tr2,Ti1,Ti2 = 0
-    set row = core.genbytes(bytesPerRow) 
+    set row = std.genbytes(bytesPerRow) 
     set xByte = 0 while xByte < bytesPerRow do
         res = 0
         set Ci = initial_i[y0]
@@ -61,8 +61,8 @@ end
 set size = 1600
 bytesPerRow = size >> 3
 
-initial_r = core.genlist(size)
-initial_i = core.genlist(size)
+initial_r = std.genlist(size)
+initial_i = std.genlist(size)
 
 set inv = 2 / size
 set xy = 0 while xy < size then xy = xy + 1 do
@@ -71,10 +71,10 @@ set xy = 0 while xy < size then xy = xy + 1 do
     initial_i[xy] = i - 1.0
 end
 
-rows = core.genlist(size)
+rows = std.genlist(size)
 set y = -1
-set mux = core.mutex()
-set wg = core.waitgroup()
+set mux = std.sync.mutex()
+set wg = std.sync.waitgroup()
 wg.add(4)
 
 set worker = function()
@@ -88,10 +88,10 @@ set worker = function()
     wg.done()
 end
 
-core.go(worker) 
-core.go(worker) 
-core.go(worker) 
-core.go(worker)
+std.sync.run(worker) 
+std.sync.run(worker) 
+std.sync.run(worker) 
+std.sync.run(worker)
 wg.wait()
  
 io.write("P4\n" & size & " " & size & "\n")
