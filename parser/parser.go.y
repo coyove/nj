@@ -68,7 +68,7 @@ block:
             }
         } |
         block stat {
-            if $2.IsIsolatedDupCall() {
+            if $2.isIsolatedDupCall() {
                 $2.Compound[2].Compound[0] = NewNumberNode("0")
             }
             $1.Compound = append($1.Compound, $2)
@@ -90,6 +90,17 @@ stat:
             if len($1.Compound) > 0 {
                 if c, _ := $1.Compound[0].Value.(string); c == "load" {
                     $$ = NewCompoundNode("store", $1.Compound[1], $1.Compound[2], $3)
+                }
+            }
+            if c, _ := $1.Value.(string); c != "" && $1.Type == NTAtom {
+                if a, b, s := $3.isSimpleAddSub(); a == c {
+                    $3.Compound[2].Value = $3.Compound[2].Value.(float64) * s
+                    $$ = NewCompoundNode("inc", $1, $3.Compound[2])
+                    $$.Compound[1].Pos = $1.Pos
+                } else if b == c {
+                    $3.Compound[1].Value = $3.Compound[1].Value.(float64) * s
+                    $$ = NewCompoundNode("inc", $1, $3.Compound[1])
+                    $$.Compound[1].Pos = $1.Pos
                 }
             }
             $$.Compound[0].Pos = $1.Pos
@@ -153,7 +164,7 @@ stat:
             $$.Compound[0].Pos = $1.Pos
         } |
         TReturn expr {
-            if $2.IsIsolatedDupCall() {
+            if $2.isIsolatedDupCall() {
                 if h, _ := $2.Compound[2].Compound[2].Value.(float64); h == 1 {
                     $2.Compound[2].Compound[2] = NewNumberNode("2")
                 }

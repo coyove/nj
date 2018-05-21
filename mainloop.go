@@ -74,6 +74,10 @@ MAIN:
 			env.Set(crReadInt32(code, &cursor), NewNumberValue(crReadDouble(code, &cursor)))
 		case OP_SET_STR:
 			env.Set(crReadInt32(code, &cursor), NewStringValue(crReadString(code, &cursor)))
+		case OP_INC:
+			addr := crReadInt32(code, &cursor)
+			num := env.Get(addr).AsNumber()
+			env.Set(addr, NewNumberValue(num+crReadDouble(code, &cursor)))
 		case OP_ADD:
 			switch l := env.R0; l.Type() {
 			case Tnumber:

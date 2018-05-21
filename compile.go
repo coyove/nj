@@ -40,6 +40,7 @@ func init() {
 	opMapping["map"] = clearI(compileMapOp)
 	opMapping["or"] = clearI(compileAndOrOp(OP_IF))
 	opMapping["and"] = clearI(compileAndOrOp(OP_IFNOT))
+	opMapping["inc"] = clearI(compileIncOp)
 
 	flatOpMapping = map[string]bool{
 		"+": true, "-": true, "*": true, "/": true, "%": true,

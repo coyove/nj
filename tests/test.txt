@@ -21,7 +21,8 @@ function deepadd(a)
     return add(a)(deepadd(a - 1))
 end
 
-assert deepadd(100000) == 5000050000 
+set e = 100000
+assert deepadd(e) == (1 + e) * (e / 2 )
  
 set a = 2
 assert 1 + 2 *3/5 == 2.2
@@ -67,3 +68,22 @@ assert cond.test() and not cond.test() # true and not false
 #require "fib.txt"
 
 #io.println(fib)
+
+set sum = 0
+i = 0 while i < 100 then i=i+1 do
+    sum = sum + i
+    if sum > 100 then break end
+end
+assert sum == 105
+
+set m = map 
+    "key1" = "value1",
+    "key2" = list 1,2,3 end
+end
+
+assert m == dup(m)
+set m2 = map end
+m2.key1 = "value1"
+m2.key2 = list end
+i = 1 while i < 4 then i = i + 1 do m2.key2 = m2.key2 + i end
+assert m2 == m

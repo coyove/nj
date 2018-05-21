@@ -296,6 +296,8 @@ MAIN:
 			sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_NOP:
 			sb.WriteString("nop")
+		case OP_INC:
+			sb.WriteString("inc " + readAddr() + " " + readDouble())
 		default:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs)

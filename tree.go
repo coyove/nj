@@ -21,13 +21,15 @@ const (
 	black, red color = true, false
 )
 
+type Map struct {
+	t *Tree
+	m map[string]Value
+}
+
 // Tree holds elements of the red-black tree
 type Tree struct {
-	Root     *Node
-	size     int
-	tree     *Tree
-	iter     *Node
-	position position
+	Root *Node
+	size int
 }
 
 // Node is a single element within the tree
@@ -56,6 +58,25 @@ func (n *Node) Dup(duper func(string, Value) Value) *Node {
 	return n2
 }
 
+func (n *Node) Equal(r *Node) bool {
+	if r == nil {
+		return false
+	}
+	if n.Key != r.Key {
+		return false
+	}
+	if !n.Value.Equal(r.Value) {
+		return false
+	}
+	if n.Left != nil && !n.Left.Equal(r.Left) {
+		return false
+	}
+	if n.Right != nil && !n.Right.Equal(r.Right) {
+		return false
+	}
+	return true
+}
+
 func NewMap() *Tree {
 	return new(Tree)
 }
@@ -66,6 +87,11 @@ func (tree *Tree) Dup(duper func(string, Value) Value) *Tree {
 		Root: tree.Root.Dup(duper),
 		size: tree.size,
 	}
+}
+
+// Equal tests whether two trees are equal
+func (tree *Tree) Equal(tree2 *Tree) bool {
+	return tree.Root.Equal(tree2.Root)
 }
 
 // Put inserts node into the tree.

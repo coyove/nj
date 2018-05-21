@@ -165,7 +165,7 @@ func (n *Node) String() string {
 	panic("shouldn't happen")
 }
 
-func (n *Node) IsIsolatedDupCall() bool {
+func (n *Node) isIsolatedDupCall() bool {
 	if n.Type != NTCompound || len(n.Compound) < 3 {
 		return false
 	}
@@ -181,19 +181,27 @@ func (n *Node) IsIsolatedDupCall() bool {
 	return true
 }
 
-func (n *Node) OpAddSubjects() (string, string) {
+func (n *Node) isSimpleAddSub() (a string, b string, s float64) {
 	if n.Type != NTCompound || len(n.Compound) < 3 {
-		return "", ""
+		return
 	}
-	if c, _ := n.Compound[0].Value.(string); c != "+" {
-		return "", ""
+	s = 1
+	if c, _ := n.Compound[0].Value.(string); c != "+" && c != "-" {
+		return
+	} else if c == "-" {
+		s = -1
 	}
-	a, b := "", ""
 	if c, _ := n.Compound[1].Value.(string); n.Compound[1].Type == NTAtom {
 		a = c
+		if n.Compound[2].Type != NTNumber {
+			a = ""
+		}
 	}
 	if c, _ := n.Compound[2].Value.(string); n.Compound[2].Type == NTAtom {
 		b = c
+		if n.Compound[1].Type != NTNumber {
+			b = ""
+		}
 	}
-	return a, b
+	return
 }

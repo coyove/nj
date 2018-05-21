@@ -332,6 +332,17 @@ func compileFlatOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte
 	return
 }
 
+func compileIncOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
+	subject, step, buf := table.GetRelPosition(atoms[1].Value.(string)), atoms[2].Value.(float64), NewBytesWriter()
+	if subject == -1 {
+		return nil, 0, 0, fmt.Errorf(ERR_UNDECLARED_VARIABLE, atoms[1])
+	}
+	buf.WriteByte(OP_INC)
+	buf.WriteInt32(subject)
+	buf.WriteDouble(step)
+	return buf.Bytes(), REG_A, sp, nil
+}
+
 func compileImmediateIntoVariable(sp int16, node *parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
 	buf := NewBytesWriter()
 	switch node.Type {
@@ -353,6 +364,8 @@ func compileImmediateIntoVariable(sp int16, node *parser.Node, table *symtable) 
 	return buf.Bytes(), yx, sp, nil
 }
 
+// [and a b] => if not a then false else use b end
+// [or a b]  => if a then use a else use b end
 func compileAndOrOp(bop byte) compileFunc {
 	return func(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
 		a1, a2 := atoms[1], atoms[2]
@@ -489,7 +502,8 @@ func compileCallOp(sp int16, nodes []*parser.Node, table *symtable) (code []byte
 		}
 	}
 
-	if len(replacedAtoms) == 1 {
+	// note: [call [..] [..]] is different
+	if len(replacedAtoms) == 1 && callee.Type != parser.NTCompound {
 		cursor := buf.Len() - 4
 		replacedAtoms[0].Value = int32(binary.LittleEndian.Uint32(buf.Bytes()[cursor:]))
 		buf.TruncateLastBytes(9)
@@ -660,9 +674,6 @@ func compileWhileOp(sp int16, atoms []*parser.Node, table *symtable) (code []byt
 		binary.LittleEndian.PutUint32(code[idx+1:], uint32(-(idx + 5)))
 		copy(code[idx+5:], []byte{OP_NOP, OP_NOP, OP_NOP, OP_NOP})
 		i = idx + 9
-		// 				buf.WriteInt(i + 1, bop == Op.JMP_BREAK ?
-		// 						(f.code.size() - i) - 5 :
-		// 						-(i + 5));
 	}
 
 	i = 0

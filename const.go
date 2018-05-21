@@ -62,6 +62,9 @@ const (
 	OP_YIELD_NUM
 	OP_YIELD_STR
 
+	// inc op
+	OP_INC
+
 	// special builtin op
 	OP_WHO
 	OP_DUP
