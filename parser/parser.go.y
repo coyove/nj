@@ -86,17 +86,11 @@ block:
 
 stat:
         var '=' expr {
+            $$ = NewCompoundNode("move", $1, $3)
             if len($1.Compound) > 0 {
-                switch c, _ := $1.Compound[0].Value.(string); c {
-                case "load":
+                if c, _ := $1.Compound[0].Value.(string); c == "load" {
                     $$ = NewCompoundNode("store", $1.Compound[1], $1.Compound[2], $3)
-                case "rload":
-                    $$ = NewCompoundNode("rstore", $1.Compound[1], $1.Compound[2], $3)
-                case "safeload":
-                    $$ = NewCompoundNode("safestore", $1.Compound[1], $1.Compound[2], $3)
                 }
-            } else {
-                $$ = NewCompoundNode("move", $1, $3)
             }
             $$.Compound[0].Pos = $1.Pos
         } |
@@ -126,7 +120,7 @@ stat:
             $$.Compound[0].Pos = $1.Pos
             cur := $$
             for _, e := range $5.Compound {
-                cur.Compound[3] = e
+                cur.Compound[3] = NewCompoundNode("chain", e)
                 cur = e
             }
         } |
@@ -135,7 +129,7 @@ stat:
             $$.Compound[0].Pos = $1.Pos
             cur := $$
             for _, e := range $5.Compound {
-                cur.Compound[3] = e
+                cur.Compound[3] = NewCompoundNode("chain", e)
                 cur = e
             }
             cur.Compound[3] = $7
@@ -213,7 +207,7 @@ elseifs:
             $$ = NewCompoundNode()
         } | 
         elseifs TElseIf expr TThen block {
-            $$.Compound = append($$.Compound, NewCompoundNode("if", $3, $5, NewCompoundNode()))
+            $$.Compound = append($1.Compound, NewCompoundNode("if", $3, $5, NewCompoundNode()))
         }
 
 var:
@@ -222,10 +216,7 @@ var:
         } |
         prefixexp '[' expr ']' {
             $$ = NewCompoundNode("load", $1, $3)
-        } | 
-        prefixexp '{' expr '}' {
-            $$ = NewCompoundNode("safeload", $1, $3)
-        } | 
+        } |
         prefixexp '.' TIdent {
             $$ = NewCompoundNode("load", $1, NewStringNode($3.Str))
         }
@@ -260,15 +251,15 @@ exprlistassign:
 expr:
         TNil {
             $$ = NewCompoundNode("nil")
-            $$.Compound[0].Pos = $1.Pos
+            $$.Pos = $1.Pos
         } | 
         TFalse {
             $$ = NewCompoundNode("false")
-            $$.Compound[0].Pos = $1.Pos
+            $$.Pos = $1.Pos
         } | 
         TTrue {
             $$ = NewCompoundNode("true")
-            $$.Compound[0].Pos = $1.Pos
+            $$.Pos = $1.Pos
         } | 
         TNumber {
             $$ = NewNumberNode($1.Str)
@@ -302,7 +293,7 @@ expr:
             $$.Compound[0].Pos = $1.Pos
         } |
         expr '>' expr {
-            $$ = NewCompoundNode(">", $1,$3)
+            $$ = NewCompoundNode("<=", $3,$1)
             $$.Compound[0].Pos = $1.Pos
         } |
         expr '<' expr {
@@ -310,7 +301,7 @@ expr:
             $$.Compound[0].Pos = $1.Pos
         } |
         expr TGte expr {
-            $$ = NewCompoundNode(">=", $1,$3)
+            $$ = NewCompoundNode("<", $3,$1)
             $$.Compound[0].Pos = $1.Pos
         } |
         expr TLte expr {

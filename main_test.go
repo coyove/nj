@@ -1,13 +1,20 @@
 package potatolang
 
 import (
+	"flag"
 	"testing"
 	// _ "net/http/pprof"
 	"runtime"
 )
 
+var lineinfo = flag.Bool("li", false, "toggle lineinfo")
+
 func runFile(t *testing.T, path string) {
-	b, err := LoadFile("tests/test.txt")
+	if !flag.Parsed() {
+		flag.Parse()
+	}
+
+	b, err := LoadFile(path, *lineinfo)
 	if err != nil {
 		t.Fatal(err)
 	}

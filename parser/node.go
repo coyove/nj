@@ -14,6 +14,13 @@ type Position struct {
 	Column int
 }
 
+func (pos *Position) String() string {
+	if pos.Source == "" {
+		return fmt.Sprintf("0:%d:%d", pos.Line, pos.Column)
+	}
+	return fmt.Sprintf("%s:%d:%d", pos.Source, pos.Line, pos.Column)
+}
+
 type Token struct {
 	Type int
 	Name string
@@ -172,4 +179,21 @@ func (n *Node) IsIsolatedDupCall() bool {
 		return false
 	}
 	return true
+}
+
+func (n *Node) OpAddSubjects() (string, string) {
+	if n.Type != NTCompound || len(n.Compound) < 3 {
+		return "", ""
+	}
+	if c, _ := n.Compound[0].Value.(string); c != "+" {
+		return "", ""
+	}
+	a, b := "", ""
+	if c, _ := n.Compound[1].Value.(string); n.Compound[1].Type == NTAtom {
+		a = c
+	}
+	if c, _ := n.Compound[2].Value.(string); n.Compound[2].Type == NTAtom {
+		b = c
+	}
+	return a, b
 }

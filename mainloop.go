@@ -3,10 +3,20 @@ package potatolang
 import (
 	"fmt"
 	"log"
-	"os"
 	"strconv"
 	"unicode/utf8"
 )
+
+type ExecError struct {
+	r      interface{}
+	hash   uint32
+	cursor uint32
+	source string
+}
+
+func (e *ExecError) Error() string {
+	return fmt.Sprintf("cursor: %d at %x, source: %s", e.cursor, e.hash, e.source)
+}
 
 func Exec(env *Env, code []byte) Value {
 	v, _, _ := ExecCursor(env, code, 0)
@@ -16,12 +26,11 @@ func Exec(env *Env, code []byte) Value {
 func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 	var newEnv *Env
 	var lastCursor uint32
+	var lineinfo string = "<unknown>"
+
 	defer func() {
 		if r := recover(); r != nil {
-			log.Println(r)
-			log.Println(fmt.Sprintf("%x", crHash(code)))
-			log.Println("cursor:", lastCursor)
-			os.Exit(1)
+			panic(&ExecError{r, crHash(code), lastCursor, lineinfo})
 		}
 	}()
 
@@ -46,6 +55,8 @@ MAIN:
 		lastCursor = cursor
 		bop := crReadByte(code, &cursor)
 		switch bop {
+		case OP_LINE:
+			lineinfo = crReadString(code, &cursor)
 		case OP_EOB:
 			break MAIN
 		case OP_NOP:
@@ -90,32 +101,14 @@ MAIN:
 			env.A = NewBoolValue(!env.R0.Equal(env.R1))
 		case OP_LESS:
 			env.A = NewBoolValue(env.R0.Less(env.R1))
-		case OP_MORE_EQ:
-			env.A = NewBoolValue(!env.R0.Less(env.R1))
 		case OP_LESS_EQ:
 			env.A = NewBoolValue(env.R0.LessEqual(env.R1))
-		case OP_MORE:
-			env.A = NewBoolValue(!env.R0.LessEqual(env.R1))
 		case OP_NOT:
 			if env.R0.IsFalse() {
 				env.A = NewBoolValue(true)
 			} else {
 				env.A = NewBoolValue(false)
 			}
-		case OP_AND:
-			env.A = NewBoolValue(!env.R0.IsFalse() && !env.R1.IsFalse())
-		case OP_OR:
-			if env.R0.IsFalse() {
-				if env.R1.IsFalse() {
-					env.A = NewBoolValue(false)
-				} else {
-					env.A = env.R1
-				}
-			} else {
-				env.A = env.R0
-			}
-		case OP_XOR:
-			env.A = NewBoolValue(env.R0.IsFalse() != env.R1.IsFalse())
 		case OP_BIT_NOT:
 			env.A = NewNumberValue(float64(^int64(env.R0.AsNumber())))
 		case OP_BIT_AND:
@@ -257,55 +250,16 @@ MAIN:
 					v.AsClosureUnsafe().SetCaller(env.R0)
 				}
 			case Tmap:
-				v, _ = env.R0.AsMapUnsafe().Get(env.R1.AsString())
+				var found bool
+				v, found = env.R0.AsMapUnsafe().Get(env.R1.AsString())
 				if v.Type() == Tclosure {
 					v.AsClosureUnsafe().SetCaller(env.R0)
+				}
+				if !found {
+					env.E = NewBoolValue(true)
 				}
 			default:
 				log.Panicf("can't load from %+v", env.R0)
-			}
-			env.A = v
-		case OP_SAFE_STORE:
-			switch idx := int(env.R1.AsNumber()); env.R0.Type() {
-			case Tbytes:
-				if bb := env.R0.AsBytesUnsafe(); idx < len(bb) {
-					bb[idx] = byte(env.R2.AsNumber())
-				}
-			case Tlist:
-				if bb := env.R0.AsListUnsafe(); idx < len(bb) {
-					bb[idx] = env.R2
-				}
-			case Tmap:
-				env.R0.AsMapUnsafe().Put(env.R1.AsString(), env.R2)
-			default:
-				log.Panicf("can't safe store into %+v", env.R0)
-			}
-			env.A = env.R2
-		case OP_SAFE_LOAD:
-			v := NewValue()
-			switch idx := int(env.R1.AsNumber()); env.R0.Type() {
-			case Tbytes:
-				if bb := env.R0.AsBytesUnsafe(); idx < len(bb) {
-					v = NewNumberValue(float64(bb[idx]))
-				}
-			case Tstring:
-				if bb := env.R0.AsStringUnsafe(); idx < len(bb) {
-					v = NewNumberValue(float64(bb[idx]))
-				}
-			case Tlist:
-				if bb := env.R0.AsListUnsafe(); idx < len(bb) {
-					v = bb[idx]
-					if v.Type() == Tclosure {
-						v.AsClosureUnsafe().SetCaller(env.R0)
-					}
-				}
-			case Tmap:
-				v, _ = env.R0.AsMapUnsafe().Get(env.R1.AsString())
-				if v.Type() == Tclosure {
-					v.AsClosureUnsafe().SetCaller(env.R0)
-				}
-			default:
-				log.Panicf("can't safe load from %+v", env.R0)
 			}
 			env.A = v
 		case OP_R0:
@@ -456,13 +410,19 @@ MAIN:
 				log.Panicf("invalid callee: %+v", v)
 			}
 		case OP_JMP:
-			off := int(crReadInt32(code, &cursor))
-			*&cursor += uint32(off)
+			off := uint32(crReadInt32(code, &cursor))
+			*&cursor += off
+		case OP_IFNOT:
+			cond := env.Get(crReadInt32(code, &cursor))
+			off := uint32(crReadInt32(code, &cursor))
+			if cond.IsFalse() {
+				*&cursor += off
+			}
 		case OP_IF:
 			cond := env.Get(crReadInt32(code, &cursor))
-			off := int(crReadInt32(code, &cursor))
-			if cond.IsFalse() {
-				*&cursor += uint32(off)
+			off := uint32(crReadInt32(code, &cursor))
+			if !cond.IsFalse() {
+				*&cursor += off
 			}
 		case OP_DUP:
 			doDup(env)
@@ -534,7 +494,7 @@ func doDup(env *Env) {
 		return
 	case Tstring:
 		if nopred {
-			env.A = env.R1
+			env.A = NewBytesValue([]byte(env.R1.AsStringUnsafe()))
 		} else {
 			cls := env.R2.AsClosure()
 			newEnv := NewEnv(cls.Env())

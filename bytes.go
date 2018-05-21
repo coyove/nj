@@ -111,36 +111,34 @@ func crReadString(data []byte, cursor *uint32) string {
 }
 
 var singleOp = map[byte]string{
-	OP_ADD:        "add",
-	OP_SUB:        "sub",
-	OP_MUL:        "mul",
-	OP_DIV:        "div",
-	OP_MOD:        "mod",
-	OP_EQ:         "eq",
-	OP_NEQ:        "neq",
-	OP_LESS:       "less",
-	OP_LESS_EQ:    "less-eq",
-	OP_MORE:       "more",
-	OP_MORE_EQ:    "more-eq",
-	OP_LEN:        "len",
-	OP_DUP:        "dup",
-	OP_WHO:        "who",
-	OP_LOAD:       "load",
-	OP_STORE:      "store",
-	OP_SAFE_LOAD:  "sload",
-	OP_SAFE_STORE: "sstore",
-	OP_NOT:        "not",
-	OP_AND:        "and",
-	OP_OR:         "or",
-	OP_XOR:        "xor",
-	OP_BIT_NOT:    "bit-not",
-	OP_BIT_AND:    "bit-and",
-	OP_BIT_OR:     "bit-or",
-	OP_BIT_XOR:    "bit-xor",
-	OP_BIT_LSH:    "bit-lsh",
-	OP_BIT_RSH:    "bit-rsh",
-	OP_ERROR:      "error",
-	OP_TYPEOF:     "typeof",
+	OP_ADD:     "add",
+	OP_SUB:     "sub",
+	OP_MUL:     "mul",
+	OP_DIV:     "div",
+	OP_MOD:     "mod",
+	OP_EQ:      "eq",
+	OP_NEQ:     "neq",
+	OP_LESS:    "less",
+	OP_LESS_EQ: "lesseq",
+	OP_LEN:     "len",
+	OP_DUP:     "dup",
+	OP_LOAD:    "load",
+	OP_STORE:   "store",
+	OP_NOT:     "not",
+	OP_BIT_NOT: "bit-not",
+	OP_BIT_AND: "bit-and",
+	OP_BIT_OR:  "bit-or",
+	OP_BIT_XOR: "bit-xor",
+	OP_BIT_LSH: "bit-lsh",
+	OP_BIT_RSH: "bit-rsh",
+	OP_ERROR:   "error",
+	OP_TYPEOF:  "typeof",
+	OP_NIL:     "nil",
+	OP_TRUE:    "true",
+	OP_FALSE:   "false",
+	OP_WHO:     "who",
+	OP_MAP:     "map",
+	OP_LIST:    "list",
 }
 
 func crHash(data []byte) uint32 {
@@ -157,8 +155,9 @@ func Prettify(code []byte) string {
 func crPrettify(data []byte, tab int) string {
 	sb := &bytes.Buffer{}
 	pre := strings.Repeat(" ", tab)
+	hash := crHash(data)
 	sb.WriteString(pre)
-	sb.WriteString(fmt.Sprintf("<%x>\n", crHash(data)))
+	sb.WriteString(fmt.Sprintf("<%x>\n", hash))
 
 	var cursor uint32
 
@@ -194,6 +193,8 @@ MAIN:
 		sb.WriteString(strconv.Itoa(int(cursor) - 1))
 		sb.WriteString("] ")
 		switch bop {
+		case OP_LINE:
+			sb.WriteString(fmt.Sprintf("---- <%x> %s", hash, crReadString(data, &cursor)))
 		case OP_EOB:
 			sb.WriteString("end\n")
 			break MAIN
@@ -283,29 +284,21 @@ MAIN:
 			pos := crReadInt32(data, &cursor)
 			pos2 := cursor + uint32(pos)
 			sb.WriteString("jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
-		case OP_IF:
+		case OP_IFNOT:
 			addr := readAddr()
 			pos := crReadInt32(data, &cursor)
 			pos2 := cursor + uint32(pos)
 			sb.WriteString("if not " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
+		case OP_IF:
+			addr := readAddr()
+			pos := crReadInt32(data, &cursor)
+			pos2 := cursor + uint32(pos)
+			sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_NOP:
 			sb.WriteString("nop")
-		case OP_NIL:
-			sb.WriteString("$a = nil")
-		case OP_TRUE:
-			sb.WriteString("$a = true")
-		case OP_FALSE:
-			sb.WriteString("$a = false")
-		case OP_WHO:
-			sb.WriteString("$a = who")
-		case OP_MAP:
-			sb.WriteString("$a = map")
-		case OP_LIST:
-			sb.WriteString("$a = list")
 		default:
 			if bs, ok := singleOp[bop]; ok {
-				sb.Truncate(lastIdx)
-				sb.WriteString(" -> [" + bs + "]")
+				sb.WriteString(bs)
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))
 			}

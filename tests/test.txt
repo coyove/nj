@@ -36,6 +36,33 @@ assert l == list 1,2,3 end and l2(1,-1) == list "2" end
 set mul = (function(a) set b = 1 return function() b = b * a return b end end)(2)
 
 assert mul() == 2 and mul() == 4 and mul() == 8
+if 0 == 1 then
+    assert false
+elseif 2 == 2 then
+    assert true
+else
+    assert false
+end
+
+if true or function() assert false end then
+    assert true
+end
+
+if false and function() assert false end then
+    assert true
+end
+
+set cond = map
+    "counter" = 0,
+    "test" = function()
+        who().counter = who().counter + 1
+        return who().counter % 2 == 0
+    end
+end
+
+assert cond.test() or cond.test() # false or true
+cond.test()
+assert cond.test() and not cond.test() # true and not false
 
 #require "fib.txt"
 

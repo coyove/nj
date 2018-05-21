@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"os"
 
 	"github.com/coyove/potatolang/parser"
 )
@@ -37,10 +38,12 @@ func init() {
 	opMapping["call"] = clearI(compileCallOp)
 	opMapping["list"] = clearI(compileListOp)
 	opMapping["map"] = clearI(compileMapOp)
+	opMapping["or"] = clearI(compileAndOrOp(OP_IF))
+	opMapping["and"] = clearI(compileAndOrOp(OP_IFNOT))
 
 	flatOpMapping = map[string]bool{
 		"+": true, "-": true, "*": true, "/": true, "%": true,
-		"<": true, "<=": true, ">": true, ">=": true, "eq": true, "neq": true, "not": true, "and": true, "or": true, "xor": true,
+		"<": true, "<=": true, "eq": true, "neq": true, "not": true,
 		"~": true, "&": true, "|": true, "^": true, "<<": true, ">>": true,
 		"store": true, "load": true, "safestore": true, "safeload": true,
 		"assert": true, "nil": true, "true": true, "false": true,
@@ -157,20 +160,22 @@ func compileChainOp(sp int16, chain *parser.Node, table *symtable) (code []byte,
 		if a.Type != parser.NTCompound {
 			continue
 		}
-
+		if table.LineInfo && len(a.Compound) > 0 && a.Compound[0].Pos.Source != "" {
+			buf.WriteByte(OP_LINE)
+			buf.WriteString(a.Compound[0].Pos.String())
+		}
 		code, yx, sp, err = compile(sp, a.Compound, table)
 		if err != nil {
 			return
 		}
-
 		buf.Write(code)
 	}
 
 	return buf.Bytes(), yx, sp, err
 }
 
-func compileNode(n *parser.Node) (code []byte, err error) {
-	table := &symtable{M: make(map[string]int16)}
+func compileNode(n *parser.Node, lineinfo bool) (code []byte, err error) {
+	table := &symtable{M: make(map[string]int16), LineInfo: lineinfo}
 	for i, n := range CoreLibNames {
 		table.M[n] = int16(i)
 	}
@@ -184,7 +189,7 @@ func compileNode(n *parser.Node) (code []byte, err error) {
 	return code, nil
 }
 
-func LoadFile(path string) ([]byte, error) {
+func LoadFile(path string, lineinfo bool) ([]byte, error) {
 	code, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -194,17 +199,14 @@ func LoadFile(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// n.Dump(os.Stderr)
-	return compileNode(n)
+	n.Dump(os.Stderr)
+	return compileNode(n, lineinfo)
 }
 
-func LoadString(code string) ([]byte, error) {
+func LoadString(code string, lineinfo bool) ([]byte, error) {
 	n, err := parser.Parse(bytes.NewReader([]byte(code)), "mem")
 	if err != nil {
 		return nil, err
 	}
-
-	// n.Dump(os.Stderr)
-	return compileNode(n)
+	return compileNode(n, lineinfo)
 }

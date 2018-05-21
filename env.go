@@ -284,6 +284,9 @@ type symtable struct {
 
 	// has error op
 	E bool
+
+	// record line info at chain
+	LineInfo bool
 }
 
 func (c *symtable) GetRelPosition(key string) int32 {
