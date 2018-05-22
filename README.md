@@ -1,27 +1,30 @@
 # potatolang
 
-potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin/gopher-lua). However I am not really a fan of lua's syntax, so I decided to make my own one.
+potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin/gopher-lua), but with some heavy modifications to the syntax and other designs.
 
 ## Quick go through
 
-1. `set a = 1` declares a variable named `a` with its value being number `1`. Value is a must so `set a` is not legal.
-2. Declare before use. (I will mix the use of "declare" and "define")
-2. There is no multi-assignment in potato. However you can write `set a, b = 1, 2`, but keep in mind this is just a syntax sugar (`set a, b = 1` will expand to `set a = 1 set b = 1`).
-2. To define comlex structures: 
+1. Declare before use.
 
-        set l = list 1, 2, 3 end
-        set m = map "key1" = "value1", "key2" = "value2" end
-
-    note that the key doesn't have to be an immediate value, but it must be a string:
-
-        set m = map
-            (function () return "key1" end) = "value1"
+        a = 1             # compile error
+        set a = 1         # declare first
+        set b = "hello world"
+        set c = nil
+        set d = true
+        set e = 0x123
+        set f = list 1, 2, 3 end
+        set g = map "key1" = "value1", "key2" = "value2" end
+        set h = map
+            (function () return "key1" end)() = "value1"
         end
+        set i, j = 1, 2   # converted to set i = 1; set j = 2
+        set k, l = 1      # converted to set k = 1; set l = 1
+        a, b = 1, 2       # illegal, sorry
     
-2. To define a string block, use `sss<ident>` to start and `end<ident>` to end (`<ident>` should be a valid identifer name):
+        # to define a string block, use sss<ident> to start and end<ident> to end. <ident> should be a valid identifer name:
 
         set s = ssshello
-            raw string literal
+            ... raw string literal ...
         endhello
 
 2. `dup` is an important builtin function:
@@ -29,17 +32,32 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         set a = 1
         set b = dup(a)
         assert b == 1
+
         set c = list 1, 2 end
         set d = dup(c) 
         c[0] = 0    
-        assert d[0] == 1
+        assert d[0] == 1   # d is another list now
+
+        # to iterate over a map:
+        set m = map
+            "1" = 1,
+            "2" = 2
+        end
+        dup(m, function(k, v)
+            assert k == ("" & v)
+        end)
+
+        # return value
         set e = dup(d, function(i, n) return n + 1 end)
-        assert e == list 2, 3 end
-        set f = dup(d, function(i, n) if i == 1 then error(true) end return n + 1 end)
+        assert e == list 2, 3 end and d == list 1, 2 end
+
+        set f = dup(d, function(i, n) 
+            if i == 1 then error(true) end 
+            return n + 1 
+        end)
         assert f == list 2 end
 
-2. If you want to return multiple results to the caller:
-
+        # if you want to return multiple results:
         function foo()
             set a = 1
             set b = 2
@@ -52,8 +70,7 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         set r = foo()
         assert r[-2] == 1 and r[-1] == 2
 
-    The same trick can be used to accept varargs:
-
+        # the same trick can be used to accept varargs:
         function sum()
             set x = dup() 
             set s = 0
@@ -80,18 +97,24 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
 2. Strings and numbers can't be added together. however `&` can (concat):
 
         set a = 1
-        set b = a + "2"         # panic
+        set b = a + "2"         # runtime panic
         set c = list end + a    # [1]
         set d = list 0 end + c  # [0, [1]]
         set e = list 0 end & c  # [0, 1]
-        set f = "" & a & "2"    # "12"
+        set f = "" & a & "2"    # "12" 
+                                # in potato there is no tostring
 
-2. To iterate over a map:
+2. When a closure is loaded from a map or a list, it remembers it, and this trick can be used to simulate structs:
 
-        set m = map
-            "1" = 1,
-            "2" = 2
+        set counter = map
+            "counter" = 0,
+            "add" = function()
+                set this = who()
+                this.counter = this.counter + 1
+            end
         end
-        dup(m, function(k, v)
-            assert k == ("" & v)
-        end)
+
+        set c = dup(counter)
+        c.add()
+        c.add()
+        assert c.counter == 2
