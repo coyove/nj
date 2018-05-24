@@ -19,7 +19,7 @@ func BenchmarkMap(b *testing.B) {
 		for j := 0; j < 4; j++ {
 			m.Put(strconv.Itoa(j), NewNumberValue(float64(j)))
 		}
-		if v, _ := m.Get(strconv.Itoa(rand.Intn(4))); v.AsNumberUnsafe() == -1 {
+		if v, _ := m.Get(strconv.Itoa(rand.Intn(4))); v.AsNumber() == -1 {
 			b.Error("won't happen")
 		}
 	}
@@ -31,7 +31,7 @@ func BenchmarkNativeMap(b *testing.B) {
 		for j := 0; j < 4; j++ {
 			m[strconv.Itoa(j)] = NewNumberValue(float64(j))
 		}
-		if m[strconv.Itoa(rand.Intn(4))].AsNumberUnsafe() == -1 {
+		if m[strconv.Itoa(rand.Intn(4))].AsNumber() == -1 {
 			b.Error("won't happen")
 		}
 	}
@@ -52,7 +52,7 @@ func TestMap_Put(t *testing.T) {
 		t.Error(0)
 	}
 	for j := 0; j < mapentrySize; j++ {
-		if v, _ := m.Get(strconv.Itoa(j)); v.AsNumberUnsafe() != float64(j) {
+		if v, _ := m.Get(strconv.Itoa(j)); v.AsNumber() != float64(j) {
 			t.Error(j)
 		}
 	}

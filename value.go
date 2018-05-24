@@ -32,6 +32,18 @@ const (
 	Tgeneric
 )
 
+const (
+	_Tnilnil         = Tnil<<8 | Tnil
+	_Tnumbernumber   = Tnumber<<8 | Tnumber
+	_Tstringstring   = Tstring<<8 | Tstring
+	_Tboolbool       = Tbool<<8 | Tbool
+	_Tlistlist       = Tlist<<8 | Tlist
+	_Tbytesbytes     = Tbytes<<8 | Tbytes
+	_Tmapmap         = Tmap<<8 | Tmap
+	_Tclosureclosure = Tclosure<<8 | Tclosure
+	_Tgenericgeneric = Tgeneric<<8 | Tgeneric
+)
+
 // TMapping maps type to its string representation
 var TMapping = map[byte]string{
 	Tnil: "nil", Tnumber: "number", Tstring: "string", Tbool: "bool",
@@ -131,48 +143,20 @@ func (v Value) Type() byte {
 }
 
 // AsBool cast value to bool
-func (v Value) AsBool() bool {
-	if v.ty != Tbool {
-		log.Panicf("expecting boolean, got %+v", v)
-	}
-	return uintptr(v.ptr) == trueValue
-}
-
-// AsBoolUnsafe cast value to bool without checking
-func (v Value) AsBoolUnsafe() bool {
-	return uintptr(v.ptr) == trueValue
-}
-
-// AsNumber cast value to float64
-func (v Value) AsNumber() float64 {
-	if v.ty != Tnumber {
-		log.Panicf("expecting number, got %+v", v)
-	}
-	return v.AsNumberUnsafe()
-}
+func (v Value) AsBool() bool { return uintptr(v.ptr) == trueValue }
 
 func (v Value) u64() uint64 {
 	if v.ty != Tnumber {
 		log.Panicf("expecting number, got %+v", v)
 	}
-	return math.Float64bits(v.AsNumberUnsafe())
+	return math.Float64bits(v.AsNumber())
 }
 
-// AsNumberUnsafe cast value to float64 without checking
-func (v Value) AsNumberUnsafe() float64 {
-	return *(*float64)(unsafe.Pointer(&v.i))
-}
+// AsNumber cast value to float64
+func (v Value) AsNumber() float64 { return *(*float64)(unsafe.Pointer(&v.i)) }
 
 // AsString cast value to string
 func (v Value) AsString() string {
-	if v.ty != Tstring {
-		log.Panicf("expecting string, got %+v", v)
-	}
-	return v.AsStringUnsafe()
-}
-
-// AsStringUnsafe cast value to string without checking
-func (v Value) AsStringUnsafe() string {
 	if v.i > 0 {
 		hdr := reflect.StringHeader{}
 		hdr.Len = int(v.i - 1)
@@ -182,71 +166,28 @@ func (v Value) AsStringUnsafe() string {
 	return *(*string)(v.ptr)
 }
 
-// AsList cast value to slice of values
-func (v Value) AsList() []Value {
-	if v.ty != Tlist {
-		log.Panicf("expecting array, got %+v", v)
-	}
-	return *(*[]Value)(v.ptr)
-}
-
-// AsListUnsafe cast value to slice of values without checking
-func (v Value) AsListUnsafe() []Value {
-	return *(*[]Value)(v.ptr)
-}
-
 // AsMap cast value to map of values
-func (v Value) AsMap() *Map {
-	if v.ty != Tmap {
-		log.Panicf("expecting map, got %+v", v)
-	}
-	return (*Map)(v.ptr)
-}
-
-// AsMapUnsafe cast value to map of values without checking
-func (v Value) AsMapUnsafe() *Map {
-	return (*Map)(v.ptr)
-}
+func (v Value) AsMap() *Map { return (*Map)(v.ptr) }
 
 // AsClosure cast value to closure
-func (v Value) AsClosure() *Closure {
-	if v.ty != Tclosure {
-		log.Panicf("expecting closure, got %+v", v)
-	}
-	return (*Closure)(v.ptr)
-}
-
-// AsClosureUnsafe cast value to closure without checking
-func (v Value) AsClosureUnsafe() *Closure {
-	return (*Closure)(v.ptr)
-}
+func (v Value) AsClosure() *Closure { return (*Closure)(v.ptr) }
 
 // AsGeneric cast value to interface{}
-func (v Value) AsGeneric() interface{} {
-	if v.ty != Tgeneric {
-		log.Panicf("expecting generic, got %+v", v)
-	}
-	return *(*interface{})(v.ptr)
-}
+func (v Value) AsGeneric() interface{} { return *(*interface{})(v.ptr) }
 
-// AsGenericUnsafe cast value to interface{} without checking
-func (v Value) AsGenericUnsafe() interface{} {
-	return *(*interface{})(v.ptr)
+// AsList cast value to slice of values
+func (v Value) AsList() []Value {
+	if v.ptr == nil {
+		return nil
+	}
+	return *(*[]Value)(v.ptr)
 }
 
 // AsBytes cast value to []byte
 func (v Value) AsBytes() []byte {
-	if v.ty != Tbytes {
-		log.Panicf("expecting bytes, got %+v", v)
-	}
 	if v.ptr == nil {
 		return nil
 	}
-	return *(*[]byte)(v.ptr)
-}
-
-// AsBytesUnsafe cast value to []byte without checking
-func (v Value) AsBytesUnsafe() []byte {
 	return *(*[]byte)(v.ptr)
 }
 
@@ -255,21 +196,21 @@ func (v Value) AsBytesUnsafe() []byte {
 func (v Value) I() interface{} {
 	switch v.Type() {
 	case Tbool:
-		return v.AsBoolUnsafe()
+		return v.AsBool()
 	case Tnumber:
-		return v.AsNumberUnsafe()
+		return v.AsNumber()
 	case Tstring:
-		return v.AsStringUnsafe()
+		return v.AsString()
 	case Tlist:
-		return v.AsListUnsafe()
+		return v.AsList()
 	case Tmap:
-		return v.AsMapUnsafe()
+		return v.AsMap()
 	case Tbytes:
-		return v.AsBytesUnsafe()
+		return v.AsBytes()
 	case Tclosure:
-		return v.AsClosureUnsafe()
+		return v.AsClosure()
 	case Tgeneric:
-		return v.AsGenericUnsafe()
+		return v.AsGeneric()
 	}
 	return nil
 }
@@ -277,7 +218,7 @@ func (v Value) I() interface{} {
 func (v Value) String() string {
 	switch v.Type() {
 	case Tstring:
-		return strconv.Quote(v.AsStringUnsafe())
+		return strconv.Quote(v.AsString())
 	default:
 		return v.ToPrintString()
 	}
@@ -289,17 +230,17 @@ func (v Value) IsFalse() bool {
 	case Tnil:
 		return true
 	case Tbool:
-		return v.AsBoolUnsafe() == false
+		return v.AsBool() == false
 	case Tnumber:
-		return v.AsNumberUnsafe() == 0.0
+		return v.AsNumber() == 0.0
 	case Tstring:
-		return v.AsStringUnsafe() == ""
+		return v.AsString() == ""
 	case Tlist:
-		return len(v.AsListUnsafe()) == 0
+		return len(v.AsList()) == 0
 	case Tbytes:
-		return len(v.AsBytesUnsafe()) == 0
+		return len(v.AsBytes()) == 0
 	case Tmap:
-		return v.AsMapUnsafe().Size() == 0
+		return v.AsMap().Size() == 0
 	}
 	return false
 }
@@ -313,21 +254,21 @@ func (v Value) Equal(r Value) bool {
 	switch v.ty {
 	case Tnumber:
 		if r.ty == Tnumber {
-			return r.AsNumberUnsafe() == v.AsNumberUnsafe()
+			return r.AsNumber() == v.AsNumber()
 		}
 	case Tstring:
 		if r.ty == Tstring {
-			return r.AsStringUnsafe() == v.AsStringUnsafe()
+			return r.AsString() == v.AsString()
 		} else if r.ty == Tbytes {
-			return bytes.Equal(r.AsBytesUnsafe(), []byte(v.AsStringUnsafe()))
+			return bytes.Equal(r.AsBytes(), []byte(v.AsString()))
 		}
 	case Tbool:
 		if r.ty == Tbool {
-			return r.AsBoolUnsafe() == v.AsBoolUnsafe()
+			return r.AsBool() == v.AsBool()
 		}
 	case Tlist:
 		if r.ty == Tlist {
-			lf, rf := v.AsListUnsafe(), r.AsListUnsafe()
+			lf, rf := v.AsList(), r.AsList()
 
 			if len(lf) != len(rf) {
 				return false
@@ -343,48 +284,16 @@ func (v Value) Equal(r Value) bool {
 		}
 	case Tbytes:
 		if r.ty == Tbytes {
-			return bytes.Equal(v.AsBytesUnsafe(), r.AsBytesUnsafe())
+			return bytes.Equal(v.AsBytes(), r.AsBytes())
 		} else if r.ty == Tstring {
-			return bytes.Equal(v.AsBytesUnsafe(), []byte(r.AsStringUnsafe()))
+			return bytes.Equal(v.AsBytes(), []byte(r.AsString()))
 		}
 	case Tmap:
 		if r.ty == Tmap {
-			return v.AsMapUnsafe().Equal(r.AsMapUnsafe())
+			return v.AsMap().Equal(r.AsMap())
 		}
 	}
 
-	return false
-}
-
-// Less tests whether value is less than another value
-func (v Value) Less(r Value) bool {
-	switch v.ty {
-	case Tnumber:
-		if r.ty == Tnumber {
-			return v.AsNumberUnsafe() < r.AsNumberUnsafe()
-		}
-	case Tstring:
-		if r.ty == Tstring {
-			return v.AsStringUnsafe() < r.AsStringUnsafe()
-		}
-	}
-	log.Panicf("can't compare %+v and %+v", v, r)
-	return false
-}
-
-// LessEqual tests whether value is less or equal than another value
-func (v Value) LessEqual(r Value) bool {
-	switch v.ty {
-	case Tnumber:
-		if r.ty == Tnumber {
-			return v.AsNumberUnsafe() <= r.AsNumberUnsafe()
-		}
-	case Tstring:
-		if r.ty == Tstring {
-			return v.AsStringUnsafe() <= r.AsStringUnsafe()
-		}
-	}
-	log.Panicf("can't compare %+v and %+v", v, r)
 	return false
 }
 
@@ -454,7 +363,15 @@ func (v Value) toString(lv int) string {
 	case Tclosure:
 		return v.AsClosure().String()
 	case Tgeneric:
-		return fmt.Sprintf("%v", v.AsGenericUnsafe())
+		return fmt.Sprintf("%v", v.AsGeneric())
 	}
 	return "nil"
+}
+
+func (v Value) panicType(expected byte) {
+	log.Panicf("expecting %s, got %+v", TMapping[expected], v)
+}
+
+func testTypes(v1, v2 Value) uint16 {
+	return uint16(v1.ty)<<8 + uint16(v2.ty)
 }

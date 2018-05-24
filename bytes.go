@@ -128,6 +128,16 @@ func crReadString(data []uint16, cursor *uint32) string {
 	return string(slice16to8(buf)[:x])
 }
 
+func cruRead16(data uintptr, cursor *uint32) uint16 {
+	*cursor++
+	return kode(data, *cursor-1)
+}
+
+func cruRead32(data uintptr, cursor *uint32) uint32 {
+	*cursor += 2
+	return uint32(kode(data, *cursor-2))<<16 + uint32(kode(data, *cursor-1))
+}
+
 var singleOp = map[uint16]string{
 	OP_ADD:     "add",
 	OP_SUB:     "sub",

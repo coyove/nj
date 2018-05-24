@@ -20,7 +20,7 @@ func TestNewStringValue(t *testing.T) {
 	runtime.GC()
 
 	for k, v := range m {
-		if k != v.AsStringUnsafe() {
+		if k != v.AsString() {
 			t.Error(k, v)
 		}
 	}

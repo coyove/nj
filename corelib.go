@@ -17,21 +17,28 @@ var CoreLibs = map[string]Value{}
 
 func init() {
 	lcore := NewMap()
-	lcore.Put("genlist", NewNativeValue(1, func(env *Env) Value { return NewListValue(make([]Value, int(env.stack.Get(0).AsNumber()))) }))
-	lcore.Put("genbytes", NewNativeValue(1, func(env *Env) Value { return NewBytesValue(make([]byte, int(env.stack.Get(0).AsNumber()))) }))
-	lcore.Put("yreset", NewNativeValue(1, func(env *Env) Value { env.stack.Get(0).AsClosure().lastenv = nil; return NewValue() }))
+	lcore.Put("genlist", NewNativeValue(1, func(env *Env) Value {
+		return NewListValue(make([]Value, int(env.stack.Get(0).AsNumber())))
+	}))
+	lcore.Put("genbytes", NewNativeValue(1, func(env *Env) Value {
+		return NewBytesValue(make([]byte, int(env.stack.Get(0).AsNumber())))
+	}))
+	lcore.Put("yreset", NewNativeValue(1, func(env *Env) Value {
+		env.stack.Get(0).AsClosure().lastenv = nil
+		return NewValue()
+	}))
 	lcore.Put("tonumber", NewNativeValue(1, func(env *Env) Value {
 		switch n := env.stack.Get(0); n.Type() {
 		case Tnumber:
 			return n
 		case Tstring:
-			num, err := parser.StringToNumber(n.AsStringUnsafe())
+			num, err := parser.StringToNumber(n.AsString())
 			if err != nil {
 				return NewValue()
 			}
 			return NewNumberValue(num)
 		case Tbool:
-			if n.AsBoolUnsafe() {
+			if n.AsBool() {
 				return NewNumberValue(1)
 			}
 			return NewNumberValue(0)
@@ -40,27 +47,31 @@ func init() {
 		}
 	}))
 	lcore.Put("remove", NewNativeValue(2, func(env *Env) Value {
-		switch s := env.Get(0); s.ty {
-		case Tmap:
-			return s.AsMapUnsafe().Remove(env.Get(1).AsString())
-		case Tlist:
-			l := s.AsListUnsafe()
+		switch s := env.Get(0); testTypes(s, env.stack.Get(1)) {
+		case Tmap<<8 | Tstring:
+			return s.AsMap().Remove(env.Get(1).AsString())
+		case Tlist<<8 | Tnumber:
+			l := s.AsList()
 			if env.Size() == 2 {
 				idx := int(env.Get(1).AsNumber())
 				l = append(l[:idx], l[idx+1:]...)
-			} else {
+			} else if env.stack.Get(2).ty == Tnumber {
 				idx, ln := int(env.Get(1).AsNumber()), int(env.Get(2).AsNumber())
 				l = append(l[:idx], l[idx+ln:]...)
+			} else {
+				log.Panicf("can't call remove on %+v with index %+v", s, env.stack.Get(2))
 			}
 			return NewListValue(l)
-		case Tbytes:
-			l := s.AsBytesUnsafe()
+		case Tbytes<<8 | Tnumber:
+			l := s.AsBytes()
 			if env.Size() == 2 {
 				idx := int(env.Get(1).AsNumber())
 				l = append(l[:idx], l[idx+1:]...)
-			} else {
+			} else if env.stack.Get(2).ty == Tnumber {
 				idx, ln := int(env.Get(1).AsNumber()), int(env.Get(2).AsNumber())
 				l = append(l[:idx], l[idx+ln:]...)
+			} else {
+				log.Panicf("can't call remove on %+v with index %+v", s, env.stack.Get(2))
 			}
 			return NewBytesValue(l)
 		default:
@@ -162,9 +173,9 @@ func stdWrite(f *os.File) func(env *Env) Value {
 		for i := 0; i < s.Size(); i++ {
 			switch a := s.Get(i); a.ty {
 			case Tbytes:
-				f.Write(s.Get(i).AsBytesUnsafe())
+				f.Write(s.Get(i).AsBytes())
 			case Tstring:
-				f.Write([]byte(s.Get(i).AsStringUnsafe()))
+				f.Write([]byte(s.Get(i).AsString()))
 			default:
 				log.Panicf("can't write to output: %+v", a)
 			}

@@ -40,6 +40,10 @@ func (e *ExecError) Error() string {
 
 func konst(addr uintptr, idx uint16) Value { return *(*Value)(unsafe.Pointer(addr + uintptr(idx)*16)) }
 
+func kode(addr uintptr, idx uint32) uint16 { return *(*uint16)(unsafe.Pointer(addr + uintptr(idx)*2)) }
+
+func kodeaddr(code []uint16) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&code)).Data }
+
 // ExecCursor executes code under the given env from the given start cursor and returns:
 // final result, yield cursor, is yield or not
 func ExecCursor(env *Env, code []uint16, consts []Value, cursor uint32) (Value, uint32, bool) {
@@ -47,6 +51,7 @@ func ExecCursor(env *Env, code []uint16, consts []Value, cursor uint32) (Value, 
 	var lastCursor uint32
 	var lineinfo = "<unknown>"
 	var retStack []ret
+	var caddr = kodeaddr(code)
 	var kaddr = (*reflect.SliceHeader)(unsafe.Pointer(&consts)).Data
 
 	defer func() {
@@ -67,6 +72,7 @@ func ExecCursor(env *Env, code []uint16, consts []Value, cursor uint32) (Value, 
 		r := retStack[len(retStack)-1]
 		cursor = r.cursor
 		code = r.code
+		caddr = kodeaddr(code)
 		kaddr = r.kaddr
 		r.env.A, r.env.E = v, env.E
 		env = r.env
@@ -76,7 +82,7 @@ MAIN:
 	for {
 		lastCursor = cursor
 		// log.Println(cursor)
-		bop := crRead16(code, &cursor)
+		bop := cruRead16(caddr, &cursor)
 		switch bop {
 		case OP_LINE:
 			lineinfo = crReadString(code, &cursor)
@@ -92,42 +98,74 @@ MAIN:
 		case OP_FALSE:
 			env.A = NewBoolValue(false)
 		case OP_SET:
-			env.Set(crRead32(code, &cursor), env.Get(crRead32(code, &cursor)))
+			env.Set(cruRead32(caddr, &cursor), env.Get(cruRead32(caddr, &cursor)))
 		case OP_SETK:
-			env.Set(crRead32(code, &cursor), konst(kaddr, crRead16(code, &cursor)))
+			env.Set(cruRead32(caddr, &cursor), konst(kaddr, cruRead16(caddr, &cursor)))
 		case OP_INC:
-			addr := crRead32(code, &cursor)
+			addr := cruRead32(caddr, &cursor)
 			num := env.Get(addr).AsNumber()
-			env.Set(addr, NewNumberValue(num+konst(kaddr, crRead16(code, &cursor)).AsNumberUnsafe()))
+			env.Set(addr, NewNumberValue(num+konst(kaddr, cruRead16(caddr, &cursor)).AsNumber()))
 		case OP_ADD:
-			switch l := env.R0; l.Type() {
-			case Tnumber:
-				env.A = NewNumberValue(l.AsNumberUnsafe() + env.R1.AsNumber())
-			case Tstring:
-				env.A = NewStringValue(l.AsStringUnsafe() + env.R1.AsString())
-			case Tlist:
-				env.A = NewListValue(append(l.AsListUnsafe(), env.R1))
-			case Tbytes:
-				env.A = NewBytesValue(append(l.AsBytesUnsafe(), byte(env.R1.AsNumber())))
+			switch testTypes(env.R0, env.R1) {
+			case _Tnumbernumber:
+				env.A = NewNumberValue(env.R0.AsNumber() + env.R1.AsNumber())
+			case _Tstringstring:
+				env.A = NewStringValue(env.R0.AsString() + env.R1.AsString())
+			case Tbytes<<8 | Tnumber:
+				env.A = NewBytesValue(append(env.R0.AsBytes(), byte(env.R1.AsNumber())))
 			default:
-				log.Panicf("can't apply 'add' on %+v", l)
+				if env.R0.ty == Tlist {
+					env.A = NewListValue(append(env.R0.AsList(), env.R1))
+				} else {
+					log.Panicf("can't apply 'add' on %+v and %+v", env.R0, env.R1)
+				}
 			}
 		case OP_SUB:
-			env.A = NewNumberValue(env.R0.AsNumber() - env.R1.AsNumber())
+			if testTypes(env.R0, env.R1) == _Tnumbernumber {
+				env.A = NewNumberValue(env.R0.AsNumber() - env.R1.AsNumber())
+			} else {
+				log.Panicf("can't apply 'sub' on %+v and %+v", env.R0, env.R1)
+			}
 		case OP_MUL:
-			env.A = NewNumberValue(env.R0.AsNumber() * env.R1.AsNumber())
+			if testTypes(env.R0, env.R1) == _Tnumbernumber {
+				env.A = NewNumberValue(env.R0.AsNumber() * env.R1.AsNumber())
+			} else {
+				log.Panicf("can't apply 'mul' on %+v and %+v", env.R0, env.R1)
+			}
 		case OP_DIV:
-			env.A = NewNumberValue(env.R0.AsNumber() / env.R1.AsNumber())
+			if testTypes(env.R0, env.R1) == _Tnumbernumber {
+				env.A = NewNumberValue(env.R0.AsNumber() / env.R1.AsNumber())
+			} else {
+				log.Panicf("can't apply 'div' on %+v and %+v", env.R0, env.R1)
+			}
 		case OP_MOD:
-			env.A = NewNumberValue(float64(int64(env.R0.AsNumber()) % int64(env.R1.AsNumber())))
+			if testTypes(env.R0, env.R1) == _Tnumbernumber {
+				env.A = NewNumberValue(float64(int64(env.R0.AsNumber()) % int64(env.R1.AsNumber())))
+			} else {
+				log.Panicf("can't apply 'mod' on %+v and %+v", env.R0, env.R1)
+			}
 		case OP_EQ:
 			env.A = NewBoolValue(env.R0.Equal(env.R1))
 		case OP_NEQ:
 			env.A = NewBoolValue(!env.R0.Equal(env.R1))
 		case OP_LESS:
-			env.A = NewBoolValue(env.R0.Less(env.R1))
+			switch testTypes(env.R0, env.R1) {
+			case _Tnumbernumber:
+				env.A = NewBoolValue(env.R0.AsNumber() < env.R1.AsNumber())
+			case _Tstringstring:
+				env.A = NewBoolValue(env.R0.AsString() < env.R1.AsString())
+			default:
+				log.Panicf("can't apply 'less' on %+v and %+v", env.R0, env.R1)
+			}
 		case OP_LESS_EQ:
-			env.A = NewBoolValue(env.R0.LessEqual(env.R1))
+			switch testTypes(env.R0, env.R1) {
+			case _Tnumbernumber:
+				env.A = NewBoolValue(env.R0.AsNumber() <= env.R1.AsNumber())
+			case _Tstringstring:
+				env.A = NewBoolValue(env.R0.AsString() <= env.R1.AsString())
+			default:
+				log.Panicf("can't apply 'less equal' on %+v and %+v", env.R0, env.R1)
+			}
 		case OP_NOT:
 			if env.R0.IsFalse() {
 				env.A = NewBoolValue(true)
@@ -135,17 +173,21 @@ MAIN:
 				env.A = NewBoolValue(false)
 			}
 		case OP_BIT_NOT:
-			env.A = NewNumberValue(float64(^int64(env.R0.AsNumber())))
+			if env.R0.ty == Tnumber {
+				env.A = NewNumberValue(float64(^int64(env.R0.AsNumber())))
+			} else {
+				log.Panicf("can't apply 'bit not' on %+v", env.R0)
+			}
 		case OP_BIT_AND:
-			switch env.R0.Type() {
-			case Tnumber:
-				env.A = NewNumberValue(float64(int64(env.R0.AsNumberUnsafe()) & int64(env.R1.AsNumber())))
-			case Tlist:
-				env.A = NewListValue(append(env.R0.AsListUnsafe(), env.R1.AsList()...))
-			case Tbytes:
-				env.A = NewBytesValue(append(env.R0.AsBytesUnsafe(), env.R1.AsBytes()...))
-			case Tmap:
-				tr, m := env.R0.AsMapUnsafe().Dup(nil), env.R1.AsMap()
+			switch testTypes(env.R0, env.R1) {
+			case _Tnumbernumber:
+				env.A = NewNumberValue(float64(int64(env.R0.AsNumber()) & int64(env.R1.AsNumber())))
+			case _Tlistlist:
+				env.A = NewListValue(append(env.R0.AsList(), env.R1.AsList()...))
+			case _Tbytesbytes:
+				env.A = NewBytesValue(append(env.R0.AsBytes(), env.R1.AsBytes()...))
+			case _Tmapmap:
+				tr, m := env.R0.AsMap().Dup(nil), env.R1.AsMap()
 				if m.t != nil {
 					for _, x := range m.t {
 						tr.Put(x.k, x.v)
@@ -156,35 +198,53 @@ MAIN:
 					}
 				}
 				env.A = NewMapValue(tr)
-			case Tstring:
-				switch ss := env.R0.AsStringUnsafe(); env.R1.ty {
-				case Tnumber:
-					num := env.R1.AsNumberUnsafe()
-					if float64(int64(num)) == num {
-						env.A = NewStringValue(ss + strconv.FormatInt(int64(num), 10))
-					} else {
-						env.A = NewStringValue(ss + strconv.FormatFloat(num, 'f', -1, 64))
-					}
-				case Tbool:
-					env.A = NewStringValue(ss + strconv.FormatBool(env.R1.AsBoolUnsafe()))
-				case Tstring:
-					env.A = NewStringValue(ss + env.R1.AsStringUnsafe())
-				case Tbytes:
-					env.A = NewStringValue(ss + string(env.R1.AsBytesUnsafe()))
-				default:
-					env.A = NewStringValue(ss + env.R1.ToPrintString())
-				}
 			default:
-				log.Panicf("can't apply bit 'and' on %+v", env.R0)
+				if env.R0.ty == Tstring {
+					switch ss := env.R0.AsString(); env.R1.ty {
+					case Tnumber:
+						num := env.R1.AsNumber()
+						if float64(int64(num)) == num {
+							env.A = NewStringValue(ss + strconv.FormatInt(int64(num), 10))
+						} else {
+							env.A = NewStringValue(ss + strconv.FormatFloat(num, 'f', -1, 64))
+						}
+					case Tbool:
+						env.A = NewStringValue(ss + strconv.FormatBool(env.R1.AsBool()))
+					case Tstring:
+						env.A = NewStringValue(ss + env.R1.AsString())
+					case Tbytes:
+						env.A = NewStringValue(ss + string(env.R1.AsBytes()))
+					default:
+						env.A = NewStringValue(ss + env.R1.ToPrintString())
+					}
+				} else {
+					log.Panicf("can't apply 'bit and' on %+v and %+v", env.R0, env.R1)
+				}
 			}
 		case OP_BIT_OR:
-			env.A = NewNumberValue(float64(int64(env.R0.AsNumber()) | int64(env.R1.AsNumber())))
+			if testTypes(env.R0, env.R1) == _Tnumbernumber {
+				env.A = NewNumberValue(float64(int64(env.R0.AsNumber()) | int64(env.R1.AsNumber())))
+			} else {
+				log.Panicf("can't apply 'bit or' on %+v and %+v", env.R0, env.R1)
+			}
 		case OP_BIT_XOR:
-			env.A = NewNumberValue(float64(int64(env.R0.AsNumber()) ^ int64(env.R1.AsNumber())))
+			if testTypes(env.R0, env.R1) == _Tnumbernumber {
+				env.A = NewNumberValue(float64(int64(env.R0.AsNumber()) ^ int64(env.R1.AsNumber())))
+			} else {
+				log.Panicf("can't apply 'bit xor' on %+v and %+v", env.R0, env.R1)
+			}
 		case OP_BIT_LSH:
-			env.A = NewNumberValue(float64(uint64(env.R0.AsNumber()) << uint64(env.R1.AsNumber())))
+			if testTypes(env.R0, env.R1) == _Tnumbernumber {
+				env.A = NewNumberValue(float64(uint64(env.R0.AsNumber()) << uint64(env.R1.AsNumber())))
+			} else {
+				log.Panicf("can't apply 'bit lsh' on %+v and %+v", env.R0, env.R1)
+			}
 		case OP_BIT_RSH:
-			env.A = NewNumberValue(float64(uint64(env.R0.AsNumber()) >> uint64(env.R1.AsNumber())))
+			if testTypes(env.R0, env.R1) == _Tnumbernumber {
+				env.A = NewNumberValue(float64(uint64(env.R0.AsNumber()) >> uint64(env.R1.AsNumber())))
+			} else {
+				log.Panicf("can't apply 'bit rsh' on %+v and %+v", env.R0, env.R1)
+			}
 		case OP_ASSERT:
 			loc := "assertion failed: " + crReadString(code, &cursor)
 			if env.R0.IsFalse() {
@@ -194,13 +254,13 @@ MAIN:
 		case OP_LEN:
 			switch v := env.R0; v.Type() {
 			case Tstring:
-				env.A = NewNumberValue(float64(len(v.AsStringUnsafe())))
+				env.A = NewNumberValue(float64(len(v.AsString())))
 			case Tlist:
-				env.A = NewNumberValue(float64(len(v.AsListUnsafe())))
+				env.A = NewNumberValue(float64(len(v.AsList())))
 			case Tmap:
-				env.A = NewNumberValue(float64(v.AsMapUnsafe().Size()))
+				env.A = NewNumberValue(float64(v.AsMap().Size()))
 			case Tbytes:
-				env.A = NewNumberValue(float64(len(v.AsBytesUnsafe())))
+				env.A = NewNumberValue(float64(len(v.AsBytes())))
 			default:
 				log.Panicf("can't evaluate the length of %+v", v)
 			}
@@ -227,119 +287,127 @@ MAIN:
 				size := newEnv.Stack().Size()
 				m := NewMap()
 				for i := 0; i < size; i += 2 {
-					m.Put(newEnv.Get(uint32(i)).AsString(), newEnv.Get(uint32(i+1)))
+					if k := newEnv.Get(uint32(i)); k.ty == Tstring {
+						m.Put(k.AsString(), newEnv.Get(uint32(i+1)))
+					} else {
+						k.panicType(Tstring)
+					}
 				}
 				newEnv.Stack().Clear()
 				env.A = NewMapValue(m)
 			}
 		case OP_STORE:
-			switch env.R0.Type() {
-			case Tbytes:
-				if b, idx := env.R0.AsBytesUnsafe(), int(env.R1.AsNumber()); idx >= 0 {
-					b[idx] = byte(env.R2.AsNumber())
+			switch testTypes(env.R0, env.R1) {
+			case Tbytes<<8 | Tnumber:
+				if env.R2.ty == Tnumber {
+					if b, idx := env.R0.AsBytes(), int(env.R1.AsNumber()); idx >= 0 {
+						b[idx] = byte(env.R2.AsNumber())
+					} else {
+						b[len(b)+idx] = byte(env.R2.AsNumber())
+					}
 				} else {
-					b[len(b)+idx] = byte(env.R2.AsNumber())
+					log.Panicf("can't store into %+v with key %+v", env.R0, env.R1)
 				}
-			case Tlist:
-				if b, idx := env.R0.AsListUnsafe(), int(env.R1.AsNumber()); idx >= 0 {
+			case Tlist<<8 | Tnumber:
+				if b, idx := env.R0.AsList(), int(env.R1.AsNumber()); idx >= 0 {
 					b[idx] = env.R2
 				} else {
 					b[len(b)+idx] = env.R2
 				}
-			case Tmap:
-				env.R0.AsMapUnsafe().Put(env.R1.AsString(), env.R2)
+			case Tmap<<8 | Tstring:
+				env.R0.AsMap().Put(env.R1.AsString(), env.R2)
 			default:
-				log.Panicf("can't store into %+v", env.R0)
+				log.Panicf("can't store into %+v with key %+v", env.R0, env.R1)
 			}
 			env.A = env.R2
 		case OP_LOAD:
 			var v Value
-			switch env.R0.Type() {
-			case Tbytes:
-				if b, idx := env.R0.AsBytesUnsafe(), int(env.R1.AsNumber()); idx >= 0 {
+			switch testTypes(env.R0, env.R1) {
+			case Tbytes<<8 | Tnumber:
+				if b, idx := env.R0.AsBytes(), int(env.R1.AsNumber()); idx >= 0 {
 					v = NewNumberValue(float64(b[idx]))
 				} else {
 					v = NewNumberValue(float64(b[len(b)+idx]))
 				}
-			case Tstring:
-				if b, idx := env.R0.AsStringUnsafe(), int(env.R1.AsNumber()); idx >= 0 {
+			case Tstring<<8 | Tnumber:
+				if b, idx := env.R0.AsString(), int(env.R1.AsNumber()); idx >= 0 {
 					v = NewNumberValue(float64(b[idx]))
 				} else {
 					v = NewNumberValue(float64(b[len(b)+idx]))
 				}
-			case Tlist:
-				b, idx := env.R0.AsListUnsafe(), int(env.R1.AsNumber())
+			case Tlist<<8 | Tnumber:
+				b, idx := env.R0.AsList(), int(env.R1.AsNumber())
 				if idx >= 0 {
 					v = b[idx]
 				} else {
 					v = b[len(b)+idx]
 				}
 				if v.Type() == Tclosure {
-					v.AsClosureUnsafe().SetCaller(env.R0)
+					v.AsClosure().SetCaller(env.R0)
 				}
-			case Tmap:
+			case Tmap<<8 | Tstring:
 				var found bool
-				v, found = env.R0.AsMapUnsafe().Get(env.R1.AsString())
+				v, found = env.R0.AsMap().Get(env.R1.AsString())
 				if v.Type() == Tclosure {
-					v.AsClosureUnsafe().SetCaller(env.R0)
+					v.AsClosure().SetCaller(env.R0)
 				}
 				if !found {
 					env.E = NewBoolValue(true)
 				}
 			default:
-				log.Panicf("can't load from %+v", env.R0)
+				log.Panicf("can't load from %+v with key %+v", env.R0, env.R1)
 			}
 			env.A = v
 		case OP_R0:
-			env.R0 = env.Get(crRead32(code, &cursor))
+			env.R0 = env.Get(cruRead32(caddr, &cursor))
 		case OP_R0K:
-			env.R0 = konst(kaddr, crRead16(code, &cursor))
+			env.R0 = konst(kaddr, cruRead16(caddr, &cursor))
 		case OP_R1:
-			env.R1 = env.Get(crRead32(code, &cursor))
+			env.R1 = env.Get(cruRead32(caddr, &cursor))
 		case OP_R1K:
-			env.R1 = konst(kaddr, crRead16(code, &cursor))
+			env.R1 = konst(kaddr, cruRead16(caddr, &cursor))
 		case OP_R2:
-			env.R2 = env.Get(crRead32(code, &cursor))
+			env.R2 = env.Get(cruRead32(caddr, &cursor))
 		case OP_R2K:
-			env.R2 = konst(kaddr, crRead16(code, &cursor))
+			env.R2 = konst(kaddr, cruRead16(caddr, &cursor))
 		case OP_R3:
-			env.R3 = env.Get(crRead32(code, &cursor))
+			env.R3 = env.Get(cruRead32(caddr, &cursor))
 		case OP_R3K:
-			env.R3 = konst(kaddr, crRead16(code, &cursor))
+			env.R3 = konst(kaddr, cruRead16(caddr, &cursor))
 		case OP_PUSH:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.stack.Add(env.Get(crRead32(code, &cursor)))
+			newEnv.stack.Add(env.Get(cruRead32(caddr, &cursor)))
 		case OP_PUSHK:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.stack.Add(konst(kaddr, crRead16(code, &cursor)))
+			newEnv.stack.Add(konst(kaddr, cruRead16(caddr, &cursor)))
 		case OP_RET:
-			v := env.Get(crRead32(code, &cursor))
+			v := env.Get(cruRead32(caddr, &cursor))
 			if len(retStack) == 0 {
 				return v, 0, false
 			}
 			returnUpperWorld(v)
 		case OP_RETK:
-			v := konst(kaddr, crRead16(code, &cursor))
+			v := konst(kaddr, cruRead16(caddr, &cursor))
 			if len(retStack) == 0 {
 				return v, 0, false
 			}
 			returnUpperWorld(v)
 		case OP_YIELD:
-			return env.Get(crRead32(code, &cursor)), cursor, true
+			return env.Get(cruRead32(caddr, &cursor)), cursor, true
 		case OP_YIELDK:
-			return konst(kaddr, crRead16(code, &cursor)), cursor, true
+			return konst(kaddr, cruRead16(caddr, &cursor)), cursor, true
 		case OP_LAMBDA:
-			argsCount := crRead16(code, &cursor)
-			yieldable := crRead16(code, &cursor) == 1
-			errorable := crRead16(code, &cursor) == 1
-			constsLen := crRead16(code, &cursor)
+			argsCount := cruRead16(caddr, &cursor)
+			yieldable := cruRead16(caddr, &cursor) == 1
+			errorable := cruRead16(caddr, &cursor) == 1
+			constsLen := cruRead16(caddr, &cursor)
 			consts := make([]Value, constsLen)
 			for i := uint16(0); i < constsLen; i++ {
-				switch crRead16(code, &cursor) {
+				switch cruRead16(caddr, &cursor) {
 				case Tnumber:
 					consts[i] = NewNumberValue(crReadDouble(code, &cursor))
 				case Tstring:
@@ -348,13 +416,13 @@ MAIN:
 					panic("shouldn't happen")
 				}
 			}
-			buf := crRead(code, &cursor, int(crRead32(code, &cursor)))
+			buf := crRead(code, &cursor, int(cruRead32(caddr, &cursor)))
 			env.A = NewClosureValue(NewClosure(buf, consts, env, byte(argsCount), yieldable, errorable))
 		case OP_CALL:
-			v := env.Get(crRead32(code, &cursor))
+			v := env.Get(cruRead32(caddr, &cursor))
 			switch v.Type() {
 			case Tclosure:
-				cls := v.AsClosureUnsafe()
+				cls := v.AsClosure()
 				if newEnv == nil {
 					newEnv = NewEnv(nil)
 				}
@@ -365,7 +433,7 @@ MAIN:
 					} else {
 						curry := cls.Dup()
 						curry.AppendPreArgs(newEnv.Stack().Values())
-						env.A = (NewClosureValue(curry))
+						env.A = NewClosureValue(curry)
 					}
 				} else {
 					if cls.PreArgs() != nil && len(cls.PreArgs()) > 0 {
@@ -394,6 +462,7 @@ MAIN:
 						newEnv.C = cls.caller
 						env = newEnv
 						code = cls.code
+						caddr = kodeaddr(code)
 						kaddr = (*reflect.SliceHeader)(unsafe.Pointer(&cls.consts)).Data
 
 						retStack = append(retStack, last)
@@ -402,7 +471,7 @@ MAIN:
 
 				newEnv = nil
 			case Tlist:
-				if bb := v.AsListUnsafe(); newEnv.Size() == 2 {
+				if bb := v.AsList(); newEnv.Size() == 2 {
 					env.A = NewListValue(bb[shiftIndex(newEnv.Get(0), len(bb)):shiftIndex(newEnv.Get(1), len(bb))])
 				} else if newEnv.Size() == 1 {
 					env.A = bb[shiftIndex(newEnv.Get(0), len(bb))]
@@ -411,7 +480,7 @@ MAIN:
 				}
 				newEnv.Stack().Clear()
 			case Tbytes:
-				if bb := v.AsBytesUnsafe(); newEnv.Size() == 2 {
+				if bb := v.AsBytes(); newEnv.Size() == 2 {
 					env.A = NewBytesValue(bb[shiftIndex(newEnv.Get(0), len(bb)):shiftIndex(newEnv.Get(1), len(bb))])
 				} else if newEnv.Size() == 1 {
 					env.A = NewNumberValue(float64(bb[shiftIndex(newEnv.Get(0), len(bb))]))
@@ -420,7 +489,7 @@ MAIN:
 				}
 				newEnv.Stack().Clear()
 			case Tstring:
-				if bb := v.AsStringUnsafe(); newEnv.Size() == 2 {
+				if bb := v.AsString(); newEnv.Size() == 2 {
 					env.A = NewStringValue(bb[shiftIndex(newEnv.Get(0), len(bb)):shiftIndex(newEnv.Get(1), len(bb))])
 				} else if newEnv.Size() == 1 {
 					env.A = NewNumberValue(float64(bb[shiftIndex(newEnv.Get(0), len(bb))]))
@@ -432,17 +501,17 @@ MAIN:
 				log.Panicf("invalid callee: %+v", v)
 			}
 		case OP_JMP:
-			off := int32(crRead32(code, &cursor))
+			off := int32(cruRead32(caddr, &cursor))
 			cursor = uint32(int32(cursor) + off)
 		case OP_IFNOT:
-			cond := env.Get(crRead32(code, &cursor))
-			off := int32(crRead32(code, &cursor))
+			cond := env.Get(cruRead32(caddr, &cursor))
+			off := int32(cruRead32(caddr, &cursor))
 			if cond.IsFalse() {
 				cursor = uint32(int32(cursor) + off)
 			}
 		case OP_IF:
-			cond := env.Get(crRead32(code, &cursor))
-			off := int32(crRead32(code, &cursor))
+			cond := env.Get(cruRead32(caddr, &cursor))
+			off := int32(cruRead32(caddr, &cursor))
 			if !cond.IsFalse() {
 				cursor = uint32(int32(cursor) + off)
 			}
@@ -450,7 +519,7 @@ MAIN:
 			doDup(env)
 		case OP_TYPEOF:
 			if env.R1.ty == Tnumber {
-				if n := byte(env.R1.AsNumberUnsafe()); n == 255 {
+				if n := byte(env.R1.AsNumber()); n == 255 {
 					env.A = NewStringValue(TMapping[env.R0.ty])
 				} else {
 					env.A = NewBoolValue(env.R0.ty == n)
@@ -469,7 +538,10 @@ MAIN:
 }
 
 func shiftIndex(index Value, len int) int {
-	i := int(index.AsNumberUnsafe())
+	if index.ty != Tnumber {
+		index.panicType(Tnumber)
+	}
+	i := int(index.AsNumber())
 	if i >= 0 {
 		return i
 	}
@@ -485,7 +557,7 @@ func doDup(env *Env) {
 	nopred := false
 
 	if env.R2.ty == Tnumber {
-		switch env.R2.AsNumberUnsafe() {
+		switch env.R2.AsNumber() {
 		case 0:
 			// dup(a)
 			nopred = true
@@ -512,15 +584,18 @@ func doDup(env *Env) {
 		env.A = env.R1
 		return
 	case Tclosure:
-		env.A = NewClosureValue(env.R1.AsClosureUnsafe().Dup())
+		env.A = NewClosureValue(env.R1.AsClosure().Dup())
 		return
 	case Tstring:
 		if nopred {
-			env.A = NewBytesValue([]byte(env.R1.AsStringUnsafe()))
+			env.A = NewBytesValue([]byte(env.R1.AsString()))
 		} else {
+			if env.R2.ty != Tclosure {
+				env.R2.panicType(Tclosure)
+			}
 			cls := env.R2.AsClosure()
 			newEnv := NewEnv(cls.Env())
-			str := env.R1.AsStringUnsafe()
+			str := env.R1.AsString()
 			var newstr []byte
 			if alloc {
 				newstr = make([]byte, 0, len(str))
@@ -535,6 +610,9 @@ func doDup(env *Env) {
 				}
 				if alloc {
 					v, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
+					if v.ty != Tnumber {
+						v.panicType(Tnumber)
+					}
 					r := rune(v.AsNumber())
 					idx := len(newstr)
 					newstr = append(newstr, 0, 0, 0, 0)
@@ -552,16 +630,16 @@ func doDup(env *Env) {
 		// simple dup of list, map and bytes
 		switch env.R1.Type() {
 		case Tlist:
-			list0 := env.R1.AsListUnsafe()
+			list0 := env.R1.AsList()
 			list1 := make([]Value, len(list0))
 			copy(list1, list0)
 			env.A = NewListValue(list1)
 			return
 		case Tmap:
-			env.A = NewMapValue(env.R1.AsMapUnsafe().Dup(nil))
+			env.A = NewMapValue(env.R1.AsMap().Dup(nil))
 			return
 		case Tbytes:
-			bytes0 := env.R1.AsBytesUnsafe()
+			bytes0 := env.R1.AsBytes()
 			bytes1 := make([]byte, len(bytes0))
 			copy(bytes1, bytes0)
 			env.A = NewBytesValue(bytes1)
@@ -576,11 +654,14 @@ func doDup(env *Env) {
 	}
 
 	// now R2 should be closure
+	if env.R2.ty != Tclosure {
+		env.R2.panicType(Tclosure)
+	}
 	cls := env.R2.AsClosure()
 	newEnv := NewEnv(cls.Env())
 	switch env.R1.Type() {
 	case Tlist:
-		var list0 = env.R1.AsListUnsafe()
+		var list0 = env.R1.AsList()
 		var list1 []Value
 		if alloc {
 			list1 = make([]Value, 0, len(list0))
@@ -607,7 +688,7 @@ func doDup(env *Env) {
 				// however cls.errorable is not 100% accurate because calling error() (to check error) and
 				// calling error(...) (to throw error) are different behaviors, but i will left this as a TODO
 				m2 := NewMap()
-				m := env.R1.AsMapUnsafe()
+				m := env.R1.AsMap()
 				if m.t != nil {
 					for _, x := range m.t {
 						newEnv.Stack().Clear()
@@ -635,7 +716,7 @@ func doDup(env *Env) {
 				env.A = NewMapValue(m2)
 			} else {
 				// full copy
-				env.A = NewMapValue(env.R1.AsMapUnsafe().Dup(func(k string, v Value) Value {
+				env.A = NewMapValue(env.R1.AsMap().Dup(func(k string, v Value) Value {
 					newEnv.Stack().Clear()
 					newEnv.stack.Add(NewStringValue(k))
 					newEnv.stack.Add(v)
@@ -644,7 +725,7 @@ func doDup(env *Env) {
 				}))
 			}
 		} else {
-			m := env.R1.AsMapUnsafe()
+			m := env.R1.AsMap()
 			for _, x := range m.t {
 				newEnv.Stack().Clear()
 				newEnv.stack.Add(NewStringValue(x.k))
@@ -665,7 +746,7 @@ func doDup(env *Env) {
 			}
 		}
 	case Tbytes:
-		var list0 = env.R1.AsBytesUnsafe()
+		var list0 = env.R1.AsBytes()
 		var list1 []byte
 		if alloc {
 			list1 = make([]byte, 0, len(list0))
@@ -679,6 +760,9 @@ func doDup(env *Env) {
 				break
 			}
 			if alloc {
+				if ret.ty != Tnumber {
+					ret.panicType(Tnumber)
+				}
 				list1 = append(list1, byte(ret.AsNumber()))
 			}
 		}
