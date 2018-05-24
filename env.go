@@ -111,27 +111,16 @@ func (e *Env) SetParent(parent *Env) {
 	e.parent = parent
 }
 
-func (e *Env) getTop(start *Env, yx uint32) *Env {
-	env := start
-	y := yx >> 16
-	for y > 0 && env != nil {
-		env = env.parent
-		y--
-	}
-
-	if env == nil {
-		panic("get: null parent")
-	}
-
-	return env
-}
-
-func (e *Env) Get(yx uint32) Value {
+func (env *Env) Get(yx uint32) Value {
 	if yx == regA {
-		return e.A
+		return env.A
 	}
-
-	env := e.getTop(e, yx)
+	y := yx >> 16
+REPEAT:
+	if y > 0 && env != nil {
+		y, env = y-1, env.parent
+		goto REPEAT
+	}
 	return env.stack.Get(int(uint16(yx)))
 }
 
@@ -143,11 +132,16 @@ func (e *Env) Size() int {
 	return e.stack.Size()
 }
 
-func (e *Env) Set(yx uint32, v Value) {
+func (env *Env) Set(yx uint32, v Value) {
 	if yx == regA {
-		e.A = v
+		env.A = v
 	} else {
-		env := e.getTop(e, yx)
+		y := yx >> 16
+	REPEAT:
+		if y > 0 && env != nil {
+			y, env = y-1, env.parent
+			goto REPEAT
+		}
 		env.stack.Set(int(int16(yx)), v)
 	}
 }

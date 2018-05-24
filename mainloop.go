@@ -3,8 +3,10 @@ package potatolang
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"strconv"
 	"unicode/utf8"
+	"unsafe"
 )
 
 func init() {
@@ -17,7 +19,7 @@ type ret struct {
 	cursor uint32
 	env    *Env
 	code   []uint16
-	consts []Value
+	kaddr  uintptr
 	line   string
 }
 
@@ -36,6 +38,8 @@ func (e *ExecError) Error() string {
 	return msg
 }
 
+func konst(addr uintptr, idx uint16) Value { return *(*Value)(unsafe.Pointer(addr + uintptr(idx)*16)) }
+
 // ExecCursor executes code under the given env from the given start cursor and returns:
 // final result, yield cursor, is yield or not
 func ExecCursor(env *Env, code []uint16, consts []Value, cursor uint32) (Value, uint32, bool) {
@@ -43,6 +47,7 @@ func ExecCursor(env *Env, code []uint16, consts []Value, cursor uint32) (Value, 
 	var lastCursor uint32
 	var lineinfo = "<unknown>"
 	var retStack []ret
+	var kaddr = (*reflect.SliceHeader)(unsafe.Pointer(&consts)).Data
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -62,7 +67,7 @@ func ExecCursor(env *Env, code []uint16, consts []Value, cursor uint32) (Value, 
 		r := retStack[len(retStack)-1]
 		cursor = r.cursor
 		code = r.code
-		consts = r.consts
+		kaddr = r.kaddr
 		r.env.A, r.env.E = v, env.E
 		env = r.env
 		retStack = retStack[:len(retStack)-1]
@@ -89,11 +94,11 @@ MAIN:
 		case OP_SET:
 			env.Set(crRead32(code, &cursor), env.Get(crRead32(code, &cursor)))
 		case OP_SETK:
-			env.Set(crRead32(code, &cursor), consts[crRead16(code, &cursor)])
+			env.Set(crRead32(code, &cursor), konst(kaddr, crRead16(code, &cursor)))
 		case OP_INC:
 			addr := crRead32(code, &cursor)
 			num := env.Get(addr).AsNumber()
-			env.Set(addr, NewNumberValue(num+consts[crRead16(code, &cursor)].AsNumberUnsafe()))
+			env.Set(addr, NewNumberValue(num+konst(kaddr, crRead16(code, &cursor)).AsNumberUnsafe()))
 		case OP_ADD:
 			switch l := env.R0; l.Type() {
 			case Tnumber:
@@ -288,29 +293,29 @@ MAIN:
 		case OP_R0:
 			env.R0 = env.Get(crRead32(code, &cursor))
 		case OP_R0K:
-			env.R0 = consts[crRead16(code, &cursor)]
+			env.R0 = konst(kaddr, crRead16(code, &cursor))
 		case OP_R1:
 			env.R1 = env.Get(crRead32(code, &cursor))
 		case OP_R1K:
-			env.R1 = consts[crRead16(code, &cursor)]
+			env.R1 = konst(kaddr, crRead16(code, &cursor))
 		case OP_R2:
 			env.R2 = env.Get(crRead32(code, &cursor))
 		case OP_R2K:
-			env.R2 = consts[crRead16(code, &cursor)]
+			env.R2 = konst(kaddr, crRead16(code, &cursor))
 		case OP_R3:
 			env.R3 = env.Get(crRead32(code, &cursor))
 		case OP_R3K:
-			env.R3 = consts[crRead16(code, &cursor)]
+			env.R3 = konst(kaddr, crRead16(code, &cursor))
 		case OP_PUSH:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.Push(env.Get(crRead32(code, &cursor)))
+			newEnv.stack.Add(env.Get(crRead32(code, &cursor)))
 		case OP_PUSHK:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.Push(consts[crRead16(code, &cursor)])
+			newEnv.stack.Add(konst(kaddr, crRead16(code, &cursor)))
 		case OP_RET:
 			v := env.Get(crRead32(code, &cursor))
 			if len(retStack) == 0 {
@@ -318,7 +323,7 @@ MAIN:
 			}
 			returnUpperWorld(v)
 		case OP_RETK:
-			v := consts[crRead16(code, &cursor)]
+			v := konst(kaddr, crRead16(code, &cursor))
 			if len(retStack) == 0 {
 				return v, 0, false
 			}
@@ -326,7 +331,7 @@ MAIN:
 		case OP_YIELD:
 			return env.Get(crRead32(code, &cursor)), cursor, true
 		case OP_YIELDK:
-			return consts[crRead16(code, &cursor)], cursor, true
+			return konst(kaddr, crRead16(code, &cursor)), cursor, true
 		case OP_LAMBDA:
 			argsCount := crRead16(code, &cursor)
 			yieldable := crRead16(code, &cursor) == 1
@@ -379,7 +384,7 @@ MAIN:
 							cursor: cursor,
 							env:    env,
 							code:   code,
-							consts: consts,
+							kaddr:  kaddr,
 							line:   lineinfo,
 						}
 
@@ -389,7 +394,7 @@ MAIN:
 						newEnv.C = cls.caller
 						env = newEnv
 						code = cls.code
-						consts = cls.consts
+						kaddr = (*reflect.SliceHeader)(unsafe.Pointer(&cls.consts)).Data
 
 						retStack = append(retStack, last)
 					}
@@ -522,9 +527,9 @@ func doDup(env *Env) {
 			}
 			for i, v := range str {
 				newEnv.Stack().Clear()
-				newEnv.Push(NewNumberValue(float64(i)))
-				newEnv.Push(NewNumberValue(float64(v)))
-				newEnv.Push(NewNumberValue(float64(len(newstr))))
+				newEnv.stack.Add(NewNumberValue(float64(i)))
+				newEnv.stack.Add(NewNumberValue(float64(v)))
+				newEnv.stack.Add(NewNumberValue(float64(len(newstr))))
 				if newEnv.E.Type() != Tnil {
 					break
 				}
@@ -582,8 +587,8 @@ func doDup(env *Env) {
 		}
 		for i, v := range list0 {
 			newEnv.Stack().Clear()
-			newEnv.Push(NewNumberValue(float64(i)))
-			newEnv.Push(v)
+			newEnv.stack.Add(NewNumberValue(float64(i)))
+			newEnv.stack.Add(v)
 			ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 			if newEnv.E.Type() != Tnil {
 				break
@@ -606,8 +611,8 @@ func doDup(env *Env) {
 				if m.t != nil {
 					for _, x := range m.t {
 						newEnv.Stack().Clear()
-						newEnv.Push(NewStringValue(x.k))
-						newEnv.Push(x.v)
+						newEnv.stack.Add(NewStringValue(x.k))
+						newEnv.stack.Add(x.v)
 						ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 						if newEnv.E.Type() != Tnil {
 							break
@@ -618,8 +623,8 @@ func doDup(env *Env) {
 					m2.SwitchToHashmap()
 					for k, v := range m.m {
 						newEnv.Stack().Clear()
-						newEnv.Push(NewStringValue(k))
-						newEnv.Push(v)
+						newEnv.stack.Add(NewStringValue(k))
+						newEnv.stack.Add(v)
 						ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 						if newEnv.E.Type() != Tnil {
 							break
@@ -632,8 +637,8 @@ func doDup(env *Env) {
 				// full copy
 				env.A = NewMapValue(env.R1.AsMapUnsafe().Dup(func(k string, v Value) Value {
 					newEnv.Stack().Clear()
-					newEnv.Push(NewStringValue(k))
-					newEnv.Push(v)
+					newEnv.stack.Add(NewStringValue(k))
+					newEnv.stack.Add(v)
 					ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 					return ret
 				}))
@@ -642,8 +647,8 @@ func doDup(env *Env) {
 			m := env.R1.AsMapUnsafe()
 			for _, x := range m.t {
 				newEnv.Stack().Clear()
-				newEnv.Push(NewStringValue(x.k))
-				newEnv.Push(x.v)
+				newEnv.stack.Add(NewStringValue(x.k))
+				newEnv.stack.Add(x.v)
 				ExecCursor(newEnv, cls.code, cls.consts, 0)
 				if newEnv.E.Type() != Tnil {
 					break
@@ -651,8 +656,8 @@ func doDup(env *Env) {
 			}
 			for k, v := range m.m {
 				newEnv.Stack().Clear()
-				newEnv.Push(NewStringValue(k))
-				newEnv.Push(v)
+				newEnv.stack.Add(NewStringValue(k))
+				newEnv.stack.Add(v)
 				ExecCursor(newEnv, cls.code, cls.consts, 0)
 				if newEnv.E.Type() != Tnil {
 					break
@@ -667,8 +672,8 @@ func doDup(env *Env) {
 		}
 		for i, v := range list0 {
 			newEnv.Stack().Clear()
-			newEnv.Push(NewNumberValue(float64(i)))
-			newEnv.Push(NewNumberValue(float64(v)))
+			newEnv.stack.Add(NewNumberValue(float64(i)))
+			newEnv.stack.Add(NewNumberValue(float64(v)))
 			ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 			if newEnv.E.Type() != Tnil {
 				break
