@@ -62,6 +62,7 @@ func ExecCursor(env *Env, code []uint16, consts []Value, cursor uint32) (Value, 
 		r := retStack[len(retStack)-1]
 		cursor = r.cursor
 		code = r.code
+		consts = r.consts
 		r.env.A, r.env.E = v, env.E
 		env = r.env
 		retStack = retStack[:len(retStack)-1]
@@ -426,19 +427,19 @@ MAIN:
 				log.Panicf("invalid callee: %+v", v)
 			}
 		case OP_JMP:
-			off := uint32(crRead32(code, &cursor))
-			*&cursor += off
+			off := int32(crRead32(code, &cursor))
+			cursor = uint32(int32(cursor) + off)
 		case OP_IFNOT:
 			cond := env.Get(crRead32(code, &cursor))
-			off := uint32(crRead32(code, &cursor))
+			off := int32(crRead32(code, &cursor))
 			if cond.IsFalse() {
-				*&cursor += off
+				cursor = uint32(int32(cursor) + off)
 			}
 		case OP_IF:
 			cond := env.Get(crRead32(code, &cursor))
-			off := uint32(crRead32(code, &cursor))
+			off := int32(crRead32(code, &cursor))
 			if !cond.IsFalse() {
-				*&cursor += off
+				cursor = uint32(int32(cursor) + off)
 			}
 		case OP_DUP:
 			doDup(env)

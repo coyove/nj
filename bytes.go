@@ -3,6 +3,8 @@ package potatolang
 import (
 	"bytes"
 	"fmt"
+	"hash/crc32"
+	"reflect"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -13,6 +15,25 @@ func btob(b bool) uint16 {
 		return 1
 	}
 	return 0
+}
+
+func slice16to8(p []uint16) []byte {
+	r := reflect.SliceHeader{}
+	r.Cap = cap(p) * 2
+	r.Len = len(p) * 2
+	r.Data = (*reflect.SliceHeader)(unsafe.Pointer(&p)).Data
+	return *(*[]byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
+}
+
+func slice8to16(p []byte) []uint16 {
+	if len(p)%2 != 0 {
+		p = append(p, 0)
+	}
+	r := reflect.SliceHeader{}
+	r.Cap = cap(p) / 2
+	r.Len = len(p) / 2
+	r.Data = (*reflect.SliceHeader)(unsafe.Pointer(&p)).Data
+	return *(*[]uint16)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
 }
 
 // BytesWriter writes complex values into bytes slice
@@ -63,9 +84,7 @@ func (b *BytesWriter) WriteDouble(v float64) {
 
 func (b *BytesWriter) WriteString(v string) {
 	b.Write32(uint32(len(v)))
-	for i := 0; i < len(v); i++ {
-		b.Write16(uint16(v[i]))
-	}
+	b.Write(slice8to16([]byte(v)))
 }
 
 func (b *BytesWriter) TruncateLast(n int) {
@@ -104,13 +123,9 @@ func crReadDouble(data []uint16, cursor *uint32) float64 {
 }
 
 func crReadString(data []uint16, cursor *uint32) string {
-	ln := crRead32(data, cursor)
-	buf := crRead(data, cursor, int(ln))
-	ret := make([]byte, len(buf))
-	for i, x := range buf {
-		ret[i] = byte(x)
-	}
-	return string(ret)
+	x := crRead32(data, cursor)
+	buf := crRead(data, cursor, int((x+1)/2))
+	return string(slice16to8(buf)[:x])
 }
 
 var singleOp = map[uint16]string{
@@ -145,9 +160,9 @@ var singleOp = map[uint16]string{
 }
 
 func crHash(data []uint16) uint32 {
-	// e := crc32.New(crc32.IEEETable)
-	// e.Write(data)
-	return 0 //e.Sum32()
+	e := crc32.New(crc32.IEEETable)
+	e.Write(slice16to8(data))
+	return e.Sum32()
 }
 
 func crPrettifyLambda(args, curry int, y, e bool, code []uint16, consts []Value, tab int) string {
@@ -179,17 +194,6 @@ func crPrettify(data []uint16, consts []Value, tab int) string {
 
 	var cursor uint32
 
-	readDouble := func() string {
-		n := crReadDouble(data, &cursor)
-		if float64(int64(n)) == n {
-			return strconv.Itoa(int(n))
-		}
-		a := strconv.FormatFloat(n, 'f', -1, 64)
-		if len(a) > 16 {
-			a = a[:8] + "{...}" + a[len(a)-8:]
-		}
-		return a
-	}
 	readAddr := func() string {
 		if a := crRead32(data, &cursor); a == regA {
 			return "$a"
@@ -257,8 +261,8 @@ MAIN:
 				sb.WriteString(readKAddr())
 			}
 		case OP_ASSERT:
-			sb.Truncate(lastIdx)
-			sb.WriteString(" -> " + crReadString(data, &cursor))
+			tt := crReadString(data, &cursor)
+			sb.WriteString(tt)
 		case OP_RET:
 			sb.WriteString("ret " + readAddr())
 		case OP_RETK:
@@ -291,23 +295,23 @@ MAIN:
 		case OP_CALL:
 			sb.WriteString("call " + readAddr())
 		case OP_JMP:
-			pos := crRead32(data, &cursor)
-			pos2 := cursor + uint32(pos)
+			pos := int32(crRead32(data, &cursor))
+			pos2 := uint32(int32(cursor) + pos)
 			sb.WriteString("jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_IFNOT:
 			addr := readAddr()
-			pos := crRead32(data, &cursor)
-			pos2 := cursor + uint32(pos)
+			pos := int32(crRead32(data, &cursor))
+			pos2 := uint32(int32(cursor) + pos)
 			sb.WriteString("if not " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_IF:
 			addr := readAddr()
-			pos := crRead32(data, &cursor)
-			pos2 := cursor + uint32(pos)
+			pos := int32(crRead32(data, &cursor))
+			pos2 := uint32(int32(cursor) + pos)
 			sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_NOP:
 			sb.WriteString("nop")
 		case OP_INC:
-			sb.WriteString("inc " + readAddr() + " " + readDouble())
+			sb.WriteString("inc " + readAddr() + " " + readKAddr())
 		default:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs)

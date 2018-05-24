@@ -18,7 +18,7 @@ end
 
 assert sum(1, -1) == 0
 assert sum(1, 2, 3) == 6 
-assert sum("1", "2") == ("123")(0,2)
+assert sum("1", "2") == "12"
 
 set m = map 
     "c" = 123, 

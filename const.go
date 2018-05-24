@@ -4,7 +4,7 @@ const regA = 0xffffffff
 
 const (
 	// basic flat op
-	OP_ASSERT = iota
+	OP_ASSERT = iota + 1
 	OP_NIL
 	OP_TRUE
 	OP_FALSE

@@ -1,8 +1,11 @@
 package potatolang
 
 import (
+	"bytes"
+	"crypto/rand"
 	"fmt"
 	"sync"
+	"unsafe"
 
 	"github.com/coyove/potatolang/parser"
 )
@@ -381,7 +384,7 @@ func compileAndOrOp(bop uint16) compileFunc {
 
 		buf.data[c2-2] = uint16(uint32(jmp) >> 16)
 		buf.data[c2-1] = uint16(jmp)
-		return code, regA, sp, nil
+		return buf.data, regA, sp, nil
 	}
 }
 
@@ -554,104 +557,108 @@ func compileLambdaOp(sp uint16, atoms []*parser.Node, table *symtable) (code []u
 
 var staticWhileHack struct {
 	sync.Mutex
-	continueFlag []byte
-	breakFlag    []byte
+	continueFlag []uint16
+	breakFlag    []uint16
 }
 
 // [continue | break]
 func compileContinueBreakOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
-	// staticWhileHack.Lock()
-	// defer staticWhileHack.Unlock()
-	// if atoms[0].Value.(string) == "continue" {
-	// 	if staticWhileHack.continueFlag == nil {
-	// 		staticWhileHack.continueFlag = make([]byte, 9)
-	// 		if _, err := rand.Read(staticWhileHack.continueFlag); err != nil {
-	// 			panic(err)
-	// 		}
-	// 	}
-	// 	return staticWhileHack.continueFlag, regA, sp, nil
-	// }
+	staticWhileHack.Lock()
+	defer staticWhileHack.Unlock()
+	gen := func(p *[]uint16) {
+		const ln = 5
+		*p = make([]uint16, ln)
+		buf := [ln * 2]byte{}
+		if _, err := rand.Read(buf[:]); err != nil {
+			panic(err)
+		}
+		copy(*p, (*(*[ln]uint16)(unsafe.Pointer(&buf)))[:])
+	}
 
-	// if staticWhileHack.breakFlag == nil {
-	// 	staticWhileHack.breakFlag = make([]byte, 9)
-	// 	if _, err := rand.Read(staticWhileHack.breakFlag); err != nil {
-	// 		panic(err)
-	// 	}
-	// }
-	// return staticWhileHack.breakFlag, regA, sp, nil
-	return
+	if atoms[0].Value.(string) == "continue" {
+		if staticWhileHack.continueFlag == nil {
+			gen(&staticWhileHack.continueFlag)
+		}
+		return staticWhileHack.continueFlag, regA, sp, nil
+	}
+	if staticWhileHack.breakFlag == nil {
+		gen(&staticWhileHack.breakFlag)
+	}
+	return staticWhileHack.breakFlag, regA, sp, nil
 }
 
 // [while condition [chain ...]]
 func compileWhileOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
 
-	// condition := atoms[1]
-	// buf := NewBytesWriter()
-	// var varIndex int32
+	condition := atoms[1]
+	buf := NewBytesWriter()
+	var varIndex uint32
 
-	// switch condition.Type {
-	// case parser.NTAddr:
-	// 	varIndex = condition.Value.(int32)
-	// case parser.NTNumber:
-	// 	buf.Write(OP_SET_NUM)
-	// 	varIndex = int32(sp)
-	// 	sp++
-	// 	buf.Write32(varIndex)
-	// 	buf.WriteDouble(condition.Value.(float64))
-	// case parser.NTString:
-	// 	buf.Write(OP_SET_STR)
-	// 	varIndex = int32(sp)
-	// 	sp++
-	// 	buf.Write32(varIndex)
-	// 	buf.WriteString(condition.Value.(string))
-	// case parser.NTCompound, parser.NTAtom:
-	// 	code, yx, sp, err = extract(sp, condition, table)
-	// 	if err != nil {
-	// 		return
-	// 	}
-	// 	buf.Write(code)
-	// 	varIndex = yx
-	// }
+	switch condition.Type {
+	case parser.NTAddr:
+		varIndex = condition.Value.(uint32)
+	case parser.NTNumber, parser.NTString:
+		buf.Write16(OP_SETK)
+		varIndex = uint32(sp)
+		sp++
+		buf.Write32(varIndex)
+		buf.Write16(table.addConst(condition.Value))
+	case parser.NTCompound, parser.NTAtom:
+		code, yx, sp, err = extract(sp, condition, table)
+		if err != nil {
+			return
+		}
+		buf.Write(code)
+		varIndex = yx
+	}
 
-	// code, yx, sp, err = compileChainOp(sp, atoms[2], table)
-	// if err != nil {
-	// 	return
-	// }
+	code, yx, sp, err = compileChainOp(sp, atoms[2], table)
+	if err != nil {
+		return
+	}
 
-	// buf.Write(OP_IFNOT)
-	// buf.Write32(varIndex)
-	// buf.Write32(int32(len(code)) + 5)
-	// buf.Write(code)
-	// buf.Write(OP_JMP)
-	// buf.Write32(-int32(buf.Len()) - 4)
+	buf.Write16(OP_IFNOT)
+	buf.Write32(varIndex)
+	buf.Write32(uint32(len(code)) + 3)
+	buf.Write(code)
+	buf.Write16(OP_JMP)
+	buf.Write32(-uint32(buf.Len()) - 2)
 
-	// code = buf.data
-	// i := 0
-	// for i < len(code) && staticWhileHack.continueFlag != nil {
-	// 	x := bytes.Index(code[i:], staticWhileHack.continueFlag)
-	// 	if x == -1 {
-	// 		break
-	// 	}
-	// 	idx := i + x
-	// 	code[idx] = OP_JMP
-	// 	binary.LittleEndian.PutUint32(code[idx+1:], uint32(-(idx + 5)))
-	// 	copy(code[idx+5:], []byte{OP_NOP, OP_NOP, OP_NOP, OP_NOP})
-	// 	i = idx + 9
-	// }
+	code = buf.data
+	code2 := slice16to8(code)
+	if staticWhileHack.continueFlag != nil {
+		flag := slice16to8(staticWhileHack.continueFlag)
+		for i := 0; i < len(code2); {
+			x := bytes.Index(code2[i:], flag)
+			if x == -1 {
+				break
+			}
+			idx := (i + x) / 2
+			code[idx] = OP_JMP
+			code[idx+1] = uint16(uint32(-(idx + 3)) >> 16)
+			code[idx+2] = uint16(-(idx + 3))
+			code[idx+3] = OP_NOP
+			code[idx+4] = OP_NOP
+			i = idx*2 + 5
+		}
+	}
 
-	// i = 0
-	// for i < len(code) && staticWhileHack.breakFlag != nil {
-	// 	x := bytes.Index(code[i:], staticWhileHack.breakFlag)
-	// 	if x == -1 {
-	// 		break
-	// 	}
-	// 	idx := i + x
-	// 	code[idx] = OP_JMP
-	// 	binary.LittleEndian.PutUint32(code[idx+1:], uint32((len(code)-idx)-5))
-	// 	copy(code[idx+5:], []byte{OP_NOP, OP_NOP, OP_NOP, OP_NOP})
-	// 	i = idx + 9
-	// }
+	if staticWhileHack.breakFlag != nil {
+		flag := slice16to8(staticWhileHack.breakFlag)
+		for i := 0; i < len(code2); {
+			x := bytes.Index(code2[i:], flag)
+			if x == -1 {
+				break
+			}
+			idx := (i + x) / 2
+			code[idx] = OP_JMP
+			code[idx+1] = uint16(uint32(len(code)-idx-3) >> 16)
+			code[idx+2] = uint16(len(code) - idx - 3)
+			code[idx+3] = OP_NOP
+			code[idx+4] = OP_NOP
+			i = idx*2 + 5
+		}
+	}
 
-	// return code, regA, sp, nil
-	return
+	return code, regA, sp, nil
 }

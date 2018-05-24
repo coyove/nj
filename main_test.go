@@ -18,9 +18,9 @@ func runFile(t *testing.T, path string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log(Prettify(b))
+	t.Log(b)
 
-	i := Exec(NewTopEnv(), b)
+	i := b.Exec(NewTopEnv())
 	t.Log(i.I())
 }
 
