@@ -13,40 +13,55 @@ func init() {
 	}
 }
 
+type ret struct {
+	cursor uint32
+	env    *Env
+	code   []byte
+	line   string
+}
+
+// ExecError represents the runtime rror
 type ExecError struct {
 	r      interface{}
-	hash   uint32
-	cursor uint32
-	source string
+	stacks []ret
 }
 
 func (e *ExecError) Error() string {
-	return fmt.Sprintf("cursor: %d at %x, source: %s", e.cursor, e.hash, e.source)
+	msg := ""
+	for i := len(e.stacks) - 1; i >= 0; i-- {
+		r := e.stacks[i]
+		msg += fmt.Sprintf("cursor: %d at <%x>, source: %s\n", r.cursor, crHash(r.code), r.line)
+	}
+	return msg
 }
 
+// Exec executes code under the given env and returns the result
 func Exec(env *Env, code []byte) Value {
 	v, _, _ := ExecCursor(env, code, 0)
 	return v
 }
 
+// ExecCursor executes code under the given env from the given start cursor and returns:
+// final result, yield cursor, is yield or not
 func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 	var newEnv *Env
 	var lastCursor uint32
-	var lineinfo string = "<unknown>"
+	var lineinfo = "<unknown>"
+	var retStack []ret
 
 	defer func() {
 		if r := recover(); r != nil {
-			panic(&ExecError{r, crHash(code), lastCursor, lineinfo})
+			e := &ExecError{r: r}
+			e.stacks = make([]ret, len(retStack)+1)
+			copy(e.stacks, retStack)
+			e.stacks[len(e.stacks)-1] = ret{
+				cursor: lastCursor,
+				code:   code,
+				line:   lineinfo,
+			}
+			panic(e)
 		}
 	}()
-
-	type ret struct {
-		cursor uint32
-		env    *Env
-		code   []byte
-	}
-
-	var retStack []ret
 
 	returnUpperWorld := func(v Value) {
 		r := retStack[len(retStack)-1]
@@ -200,11 +215,8 @@ MAIN:
 			if newEnv == nil {
 				env.A = NewListValue(make([]Value, 0))
 			} else {
-				size := newEnv.Stack().Size()
-				list := make([]Value, size)
-				for i := 0; i < size; i++ {
-					list[i] = newEnv.Get(int32(i))
-				}
+				list := make([]Value, newEnv.stack.Size())
+				copy(list, newEnv.stack.data)
 				newEnv.Stack().Clear()
 				env.A = NewListValue(list)
 			}
@@ -269,7 +281,6 @@ MAIN:
 				var found bool
 				v, found = env.R0.AsMapUnsafe().Get(env.R1.AsString())
 				if v.Type() == Tclosure {
-					log.Println("=====", env.R0.AsMapUnsafe().t)
 					v.AsClosureUnsafe().SetCaller(env.R0)
 				}
 				if !found {
@@ -382,6 +393,7 @@ MAIN:
 							cursor: cursor,
 							env:    env,
 							code:   code,
+							line:   lineinfo,
 						}
 
 						// switch to the env of cls
@@ -615,6 +627,7 @@ func doDup(env *Env) {
 						m2.Put(x.k, ret)
 					}
 				} else {
+					m2.SwitchToHashmap()
 					for k, v := range m.m {
 						newEnv.Stack().Clear()
 						newEnv.Push(NewStringValue(k))

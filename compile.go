@@ -161,9 +161,14 @@ func compileChainOp(sp int16, chain *parser.Node, table *symtable) (code []byte,
 		if a.Type != parser.NTCompound {
 			continue
 		}
-		if table.LineInfo && len(a.Compound) > 0 && a.Compound[0].Pos.Source != "" {
-			buf.WriteByte(OP_LINE)
-			buf.WriteString(a.Compound[0].Pos.String())
+		if table.LineInfo {
+			for _, n := range a.Compound {
+				if n.Pos.Source != "" {
+					buf.WriteByte(OP_LINE)
+					buf.WriteString(n.Pos.String())
+					break
+				}
+			}
 		}
 		code, yx, sp, err = compile(sp, a.Compound, table)
 		if err != nil {

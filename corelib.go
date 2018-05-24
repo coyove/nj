@@ -64,7 +64,7 @@ func init() {
 			}
 			return NewBytesValue(l)
 		default:
-			log.Panicf("can't delete from %+v", s)
+			log.Panicf("can't call remove on %+v", s)
 			return NewValue()
 		}
 	}))

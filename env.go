@@ -5,6 +5,7 @@ import (
 )
 
 const (
+	// INIT_CAPACITY defines the inital capacity of the stack
 	INIT_CAPACITY = 16
 )
 
@@ -13,6 +14,7 @@ type Stack struct {
 	data []Value
 }
 
+// NewStack creates a new stack
 func NewStack() *Stack {
 	return &Stack{
 		data: make([]Value, 0, INIT_CAPACITY),
@@ -154,6 +156,7 @@ func (e *Env) Stack() *Stack {
 	return e.stack
 }
 
+// Closure is the closure struct used in potatolang
 type Closure struct {
 	code      []byte
 	env       *Env
@@ -168,6 +171,7 @@ type Closure struct {
 	lastenv   *Env
 }
 
+// NewClosure creates a new closure
 func NewClosure(code []byte, env *Env, argsCount byte, yieldable, errorable bool) *Closure {
 	return &Closure{
 		code:      code,
@@ -178,6 +182,7 @@ func NewClosure(code []byte, env *Env, argsCount byte, yieldable, errorable bool
 	}
 }
 
+// NewNativeValue creates a native function in potatolang
 func NewNativeValue(argsCount int, f func(env *Env) Value) Value {
 	return NewClosureValue(&Closure{
 		argsCount: byte(argsCount),
@@ -217,18 +222,22 @@ func (c *Closure) Caller() Value {
 	return c.caller
 }
 
+// ArgsCount returns the minimal number of arguments closure accepts
 func (c *Closure) ArgsCount() int {
 	return int(c.argsCount)
 }
 
+// Env returns the env inside closure
 func (c *Closure) Env() *Env {
 	return c.env
 }
 
+// Dup duplicates the closure
 func (c *Closure) Dup() *Closure {
 	cls := NewClosure(c.code, c.env, c.argsCount, c.yieldable, c.errorable)
 	cls.caller = c.caller
 	cls.lastp = c.lastp
+	cls.native = c.native
 	if c.preArgs != nil {
 		cls.preArgs = make([]Value, len(c.preArgs))
 		copy(cls.preArgs, c.preArgs)
@@ -238,21 +247,12 @@ func (c *Closure) Dup() *Closure {
 
 func (c *Closure) String() string {
 	if c.native == nil {
-		code := NewBytesWriter()
-		code.WriteByte(OP_LAMBDA)
-		code.WriteByte(c.argsCount)
-		tag := ""
-		if c.yieldable {
-			tag = "y"
-		}
-		if c.errorable {
-			tag += "e"
-		}
-		return fmt.Sprintf("closure%d%s [curry:%d] (\n", c.argsCount, tag, len(c.preArgs)) + crPrettify(c.code, 4) + ")"
+		return "closure (\n" + crPrettifyLambda(int(c.argsCount), len(c.preArgs), c.yieldable, c.errorable, c.code, 4) + ")"
 	}
-	return fmt.Sprintf("native%d (...)", c.argsCount)
+	return fmt.Sprintf("closure (\n    <args: %d>\n    <curry: %d>\n    [...] native code\n)", c.argsCount, len(c.preArgs))
 }
 
+// Exec executes the closure with the given env
 func (c *Closure) Exec(newEnv *Env) Value {
 
 	if c.lastenv != nil {

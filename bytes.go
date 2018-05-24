@@ -152,6 +152,23 @@ func Prettify(code []byte) string {
 	return crPrettify(code, 0)
 }
 
+func crPrettifyLambda(args, curry int, y, e bool, code []byte, tab int) string {
+	sb := &bytes.Buffer{}
+	spaces := strings.Repeat(" ", tab)
+	sb.WriteString(spaces + "<args: " + strconv.Itoa(args) + ">\n")
+	if curry > 0 {
+		sb.WriteString(spaces + "<curry: " + strconv.Itoa(curry) + ">\n")
+	}
+	if y {
+		sb.WriteString(spaces + "<yieldable>\n")
+	}
+	if e {
+		sb.WriteString(spaces + "<errorable>\n")
+	}
+	sb.WriteString(crPrettify(code, tab))
+	return sb.String()
+}
+
 func crPrettify(data []byte, tab int) string {
 	sb := &bytes.Buffer{}
 	pre := strings.Repeat(" ", tab)
@@ -269,14 +286,10 @@ MAIN:
 			sb.WriteString("yield " + readString())
 		case OP_LAMBDA:
 			sb.WriteString("$a = lambda (\n")
-			sb.WriteString(strings.Repeat(" ", tab+4) + "<" + strconv.Itoa(int(crReadByte(data, &cursor))) + " args>\n")
-			if crReadByte(data, &cursor) == 1 {
-				sb.WriteString(strings.Repeat(" ", tab+4) + "<yieldable>\n")
-			}
-			if crReadByte(data, &cursor) == 1 {
-				sb.WriteString(strings.Repeat(" ", tab+4) + "<errorable>\n")
-			}
-			sb.WriteString(crPrettify(crReadBytes(data, &cursor, int(crReadInt32(data, &cursor))), tab+4))
+			sb.WriteString(crPrettifyLambda(int(crReadByte(data, &cursor)), 0,
+				crReadByte(data, &cursor) == 1, crReadByte(data, &cursor) == 1,
+				crReadBytes(data, &cursor, int(crReadInt32(data, &cursor))),
+				tab+4))
 			sb.WriteString(pre + ")")
 		case OP_CALL:
 			sb.WriteString("call " + readAddr())

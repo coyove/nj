@@ -22,7 +22,6 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         a, b = 1, 2       # illegal, sorry
     
         # to define a string block, use sss<ident> to start and end<ident> to end. <ident> should be a valid identifer name:
-
         set s = ssshello
             ... raw string literal ...
         endhello
@@ -31,7 +30,7 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
 
         set a = 1
         set b = dup(a)
-        assert b == 1
+        assert b == 1      # assert
 
         set c = list 1, 2 end
         set d = dup(c) 
@@ -57,18 +56,26 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         end)
         assert f == list 2 end
 
+2. Advanced `dup`:
+
         # if you want to return multiple results:
-        function foo()
-            set a = 1
-            set b = 2
+        function foo(c)
+            set a = 1 + c
+            set b = 2 + c
 
             # dup() without arguments will return a copy of the current stack
-            # if dup() is right after return, then no actual copy will be done
             return dup()
         end
 
-        set r = foo()
-        assert r[-2] == 1 and r[-1] == 2
+        # stack in potato is []Value
+        #
+        #         0   1   2
+        #  foo  +---+---+---+
+        # stack | c | a | b |
+        #       +---+---+---+
+
+        set r = foo(2)
+        assert r[-2] == 3 and r[-1] == 4
 
         # the same trick can be used to accept varargs:
         function sum()
@@ -78,8 +85,17 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
             return s
         end
 
-        assert sum(1, -1) == 0
-        assert sum(1, 2, 3) == 6 
+        assert sum(1, -1) == 0    # when calling dup() in sum(), since there is no
+                                  # other variables yet on the stack, x = [1, -1]
+        assert sum(1, 2, 3) == 6  # x = [1, 2, 3]
+
+        # string is immutable, dup(str) will return its bytes representation
+        set a = "text"
+        a[0] = 96                  # panic
+
+        set b = dup(a)
+        assert typeof(b, "bytes")  # ok
+        b[0] = 96                  # ok
 
 2. Yield:
 
@@ -94,7 +110,7 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         assert a() == 1 and a() == 2 and a() == 3 and a() == nil
         assert b() == 1 and b() == 2 and b() == 3 and b() == nil
 
-2. Strings and numbers can't be added together. however `&` can (concat):
+2. Strings and numbers can't be summed up. however `&` (concat) can:
 
         set a = 1
         set b = a + "2"         # runtime panic
@@ -102,19 +118,28 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         set d = list 0 end + c  # [0, [1]]
         set e = list 0 end & c  # [0, 1]
         set f = "" & a & "2"    # "12" 
-                                # in potato there is no tostring
+                                # this is the de facto tostring in potatolang
+        set g = 7 & 8           # bit and: 0
 
-2. When a closure is loaded from a map or a list, it remembers it, and this trick can be used to simulate structs:
+2. Closure knows whether it is a member of map or list. This acknowledgement can be used to simulate member functions:
 
         set counter = map
-            "counter" = 0,
+            "tick" = 0,
             "add" = function()
-                set this = who()
-                this.counter = this.counter + 1
+                set this = who() # who's your dad
+                this.tick = this.tick + 1
             end
         end
 
         set c = dup(counter)
         c.add()
         c.add()
-        assert c.counter == 2
+        assert c.tick == 2
+
+        set c2 = dup(c)
+        c2.add()
+        assert c2.tick == 3
+
+        set c3 = dup(counter)
+        c3.add()
+        assert c3.tick == 1

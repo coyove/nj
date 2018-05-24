@@ -90,10 +90,14 @@ assert m2 == m
 a = 0i0
 set b = 0iffffffffffffffff
 assert std.u64.ieq(std.u64.ixor(a, b), b)
-
+a = std.u64.ieq(12)
+assert a(12)
 
 function select(cond, t, f)
     return cond and t or f
 end
 
 assert select(true, 1, 2) == 1 and select(false)(1)(2) == 2
+a = 1
+a = a - 1  # this will be eventually compiled into: [inc a -1]
+assert a == 0

@@ -452,7 +452,7 @@ func (v Value) toString(lv int) string {
 		buf.WriteString("]")
 		return buf.String()
 	case Tclosure:
-		return "<" + v.AsClosure().String() + ">"
+		return v.AsClosure().String()
 	case Tgeneric:
 		return fmt.Sprintf("%v", v.AsGenericUnsafe())
 	}

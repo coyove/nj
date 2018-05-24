@@ -47,6 +47,13 @@ func (m *Map) Dup(duper func(string, Value) Value) *Map {
 	return m2
 }
 
+// SwitchToHashmap switches to map[string]Value
+// only call this before puting into any data
+func (m *Map) SwitchToHashmap() {
+	m.t = nil
+	m.m = make(map[string]Value)
+}
+
 // Equal compares two maps
 func (m *Map) Equal(m2 *Map) bool {
 	if m.t != nil && m2.t != nil {
