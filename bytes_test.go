@@ -8,18 +8,18 @@ func TestBytesWriter(t *testing.T) {
 	const v = 10
 
 	w := NewBytesWriter()
-	w.WriteByte(v)
-	w.WriteInt32(v)
+	w.Write(v)
+	w.Write32(v)
 	w.WriteDouble(v)
 	w.WriteInt64(v)
 	w.WriteString("10")
 
 	buf := w.Bytes()
 	cursor := uint32(0)
-	if crReadByte(buf, &cursor) != v {
+	if crRead(buf, &cursor) != v {
 		t.Error(cursor)
 	}
-	if crReadInt32(buf, &cursor) != v {
+	if crRead32(buf, &cursor) != v {
 		t.Error(cursor)
 	}
 	if crReadDouble(buf, &cursor) != v {

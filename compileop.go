@@ -1,9 +1,6 @@
 package potatolang
 
 import (
-	"bytes"
-	"crypto/rand"
-	"encoding/binary"
 	"fmt"
 	"sync"
 
@@ -14,27 +11,22 @@ const (
 	ERR_UNDECLARED_VARIABLE = "undeclared variable: %+v"
 )
 
-func compileSetOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
-	aVar := atoms[1]
-	varIndex := int32(0)
-	if len(atoms) < 3 {
-		err = fmt.Errorf("can't set/move without value %+v", atoms[0])
-		return
-	}
-
-	aValue := atoms[2]
-
+func compileSetOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
+	aVar, aValue := atoms[1], atoms[2]
+	varIndex := uint32(0)
 	buf := NewBytesWriter()
-	var newYX int32
+	var newYX uint32
+	var ok bool
+
 	if atoms[0].Value.(string) == "set" {
 		// compound has its own logic, we won't incr stack here
 		if aValue.Type != parser.NTCompound {
-			newYX = int32(sp)
+			newYX = uint32(sp)
 			sp++
 		}
 	} else {
-		varIndex = table.GetRelPosition(aVar.Value.(string))
-		if varIndex == -1 {
+		varIndex, ok = table.get(aVar.Value.(string))
+		if !ok {
 			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, aVar)
 			return
 		}
@@ -43,23 +35,18 @@ func compileSetOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte,
 
 	switch aValue.Type {
 	case parser.NTAtom:
-		valueIndex := table.GetRelPosition(aValue.Value.(string))
-		if valueIndex == -1 {
+		valueIndex, ok := table.get(aValue.Value.(string))
+		if !ok {
 			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, aValue)
 			return
 		}
-
-		buf.WriteByte(OP_SET)
-		buf.WriteInt32(newYX)
-		buf.WriteInt32(valueIndex)
-	case parser.NTNumber:
-		buf.WriteByte(OP_SET_NUM)
-		buf.WriteInt32(newYX)
-		buf.WriteDouble(aValue.Value.(float64))
-	case parser.NTString:
-		buf.WriteByte(OP_SET_STR)
-		buf.WriteInt32(newYX)
-		buf.WriteString(aValue.Value.(string))
+		buf.Write16(OP_SET)
+		buf.Write32(newYX)
+		buf.Write32(valueIndex)
+	case parser.NTNumber, parser.NTString:
+		buf.Write16(OP_SETK)
+		buf.Write32(newYX)
+		buf.Write16(table.addConst(aValue.Value))
 	case parser.NTCompound:
 		code, newYX, sp, err = compileCompoundIntoVariable(sp, aValue, table,
 			atoms[0].Value.(string) == "set", varIndex)
@@ -70,53 +57,46 @@ func compileSetOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte,
 	}
 
 	if atoms[0].Value.(string) == "set" {
-		_, reset := table.M[aVar.Value.(string)]
-		if reset {
+		_, redecl := table.get(aVar.Value.(string))
+		if redecl {
 			err = fmt.Errorf("redeclare: %+v", aVar)
 			return
 		}
-
-		table.M[aVar.Value.(string)] = int16(newYX)
+		table.put(aVar.Value.(string), uint16(newYX))
 	}
-
-	table.I = nil
-	return buf.Bytes(), newYX, sp, nil
+	return buf.data, newYX, sp, nil
 }
 
-func compileRetOp(r, n, s byte) compileFunc {
-	return func(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
+func compileRetOp(op, opk uint16) compileFunc {
+	return func(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
 		buf := NewBytesWriter()
 		if len(atoms) == 1 {
-			buf.WriteByte(r)
-			buf.WriteInt32(REG_A)
-			table.I = nil
-			return buf.Bytes(), yx, sp, nil
+			buf.Write16(op)
+			buf.Write32(regA)
+			return buf.data, yx, sp, nil
 		}
 
-		atom := atoms[1]
-
-		switch atom.Type {
+		switch atom := atoms[1]; atom.Type {
 		case parser.NTAtom, parser.NTNumber, parser.NTString, parser.NTAddr:
-			err = fill1(buf, atom, table, r, n, s)
+			err = fill(buf, atom, table, op, opk)
 			if err != nil {
 				return
 			}
 		case parser.NTCompound:
 			code, yx, sp, err = extract(sp, atom, table)
 			buf.Write(code)
-			buf.WriteByte(r)
-			buf.WriteInt32(yx)
+			buf.Write16(op)
+			buf.Write32(yx)
 		}
 
-		if r == OP_YIELD {
-			table.Y = true
+		if op == OP_YIELD {
+			table.y = true
 		}
-
-		return buf.Bytes(), yx, sp, nil
+		return buf.data, yx, sp, nil
 	}
 }
 
-func compileListOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
+func compileListOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
 	var buf *BytesWriter
 	buf, sp, err = flaten(sp, atoms[1].Compound, table)
 	if err != nil {
@@ -124,18 +104,17 @@ func compileListOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte
 	}
 
 	for _, atom := range atoms[1].Compound {
-		err = fill1(buf, atom, table, OP_PUSH, OP_PUSH_NUM, OP_PUSH_STR)
+		err = fill(buf, atom, table, OP_PUSH, OP_PUSHK)
 		if err != nil {
 			return
 		}
 	}
 
-	buf.WriteByte(OP_LIST)
-	table.I = nil
-	return buf.Bytes(), REG_A, sp, nil
+	buf.Write16(OP_LIST)
+	return buf.data, regA, sp, nil
 }
 
-func compileMapOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
+func compileMapOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
 	if len(atoms[1].Compound)%2 != 0 {
 		err = fmt.Errorf("every key in map must have a value: %+v", atoms[1])
 		return
@@ -148,52 +127,49 @@ func compileMapOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte,
 	}
 
 	for _, atom := range atoms[1].Compound {
-		err = fill1(buf, atom, table, OP_PUSH, OP_PUSH_NUM, OP_PUSH_STR)
+		err = fill(buf, atom, table, OP_PUSH, OP_PUSHK)
 		if err != nil {
 			return
 		}
 	}
 
-	buf.WriteByte(OP_MAP)
-	table.I = nil
-	return buf.Bytes(), REG_A, sp, nil
+	buf.Write16(OP_MAP)
+	return buf.data, regA, sp, nil
 }
 
-func indexToOpR(index int) []byte {
+func indexToOpR(index int) (a, b uint16) {
 	switch index {
 	case 0:
-		return []byte{OP_R0, OP_R0_NUM, OP_R0_STR}
+		return OP_R0, OP_R0K
 	case 1:
-		return []byte{OP_R1, OP_R1_NUM, OP_R1_STR}
+		return OP_R1, OP_R1K
 	case 2:
-		return []byte{OP_R2, OP_R2_NUM, OP_R2_STR}
+		return OP_R2, OP_R2K
 	case 3:
-		return []byte{OP_R3, OP_R3_NUM, OP_R3_STR}
+		return OP_R3, OP_R3K
 	}
 	panic("shouldn't happen")
 }
 
-func flaten(sp int16, atoms []*parser.Node, table *symtable) (buf *BytesWriter, newsp int16, err error) {
-
+func flaten(sp uint16, atoms []*parser.Node, table *symtable) (buf *BytesWriter, newsp uint16, err error) {
 	replacedAtoms := []*parser.Node{}
 	buf = NewBytesWriter()
 
 	for i, atom := range atoms {
-
-		var yx int32
-		var code []byte
+		var yx uint32
+		var code []uint16
 
 		if atom.Type == parser.NTCompound {
 			code, yx, sp, err = compileCompoundIntoVariable(sp, atom, table, true, 0)
 			if err != nil {
 				return
 			}
-			if table.I != nil {
-				atoms[i] = &parser.Node{Type: parser.NTNumber, Value: *table.I}
-				table.I = nil
-			} else if table.Is != nil {
-				atoms[i] = &parser.Node{Type: parser.NTString, Value: *table.Is}
-				table.Is = nil
+			if table.im != nil {
+				atoms[i] = &parser.Node{Type: parser.NTNumber, Value: *table.im}
+				table.im = nil
+			} else if table.ims != nil {
+				atoms[i] = &parser.Node{Type: parser.NTString, Value: *table.ims}
+				table.ims = nil
 			} else {
 				atoms[i] = &parser.Node{Type: parser.NTAddr, Value: yx}
 				replacedAtoms = append(replacedAtoms, atoms[i])
@@ -203,16 +179,16 @@ func flaten(sp int16, atoms []*parser.Node, table *symtable) (buf *BytesWriter, 
 	}
 
 	if len(replacedAtoms) == 1 {
-		cursor := buf.Len() - 4
-		replacedAtoms[0].Value = int32(binary.LittleEndian.Uint32(buf.Bytes()[cursor:]))
-		buf.TruncateLastBytes(9)
+		cursor := uint32(buf.Len() - 2)
+		replacedAtoms[0].Value = crRead32(buf.data, &cursor)
+		buf.TruncateLast(5)
 		sp--
 	}
 
 	return buf, sp, nil
 }
 
-func flatWrite(sp int16, atoms []*parser.Node, table *symtable, bop byte) (code []byte, yx int32, newsp int16, err error) {
+func flatWrite(sp uint16, atoms []*parser.Node, table *symtable, bop uint16) (code []uint16, yx uint32, newsp uint16, err error) {
 
 	var buf *BytesWriter
 	buf, sp, err = flaten(sp, atoms[1:], table)
@@ -222,10 +198,10 @@ func flatWrite(sp int16, atoms []*parser.Node, table *symtable, bop byte) (code 
 
 	immediateRet := func(n float64) {
 		buf.Clear()
-		buf.WriteByte(OP_SET_NUM)
-		buf.WriteInt32(REG_A)
-		table.I = &n
-		buf.WriteDouble(n)
+		buf.Write16(OP_SETK)
+		buf.Write32(regA)
+		buf.Write16(table.addConst(n))
+		table.im = &n
 	}
 
 	v1 := func() float64 { return atoms[1].Value.(float64) }
@@ -235,50 +211,51 @@ func flatWrite(sp int16, atoms []*parser.Node, table *symtable, bop byte) (code 
 	case OP_ADD:
 		if atoms[1].Type == parser.NTString && atoms[2].Type == parser.NTString {
 			buf.Clear()
-			buf.WriteByte(OP_SET_STR)
-			buf.WriteInt32(REG_A)
+			buf.Write16(OP_SETK)
+			buf.Write32(regA)
 			str := atoms[1].Value.(string) + atoms[2].Value.(string)
-			buf.WriteString(str)
-			table.Is = &str
-			return buf.Bytes(), REG_A, sp, nil
+			buf.Write16(table.addConst(str))
+			table.ims = &str
+			return buf.data, regA, sp, nil
 		}
 		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {
 			immediateRet(v1() + v2())
-			return buf.Bytes(), REG_A, sp, nil
+			return buf.data, regA, sp, nil
 		}
 	case OP_SUB:
 		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {
 			immediateRet(v1() - v2())
-			return buf.Bytes(), REG_A, sp, nil
+			return buf.data, regA, sp, nil
 		}
 	case OP_MUL:
 		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {
 			immediateRet(v1() * v2())
-			return buf.Bytes(), REG_A, sp, nil
+			return buf.data, regA, sp, nil
 		}
 	case OP_DIV:
 		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {
 			immediateRet(v1() / v2())
-			return buf.Bytes(), REG_A, sp, nil
+			return buf.data, regA, sp, nil
 		}
 	}
 
 	for i := 1; i < len(atoms); i++ {
-		err = fill1(buf, atoms[i], table, indexToOpR(i-1)...)
+		a, b := indexToOpR(i - 1)
+		err = fill(buf, atoms[i], table, a, b)
 		if err != nil {
 			return
 		}
 	}
-	buf.WriteByte(bop)
+	buf.Write16(bop)
 
 	if bop == OP_ASSERT {
 		buf.WriteString(atoms[0].String())
 	}
 
-	return buf.Bytes(), REG_A, sp, nil
+	return buf.data, regA, sp, nil
 }
 
-func compileFlatOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
+func compileFlatOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
 
 	head := atoms[0]
 	switch head.Value.(string) {
@@ -332,98 +309,84 @@ func compileFlatOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte
 	return
 }
 
-func compileIncOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
-	subject, step, buf := table.GetRelPosition(atoms[1].Value.(string)), atoms[2].Value.(float64), NewBytesWriter()
-	if subject == -1 {
+func compileIncOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
+	subject, ok := table.get(atoms[1].Value.(string))
+	buf := NewBytesWriter()
+	if !ok {
 		return nil, 0, 0, fmt.Errorf(ERR_UNDECLARED_VARIABLE, atoms[1])
 	}
-	buf.WriteByte(OP_INC)
-	buf.WriteInt32(subject)
-	buf.WriteDouble(step)
-	return buf.Bytes(), REG_A, sp, nil
+	buf.Write16(OP_INC)
+	buf.Write32(subject)
+	buf.Write16(table.addConst(atoms[2].Value))
+	return buf.data, regA, sp, nil
 }
 
-func compileImmediateIntoVariable(sp int16, node *parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
+func compileImmediateIntoVariable(sp uint16, node *parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
 	buf := NewBytesWriter()
 	switch node.Type {
-	case parser.NTNumber:
-		buf.WriteByte(OP_SET_NUM)
-		buf.WriteInt32(int32(sp))
-		yx = int32(sp)
-		buf.WriteDouble(node.Value.(float64))
-		sp++
-	case parser.NTString:
-		buf.WriteByte(OP_SET_STR)
-		buf.WriteInt32(int32(sp))
-		yx = int32(sp)
-		buf.WriteString(node.Value.(string))
+	case parser.NTNumber, parser.NTString:
+		buf.Write16(OP_SETK)
+		buf.Write32(uint32(sp))
+		buf.Write16(table.addConst(node.Value))
+		yx = uint32(sp)
 		sp++
 	default:
 		panic("shouldn't happen")
 	}
-	return buf.Bytes(), yx, sp, nil
+	return buf.data, yx, sp, nil
 }
 
 // [and a b] => if not a then false else use b end
 // [or a b]  => if a then use a else use b end
-func compileAndOrOp(bop byte) compileFunc {
-	return func(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
+func compileAndOrOp(bop uint16) compileFunc {
+	return func(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
 		a1, a2 := atoms[1], atoms[2]
 		buf := NewBytesWriter()
 		switch a1.Type {
 		case parser.NTNumber, parser.NTString:
 			code, yx, sp, err = compileImmediateIntoVariable(sp, a1, table)
 			buf.Write(code)
-			buf.WriteByte(bop)
-			buf.WriteInt32(yx)
+			buf.Write16(bop)
+			buf.Write32(yx)
 		case parser.NTAtom, parser.NTCompound:
 			code, yx, sp, err = extract(sp, a1, table)
 			if err != nil {
 				return nil, 0, 0, err
 			}
 			buf.Write(code)
-			buf.WriteByte(bop)
-			buf.WriteInt32(yx)
+			buf.Write16(bop)
+			buf.Write32(yx)
 		}
-		buf.WriteInt32(0)
+		buf.Write32(0)
 		c2 := buf.Len()
 
 		switch a2.Type {
-		case parser.NTNumber:
-			buf.WriteByte(OP_SET_NUM)
-			buf.WriteInt32(REG_A)
-			buf.WriteDouble(a2.Value.(float64))
-		case parser.NTString:
-			buf.WriteByte(OP_SET_STR)
-			buf.WriteInt32(REG_A)
-			buf.WriteString(a2.Value.(string))
+		case parser.NTNumber, parser.NTString:
+			buf.Write16(OP_SETK)
+			buf.Write32(regA)
+			buf.Write16(table.addConst(a2.Value))
 		case parser.NTAtom, parser.NTCompound:
 			code, yx, sp, err = extract(sp, a2, table)
 			if err != nil {
 				return nil, 0, 0, err
 			}
 			buf.Write(code)
-			if yx != REG_A {
-				buf.WriteByte(OP_SET)
-				buf.WriteInt32(REG_A)
-				buf.WriteInt32(yx)
+			if yx != regA {
+				buf.Write16(OP_SET)
+				buf.Write32(regA)
+				buf.Write32(yx)
 			}
 		}
 		jmp := buf.Len() - c2
 
-		code = buf.Bytes()
-		binary.LittleEndian.PutUint32(code[c2-4:], uint32(jmp))
-		return code, REG_A, sp, nil
+		buf.data[c2-2] = uint16(uint32(jmp) >> 16)
+		buf.data[c2-1] = uint16(jmp)
+		return code, regA, sp, nil
 	}
 }
 
 // [if condition [truechain ...] [falsechain ...]]
-func compileIfOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
-	if len(atoms) < 3 {
-		err = fmt.Errorf("if statement should have at least a true branch: %+v", atoms[0])
-		return
-	}
-
+func compileIfOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
 	condition := atoms[1]
 	trueBranch, falseBranch := atoms[2], atoms[3]
 	buf := NewBytesWriter()
@@ -432,8 +395,8 @@ func compileIfOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, 
 	case parser.NTNumber, parser.NTString:
 		code, yx, sp, err = compileImmediateIntoVariable(sp, condition, table)
 		buf.Write(code)
-		buf.WriteByte(OP_IFNOT)
-		buf.WriteInt32(yx)
+		buf.Write16(OP_IFNOT)
+		buf.Write32(yx)
 	case parser.NTAtom, parser.NTCompound:
 		code, yx, sp, err = extract(sp, condition, table)
 		if err != nil {
@@ -441,10 +404,10 @@ func compileIfOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, 
 		}
 
 		buf.Write(code)
-		buf.WriteByte(OP_IFNOT)
-		buf.WriteInt32(yx)
+		buf.Write16(OP_IFNOT)
+		buf.Write32(yx)
 
-		var trueCode, falseCode []byte
+		var trueCode, falseCode []uint16
 		trueCode, yx, sp, err = compileChainOp(sp, trueBranch, table)
 		if err != nil {
 			return
@@ -454,28 +417,27 @@ func compileIfOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, 
 			return
 		}
 		if len(falseCode) > 0 {
-			buf.WriteInt32(int32(len(trueCode)) + 5) // jmp (1b) + offset (4b)
+			buf.Write32(uint32(len(trueCode)) + 3) // jmp (1) + offset (2)
 			buf.Write(trueCode)
-			buf.WriteByte(OP_JMP)
-			buf.WriteInt32(int32(len(falseCode)))
+			buf.Write16(OP_JMP)
+			buf.Write32(uint32(len(falseCode)))
 			buf.Write(falseCode)
 		} else {
-			buf.WriteInt32(int32(len(trueCode)))
+			buf.Write32(uint32(len(trueCode)))
 			buf.Write(trueCode)
 		}
 	}
-	return buf.Bytes(), REG_A, sp, nil
+	return buf.data, regA, sp, nil
 }
 
 // [call func-name [args ...]]
-func compileCallOp(sp int16, nodes []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
+func compileCallOp(sp uint16, nodes []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
 	buf := NewBytesWriter()
 	callee := nodes[1]
-
 	name, _ := callee.Value.(string)
 	switch name {
 	case "error":
-		table.E = true
+		table.e = true
 		return flatWrite(sp, append(nodes[1:2], nodes[2].Compound...), table, OP_ERROR)
 	case "len":
 		return flatWrite(sp, append(nodes[1:2], nodes[2].Compound...), table, OP_LEN)
@@ -484,7 +446,7 @@ func compileCallOp(sp int16, nodes []*parser.Node, table *symtable) (code []byte
 	case "typeof":
 		return flatWrite(sp, append(nodes[1:2], nodes[2].Compound...), table, OP_TYPEOF)
 	case "who":
-		return []byte{OP_WHO}, REG_A, sp, nil
+		return []uint16{OP_WHO}, regA, sp, nil
 	}
 
 	atoms, replacedAtoms := nodes[2].Compound, []*parser.Node{}
@@ -504,17 +466,18 @@ func compileCallOp(sp int16, nodes []*parser.Node, table *symtable) (code []byte
 
 	// note: [call [..] [..]] is different
 	if len(replacedAtoms) == 1 && callee.Type != parser.NTCompound {
-		cursor := buf.Len() - 4
-		replacedAtoms[0].Value = int32(binary.LittleEndian.Uint32(buf.Bytes()[cursor:]))
-		buf.TruncateLastBytes(9)
+		cursor := uint32(buf.Len() - 2)
+		replacedAtoms[0].Value = crRead32(buf.data, &cursor)
+		buf.TruncateLast(5)
 		sp--
 	}
 
-	var varIndex int32
+	var varIndex uint32
+	var ok bool
 	switch callee.Type {
 	case parser.NTAtom:
-		varIndex = table.GetRelPosition(callee.Value.(string))
-		if varIndex == -1 {
+		varIndex, ok = table.get(callee.Value.(string))
+		if !ok {
 			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, callee)
 			return
 		}
@@ -523,41 +486,32 @@ func compileCallOp(sp int16, nodes []*parser.Node, table *symtable) (code []byte
 		if err != nil {
 			return
 		}
-
 		varIndex = yx
 		buf.Write(code)
 	case parser.NTAddr:
-		varIndex = callee.Value.(int32)
-	case parser.NTString:
-		buf.WriteByte(OP_SET_STR)
-		buf.WriteInt32(int32(sp))
-		buf.WriteString(callee.Value.(string))
-		varIndex = int32(sp)
-		sp++
+		varIndex = callee.Value.(uint32)
 	default:
 		err = fmt.Errorf("invalid callee: %+v", callee)
 		return
 	}
 
 	for i := 0; i < len(atoms); i++ {
-		err = fill1(buf, atoms[i], table, OP_PUSH, OP_PUSH_NUM, OP_PUSH_STR)
+		err = fill(buf, atoms[i], table, OP_PUSH, OP_PUSHK)
 		if err != nil {
 			return
 		}
 	}
 
-	buf.WriteByte(OP_CALL)
-	buf.WriteInt32(varIndex)
-
-	table.I = nil
-	return buf.Bytes(), REG_A, sp, nil
+	buf.Write16(OP_CALL)
+	buf.Write32(varIndex)
+	return buf.data, regA, sp, nil
 }
 
 // [lambda [namelist] [chain ...]]
-func compileLambdaOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
-	newLookup := &symtable{M: make(map[string]int16)}
-	newLookup.Parent = table
-	newLookup.LineInfo = table.LineInfo
+func compileLambdaOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
+	newLookup := newsymtable()
+	newLookup.parent = table
+	newLookup.lineInfo = table.lineInfo
 
 	params := atoms[1]
 	if params.Type != parser.NTCompound {
@@ -566,25 +520,36 @@ func compileLambdaOp(sp int16, atoms []*parser.Node, table *symtable) (code []by
 	}
 
 	for i, p := range params.Compound {
-		newLookup.M[p.Value.(string)] = int16(i)
+		newLookup.put(p.Value.(string), uint16(i))
 	}
 
-	ln := len(newLookup.M)
-	code, yx, _, err = compileChainOp(int16(ln), atoms[2], newLookup)
+	ln := len(newLookup.sym)
+	code, yx, _, err = compileChainOp(uint16(ln), atoms[2], newLookup)
 	if err != nil {
 		return
 	}
 
 	code = append(code, OP_EOB)
 	buf := NewBytesWriter()
-	buf.WriteByte(OP_LAMBDA)
-	buf.WriteByte(byte(ln))
-	buf.WriteByte(btob(newLookup.Y))
-	buf.WriteByte(btob(newLookup.E))
-	buf.WriteInt32(int32(len(code)))
+	buf.Write16(OP_LAMBDA)
+	buf.Write16(uint16(ln))
+	buf.Write16(btob(newLookup.y))
+	buf.Write16(btob(newLookup.e))
+	buf.Write16(uint16(len(newLookup.consts)))
+	for _, k := range newLookup.consts {
+		if k.ty == Tnumber {
+			buf.Write16(Tnumber)
+			buf.WriteDouble(k.value.(float64))
+		} else if k.ty == Tstring {
+			buf.Write16(Tstring)
+			buf.WriteString(k.value.(string))
+		} else {
+			panic("shouldn't happen")
+		}
+	}
+	buf.Write32(uint32(len(code)))
 	buf.Write(code)
-
-	return buf.Bytes(), REG_A, sp, nil
+	return buf.data, regA, sp, nil
 }
 
 var staticWhileHack struct {
@@ -594,100 +559,99 @@ var staticWhileHack struct {
 }
 
 // [continue | break]
-func compileContinueBreakOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
-	staticWhileHack.Lock()
-	defer staticWhileHack.Unlock()
-	if atoms[0].Value.(string) == "continue" {
-		if staticWhileHack.continueFlag == nil {
-			staticWhileHack.continueFlag = make([]byte, 9)
-			if _, err := rand.Read(staticWhileHack.continueFlag); err != nil {
-				panic(err)
-			}
-		}
-		return staticWhileHack.continueFlag, REG_A, sp, nil
-	}
+func compileContinueBreakOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
+	// staticWhileHack.Lock()
+	// defer staticWhileHack.Unlock()
+	// if atoms[0].Value.(string) == "continue" {
+	// 	if staticWhileHack.continueFlag == nil {
+	// 		staticWhileHack.continueFlag = make([]byte, 9)
+	// 		if _, err := rand.Read(staticWhileHack.continueFlag); err != nil {
+	// 			panic(err)
+	// 		}
+	// 	}
+	// 	return staticWhileHack.continueFlag, regA, sp, nil
+	// }
 
-	if staticWhileHack.breakFlag == nil {
-		staticWhileHack.breakFlag = make([]byte, 9)
-		if _, err := rand.Read(staticWhileHack.breakFlag); err != nil {
-			panic(err)
-		}
-	}
-	return staticWhileHack.breakFlag, REG_A, sp, nil
+	// if staticWhileHack.breakFlag == nil {
+	// 	staticWhileHack.breakFlag = make([]byte, 9)
+	// 	if _, err := rand.Read(staticWhileHack.breakFlag); err != nil {
+	// 		panic(err)
+	// 	}
+	// }
+	// return staticWhileHack.breakFlag, regA, sp, nil
+	return
 }
 
 // [while condition [chain ...]]
-func compileWhileOp(sp int16, atoms []*parser.Node, table *symtable) (code []byte, yx int32, newsp int16, err error) {
-	if len(atoms) < 3 {
-		err = fmt.Errorf("while statement should have condition and body: %+v", atoms[0])
-		return
-	}
-	condition := atoms[1]
-	buf := NewBytesWriter()
-	var varIndex int32
+func compileWhileOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
 
-	switch condition.Type {
-	case parser.NTAddr:
-		varIndex = condition.Value.(int32)
-	case parser.NTNumber:
-		buf.WriteByte(OP_SET_NUM)
-		varIndex = int32(sp)
-		sp++
-		buf.WriteInt32(varIndex)
-		buf.WriteDouble(condition.Value.(float64))
-	case parser.NTString:
-		buf.WriteByte(OP_SET_STR)
-		varIndex = int32(sp)
-		sp++
-		buf.WriteInt32(varIndex)
-		buf.WriteString(condition.Value.(string))
-	case parser.NTCompound, parser.NTAtom:
-		code, yx, sp, err = extract(sp, condition, table)
-		if err != nil {
-			return
-		}
-		buf.Write(code)
-		varIndex = yx
-	}
+	// condition := atoms[1]
+	// buf := NewBytesWriter()
+	// var varIndex int32
 
-	code, yx, sp, err = compileChainOp(sp, atoms[2], table)
-	if err != nil {
-		return
-	}
+	// switch condition.Type {
+	// case parser.NTAddr:
+	// 	varIndex = condition.Value.(int32)
+	// case parser.NTNumber:
+	// 	buf.Write(OP_SET_NUM)
+	// 	varIndex = int32(sp)
+	// 	sp++
+	// 	buf.Write32(varIndex)
+	// 	buf.WriteDouble(condition.Value.(float64))
+	// case parser.NTString:
+	// 	buf.Write(OP_SET_STR)
+	// 	varIndex = int32(sp)
+	// 	sp++
+	// 	buf.Write32(varIndex)
+	// 	buf.WriteString(condition.Value.(string))
+	// case parser.NTCompound, parser.NTAtom:
+	// 	code, yx, sp, err = extract(sp, condition, table)
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// 	buf.Write(code)
+	// 	varIndex = yx
+	// }
 
-	buf.WriteByte(OP_IFNOT)
-	buf.WriteInt32(varIndex)
-	buf.WriteInt32(int32(len(code)) + 5)
-	buf.Write(code)
-	buf.WriteByte(OP_JMP)
-	buf.WriteInt32(-int32(buf.Len()) - 4)
+	// code, yx, sp, err = compileChainOp(sp, atoms[2], table)
+	// if err != nil {
+	// 	return
+	// }
 
-	code = buf.Bytes()
-	i := 0
-	for i < len(code) && staticWhileHack.continueFlag != nil {
-		x := bytes.Index(code[i:], staticWhileHack.continueFlag)
-		if x == -1 {
-			break
-		}
-		idx := i + x
-		code[idx] = OP_JMP
-		binary.LittleEndian.PutUint32(code[idx+1:], uint32(-(idx + 5)))
-		copy(code[idx+5:], []byte{OP_NOP, OP_NOP, OP_NOP, OP_NOP})
-		i = idx + 9
-	}
+	// buf.Write(OP_IFNOT)
+	// buf.Write32(varIndex)
+	// buf.Write32(int32(len(code)) + 5)
+	// buf.Write(code)
+	// buf.Write(OP_JMP)
+	// buf.Write32(-int32(buf.Len()) - 4)
 
-	i = 0
-	for i < len(code) && staticWhileHack.breakFlag != nil {
-		x := bytes.Index(code[i:], staticWhileHack.breakFlag)
-		if x == -1 {
-			break
-		}
-		idx := i + x
-		code[idx] = OP_JMP
-		binary.LittleEndian.PutUint32(code[idx+1:], uint32((len(code)-idx)-5))
-		copy(code[idx+5:], []byte{OP_NOP, OP_NOP, OP_NOP, OP_NOP})
-		i = idx + 9
-	}
+	// code = buf.data
+	// i := 0
+	// for i < len(code) && staticWhileHack.continueFlag != nil {
+	// 	x := bytes.Index(code[i:], staticWhileHack.continueFlag)
+	// 	if x == -1 {
+	// 		break
+	// 	}
+	// 	idx := i + x
+	// 	code[idx] = OP_JMP
+	// 	binary.LittleEndian.PutUint32(code[idx+1:], uint32(-(idx + 5)))
+	// 	copy(code[idx+5:], []byte{OP_NOP, OP_NOP, OP_NOP, OP_NOP})
+	// 	i = idx + 9
+	// }
 
-	return code, REG_A, sp, nil
+	// i = 0
+	// for i < len(code) && staticWhileHack.breakFlag != nil {
+	// 	x := bytes.Index(code[i:], staticWhileHack.breakFlag)
+	// 	if x == -1 {
+	// 		break
+	// 	}
+	// 	idx := i + x
+	// 	code[idx] = OP_JMP
+	// 	binary.LittleEndian.PutUint32(code[idx+1:], uint32((len(code)-idx)-5))
+	// 	copy(code[idx+5:], []byte{OP_NOP, OP_NOP, OP_NOP, OP_NOP})
+	// 	i = idx + 9
+	// }
+
+	// return code, regA, sp, nil
+	return
 }

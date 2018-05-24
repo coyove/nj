@@ -1,0 +1,4 @@
+set a = true
+set b = nil
+set c = 1 + 2
+set f = function (a, b) return a + b * 2 end

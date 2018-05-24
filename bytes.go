@@ -2,15 +2,13 @@ package potatolang
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
-	"hash/crc32"
 	"strconv"
 	"strings"
 	"unsafe"
 )
 
-func btob(b bool) byte {
+func btob(b bool) uint16 {
 	if b {
 		return 1
 	}
@@ -19,12 +17,14 @@ func btob(b bool) byte {
 
 // BytesWriter writes complex values into bytes slice
 type BytesWriter struct {
-	data []byte
+	data []uint16
 }
 
 func NewBytesWriter() *BytesWriter {
 	const defaultBufferSize = 128
-	return &BytesWriter{make([]byte, 0, defaultBufferSize)}
+	return &BytesWriter{
+		make([]uint16, 0, defaultBufferSize),
+	}
 }
 
 func (b *BytesWriter) Dup() *BytesWriter {
@@ -36,41 +36,39 @@ func (b *BytesWriter) Clear() {
 	b.data = b.data[:0]
 }
 
-func (b *BytesWriter) Bytes() []byte {
+func (b *BytesWriter) Data() []uint16 {
 	return b.data
 }
 
-func (b *BytesWriter) Write(buf []byte) {
+func (b *BytesWriter) Write(buf []uint16) {
 	b.data = append(b.data, buf...)
 }
 
-func (b *BytesWriter) WriteByte(v byte) {
+func (b *BytesWriter) Write16(v uint16) {
 	b.data = append(b.data, v)
 }
 
-func (b *BytesWriter) WriteInt32(v int32) {
-	buf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(buf, uint32(v))
-	b.data = append(b.data, buf...)
+func (b *BytesWriter) Write32(v uint32) {
+	b.data = append(b.data, uint16(v>>16), uint16(v))
 }
 
-func (b *BytesWriter) WriteInt64(v int64) {
-	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, uint64(v))
-	b.data = append(b.data, buf...)
+func (b *BytesWriter) Write64(v uint64) {
+	b.data = append(b.data, uint16(v>>48), uint16(v>>32), uint16(v>>16), uint16(v))
 }
 
 func (b *BytesWriter) WriteDouble(v float64) {
-	d := *(*int64)(unsafe.Pointer(&v))
-	b.WriteInt64(d)
+	d := *(*uint64)(unsafe.Pointer(&v))
+	b.Write64(d)
 }
 
 func (b *BytesWriter) WriteString(v string) {
-	b.WriteInt32(int32(len(v)))
-	b.Write([]byte(v))
+	b.Write32(uint32(len(v)))
+	for i := 0; i < len(v); i++ {
+		b.Write16(uint16(v[i]))
+	}
 }
 
-func (b *BytesWriter) TruncateLastBytes(n int) {
+func (b *BytesWriter) TruncateLast(n int) {
 	if len(b.data) > n {
 		b.data = b.data[:len(b.data)-n]
 	}
@@ -80,37 +78,42 @@ func (b *BytesWriter) Len() int {
 	return len(b.data)
 }
 
-func crReadBytes(data []byte, cursor *uint32, len int) []byte {
+func crRead(data []uint16, cursor *uint32, len int) []uint16 {
 	*cursor += uint32(len)
 	return data[*cursor-uint32(len) : *cursor]
 }
 
-func crReadByte(data []byte, cursor *uint32) byte {
+func crRead16(data []uint16, cursor *uint32) uint16 {
 	*cursor++
 	return data[*cursor-1]
 }
 
-func crReadInt32(data []byte, cursor *uint32) int32 {
+func crRead32(data []uint16, cursor *uint32) uint32 {
+	*cursor += 2
+	return uint32(data[*cursor-2])<<16 + uint32(data[*cursor-1])
+}
+
+func crRead64(data []uint16, cursor *uint32) uint64 {
 	*cursor += 4
-	return int32(binary.LittleEndian.Uint32(data[*cursor-4 : *cursor]))
+	return uint64(data[*cursor-4])<<48 + uint64(data[*cursor-3])<<32 + uint64(data[*cursor-2])<<16 + uint64(data[*cursor-1])
 }
 
-func crReadInt64(data []byte, cursor *uint32) int64 {
-	*cursor += 8
-	return int64(binary.LittleEndian.Uint64(data[*cursor-8 : *cursor]))
-}
-
-func crReadDouble(data []byte, cursor *uint32) float64 {
-	d := crReadInt64(data, cursor)
+func crReadDouble(data []uint16, cursor *uint32) float64 {
+	d := crRead64(data, cursor)
 	return *(*float64)(unsafe.Pointer(&d))
 }
 
-func crReadString(data []byte, cursor *uint32) string {
-	ln := crReadInt32(data, cursor)
-	return string(crReadBytes(data, cursor, int(ln)))
+func crReadString(data []uint16, cursor *uint32) string {
+	ln := crRead32(data, cursor)
+	buf := crRead(data, cursor, int(ln))
+	ret := make([]byte, len(buf))
+	for i, x := range buf {
+		ret[i] = byte(x)
+	}
+	return string(ret)
 }
 
-var singleOp = map[byte]string{
+var singleOp = map[uint16]string{
 	OP_ADD:     "add",
 	OP_SUB:     "sub",
 	OP_MUL:     "mul",
@@ -141,18 +144,13 @@ var singleOp = map[byte]string{
 	OP_LIST:    "list",
 }
 
-func crHash(data []byte) uint32 {
-	e := crc32.New(crc32.IEEETable)
-	e.Write(data)
-	return e.Sum32()
+func crHash(data []uint16) uint32 {
+	// e := crc32.New(crc32.IEEETable)
+	// e.Write(data)
+	return 0 //e.Sum32()
 }
 
-// Prettify prettifies the code to somehow human readable
-func Prettify(code []byte) string {
-	return crPrettify(code, 0)
-}
-
-func crPrettifyLambda(args, curry int, y, e bool, code []byte, tab int) string {
+func crPrettifyLambda(args, curry int, y, e bool, code []uint16, consts []Value, tab int) string {
 	sb := &bytes.Buffer{}
 	spaces := strings.Repeat(" ", tab)
 	sb.WriteString(spaces + "<args: " + strconv.Itoa(args) + ">\n")
@@ -165,11 +163,14 @@ func crPrettifyLambda(args, curry int, y, e bool, code []byte, tab int) string {
 	if e {
 		sb.WriteString(spaces + "<errorable>\n")
 	}
-	sb.WriteString(crPrettify(code, tab))
+	for i, k := range consts {
+		sb.WriteString(spaces + fmt.Sprintf("<k$%d: %+v>\n", i, k))
+	}
+	sb.WriteString(crPrettify(code, consts, tab))
 	return sb.String()
 }
 
-func crPrettify(data []byte, tab int) string {
+func crPrettify(data []uint16, consts []Value, tab int) string {
 	sb := &bytes.Buffer{}
 	pre := strings.Repeat(" ", tab)
 	hash := crHash(data)
@@ -189,21 +190,22 @@ func crPrettify(data []byte, tab int) string {
 		}
 		return a
 	}
-	readString := func() string {
-		return strconv.Quote(crReadString(data, &cursor))
-	}
 	readAddr := func() string {
-		if a := crReadInt32(data, &cursor); a == REG_A {
+		if a := crRead32(data, &cursor); a == regA {
 			return "$a"
 		} else {
-			return fmt.Sprintf("$%d$%d", a>>16, int16(a))
+			return fmt.Sprintf("$%d$%d", a>>16, uint16(a))
 		}
 	}
+	readKAddr := func() string {
+		a := crRead16(data, &cursor)
+		return fmt.Sprintf("k$%d <%+v>", a, consts[a])
+	}
 
-	lastBop := byte(OP_EOB)
+	lastBop := uint16(OP_EOB)
 MAIN:
 	for {
-		bop := crReadByte(data, &cursor)
+		bop := crRead16(data, &cursor)
 
 		lastIdx := sb.Len() - 1
 		sb.WriteString(pre + "[")
@@ -217,45 +219,32 @@ MAIN:
 			break MAIN
 		case OP_SET:
 			sb.WriteString(readAddr() + " = " + readAddr())
-		case OP_SET_NUM:
-			sb.WriteString(readAddr() + " = " + readDouble())
-		case OP_SET_STR:
-			sb.WriteString(readAddr() + " = " + readString())
+		case OP_SETK:
+			sb.WriteString(readAddr() + " = " + readKAddr())
 		case OP_R0:
 			sb.WriteString("r0 = " + readAddr())
-		case OP_R0_NUM:
-			sb.WriteString("r0 = " + readDouble())
-		case OP_R0_STR:
-			sb.WriteString("r0 = " + readString())
+		case OP_R0K:
+			sb.WriteString("r0 = " + readKAddr())
 		case OP_R1:
 			sb.Truncate(lastIdx)
 			sb.WriteString(", r1 = " + readAddr())
-		case OP_R1_NUM:
+		case OP_R1K:
 			sb.Truncate(lastIdx)
-			sb.WriteString(", r1 = " + readDouble())
-		case OP_R1_STR:
-			sb.Truncate(lastIdx)
-			sb.WriteString(", r1 = " + readString())
+			sb.WriteString(", r1 = " + readKAddr())
 		case OP_R2:
 			sb.Truncate(lastIdx)
 			sb.WriteString(", r2 = " + readAddr())
-		case OP_R2_NUM:
+		case OP_R2K:
 			sb.Truncate(lastIdx)
-			sb.WriteString(", r2 = " + readDouble())
-		case OP_R2_STR:
-			sb.Truncate(lastIdx)
-			sb.WriteString(", r2 = " + readString())
+			sb.WriteString(", r2 = " + readKAddr())
 		case OP_R3:
 			sb.Truncate(lastIdx)
 			sb.WriteString(", r3 = " + readAddr())
-		case OP_R3_NUM:
+		case OP_R3K:
 			sb.Truncate(lastIdx)
-			sb.WriteString(", r3 = " + readDouble())
-		case OP_R3_STR:
-			sb.Truncate(lastIdx)
-			sb.WriteString(", r3 = " + readString())
-		case OP_PUSH, OP_PUSH_NUM, OP_PUSH_STR:
-			if lastBop == OP_PUSH || lastBop == OP_PUSH_NUM || lastBop == OP_PUSH_STR {
+			sb.WriteString(", r3 = " + readKAddr())
+		case OP_PUSH, OP_PUSHK:
+			if lastBop == OP_PUSH || lastBop == OP_PUSHK {
 				sb.Truncate(lastIdx)
 				sb.WriteString(", ")
 			} else {
@@ -264,47 +253,55 @@ MAIN:
 			switch bop {
 			case OP_PUSH:
 				sb.WriteString(readAddr())
-			case OP_PUSH_NUM:
-				sb.WriteString(readDouble())
-			case OP_PUSH_STR:
-				sb.WriteString(readString())
+			case OP_PUSHK:
+				sb.WriteString(readKAddr())
 			}
 		case OP_ASSERT:
 			sb.Truncate(lastIdx)
 			sb.WriteString(" -> " + crReadString(data, &cursor))
 		case OP_RET:
 			sb.WriteString("ret " + readAddr())
-		case OP_RET_NUM:
-			sb.WriteString("ret " + readDouble())
-		case OP_RET_STR:
-			sb.WriteString("ret " + readString())
+		case OP_RETK:
+			sb.WriteString("ret " + readKAddr())
 		case OP_YIELD:
 			sb.WriteString("yield " + readAddr())
-		case OP_YIELD_NUM:
-			sb.WriteString("yield " + readDouble())
-		case OP_YIELD_STR:
-			sb.WriteString("yield " + readString())
+		case OP_YIELDK:
+			sb.WriteString("yield " + readKAddr())
 		case OP_LAMBDA:
 			sb.WriteString("$a = lambda (\n")
-			sb.WriteString(crPrettifyLambda(int(crReadByte(data, &cursor)), 0,
-				crReadByte(data, &cursor) == 1, crReadByte(data, &cursor) == 1,
-				crReadBytes(data, &cursor, int(crReadInt32(data, &cursor))),
-				tab+4))
+			argsCount := crRead16(data, &cursor)
+			yieldable := crRead16(data, &cursor) == 1
+			errorable := crRead16(data, &cursor) == 1
+			constsLen := crRead16(data, &cursor)
+			consts := make([]Value, constsLen)
+			for i := uint16(0); i < constsLen; i++ {
+				switch crRead16(data, &cursor) {
+				case Tnumber:
+					consts[i] = NewNumberValue(crReadDouble(data, &cursor))
+				case Tstring:
+					consts[i] = NewStringValue(crReadString(data, &cursor))
+				default:
+					panic("shouldn't happen")
+				}
+			}
+			buf := crRead(data, &cursor, int(crRead32(data, &cursor)))
+
+			sb.WriteString(crPrettifyLambda(int(argsCount), 0, yieldable, errorable, buf, consts, tab+4))
 			sb.WriteString(pre + ")")
 		case OP_CALL:
 			sb.WriteString("call " + readAddr())
 		case OP_JMP:
-			pos := crReadInt32(data, &cursor)
+			pos := crRead32(data, &cursor)
 			pos2 := cursor + uint32(pos)
 			sb.WriteString("jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_IFNOT:
 			addr := readAddr()
-			pos := crReadInt32(data, &cursor)
+			pos := crRead32(data, &cursor)
 			pos2 := cursor + uint32(pos)
 			sb.WriteString("if not " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_IF:
 			addr := readAddr()
-			pos := crReadInt32(data, &cursor)
+			pos := crRead32(data, &cursor)
 			pos2 := cursor + uint32(pos)
 			sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_NOP:

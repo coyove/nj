@@ -111,7 +111,7 @@ func (e *Env) SetParent(parent *Env) {
 	e.parent = parent
 }
 
-func (e *Env) getTop(start *Env, yx int32) *Env {
+func (e *Env) getTop(start *Env, yx uint32) *Env {
 	env := start
 	y := yx >> 16
 	for y > 0 && env != nil {
@@ -126,13 +126,13 @@ func (e *Env) getTop(start *Env, yx int32) *Env {
 	return env
 }
 
-func (e *Env) Get(yx int32) Value {
-	if yx == REG_A {
+func (e *Env) Get(yx uint32) Value {
+	if yx == regA {
 		return e.A
 	}
 
 	env := e.getTop(e, yx)
-	return env.stack.Get(int(int16(yx)))
+	return env.stack.Get(int(uint16(yx)))
 }
 
 func (e *Env) Push(v Value) {
@@ -143,8 +143,8 @@ func (e *Env) Size() int {
 	return e.stack.Size()
 }
 
-func (e *Env) Set(yx int32, v Value) {
-	if yx == REG_A {
+func (e *Env) Set(yx uint32, v Value) {
+	if yx == regA {
 		e.A = v
 	} else {
 		env := e.getTop(e, yx)
@@ -158,7 +158,8 @@ func (e *Env) Stack() *Stack {
 
 // Closure is the closure struct used in potatolang
 type Closure struct {
-	code      []byte
+	code      []uint16
+	consts    []Value
 	env       *Env
 	caller    Value
 	preArgs   []Value
@@ -172,9 +173,10 @@ type Closure struct {
 }
 
 // NewClosure creates a new closure
-func NewClosure(code []byte, env *Env, argsCount byte, yieldable, errorable bool) *Closure {
+func NewClosure(code []uint16, consts []Value, env *Env, argsCount byte, yieldable, errorable bool) *Closure {
 	return &Closure{
 		code:      code,
+		consts:    consts,
 		env:       env,
 		argsCount: argsCount,
 		yieldable: yieldable,
@@ -206,11 +208,11 @@ func (c *Closure) PreArgs() []Value {
 	return c.preArgs
 }
 
-func (c *Closure) SetCode(code []byte) {
+func (c *Closure) SetCode(code []uint16) {
 	c.code = code
 }
 
-func (c *Closure) Code() []byte {
+func (c *Closure) Code() []uint16 {
 	return c.code
 }
 
@@ -234,7 +236,7 @@ func (c *Closure) Env() *Env {
 
 // Dup duplicates the closure
 func (c *Closure) Dup() *Closure {
-	cls := NewClosure(c.code, c.env, c.argsCount, c.yieldable, c.errorable)
+	cls := NewClosure(c.code, c.consts, c.env, c.argsCount, c.yieldable, c.errorable)
 	cls.caller = c.caller
 	cls.lastp = c.lastp
 	cls.native = c.native
@@ -247,7 +249,8 @@ func (c *Closure) Dup() *Closure {
 
 func (c *Closure) String() string {
 	if c.native == nil {
-		return "closure (\n" + crPrettifyLambda(int(c.argsCount), len(c.preArgs), c.yieldable, c.errorable, c.code, 4) + ")"
+		return "closure (\n" +
+			crPrettifyLambda(int(c.argsCount), len(c.preArgs), c.yieldable, c.errorable, c.code, c.consts, 4) + ")"
 	}
 	return fmt.Sprintf("closure (\n    <args: %d>\n    <curry: %d>\n    [...] native code\n)", c.argsCount, len(c.preArgs))
 }
@@ -263,7 +266,7 @@ func (c *Closure) Exec(newEnv *Env) Value {
 	}
 
 	if c.native == nil {
-		v, np, yield := ExecCursor(newEnv, c.code, c.lastp)
+		v, np, yield := ExecCursor(newEnv, c.code, c.consts, c.lastp)
 		if yield {
 			c.lastp = np
 			c.lastenv = newEnv
@@ -276,39 +279,92 @@ func (c *Closure) Exec(newEnv *Env) Value {
 	return c.native(newEnv)
 }
 
+type kinfo struct {
+	ty    byte
+	value interface{}
+}
+
 // symtable is responsible for recording extra states of compilation
 type symtable struct {
 	// variable name lookup
-	Parent *symtable
-	M      map[string]int16
+	parent *symtable
+	sym    map[string]uint16
 
 	// flat op immediate value
-	I  *float64
-	Is *string
+	im  *float64
+	ims *string
 
 	// has yield op
-	Y bool
+	y bool
 
 	// has error op
-	E bool
+	e bool
 
 	// record line info at chain
-	LineInfo bool
+	lineInfo bool
+
+	consts         []kinfo
+	constStringMap map[string]uint16
+	constFloatMap  map[float64]uint16
 }
 
-func (c *symtable) GetRelPosition(key string) int32 {
-	m := c
-	depth := int32(0)
+func newsymtable() *symtable {
+	return &symtable{
+		sym:            make(map[string]uint16),
+		consts:         make([]kinfo, 0),
+		constStringMap: make(map[string]uint16),
+		constFloatMap:  make(map[float64]uint16),
+	}
+}
+
+func (m *symtable) get(varname string) (uint32, bool) {
+	depth := uint32(0)
 
 	for m != nil {
-		k, e := m.M[key]
+		k, e := m.sym[varname]
 		if e {
-			return (depth << 16) | int32(k)
+			return (depth << 16) | uint32(k), true
 		}
 
 		depth++
-		m = m.Parent
+		m = m.parent
 	}
 
-	return -1
+	return 0, false
+}
+
+func (m *symtable) put(varname string, addr uint16) {
+	m.sym[varname] = addr
+}
+
+func (m *symtable) addConst(v interface{}) uint16 {
+	var k kinfo
+	k.value = v
+
+	switch v.(type) {
+	case float64:
+		k.ty = Tnumber
+		if i, ok := m.constFloatMap[v.(float64)]; ok {
+			return i
+		}
+	case string:
+		k.ty = Tstring
+		if i, ok := m.constStringMap[v.(string)]; ok {
+			return i
+		}
+	default:
+		panic("shouldn't happen")
+	}
+
+	m.consts = append(m.consts, k)
+	idx := uint16(len(m.consts)) - 1
+
+	switch v.(type) {
+	case float64:
+		m.constFloatMap[v.(float64)] = idx
+	case string:
+		m.constStringMap[v.(string)] = idx
+	}
+
+	return idx
 }

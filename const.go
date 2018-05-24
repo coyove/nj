@@ -1,6 +1,6 @@
 package potatolang
 
-const REG_A = -1
+const regA = 0xffffffff
 
 const (
 	// basic flat op
@@ -38,29 +38,21 @@ const (
 	OP_LAMBDA
 	OP_CALL
 	OP_SET
-	OP_SET_NUM
-	OP_SET_STR
+	OP_SETK
 	OP_R0
-	OP_R0_NUM
-	OP_R0_STR
+	OP_R0K
 	OP_R1
-	OP_R1_NUM
-	OP_R1_STR
+	OP_R1K
 	OP_R2
-	OP_R2_NUM
-	OP_R2_STR
+	OP_R2K
 	OP_R3
-	OP_R3_NUM
-	OP_R3_STR
+	OP_R3K
 	OP_PUSH
-	OP_PUSH_NUM
-	OP_PUSH_STR
+	OP_PUSHK
 	OP_RET
-	OP_RET_NUM
-	OP_RET_STR
+	OP_RETK
 	OP_YIELD
-	OP_YIELD_NUM
-	OP_YIELD_STR
+	OP_YIELDK
 
 	// inc op
 	OP_INC

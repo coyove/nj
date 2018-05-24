@@ -77,9 +77,9 @@ func init() {
 				panic("not enough arguments to start")
 			}
 			for i := 1; i < env.Size(); i++ {
-				newEnv.Push(env.Get(int32(i)))
+				newEnv.Push(env.Get(uint32(i)))
 			}
-			go Exec(newEnv, cls.Code())
+			go ExecCursor(newEnv, cls.code, cls.consts, 0)
 			return NewValue()
 		})).
 		Put("mutex", NewNativeValue(0, func(env *Env) Value {

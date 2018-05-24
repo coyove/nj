@@ -16,7 +16,8 @@ func init() {
 type ret struct {
 	cursor uint32
 	env    *Env
-	code   []byte
+	code   []uint16
+	consts []Value
 	line   string
 }
 
@@ -35,15 +36,9 @@ func (e *ExecError) Error() string {
 	return msg
 }
 
-// Exec executes code under the given env and returns the result
-func Exec(env *Env, code []byte) Value {
-	v, _, _ := ExecCursor(env, code, 0)
-	return v
-}
-
 // ExecCursor executes code under the given env from the given start cursor and returns:
 // final result, yield cursor, is yield or not
-func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
+func ExecCursor(env *Env, code []uint16, consts []Value, cursor uint32) (Value, uint32, bool) {
 	var newEnv *Env
 	var lastCursor uint32
 	var lineinfo = "<unknown>"
@@ -74,7 +69,8 @@ func ExecCursor(env *Env, code []byte, cursor uint32) (Value, uint32, bool) {
 MAIN:
 	for {
 		lastCursor = cursor
-		bop := crReadByte(code, &cursor)
+		// log.Println(cursor)
+		bop := crRead16(code, &cursor)
 		switch bop {
 		case OP_LINE:
 			lineinfo = crReadString(code, &cursor)
@@ -90,15 +86,13 @@ MAIN:
 		case OP_FALSE:
 			env.A = NewBoolValue(false)
 		case OP_SET:
-			env.Set(crReadInt32(code, &cursor), env.Get(crReadInt32(code, &cursor)))
-		case OP_SET_NUM:
-			env.Set(crReadInt32(code, &cursor), NewNumberValue(crReadDouble(code, &cursor)))
-		case OP_SET_STR:
-			env.Set(crReadInt32(code, &cursor), NewStringValue(crReadString(code, &cursor)))
+			env.Set(crRead32(code, &cursor), env.Get(crRead32(code, &cursor)))
+		case OP_SETK:
+			env.Set(crRead32(code, &cursor), consts[crRead16(code, &cursor)])
 		case OP_INC:
-			addr := crReadInt32(code, &cursor)
+			addr := crRead32(code, &cursor)
 			num := env.Get(addr).AsNumber()
-			env.Set(addr, NewNumberValue(num+crReadDouble(code, &cursor)))
+			env.Set(addr, NewNumberValue(num+consts[crRead16(code, &cursor)].AsNumberUnsafe()))
 		case OP_ADD:
 			switch l := env.R0; l.Type() {
 			case Tnumber:
@@ -227,7 +221,7 @@ MAIN:
 				size := newEnv.Stack().Size()
 				m := NewMap()
 				for i := 0; i < size; i += 2 {
-					m.Put(newEnv.Get(int32(i)).AsString(), newEnv.Get(int32(i+1)))
+					m.Put(newEnv.Get(uint32(i)).AsString(), newEnv.Get(uint32(i+1)))
 				}
 				newEnv.Stack().Clear()
 				env.A = NewMapValue(m)
@@ -291,76 +285,67 @@ MAIN:
 			}
 			env.A = v
 		case OP_R0:
-			env.R0 = env.Get(crReadInt32(code, &cursor))
-		case OP_R0_NUM:
-			env.R0 = NewNumberValue(crReadDouble(code, &cursor))
-		case OP_R0_STR:
-			env.R0 = NewStringValue(crReadString(code, &cursor))
+			env.R0 = env.Get(crRead32(code, &cursor))
+		case OP_R0K:
+			env.R0 = consts[crRead16(code, &cursor)]
 		case OP_R1:
-			env.R1 = env.Get(crReadInt32(code, &cursor))
-		case OP_R1_NUM:
-			env.R1 = NewNumberValue(crReadDouble(code, &cursor))
-		case OP_R1_STR:
-			env.R1 = NewStringValue(crReadString(code, &cursor))
+			env.R1 = env.Get(crRead32(code, &cursor))
+		case OP_R1K:
+			env.R1 = consts[crRead16(code, &cursor)]
 		case OP_R2:
-			env.R2 = env.Get(crReadInt32(code, &cursor))
-		case OP_R2_NUM:
-			env.R2 = NewNumberValue(crReadDouble(code, &cursor))
-		case OP_R2_STR:
-			env.R2 = NewStringValue(crReadString(code, &cursor))
+			env.R2 = env.Get(crRead32(code, &cursor))
+		case OP_R2K:
+			env.R2 = consts[crRead16(code, &cursor)]
 		case OP_R3:
-			env.R3 = env.Get(crReadInt32(code, &cursor))
-		case OP_R3_NUM:
-			env.R3 = NewNumberValue(crReadDouble(code, &cursor))
-		case OP_R3_STR:
-			env.R3 = NewStringValue(crReadString(code, &cursor))
+			env.R3 = env.Get(crRead32(code, &cursor))
+		case OP_R3K:
+			env.R3 = consts[crRead16(code, &cursor)]
 		case OP_PUSH:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.Push(env.Get(crReadInt32(code, &cursor)))
-		case OP_PUSH_NUM:
+			newEnv.Push(env.Get(crRead32(code, &cursor)))
+		case OP_PUSHK:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.Push(NewNumberValue(crReadDouble(code, &cursor)))
-		case OP_PUSH_STR:
-			if newEnv == nil {
-				newEnv = NewEnv(nil)
-			}
-			newEnv.Push(NewStringValue(crReadString(code, &cursor)))
+			newEnv.Push(consts[crRead16(code, &cursor)])
 		case OP_RET:
-			v := env.Get(crReadInt32(code, &cursor))
+			v := env.Get(crRead32(code, &cursor))
 			if len(retStack) == 0 {
 				return v, 0, false
 			}
 			returnUpperWorld(v)
-		case OP_RET_NUM:
-			v := NewNumberValue(crReadDouble(code, &cursor))
-			if len(retStack) == 0 {
-				return v, 0, false
-			}
-			returnUpperWorld(v)
-		case OP_RET_STR:
-			v := NewStringValue(crReadString(code, &cursor))
+		case OP_RETK:
+			v := consts[crRead16(code, &cursor)]
 			if len(retStack) == 0 {
 				return v, 0, false
 			}
 			returnUpperWorld(v)
 		case OP_YIELD:
-			return env.Get(crReadInt32(code, &cursor)), cursor, true
-		case OP_YIELD_NUM:
-			return NewNumberValue(crReadDouble(code, &cursor)), cursor, true
-		case OP_YIELD_STR:
-			return NewStringValue(crReadString(code, &cursor)), cursor, true
+			return env.Get(crRead32(code, &cursor)), cursor, true
+		case OP_YIELDK:
+			return consts[crRead16(code, &cursor)], cursor, true
 		case OP_LAMBDA:
-			argsCount := crReadByte(code, &cursor)
-			yieldable := crReadByte(code, &cursor) == 1
-			errorable := crReadByte(code, &cursor) == 1
-			buf := crReadBytes(code, &cursor, int(crReadInt32(code, &cursor)))
-			env.A = NewClosureValue(NewClosure(buf, env, argsCount, yieldable, errorable))
+			argsCount := crRead16(code, &cursor)
+			yieldable := crRead16(code, &cursor) == 1
+			errorable := crRead16(code, &cursor) == 1
+			constsLen := crRead16(code, &cursor)
+			consts := make([]Value, constsLen)
+			for i := uint16(0); i < constsLen; i++ {
+				switch crRead16(code, &cursor) {
+				case Tnumber:
+					consts[i] = NewNumberValue(crReadDouble(code, &cursor))
+				case Tstring:
+					consts[i] = NewStringValue(crReadString(code, &cursor))
+				default:
+					panic("shouldn't happen")
+				}
+			}
+			buf := crRead(code, &cursor, int(crRead32(code, &cursor)))
+			env.A = NewClosureValue(NewClosure(buf, consts, env, byte(argsCount), yieldable, errorable))
 		case OP_CALL:
-			v := env.Get(crReadInt32(code, &cursor))
+			v := env.Get(crRead32(code, &cursor))
 			switch v.Type() {
 			case Tclosure:
 				cls := v.AsClosureUnsafe()
@@ -393,6 +378,7 @@ MAIN:
 							cursor: cursor,
 							env:    env,
 							code:   code,
+							consts: consts,
 							line:   lineinfo,
 						}
 
@@ -402,6 +388,7 @@ MAIN:
 						newEnv.C = cls.caller
 						env = newEnv
 						code = cls.code
+						consts = cls.consts
 
 						retStack = append(retStack, last)
 					}
@@ -439,17 +426,17 @@ MAIN:
 				log.Panicf("invalid callee: %+v", v)
 			}
 		case OP_JMP:
-			off := uint32(crReadInt32(code, &cursor))
+			off := uint32(crRead32(code, &cursor))
 			*&cursor += off
 		case OP_IFNOT:
-			cond := env.Get(crReadInt32(code, &cursor))
-			off := uint32(crReadInt32(code, &cursor))
+			cond := env.Get(crRead32(code, &cursor))
+			off := uint32(crRead32(code, &cursor))
 			if cond.IsFalse() {
 				*&cursor += off
 			}
 		case OP_IF:
-			cond := env.Get(crReadInt32(code, &cursor))
-			off := uint32(crReadInt32(code, &cursor))
+			cond := env.Get(crRead32(code, &cursor))
+			off := uint32(crRead32(code, &cursor))
 			if !cond.IsFalse() {
 				*&cursor += off
 			}
@@ -541,7 +528,8 @@ func doDup(env *Env) {
 					break
 				}
 				if alloc {
-					r := rune(Exec(newEnv, cls.Code()).AsNumber())
+					v, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
+					r := rune(v.AsNumber())
 					idx := len(newstr)
 					newstr = append(newstr, 0, 0, 0, 0)
 					newstr = newstr[:idx+utf8.EncodeRune(newstr[idx:], r)]
@@ -595,8 +583,7 @@ func doDup(env *Env) {
 			newEnv.Stack().Clear()
 			newEnv.Push(NewNumberValue(float64(i)))
 			newEnv.Push(v)
-			// log.Println("==", i, cls)
-			ret := Exec(newEnv, cls.Code())
+			ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 			if newEnv.E.Type() != Tnil {
 				break
 			}
@@ -620,7 +607,7 @@ func doDup(env *Env) {
 						newEnv.Stack().Clear()
 						newEnv.Push(NewStringValue(x.k))
 						newEnv.Push(x.v)
-						ret := Exec(newEnv, cls.Code())
+						ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 						if newEnv.E.Type() != Tnil {
 							break
 						}
@@ -632,7 +619,7 @@ func doDup(env *Env) {
 						newEnv.Stack().Clear()
 						newEnv.Push(NewStringValue(k))
 						newEnv.Push(v)
-						ret := Exec(newEnv, cls.Code())
+						ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 						if newEnv.E.Type() != Tnil {
 							break
 						}
@@ -646,7 +633,8 @@ func doDup(env *Env) {
 					newEnv.Stack().Clear()
 					newEnv.Push(NewStringValue(k))
 					newEnv.Push(v)
-					return Exec(newEnv, cls.Code())
+					ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
+					return ret
 				}))
 			}
 		} else {
@@ -655,7 +643,7 @@ func doDup(env *Env) {
 				newEnv.Stack().Clear()
 				newEnv.Push(NewStringValue(x.k))
 				newEnv.Push(x.v)
-				Exec(newEnv, cls.Code())
+				ExecCursor(newEnv, cls.code, cls.consts, 0)
 				if newEnv.E.Type() != Tnil {
 					break
 				}
@@ -664,7 +652,7 @@ func doDup(env *Env) {
 				newEnv.Stack().Clear()
 				newEnv.Push(NewStringValue(k))
 				newEnv.Push(v)
-				Exec(newEnv, cls.Code())
+				ExecCursor(newEnv, cls.code, cls.consts, 0)
 				if newEnv.E.Type() != Tnil {
 					break
 				}
@@ -680,7 +668,7 @@ func doDup(env *Env) {
 			newEnv.Stack().Clear()
 			newEnv.Push(NewNumberValue(float64(i)))
 			newEnv.Push(NewNumberValue(float64(v)))
-			ret := Exec(newEnv, cls.Code())
+			ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 			if newEnv.E.Type() != Tnil {
 				break
 			}
