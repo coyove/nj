@@ -40,8 +40,6 @@ func (e *ExecError) Error() string {
 
 func konst(addr uintptr, idx uint16) Value { return *(*Value)(unsafe.Pointer(addr + uintptr(idx)*16)) }
 
-func kode(addr uintptr, idx uint32) uint16 { return *(*uint16)(unsafe.Pointer(addr + uintptr(idx)*2)) }
-
 func kodeaddr(code []uint16) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&code)).Data }
 
 // ExecCursor executes code under the given env from the given start cursor and returns:
@@ -358,14 +356,14 @@ MAIN:
 				log.Panicf("can't load from %+v with key %+v", env.R0, env.R1)
 			}
 			env.A = v
-		case OP_R0:
-			env.R0 = env.Get(cruRead32(caddr, &cursor))
-		case OP_R0K:
-			env.R0 = konst(kaddr, cruRead16(caddr, &cursor))
-		case OP_R1:
-			env.R1 = env.Get(cruRead32(caddr, &cursor))
-		case OP_R1K:
-			env.R1 = konst(kaddr, cruRead16(caddr, &cursor))
+		case OP_RR:
+			env.R0, env.R1 = env.Get(cruRead32(caddr, &cursor)), env.Get(cruRead32(caddr, &cursor))
+		case OP_KK:
+			env.R0, env.R1 = konst(kaddr, cruRead16(caddr, &cursor)), konst(kaddr, cruRead16(caddr, &cursor))
+		case OP_RK:
+			env.R0, env.R1 = env.Get(cruRead32(caddr, &cursor)), konst(kaddr, cruRead16(caddr, &cursor))
+		case OP_KR:
+			env.R0, env.R1 = konst(kaddr, cruRead16(caddr, &cursor)), env.Get(cruRead32(caddr, &cursor))
 		case OP_R2:
 			env.R2 = env.Get(cruRead32(caddr, &cursor))
 		case OP_R2K:

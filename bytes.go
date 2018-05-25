@@ -130,12 +130,13 @@ func crReadString(data []uint16, cursor *uint32) string {
 
 func cruRead16(data uintptr, cursor *uint32) uint16 {
 	*cursor++
-	return kode(data, *cursor-1)
+	return *(*uint16)(unsafe.Pointer(data + uintptr(*cursor-1)*2))
 }
 
 func cruRead32(data uintptr, cursor *uint32) uint32 {
 	*cursor += 2
-	return uint32(kode(data, *cursor-2))<<16 + uint32(kode(data, *cursor-1))
+	return uint32(*(*uint16)(unsafe.Pointer(data + uintptr(*cursor-2)*2)))<<16 +
+		uint32(*(*uint16)(unsafe.Pointer(data + uintptr(*cursor-1)*2)))
 }
 
 var singleOp = map[uint16]string{
@@ -235,16 +236,14 @@ MAIN:
 			sb.WriteString(readAddr() + " = " + readAddr())
 		case OP_SETK:
 			sb.WriteString(readAddr() + " = " + readKAddr())
-		case OP_R0:
-			sb.WriteString("r0 = " + readAddr())
-		case OP_R0K:
-			sb.WriteString("r0 = " + readKAddr())
-		case OP_R1:
-			sb.Truncate(lastIdx)
-			sb.WriteString(", r1 = " + readAddr())
-		case OP_R1K:
-			sb.Truncate(lastIdx)
-			sb.WriteString(", r1 = " + readKAddr())
+		case OP_RR:
+			sb.WriteString("r0 = " + readAddr() + ", r1 = " + readAddr())
+		case OP_RK:
+			sb.WriteString("r0 = " + readAddr() + ", r1 = " + readKAddr())
+		case OP_KR:
+			sb.WriteString("r0 = " + readKAddr() + ", r1 = " + readAddr())
+		case OP_KK:
+			sb.WriteString("r0 = " + readKAddr() + ", r1 = " + readKAddr())
 		case OP_R2:
 			sb.Truncate(lastIdx)
 			sb.WriteString(", r2 = " + readAddr())

@@ -140,20 +140,6 @@ func compileMapOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint
 	return buf.data, regA, sp, nil
 }
 
-func indexToOpR(index int) (a, b uint16) {
-	switch index {
-	case 0:
-		return OP_R0, OP_R0K
-	case 1:
-		return OP_R1, OP_R1K
-	case 2:
-		return OP_R2, OP_R2K
-	case 3:
-		return OP_R3, OP_R3K
-	}
-	panic("shouldn't happen")
-}
-
 func flaten(sp uint16, atoms []*parser.Node, table *symtable) (buf *BytesWriter, newsp uint16, err error) {
 	replacedAtoms := []*parser.Node{}
 	buf = NewBytesWriter()
@@ -242,10 +228,62 @@ func flatWrite(sp uint16, atoms []*parser.Node, table *symtable, bop uint16) (co
 		}
 	}
 
-	for i := 1; i < len(atoms); i++ {
-		a, b := indexToOpR(i - 1)
-		err = fill(buf, atoms[i], table, a, b)
-		if err != nil {
+	if len(atoms) == 2 {
+		switch n := atoms[1]; n.Type {
+		case parser.NTAtom:
+			addr, ok := table.get(n.Value.(string))
+			if !ok {
+				err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
+				return
+			}
+			buf.Write16(OP_RK)
+			buf.Write32(addr)
+			buf.Write16(0)
+		case parser.NTNumber, parser.NTString:
+			buf.Write16(OP_KK)
+			buf.Write16(table.addConst(n.Value))
+			buf.Write16(0)
+		case parser.NTAddr:
+			buf.Write16(OP_RK)
+			buf.Write32(n.Value.(uint32))
+			buf.Write16(0)
+		}
+	}
+	if len(atoms) > 2 {
+		if r0, r1 := atoms[1], atoms[2]; r0.Type == parser.NTAtom || r0.Type == parser.NTAddr {
+			if r1.Type == parser.NTAtom || r1.Type == parser.NTAddr {
+				buf.Write16(OP_RR)
+			} else {
+				buf.Write16(OP_RK)
+			}
+		} else if r1.Type == parser.NTAtom || r1.Type == parser.NTAddr {
+			buf.Write16(OP_KR)
+		} else {
+			buf.Write16(OP_KK)
+		}
+		for i := 1; i <= 2; i++ {
+			switch n := atoms[i]; n.Type {
+			case parser.NTAtom:
+				addr, ok := table.get(n.Value.(string))
+				if !ok {
+					err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
+					return
+				}
+				buf.Write32(addr)
+			case parser.NTNumber, parser.NTString:
+				buf.Write16(table.addConst(n.Value))
+			case parser.NTAddr:
+				buf.Write32(n.Value.(uint32))
+			}
+		}
+	}
+	if len(atoms) > 3 {
+		if err = fill(buf, atoms[3], table, OP_R2, OP_R2K); err != nil {
+			return
+		}
+	}
+	if len(atoms) > 4 {
+		if err = fill(buf, atoms[4], table, OP_R3, OP_R3K); err != nil {
 			return
 		}
 	}
