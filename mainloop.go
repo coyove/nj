@@ -11,7 +11,11 @@ import (
 
 func init() {
 	if strconv.IntSize != 64 {
-		panic("potatolang only run under 64bit")
+		panic("potatolang can only run under 64bit")
+	}
+	one := uint32(1)
+	if *(*byte)(unsafe.Pointer(&one)) != 1 {
+		panic("potatolang only support little endian arch now")
 	}
 }
 
@@ -19,7 +23,7 @@ type ret struct {
 	cursor      uint32
 	noenvescape bool
 	env         *Env
-	code        []uint16
+	code        []uint64
 	kaddr       uintptr
 	line        string
 }
@@ -31,23 +35,24 @@ type ExecError struct {
 }
 
 func (e *ExecError) Error() string {
-	msg := ""
+	msg := "stacktrace:\n"
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
-		msg += fmt.Sprintf("cursor: %d at <%x>, source: %s\n", r.cursor, crHash(r.code), r.line)
+		// the recorded cursor was advanced by 1 already
+		msg += fmt.Sprintf("cursor: %d at <%08x>, source: %s\n", r.cursor-1, crHash(r.code), r.line)
 	}
 	return msg
 }
 
 func konst(addr uintptr, idx uint16) Value { return *(*Value)(unsafe.Pointer(addr + uintptr(idx)*16)) }
 
-func kodeaddr(code []uint16) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&code)).Data }
+func kodeaddr(code []uint64) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&code)).Data }
 
 // ExecCursor executes code under the given env from the given start cursor and returns:
-// final result, yield cursor, is yield or not
-func ExecCursor(env *Env, code []uint16, consts []Value, cursor uint32) (Value, uint32, bool) {
+// 1. final result 2. yield cursor 3. is yield or not
+func ExecCursor(env *Env, code []uint64, consts []Value, cursor uint32) (Value, uint32, bool) {
 	var newEnv *Env
-	var lastCursor uint32
+	// var lastCursor uint32
 	var lineinfo = "<unknown>"
 	var retStack []ret
 	var caddr = kodeaddr(code)
@@ -55,15 +60,23 @@ func ExecCursor(env *Env, code []uint16, consts []Value, cursor uint32) (Value, 
 
 	defer func() {
 		if r := recover(); r != nil {
-			e := &ExecError{r: r}
-			e.stacks = make([]ret, len(retStack)+1)
-			copy(e.stacks, retStack)
-			e.stacks[len(e.stacks)-1] = ret{
-				cursor: lastCursor,
+			rr := ret{
+				cursor: cursor,
 				code:   code,
 				line:   lineinfo,
 			}
-			panic(e)
+			if re, ok := r.(*ExecError); ok {
+				retStack = append(retStack, rr)
+				re.stacks = append(retStack, re.stacks...)
+				panic(re)
+			} else {
+				e := &ExecError{}
+				e.r = r // root panic
+				e.stacks = make([]ret, len(retStack)+1)
+				copy(e.stacks, retStack)
+				e.stacks[len(e.stacks)-1] = rr
+				panic(e)
+			}
 		}
 	}()
 
@@ -83,9 +96,12 @@ func ExecCursor(env *Env, code []uint16, consts []Value, cursor uint32) (Value, 
 	}
 MAIN:
 	for {
-		lastCursor = cursor
+		// lastCursor = cursor
+		// log.Println(cruop(caddr, &cursor))
+		// log.Println(op(cruRead64(caddr, &lastCursor)))
+		// os.Exit(1)
 		// log.Println(cursor)
-		bop := cruRead16(caddr, &cursor)
+		bop, opa, opb := cruop(caddr, &cursor)
 		switch bop {
 		case OP_LINE:
 			lineinfo = crReadString(code, &cursor)
@@ -101,13 +117,12 @@ MAIN:
 		case OP_FALSE:
 			env.A = NewBoolValue(false)
 		case OP_SET:
-			env.Set(cruRead32(caddr, &cursor), env.Get(cruRead32(caddr, &cursor)))
+			env.Set(opa, env.Get(opb))
 		case OP_SETK:
-			env.Set(cruRead32(caddr, &cursor), konst(kaddr, cruRead16(caddr, &cursor)))
+			env.Set(opa, konst(kaddr, uint16(opb)))
 		case OP_INC:
-			addr := cruRead32(caddr, &cursor)
-			num := env.Get(addr).AsNumber()
-			env.Set(addr, NewNumberValue(num+konst(kaddr, cruRead16(caddr, &cursor)).AsNumber()))
+			num := env.Get(opa).AsNumber()
+			env.Set(opa, NewNumberValue(num+konst(kaddr, uint16(opb)).AsNumber()))
 		case OP_ADD:
 			switch testTypes(env.R0, env.R1) {
 			case _Tnumbernumber:
@@ -363,57 +378,57 @@ MAIN:
 			}
 			env.A = v
 		case OP_R0:
-			env.R0 = env.Get(cruRead32(caddr, &cursor))
+			env.R0 = env.Get(opa)
 		case OP_R0K:
-			env.R0 = konst(kaddr, cruRead16(caddr, &cursor))
+			env.R0 = konst(kaddr, uint16(opa))
 		case OP_R1:
-			env.R1 = env.Get(cruRead32(caddr, &cursor))
+			env.R1 = env.Get(opa)
 		case OP_R1K:
-			env.R1 = konst(kaddr, cruRead16(caddr, &cursor))
+			env.R1 = konst(kaddr, uint16(opa))
 		case OP_R2:
-			env.R2 = env.Get(cruRead32(caddr, &cursor))
+			env.R2 = env.Get(opa)
 		case OP_R2K:
-			env.R2 = konst(kaddr, cruRead16(caddr, &cursor))
+			env.R2 = konst(kaddr, uint16(opa))
 		case OP_R3:
-			env.R3 = env.Get(cruRead32(caddr, &cursor))
+			env.R3 = env.Get(opa)
 		case OP_R3K:
-			env.R3 = konst(kaddr, cruRead16(caddr, &cursor))
+			env.R3 = konst(kaddr, uint16(opa))
 		case OP_PUSH:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.SPush(env.Get(cruRead32(caddr, &cursor)))
+			newEnv.SPush(env.Get(opa))
 		case OP_PUSHK:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.SPush(konst(kaddr, cruRead16(caddr, &cursor)))
+			newEnv.SPush(konst(kaddr, uint16(opa)))
 		case OP_RET:
-			v := env.Get(cruRead32(caddr, &cursor))
+			v := env.Get(opa)
 			if len(retStack) == 0 {
 				return v, 0, false
 			}
 			returnUpperWorld(v)
 		case OP_RETK:
-			v := konst(kaddr, cruRead16(caddr, &cursor))
+			v := konst(kaddr, uint16(opa))
 			if len(retStack) == 0 {
 				return v, 0, false
 			}
 			returnUpperWorld(v)
 		case OP_YIELD:
-			return env.Get(cruRead32(caddr, &cursor)), cursor, true
+			return env.Get(opa), cursor, true
 		case OP_YIELDK:
-			return konst(kaddr, cruRead16(caddr, &cursor)), cursor, true
+			return konst(kaddr, uint16(opa)), cursor, true
 		case OP_LAMBDA:
-			metadata := cruRead32(caddr, &cursor)
+			metadata := opb
 			argsCount := byte(metadata >> 24)
 			yieldable := byte(metadata>>16) == 1
 			errorable := byte(metadata>>8) == 1
 			noenvescape := byte(metadata) == 1
-			constsLen := cruRead16(caddr, &cursor)
+			constsLen := opa
 			consts := make([]Value, constsLen)
-			for i := uint16(0); i < constsLen; i++ {
-				switch cruRead16(caddr, &cursor) {
+			for i := uint32(0); i < constsLen; i++ {
+				switch cruRead64(caddr, &cursor) {
 				case Tnumber:
 					consts[i] = NewNumberValue(crReadDouble(code, &cursor))
 				case Tstring:
@@ -422,10 +437,10 @@ MAIN:
 					panic("shouldn't happen")
 				}
 			}
-			buf := crRead(code, &cursor, int(cruRead32(caddr, &cursor)))
+			buf := crRead(code, &cursor, int(cruRead64(caddr, &cursor)))
 			env.A = NewClosureValue(NewClosure(buf, consts, env, byte(argsCount), yieldable, errorable, noenvescape))
 		case OP_CALL:
-			switch v := env.Get(cruRead32(caddr, &cursor)); v.ty {
+			switch v := env.Get(opa); v.ty {
 			case Tclosure:
 				cls := v.AsClosure()
 				if cls.lastenv != nil {
@@ -459,7 +474,7 @@ MAIN:
 						if retStack == nil {
 							retStack = make([]ret, 0, 1)
 						}
-
+						//  log.Println(newEnv.stack)
 						last := ret{
 							cursor:      cursor,
 							env:         env,
@@ -517,19 +532,19 @@ MAIN:
 				log.Panicf("invalid callee: %+v", v)
 			}
 		case OP_JMP:
-			off := int32(cruRead32(caddr, &cursor))
+			off := int32(opb)
 			cursor = uint32(int32(cursor) + off)
 		case OP_IFNOT:
-			cond := env.Get(cruRead32(caddr, &cursor))
-			off := int32(cruRead32(caddr, &cursor))
+			cond := env.Get(opa)
+			off := int32(opb)
 			if cond.ty == Tbool && !cond.AsBool() {
 				cursor = uint32(int32(cursor) + off)
 			} else if cond.IsFalse() {
 				cursor = uint32(int32(cursor) + off)
 			}
 		case OP_IF:
-			cond := env.Get(cruRead32(caddr, &cursor))
-			off := int32(cruRead32(caddr, &cursor))
+			cond := env.Get(opa)
+			off := int32(opb)
 			if cond.ty == Tbool && cond.AsBool() {
 				cursor = uint32(int32(cursor) + off)
 			} else if !cond.IsFalse() {

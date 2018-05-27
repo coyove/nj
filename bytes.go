@@ -10,6 +10,17 @@ import (
 	"unsafe"
 )
 
+func makeop(op byte, a, b uint32) uint64 {
+	return uint64(op)<<56 + uint64(a&0x00ffffff)<<32 + uint64(b)
+}
+
+func op(x uint64) (op byte, a, b uint32) {
+	op = byte(x >> 56)
+	a = uint32(x>>32) & 0x00ffffff
+	b = uint32(x)
+	return
+}
+
 func btob(b bool) byte {
 	if b {
 		return 1
@@ -17,34 +28,36 @@ func btob(b bool) byte {
 	return 0
 }
 
-func slice16to8(p []uint16) []byte {
+func slice64to8(p []uint64) []byte {
 	r := reflect.SliceHeader{}
-	r.Cap = cap(p) * 2
-	r.Len = len(p) * 2
+	r.Cap = cap(p) * 8
+	r.Len = len(p) * 8
 	r.Data = (*reflect.SliceHeader)(unsafe.Pointer(&p)).Data
 	return *(*[]byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
 }
 
-func slice8to16(p []byte) []uint16 {
-	if len(p)%2 != 0 {
-		p = append(p, 0)
+var filler = []byte{0, 0, 0, 0, 0, 0, 0}
+
+func slice8to64(p []byte) []uint64 {
+	if m := len(p) % 8; m != 0 {
+		p = append(p, filler[:8-m]...)
 	}
 	r := reflect.SliceHeader{}
-	r.Cap = cap(p) / 2
-	r.Len = len(p) / 2
+	r.Cap = cap(p) / 8
+	r.Len = len(p) / 8
 	r.Data = (*reflect.SliceHeader)(unsafe.Pointer(&p)).Data
-	return *(*[]uint16)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
+	return *(*[]uint64)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
 }
 
 // BytesWriter writes complex values into bytes slice
 type BytesWriter struct {
-	data []uint16
+	data []uint64
 }
 
 func NewBytesWriter() *BytesWriter {
 	const defaultBufferSize = 128
 	return &BytesWriter{
-		make([]uint16, 0, defaultBufferSize),
+		make([]uint64, 0, defaultBufferSize),
 	}
 }
 
@@ -57,24 +70,16 @@ func (b *BytesWriter) Clear() {
 	b.data = b.data[:0]
 }
 
-func (b *BytesWriter) Data() []uint16 {
+func (b *BytesWriter) Data() []uint64 {
 	return b.data
 }
 
-func (b *BytesWriter) Write(buf []uint16) {
+func (b *BytesWriter) Write(buf []uint64) {
 	b.data = append(b.data, buf...)
 }
 
-func (b *BytesWriter) Write16(v uint16) {
-	b.data = append(b.data, v)
-}
-
-func (b *BytesWriter) Write32(v uint32) {
-	b.data = append(b.data, uint16(v>>16), uint16(v))
-}
-
 func (b *BytesWriter) Write64(v uint64) {
-	b.data = append(b.data, uint16(v>>48), uint16(v>>32), uint16(v>>16), uint16(v))
+	b.data = append(b.data, v)
 }
 
 func (b *BytesWriter) WriteDouble(v float64) {
@@ -83,8 +88,8 @@ func (b *BytesWriter) WriteDouble(v float64) {
 }
 
 func (b *BytesWriter) WriteString(v string) {
-	b.Write32(uint32(len(v)))
-	b.Write(slice8to16([]byte(v)))
+	b.Write64(uint64(len(v)))
+	b.Write(slice8to64([]byte(v)))
 }
 
 func (b *BytesWriter) TruncateLast(n int) {
@@ -97,63 +102,42 @@ func (b *BytesWriter) Len() int {
 	return len(b.data)
 }
 
-func crRead(data []uint16, cursor *uint32, len int) []uint16 {
+func crRead(data []uint64, cursor *uint32, len int) []uint64 {
 	*cursor += uint32(len)
 	return data[*cursor-uint32(len) : *cursor]
 }
 
-func crRead16(data []uint16, cursor *uint32) uint16 {
+func crRead64(data []uint64, cursor *uint32) uint64 {
 	*cursor++
 	return data[*cursor-1]
 }
 
-func crRead32(data []uint16, cursor *uint32) uint32 {
-	*cursor += 2
-	return uint32(data[*cursor-2])<<16 + uint32(data[*cursor-1])
-}
-
-func crRead64(data []uint16, cursor *uint32) uint64 {
-	*cursor += 4
-	return uint64(data[*cursor-4])<<48 + uint64(data[*cursor-3])<<32 + uint64(data[*cursor-2])<<16 + uint64(data[*cursor-1])
-}
-
-func crReadDouble(data []uint16, cursor *uint32) float64 {
+func crReadDouble(data []uint64, cursor *uint32) float64 {
 	d := crRead64(data, cursor)
 	return *(*float64)(unsafe.Pointer(&d))
 }
 
-func crReadString(data []uint16, cursor *uint32) string {
-	x := crRead32(data, cursor)
-	buf := crRead(data, cursor, int((x+1)/2))
-	return string(slice16to8(buf)[:x])
+func crReadString(data []uint64, cursor *uint32) string {
+	x := crRead64(data, cursor)
+	buf := crRead(data, cursor, int((x+7)/8))
+	return string(slice64to8(buf)[:x])
 }
 
-func cruRead16(data uintptr, cursor *uint32) uint16 {
+func cruRead64(data uintptr, cursor *uint32) uint64 {
 	*cursor++
-	return *(*uint16)(unsafe.Pointer(data + uintptr(*cursor-1)*2))
+	return *(*uint64)(unsafe.Pointer(data + uintptr(*cursor-1)*8))
 }
 
-func cruRead32(data uintptr, cursor *uint32) uint32 {
-	*cursor += 2
-	return uint32(*(*uint16)(unsafe.Pointer(data + uintptr(*cursor-2)*2)))<<16 +
-		uint32(*(*uint16)(unsafe.Pointer(data + uintptr(*cursor-1)*2)))
+// little endian only
+func cruop(data uintptr, cursor *uint32) (byte, uint32, uint32) {
+	addr := uintptr(*cursor) * 8
+	*cursor++
+	return *(*byte)(unsafe.Pointer(data + addr + 7)),
+		*(*uint32)(unsafe.Pointer(data + addr + 4)) & 0x00ffffff,
+		*(*uint32)(unsafe.Pointer(data + addr))
 }
 
-// func cruRead64(data uintptr, cursor *uint32) uint64 {
-// 	*cursor += 4
-// 	addr := uintptr(*cursor) * 2
-// 	return uint64(*(*uint16)(unsafe.Pointer(data + addr - 8)))<<48 +
-// 		uint64(*(*uint16)(unsafe.Pointer(data + addr - 6)))<<32 +
-// 		uint64(*(*uint16)(unsafe.Pointer(data + addr - 4)))<<32 +
-// 		uint64(*(*uint16)(unsafe.Pointer(data + addr - 2)))
-// }
-
-// func cruRead(data uintptr, cursor *uint32, len int) []uint16 {
-// 	*cursor += uint32(len)
-// 	return data[*cursor-uint32(len) : *cursor]
-// }
-
-var singleOp = map[uint16]string{
+var singleOp = map[byte]string{
 	OP_ADD:     "add",
 	OP_SUB:     "sub",
 	OP_MUL:     "mul",
@@ -184,13 +168,13 @@ var singleOp = map[uint16]string{
 	OP_LIST:    "list",
 }
 
-func crHash(data []uint16) uint32 {
+func crHash(data []uint64) uint32 {
 	e := crc32.New(crc32.IEEETable)
-	e.Write(slice16to8(data))
+	e.Write(slice64to8(data))
 	return e.Sum32()
 }
 
-func crPrettifyLambda(args, curry int, y, e, esc bool, code []uint16, consts []Value, tab int) string {
+func crPrettifyLambda(args, curry int, y, e, esc bool, code []uint64, consts []Value, tab int) string {
 	sb := &bytes.Buffer{}
 	spaces := strings.Repeat(" ", tab)
 	sb.WriteString(spaces + "<args: " + strconv.Itoa(args) + ">\n")
@@ -213,32 +197,30 @@ func crPrettifyLambda(args, curry int, y, e, esc bool, code []uint16, consts []V
 	return sb.String()
 }
 
-func crPrettify(data []uint16, consts []Value, tab int) string {
+func crPrettify(data []uint64, consts []Value, tab int) string {
 
 	sb := &bytes.Buffer{}
 	pre := strings.Repeat(" ", tab)
 	hash := crHash(data)
 	sb.WriteString(pre)
-	sb.WriteString(fmt.Sprintf("<%x>\n", hash))
+	sb.WriteString(fmt.Sprintf("<%08x>\n", hash))
 
 	var cursor uint32
 
-	readAddr := func() string {
-		if a := crRead32(data, &cursor); a == regA {
+	readAddr := func(a uint32) string {
+		if a == regA {
 			return "$a"
-		} else {
-			return fmt.Sprintf("$%d$%d", a>>16, uint16(a))
 		}
+		return fmt.Sprintf("$%d$%d", a>>16, uint16(a))
 	}
-	readKAddr := func() string {
-		a := crRead16(data, &cursor)
+	readKAddr := func(a uint16) string {
 		return fmt.Sprintf("k$%d <%+v>", a, consts[a])
 	}
 
-	lastBop := uint16(OP_EOB)
+	lastBop := byte(OP_EOB)
 MAIN:
 	for {
-		bop := crRead16(data, &cursor)
+		bop, a, b := op(crRead64(data, &cursor))
 
 		lastIdx := sb.Len() - 1
 		sb.WriteString(pre + "[")
@@ -251,31 +233,31 @@ MAIN:
 			sb.WriteString("end\n")
 			break MAIN
 		case OP_SET:
-			sb.WriteString(readAddr() + " = " + readAddr())
+			sb.WriteString(readAddr(a) + " = " + readAddr(b))
 		case OP_SETK:
-			sb.WriteString(readAddr() + " = " + readKAddr())
+			sb.WriteString(readAddr(a) + " = " + readKAddr(uint16(b)))
 		case OP_R0:
-			sb.WriteString("r0 = " + readAddr())
+			sb.WriteString("r0 = " + readAddr(a))
 		case OP_R0K:
-			sb.WriteString("r0 = " + readKAddr())
+			sb.WriteString("r0 = " + readKAddr(uint16(a)))
 		case OP_R1:
-			sb.Truncate(lastIdx)
-			sb.WriteString(", r1 = " + readAddr())
+			// sb.Truncate(lastIdx)
+			sb.WriteString("r1 = " + readAddr(a))
 		case OP_R1K:
-			sb.Truncate(lastIdx)
-			sb.WriteString(", r1 = " + readKAddr())
+			// sb.Truncate(lastIdx)
+			sb.WriteString("r1 = " + readKAddr(uint16(a)))
 		case OP_R2:
-			sb.Truncate(lastIdx)
-			sb.WriteString(", r2 = " + readAddr())
+			// sb.Truncate(lastIdx)
+			sb.WriteString("r2 = " + readAddr(a))
 		case OP_R2K:
-			sb.Truncate(lastIdx)
-			sb.WriteString(", r2 = " + readKAddr())
+			// sb.Truncate(lastIdx)
+			sb.WriteString("r2 = " + readKAddr(uint16(a)))
 		case OP_R3:
-			sb.Truncate(lastIdx)
-			sb.WriteString(", r3 = " + readAddr())
+			// sb.Truncate(lastIdx)
+			sb.WriteString("r3 = " + readAddr(a))
 		case OP_R3K:
-			sb.Truncate(lastIdx)
-			sb.WriteString(", r3 = " + readKAddr())
+			// sb.Truncate(lastIdx)
+			sb.WriteString("r3 = " + readKAddr(uint16(a)))
 		case OP_PUSH, OP_PUSHK:
 			if lastBop == OP_PUSH || lastBop == OP_PUSHK {
 				sb.Truncate(lastIdx)
@@ -285,32 +267,31 @@ MAIN:
 			}
 			switch bop {
 			case OP_PUSH:
-				sb.WriteString(readAddr())
+				sb.WriteString(readAddr(a))
 			case OP_PUSHK:
-				sb.WriteString(readKAddr())
+				sb.WriteString(readKAddr(uint16(a)))
 			}
 		case OP_ASSERT:
 			tt := crReadString(data, &cursor)
 			sb.WriteString(tt)
 		case OP_RET:
-			sb.WriteString("ret " + readAddr())
+			sb.WriteString("ret " + readAddr(a))
 		case OP_RETK:
-			sb.WriteString("ret " + readKAddr())
+			sb.WriteString("ret " + readKAddr(uint16(a)))
 		case OP_YIELD:
-			sb.WriteString("yield " + readAddr())
+			sb.WriteString("yield " + readAddr(a))
 		case OP_YIELDK:
-			sb.WriteString("yield " + readKAddr())
+			sb.WriteString("yield " + readKAddr(uint16(a)))
 		case OP_LAMBDA:
 			sb.WriteString("$a = lambda (\n")
-			metadata := crRead32(data, &cursor)
-			argsCount := byte(metadata >> 24)
-			yieldable := byte(metadata>>16) == 1
-			errorable := byte(metadata>>8) == 1
-			noenvescape := byte(metadata) == 1
-			constsLen := crRead16(data, &cursor)
+			argsCount := byte(b >> 24)
+			yieldable := byte(b>>16) == 1
+			errorable := byte(b>>8) == 1
+			noenvescape := byte(b) == 1
+			constsLen := a
 			consts := make([]Value, constsLen)
-			for i := uint16(0); i < constsLen; i++ {
-				switch crRead16(data, &cursor) {
+			for i := uint32(0); i < constsLen; i++ {
+				switch crRead64(data, &cursor) {
 				case Tnumber:
 					consts[i] = NewNumberValue(crReadDouble(data, &cursor))
 				case Tstring:
@@ -319,29 +300,29 @@ MAIN:
 					panic("shouldn't happen")
 				}
 			}
-			buf := crRead(data, &cursor, int(crRead32(data, &cursor)))
+			buf := crRead(data, &cursor, int(crRead64(data, &cursor)))
 			sb.WriteString(crPrettifyLambda(int(argsCount), 0, yieldable, errorable, !noenvescape, buf, consts, tab+4))
 			sb.WriteString(pre + ")")
 		case OP_CALL:
-			sb.WriteString("call " + readAddr())
+			sb.WriteString("call " + readAddr(a))
 		case OP_JMP:
-			pos := int32(crRead32(data, &cursor))
+			pos := int32(b)
 			pos2 := uint32(int32(cursor) + pos)
 			sb.WriteString("jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_IFNOT:
-			addr := readAddr()
-			pos := int32(crRead32(data, &cursor))
+			addr := readAddr(a)
+			pos := int32(b)
 			pos2 := uint32(int32(cursor) + pos)
 			sb.WriteString("if not " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_IF:
-			addr := readAddr()
-			pos := int32(crRead32(data, &cursor))
+			addr := readAddr(a)
+			pos := int32(b)
 			pos2 := uint32(int32(cursor) + pos)
 			sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_NOP:
 			sb.WriteString("nop")
 		case OP_INC:
-			sb.WriteString("inc " + readAddr() + " " + readKAddr())
+			sb.WriteString("inc " + readAddr(a) + " " + readKAddr(uint16(b)))
 		default:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs)

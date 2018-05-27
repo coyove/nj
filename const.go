@@ -1,6 +1,6 @@
 package potatolang
 
-const regA = 0xffffffff
+const regA = 0x00ffffff
 
 const (
 	// basic flat op

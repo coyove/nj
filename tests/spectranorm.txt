@@ -1,58 +1,58 @@
-set n = 0   
-set nCPU = 4
-set Vec = list end
+#set n = 0   
+#set nCPU = 4
+#set Vec = list end
 
 function A(i, j)
     return ((i+j)*(i+j+1)/2 + i + 1)
 end
 
-std.noenvescape(A)
-
-function TimesVec(v, n, u, wg)
-    set ul = len(u)
-    set i = 0 while i < n then i = i + 1 do
-        set vi = 0
-        set j = 0 while j < ul then j = j + 1 do
-            vi = vi + u[j] / A(i, j)
-        end
-        v[i] = vi
-    end
-end
-
-function TimesTranspVec(v, n, u, wg)
-    set ul = len(u)
-    set i = 0 while i < n then i = i + 1 do
-        set vi = 0
-        set j = 0 while j < ul then j = j + 1 do
-            vi = vi + u[j] / A(j, i)
-        end
-        v[i] = vi
-    end
-end
-
-function ATimesTransp(v, u)
-    set x = std.genlist(len(u))
-    set wg = std.sync.waitgroup()
-
-        TimesVec(x, len(v), u, wg)
-        TimesTranspVec(v, len(v), x, wg)
-end
-
-n = 550
-set u = std.genlist(n)
-dup(u, function (i) u[i] = 1 end)
-
-set v = std.genlist(n)
-set i = 0 while i < 10 then i = i + 1 do
-    ATimesTransp(v, u)
-    ATimesTransp(u, v)
-end
-
-set vBv, vv = 0
-dup(v, function(i, x)
-    vBv = vBv + u[i] * x
-    vv = vv + x * x
-end)
-
-io.println(math.sqrt(vBv/vv))
-    
+# std.noenvescape(A)
+# 
+# function TimesVec(v, n, u, wg)
+#     set ul = len(u)
+#     set i = 0 while i < n then i = i + 1 do
+#         set vi = 0
+#         set j = 0 while j < ul then j = j + 1 do
+#             vi = vi + u[j] / A(i, j)
+#         end
+#         v[i] = vi
+#     end
+# end
+# 
+# function TimesTranspVec(v, n, u, wg)
+#     set ul = len(u)
+#     set i = 0 while i < n then i = i + 1 do
+#         set vi = 0
+#         set j = 0 while j < ul then j = j + 1 do
+#             vi = vi + u[j] / A(j, i)
+#         end
+#         v[i] = vi
+#     end
+# end
+# 
+# function ATimesTransp(v, u)
+#     set x = std.genlist(len(u))
+#     set wg = std.sync.waitgroup()
+# 
+#         TimesVec(x, len(v), u, wg)
+#         TimesTranspVec(v, len(v), x, wg)
+# end
+# 
+# n = 550
+# set u = std.genlist(n)
+# dup(u, function (i) u[i] = 1 end)
+# 
+# set v = std.genlist(n)
+# set i = 0 while i < 10 then i = i + 1 do
+#     ATimesTransp(v, u)
+#     ATimesTransp(u, v)
+# end
+# 
+# set vBv, vv = 0
+# dup(v, function(i, x)
+#     vBv = vBv + u[i] * x
+#     vv = vv + x * x
+# end)
+# 
+# io.println(math.sqrt(vBv/vv))
+#     

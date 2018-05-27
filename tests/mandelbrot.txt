@@ -71,6 +71,8 @@ set xy = 0 while xy < size then xy = xy + 1 do
     initial_i[xy] = i - 1.0
 end
 
+#io.println("zzz",initial_i)
+
 rows = std.genlist(size)
 set y = -1
 set mux = std.sync.mutex()

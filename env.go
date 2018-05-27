@@ -136,7 +136,7 @@ func (env *Env) Stack() []Value {
 
 // Closure is the closure struct used in potatolang
 type Closure struct {
-	code        []uint16
+	code        []uint64
 	consts      []Value
 	env         *Env
 	caller      Value
@@ -151,7 +151,7 @@ type Closure struct {
 }
 
 // NewClosure creates a new closure
-func NewClosure(code []uint16, consts []Value, env *Env, argsCount byte, yieldable, errorable, noenvescape bool) *Closure {
+func NewClosure(code []uint64, consts []Value, env *Env, argsCount byte, yieldable, errorable, noenvescape bool) *Closure {
 	return &Closure{
 		code:        code,
 		consts:      consts,
@@ -188,11 +188,11 @@ func (c *Closure) PreArgs() []Value {
 	return c.preArgs
 }
 
-func (c *Closure) SetCode(code []uint16) {
+func (c *Closure) SetCode(code []uint64) {
 	c.code = code
 }
 
-func (c *Closure) Code() []uint16 {
+func (c *Closure) Code() []uint64 {
 	return c.code
 }
 

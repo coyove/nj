@@ -34,18 +34,29 @@ type symtable struct {
 	// record line info at chain
 	lineInfo bool
 
+	regs [4]struct {
+		addr  uint32
+		kaddr uint16
+		k     bool
+	}
+
 	consts         []kinfo
 	constStringMap map[string]uint16
 	constFloatMap  map[float64]uint16
 }
 
 func newsymtable() *symtable {
-	return &symtable{
+	t := &symtable{
 		sym:            make(map[string]uint16),
 		consts:         make([]kinfo, 0),
 		constStringMap: make(map[string]uint16),
 		constFloatMap:  make(map[float64]uint16),
 	}
+	for i := range t.regs {
+		t.regs[i].addr = regA
+		t.regs[i].k = false
+	}
+	return t
 }
 
 func (m *symtable) get(varname string) (uint32, bool) {
@@ -66,6 +77,21 @@ func (m *symtable) get(varname string) (uint32, bool) {
 
 func (m *symtable) put(varname string, addr uint16) {
 	m.sym[varname] = addr
+}
+
+func (m *symtable) clearRegRecord(addr uint32) {
+	for i, x := range m.regs {
+		if !x.k && x.addr == addr {
+			m.regs[i].addr = regA
+		}
+	}
+}
+
+func (m *symtable) clearAllRegRecords() {
+	for i := range m.regs {
+		m.regs[i].k = false
+		m.regs[i].addr = regA
+	}
 }
 
 func (m *symtable) addConst(v interface{}) uint16 {
@@ -100,7 +126,7 @@ func (m *symtable) addConst(v interface{}) uint16 {
 	return idx
 }
 
-type compileFunc func(uint16, []*parser.Node, *symtable) ([]uint16, uint32, uint16, error)
+type compileFunc func(uint16, []*parser.Node, *symtable) ([]uint64, uint32, uint16, error)
 
 var opMapping map[string]compileFunc
 
@@ -108,7 +134,7 @@ var flatOpMapping map[string]bool
 
 func init() {
 	clearI := func(f compileFunc) compileFunc {
-		return func(s uint16, n []*parser.Node, v *symtable) ([]uint16, uint32, uint16, error) {
+		return func(s uint16, n []*parser.Node, v *symtable) ([]uint64, uint32, uint16, error) {
 			a, b, c, d := f(s, n, v)
 			v.im = nil
 			v.ims = nil
@@ -142,21 +168,54 @@ func init() {
 	}
 }
 
-func fill(buf *BytesWriter, n *parser.Node, table *symtable, op, opk uint16) (err error) {
+var registerOpMappings = map[byte]int{OP_R0: 0, OP_R1: 1, OP_R2: 2, OP_R3: 3}
+
+func fill(buf *BytesWriter, n *parser.Node, table *symtable, op, opk byte) (err error) {
+	idx, isreg := registerOpMappings[op]
+	if isreg {
+		if rs := table.regs[idx]; rs.k {
+			if n.Type == parser.NTNumber || n.Type == parser.NTString {
+				if kidx := table.addConst(n.Value); kidx == rs.kaddr {
+					// the register contains what we want already,
+					return
+				}
+			}
+		} else {
+			var addr uint32 = regA
+			switch n.Type {
+			case parser.NTAtom:
+				addr, _ = table.get(n.Value.(string))
+			case parser.NTAddr:
+				addr = n.Value.(uint32)
+			}
+			if addr != regA && rs.addr == addr {
+				// the register contains what we want already,
+				return
+			}
+		}
+	}
+
 	switch n.Type {
 	case parser.NTAtom:
 		addr, ok := table.get(n.Value.(string))
 		if !ok {
 			return fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
 		}
-		buf.Write16(op)
-		buf.Write32(addr)
+		buf.Write64(makeop(op, addr, 0))
+		if isreg {
+			table.regs[idx].k, table.regs[idx].addr = false, addr
+		}
 	case parser.NTNumber, parser.NTString:
-		buf.Write16(opk)
-		buf.Write16(table.addConst(n.Value))
+		kidx := table.addConst(n.Value)
+		buf.Write64(makeop(opk, uint32(kidx), 0))
+		if isreg {
+			table.regs[idx].k, table.regs[idx].kaddr = true, kidx
+		}
 	case parser.NTAddr:
-		buf.Write16(op)
-		buf.Write32(n.Value.(uint32))
+		buf.Write64(makeop(op, n.Value.(uint32), 0))
+		if isreg {
+			table.regs[idx].k, table.regs[idx].addr = false, n.Value.(uint32)
+		}
 	default:
 		return fmt.Errorf("unknown type: %d", n.Type)
 	}
@@ -169,7 +228,7 @@ func compileCompoundIntoVariable(
 	table *symtable,
 	intoNewVar bool,
 	intoExistedVar uint32,
-) (code []uint16, yx uint32, newsp uint16, err error) {
+) (code []uint64, yx uint32, newsp uint16, err error) {
 	buf := NewBytesWriter()
 
 	var newYX uint32
@@ -179,19 +238,17 @@ func compileCompoundIntoVariable(
 	}
 
 	buf.Write(code)
-	buf.Write16(OP_SET)
 	if intoNewVar {
 		yx = uint32(sp)
 		sp++
 	} else {
 		yx = intoExistedVar
 	}
-	buf.Write32(yx)
-	buf.Write32(newYX)
+	buf.Write64(makeop(OP_SET, yx, newYX))
 	return buf.data, yx, sp, nil
 }
 
-func extract(sp uint16, n *parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
+func extract(sp uint16, n *parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
 	var varIndex uint32
 
 	switch n.Type {
@@ -214,7 +271,7 @@ func extract(sp uint16, n *parser.Node, table *symtable) (code []uint16, yx uint
 	return code, varIndex, sp, nil
 }
 
-func compile(sp uint16, nodes []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
+func compile(sp uint16, nodes []*parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
 	if len(nodes) == 0 {
 		return nil, regA, sp, nil
 	}
@@ -241,7 +298,7 @@ func compile(sp uint16, nodes []*parser.Node, table *symtable) (code []uint16, y
 	panic(nodes[0].Value)
 }
 
-func compileChainOp(sp uint16, chain *parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
+func compileChainOp(sp uint16, chain *parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
 	buf := NewBytesWriter()
 	table.im = nil
 
@@ -252,7 +309,7 @@ func compileChainOp(sp uint16, chain *parser.Node, table *symtable) (code []uint
 		if table.lineInfo {
 			for _, n := range a.Compound {
 				if n.Pos.Source != "" {
-					buf.Write16(OP_LINE)
+					buf.Write64(makeop(OP_LINE, 0, 0))
 					buf.WriteString(n.Pos.String())
 					break
 				}
@@ -280,7 +337,7 @@ func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
 		return nil, err
 	}
 
-	code = append(code, OP_EOB)
+	code = append(code, makeop(OP_EOB, 0, 0))
 	consts := make([]Value, len(table.consts))
 	for i, k := range table.consts {
 		switch k.ty {
