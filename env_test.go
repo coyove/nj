@@ -6,7 +6,7 @@ import (
 )
 
 func TestNewStack(t *testing.T) {
-	st := NewStack()
+	st := NewEnv(nil)
 
 	v := NewNumberValue(19930731)
 	vi := 0
@@ -14,15 +14,15 @@ func TestNewStack(t *testing.T) {
 	for {
 		idx := rand.Intn(1000)
 		if rand.Intn(100) == 0 {
-			st.Set(idx, v)
+			st.SSet(idx, v)
 			vi = idx
 			break
 		}
 
-		st.Set(idx, NewValue())
+		st.SSet(idx, NewValue())
 	}
 
-	if !st.Get(vi).Equal(v) {
+	if !st.SGet(vi).Equal(v) {
 		t.Error(v, vi)
 	}
 }

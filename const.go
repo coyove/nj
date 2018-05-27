@@ -39,10 +39,10 @@ const (
 	OP_CALL
 	OP_SET
 	OP_SETK
-	OP_RR
-	OP_RK
-	OP_KR
-	OP_KK
+	OP_R0
+	OP_R0K
+	OP_R1
+	OP_R1K
 	OP_R2
 	OP_R2K
 	OP_R3

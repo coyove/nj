@@ -10,7 +10,7 @@ import (
 	"unsafe"
 )
 
-func btob(b bool) uint16 {
+func btob(b bool) byte {
 	if b {
 		return 1
 	}
@@ -139,6 +139,20 @@ func cruRead32(data uintptr, cursor *uint32) uint32 {
 		uint32(*(*uint16)(unsafe.Pointer(data + uintptr(*cursor-1)*2)))
 }
 
+// func cruRead64(data uintptr, cursor *uint32) uint64 {
+// 	*cursor += 4
+// 	addr := uintptr(*cursor) * 2
+// 	return uint64(*(*uint16)(unsafe.Pointer(data + addr - 8)))<<48 +
+// 		uint64(*(*uint16)(unsafe.Pointer(data + addr - 6)))<<32 +
+// 		uint64(*(*uint16)(unsafe.Pointer(data + addr - 4)))<<32 +
+// 		uint64(*(*uint16)(unsafe.Pointer(data + addr - 2)))
+// }
+
+// func cruRead(data uintptr, cursor *uint32, len int) []uint16 {
+// 	*cursor += uint32(len)
+// 	return data[*cursor-uint32(len) : *cursor]
+// }
+
 var singleOp = map[uint16]string{
 	OP_ADD:     "add",
 	OP_SUB:     "sub",
@@ -176,7 +190,7 @@ func crHash(data []uint16) uint32 {
 	return e.Sum32()
 }
 
-func crPrettifyLambda(args, curry int, y, e bool, code []uint16, consts []Value, tab int) string {
+func crPrettifyLambda(args, curry int, y, e, esc bool, code []uint16, consts []Value, tab int) string {
 	sb := &bytes.Buffer{}
 	spaces := strings.Repeat(" ", tab)
 	sb.WriteString(spaces + "<args: " + strconv.Itoa(args) + ">\n")
@@ -189,6 +203,9 @@ func crPrettifyLambda(args, curry int, y, e bool, code []uint16, consts []Value,
 	if e {
 		sb.WriteString(spaces + "<errorable>\n")
 	}
+	if esc {
+		sb.WriteString(spaces + "<env escaped>\n")
+	}
 	for i, k := range consts {
 		sb.WriteString(spaces + fmt.Sprintf("<k$%d: %+v>\n", i, k))
 	}
@@ -197,6 +214,7 @@ func crPrettifyLambda(args, curry int, y, e bool, code []uint16, consts []Value,
 }
 
 func crPrettify(data []uint16, consts []Value, tab int) string {
+
 	sb := &bytes.Buffer{}
 	pre := strings.Repeat(" ", tab)
 	hash := crHash(data)
@@ -236,14 +254,16 @@ MAIN:
 			sb.WriteString(readAddr() + " = " + readAddr())
 		case OP_SETK:
 			sb.WriteString(readAddr() + " = " + readKAddr())
-		case OP_RR:
-			sb.WriteString("r0 = " + readAddr() + ", r1 = " + readAddr())
-		case OP_RK:
-			sb.WriteString("r0 = " + readAddr() + ", r1 = " + readKAddr())
-		case OP_KR:
-			sb.WriteString("r0 = " + readKAddr() + ", r1 = " + readAddr())
-		case OP_KK:
-			sb.WriteString("r0 = " + readKAddr() + ", r1 = " + readKAddr())
+		case OP_R0:
+			sb.WriteString("r0 = " + readAddr())
+		case OP_R0K:
+			sb.WriteString("r0 = " + readKAddr())
+		case OP_R1:
+			sb.Truncate(lastIdx)
+			sb.WriteString(", r1 = " + readAddr())
+		case OP_R1K:
+			sb.Truncate(lastIdx)
+			sb.WriteString(", r1 = " + readKAddr())
 		case OP_R2:
 			sb.Truncate(lastIdx)
 			sb.WriteString(", r2 = " + readAddr())
@@ -282,9 +302,11 @@ MAIN:
 			sb.WriteString("yield " + readKAddr())
 		case OP_LAMBDA:
 			sb.WriteString("$a = lambda (\n")
-			argsCount := crRead16(data, &cursor)
-			yieldable := crRead16(data, &cursor) == 1
-			errorable := crRead16(data, &cursor) == 1
+			metadata := crRead32(data, &cursor)
+			argsCount := byte(metadata >> 24)
+			yieldable := byte(metadata>>16) == 1
+			errorable := byte(metadata>>8) == 1
+			noenvescape := byte(metadata) == 1
 			constsLen := crRead16(data, &cursor)
 			consts := make([]Value, constsLen)
 			for i := uint16(0); i < constsLen; i++ {
@@ -298,8 +320,7 @@ MAIN:
 				}
 			}
 			buf := crRead(data, &cursor, int(crRead32(data, &cursor)))
-
-			sb.WriteString(crPrettifyLambda(int(argsCount), 0, yieldable, errorable, buf, consts, tab+4))
+			sb.WriteString(crPrettifyLambda(int(argsCount), 0, yieldable, errorable, !noenvescape, buf, consts, tab+4))
 			sb.WriteString(pre + ")")
 		case OP_CALL:
 			sb.WriteString("call " + readAddr())

@@ -75,7 +75,7 @@ rows = std.genlist(size)
 set y = -1
 set mux = std.sync.mutex()
 set wg = std.sync.waitgroup()
-wg.add(4)
+wg.add(1)
 
 set worker = function()
     while y < size do
@@ -89,9 +89,9 @@ set worker = function()
 end
 
 std.sync.run(worker) 
-std.sync.run(worker) 
-std.sync.run(worker) 
-std.sync.run(worker)
+#std.sync.run(worker) 
+#std.sync.run(worker) 
+#std.sync.run(worker)
 wg.wait()
  
 io.write("P4\n" & size & " " & size & "\n")

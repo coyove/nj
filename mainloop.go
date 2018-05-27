@@ -16,14 +16,15 @@ func init() {
 }
 
 type ret struct {
-	cursor uint32
-	env    *Env
-	code   []uint16
-	kaddr  uintptr
-	line   string
+	cursor      uint32
+	noenvescape bool
+	env         *Env
+	code        []uint16
+	kaddr       uintptr
+	line        string
 }
 
-// ExecError represents the runtime rror
+// ExecError represents the runtime error
 type ExecError struct {
 	r      interface{}
 	stacks []ret
@@ -73,6 +74,10 @@ func ExecCursor(env *Env, code []uint16, consts []Value, cursor uint32) (Value, 
 		caddr = kodeaddr(code)
 		kaddr = r.kaddr
 		r.env.A, r.env.E = v, env.E
+		if r.noenvescape {
+			newEnv = env
+			newEnv.SClear()
+		}
 		env = r.env
 		retStack = retStack[:len(retStack)-1]
 	}
@@ -165,7 +170,9 @@ MAIN:
 				log.Panicf("can't apply 'less equal' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_NOT:
-			if env.R0.IsFalse() {
+			if env.R0.ty == Tbool {
+				env.A = NewBoolValue(!env.R0.AsBool())
+			} else if env.R0.IsFalse() {
 				env.A = NewBoolValue(true)
 			} else {
 				env.A = NewBoolValue(false)
@@ -273,25 +280,24 @@ MAIN:
 			if newEnv == nil {
 				env.A = NewListValue(make([]Value, 0))
 			} else {
-				list := make([]Value, newEnv.stack.Size())
-				copy(list, newEnv.stack.data)
-				newEnv.Stack().Clear()
+				list := make([]Value, newEnv.SSize())
+				copy(list, newEnv.stack)
+				newEnv.SClear()
 				env.A = NewListValue(list)
 			}
 		case OP_MAP:
 			if newEnv == nil {
 				env.A = NewMapValue(NewMap())
 			} else {
-				size := newEnv.Stack().Size()
-				m := NewMap()
+				size, m := newEnv.SSize(), NewMap()
 				for i := 0; i < size; i += 2 {
-					if k := newEnv.Get(uint32(i)); k.ty == Tstring {
-						m.Put(k.AsString(), newEnv.Get(uint32(i+1)))
+					if k := newEnv.SGet(i); k.ty == Tstring {
+						m.Put(k.AsString(), newEnv.SGet(i+1))
 					} else {
 						k.panicType(Tstring)
 					}
 				}
-				newEnv.Stack().Clear()
+				newEnv.SClear()
 				env.A = NewMapValue(m)
 			}
 		case OP_STORE:
@@ -356,14 +362,14 @@ MAIN:
 				log.Panicf("can't load from %+v with key %+v", env.R0, env.R1)
 			}
 			env.A = v
-		case OP_RR:
-			env.R0, env.R1 = env.Get(cruRead32(caddr, &cursor)), env.Get(cruRead32(caddr, &cursor))
-		case OP_KK:
-			env.R0, env.R1 = konst(kaddr, cruRead16(caddr, &cursor)), konst(kaddr, cruRead16(caddr, &cursor))
-		case OP_RK:
-			env.R0, env.R1 = env.Get(cruRead32(caddr, &cursor)), konst(kaddr, cruRead16(caddr, &cursor))
-		case OP_KR:
-			env.R0, env.R1 = konst(kaddr, cruRead16(caddr, &cursor)), env.Get(cruRead32(caddr, &cursor))
+		case OP_R0:
+			env.R0 = env.Get(cruRead32(caddr, &cursor))
+		case OP_R0K:
+			env.R0 = konst(kaddr, cruRead16(caddr, &cursor))
+		case OP_R1:
+			env.R1 = env.Get(cruRead32(caddr, &cursor))
+		case OP_R1K:
+			env.R1 = konst(kaddr, cruRead16(caddr, &cursor))
 		case OP_R2:
 			env.R2 = env.Get(cruRead32(caddr, &cursor))
 		case OP_R2K:
@@ -376,12 +382,12 @@ MAIN:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.stack.Add(env.Get(cruRead32(caddr, &cursor)))
+			newEnv.SPush(env.Get(cruRead32(caddr, &cursor)))
 		case OP_PUSHK:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
 			}
-			newEnv.stack.Add(konst(kaddr, cruRead16(caddr, &cursor)))
+			newEnv.SPush(konst(kaddr, cruRead16(caddr, &cursor)))
 		case OP_RET:
 			v := env.Get(cruRead32(caddr, &cursor))
 			if len(retStack) == 0 {
@@ -399,9 +405,11 @@ MAIN:
 		case OP_YIELDK:
 			return konst(kaddr, cruRead16(caddr, &cursor)), cursor, true
 		case OP_LAMBDA:
-			argsCount := cruRead16(caddr, &cursor)
-			yieldable := cruRead16(caddr, &cursor) == 1
-			errorable := cruRead16(caddr, &cursor) == 1
+			metadata := cruRead32(caddr, &cursor)
+			argsCount := byte(metadata >> 24)
+			yieldable := byte(metadata>>16) == 1
+			errorable := byte(metadata>>8) == 1
+			noenvescape := byte(metadata) == 1
 			constsLen := cruRead16(caddr, &cursor)
 			consts := make([]Value, constsLen)
 			for i := uint16(0); i < constsLen; i++ {
@@ -415,27 +423,33 @@ MAIN:
 				}
 			}
 			buf := crRead(code, &cursor, int(cruRead32(caddr, &cursor)))
-			env.A = NewClosureValue(NewClosure(buf, consts, env, byte(argsCount), yieldable, errorable))
+			env.A = NewClosureValue(NewClosure(buf, consts, env, byte(argsCount), yieldable, errorable, noenvescape))
 		case OP_CALL:
-			v := env.Get(cruRead32(caddr, &cursor))
-			switch v.Type() {
+			switch v := env.Get(cruRead32(caddr, &cursor)); v.ty {
 			case Tclosure:
 				cls := v.AsClosure()
-				if newEnv == nil {
-					newEnv = NewEnv(nil)
-				}
-
-				if newEnv.Size() < cls.ArgsCount() {
-					if newEnv.Size() == 0 {
-						env.A = (NewClosureValue(cls))
+				if cls.lastenv != nil {
+					env.A = cls.Exec(newEnv)
+					if newEnv != nil {
+						env.E = newEnv.E
+					}
+					newEnv = nil
+				} else if (newEnv == nil && cls.argsCount > 0) ||
+					(newEnv != nil && newEnv.SSize() < int(cls.argsCount)) {
+					if newEnv == nil || newEnv.SSize() == 0 {
+						env.A = NewClosureValue(cls)
 					} else {
 						curry := cls.Dup()
-						curry.AppendPreArgs(newEnv.Stack().Values())
+						curry.AppendPreArgs(newEnv.Stack())
 						env.A = NewClosureValue(curry)
+						newEnv.SClear()
 					}
 				} else {
-					if cls.PreArgs() != nil && len(cls.PreArgs()) > 0 {
-						newEnv.Stack().Insert(0, cls.PreArgs())
+					if newEnv == nil {
+						newEnv = NewEnv(nil)
+					}
+					if len(cls.preArgs) > 0 {
+						newEnv.SInsert(0, cls.preArgs)
 					}
 
 					if cls.yieldable || cls.native != nil {
@@ -447,11 +461,12 @@ MAIN:
 						}
 
 						last := ret{
-							cursor: cursor,
-							env:    env,
-							code:   code,
-							kaddr:  kaddr,
-							line:   lineinfo,
+							cursor:      cursor,
+							env:         env,
+							code:        code,
+							kaddr:       kaddr,
+							line:        lineinfo,
+							noenvescape: cls.noenvescape,
 						}
 
 						// switch to the env of cls
@@ -465,36 +480,39 @@ MAIN:
 
 						retStack = append(retStack, last)
 					}
+					if cls.native == nil {
+						newEnv = nil
+					} else {
+						newEnv.SClear()
+					}
 				}
-
-				newEnv = nil
 			case Tlist:
-				if bb := v.AsList(); newEnv.Size() == 2 {
-					env.A = NewListValue(bb[shiftIndex(newEnv.Get(0), len(bb)):shiftIndex(newEnv.Get(1), len(bb))])
-				} else if newEnv.Size() == 1 {
-					env.A = bb[shiftIndex(newEnv.Get(0), len(bb))]
+				if bb := v.AsList(); newEnv.SSize() == 2 {
+					env.A = NewListValue(bb[shiftIndex(newEnv.SGet(0), len(bb)):shiftIndex(newEnv.SGet(1), len(bb))])
+				} else if newEnv.SSize() == 1 {
+					env.A = bb[shiftIndex(newEnv.SGet(0), len(bb))]
 				} else {
-					log.Panicf("too many (or few) arguments to call on list")
+					log.Panicf("invalid call on %v", v)
 				}
-				newEnv.Stack().Clear()
+				newEnv.SClear()
 			case Tbytes:
-				if bb := v.AsBytes(); newEnv.Size() == 2 {
-					env.A = NewBytesValue(bb[shiftIndex(newEnv.Get(0), len(bb)):shiftIndex(newEnv.Get(1), len(bb))])
-				} else if newEnv.Size() == 1 {
-					env.A = NewNumberValue(float64(bb[shiftIndex(newEnv.Get(0), len(bb))]))
+				if bb := v.AsBytes(); newEnv.SSize() == 2 {
+					env.A = NewBytesValue(bb[shiftIndex(newEnv.SGet(0), len(bb)):shiftIndex(newEnv.SGet(1), len(bb))])
+				} else if newEnv.SSize() == 1 {
+					env.A = NewNumberValue(float64(bb[shiftIndex(newEnv.SGet(0), len(bb))]))
 				} else {
-					log.Panicf("too many (or few) arguments to call on bytes")
+					log.Panicf("invalid call on %v", v)
 				}
-				newEnv.Stack().Clear()
+				newEnv.SClear()
 			case Tstring:
-				if bb := v.AsString(); newEnv.Size() == 2 {
-					env.A = NewStringValue(bb[shiftIndex(newEnv.Get(0), len(bb)):shiftIndex(newEnv.Get(1), len(bb))])
-				} else if newEnv.Size() == 1 {
-					env.A = NewNumberValue(float64(bb[shiftIndex(newEnv.Get(0), len(bb))]))
+				if bb := v.AsString(); newEnv.SSize() == 2 {
+					env.A = NewStringValue(bb[shiftIndex(newEnv.SGet(0), len(bb)):shiftIndex(newEnv.SGet(1), len(bb))])
+				} else if newEnv.SSize() == 1 {
+					env.A = NewNumberValue(float64(bb[shiftIndex(newEnv.SGet(0), len(bb))]))
 				} else {
-					log.Panicf("too many (or few) arguments to call on string")
+					log.Panicf("invalid call on %v", v)
 				}
-				newEnv.Stack().Clear()
+				newEnv.SClear()
 			default:
 				log.Panicf("invalid callee: %+v", v)
 			}
@@ -504,13 +522,17 @@ MAIN:
 		case OP_IFNOT:
 			cond := env.Get(cruRead32(caddr, &cursor))
 			off := int32(cruRead32(caddr, &cursor))
-			if cond.IsFalse() {
+			if cond.ty == Tbool && !cond.AsBool() {
+				cursor = uint32(int32(cursor) + off)
+			} else if cond.IsFalse() {
 				cursor = uint32(int32(cursor) + off)
 			}
 		case OP_IF:
 			cond := env.Get(cruRead32(caddr, &cursor))
 			off := int32(cruRead32(caddr, &cursor))
-			if !cond.IsFalse() {
+			if cond.ty == Tbool && cond.AsBool() {
+				cursor = uint32(int32(cursor) + off)
+			} else if !cond.IsFalse() {
 				cursor = uint32(int32(cursor) + off)
 			}
 		case OP_DUP:
@@ -561,14 +583,14 @@ func doDup(env *Env) {
 			nopred = true
 		case 1:
 			// dup()
-			stack := env.Stack().data
+			stack := env.Stack()
 			ret := make([]Value, len(stack))
 			copy(ret, stack)
 			env.A = NewListValue(ret)
 			return
 		case 2:
 			// return dup()
-			env.A = NewListValue(env.Stack().data)
+			env.A = NewListValue(env.Stack())
 			return
 		default:
 			panic("serious error")
@@ -599,10 +621,10 @@ func doDup(env *Env) {
 				newstr = make([]byte, 0, len(str))
 			}
 			for i, v := range str {
-				newEnv.Stack().Clear()
-				newEnv.stack.Add(NewNumberValue(float64(i)))
-				newEnv.stack.Add(NewNumberValue(float64(v)))
-				newEnv.stack.Add(NewNumberValue(float64(len(newstr))))
+				newEnv.SClear()
+				newEnv.SPush(NewNumberValue(float64(i)))
+				newEnv.SPush(NewNumberValue(float64(v)))
+				newEnv.SPush(NewNumberValue(float64(len(newstr))))
 				if newEnv.E.Type() != Tnil {
 					break
 				}
@@ -665,9 +687,9 @@ func doDup(env *Env) {
 			list1 = make([]Value, 0, len(list0))
 		}
 		for i, v := range list0 {
-			newEnv.Stack().Clear()
-			newEnv.stack.Add(NewNumberValue(float64(i)))
-			newEnv.stack.Add(v)
+			newEnv.SClear()
+			newEnv.SPush(NewNumberValue(float64(i)))
+			newEnv.SPush(v)
 			ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 			if newEnv.E.Type() != Tnil {
 				break
@@ -689,9 +711,9 @@ func doDup(env *Env) {
 				m := env.R1.AsMap()
 				if m.t != nil {
 					for _, x := range m.t {
-						newEnv.Stack().Clear()
-						newEnv.stack.Add(NewStringValue(x.k))
-						newEnv.stack.Add(x.v)
+						newEnv.SClear()
+						newEnv.SPush(NewStringValue(x.k))
+						newEnv.SPush(x.v)
 						ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 						if newEnv.E.Type() != Tnil {
 							break
@@ -701,9 +723,9 @@ func doDup(env *Env) {
 				} else {
 					m2.SwitchToHashmap()
 					for k, v := range m.m {
-						newEnv.Stack().Clear()
-						newEnv.stack.Add(NewStringValue(k))
-						newEnv.stack.Add(v)
+						newEnv.SClear()
+						newEnv.SPush(NewStringValue(k))
+						newEnv.SPush(v)
 						ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 						if newEnv.E.Type() != Tnil {
 							break
@@ -715,9 +737,9 @@ func doDup(env *Env) {
 			} else {
 				// full copy
 				env.A = NewMapValue(env.R1.AsMap().Dup(func(k string, v Value) Value {
-					newEnv.Stack().Clear()
-					newEnv.stack.Add(NewStringValue(k))
-					newEnv.stack.Add(v)
+					newEnv.SClear()
+					newEnv.SPush(NewStringValue(k))
+					newEnv.SPush(v)
 					ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 					return ret
 				}))
@@ -725,18 +747,18 @@ func doDup(env *Env) {
 		} else {
 			m := env.R1.AsMap()
 			for _, x := range m.t {
-				newEnv.Stack().Clear()
-				newEnv.stack.Add(NewStringValue(x.k))
-				newEnv.stack.Add(x.v)
+				newEnv.SClear()
+				newEnv.SPush(NewStringValue(x.k))
+				newEnv.SPush(x.v)
 				ExecCursor(newEnv, cls.code, cls.consts, 0)
 				if newEnv.E.Type() != Tnil {
 					break
 				}
 			}
 			for k, v := range m.m {
-				newEnv.Stack().Clear()
-				newEnv.stack.Add(NewStringValue(k))
-				newEnv.stack.Add(v)
+				newEnv.SClear()
+				newEnv.SPush(NewStringValue(k))
+				newEnv.SPush(v)
 				ExecCursor(newEnv, cls.code, cls.consts, 0)
 				if newEnv.E.Type() != Tnil {
 					break
@@ -750,9 +772,9 @@ func doDup(env *Env) {
 			list1 = make([]byte, 0, len(list0))
 		}
 		for i, v := range list0 {
-			newEnv.Stack().Clear()
-			newEnv.stack.Add(NewNumberValue(float64(i)))
-			newEnv.stack.Add(NewNumberValue(float64(v)))
+			newEnv.SClear()
+			newEnv.SPush(NewNumberValue(float64(i)))
+			newEnv.SPush(NewNumberValue(float64(v)))
 			ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 			if newEnv.E.Type() != Tnil {
 				break

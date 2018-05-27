@@ -8,6 +8,98 @@ import (
 	"github.com/coyove/potatolang/parser"
 )
 
+type kinfo struct {
+	ty    byte
+	value interface{}
+}
+
+// symtable is responsible for recording extra states of compilation
+type symtable struct {
+	// variable name lookup
+	parent *symtable
+	sym    map[string]uint16
+
+	// flat op immediate value
+	im  *float64
+	ims *string
+
+	// has yield op
+	y bool
+
+	// has error op
+	e bool
+
+	envescape bool
+
+	// record line info at chain
+	lineInfo bool
+
+	consts         []kinfo
+	constStringMap map[string]uint16
+	constFloatMap  map[float64]uint16
+}
+
+func newsymtable() *symtable {
+	return &symtable{
+		sym:            make(map[string]uint16),
+		consts:         make([]kinfo, 0),
+		constStringMap: make(map[string]uint16),
+		constFloatMap:  make(map[float64]uint16),
+	}
+}
+
+func (m *symtable) get(varname string) (uint32, bool) {
+	depth := uint32(0)
+
+	for m != nil {
+		k, e := m.sym[varname]
+		if e {
+			return (depth << 16) | uint32(k), true
+		}
+
+		depth++
+		m = m.parent
+	}
+
+	return 0, false
+}
+
+func (m *symtable) put(varname string, addr uint16) {
+	m.sym[varname] = addr
+}
+
+func (m *symtable) addConst(v interface{}) uint16 {
+	var k kinfo
+	k.value = v
+
+	switch v.(type) {
+	case float64:
+		k.ty = Tnumber
+		if i, ok := m.constFloatMap[v.(float64)]; ok {
+			return i
+		}
+	case string:
+		k.ty = Tstring
+		if i, ok := m.constStringMap[v.(string)]; ok {
+			return i
+		}
+	default:
+		panic("shouldn't happen")
+	}
+
+	m.consts = append(m.consts, k)
+	idx := uint16(len(m.consts)) - 1
+
+	switch v.(type) {
+	case float64:
+		m.constFloatMap[v.(float64)] = idx
+	case string:
+		m.constStringMap[v.(string)] = idx
+	}
+
+	return idx
+}
+
 type compileFunc func(uint16, []*parser.Node, *symtable) ([]uint16, uint32, uint16, error)
 
 var opMapping map[string]compileFunc
@@ -198,7 +290,12 @@ func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
 			consts[i] = NewStringValue(k.value.(string))
 		}
 	}
-	return NewClosure(code, consts, nil, 0, false, false), err
+	cls = NewClosure(code, consts, nil, 0, false, false, false)
+	cls.lastenv = NewEnv(nil)
+	for _, name := range CoreLibNames {
+		cls.lastenv.SPush(CoreLibs[name])
+	}
+	return cls, err
 }
 
 func LoadFile(path string, lineinfo bool) (*Closure, error) {

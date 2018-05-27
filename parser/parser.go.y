@@ -155,6 +155,7 @@ stat:
                     e = $4.Compound[len($4.Compound) - 1]
                 }
                 c := NewCompoundNode("set", name, e)
+                name.Pos, e.Pos = $1.Pos, $1.Pos
                 c.Compound[0].Pos = $1.Pos
                 $$.Compound = append($$.Compound, c)
             }

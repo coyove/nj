@@ -4,103 +4,86 @@ import (
 	"fmt"
 )
 
-const (
-	// INIT_CAPACITY defines the inital capacity of the stack
-	INIT_CAPACITY = 16
-)
-
-// Stack is a special structure which will automatically grow when index overflows
-type Stack struct {
-	data []Value
-}
-
-// NewStack creates a new stack
-func NewStack() *Stack {
-	return &Stack{
-		data: make([]Value, 0, INIT_CAPACITY),
-	}
-}
-
-func (s *Stack) grow(newSize int) {
-	if newSize > cap(s.data) {
-		old := s.data
-		s.data = make([]Value, newSize, newSize*3/2)
-		copy(s.data, old)
-	}
-	s.data = s.data[:newSize]
-}
-
-func (s *Stack) Size() int {
-	return len(s.data)
-}
-
-func (s *Stack) Get(index int) Value {
-	if index >= len(s.data) {
-		return NewValue()
-	}
-	return s.data[index]
-}
-
-func (s *Stack) Set(index int, value Value) {
-	if index >= len(s.data) {
-		s.grow(index + 1)
-	}
-	s.data[index] = value
-}
-
-func (s *Stack) Add(value Value) {
-	s.Set(len(s.data), value)
-}
-
-func (s *Stack) Clear() {
-	s.data = s.data[:0]
-}
-
-func (s *Stack) InsertStack(index int, s2 *Stack) {
-	s.Insert(index, s2.data)
-}
-
-func (s *Stack) Insert(index int, data []Value) {
-	if index <= len(s.data) {
-		ln := len(s.data)
-		s.grow(ln + len(data))
-		copy(s.data[len(s.data)-(ln-index):], s.data[index:])
-	} else {
-		s.grow(index + len(data))
-	}
-	copy(s.data[index:], data)
-}
-
-func (s *Stack) Values() []Value {
-	return s.data
-}
-
+// Env is the environment for a closure in potatolang to run within.
+// The stack contains arguments used to execute the closure,
+// all the local variables will sequentially take the following spaces.
+// A stores the result of executing a closure, or a builtin operator;
+// C stores the caller;
+// E stores the error;
+// R0 ~ R3 store the arguments to call builtin operators (+, -, *, ...).
+// After each function calling in potato, E will be propagated to the upper Env.
+// Explicitly calling error() will get E and clear E.
 type Env struct {
 	parent *Env
-	stack  *Stack
+	stack  []Value
 
 	A, C, E, R0, R1, R2, R3 Value
 }
 
-func NewTopEnv() *Env {
-	e := NewEnv(nil)
-	for _, name := range CoreLibNames {
-		e.Push(CoreLibs[name])
-	}
-	return e
-}
-
+// NewEnv creates the Env for closure to run within
+// parent can be nil, which means this is a top Env
 func NewEnv(parent *Env) *Env {
+	const initCapacity = 16
 	return &Env{
 		parent: parent,
-		stack:  NewStack(),
-		A:      NewValue(),
+		stack:  make([]Value, 0, initCapacity),
+		A:      Value{},
 	}
 }
 
-func (e *Env) Reset() {
-	e.stack.Clear()
-	e.A = NewValue()
+func (env *Env) grow(newSize int) {
+	if newSize > cap(env.stack) {
+		old := env.stack
+		env.stack = make([]Value, newSize, newSize*3/2)
+		copy(env.stack, old)
+	}
+	env.stack = env.stack[:newSize]
+}
+
+// SGet gets a value from the current stack
+func (env *Env) SGet(index int) Value {
+	if index >= len(env.stack) {
+		return Value{}
+	}
+	return env.stack[index]
+}
+
+// SSet sets a value in the current stack
+func (env *Env) SSet(index int, value Value) {
+	if index >= len(env.stack) {
+		env.grow(index + 1)
+	}
+	env.stack[index] = value
+}
+
+// SClear clears the current stack
+func (env *Env) SClear() {
+	env.stack = env.stack[:0]
+	env.A = Value{}
+}
+
+// SInsert inserts another stack into the current stack
+func (env *Env) SInsert(index int, data []Value) {
+	if index <= len(env.stack) {
+		ln := len(env.stack)
+		env.grow(ln + len(data))
+		copy(env.stack[len(env.stack)-(ln-index):], env.stack[index:])
+	} else {
+		env.grow(index + len(data))
+	}
+	copy(env.stack[index:], data)
+}
+
+// SPush pushes a value into the current stack
+func (env *Env) SPush(v Value) {
+	// e.stack.Add(v)
+	ln := len(env.stack)
+	env.grow(ln + 1)
+	env.stack[ln] = v
+}
+
+func (env *Env) SSize() int {
+	return len(env.stack)
 }
 
 func (e *Env) Parent() *Env {
@@ -121,15 +104,11 @@ REPEAT:
 		y, env = y-1, env.parent
 		goto REPEAT
 	}
-	return env.stack.Get(int(uint16(yx)))
-}
-
-func (e *Env) Push(v Value) {
-	e.stack.Add(v)
-}
-
-func (e *Env) Size() int {
-	return e.stack.Size()
+	index := int(uint16(yx))
+	if index >= len(env.stack) {
+		return Value{}
+	}
+	return env.stack[index]
 }
 
 func (env *Env) Set(yx uint32, v Value) {
@@ -142,47 +121,54 @@ func (env *Env) Set(yx uint32, v Value) {
 			y, env = y-1, env.parent
 			goto REPEAT
 		}
-		env.stack.Set(int(int16(yx)), v)
+		index := int(uint16(yx))
+		if index >= len(env.stack) {
+			env.grow(index + 1)
+		}
+		env.stack[index] = v
 	}
 }
 
-func (e *Env) Stack() *Stack {
-	return e.stack
+// Stack returns the current stack
+func (env *Env) Stack() []Value {
+	return env.stack
 }
 
 // Closure is the closure struct used in potatolang
 type Closure struct {
-	code      []uint16
-	consts    []Value
-	env       *Env
-	caller    Value
-	preArgs   []Value
-	native    func(env *Env) Value
-	argsCount byte
-	status    byte
-	yieldable bool
-	errorable bool
-	lastp     uint32
-	lastenv   *Env
+	code        []uint16
+	consts      []Value
+	env         *Env
+	caller      Value
+	preArgs     []Value
+	native      func(env *Env) Value
+	argsCount   byte
+	noenvescape bool
+	yieldable   bool
+	errorable   bool
+	lastp       uint32
+	lastenv     *Env
 }
 
 // NewClosure creates a new closure
-func NewClosure(code []uint16, consts []Value, env *Env, argsCount byte, yieldable, errorable bool) *Closure {
+func NewClosure(code []uint16, consts []Value, env *Env, argsCount byte, yieldable, errorable, noenvescape bool) *Closure {
 	return &Closure{
-		code:      code,
-		consts:    consts,
-		env:       env,
-		argsCount: argsCount,
-		yieldable: yieldable,
-		errorable: errorable,
+		code:        code,
+		consts:      consts,
+		env:         env,
+		argsCount:   argsCount,
+		yieldable:   yieldable,
+		errorable:   errorable,
+		noenvescape: noenvescape,
 	}
 }
 
 // NewNativeValue creates a native function in potatolang
 func NewNativeValue(argsCount int, f func(env *Env) Value) Value {
 	return NewClosureValue(&Closure{
-		argsCount: byte(argsCount),
-		native:    f,
+		argsCount:   byte(argsCount),
+		native:      f,
+		noenvescape: true,
 	})
 }
 
@@ -230,7 +216,7 @@ func (c *Closure) Env() *Env {
 
 // Dup duplicates the closure
 func (c *Closure) Dup() *Closure {
-	cls := NewClosure(c.code, c.consts, c.env, c.argsCount, c.yieldable, c.errorable)
+	cls := NewClosure(c.code, c.consts, c.env, c.argsCount, c.yieldable, c.errorable, c.noenvescape)
 	cls.caller = c.caller
 	cls.lastp = c.lastp
 	cls.native = c.native
@@ -244,7 +230,8 @@ func (c *Closure) Dup() *Closure {
 func (c *Closure) String() string {
 	if c.native == nil {
 		return "closure (\n" +
-			crPrettifyLambda(int(c.argsCount), len(c.preArgs), c.yieldable, c.errorable, c.code, c.consts, 4) + ")"
+			crPrettifyLambda(int(c.argsCount), len(c.preArgs),
+				c.yieldable, c.errorable, !c.noenvescape, c.code, c.consts, 4) + ")"
 	}
 	return fmt.Sprintf("closure (\n    <args: %d>\n    <curry: %d>\n    [...] native code\n)", c.argsCount, len(c.preArgs))
 }
@@ -271,94 +258,4 @@ func (c *Closure) Exec(newEnv *Env) Value {
 		return v
 	}
 	return c.native(newEnv)
-}
-
-type kinfo struct {
-	ty    byte
-	value interface{}
-}
-
-// symtable is responsible for recording extra states of compilation
-type symtable struct {
-	// variable name lookup
-	parent *symtable
-	sym    map[string]uint16
-
-	// flat op immediate value
-	im  *float64
-	ims *string
-
-	// has yield op
-	y bool
-
-	// has error op
-	e bool
-
-	// record line info at chain
-	lineInfo bool
-
-	consts         []kinfo
-	constStringMap map[string]uint16
-	constFloatMap  map[float64]uint16
-}
-
-func newsymtable() *symtable {
-	return &symtable{
-		sym:            make(map[string]uint16),
-		consts:         make([]kinfo, 0),
-		constStringMap: make(map[string]uint16),
-		constFloatMap:  make(map[float64]uint16),
-	}
-}
-
-func (m *symtable) get(varname string) (uint32, bool) {
-	depth := uint32(0)
-
-	for m != nil {
-		k, e := m.sym[varname]
-		if e {
-			return (depth << 16) | uint32(k), true
-		}
-
-		depth++
-		m = m.parent
-	}
-
-	return 0, false
-}
-
-func (m *symtable) put(varname string, addr uint16) {
-	m.sym[varname] = addr
-}
-
-func (m *symtable) addConst(v interface{}) uint16 {
-	var k kinfo
-	k.value = v
-
-	switch v.(type) {
-	case float64:
-		k.ty = Tnumber
-		if i, ok := m.constFloatMap[v.(float64)]; ok {
-			return i
-		}
-	case string:
-		k.ty = Tstring
-		if i, ok := m.constStringMap[v.(string)]; ok {
-			return i
-		}
-	default:
-		panic("shouldn't happen")
-	}
-
-	m.consts = append(m.consts, k)
-	idx := uint16(len(m.consts)) - 1
-
-	switch v.(type) {
-	case float64:
-		m.constFloatMap[v.(float64)] = idx
-	case string:
-		m.constStringMap[v.(string)] = idx
-	}
-
-	return idx
 }

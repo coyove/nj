@@ -228,62 +228,9 @@ func flatWrite(sp uint16, atoms []*parser.Node, table *symtable, bop uint16) (co
 		}
 	}
 
-	if len(atoms) == 2 {
-		switch n := atoms[1]; n.Type {
-		case parser.NTAtom:
-			addr, ok := table.get(n.Value.(string))
-			if !ok {
-				err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
-				return
-			}
-			buf.Write16(OP_RK)
-			buf.Write32(addr)
-			buf.Write16(0)
-		case parser.NTNumber, parser.NTString:
-			buf.Write16(OP_KK)
-			buf.Write16(table.addConst(n.Value))
-			buf.Write16(0)
-		case parser.NTAddr:
-			buf.Write16(OP_RK)
-			buf.Write32(n.Value.(uint32))
-			buf.Write16(0)
-		}
-	}
-	if len(atoms) > 2 {
-		if r0, r1 := atoms[1], atoms[2]; r0.Type == parser.NTAtom || r0.Type == parser.NTAddr {
-			if r1.Type == parser.NTAtom || r1.Type == parser.NTAddr {
-				buf.Write16(OP_RR)
-			} else {
-				buf.Write16(OP_RK)
-			}
-		} else if r1.Type == parser.NTAtom || r1.Type == parser.NTAddr {
-			buf.Write16(OP_KR)
-		} else {
-			buf.Write16(OP_KK)
-		}
-		for i := 1; i <= 2; i++ {
-			switch n := atoms[i]; n.Type {
-			case parser.NTAtom:
-				addr, ok := table.get(n.Value.(string))
-				if !ok {
-					err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
-					return
-				}
-				buf.Write32(addr)
-			case parser.NTNumber, parser.NTString:
-				buf.Write16(table.addConst(n.Value))
-			case parser.NTAddr:
-				buf.Write32(n.Value.(uint32))
-			}
-		}
-	}
-	if len(atoms) > 3 {
-		if err = fill(buf, atoms[3], table, OP_R2, OP_R2K); err != nil {
-			return
-		}
-	}
-	if len(atoms) > 4 {
-		if err = fill(buf, atoms[4], table, OP_R3, OP_R3K); err != nil {
+	var op = [8]uint16{OP_R0, OP_R0K, OP_R1, OP_R1K, OP_R2, OP_R2K, OP_R3, OP_R3K}
+	for i := 1; i < len(atoms); i++ {
+		if err = fill(buf, atoms[i], table, op[i*2-2], op[i*2-1]); err != nil {
 			return
 		}
 	}
@@ -550,9 +497,10 @@ func compileCallOp(sp uint16, nodes []*parser.Node, table *symtable) (code []uin
 
 // [lambda [namelist] [chain ...]]
 func compileLambdaOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint16, yx uint32, newsp uint16, err error) {
-	newLookup := newsymtable()
-	newLookup.parent = table
-	newLookup.lineInfo = table.lineInfo
+	table.envescape = true
+	newtable := newsymtable()
+	newtable.parent = table
+	newtable.lineInfo = table.lineInfo
 
 	params := atoms[1]
 	if params.Type != parser.NTCompound {
@@ -561,11 +509,14 @@ func compileLambdaOp(sp uint16, atoms []*parser.Node, table *symtable) (code []u
 	}
 
 	for i, p := range params.Compound {
-		newLookup.put(p.Value.(string), uint16(i))
+		newtable.put(p.Value.(string), uint16(i))
 	}
 
-	ln := len(newLookup.sym)
-	code, yx, _, err = compileChainOp(uint16(ln), atoms[2], newLookup)
+	ln := len(newtable.sym)
+	if ln > 255 {
+		return nil, 0, 0, fmt.Errorf("do you really need more than 255 arguments?")
+	}
+	code, yx, _, err = compileChainOp(uint16(ln), atoms[2], newtable)
 	if err != nil {
 		return
 	}
@@ -573,11 +524,12 @@ func compileLambdaOp(sp uint16, atoms []*parser.Node, table *symtable) (code []u
 	code = append(code, OP_EOB)
 	buf := NewBytesWriter()
 	buf.Write16(OP_LAMBDA)
-	buf.Write16(uint16(ln))
-	buf.Write16(btob(newLookup.y))
-	buf.Write16(btob(newLookup.e))
-	buf.Write16(uint16(len(newLookup.consts)))
-	for _, k := range newLookup.consts {
+	buf.Write32(uint32(byte(ln))<<24 +
+		uint32(btob(newtable.y))<<16 +
+		uint32(btob(newtable.e))<<8 +
+		uint32(btob(!newtable.envescape)))
+	buf.Write16(uint16(len(newtable.consts)))
+	for _, k := range newtable.consts {
 		if k.ty == Tnumber {
 			buf.Write16(Tnumber)
 			buf.WriteDouble(k.value.(float64))
