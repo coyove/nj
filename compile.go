@@ -130,7 +130,7 @@ type compileFunc func(uint16, []*parser.Node, *symtable) ([]uint64, uint32, uint
 
 var opMapping map[string]compileFunc
 
-var flatOpMapping map[string]bool
+var flatOpMapping map[string]byte
 
 func init() {
 	clearI := func(f compileFunc) compileFunc {
@@ -159,18 +159,18 @@ func init() {
 	opMapping["and"] = clearI(compileAndOrOp(OP_IFNOT))
 	opMapping["inc"] = clearI(compileIncOp)
 
-	flatOpMapping = map[string]bool{
-		"+": true, "-": true, "*": true, "/": true, "%": true,
-		"<": true, "<=": true, "eq": true, "neq": true, "not": true,
-		"~": true, "&": true, "|": true, "^": true, "<<": true, ">>": true,
-		"store": true, "load": true, "safestore": true, "safeload": true,
-		"assert": true, "nil": true, "true": true, "false": true,
+	flatOpMapping = map[string]byte{
+		"+": OP_ADD, "-": OP_SUB, "*": OP_MUL, "/": OP_DIV, "%": OP_MOD,
+		"<": OP_LESS, "<=": OP_LESS_EQ, "eq": OP_EQ, "neq": OP_NEQ, "not": OP_NOT,
+		"~": OP_BIT_NOT, "&": OP_BIT_AND, "|": OP_BIT_OR, "^": OP_BIT_XOR, "<<": OP_BIT_LSH, ">>": OP_BIT_RSH,
+		"store": OP_STORE, "load": OP_LOAD, "assert": OP_ASSERT,
+		"nil": OP_NIL, "true": OP_TRUE, "false": OP_FALSE,
 	}
 }
 
 var registerOpMappings = map[byte]int{OP_R0: 0, OP_R1: 1, OP_R2: 2, OP_R3: 3}
 
-func fill(buf *BytesWriter, n *parser.Node, table *symtable, op, opk byte) (err error) {
+func fill(buf *opwriter, n *parser.Node, table *symtable, op, opk byte) (err error) {
 	idx, isreg := registerOpMappings[op]
 	if isreg {
 		if rs := table.regs[idx]; rs.k {
@@ -201,18 +201,18 @@ func fill(buf *BytesWriter, n *parser.Node, table *symtable, op, opk byte) (err 
 		if !ok {
 			return fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
 		}
-		buf.Write64(makeop(op, addr, 0))
+		buf.WriteOP(op, addr, 0)
 		if isreg {
 			table.regs[idx].k, table.regs[idx].addr = false, addr
 		}
 	case parser.NTNumber, parser.NTString:
 		kidx := table.addConst(n.Value)
-		buf.Write64(makeop(opk, uint32(kidx), 0))
+		buf.WriteOP(opk, uint32(kidx), 0)
 		if isreg {
 			table.regs[idx].k, table.regs[idx].kaddr = true, kidx
 		}
 	case parser.NTAddr:
-		buf.Write64(makeop(op, n.Value.(uint32), 0))
+		buf.WriteOP(op, n.Value.(uint32), 0)
 		if isreg {
 			table.regs[idx].k, table.regs[idx].addr = false, n.Value.(uint32)
 		}
@@ -229,7 +229,7 @@ func compileCompoundIntoVariable(
 	intoNewVar bool,
 	intoExistedVar uint32,
 ) (code []uint64, yx uint32, newsp uint16, err error) {
-	buf := NewBytesWriter()
+	buf := newopwriter()
 
 	var newYX uint32
 	code, newYX, sp, err = compile(sp, compound.Compound, table)
@@ -244,7 +244,7 @@ func compileCompoundIntoVariable(
 	} else {
 		yx = intoExistedVar
 	}
-	buf.Write64(makeop(OP_SET, yx, newYX))
+	buf.WriteOP(OP_SET, yx, newYX)
 	return buf.data, yx, sp, nil
 }
 
@@ -286,7 +286,7 @@ func compile(sp uint16, nodes []*parser.Node, table *symtable) (code []uint64, y
 
 		f := opMapping[name]
 		if f == nil {
-			if flatOpMapping[name] {
+			if flatOpMapping[name] != 0 {
 				return compileFlatOp(sp, nodes, table)
 			}
 			panic(name)
@@ -299,7 +299,7 @@ func compile(sp uint16, nodes []*parser.Node, table *symtable) (code []uint64, y
 }
 
 func compileChainOp(sp uint16, chain *parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
-	buf := NewBytesWriter()
+	buf := newopwriter()
 	table.im = nil
 
 	for _, a := range chain.Compound {
@@ -309,7 +309,7 @@ func compileChainOp(sp uint16, chain *parser.Node, table *symtable) (code []uint
 		if table.lineInfo {
 			for _, n := range a.Compound {
 				if n.Pos.Source != "" {
-					buf.Write64(makeop(OP_LINE, 0, 0))
+					buf.WriteOP(OP_LINE, 0, 0)
 					buf.WriteString(n.Pos.String())
 					break
 				}

@@ -49,56 +49,59 @@ func slice8to64(p []byte) []uint64 {
 	return *(*[]uint64)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
 }
 
-// BytesWriter writes complex values into bytes slice
-type BytesWriter struct {
+type opwriter struct {
 	data []uint64
 }
 
-func NewBytesWriter() *BytesWriter {
-	const defaultBufferSize = 128
-	return &BytesWriter{
+func newopwriter() *opwriter {
+	const defaultBufferSize = 2
+	return &opwriter{
 		make([]uint64, 0, defaultBufferSize),
 	}
 }
 
-func (b *BytesWriter) Dup() *BytesWriter {
+func (b *opwriter) Dup() *opwriter {
 	b2 := *b
 	return &b2
 }
 
-func (b *BytesWriter) Clear() {
+func (b *opwriter) Clear() {
 	b.data = b.data[:0]
 }
 
-func (b *BytesWriter) Data() []uint64 {
+func (b *opwriter) Data() []uint64 {
 	return b.data
 }
 
-func (b *BytesWriter) Write(buf []uint64) {
+func (b *opwriter) Write(buf []uint64) {
 	b.data = append(b.data, buf...)
 }
 
-func (b *BytesWriter) Write64(v uint64) {
+func (b *opwriter) Write64(v uint64) {
 	b.data = append(b.data, v)
 }
 
-func (b *BytesWriter) WriteDouble(v float64) {
+func (b *opwriter) WriteOP(op byte, opa, opb uint32) {
+	b.data = append(b.data, makeop(op, opa, opb))
+}
+
+func (b *opwriter) WriteDouble(v float64) {
 	d := *(*uint64)(unsafe.Pointer(&v))
 	b.Write64(d)
 }
 
-func (b *BytesWriter) WriteString(v string) {
+func (b *opwriter) WriteString(v string) {
 	b.Write64(uint64(len(v)))
 	b.Write(slice8to64([]byte(v)))
 }
 
-func (b *BytesWriter) TruncateLast(n int) {
+func (b *opwriter) TruncateLast(n int) {
 	if len(b.data) > n {
 		b.data = b.data[:len(b.data)-n]
 	}
 }
 
-func (b *BytesWriter) Len() int {
+func (b *opwriter) Len() int {
 	return len(b.data)
 }
 
@@ -309,16 +312,15 @@ MAIN:
 			pos := int32(b)
 			pos2 := uint32(int32(cursor) + pos)
 			sb.WriteString("jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
-		case OP_IFNOT:
+		case OP_IF, OP_IFNOT:
 			addr := readAddr(a)
 			pos := int32(b)
-			pos2 := uint32(int32(cursor) + pos)
-			sb.WriteString("if not " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
-		case OP_IF:
-			addr := readAddr(a)
-			pos := int32(b)
-			pos2 := uint32(int32(cursor) + pos)
-			sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
+			pos2 := strconv.Itoa(int(int32(cursor) + pos))
+			if bop == OP_IFNOT {
+				sb.WriteString("if not " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
+			} else {
+				sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
+			}
 		case OP_NOP:
 			sb.WriteString("nop")
 		case OP_INC:
