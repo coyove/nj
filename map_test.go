@@ -13,59 +13,98 @@ import (
 	"testing"
 )
 
+const benchSize = 40
+
 func BenchmarkMap(b *testing.B) {
+	m := NewMap()
+	for j := 0; j < benchSize; j++ {
+		m.Put(NewNumberValue(float64(j)), NewNumberValue(float64(j)))
+	}
+
+	x := float64(rand.Intn(benchSize))
+	y := NewNumberValue(x)
 	for i := 0; i < b.N; i++ {
-		m := NewMap()
-		for j := 0; j < 4; j++ {
-			m.Put(strconv.Itoa(j), NewNumberValue(float64(j)))
-		}
-		if v, _ := m.Get(strconv.Itoa(rand.Intn(4))); v.AsNumber() == -1 {
-			b.Error("won't happen")
+		if v, _ := m.Get(y); v.AsNumber() != x {
+			b.Error("shouldn't happen")
 		}
 	}
 }
 
-func BenchmarkNativeMap(b *testing.B) {
+func BenchmarkMapPut(b *testing.B) {
+	m := NewMap()
+	for j := 0; j < benchSize; j++ {
+		m.Put(NewNumberValue(float64(j)), NewNumberValue(float64(j)))
+	}
+
 	for i := 0; i < b.N; i++ {
-		m := map[string]Value{}
-		for j := 0; j < 4; j++ {
-			m[strconv.Itoa(j)] = NewNumberValue(float64(j))
+		x := NewNumberValue(benchSize)
+		m.Put(x, x)
+		m.Remove(x)
+	}
+}
+
+func BenchmarkNativeSlice(b *testing.B) {
+	m := make([]Value, benchSize)
+	for j := 0; j < benchSize; j++ {
+		m[j] = NewNumberValue(float64(j))
+	}
+
+	x := float64(rand.Intn(benchSize))
+	y := NewNumberValue(x)
+	for i := 0; i < b.N; i++ {
+		if m[int(y.AsNumber())].AsNumber() != x {
+			b.Error("shouldn't happen")
 		}
-		if m[strconv.Itoa(rand.Intn(4))].AsNumber() == -1 {
-			b.Error("won't happen")
+	}
+}
+
+func BenchmarkNativeSliceAppend(b *testing.B) {
+	m := make([]Value, benchSize)
+	for j := 0; j < benchSize; j++ {
+		m[j] = NewNumberValue(float64(j))
+	}
+	for i := 0; i < b.N; i++ {
+		m = append(m, NewNumberValue(benchSize))
+		m = m[:len(m)-1]
+	}
+}
+
+func BenchmarkNativeMap(b *testing.B) {
+	m := map[string]Value{}
+	for j := 0; j < benchSize; j++ {
+		m[strconv.Itoa(j)] = NewNumberValue(float64(j))
+	}
+
+	for i := 0; i < b.N; i++ {
+		x := float64(rand.Intn(benchSize))
+		if m[strconv.Itoa(int(x))].AsNumber() != x {
+			b.Error("shouldn't happen")
 		}
 	}
 }
 
 func TestMap_Put(t *testing.T) {
 	m := NewMap()
-	for j := 0; j < mapentrySize; j++ {
-		m.Put(strconv.Itoa(j), NewNumberValue(float64(j)))
+	for j := 0; j < 10; j++ {
+		m.Put(NewStringValue(strconv.Itoa(j)), NewNumberValue(float64(j)))
 	}
-	m.Put("0", NewValue()) // overwrite
+	m.Put(NewStringValue("0"), NewValue()) // overwrite
 
-	if m.t == nil {
-		t.Error("t is nil")
-	}
-
-	if v, f := m.Get("0"); v.ty != Tnil || !f {
+	if v, f := m.Get(NewStringValue("0")); v.ty != Tnil || !f {
 		t.Error(0)
 	}
-	for j := 0; j < mapentrySize; j++ {
-		if v, _ := m.Get(strconv.Itoa(j)); v.AsNumber() != float64(j) {
+	for j := 0; j < 10; j++ {
+		if v, _ := m.Get(NewStringValue(strconv.Itoa(j))); v.AsNumber() != float64(j) {
 			t.Error(j)
 		}
 	}
 
-	m.Put("5", NewValue())
-	if m.t != nil {
-		t.Error("t is not nil")
-	}
+	m.Put(NewStringValue("5"), NewValue())
 
 	keys := "0:1:2:3:5:"
-	for k := range m.m {
-		if !strings.Contains(keys, k+":") {
-			t.Error(k)
+	for _, v := range m.m {
+		if !strings.Contains(keys, v[0].AsString()+":") {
+			t.Error(v)
 		}
 	}
 }

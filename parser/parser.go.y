@@ -23,7 +23,6 @@ import (
 %type<exprlist> args
 %type<expr> function
 %type<expr> functionargnames
-%type<expr> listgen
 %type<expr> mapgen
 
 %union {
@@ -279,10 +278,7 @@ expr:
         } |
         function {
             $$ = $1
-        } | 
-        listgen {
-            $$ = $1
-        } | 
+        } |
         mapgen {
             $$ = $1
         } | 
@@ -494,23 +490,17 @@ functionargnames:
             $$ = $2
         }
 
-listgen:
-        TList TEnd {
-            $$ = NewCompoundNode("list", NewCompoundNode())
-            $$.Compound[0].Pos = $1.Pos
-        } |
-        TList exprlist TEnd {
-            $$ = NewCompoundNode("list", $2)
-            $$.Compound[0].Pos = $1.Pos
-        }
-
 mapgen:
-        TMap TEnd {
+        '{' '}' {
             $$ = NewCompoundNode("map", NewCompoundNode())
             $$.Compound[0].Pos = $1.Pos
         } |
-        TMap exprlistassign TEnd {
+        '{' exprlistassign '}' {
             $$ = NewCompoundNode("map", $2)
+            $$.Compound[0].Pos = $1.Pos
+        } |
+        '{' exprlist '}' {
+            $$ = NewCompoundNode("list", $2)
             $$.Compound[0].Pos = $1.Pos
         }
 

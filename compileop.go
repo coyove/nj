@@ -315,6 +315,7 @@ func compileAndOrOp(bop byte) compileFunc {
 
 // [if condition [truechain ...] [falsechain ...]]
 func compileIfOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
+	table.clearAllRegRecords()
 	condition := atoms[1]
 	trueBranch, falseBranch := atoms[2], atoms[3]
 	buf := newopwriter()
@@ -569,6 +570,6 @@ func compileWhileOp(sp uint16, atoms []*parser.Node, table *symtable) (code []ui
 			i = idx*8 + 2
 		}
 	}
-
+	table.clearAllRegRecords()
 	return buf.data, regA, sp, nil
 }

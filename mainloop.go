@@ -129,11 +129,17 @@ MAIN:
 				env.A = NewNumberValue(env.R0.AsNumber() + env.R1.AsNumber())
 			case _Tstringstring:
 				env.A = NewStringValue(env.R0.AsString() + env.R1.AsString())
-			case Tbytes<<8 | Tnumber:
-				env.A = NewBytesValue(append(env.R0.AsBytes(), byte(env.R1.AsNumber())))
+			case _Tbytesnumber:
+				buf := env.R0.AsBytes()
+				xbuf := make([]byte, len(buf)+1)
+				copy(xbuf, buf)
+				xbuf[len(xbuf)-1] = byte(env.R1.AsNumber())
+				env.A = NewBytesValue(xbuf)
 			default:
-				if env.R0.ty == Tlist {
-					env.A = NewListValue(append(env.R0.AsList(), env.R1))
+				if env.R0.ty == Tmap {
+					m := env.R0.AsMap().Dup(nil)
+					m.l = append(m.l, env.R1)
+					env.A = NewMapValue(m)
 				} else {
 					log.Panicf("can't apply 'add' on %+v and %+v", env.R0, env.R1)
 				}
@@ -205,17 +211,17 @@ MAIN:
 			case _Tlistlist:
 				env.A = NewListValue(append(env.R0.AsList(), env.R1.AsList()...))
 			case _Tbytesbytes:
-				env.A = NewBytesValue(append(env.R0.AsBytes(), env.R1.AsBytes()...))
+				buf, buf2 := env.R0.AsBytes(), env.R1.AsBytes()
+				xbuf := make([]byte, 0, len(buf)+len(buf2))
+				xbuf = append(append(xbuf, buf...), buf2...)
+				env.A = NewBytesValue(xbuf)
 			case _Tmapmap:
 				tr, m := env.R0.AsMap().Dup(nil), env.R1.AsMap()
-				if m.t != nil {
-					for _, x := range m.t {
-						tr.Put(x.k, x.v)
-					}
-				} else {
-					for k, v := range m.m {
-						tr.Put(k, v)
-					}
+				for _, v := range m.l {
+					tr.l = append(tr.l, v)
+				}
+				for _, v := range m.m {
+					tr.Put(v[0], v[1])
 				}
 				env.A = NewMapValue(tr)
 			default:
@@ -293,12 +299,15 @@ MAIN:
 			}
 		case OP_LIST:
 			if newEnv == nil {
-				env.A = NewListValue(make([]Value, 0))
+				env.A = NewMapValue(NewMap())
 			} else {
-				list := make([]Value, newEnv.SSize())
-				copy(list, newEnv.stack)
+				size, m := newEnv.SSize(), NewMap()
+				m.l = make([]Value, size)
+				for i := 0; i < size; i++ {
+					m.l[i] = newEnv.SGet(i)
+				}
 				newEnv.SClear()
-				env.A = NewListValue(list)
+				env.A = NewMapValue(m)
 			}
 		case OP_MAP:
 			if newEnv == nil {
@@ -306,18 +315,14 @@ MAIN:
 			} else {
 				size, m := newEnv.SSize(), NewMap()
 				for i := 0; i < size; i += 2 {
-					if k := newEnv.SGet(i); k.ty == Tstring {
-						m.Put(k.AsString(), newEnv.SGet(i+1))
-					} else {
-						k.panicType(Tstring)
-					}
+					m.Put(newEnv.SGet(i), newEnv.SGet(i+1))
 				}
 				newEnv.SClear()
 				env.A = NewMapValue(m)
 			}
 		case OP_STORE:
 			switch testTypes(env.R0, env.R1) {
-			case Tbytes<<8 | Tnumber:
+			case _Tbytesnumber:
 				if env.R2.ty == Tnumber {
 					if b, idx := env.R0.AsBytes(), int(env.R1.AsNumber()); idx >= 0 {
 						b[idx] = byte(env.R2.AsNumber())
@@ -327,34 +332,46 @@ MAIN:
 				} else {
 					log.Panicf("can't store into %+v with key %+v", env.R0, env.R1)
 				}
-			case Tlist<<8 | Tnumber:
+			case _Tlistnumber:
 				if b, idx := env.R0.AsList(), int(env.R1.AsNumber()); idx >= 0 {
 					b[idx] = env.R2
 				} else {
 					b[len(b)+idx] = env.R2
 				}
-			case Tmap<<8 | Tstring:
-				env.R0.AsMap().Put(env.R1.AsString(), env.R2)
+			case _Tmapnumber:
+				m := env.R0.AsMap()
+				if idx, ln := int(env.R1.AsNumber()), len(m.l); idx < ln {
+					m.l[idx] = env.R2
+					break
+				} else if idx == ln {
+					m.l = append(m.l, env.R2)
+					break
+				}
+				fallthrough
 			default:
-				log.Panicf("can't store into %+v with key %+v", env.R0, env.R1)
+				if env.R0.ty == Tmap {
+					env.R0.AsMap().putIntoMap(env.R1, env.R2)
+				} else {
+					log.Panicf("can't store into %+v with key %+v", env.R0, env.R1)
+				}
 			}
 			env.A = env.R2
 		case OP_LOAD:
 			var v Value
 			switch testTypes(env.R0, env.R1) {
-			case Tbytes<<8 | Tnumber:
+			case _Tbytesnumber:
 				if b, idx := env.R0.AsBytes(), int(env.R1.AsNumber()); idx >= 0 {
 					v = NewNumberValue(float64(b[idx]))
 				} else {
 					v = NewNumberValue(float64(b[len(b)+idx]))
 				}
-			case Tstring<<8 | Tnumber:
+			case _Tstringnumber:
 				if b, idx := env.R0.AsString(), int(env.R1.AsNumber()); idx >= 0 {
 					v = NewNumberValue(float64(b[idx]))
 				} else {
 					v = NewNumberValue(float64(b[len(b)+idx]))
 				}
-			case Tlist<<8 | Tnumber:
+			case _Tlistnumber:
 				b, idx := env.R0.AsList(), int(env.R1.AsNumber())
 				if idx >= 0 {
 					v = b[idx]
@@ -364,17 +381,21 @@ MAIN:
 				if v.Type() == Tclosure {
 					v.AsClosure().SetCaller(env.R0)
 				}
-			case Tmap<<8 | Tstring:
-				var found bool
-				v, found = env.R0.AsMap().Get(env.R1.AsString())
-				if v.Type() == Tclosure {
-					v.AsClosure().SetCaller(env.R0)
+			case _Tmapnumber:
+				if m, idx := env.R0.AsMap(), int(env.R1.AsNumber()); idx < len(m.l) {
+					v = m.l[idx]
+					break
 				}
-				if !found {
-					env.E = NewBoolValue(true)
-				}
+				fallthrough
 			default:
-				log.Panicf("can't load from %+v with key %+v", env.R0, env.R1)
+				if env.R0.ty == Tmap {
+					v, _ = env.R0.AsMap().getFromMap(env.R1)
+					if v.Type() == Tclosure {
+						v.AsClosure().SetCaller(env.R0)
+					}
+				} else {
+					log.Panicf("can't load from %+v with key %+v", env.R0, env.R1)
+				}
 			}
 			env.A = v
 		case OP_R0:
@@ -724,36 +745,33 @@ func doDup(env *Env) {
 				// calling error(...) (to throw error) are different behaviors, but i will left this as a TODO
 				m2 := NewMap()
 				m := env.R1.AsMap()
-				if m.t != nil {
-					for _, x := range m.t {
-						newEnv.SClear()
-						newEnv.SPush(NewStringValue(x.k))
-						newEnv.SPush(x.v)
-						ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
-						if newEnv.E.Type() != Tnil {
-							break
-						}
-						m2.Put(x.k, ret)
+				for i, v := range m.l {
+					idx := NewNumberValue(float64(i))
+					newEnv.SClear()
+					newEnv.SPush(idx)
+					newEnv.SPush(v)
+					ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
+					if newEnv.E.Type() != Tnil {
+						break
 					}
-				} else {
-					m2.SwitchToHashmap()
-					for k, v := range m.m {
-						newEnv.SClear()
-						newEnv.SPush(NewStringValue(k))
-						newEnv.SPush(v)
-						ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
-						if newEnv.E.Type() != Tnil {
-							break
-						}
-						m2.Put(k, ret)
+					m2.Put(idx, ret)
+				}
+				for _, v := range m.m {
+					newEnv.SClear()
+					newEnv.SPush(v[0])
+					newEnv.SPush(v[1])
+					ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
+					if newEnv.E.Type() != Tnil {
+						break
 					}
+					m2.Put(v[0], ret)
 				}
 				env.A = NewMapValue(m2)
 			} else {
 				// full copy
-				env.A = NewMapValue(env.R1.AsMap().Dup(func(k string, v Value) Value {
+				env.A = NewMapValue(env.R1.AsMap().Dup(func(k Value, v Value) Value {
 					newEnv.SClear()
-					newEnv.SPush(NewStringValue(k))
+					newEnv.SPush(k)
 					newEnv.SPush(v)
 					ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 					return ret
@@ -761,19 +779,19 @@ func doDup(env *Env) {
 			}
 		} else {
 			m := env.R1.AsMap()
-			for _, x := range m.t {
+			for i, v := range m.l {
 				newEnv.SClear()
-				newEnv.SPush(NewStringValue(x.k))
-				newEnv.SPush(x.v)
+				newEnv.SPush(NewNumberValue(float64(i)))
+				newEnv.SPush(v)
 				ExecCursor(newEnv, cls.code, cls.consts, 0)
 				if newEnv.E.Type() != Tnil {
 					break
 				}
 			}
-			for k, v := range m.m {
+			for _, v := range m.m {
 				newEnv.SClear()
-				newEnv.SPush(NewStringValue(k))
-				newEnv.SPush(v)
+				newEnv.SPush(v[0])
+				newEnv.SPush(v[1])
 				ExecCursor(newEnv, cls.code, cls.consts, 0)
 				if newEnv.E.Type() != Tnil {
 					break

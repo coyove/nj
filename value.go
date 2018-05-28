@@ -2,12 +2,15 @@ package potatolang
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
 	"reflect"
 	"strconv"
 	"unsafe"
+
+	"github.com/coyove/common/rand"
 )
 
 // the order can't be changed, for any new type, please also add it in parser.go.y typeof
@@ -42,6 +45,10 @@ const (
 	_Tmapmap         = Tmap<<8 | Tmap
 	_Tclosureclosure = Tclosure<<8 | Tclosure
 	_Tgenericgeneric = Tgeneric<<8 | Tgeneric
+	_Tbytesnumber    = Tbytes<<8 | Tnumber
+	_Tlistnumber     = Tlist<<8 | Tnumber
+	_Tstringnumber   = Tstring<<8 | Tnumber
+	_Tmapnumber      = Tmap<<8 | Tnumber
 )
 
 // TMapping maps type to its string representation
@@ -50,7 +57,7 @@ var TMapping = map[byte]string{
 	Tclosure: "closure", Tgeneric: "generic", Tlist: "list", Tmap: "map", Tbytes: "bytes",
 }
 
-var safePointerAddr = unsafe.Pointer(uintptr(0x4000000000000000))
+var safePointerAddr = unsafe.Pointer(uintptr(0x400000000000ffff))
 
 const (
 	minPhysPageSize = 4096 // (0x1000) in mheap.go
@@ -62,12 +69,14 @@ const (
 type Value struct {
 	ty byte
 
-	// float64 will be stored at &i
-	// it can't be stored in ptr because pointer value smaller than minPhysPageSize will violate the heap
-	// for ty == Tstring and len(str) <= 10, i == len(str) + 1
+	a byte
+
+	// Number (float64) will be stored at &i
+	// It can't be stored in ptr because pointer value smaller than minPhysPageSize will violate the heap.
+	// For ty == Tstring and len(str) <= 10, i == len(str) + 1
 	i byte
 
-	// for ty == Tstring and i > 0, 10 bytes starting from p[0] will be used to store small strings
+	// For ty == Tstring and i > 0, 10 bytes starting from p[0] will be used to store small strings
 	p [4]byte
 
 	ptr unsafe.Pointer
@@ -153,7 +162,9 @@ func (v Value) u64() uint64 {
 }
 
 // AsNumber cast value to float64
-func (v Value) AsNumber() float64 { return *(*float64)(unsafe.Pointer(&v.i)) }
+func (v Value) AsNumber() float64 {
+	return *(*float64)(unsafe.Pointer(&v.i))
+}
 
 // AsString cast value to string
 func (v Value) AsString() string {
@@ -330,16 +341,16 @@ func (v Value) toString(lv int) string {
 	case Tmap:
 		m, buf := v.AsMap(), &bytes.Buffer{}
 		buf.WriteString("{")
-		for _, x := range m.t {
-			buf.WriteString(x.k)
-			buf.WriteString(":")
-			buf.WriteString(x.v.toString(lv + 1))
+		for i, v := range m.l {
+			buf.WriteString(strconv.Itoa(i))
+			buf.WriteString("=")
+			buf.WriteString(v.toString(lv + 1))
 			buf.WriteString(",")
 		}
-		for k, v := range m.m {
-			buf.WriteString(k)
-			buf.WriteString(":")
-			buf.WriteString(v.toString(lv + 1))
+		for _, v := range m.m {
+			buf.WriteString(v[0].String())
+			buf.WriteString("=")
+			buf.WriteString(v[1].toString(lv + 1))
 			buf.WriteString(",")
 		}
 		if m.Size() > 0 {
@@ -374,4 +385,130 @@ func (v Value) panicType(expected byte) {
 
 func testTypes(v1, v2 Value) uint16 {
 	return uint16(v1.ty)<<8 + uint16(v2.ty)
+}
+
+const (
+	// Constants for multiplication: four random odd 64-bit numbers.
+	m1    = 16877499708836156737
+	m2    = 2820277070424839065
+	m3    = 9497967016996688599
+	m4    = 15839092249703872147
+	m5    = 0x9a81d0a6d5a123ed
+	iseed = 0x930731
+)
+
+var hashkey [4]uintptr
+
+func init() {
+	buf := rand.New().Fetch(32)
+	for i := 0; i < 4; i++ {
+		hashkey[i] = uintptr(binary.LittleEndian.Uint64(buf[i*8:]))
+		hashkey[i] |= 1
+	}
+	initCoreLibs()
+}
+
+// The following code is taken from src/runtime/hash64.go
+
+//go:nosplit
+func add(p unsafe.Pointer, x uintptr) unsafe.Pointer {
+	return unsafe.Pointer(uintptr(p) + x)
+}
+
+// Note: in order to get the compiler to issue rotl instructions, we
+// need to constant fold the shift amount by hand.
+// TODO: convince the compiler to issue rotl instructions after inlining.
+func rotl_31(x uint64) uint64 {
+	return (x << 31) | (x >> (64 - 31))
+}
+
+func readUnaligned32(p unsafe.Pointer) uint32 {
+	return *(*uint32)(p)
+}
+
+func readUnaligned64(p unsafe.Pointer) uint64 {
+	return *(*uint64)(p)
+}
+
+func (v Value) Hash() hash128 {
+	var a hash128
+	switch v.ty {
+	case Tnumber, Tbool, Tnil, Tclosure, Tlist, Tmap, Tgeneric:
+		a = *(*hash128)(unsafe.Pointer(&v))
+	case Tstring, Tbytes:
+		if v.i > 0 {
+			a = *(*hash128)(unsafe.Pointer(&v))
+		} else {
+			hdr := (*reflect.StringHeader)(v.ptr)
+			seed := uintptr(v.ty) ^ iseed
+			s := uintptr(hdr.Len)
+			p := unsafe.Pointer(hdr.Data)
+			h := uint64(seed + s*hashkey[0])
+			h0 := uint64(seed<<1 + s*hashkey[0])
+
+		tail:
+			switch {
+			case s == 0:
+			case s < 4:
+				h ^= uint64(*(*byte)(p))
+				h ^= uint64(*(*byte)(add(p, s>>1))) << 8
+				h ^= uint64(*(*byte)(add(p, s-1))) << 16
+				h = rotl_31(h*m1) * m2
+			case s <= 8:
+				h ^= uint64(readUnaligned32(p))
+				h ^= uint64(readUnaligned32(add(p, s-4))) << 32
+				h = rotl_31(h*m1) * m2
+			case s <= 16:
+				h ^= readUnaligned64(p)
+				h = rotl_31(h*m1) * m2
+				h ^= readUnaligned64(add(p, s-8))
+				h = rotl_31(h*m1) * m2
+				h0 ^= h
+			case s <= 32:
+				h ^= readUnaligned64(p)
+				h = rotl_31(h*m1) * m2
+				h ^= readUnaligned64(add(p, 8))
+				h = rotl_31(h*m1) * m2
+				h ^= readUnaligned64(add(p, s-16))
+				h = rotl_31(h*m1) * m2
+				h ^= readUnaligned64(add(p, s-8))
+				h = rotl_31(h*m1) * m2
+				h0 ^= h
+			default:
+				v1 := h
+				v2 := uint64(seed * hashkey[1])
+				v3 := uint64(seed * hashkey[2])
+				v4 := uint64(seed * hashkey[3])
+				for s >= 32 {
+					v1 ^= readUnaligned64(p)
+					v1 = rotl_31(v1*m1) * m2
+					p = add(p, 8)
+					v2 ^= readUnaligned64(p)
+					v2 = rotl_31(v2*m2) * m3
+					p = add(p, 8)
+					v3 ^= readUnaligned64(p)
+					v3 = rotl_31(v3*m3) * m4
+					p = add(p, 8)
+					v4 ^= readUnaligned64(p)
+					v4 = rotl_31(v4*m4) * m1
+					p = add(p, 8)
+					s -= 32
+				}
+				h = v1 ^ v2 ^ v3 ^ v4
+				h0 ^= h
+				goto tail
+			}
+
+			h ^= h >> 29
+			h *= m3
+			h ^= h >> 32
+
+			h0 ^= h0 >> 29
+			h0 *= m5
+			h0 ^= h0 >> 32
+
+			a = hash128{h, h0}
+		}
+	}
+	return a
 }

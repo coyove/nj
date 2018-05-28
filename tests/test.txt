@@ -1,119 +1,119 @@
-# function add(a,b) return a + b end
-# 
-# set fib2 = function(a, b)
-#     while true do
-#         set c = add(a, b)
-#         a = b
-#         b = c
-#         yield c
-#     end
-# end
-#  
-#  set fib3 = dup(fib2)
-#  
-# set i = 0 while i < 33 then i = i + 1 do fib2(0, 1) end
-# assert (fib2())==9227465 
-# assert (fib3(0, 1)+fib3()+fib3()+fib3()) == 11
-# 
-# function yieldtest()
-#     yield 1
-#     yield 2
-#     yield 3
-# end
-# 
-# assert yieldtest() ==1  and yieldtest()==2 and yieldtest()==3 and yieldtest()==nil
-# 
-# function deepadd(a)
-#     if a <= 0 then return 0 end
-#     return add(a)(deepadd(a - 1))
-# end
-# 
-# set e = 100000
-# assert deepadd(e) == (1 + e) * (e / 2 )
-#  
-# set a = 2
-# assert 1 + 2 *3/5 == 2.2
-# assert 1 /2+ 2.2 * 5 * (a + 1) == 33.5
-# assert 1 /2+ 2.2 * (a + 1) * 5 == 33.5
-# 
-# set l, l2 = list 1,2,3 end, list "1","2","3" end
-# assert (l + l2) == list 1,2,3, list "1", "2", "3" end end
-# assert (l & l2) == list 1,2,3, "1", "2", "3" end 
-# assert l == list 1,2,3 end and l2(1,-1) == list "2" end
-# 
-# set mul = (function(a) set b = 1 return function() b = b * a return b end end)(2)
-# 
-# assert mul() == 2 and mul() == 4 and mul() == 8
-# if 0 == 1 then
-#     assert false
-# elseif 2 == 2 then
-#     assert true
-# else
-#     assert false
-# end
-# 
-# if true or function() assert false end then
-#     assert true
-# end
-# 
-# if false and function() assert false end then
-#     assert true
-# end
-# 
-# function returncond(n)
-#     return map
-#         "counter" = n,
-#         "test" = function() 
-#             who().counter = who().counter + 1
-#             return who().counter % 2 == 0
-#         end
-#     end
-# end
-# 
-# set cond = returncond(0)
-# assert cond.test() or cond.test() # false or true
-# cond.test()
-# assert cond.test() and not cond.test() # true and not false
-# 
-# #require "fib.txt"
-# 
-# #io.println(fib)
-# 
-# set sum = 0
-# i = 0 while i < 100 then i=i+1 do
-#     sum = sum + i
-#     if sum > 100 then break end
-# end
-# assert sum == 105
-# 
-# set m = map 
-#     "key1" = "value1",
-#     "key2" = list 1,2,3 end
-# end
-# 
-# assert m == dup(m)
-# set m2 = map end
-# m2.key1 = "value1"
-# m2.key2 = list end
-# i = 1 while i < 4 then i = i + 1 do m2.key2 = m2.key2 + i end
-# assert m2 == m
-# 
-# a = 0i0
-# set b = 0iffffffffffffffff
-# assert std.u64.ieq(std.u64.ixor(a, b), b)
-# a = std.u64.ieq(12)
-# assert a(12)
-# 
-# function select(cond, t, f)
-#     return cond and t or f
-# end
-#  
-# assert select(true, 1, 2) == 1 and select(false)(1)(2) == 2
-# a = 1
-# a = a - 1  # this will be eventually compiled into: [inc a -1]
-# assert a == 0
+function add(a,b) return a + b end
 
-set i = 0 while i < 5 then i = i + 1 do
+set fib2 = function(a, b)
+    while true do
+        set c = add(a, b)
+        a = b
+        b = c
+        yield c
+    end
+end
+ 
+ set fib3 = dup(fib2)
+ 
+set i = 0 while i < 33 then i = i + 1 do fib2(0, 1) end
+assert (fib2())==9227465 
+assert (fib3(0, 1)+fib3()+fib3()+fib3()) == 11
+
+function yieldtest()
+    yield 1
+    yield 2
+    yield 3
+end
+
+assert yieldtest() ==1  and yieldtest()==2 and yieldtest()==3 and yieldtest()==nil
+
+function deepadd(a)
+    if a <= 0 then return 0 end
+    return add(a)(deepadd(a - 1))
+end
+
+set e = 100000
+assert deepadd(e) == (1 + e) * (e / 2 )
+ 
+set a = 2
+assert 1 + 2 *3/5 == 2.2
+assert 1 /2+ 2.2 * 5 * (a + 1) == 33.5
+assert 1 /2+ 2.2 * (a + 1) * 5 == 33.5
+
+set l, l2 = {1,2,3}, {"1","2","3"}
+assert (l + l2) == {1,2,3, {"1","2","3"}}
+assert (l & l2) == {1,2,3, "1", "2", "3"}
+assert l == {1,2,3}
+
+set mul = (function(a) set b = 1 return function() b = b * a return b end end)(2)
+
+assert mul() == 2 and mul() == 4 and mul() == 8
+if 0 == 1 then
+    assert false
+elseif 2 == 2 then
+    assert true
+else
+    assert false
+end
+
+if true or function() assert false end then
+    assert true
+end
+
+if false and function() assert false end then
+    assert true
+end
+
+function returncond(n)
+    return {
+        "counter" = n,
+        "test" = function() 
+            who().counter = who().counter + 1
+            return who().counter % 2 == 0
+        end
+    }
+end
+
+set cond = returncond(0)
+assert cond.test() or cond.test() #false or true
+cond.test()
+assert cond.test() and not cond.test() #true and not false
+
+#require "fib.txt"
+
+#io.println(fib)
+
+set sum = 0
+i = 0 while i < 100 then i=i+1 do
+    sum = sum + i
+    if sum > 100 then break end
+end
+assert sum == 105
+
+set m = {
+    "key1" = "value1",
+    "key2" = {1,2,3}
+}
+
+assert m == dup(m)
+set m2 = {}
+m2.key1 = "value1"
+m2.key2 = {}
+i = 1 while i < 4 then i = i + 1 do m2.key2 = m2.key2 + i end
+assert m2 == m
+
+a = 0i0
+set b = 0iffffffffffffffff
+assert std.u64.ieq(std.u64.ixor(a, b), b)
+a = std.u64.ieq(12)
+assert a(12)
+
+function select(cond, t, f)
+    return cond and t or f
+end
+ 
+assert select(true, 1, 2) == 1 and select(false)(1)(2) == 2
+a = 1
+a = a - 1  # this will be eventually compiled into: [inc a -1]
+assert a == 0
+
+i = 0 while i < 5 then i = i + 1 do
 if i == 2 then break end
     io.println(i)
 end
