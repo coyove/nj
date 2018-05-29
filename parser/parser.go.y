@@ -41,7 +41,7 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TIf TLambda TList TNil TNot TMap TOr TReturn TRequire TSet TThen TTrue TWhile TYield
+%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TFor TIf TLambda TList TNil TNot TMap TOr TReturn TRequire TSet TThen TTrue TYield
 
 /* Literals */
 %token<token> TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
@@ -112,13 +112,12 @@ stat:
             $$ = $1
             // }
         } |
-        TWhile expr TDo block TEnd {
-            $$ = NewCompoundNode("while", $2, $4)
+        TFor expr TDo block TEnd {
+            $$ = NewCompoundNode("for", $2, NewCompoundNode(), $4)
             $$.Compound[0].Pos = $1.Pos
         } |
-        TWhile expr TThen stat TDo block TEnd {
-            $6.Compound = append($6.Compound, $4)
-            $$ = NewCompoundNode("while", $2, $6)
+        TFor expr ',' stat TDo block TEnd {
+            $$ = NewCompoundNode("for", $2, NewCompoundNode("chain", $4), $6)
             $$.Compound[0].Pos = $1.Pos
         } |
         TLambda TIdent functionargnames block TEnd {
@@ -297,7 +296,7 @@ expr:
             $$.Compound[0].Pos = $1.Pos
         } |
         expr '>' expr {
-            $$ = NewCompoundNode("<=", $3,$1)
+            $$ = NewCompoundNode("<", $3,$1)
             $$.Compound[0].Pos = $1.Pos
         } |
         expr '<' expr {
@@ -305,7 +304,7 @@ expr:
             $$.Compound[0].Pos = $1.Pos
         } |
         expr TGte expr {
-            $$ = NewCompoundNode("<", $3,$1)
+            $$ = NewCompoundNode("<=", $3,$1)
             $$.Compound[0].Pos = $1.Pos
         } |
         expr TLte expr {

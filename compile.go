@@ -40,6 +40,8 @@ type symtable struct {
 		k     bool
 	}
 
+	continueNode []*parser.Node
+
 	consts         []kinfo
 	constStringMap map[string]uint16
 	constFloatMap  map[float64]uint16
@@ -51,6 +53,7 @@ func newsymtable() *symtable {
 		consts:         make([]kinfo, 0),
 		constStringMap: make(map[string]uint16),
 		constFloatMap:  make(map[float64]uint16),
+		continueNode:   make([]*parser.Node, 0),
 	}
 	for i := range t.regs {
 		t.regs[i].addr = regA
@@ -149,7 +152,7 @@ func init() {
 	opMapping["yield"] = clearI(compileRetOp(OP_YIELD, OP_YIELDK))
 	opMapping["lambda"] = clearI(compileLambdaOp)
 	opMapping["if"] = clearI(compileIfOp)
-	opMapping["while"] = clearI(compileWhileOp)
+	opMapping["for"] = clearI(compileWhileOp)
 	opMapping["continue"] = clearI(compileContinueBreakOp)
 	opMapping["break"] = clearI(compileContinueBreakOp)
 	opMapping["call"] = clearI(compileCallOp)
@@ -242,6 +245,7 @@ func compileCompoundIntoVariable(
 		sp++
 	} else {
 		yx = intoExistedVar
+		table.clearRegRecord(yx)
 	}
 	buf.WriteOP(OP_SET, yx, newYX)
 	return buf.data, yx, sp, nil

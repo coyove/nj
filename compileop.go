@@ -485,7 +485,14 @@ func compileContinueBreakOp(sp uint16, atoms []*parser.Node, table *symtable) (c
 		if staticWhileHack.continueFlag == nil {
 			gen(&staticWhileHack.continueFlag)
 		}
-		return staticWhileHack.continueFlag, regA, sp, nil
+		buf := newopwriter()
+		code, yx, sp, err = compileChainOp(sp, table.continueNode[len(table.continueNode)-1], table)
+		if err != nil {
+			return
+		}
+		buf.Write(code)
+		buf.Write(staticWhileHack.continueFlag)
+		return buf.data, regA, sp, nil
 	}
 	if staticWhileHack.breakFlag == nil {
 		gen(&staticWhileHack.breakFlag)
@@ -493,7 +500,7 @@ func compileContinueBreakOp(sp uint16, atoms []*parser.Node, table *symtable) (c
 	return staticWhileHack.breakFlag, regA, sp, nil
 }
 
-// [while condition [chain ...]]
+// [for condition incr [chain ...]]
 func compileWhileOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
 	table.clearAllRegRecords()
 	condition := atoms[1]
@@ -516,11 +523,19 @@ func compileWhileOp(sp uint16, atoms []*parser.Node, table *symtable) (code []ui
 		varIndex = yx
 	}
 
-	code, yx, sp, err = compileChainOp(sp, atoms[2], table)
+	table.continueNode = append(table.continueNode, atoms[2])
+	code, yx, sp, err = compileChainOp(sp, atoms[3], table)
 	if err != nil {
 		return
 	}
+	var icode []uint64
+	icode, yx, sp, err = compileChainOp(sp, atoms[2], table)
+	if err != nil {
+		return
+	}
+	table.continueNode = table.continueNode[:len(table.continueNode)-1]
 
+	code = append(code, icode...)
 	buf.WriteOP(OP_IFNOT, varIndex, uint32(len(code))+1)
 	buf.Write(code)
 	buf.WriteOP(OP_JMP, 0, -uint32(buf.Len())-1)
