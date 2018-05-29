@@ -23,8 +23,6 @@ const (
 	Tstring
 	// Tbool represents bool type
 	Tbool
-	// Tlist represents list type
-	Tlist
 	// Tbytes represents bytes list type
 	Tbytes
 	// Tmap represents map type
@@ -40,13 +38,11 @@ const (
 	_Tnumbernumber   = Tnumber<<8 | Tnumber
 	_Tstringstring   = Tstring<<8 | Tstring
 	_Tboolbool       = Tbool<<8 | Tbool
-	_Tlistlist       = Tlist<<8 | Tlist
 	_Tbytesbytes     = Tbytes<<8 | Tbytes
 	_Tmapmap         = Tmap<<8 | Tmap
 	_Tclosureclosure = Tclosure<<8 | Tclosure
 	_Tgenericgeneric = Tgeneric<<8 | Tgeneric
 	_Tbytesnumber    = Tbytes<<8 | Tnumber
-	_Tlistnumber     = Tlist<<8 | Tnumber
 	_Tstringnumber   = Tstring<<8 | Tnumber
 	_Tmapnumber      = Tmap<<8 | Tnumber
 )
@@ -54,7 +50,7 @@ const (
 // TMapping maps type to its string representation
 var TMapping = map[byte]string{
 	Tnil: "nil", Tnumber: "number", Tstring: "string", Tbool: "bool",
-	Tclosure: "closure", Tgeneric: "generic", Tlist: "list", Tmap: "map", Tbytes: "bytes",
+	Tclosure: "closure", Tgeneric: "generic", Tmap: "map", Tbytes: "bytes",
 }
 
 var safePointerAddr = unsafe.Pointer(uintptr(0x400000000000ffff))
@@ -119,11 +115,6 @@ func NewBoolValue(b bool) Value {
 		v.ptr = unsafe.Pointer(uintptr(falseValue))
 	}
 	return v
-}
-
-// NewListValue returns a list value
-func NewListValue(a []Value) Value {
-	return Value{ty: Tlist, ptr: unsafe.Pointer(&a)}
 }
 
 // NewMapValue returns a map value
@@ -212,8 +203,6 @@ func (v Value) I() interface{} {
 		return v.AsNumber()
 	case Tstring:
 		return v.AsString()
-	case Tlist:
-		return v.AsList()
 	case Tmap:
 		return v.AsMap()
 	case Tbytes:
@@ -246,8 +235,6 @@ func (v Value) IsFalse() bool {
 		return v.AsNumber() == 0.0
 	case Tstring:
 		return v.AsString() == ""
-	case Tlist:
-		return len(v.AsList()) == 0
 	case Tbytes:
 		return len(v.AsBytes()) == 0
 	case Tmap:
@@ -276,22 +263,6 @@ func (v Value) Equal(r Value) bool {
 	case Tbool:
 		if r.ty == Tbool {
 			return r.AsBool() == v.AsBool()
-		}
-	case Tlist:
-		if r.ty == Tlist {
-			lf, rf := v.AsList(), r.AsList()
-
-			if len(lf) != len(rf) {
-				return false
-			}
-
-			for i := 0; i < len(lf); i++ {
-				if !lf[i].Equal(rf[i]) {
-					return false
-				}
-			}
-
-			return true
 		}
 	case Tbytes:
 		if r.ty == Tbytes {
@@ -325,25 +296,10 @@ func (v Value) toString(lv int) string {
 		return strconv.FormatFloat(v.AsNumber(), 'f', -1, 64)
 	case Tstring:
 		return v.AsString()
-	case Tlist:
-		arr := v.AsList()
-		buf := &bytes.Buffer{}
-		buf.WriteString("[")
-		for _, v := range arr {
-			buf.WriteString(v.toString(lv + 1))
-			buf.WriteString(",")
-		}
-		if len(arr) > 0 {
-			buf.Truncate(buf.Len() - 1)
-		}
-		buf.WriteString("]")
-		return buf.String()
 	case Tmap:
 		m, buf := v.AsMap(), &bytes.Buffer{}
 		buf.WriteString("{")
-		for i, v := range m.l {
-			buf.WriteString(strconv.Itoa(i))
-			buf.WriteString("=")
+		for _, v := range m.l {
 			buf.WriteString(v.toString(lv + 1))
 			buf.WriteString(",")
 		}
@@ -433,7 +389,7 @@ func readUnaligned64(p unsafe.Pointer) uint64 {
 func (v Value) Hash() hash128 {
 	var a hash128
 	switch v.ty {
-	case Tnumber, Tbool, Tnil, Tclosure, Tlist, Tmap, Tgeneric:
+	case Tnumber, Tbool, Tnil, Tclosure, Tmap, Tgeneric:
 		a = *(*hash128)(unsafe.Pointer(&v))
 	case Tstring, Tbytes:
 		if v.i > 0 {

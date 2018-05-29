@@ -1,9 +1,9 @@
-//line parser.go.y:1
+//line parser.go.y:2
 package parser
 
 import __yyfmt__ "fmt"
 
-//line parser.go.y:3
+//line parser.go.y:2
 import (
 	"bytes"
 	"io/ioutil"
@@ -126,7 +126,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line parser.go.y:507
+//line parser.go.y:511
 
 func TokenName(c int) string {
 	if c >= TAnd && c-TAnd < len(yyToknames) {
@@ -1220,16 +1220,14 @@ yydefault:
 						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("2")))
 					case "bool":
 						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("3")))
-					case "list":
-						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("4")))
 					case "bytes":
-						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("5")))
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("4")))
 					case "map":
-						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("6")))
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("5")))
 					case "closure":
-						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("7")))
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("6")))
 					case "generic":
-						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("8")))
+						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], NewNumberNode("7")))
 					default:
 						yyVAL.expr = NewCompoundNode("call", yyDollar[1].expr, NewCompoundNode(yyDollar[2].exprlist.Compound[0], yyDollar[2].exprlist.Compound[1]))
 					}
@@ -1247,7 +1245,7 @@ yydefault:
 		}
 	case 67:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line parser.go.y:466
+		//line parser.go.y:464
 		{
 			if yylex.(*Lexer).PNewLine {
 				yylex.(*Lexer).TokenError(yyDollar[1].token, "ambiguous syntax (function call x new statement)")
@@ -1256,7 +1254,7 @@ yydefault:
 		}
 	case 68:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line parser.go.y:472
+		//line parser.go.y:470
 		{
 			if yylex.(*Lexer).PNewLine {
 				yylex.(*Lexer).TokenError(yyDollar[1].token, "ambiguous syntax (function call x new statement)")
@@ -1265,42 +1263,48 @@ yydefault:
 		}
 	case 69:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line parser.go.y:480
+		//line parser.go.y:478
 		{
 			yyVAL.expr = NewCompoundNode("lambda", yyDollar[2].expr, yyDollar[3].stmts)
 			yyVAL.expr.Compound[0].Pos = yyDollar[1].token.Pos
 		}
 	case 70:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line parser.go.y:486
+		//line parser.go.y:484
 		{
 			yyVAL.expr = NewCompoundNode()
 		}
 	case 71:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line parser.go.y:489
+		//line parser.go.y:487
 		{
 			yyVAL.expr = yyDollar[2].namelist
 		}
 	case 72:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line parser.go.y:494
+		//line parser.go.y:492
 		{
 			yyVAL.expr = NewCompoundNode("map", NewCompoundNode())
 			yyVAL.expr.Compound[0].Pos = yyDollar[1].token.Pos
 		}
 	case 73:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line parser.go.y:498
+		//line parser.go.y:496
 		{
 			yyVAL.expr = NewCompoundNode("map", yyDollar[2].exprlist)
 			yyVAL.expr.Compound[0].Pos = yyDollar[1].token.Pos
 		}
 	case 74:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line parser.go.y:502
+		//line parser.go.y:500
 		{
-			yyVAL.expr = NewCompoundNode("list", yyDollar[2].exprlist)
+			table := NewCompoundNode()
+			for i, v := range yyDollar[2].exprlist.Compound {
+				table.Compound = append(table.Compound,
+					&Node{Type: NTNumber, Value: float64(i)},
+					v)
+			}
+			yyVAL.expr = NewCompoundNode("map", table)
 			yyVAL.expr.Compound[0].Pos = yyDollar[1].token.Pos
 		}
 	}

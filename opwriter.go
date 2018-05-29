@@ -168,7 +168,6 @@ var singleOp = map[byte]string{
 	OP_FALSE:   "false",
 	OP_WHO:     "who",
 	OP_MAP:     "map",
-	OP_LIST:    "list",
 }
 
 func crHash(data []uint64) uint32 {

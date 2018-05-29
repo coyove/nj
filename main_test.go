@@ -58,3 +58,29 @@ func TestArithmeticUnfold(t *testing.T) {
 		t.Error("exec failed")
 	}
 }
+
+func TestRegisterOptimzation(t *testing.T) {
+	cls, err := LoadString(`
+		set a, b = 1, 2
+		set c = 0
+		if false then
+			a = 2
+			b = 3
+			c = a + b
+		end
+		c = a + b
+		return c
+`, false)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// At the end of the if block, the op code will be like:
+	// R0 = a, R1 = b -> Add
+	// But after the if block, there is another c = a + b, we can't re-use the registers R0 and R1
+	// because they will not contain the value we want as the if block was not executed at all.
+
+	if n := cls.Exec(nil).AsNumber(); n != 3 {
+		t.Error("exec failed:", n, cls)
+	}
+}

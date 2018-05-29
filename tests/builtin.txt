@@ -5,7 +5,7 @@ function foo1(c)
 end
 
 set ans = foo1()(2)
-assert ans[-1] == 4 and ans[-2] == 6
+assert ans[len(ans)-1] == 4 and ans[len(ans)-2] == 6
 
 function sum()
     set x = dup() 
@@ -20,7 +20,7 @@ assert sum(1, -1) == 0
 assert sum(1, 2, 3) == 6 
 assert sum("1", "2") == "12"
 
-set m = map 
+set m = {
     "c" = 123, 
     "a" = "a",
     "incr" = function()
@@ -28,7 +28,7 @@ set m = map
         c.c = c.c + 1
         return c
     end
-end
+}
 set mp = m
 set  m2 = dup(m)
 
@@ -55,9 +55,9 @@ assert errtest(1, 2) == 0.5
 errtest(1, 1 - 1)
 assert error() == "divided by zero"
 
-set a = list 1,2,3 end
+set a = {1,2,3}
 dup(a, function(i, v) a[i] = v + 1 end)
-assert a == list 2,3,4 end
+assert a == {2,3,4}
 
 a = "hello world"
 set upper = function(i, r) if i == 0 then return r - 32 else return r end end
@@ -72,9 +72,9 @@ assert typeof(a, bytes)
 a = dup(a, function(i,b) if i == 5 then error(true) end return b end)
 assert a == "Hello"
 
-a = map
+a = {
     (function() return "key" end)() = "value"
-end
+}
 assert a.key == "value" and a["key"] == "value"
 
 assert(std.tonumber("0x0")) == 0

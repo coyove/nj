@@ -22,7 +22,9 @@ func initCoreLibs() {
 		if v.ty != Tnumber {
 			v.panicType(Tnumber)
 		}
-		return NewListValue(make([]Value, int(v.AsNumber())))
+		m := NewMap()
+		m.l = make([]Value, int(v.AsNumber()))
+		return NewMapValue(m)
 	}))
 	lcore.Puts("genbytes", NewNativeValue(1, func(env *Env) Value {
 		return NewBytesValue(make([]byte, int(env.SGet(0).AsNumber())))
@@ -61,18 +63,6 @@ func initCoreLibs() {
 		switch s := env.Get(0); testTypes(s, env.SGet(1)) {
 		case Tmap<<8 | Tstring:
 			return s.AsMap().Remove(env.Get(1))
-		case Tlist<<8 | Tnumber:
-			l := s.AsList()
-			if env.SSize() == 2 {
-				idx := int(env.Get(1).AsNumber())
-				l = append(l[:idx], l[idx+1:]...)
-			} else if env.SGet(2).ty == Tnumber {
-				idx, ln := int(env.Get(1).AsNumber()), int(env.Get(2).AsNumber())
-				l = append(l[:idx], l[idx+ln:]...)
-			} else {
-				log.Panicf("can't call remove on %+v with index %+v", s, env.SGet(2))
-			}
-			return NewListValue(l)
 		case Tbytes<<8 | Tnumber:
 			l := s.AsBytes()
 			if env.SSize() == 2 {

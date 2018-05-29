@@ -208,8 +208,6 @@ MAIN:
 			switch testTypes(env.R0, env.R1) {
 			case _Tnumbernumber:
 				env.A = NewNumberValue(float64(int64(env.R0.AsNumber()) & int64(env.R1.AsNumber())))
-			case _Tlistlist:
-				env.A = NewListValue(append(env.R0.AsList(), env.R1.AsList()...))
 			case _Tbytesbytes:
 				buf, buf2 := env.R0.AsBytes(), env.R1.AsBytes()
 				xbuf := make([]byte, 0, len(buf)+len(buf2))
@@ -281,8 +279,6 @@ MAIN:
 			switch v := env.R0; v.Type() {
 			case Tstring:
 				env.A = NewNumberValue(float64(len(v.AsString())))
-			case Tlist:
-				env.A = NewNumberValue(float64(len(v.AsList())))
 			case Tmap:
 				env.A = NewNumberValue(float64(v.AsMap().Size()))
 			case Tbytes:
@@ -296,18 +292,6 @@ MAIN:
 			} else {
 				env.A = env.E
 				env.E = NewValue()
-			}
-		case OP_LIST:
-			if newEnv == nil {
-				env.A = NewMapValue(NewMap())
-			} else {
-				size, m := newEnv.SSize(), NewMap()
-				m.l = make([]Value, size)
-				for i := 0; i < size; i++ {
-					m.l[i] = newEnv.SGet(i)
-				}
-				newEnv.SClear()
-				env.A = NewMapValue(m)
 			}
 		case OP_MAP:
 			if newEnv == nil {
@@ -331,12 +315,6 @@ MAIN:
 					}
 				} else {
 					log.Panicf("can't store into %+v with key %+v", env.R0, env.R1)
-				}
-			case _Tlistnumber:
-				if b, idx := env.R0.AsList(), int(env.R1.AsNumber()); idx >= 0 {
-					b[idx] = env.R2
-				} else {
-					b[len(b)+idx] = env.R2
 				}
 			case _Tmapnumber:
 				m := env.R0.AsMap()
@@ -370,16 +348,6 @@ MAIN:
 					v = NewNumberValue(float64(b[idx]))
 				} else {
 					v = NewNumberValue(float64(b[len(b)+idx]))
-				}
-			case _Tlistnumber:
-				b, idx := env.R0.AsList(), int(env.R1.AsNumber())
-				if idx >= 0 {
-					v = b[idx]
-				} else {
-					v = b[len(b)+idx]
-				}
-				if v.Type() == Tclosure {
-					v.AsClosure().SetCaller(env.R0)
 				}
 			case _Tmapnumber:
 				if m, idx := env.R0.AsMap(), int(env.R1.AsNumber()); idx < len(m.l) {
@@ -522,15 +490,6 @@ MAIN:
 						newEnv.SClear()
 					}
 				}
-			case Tlist:
-				if bb := v.AsList(); newEnv.SSize() == 2 {
-					env.A = NewListValue(bb[shiftIndex(newEnv.SGet(0), len(bb)):shiftIndex(newEnv.SGet(1), len(bb))])
-				} else if newEnv.SSize() == 1 {
-					env.A = bb[shiftIndex(newEnv.SGet(0), len(bb))]
-				} else {
-					log.Panicf("invalid call on %v", v)
-				}
-				newEnv.SClear()
 			case Tbytes:
 				if bb := v.AsBytes(); newEnv.SSize() == 2 {
 					env.A = NewBytesValue(bb[shiftIndex(newEnv.SGet(0), len(bb)):shiftIndex(newEnv.SGet(1), len(bb))])
@@ -619,14 +578,15 @@ func doDup(env *Env) {
 			nopred = true
 		case 1:
 			// dup()
-			stack := env.Stack()
-			ret := make([]Value, len(stack))
-			copy(ret, stack)
-			env.A = NewListValue(ret)
+			ret := NewMap()
+			ret.l = make([]Value, len(env.stack))
+			copy(ret.l, env.stack)
+			env.A = NewMapValue(ret)
 			return
 		case 2:
-			// return dup()
-			env.A = NewListValue(env.Stack())
+			ret := NewMap()
+			ret.l = env.stack
+			env.A = NewMapValue(ret)
 			return
 		default:
 			panic("serious error")
@@ -685,12 +645,6 @@ func doDup(env *Env) {
 	if alloc && nopred {
 		// simple dup of list, map and bytes
 		switch env.R1.Type() {
-		case Tlist:
-			list0 := env.R1.AsList()
-			list1 := make([]Value, len(list0))
-			copy(list1, list0)
-			env.A = NewListValue(list1)
-			return
 		case Tmap:
 			env.A = NewMapValue(env.R1.AsMap().Dup(nil))
 			return
@@ -716,27 +670,6 @@ func doDup(env *Env) {
 	cls := env.R2.AsClosure()
 	newEnv := NewEnv(cls.Env())
 	switch env.R1.Type() {
-	case Tlist:
-		var list0 = env.R1.AsList()
-		var list1 []Value
-		if alloc {
-			list1 = make([]Value, 0, len(list0))
-		}
-		for i, v := range list0 {
-			newEnv.SClear()
-			newEnv.SPush(NewNumberValue(float64(i)))
-			newEnv.SPush(v)
-			ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
-			if newEnv.E.Type() != Tnil {
-				break
-			}
-			if alloc {
-				list1 = append(list1, ret)
-			}
-		}
-		if alloc {
-			env.A = NewListValue(list1)
-		}
 	case Tmap:
 		if alloc {
 			if cls.errorable {

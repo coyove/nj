@@ -436,16 +436,14 @@ functioncall:
                         $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("2")))
                     case "bool":
                         $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("3")))
-                    case "list":
-                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("4")))
                     case "bytes":
-                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("5")))
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("4")))
                     case "map":
-                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("6")))
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("5")))
                     case "closure":
-                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("7")))
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("6")))
                     case "generic":
-                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("8")))
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("7")))
                     default:
                         $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], $2.Compound[1]))
                     }
@@ -500,7 +498,13 @@ mapgen:
             $$.Compound[0].Pos = $1.Pos
         } |
         '{' exprlist '}' {
-            $$ = NewCompoundNode("list", $2)
+            table := NewCompoundNode()
+            for i, v := range $2.Compound {
+                table.Compound = append(table.Compound, 
+                    &Node{ Type:  NTNumber, Value: float64(i) },
+                    v)
+            }
+            $$ = NewCompoundNode("map", table)
             $$.Compound[0].Pos = $1.Pos
         }
 

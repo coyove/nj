@@ -153,7 +153,6 @@ func init() {
 	opMapping["continue"] = clearI(compileContinueBreakOp)
 	opMapping["break"] = clearI(compileContinueBreakOp)
 	opMapping["call"] = clearI(compileCallOp)
-	opMapping["list"] = clearI(compileListOp)
 	opMapping["map"] = clearI(compileMapOp)
 	opMapping["or"] = clearI(compileAndOrOp(OP_IF))
 	opMapping["and"] = clearI(compileAndOrOp(OP_IFNOT))

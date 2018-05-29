@@ -28,7 +28,6 @@ const (
 	OP_BIT_RSH
 
 	// complex structure op
-	OP_LIST
 	OP_MAP
 
 	// flow control op

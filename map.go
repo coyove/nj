@@ -5,15 +5,18 @@ type hash128 struct {
 }
 
 // Map represents the map structure in potatolang
-// Like lua it has a linear slice and a hash table
+// Like lua it has a linear slice and a hash table.
+// We use a 128bit hash to identify the key,
+// and since 128bit is large enough, we will consider it impossible to collide
+// in a foreseeable period of time (though this is not a good practice).
 type Map struct {
 	l []Value
 	m map[hash128][2]Value
 }
 
-// NewMap returns a new map
+// NewMap creates a new map
 func NewMap() *Map {
-	return &Map{l: make([]Value, 0), m: make(map[hash128][2]Value)}
+	return &Map{l: make([]Value, 0)}
 }
 
 // Dup duplicates the map
@@ -28,12 +31,14 @@ func (m *Map) Dup(duper func(Value, Value) Value) *Map {
 		}
 	}
 
-	m2.m = make(map[hash128][2]Value)
-	for k, v := range m.m {
-		if duper != nil {
-			v[1] = duper(v[0], v[1])
+	if m.m != nil {
+		m2.m = make(map[hash128][2]Value)
+		for k, v := range m.m {
+			if duper != nil {
+				v[1] = duper(v[0], v[1])
+			}
+			m2.m[k] = v
 		}
-		m2.m[k] = v
 	}
 	return m2
 }
@@ -68,11 +73,17 @@ func (m *Map) Put(key Value, value Value) *Map {
 			return m
 		}
 	}
+	if m.m == nil {
+		m.m = make(map[hash128][2]Value)
+	}
 	m.m[key.Hash()] = [2]Value{key, value}
 	return m
 }
 
 func (m *Map) putIntoMap(key Value, value Value) *Map {
+	if m.m == nil {
+		m.m = make(map[hash128][2]Value)
+	}
 	m.m[key.Hash()] = [2]Value{key, value}
 	return m
 }
@@ -88,6 +99,9 @@ func (m *Map) Get(key Value) (value Value, found bool) {
 		if idx, ln := int(key.AsNumber()), len(m.l); idx < ln {
 			return m.l[idx], true
 		}
+	}
+	if m.m == nil {
+		return Value{}, false
 	}
 	v, ok := m.m[key.Hash()]
 	return v[1], ok
@@ -106,6 +120,9 @@ func (m *Map) Remove(key Value) Value {
 			m.l = append(m.l[:idx], m.l[idx+1:]...)
 			return v
 		}
+	}
+	if m.m == nil {
+		return Value{}
 	}
 	hash := key.Hash()
 	v := m.m[hash]

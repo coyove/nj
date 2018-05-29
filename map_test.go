@@ -9,7 +9,6 @@ package potatolang
 import (
 	"math/rand"
 	"strconv"
-	"strings"
 	"testing"
 )
 
@@ -99,12 +98,9 @@ func TestMap_Put(t *testing.T) {
 		}
 	}
 
-	m.Put(NewStringValue("5"), NewValue())
-
-	keys := "0:1:2:3:5:"
-	for _, v := range m.m {
-		if !strings.Contains(keys, v[0].AsString()+":") {
-			t.Error(v)
-		}
+	m.Put(NewStringValue("5"), NewNumberValue(5))
+	if v, _ := m.getFromMap(NewStringValue("5")); v.AsNumber() != 5 {
+		t.Error(m)
 	}
+
 }

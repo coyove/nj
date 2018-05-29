@@ -94,22 +94,6 @@ func compileRetOp(op, opk byte) compileFunc {
 	}
 }
 
-func compileListOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
-	var buf *opwriter
-	buf, sp, err = flaten(sp, atoms[1].Compound, table)
-	if err != nil {
-		return
-	}
-	for _, atom := range atoms[1].Compound {
-		err = fill(buf, atom, table, OP_PUSH, OP_PUSHK)
-		if err != nil {
-			return
-		}
-	}
-	buf.WriteOP(OP_LIST, 0, 0)
-	return buf.data, regA, sp, nil
-}
-
 func compileMapOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
 	if len(atoms[1].Compound)%2 != 0 {
 		err = fmt.Errorf("every key in map must have a value: %+v", atoms[1])
@@ -315,7 +299,6 @@ func compileAndOrOp(bop byte) compileFunc {
 
 // [if condition [truechain ...] [falsechain ...]]
 func compileIfOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
-	table.clearAllRegRecords()
 	condition := atoms[1]
 	trueBranch, falseBranch := atoms[2], atoms[3]
 	buf := newopwriter()
@@ -350,6 +333,7 @@ func compileIfOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint6
 		buf.WriteOP(OP_IFNOT, condyx, uint32(len(trueCode)))
 		buf.Write(trueCode)
 	}
+	table.clearAllRegRecords()
 	return buf.data, regA, sp, nil
 }
 
