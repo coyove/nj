@@ -26,13 +26,13 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
             ... raw string literal ...
         endhello
 
-2. `dup` is an important builtin function:
+2. `dup` is an important builtin function, it can create a duplicate of a map or a string. During the process of duplication, you can map the value to a new one:
 
         set a = 1
         set b = dup(a)
         assert b == 1      # assert
 
-        set c = list 1, 2 end
+        set c = { 1, 2 }
         set d = dup(c) 
         c[0] = 0    
         assert d[0] == 1   # d is another list now
@@ -46,17 +46,18 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
             assert k == ("" & v)
         end)
 
-        # return value
+        # map value in dup
         set e = dup(d, function(i, n) return n + 1 end)
         assert e == { 2, 3 } and d == { 1, 2 }
 
+        # use error(...) to interrupt the dup
         set f = dup(d, function(i, n) 
             if i == 1 then error(true) end 
             return n + 1 
         end)
         assert f == {2}
 
-2. Advanced `dup`:
+2. Advance `dup`:
 
         # if you want to return multiple results:
         function foo(c)
@@ -67,8 +68,6 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
             return dup()
         end
 
-        # stack in potato is []Value
-        #
         #         0   1   2
         #  foo  +---+---+---+
         # stack | c | a | b |
@@ -110,6 +109,10 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         assert a() == 1 and a() == 2 and a() == 3 and a() == nil
         assert b() == 1 and b() == 2 and b() == 3 and b() == nil
 
+        # now the life of a is terminated, everything starts from the begining
+
+        assert a() == 1 and a() == 2 and a() == 3 and a() == nil
+
 2. Strings and numbers can't be summed up. however `&` (concat) can:
 
         set a = 1
@@ -118,10 +121,10 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         set d = { 0 } + c       # { 0, { 1 } }
         set e = { 0 } & c       # { 0, 1 }
         set f = "" & a & "2"    # "12" 
-                                # this is the de facto tostring in potatolang
+                                # this is the de facto tostring() in potatolang
         set g = 7 & 8           # bit and: 0
 
-2. Closure knows whether it is a member of map or list. This acknowledgement can be used to simulate member functions:
+2. Closure knows whether it is a member of the map or not. This acknowledgement can be used to simulate member functions:
 
         set counter = map
             "tick" = 0,
@@ -143,3 +146,39 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         set c3 = dup(counter)
         c3.add()
         assert c3.tick == 1
+
+2. potatolang can't return multiple values, nor throw an exception, its error handling will be like:
+
+        function foo(n)
+            if n < 2 then error("n is less than 2") end
+            return n + 1
+        end
+
+        foo(1)
+        assert error() == "n is less than 2"
+        foo(2)
+        assert error() == nil
+
+        # note that calling error(...) will not interrupt the execution of its following code
+        # you should manually return after it
+        set ans = foo(1)
+        assert error() == "n is less than 2"   # as expected
+        assert ans == 2                        # still as expected (return n + 1)
+
+        # also keep in mind: do check the error if the callee tends to return an error
+        # otherwise the error gets propagated implicitly
+
+        function bar(n)
+            error("error" + n)
+        end
+
+        function foo(n)
+            bar(n)
+            # not calling error() to check the error
+            # now the error (if any) belongs to foo(n)
+        end
+
+        bar(1)
+        assert error() == "error1"   # as expected
+        foo(1)
+        assert error() == "error1"   # oops
