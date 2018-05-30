@@ -350,7 +350,7 @@ func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
 			consts[i] = NewStringValue(k.value.(string))
 		}
 	}
-	cls = NewClosure(code, consts, nil, 0, false, false, false)
+	cls = NewClosure(code, consts, nil, 0, false, false, false, false)
 	cls.lastenv = NewEnv(nil)
 	for _, name := range CoreLibNames {
 		cls.lastenv.SPush(CoreLibs[name])

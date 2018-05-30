@@ -8,7 +8,6 @@ import (
 // The stack contains arguments used to execute the closure,
 // all the local variables will sequentially take the following spaces.
 // A stores the result of executing a closure, or a builtin operator;
-// C stores the caller;
 // E stores the error;
 // R0 ~ R3 store the arguments to call builtin operators (+, -, *, ...).
 // After each function calling in potato, E will be propagated to the upper Env.
@@ -18,7 +17,7 @@ type Env struct {
 	trace  []stacktrace
 	stack  []Value
 
-	A, C, E, R0, R1, R2, R3 Value
+	A, E, R0, R1, R2, R3 Value
 }
 
 // NewEnv creates the Env for closure to run within
@@ -145,23 +144,29 @@ type Closure struct {
 	native      func(env *Env) Value
 	argsCount   byte
 	noenvescape bool
-	yieldable   bool
-	errorable   bool
+	receiver    bool
+	ye          byte
 	lastp       uint32
 	lastenv     *Env
 }
 
 // NewClosure creates a new closure
-func NewClosure(code []uint64, consts []Value, env *Env, argsCount byte, yieldable, errorable, noenvescape bool) *Closure {
-	return &Closure{
+func NewClosure(code []uint64, consts []Value, env *Env, argsCount byte, y, e, r, noenvescape bool) *Closure {
+	cls := &Closure{
 		code:        code,
 		consts:      consts,
 		env:         env,
 		argsCount:   argsCount,
-		yieldable:   yieldable,
-		errorable:   errorable,
 		noenvescape: noenvescape,
+		receiver:    r,
 	}
+	if y {
+		cls.ye = 0x01
+	}
+	if e {
+		cls.ye |= 0x10
+	}
+	return cls
 }
 
 // NewNativeValue creates a native function in potatolang
@@ -171,6 +176,14 @@ func NewNativeValue(argsCount int, f func(env *Env) Value) Value {
 		native:      f,
 		noenvescape: true,
 	})
+}
+
+func (c *Closure) Errorable() bool {
+	return (c.ye >> 4) > 0
+}
+
+func (c *Closure) Yieldable() bool {
+	return (c.ye & 0x01) > 0
 }
 
 func (c *Closure) AppendPreArgs(preArgs []Value) {
@@ -217,7 +230,7 @@ func (c *Closure) Env() *Env {
 
 // Dup duplicates the closure
 func (c *Closure) Dup() *Closure {
-	cls := NewClosure(c.code, c.consts, c.env, c.argsCount, c.yieldable, c.errorable, c.noenvescape)
+	cls := NewClosure(c.code, c.consts, c.env, c.argsCount, c.Yieldable(), c.Errorable(), c.receiver, c.noenvescape)
 	cls.caller = c.caller
 	cls.lastp = c.lastp
 	cls.native = c.native
@@ -232,7 +245,7 @@ func (c *Closure) String() string {
 	if c.native == nil {
 		return "closure (\n" +
 			crPrettifyLambda(int(c.argsCount), len(c.preArgs),
-				c.yieldable, c.errorable, !c.noenvescape, c.code, c.consts, 4) + ")"
+				c.Yieldable(), c.Errorable(), c.receiver, !c.noenvescape, c.code, c.consts, 4) + ")"
 	}
 	return fmt.Sprintf("closure (\n    <args: %d>\n    <curry: %d>\n    [...] native code\n)", c.argsCount, len(c.preArgs))
 }
@@ -244,7 +257,6 @@ func (c *Closure) Exec(newEnv *Env) Value {
 		newEnv = c.lastenv
 	} else {
 		newEnv.SetParent(c.env)
-		newEnv.C = c.caller
 	}
 
 	if c.native == nil {

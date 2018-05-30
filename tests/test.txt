@@ -63,9 +63,9 @@ end
 function returncond(n)
     return {
         "counter" = n,
-        "test" = function() 
-            who().counter = who().counter + 1
-            return who().counter % 2 == 0
+        "test" = function(this) 
+            this.counter = this.counter + 1
+            return this.counter % 2 == 0
         end
     }
 end
@@ -107,8 +107,8 @@ assert m2 == m
 
 a = 0i0
 set b = 0iffffffffffffffff
-assert std.u64.ieq(std.u64.ixor(a, b), b)
-a = std.u64.ieq(12)
+assert math.u64.ieq(math.u64.ixor(a, b), b)
+a = math.u64.ieq(12)
 assert a(12)
 
 function select(cond, t, f)
@@ -124,3 +124,15 @@ i = 0 for i < 5 , i = i + 1 do
 if i == 2 then break end
     io.println(i)
 end
+
+set counter = {
+    "tick" = 0,
+    "add" = function(this, step)
+        this.tick = this.tick + step
+    end
+}
+
+set c = dup(counter)
+c.add()(2)
+c.add(1)
+assert c.tick == 3

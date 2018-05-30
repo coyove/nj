@@ -358,8 +358,6 @@ func compileCallOp(sp uint16, nodes []*parser.Node, table *symtable) (code []uin
 		return flatWrite(sp, append(nodes[1:2], nodes[2].Compound...), table, OP_DUP)
 	case "typeof":
 		return flatWrite(sp, append(nodes[1:2], nodes[2].Compound...), table, OP_TYPEOF)
-	case "who":
-		return flatWrite(sp, append(nodes[1:2], nodes[2].Compound...), table, OP_WHO)
 	}
 
 	atoms, replacedAtoms := nodes[2].Compound, []*parser.Node{}
@@ -432,15 +430,27 @@ func compileLambdaOp(sp uint16, atoms []*parser.Node, table *symtable) (code []u
 
 	params := atoms[1]
 	if params.Type != parser.NTCompound {
-		err = fmt.Errorf("invalid lambda parameters: %+v", atoms[0])
+		err = fmt.Errorf("%+v: invalid arguments list", atoms[0])
 		return
 	}
 
-	for i, p := range params.Compound {
-		newtable.put(p.Value.(string), uint16(i))
+	var this bool
+	i := 0
+	for _, p := range params.Compound {
+		argname := p.Value.(string)
+		if argname == "this" {
+			this = true
+			continue
+		}
+		newtable.put(argname, uint16(i))
+		i++
 	}
 
 	ln := len(newtable.sym)
+	if this {
+		newtable.put("this", uint16(ln))
+	}
+
 	if ln > 255 {
 		return nil, 0, 0, fmt.Errorf("do you really need more than 255 arguments?")
 	}
@@ -453,9 +463,10 @@ func compileLambdaOp(sp uint16, atoms []*parser.Node, table *symtable) (code []u
 	buf := newopwriter()
 	buf.WriteOP(OP_LAMBDA, uint32(len(newtable.consts)),
 		uint32(byte(ln))<<24+
-			uint32(btob(newtable.y))<<16+
-			uint32(btob(newtable.e))<<8+
-			uint32(btob(!newtable.envescape)))
+			uint32(btob(newtable.y))<<20+
+			uint32(btob(newtable.e))<<16+
+			uint32(btob(!newtable.envescape))<<12+
+			uint32(btob(this))<<8)
 	for _, k := range newtable.consts {
 		if k.ty == Tnumber {
 			buf.Write64(Tnumber)

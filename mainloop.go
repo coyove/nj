@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strconv"
 	"unsafe"
+
+	"github.com/coyove/potatolang/parser"
 )
 
 func init() {
@@ -107,8 +109,6 @@ MAIN:
 		case OP_EOB:
 			break MAIN
 		case OP_NOP:
-		case OP_WHO:
-			env.A = env.C
 		case OP_NIL:
 			env.A = NewValue()
 		case OP_TRUE:
@@ -210,6 +210,18 @@ MAIN:
 					tr.Put(v[0], v[1])
 				}
 				env.A = NewMapValue(tr)
+			case Tnumber<<8 | Tstring:
+				num, err := parser.StringToNumber(env.R1.AsString())
+				if err != nil {
+					log.Panicf("can't apply 'bit and (concat)' on %+v and %+v", env.R0, env.R1)
+				}
+				env.A = NewNumberValue(env.R0.AsNumber() + num)
+			case Tnumber<<8 | Tbool:
+				if env.R1.AsBool() {
+					env.A = NewNumberValue(env.R0.AsNumber() + 1)
+				} else {
+					env.A = env.R0
+				}
 			default:
 				if env.R0.ty == Tstring {
 					switch ss := env.R0.AsString(); env.R1.ty {
@@ -230,7 +242,7 @@ MAIN:
 						env.A = NewStringValue(ss + env.R1.ToPrintString())
 					}
 				} else {
-					log.Panicf("can't apply 'bit and' on %+v and %+v", env.R0, env.R1)
+					log.Panicf("can't apply 'bit and (concat)' on %+v and %+v", env.R0, env.R1)
 				}
 			}
 		case OP_BIT_OR:
@@ -258,9 +270,9 @@ MAIN:
 				log.Panicf("can't apply 'bit rsh' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_ASSERT:
-			loc := "assertion failed: " + crReadString(code, &cursor)
+			loc := crReadString(code, &cursor)
 			if env.R0.IsFalse() {
-				panic(loc)
+				panic("assertion failed: " + loc)
 			}
 			env.A = NewBoolValue(true)
 		case OP_LEN:
@@ -374,9 +386,10 @@ MAIN:
 		case OP_LAMBDA:
 			metadata := opb
 			argsCount := byte(metadata >> 24)
-			yieldable := byte(metadata>>16) == 1
-			errorable := byte(metadata>>8) == 1
-			noenvescape := byte(metadata) == 1
+			yieldable := byte(metadata<<8>>28) == 1
+			errorable := byte(metadata<<12>>28) == 1
+			noenvescape := byte(metadata<<16>>28) == 1
+			receiver := byte(metadata<<20>>28) == 1
 			constsLen := opa
 			consts := make([]Value, constsLen)
 			for i := uint32(0); i < constsLen; i++ {
@@ -390,7 +403,7 @@ MAIN:
 				}
 			}
 			buf := crRead(code, &cursor, int(cruRead64(caddr, &cursor)))
-			env.A = NewClosureValue(NewClosure(buf, consts, env, byte(argsCount), yieldable, errorable, noenvescape))
+			env.A = NewClosureValue(NewClosure(buf, consts, env, byte(argsCount), yieldable, errorable, receiver, noenvescape))
 		case OP_CALL:
 			v := env.Get(opa)
 			if v.ty != Tclosure {
@@ -420,8 +433,10 @@ MAIN:
 				if len(cls.preArgs) > 0 {
 					newEnv.SInsert(0, cls.preArgs)
 				}
-
-				if cls.yieldable || cls.native != nil {
+				if cls.receiver {
+					newEnv.SPush(cls.caller)
+				}
+				if cls.Yieldable() || cls.native != nil {
 					newEnv.trace = retStack
 					env.A = cls.Exec(newEnv)
 					env.E = newEnv.E
@@ -442,7 +457,6 @@ MAIN:
 					// switch to the env of cls
 					cursor = 0
 					newEnv.parent = cls.env
-					newEnv.C = cls.caller
 					env = newEnv
 					code = cls.code
 					caddr = kodeaddr(code)
@@ -524,8 +538,7 @@ func doDup(env *Env) {
 			nopred = true
 		case 1:
 			// dup()
-			ret := NewMap()
-			ret.l = make([]Value, len(env.stack))
+			ret := NewMapSize(len(env.stack))
 			copy(ret.l, env.stack)
 			env.A = NewMapValue(ret)
 			return
@@ -550,8 +563,8 @@ func doDup(env *Env) {
 		return
 	case Tstring:
 		if nopred {
-			m, s := NewMap(), env.R1.AsString()
-			m.l = make([]Value, 0, len(s))
+			s := env.R1.AsString()
+			m := NewMapSize(len(s))
 			for _, x := range s {
 				m.l = append(m.l, NewNumberValue(float64(x)))
 			}
@@ -613,7 +626,7 @@ func doDup(env *Env) {
 	switch env.R1.Type() {
 	case Tmap:
 		if alloc {
-			if cls.errorable {
+			if cls.Errorable() {
 				// the predicator may return error and interrupt the dup, so full copy is not used here
 				// however cls.errorable is not 100% accurate because calling error() (to check error) and
 				// calling error(...) (to throw error) are different behaviors, but i will left this as a TODO

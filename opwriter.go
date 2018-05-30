@@ -166,7 +166,6 @@ var singleOp = map[byte]string{
 	OP_NIL:     "nil",
 	OP_TRUE:    "true",
 	OP_FALSE:   "false",
-	OP_WHO:     "who",
 	OP_MAKEMAP: "make-map",
 }
 
@@ -176,12 +175,12 @@ func crHash(data []uint64) uint32 {
 	return e.Sum32()
 }
 
-func crPrettifyLambda(args, curry int, y, e, esc bool, code []uint64, consts []Value, tab int) string {
+func crPrettifyLambda(args, curry int, y, e, r, esc bool, code []uint64, consts []Value, tab int) string {
 	sb := &bytes.Buffer{}
 	spaces := strings.Repeat(" ", tab)
-	sb.WriteString(spaces + "<args: " + strconv.Itoa(args) + ">\n")
+	sb.WriteString(spaces + "<args(" + strconv.Itoa(args) + ")>\n")
 	if curry > 0 {
-		sb.WriteString(spaces + "<curry: " + strconv.Itoa(curry) + ">\n")
+		sb.WriteString(spaces + "<curry(" + strconv.Itoa(curry) + ")>\n")
 	}
 	if y {
 		sb.WriteString(spaces + "<yieldable>\n")
@@ -189,11 +188,14 @@ func crPrettifyLambda(args, curry int, y, e, esc bool, code []uint64, consts []V
 	if e {
 		sb.WriteString(spaces + "<errorable>\n")
 	}
+	if r {
+		sb.WriteString(spaces + "<receiver>\n")
+	}
 	if esc {
-		sb.WriteString(spaces + "<env escaped>\n")
+		sb.WriteString(spaces + "<envescaped>\n")
 	}
 	for i, k := range consts {
-		sb.WriteString(spaces + fmt.Sprintf("<k$%d: %+v>\n", i, k))
+		sb.WriteString(spaces + fmt.Sprintf("<k$%d(%+v)>\n", i, k))
 	}
 	sb.WriteString(crPrettify(code, consts, tab))
 	return sb.String()
@@ -216,7 +218,7 @@ func crPrettify(data []uint64, consts []Value, tab int) string {
 		return fmt.Sprintf("$%d$%d", a>>16, uint16(a))
 	}
 	readKAddr := func(a uint16) string {
-		return fmt.Sprintf("k$%d <%+v>", a, consts[a])
+		return fmt.Sprintf("k$%d(%+v)", a, consts[a])
 	}
 
 	lastBop := byte(OP_EOB)
@@ -287,9 +289,10 @@ MAIN:
 		case OP_LAMBDA:
 			sb.WriteString("$a = lambda (\n")
 			argsCount := byte(b >> 24)
-			yieldable := byte(b>>16) == 1
-			errorable := byte(b>>8) == 1
-			noenvescape := byte(b) == 1
+			yieldable := byte(b<<8>>28) == 1
+			errorable := byte(b<<12>>28) == 1
+			noenvescape := byte(b<<16>>28) == 1
+			receiver := byte(b<<20>>28) == 1
 			constsLen := a
 			consts := make([]Value, constsLen)
 			for i := uint32(0); i < constsLen; i++ {
@@ -303,7 +306,7 @@ MAIN:
 				}
 			}
 			buf := crRead(data, &cursor, int(crRead64(data, &cursor)))
-			sb.WriteString(crPrettifyLambda(int(argsCount), 0, yieldable, errorable, !noenvescape, buf, consts, tab+4))
+			sb.WriteString(crPrettifyLambda(int(argsCount), 0, yieldable, errorable, receiver, !noenvescape, buf, consts, tab+4))
 			sb.WriteString(pre + ")")
 		case OP_CALL:
 			sb.WriteString("call " + readAddr(a))

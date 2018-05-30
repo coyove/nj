@@ -19,6 +19,11 @@ func NewMap() *Map {
 	return &Map{l: make([]Value, 0)}
 }
 
+// NewMapSize creates a new map with pre-allocated slice
+func NewMapSize(n int) *Map {
+	return &Map{l: make([]Value, n)}
+}
+
 // Dup duplicates the map
 func (m *Map) Dup(duper func(Value, Value) Value) *Map {
 	m2 := &Map{}

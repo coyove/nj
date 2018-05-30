@@ -27,7 +27,7 @@ const (
 	OP_BIT_LSH
 	OP_BIT_RSH
 
-	// complex structure op
+	// make map op
 	OP_MAKEMAP
 
 	// flow control op
@@ -57,7 +57,6 @@ const (
 	OP_INC
 
 	// special builtin op
-	OP_WHO
 	OP_DUP
 	OP_ERROR
 	OP_LEN

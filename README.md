@@ -21,7 +21,8 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         set k, l = 1      # converted to set k = 1; set l = 1
         a, b = 1, 2       # illegal, sorry
     
-        # to define a string block, use sss<ident> to start and end<ident> to end. <ident> should be a valid identifer name:
+    To define a string block, use `sss<ident>` to start and `end<ident>` to end. `<ident>` should be a valid identifer name:
+
         set s = ssshello
             ... raw string literal ...
         endhello
@@ -37,7 +38,8 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         c[0] = 0    
         assert d[0] == 1   # d is another list now
 
-        # to iterate over a map:
+    Iterate over a map:
+
         set m = {
             "1" = 1,
             "2" = 2
@@ -50,16 +52,16 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         set e = dup(d, function(i, n) return n + 1 end)
         assert e == { 2, 3 } and d == { 1, 2 }
 
-        # use error(...) to interrupt the dup
+    Use error(...) to interrupt the dup:
+
         set f = dup(d, function(i, n) 
             if i == 1 then error(true) end 
             return n + 1 
         end)
         assert f == {2}
 
-2. Advance `dup`:
+2. If you want to return multiple results:
 
-        # if you want to return multiple results:
         function foo(c)
             set a = 1 + c
             set b = 2 + c
@@ -76,7 +78,8 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         set r = foo(2)
         assert r[len(r)-2] == 3 and r[len(r)-1] == 4
 
-        # the same trick can be used to accept varargs:
+    The same trick can be used to accept varargs:
+
         function sum()
             set x = dup() 
             set s = 0
@@ -88,7 +91,8 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
                                   # other variables yet on the stack, x = [1, -1]
         assert sum(1, 2, 3) == 6  # x = [1, 2, 3]
 
-        # string is immutable, dup(str) will return an array of its bytes
+    String is immutable, dup(str) will return an array of its bytes:
+
         set a = "text"
         a[0] = 96                  # panic
 
@@ -109,7 +113,7 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         assert a() == 1 and a() == 2 and a() == 3 and a() == nil
         assert b() == 1 and b() == 2 and b() == 3 and b() == nil
 
-        # now the life of a is terminated, everything starts from the begining
+    Now the life of `a` is terminated, everything starts from the begining:
 
         assert a() == 1 and a() == 2 and a() == 3 and a() == nil
 
@@ -124,30 +128,23 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
                                 # this is the de facto tostring() in potatolang
         set g = 7 & 8           # bit and: 0
 
-2. Closure knows whether it is a member of the map or not. This acknowledgement can be used to simulate member functions:
+2. Use `this` as an argument name in the function definition and it can be used to simulate member functions:
 
-        set counter = map
+        set counter = {
             "tick" = 0,
-            "add" = function()
-                set this = who() # who's your dad
-                this.tick = this.tick + 1
+            "add" = function(step, this)
+                this.tick = this.tick + step
             end
-        end
+        }
 
         set c = dup(counter)
-        c.add()
-        c.add()
+        c.add(1)
+        c.add(1)
         assert c.tick == 2
 
-        set c2 = dup(c)
-        c2.add()
-        assert c2.tick == 3
+    Note that the order of `this` and other arguments does not matter, e.g.: `function(this, a, b)` and `function(a, this, b)` are the same: both of them will be compiled into `function(a, b, this)`.
 
-        set c3 = dup(counter)
-        c3.add()
-        assert c3.tick == 1
-
-2. potatolang can't return multiple values, nor throw an exception, its error handling will be like:
+2. potatolang can't return multiple values to, nor throw an exception, its error handling will be like:
 
         function foo(n)
             if n < 2 then error("n is less than 2") end
@@ -159,14 +156,13 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         foo(2)
         assert error() == nil
 
-        # note that calling error(...) will not interrupt the execution of its following code
-        # you should manually return after it
+    Note that calling error(...) will not interrupt the execution of the following code, you should manually return after it if needed:
+
         set ans = foo(1)
         assert error() == "n is less than 2"   # as expected
         assert ans == 2                        # still as expected (return n + 1)
 
-        # also keep in mind: do check the error if the callee tends to return an error
-        # otherwise the error gets propagated implicitly
+    Also, do check the error if the callee tends to return one, otherwise the error gets propagated implicitly:
 
         function bar(n)
             error("error" + n)
