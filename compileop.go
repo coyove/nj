@@ -110,7 +110,7 @@ func compileMapOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint
 			return
 		}
 	}
-	buf.WriteOP(OP_MAP, 0, 0)
+	buf.WriteOP(OP_MAKEMAP, 0, 0)
 	return buf.data, regA, sp, nil
 }
 
@@ -196,16 +196,22 @@ func flatWrite(sp uint16, atoms []*parser.Node, table *symtable, bop byte) (code
 		}
 	}
 
-	var op = [8]byte{OP_R0, OP_R0K, OP_R1, OP_R1K, OP_R2, OP_R2K, OP_R3, OP_R3K}
+	var op = [4]uint16{OP_R0<<8 | OP_R0K, OP_R1<<8 | OP_R1K, OP_R2<<8 | OP_R2K, OP_R3<<8 | OP_R3K}
+	switch bop {
+	case OP_LEN, OP_STORE, OP_LOAD:
+		op[0], op[3] = op[3], op[0]
+		op[1], op[2] = op[2], op[1]
+	}
+
 	count := buf.Len()
 	for i := 1; i < len(atoms); i++ {
-		if err = fill(buf, atoms[i], table, op[i*2-2], op[i*2-1]); err != nil {
+		if err = fill(buf, atoms[i], table, byte(op[i-1]>>8), byte(op[i-1])); err != nil {
 			return
 		}
 	}
 	if buf.Len() == count {
 		// TODO:
-		// No arguments were written into buf, which means either this op accepts 0 argument,
+		// No argument opcode was written into buf, which means either this op accepts 0 argument,
 		// or all arguments have been inside the registers already.
 		// So we should evaluate the case that A still holds the result and skip the current op, e.g.:
 
@@ -393,6 +399,11 @@ func compileCallOp(sp uint16, nodes []*parser.Node, table *symtable) (code []uin
 			return
 		}
 		varIndex = yx
+		if len(replacedAtoms) == 0 {
+			_, _, varIndex = op(code[len(code)-1])
+			code = code[:len(code)-1]
+			sp--
+		}
 		buf.Write(code)
 	case parser.NTAddr:
 		varIndex = callee.Value.(uint32)

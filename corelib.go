@@ -3,7 +3,6 @@ package potatolang
 import (
 	"log"
 	"math"
-	"os"
 	"sync"
 
 	"github.com/coyove/potatolang/parser"
@@ -14,6 +13,13 @@ var CoreLibNames = []string{
 }
 
 var CoreLibs = map[string]Value{}
+
+func char(v float64, ascii bool) string {
+	if ascii {
+		return string([]byte{byte(v)})
+	}
+	return string(rune(v))
+}
 
 func initCoreLibs() {
 	lcore := NewMap()
@@ -26,15 +32,16 @@ func initCoreLibs() {
 		m.l = make([]Value, int(v.AsNumber()))
 		return NewMapValue(m)
 	}))
-	lcore.Puts("genbytes", NewNativeValue(1, func(env *Env) Value {
-		return NewBytesValue(make([]byte, int(env.SGet(0).AsNumber())))
-	}))
 	lcore.Puts("noenvescape", NewNativeValue(1, func(env *Env) Value {
 		if env.SGet(0).ty != Tclosure {
 			env.SGet(0).panicType(Tclosure)
 		}
 		env.SGet(0).AsClosure().noenvescape = true
 		return env.SGet(0)
+	}))
+	lcore.Puts("stacktrace", NewNativeValue(0, func(env *Env) Value {
+		e := ExecError{stacks: env.trace}
+		return NewStringValue(e.Error())
 	}))
 	lcore.Puts("yreset", NewNativeValue(1, func(env *Env) Value {
 		env.SGet(0).AsClosure().lastenv = nil
@@ -60,25 +67,68 @@ func initCoreLibs() {
 		}
 	}))
 	lcore.Puts("remove", NewNativeValue(2, func(env *Env) Value {
-		switch s := env.Get(0); testTypes(s, env.SGet(1)) {
-		case Tmap<<8 | Tstring:
-			return s.AsMap().Remove(env.Get(1))
-		case Tbytes<<8 | Tnumber:
-			l := s.AsBytes()
-			if env.SSize() == 2 {
-				idx := int(env.Get(1).AsNumber())
-				l = append(l[:idx], l[idx+1:]...)
-			} else if env.SGet(2).ty == Tnumber {
-				idx, ln := int(env.Get(1).AsNumber()), int(env.Get(2).AsNumber())
-				l = append(l[:idx], l[idx+ln:]...)
-			} else {
-				log.Panicf("can't call remove on %+v with index %+v", s, env.SGet(2))
-			}
-			return NewBytesValue(l)
-		default:
-			log.Panicf("can't call remove on %+v", s)
-			return NewValue()
+		s := env.SGet(0)
+		if s.ty != Tmap {
+			s.panicType(Tmap)
 		}
+		return s.AsMap().Remove(env.Get(1))
+	}))
+	lcore.Puts("copy", NewNativeValue(5, func(env *Env) Value {
+		dst, src := env.SGet(0).testType(Tmap).AsMap(), env.SGet(2).testType(Tmap).AsMap()
+		dstPos, srcPos := int(env.SGet(1).testType(Tnumber).AsNumber()), int(env.SGet(3).testType(Tnumber).AsNumber())
+		length := int(env.SGet(4).testType(Tnumber).AsNumber())
+		return NewNumberValue(float64(copy(dst.l[dstPos:], src.l[srcPos:srcPos+length])))
+	}))
+	lcore.Puts("sub", NewNativeValue(2, func(env *Env) Value {
+		src := env.SGet(0)
+		start, end := int(env.SGet(1).testType(Tnumber).AsNumber()), -1
+		if env.SSize() > 2 {
+			end = int(env.SGet(2).testType(Tnumber).AsNumber())
+		}
+		switch src.ty {
+		case Tmap:
+			m, m2 := NewMap(), src.AsMap()
+			if end == -1 {
+				end = len(m2.l)
+			}
+			m.l = make([]Value, end-start)
+			copy(m.l, m2.l[start:end])
+			return NewMapValue(m)
+		case Tstring:
+			buf2 := src.AsString()
+			if end == -1 {
+				end = len(buf2)
+			}
+			buf := make([]byte, end-start)
+			copy(buf, buf2[start:end])
+			return NewStringValue(string(buf))
+		default:
+			log.Panicf("can't call sub on %v", src)
+		}
+		return Value{}
+	}))
+	lcore.Puts("char", NewNativeValue(1, func(env *Env) Value {
+		return NewStringValue(char(env.SGet(0).AsNumber(), true))
+	}))
+	lcore.Puts("utf8char", NewNativeValue(1, func(env *Env) Value {
+		return NewStringValue(char(env.SGet(0).AsNumber(), false))
+	}))
+	lcore.Puts("append", NewNativeValue(2, func(env *Env) Value {
+		src, v := env.SGet(0), env.SGet(1)
+		switch src.ty {
+		case Tmap:
+			m := src.AsMap()
+			m.l = append(m.l, v)
+			return src
+		case Tstring:
+			if v.ty == Tstring {
+				return NewStringValue(src.AsString() + v.AsString())
+			}
+			fallthrough
+		default:
+			log.Panicf("can't call append on %v", src)
+		}
+		return Value{}
 	}))
 
 	lcore.Puts("sync", NewMapValue(NewMap().
@@ -135,52 +185,6 @@ func initCoreLibs() {
 
 	CoreLibs["std"] = NewMapValue(lcore)
 
-	lio := NewMap()
-	lio.Puts("println", NewNativeValue(0, stdPrintln(os.Stdout)))
-	lio.Puts("print", NewNativeValue(0, stdPrint(os.Stdout)))
-	lio.Puts("write", NewNativeValue(0, stdWrite(os.Stdout)))
-	lio.Puts("errprintln", NewNativeValue(0, stdPrintln(os.Stderr)))
-	lio.Puts("errprint", NewNativeValue(0, stdPrint(os.Stderr)))
-	lio.Puts("errwrite", NewNativeValue(0, stdWrite(os.Stderr)))
-	CoreLibs["io"] = NewMapValue(lio)
-
-	lmath := NewMap()
-	lmath.Puts("sqrt", NewNativeValue(1, func(env *Env) Value { return NewNumberValue(math.Sqrt(env.SGet(0).AsNumber())) }))
-	CoreLibs["math"] = NewMapValue(lmath)
-}
-
-func stdPrint(f *os.File) func(env *Env) Value {
-	return func(env *Env) Value {
-		for i := 0; i < env.SSize(); i++ {
-			f.WriteString(env.SGet(i).ToPrintString())
-		}
-
-		return NewValue()
-	}
-}
-
-func stdPrintln(f *os.File) func(env *Env) Value {
-	return func(env *Env) Value {
-		for i := 0; i < env.SSize(); i++ {
-			f.WriteString(env.SGet(i).ToPrintString() + " ")
-		}
-		f.WriteString("\n")
-		return NewValue()
-	}
-}
-
-func stdWrite(f *os.File) func(env *Env) Value {
-	return func(env *Env) Value {
-		for i := 0; i < env.SSize(); i++ {
-			switch a := env.SGet(i); a.ty {
-			case Tbytes:
-				f.Write(env.SGet(i).AsBytes())
-			case Tstring:
-				f.Write([]byte(env.SGet(i).AsString()))
-			default:
-				log.Panicf("can't write to output: %+v", a)
-			}
-		}
-		return NewValue()
-	}
+	initIOLib()
+	initMathLib()
 }

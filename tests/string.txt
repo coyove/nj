@@ -1,7 +1,4 @@
 assert "abc" == "abc"
-set b = std.genbytes(3)
-dup(b, function (i) b[i] = 97 + i end )
-assert "abc" == b
 assert "abc" == "\97\98\99"
 assert "abc" == "\x61\x62\x63"
 assert "abc吱吱吱" == "abc" + "吱吱" + "吱"
@@ -29,7 +26,7 @@ dup("abc组织者", function (i, r)
 
 
 set m ={}
-set i = 0 while i < 100 then i = i +1 do m["" & i] = i end
+set i = 0 for i < 100 , i = i +1 do m["" & i] = i end
 dup(m, function(k,v)
     if k == "50" then
         std.remove(m, k)
@@ -39,3 +36,4 @@ end)
 io.println(m)
 
 assert "" & 1 & true == "1true"
+assert "" & 10000000000 == "10000000000"

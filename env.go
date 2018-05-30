@@ -15,6 +15,7 @@ import (
 // Explicitly calling error() will get E and clear E.
 type Env struct {
 	parent *Env
+	trace  []stacktrace
 	stack  []Value
 
 	A, C, E, R0, R1, R2, R3 Value

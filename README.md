@@ -12,11 +12,11 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         set c = nil
         set d = true
         set e = 0x123
-        set f = list 1, 2, 3 end
-        set g = map "key1" = "value1", "key2" = "value2" end
-        set h = map
+        set f = { 1, 2, 3 }
+        set g = { "key1" = "value1", "key2" = "value2" }
+        set h = {
             (function () return "key1" end)() = "value1"
-        end
+        }
         set i, j = 1, 2   # converted to set i = 1; set j = 2
         set k, l = 1      # converted to set k = 1; set l = 1
         a, b = 1, 2       # illegal, sorry
@@ -38,23 +38,23 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         assert d[0] == 1   # d is another list now
 
         # to iterate over a map:
-        set m = map
+        set m = {
             "1" = 1,
             "2" = 2
-        end
+        }
         dup(m, function(k, v)
             assert k == ("" & v)
         end)
 
         # return value
         set e = dup(d, function(i, n) return n + 1 end)
-        assert e == list 2, 3 end and d == list 1, 2 end
+        assert e == { 2, 3 } and d == { 1, 2 }
 
         set f = dup(d, function(i, n) 
             if i == 1 then error(true) end 
             return n + 1 
         end)
-        assert f == list 2 end
+        assert f == {2}
 
 2. Advanced `dup`:
 
@@ -75,7 +75,7 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
         #       +---+---+---+
 
         set r = foo(2)
-        assert r[-2] == 3 and r[-1] == 4
+        assert r[len(r)-2] == 3 and r[len(r)-1] == 4
 
         # the same trick can be used to accept varargs:
         function sum()
@@ -89,12 +89,12 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
                                   # other variables yet on the stack, x = [1, -1]
         assert sum(1, 2, 3) == 6  # x = [1, 2, 3]
 
-        # string is immutable, dup(str) will return its bytes representation
+        # string is immutable, dup(str) will return an array of its bytes
         set a = "text"
         a[0] = 96                  # panic
 
         set b = dup(a)
-        assert typeof(b, "bytes")  # ok
+        assert typeof(b, "map")    # ok
         b[0] = 96                  # ok
 
 2. Yield:
@@ -114,9 +114,9 @@ potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin
 
         set a = 1
         set b = a + "2"         # runtime panic
-        set c = list end + a    # [1]
-        set d = list 0 end + c  # [0, [1]]
-        set e = list 0 end & c  # [0, 1]
+        set c = {} + a          # { 1 }
+        set d = { 0 } + c       # { 0, { 1 } }
+        set e = { 0 } & c       # { 0, 1 }
         set f = "" & a & "2"    # "12" 
                                 # this is the de facto tostring in potatolang
         set g = 7 & 8           # bit and: 0

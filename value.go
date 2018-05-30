@@ -23,8 +23,6 @@ const (
 	Tstring
 	// Tbool represents bool type
 	Tbool
-	// Tbytes represents bytes list type
-	Tbytes
 	// Tmap represents map type
 	Tmap
 	// Tclosure represents closure type
@@ -38,11 +36,9 @@ const (
 	_Tnumbernumber   = Tnumber<<8 | Tnumber
 	_Tstringstring   = Tstring<<8 | Tstring
 	_Tboolbool       = Tbool<<8 | Tbool
-	_Tbytesbytes     = Tbytes<<8 | Tbytes
 	_Tmapmap         = Tmap<<8 | Tmap
 	_Tclosureclosure = Tclosure<<8 | Tclosure
 	_Tgenericgeneric = Tgeneric<<8 | Tgeneric
-	_Tbytesnumber    = Tbytes<<8 | Tnumber
 	_Tstringnumber   = Tstring<<8 | Tnumber
 	_Tmapnumber      = Tmap<<8 | Tnumber
 )
@@ -50,7 +46,7 @@ const (
 // TMapping maps type to its string representation
 var TMapping = map[byte]string{
 	Tnil: "nil", Tnumber: "number", Tstring: "string", Tbool: "bool",
-	Tclosure: "closure", Tgeneric: "generic", Tmap: "map", Tbytes: "bytes",
+	Tclosure: "closure", Tgeneric: "generic", Tmap: "map",
 }
 
 var safePointerAddr = unsafe.Pointer(uintptr(0x400000000000ffff))
@@ -127,11 +123,6 @@ func NewClosureValue(c *Closure) Value {
 	return Value{ty: Tclosure, ptr: unsafe.Pointer(c)}
 }
 
-// NewBytesValue returns a bytes value
-func NewBytesValue(buf []byte) Value {
-	return Value{ty: Tbytes, ptr: unsafe.Pointer(&buf)}
-}
-
 // NewGenericValue returns a generic value
 func NewGenericValue(g interface{}) Value {
 	return Value{ty: Tgeneric, ptr: unsafe.Pointer(&g)}
@@ -185,14 +176,6 @@ func (v Value) AsList() []Value {
 	return *(*[]Value)(v.ptr)
 }
 
-// AsBytes cast value to []byte
-func (v Value) AsBytes() []byte {
-	if v.ptr == nil {
-		return nil
-	}
-	return *(*[]byte)(v.ptr)
-}
-
 // I returns the golang interface representation of value
 // it is not the same as AsGeneric()
 func (v Value) I() interface{} {
@@ -205,8 +188,6 @@ func (v Value) I() interface{} {
 		return v.AsString()
 	case Tmap:
 		return v.AsMap()
-	case Tbytes:
-		return v.AsBytes()
 	case Tclosure:
 		return v.AsClosure()
 	case Tgeneric:
@@ -235,8 +216,6 @@ func (v Value) IsFalse() bool {
 		return v.AsNumber() == 0.0
 	case Tstring:
 		return v.AsString() == ""
-	case Tbytes:
-		return len(v.AsBytes()) == 0
 	case Tmap:
 		return v.AsMap().Size() == 0
 	}
@@ -244,38 +223,25 @@ func (v Value) IsFalse() bool {
 }
 
 // Equal tests whether value is equal to another value
+// This is a strict test
 func (v Value) Equal(r Value) bool {
 	if v.ty == Tnil || r.ty == Tnil {
 		return v.ty == r.ty
 	}
-
-	switch v.ty {
-	case Tnumber:
-		if r.ty == Tnumber {
-			return r.AsNumber() == v.AsNumber()
-		}
-	case Tstring:
-		if r.ty == Tstring {
-			return r.AsString() == v.AsString()
-		} else if r.ty == Tbytes {
-			return bytes.Equal(r.AsBytes(), []byte(v.AsString()))
-		}
-	case Tbool:
-		if r.ty == Tbool {
-			return r.AsBool() == v.AsBool()
-		}
-	case Tbytes:
-		if r.ty == Tbytes {
-			return bytes.Equal(v.AsBytes(), r.AsBytes())
-		} else if r.ty == Tstring {
-			return bytes.Equal(v.AsBytes(), []byte(r.AsString()))
-		}
-	case Tmap:
-		if r.ty == Tmap {
-			return v.AsMap().Equal(r.AsMap())
-		}
+	switch testTypes(v, r) {
+	case _Tnumbernumber:
+		return r.AsNumber() == v.AsNumber()
+	case _Tstringstring:
+		return r.AsString() == v.AsString()
+	case _Tboolbool:
+		return r.AsBool() == v.AsBool()
+	case _Tmapmap:
+		return v.AsMap().Equal(r.AsMap())
+	case _Tclosureclosure:
+		return bytes.Equal(slice64to8(v.AsClosure().code), slice64to8(r.AsClosure().code))
+	case _Tgenericgeneric:
+		return v.AsGeneric() == r.AsGeneric()
 	}
-
 	return false
 }
 
@@ -314,19 +280,6 @@ func (v Value) toString(lv int) string {
 		}
 		buf.WriteString("}")
 		return buf.String()
-	case Tbytes:
-		arr := v.AsBytes()
-		buf := &bytes.Buffer{}
-		buf.WriteString("[")
-		for _, v := range arr {
-			buf.WriteString(fmt.Sprintf("%02x", int(v)))
-			buf.WriteString(",")
-		}
-		if len(arr) > 0 {
-			buf.Truncate(buf.Len() - 1)
-		}
-		buf.WriteString("]")
-		return buf.String()
 	case Tclosure:
 		return v.AsClosure().String()
 	case Tgeneric:
@@ -337,6 +290,13 @@ func (v Value) toString(lv int) string {
 
 func (v Value) panicType(expected byte) {
 	log.Panicf("expecting %s, got %+v", TMapping[expected], v)
+}
+
+func (v Value) testType(expected byte) Value {
+	if v.ty != expected {
+		log.Panicf("expecting %s, got %+v", TMapping[expected], v)
+	}
+	return v
 }
 
 func testTypes(v1, v2 Value) uint16 {
@@ -391,7 +351,7 @@ func (v Value) Hash() hash128 {
 	switch v.ty {
 	case Tnumber, Tbool, Tnil, Tclosure, Tmap, Tgeneric:
 		a = *(*hash128)(unsafe.Pointer(&v))
-	case Tstring, Tbytes:
+	case Tstring:
 		if v.i > 0 {
 			a = *(*hash128)(unsafe.Pointer(&v))
 		} else {

@@ -7,7 +7,7 @@ set initial_i = 0
 set ctr = 0
 set renderRow = function(y0)
     set i,j,x,res,b,Zr1,Zr2,Zi1,Zi2,Tr1,Tr2,Ti1,Ti2 = 0
-    set row = std.genbytes(bytesPerRow) 
+    set row = ""
     set xByte = 0 for xByte < bytesPerRow do
         res = 0
         set Ci = initial_i[y0]
@@ -51,7 +51,7 @@ set renderRow = function(y0)
             i=i+2
         end
 
-        row[xByte] = ~res
+        row = row + std.char(~res)
         xByte=xByte+1
     end
 

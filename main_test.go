@@ -38,6 +38,10 @@ func TestSString(t *testing.T) {
 	runFile(t, "tests/string.txt")
 }
 
+func TestSStd(t *testing.T) {
+	runFile(t, "tests/std.txt")
+}
+
 func TestArithmeticUnfold(t *testing.T) {
 	cls, err := LoadString(`
 		return 1 + 2 * 3 / 4
