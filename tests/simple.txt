@@ -1,9 +1,4 @@
-#set a = {0,1,2}
-#a[len(a)+1]=3
-#io.println(a);
-#
-#(function()
-#    io.println(std.stacktrace())
-#end)()
-
+set a = nil or 2
+set b = nil and 1
+io.println(a,b)
 

@@ -80,6 +80,13 @@ func NewAtomNode(tok Token) *Node {
 	}
 }
 
+func NewNilNode() *Node {
+	return &Node{
+		Type:  NTAtom,
+		Value: "nil",
+	}
+}
+
 func NewStringNode(arg string) *Node {
 	return &Node{
 		Type:  NTString,

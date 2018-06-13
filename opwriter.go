@@ -294,8 +294,8 @@ MAIN:
 			noenvescape := byte(b<<16>>28) == 1
 			receiver := byte(b<<20>>28) == 1
 			constsLen := a
-			consts := make([]Value, constsLen)
-			for i := uint32(0); i < constsLen; i++ {
+			consts := make([]Value, constsLen+1)
+			for i := uint32(1); i <= constsLen; i++ {
 				switch crRead64(data, &cursor) {
 				case Tnumber:
 					consts[i] = NewNumberValue(crReadDouble(data, &cursor))

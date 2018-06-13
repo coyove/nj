@@ -117,7 +117,7 @@ func (m *symtable) addConst(v interface{}) uint16 {
 	}
 
 	m.consts = append(m.consts, k)
-	idx := uint16(len(m.consts)) - 1
+	idx := uint16(len(m.consts))
 
 	switch v.(type) {
 	case float64:
@@ -199,13 +199,20 @@ func fill(buf *opwriter, n *parser.Node, table *symtable, op, opk byte) (err err
 
 	switch n.Type {
 	case parser.NTAtom:
-		addr, ok := table.get(n.Value.(string))
-		if !ok {
-			return fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
-		}
-		buf.WriteOP(op, addr, 0)
-		if isreg {
-			table.regs[idx].k, table.regs[idx].addr = false, addr
+		if n.Value.(string) == "nil" {
+			buf.WriteOP(opk, 0, 0)
+			if isreg {
+				table.regs[idx].k, table.regs[idx].kaddr = true, 0
+			}
+		} else {
+			addr, ok := table.get(n.Value.(string))
+			if !ok {
+				return fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
+			}
+			buf.WriteOP(op, addr, 0)
+			if isreg {
+				table.regs[idx].k, table.regs[idx].addr = false, addr
+			}
 		}
 	case parser.NTNumber, parser.NTString:
 		kidx := table.addConst(n.Value)
@@ -256,11 +263,17 @@ func extract(sp uint16, n *parser.Node, table *symtable) (code []uint64, yx uint
 
 	switch n.Type {
 	case parser.NTAtom:
-		var ok bool
-		varIndex, ok = table.get(n.Value.(string))
-		if !ok {
-			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
-			return
+		if n.Value.(string) == "nil" {
+			buf := newopwriter()
+			buf.WriteOP(OP_SETK, uint32(sp), 0)
+			return buf.data, uint32(sp), sp + 1, nil
+		} else {
+			var ok bool
+			varIndex, ok = table.get(n.Value.(string))
+			if !ok {
+				err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
+				return
+			}
 		}
 	case parser.NTAddr:
 		varIndex = n.Value.(uint32)
@@ -341,13 +354,13 @@ func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
 	}
 
 	code = append(code, makeop(OP_EOB, 0, 0))
-	consts := make([]Value, len(table.consts))
+	consts := make([]Value, len(table.consts)+1)
 	for i, k := range table.consts {
 		switch k.ty {
 		case Tnumber:
-			consts[i] = NewNumberValue(k.value.(float64))
+			consts[i+1] = NewNumberValue(k.value.(float64))
 		case Tstring:
-			consts[i] = NewStringValue(k.value.(string))
+			consts[i+1] = NewStringValue(k.value.(string))
 		}
 	}
 	cls = NewClosure(code, consts, nil, 0, false, false, false, false)

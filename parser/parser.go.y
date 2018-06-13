@@ -122,7 +122,7 @@ stat:
         } |
         TLambda TIdent functionargnames block TEnd {
             funcname := NewAtomNode($2)
-            $$ = NewCompoundNode("chain", NewCompoundNode("set", funcname, NewCompoundNode("nil")), NewCompoundNode("move", funcname, NewCompoundNode("lambda", $3, $4)))
+            $$ = NewCompoundNode("chain", NewCompoundNode("set", funcname, NewNilNode()), NewCompoundNode("move", funcname, NewCompoundNode("lambda", $3, $4)))
         } |
         TIf expr TThen block elseifs TEnd {
             $$ = NewCompoundNode("if", $2, $4, NewCompoundNode())
@@ -260,7 +260,7 @@ exprlistassign:
 
 expr:
         TNil {
-            $$ = NewCompoundNode("nil")
+            $$ = NewNilNode()
             $$.Pos = $1.Pos
         } | 
         TFalse {
@@ -415,7 +415,7 @@ functioncall:
                 }
             case "error":
                 if len($2.Compound) == 0 {
-                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewCompoundNode("nil")))
+                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNilNode()))
                 } else {
                     $$ = NewCompoundNode("call", $1, $2)
                 }
@@ -433,14 +433,12 @@ functioncall:
                         $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("1")))
                     case "string":
                         $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("2")))
-                    case "bool":
-                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("3")))
                     case "map":
-                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("4")))
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("3")))
                     case "closure":
-                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("5")))
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("4")))
                     case "generic":
-                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("6")))
+                        $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], NewNumberNode("5")))
                     default:
                         $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], $2.Compound[1]))
                     }

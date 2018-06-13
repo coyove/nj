@@ -184,13 +184,7 @@ MAIN:
 				log.Panicf("can't apply 'less equal' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_NOT:
-			if env.R0.ty == Tbool {
-				env.A = NewBoolValue(!env.R0.AsBool())
-			} else if env.R0.IsFalse() {
-				env.A = NewBoolValue(true)
-			} else {
-				env.A = NewBoolValue(false)
-			}
+			env.A = NewBoolValue(env.R0.IsFalse())
 		case OP_BIT_NOT:
 			if env.R0.ty == Tnumber {
 				env.A = NewNumberValue(float64(^int64(env.R0.AsNumber())))
@@ -213,22 +207,15 @@ MAIN:
 			case Tnumber<<8 | Tstring:
 				num, err := parser.StringToNumber(env.R1.AsString())
 				if err != nil {
-					log.Panicf("can't apply 'bit and (concat)' on %+v and %+v", env.R0, env.R1)
-				}
-				env.A = NewNumberValue(env.R0.AsNumber() + num)
-			case Tnumber<<8 | Tbool:
-				if env.R1.AsBool() {
-					env.A = NewNumberValue(env.R0.AsNumber() + 1)
+					env.A = Value{}
 				} else {
-					env.A = env.R0
+					env.A = NewNumberValue(env.R0.AsNumber() + num)
 				}
 			default:
 				if env.R0.ty == Tstring {
 					switch ss := env.R0.AsString(); env.R1.ty {
 					case Tnumber:
 						env.A = NewStringValue(ss + strconv.FormatFloat(env.R1.AsNumber(), 'f', -1, 64))
-					case Tbool:
-						env.A = NewStringValue(ss + strconv.FormatBool(env.R1.AsBool()))
 					case Tstring:
 						env.A = NewStringValue(ss + env.R1.AsString())
 					case Tmap:
@@ -285,7 +272,7 @@ MAIN:
 				log.Panicf("can't evaluate the length of %+v", v)
 			}
 		case OP_ERROR:
-			if env.R0.Type() != Tnil {
+			if env.R0.ty != Tnil {
 				env.E = env.R0
 			} else {
 				env.A = env.E
@@ -391,8 +378,8 @@ MAIN:
 			noenvescape := byte(metadata<<16>>28) == 1
 			receiver := byte(metadata<<20>>28) == 1
 			constsLen := opa
-			consts := make([]Value, constsLen)
-			for i := uint32(0); i < constsLen; i++ {
+			consts := make([]Value, constsLen+1)
+			for i := uint32(1); i <= constsLen; i++ {
 				switch cruRead64(caddr, &cursor) {
 				case Tnumber:
 					consts[i] = NewNumberValue(crReadDouble(code, &cursor))
@@ -477,17 +464,13 @@ MAIN:
 		case OP_IFNOT:
 			cond := env.Get(opa)
 			off := int32(opb)
-			if cond.ty == Tbool && !cond.AsBool() {
-				cursor = uint32(int32(cursor) + off)
-			} else if cond.IsFalse() {
+			if cond.IsFalse() {
 				cursor = uint32(int32(cursor) + off)
 			}
 		case OP_IF:
 			cond := env.Get(opa)
 			off := int32(opb)
-			if cond.ty == Tbool && cond.AsBool() {
-				cursor = uint32(int32(cursor) + off)
-			} else if !cond.IsFalse() {
+			if !cond.IsFalse() {
 				cursor = uint32(int32(cursor) + off)
 			}
 		case OP_DUP:
@@ -555,7 +538,7 @@ func doDup(env *Env) {
 	// immediate value and generic will be returned directly since they can't be truly duplicated
 	// however string is an exception
 	switch env.R1.Type() {
-	case Tnil, Tnumber, Tbool, Tgeneric:
+	case Tnil, Tnumber, Tgeneric:
 		env.A = env.R1
 		return
 	case Tclosure:

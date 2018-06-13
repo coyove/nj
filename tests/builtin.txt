@@ -23,10 +23,9 @@ assert sum("1", "2") == "12"
 set m = {
     "c" = 123, 
     "a" = "a",
-    "incr" = function()
-        set c = who()
-        c.c = c.c + 1
-        return c
+    "incr" = function(this)
+        this.c = this.c + 1
+        return this
     end
 }
 set mp = m
@@ -77,12 +76,12 @@ a = {
 }
 assert a.key == "value" and a["key"] == "value"
 
-assert(std.tonumber("0x0")) == 0
-assert(std.tonumber("0xa")) == 10
-assert(std.tonumber("0xA")) == 10
-assert(std.tonumber("1")) == 1
-assert(std.tonumber("+0.0")) == 0.0
-assert(std.tonumber("0i12345678")) == 0i12345678
-assert(std.tonumber("-10e-2")) == -10e-2
-assert(std.tonumber("1.2a")) == nil
-assert(std.tonumber("0xabcdefg")) == nil
+assert(0 & ("0x0")) == 0
+assert(0 & ("0xa")) == 10
+assert(0 & ("0xA")) == 10
+assert(0 & ("1")) == 1
+assert(0 & ("+0.0")) == 0.0
+assert(0 & ("0i12345678")) == 0i12345678
+assert(0 & ("-10e-2")) == -10e-2
+assert(0 & ("1.2a")) == nil
+assert(0 & ("0xabcdefg")) == nil

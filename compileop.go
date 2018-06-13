@@ -39,12 +39,16 @@ func compileSetOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint
 
 	switch aSrc.Type {
 	case parser.NTAtom:
-		valueIndex, ok := table.get(aSrc.Value.(string))
-		if !ok {
-			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, aSrc)
-			return
+		if aSrc.Value.(string) == "nil" {
+			buf.WriteOP(OP_SETK, newYX, 0)
+		} else {
+			valueIndex, ok := table.get(aSrc.Value.(string))
+			if !ok {
+				err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, aSrc)
+				return
+			}
+			buf.WriteOP(OP_SET, newYX, valueIndex)
 		}
-		buf.WriteOP(OP_SET, newYX, valueIndex)
 	case parser.NTNumber, parser.NTString:
 		buf.WriteOP(OP_SETK, newYX, uint32(table.addConst(aSrc.Value)))
 	case parser.NTCompound:
@@ -248,37 +252,24 @@ func compileIncOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint
 	return buf.data, regA, sp, nil
 }
 
-func compileImmediateIntoVariable(sp uint16, node *parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
-	buf := newopwriter()
-	switch node.Type {
-	case parser.NTNumber, parser.NTString:
-		buf.WriteOP(OP_SETK, uint32(sp), uint32(table.addConst(node.Value)))
-		yx = uint32(sp)
-		sp++
-	default:
-		panic("shouldn't happen")
-	}
-	return buf.data, yx, sp, nil
-}
-
-// [and a b] => if not a then false else use b end
-// [or a b]  => if a then use a else use b end
+// [and a b] => $a = a if not a then return else $a = b end
+// [or a b]  => $a = a if a then do nothing else $a = b end
 func compileAndOrOp(bop byte) compileFunc {
 	return func(sp uint16, atoms []*parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
 		a1, a2 := atoms[1], atoms[2]
 		buf := newopwriter()
 		switch a1.Type {
 		case parser.NTNumber, parser.NTString:
-			code, yx, sp, err = compileImmediateIntoVariable(sp, a1, table)
-			buf.Write(code)
-			buf.WriteOP(bop, yx, 0)
+			buf.WriteOP(OP_SETK, regA, uint32(table.addConst(a1.Value)))
+			buf.WriteOP(bop, regA, 0)
 		case parser.NTAtom, parser.NTCompound:
 			code, yx, sp, err = extract(sp, a1, table)
 			if err != nil {
 				return nil, 0, 0, err
 			}
 			buf.Write(code)
-			buf.WriteOP(bop, yx, 0)
+			buf.WriteOP(OP_SET, regA, yx)
+			buf.WriteOP(bop, regA, 0)
 		}
 		c2 := buf.Len()
 
@@ -311,8 +302,8 @@ func compileIfOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint6
 
 	switch condition.Type {
 	case parser.NTNumber, parser.NTString:
-		code, yx, sp, _ = compileImmediateIntoVariable(sp, condition, table)
-		buf.Write(code)
+		buf.WriteOP(OP_SETK, regA, uint32(table.addConst(condition.Value)))
+		yx = regA
 	case parser.NTAtom, parser.NTCompound:
 		code, yx, sp, err = extract(sp, condition, table)
 		if err != nil {

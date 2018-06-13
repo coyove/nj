@@ -21,8 +21,6 @@ const (
 	Tnumber
 	// Tstring represents string type
 	Tstring
-	// Tbool represents bool type
-	Tbool
 	// Tmap represents map type
 	Tmap
 	// Tclosure represents closure type
@@ -35,7 +33,6 @@ const (
 	_Tnilnil         = Tnil<<8 | Tnil
 	_Tnumbernumber   = Tnumber<<8 | Tnumber
 	_Tstringstring   = Tstring<<8 | Tstring
-	_Tboolbool       = Tbool<<8 | Tbool
 	_Tmapmap         = Tmap<<8 | Tmap
 	_Tclosureclosure = Tclosure<<8 | Tclosure
 	_Tgenericgeneric = Tgeneric<<8 | Tgeneric
@@ -45,7 +42,7 @@ const (
 
 // TMapping maps type to its string representation
 var TMapping = map[byte]string{
-	Tnil: "nil", Tnumber: "number", Tstring: "string", Tbool: "bool",
+	Tnil: "nil", Tnumber: "number", Tstring: "string",
 	Tclosure: "closure", Tgeneric: "generic", Tmap: "map",
 }
 
@@ -104,13 +101,10 @@ func NewStringValue(s string) Value {
 
 // NewBoolValue returns a boolean value
 func NewBoolValue(b bool) Value {
-	v := Value{ty: Tbool}
 	if b {
-		v.ptr = unsafe.Pointer(uintptr(trueValue))
-	} else {
-		v.ptr = unsafe.Pointer(uintptr(falseValue))
+		return One
 	}
-	return v
+	return Zero
 }
 
 // NewMapValue returns a map value
@@ -133,9 +127,6 @@ func (v Value) Type() byte {
 	return v.ty
 }
 
-// AsBool cast value to bool
-func (v Value) AsBool() bool { return uintptr(v.ptr) == trueValue }
-
 func (v Value) u64() uint64 {
 	if v.ty != Tnumber {
 		log.Panicf("expecting number, got %+v", v)
@@ -146,6 +137,21 @@ func (v Value) u64() uint64 {
 // AsNumber cast value to float64
 func (v Value) AsNumber() float64 {
 	return *(*float64)(unsafe.Pointer(&v.i))
+}
+
+var (
+	// Zero is +0
+	Zero = NewNumberValue(0)
+
+	// One is 1
+	One = NewNumberValue(1)
+
+	_zeroRaw = *(*[2]uint64)(unsafe.Pointer(&Zero))
+)
+
+// IsZero is a fast way to check whether number value equals to +0
+func (v Value) IsZero() bool {
+	return *(*[2]uint64)(unsafe.Pointer(&v)) == _zeroRaw
 }
 
 // AsString cast value to string
@@ -180,8 +186,6 @@ func (v Value) AsList() []Value {
 // it is not the same as AsGeneric()
 func (v Value) I() interface{} {
 	switch v.Type() {
-	case Tbool:
-		return v.AsBool()
 	case Tnumber:
 		return v.AsNumber()
 	case Tstring:
@@ -207,17 +211,18 @@ func (v Value) String() string {
 
 // IsFalse tests whether value contains a "false" value
 func (v Value) IsFalse() bool {
-	switch v.Type() {
-	case Tnil:
+	if v.ty == Tnumber {
+		return *(*[2]uint64)(unsafe.Pointer(&v)) == _zeroRaw
+	}
+	if v.ty == Tnil {
 		return true
-	case Tbool:
-		return v.AsBool() == false
-	case Tnumber:
-		return v.AsNumber() == 0.0
-	case Tstring:
-		return v.AsString() == ""
-	case Tmap:
-		return v.AsMap().Size() == 0
+	}
+	if v.ty == Tstring {
+		return v.i == 1
+	}
+	if v.ty == Tmap {
+		m := (*Map)(v.ptr)
+		return len(m.l)+len(m.m) == 0
 	}
 	return false
 }
@@ -233,8 +238,6 @@ func (v Value) Equal(r Value) bool {
 		return r.AsNumber() == v.AsNumber()
 	case _Tstringstring:
 		return r.AsString() == v.AsString()
-	case _Tboolbool:
-		return r.AsBool() == v.AsBool()
 	case _Tmapmap:
 		return v.AsMap().Equal(r.AsMap())
 	case _Tclosureclosure:
@@ -256,8 +259,6 @@ func (v Value) toString(lv int) string {
 	}
 
 	switch v.Type() {
-	case Tbool:
-		return strconv.FormatBool(v.AsBool())
 	case Tnumber:
 		return strconv.FormatFloat(v.AsNumber(), 'f', -1, 64)
 	case Tstring:
@@ -349,7 +350,7 @@ func readUnaligned64(p unsafe.Pointer) uint64 {
 func (v Value) Hash() hash128 {
 	var a hash128
 	switch v.ty {
-	case Tnumber, Tbool, Tnil, Tclosure, Tmap, Tgeneric:
+	case Tnumber, Tnil, Tclosure, Tmap, Tgeneric:
 		a = *(*hash128)(unsafe.Pointer(&v))
 	case Tstring:
 		if v.i > 0 {
