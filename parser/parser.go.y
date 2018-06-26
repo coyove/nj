@@ -24,6 +24,7 @@ import (
 %type<expr> function
 %type<expr> functionargnames
 %type<expr> mapgen
+%type<expr> mapgenlist
 
 %union {
   token  Token
@@ -41,7 +42,7 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFalse TFor TIf TLambda TList TNil TNot TOr TReturn TRequire TSet TThen TTrue TYield
+%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFor TIf TLambda TList TNil TNot TOr TReturn TRequire TSet TThen TYield
 
 /* Literals */
 %token<token> TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
@@ -262,15 +263,7 @@ expr:
         TNil {
             $$ = NewNilNode()
             $$.Pos = $1.Pos
-        } | 
-        TFalse {
-            $$ = NewCompoundNode("false")
-            $$.Pos = $1.Pos
-        } | 
-        TTrue {
-            $$ = NewCompoundNode("true")
-            $$.Pos = $1.Pos
-        } | 
+        } |
         TNumber {
             $$ = NewNumberNode($1.Str)
             $$.Pos = $1.Pos
@@ -488,13 +481,33 @@ mapgen:
             $$ = NewCompoundNode("map", NewCompoundNode())
             $$.Compound[0].Pos = $1.Pos
         } |
-        '{' exprlistassign '}' {
-            $$ = NewCompoundNode("map", $2)
+        '{' mapgenlist '}' {
+            $$ = $2
+            $$.Compound[0].Pos = $1.Pos
+        }
+
+mapgenlist:
+        exprlistassign {
+            $$ = NewCompoundNode("map", $1)
             $$.Compound[0].Pos = $1.Pos
         } |
-        '{' exprlist '}' {
+        exprlistassign ',' {
+            $$ = NewCompoundNode("map", $1)
+            $$.Compound[0].Pos = $1.Pos
+        } |
+        exprlist {
             table := NewCompoundNode()
-            for i, v := range $2.Compound {
+            for i, v := range $1.Compound {
+                table.Compound = append(table.Compound, 
+                    &Node{ Type:  NTNumber, Value: float64(i) },
+                    v)
+            }
+            $$ = NewCompoundNode("map", table)
+            $$.Compound[0].Pos = $1.Pos
+        } |
+        exprlist ',' {
+            table := NewCompoundNode()
+            for i, v := range $1.Compound {
                 table.Compound = append(table.Compound, 
                     &Node{ Type:  NTNumber, Value: float64(i) },
                     v)

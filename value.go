@@ -42,8 +42,7 @@ const (
 
 // TMapping maps type to its string representation
 var TMapping = map[byte]string{
-	Tnil: "nil", Tnumber: "number", Tstring: "string",
-	Tclosure: "closure", Tgeneric: "generic", Tmap: "map",
+	Tnil: "nil", Tnumber: "number", Tstring: "string", Tclosure: "closure", Tgeneric: "generic", Tmap: "map",
 }
 
 var safePointerAddr = unsafe.Pointer(uintptr(0x400000000000ffff))
@@ -80,14 +79,23 @@ func NewValue() Value {
 func NewNumberValue(f float64) Value {
 	v := Value{ty: Tnumber}
 	v.ptr = safePointerAddr
-	*(*float64)(unsafe.Pointer(&v.i)) = f
+	*(*float64)(unsafe.Pointer(&v.ptr)) = f
 	return v
+}
+
+func (v *Value) SetNumberValue(f float64) {
+	*(*[2]uint64)(unsafe.Pointer(v)) = _zeroRaw
+	*(*float64)(unsafe.Pointer(&v.ptr)) = f
+}
+
+func (v *Value) SetBoolValue(b bool) {
+	*(*[2]uint64)(unsafe.Pointer(v)) = _zeroRaw
+	*(*float64)(unsafe.Pointer(&v.ptr)) = float64(*(*byte)(unsafe.Pointer(&b)))
 }
 
 // NewStringValue returns a string value
 func NewStringValue(s string) Value {
-	v := NewValue()
-	v.ty = Tstring
+	v := Value{ty: Tstring}
 
 	if len(s) < 11 {
 		v.ptr = safePointerAddr
@@ -136,7 +144,7 @@ func (v Value) u64() uint64 {
 
 // AsNumber cast value to float64
 func (v Value) AsNumber() float64 {
-	return *(*float64)(unsafe.Pointer(&v.i))
+	return (*(*[2]float64)(unsafe.Pointer(&v)))[1]
 }
 
 var (
@@ -185,7 +193,7 @@ func (v Value) AsList() []Value {
 // I returns the golang interface representation of value
 // it is not the same as AsGeneric()
 func (v Value) I() interface{} {
-	switch v.Type() {
+	switch v.ty {
 	case Tnumber:
 		return v.AsNumber()
 	case Tstring:
@@ -201,7 +209,7 @@ func (v Value) I() interface{} {
 }
 
 func (v Value) String() string {
-	switch v.Type() {
+	switch v.ty {
 	case Tstring:
 		return strconv.Quote(v.AsString())
 	default:

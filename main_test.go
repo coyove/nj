@@ -68,7 +68,7 @@ func TestRegisterOptimzation(t *testing.T) {
 	cls, err := LoadString(`
 		set a, b = 1, 2
 		set c = 0
-		if false then
+		if 0 then
 			a = 2
 			b = 3
 			c = a + b

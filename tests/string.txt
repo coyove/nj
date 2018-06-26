@@ -21,7 +21,7 @@ assert stR == 1
 set dupcheck = {97,98,99,32452}
 dup("abc组织者", function (i, r) 
     assert dupcheck[i] == r 
-    if i == 3 then error(true) end
+    if i == 3 then error(1) end
  end)
 
 
@@ -35,5 +35,5 @@ dup(m, function(k,v)
 end)
 io.println(m)
 
-assert "" & 1 & true == "1true"
+assert "" & 1  == "1"
 assert "" & 10000000000 == "10000000000"

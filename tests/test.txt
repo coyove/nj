@@ -1,7 +1,7 @@
 function add(a,b) return a + b end
 
 set fib2 = function(a, b)
-    for true do
+    for 1 do
         set c = add(a, b)
         a = b
         b = c
@@ -45,19 +45,19 @@ set mul = (function(a) set b = 1 return function() b = b * a return b end end)(2
 
 assert mul() == 2 and mul() == 4 and mul() == 8
 if 0 == 1 then
-    assert false
+    assert 0
 elseif 2 == 2 then
-    assert true
+    assert 1
 else
-    assert false
+    assert 0
 end
 
-if true or function() assert false end then
-    assert true
+if 1 or function() assert 0 end then
+    assert 1
 end
 
-if false and function() assert false end then
-    assert true
+if 0 and function() assert 0 end then
+    assert 1
 end
 
 function returncond(n)
@@ -114,8 +114,10 @@ assert a(12)
 function select(cond, t, f)
     return cond and t or f
 end
- 
-assert select(true, 1, 2) == 1 and select(false)(1)(2) == 2
+
+assert 1 and 1 or 0
+assert 0 and 0 or 1
+assert select(1, 1, 2) == 1 and select(0)(1)(2) == 2
 a = 1
 a = a - 1  # this will be eventually compiled into: [inc a -1]
 assert a == 0
@@ -129,10 +131,16 @@ set counter = {
     "tick" = 0,
     "add" = function(this, step)
         this.tick = this.tick + step
-    end
+    end,
 }
 
 set c = dup(counter)
 c.add()(2)
 c.add(1)
 assert c.tick == 3
+
+set _array = {1,2,3}
+assert len(_array)==3
+
+_array = {1,2,3,}
+assert len(_array)==3

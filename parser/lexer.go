@@ -293,8 +293,8 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 
 var reservedWords = map[string]int{
 	"and": TAnd, "assert": TAssert, "break": TBreak, "continue": TContinue, "do": TDo, "else": TElse, "elseif": TElseIf,
-	"end": TEnd, "for": TFor, "false": TFalse, "function": TLambda, "list": TList, "if": TIf, "set": TSet, "nil": TNil,
-	"not": TNot, "or": TOr, "return": TReturn, "require": TRequire, "then": TThen, "true": TTrue, "yield": TYield,
+	"end": TEnd, "for": TFor, "function": TLambda, "list": TList, "if": TIf, "set": TSet, "nil": TNil,
+	"not": TNot, "or": TOr, "return": TReturn, "require": TRequire, "then": TThen, "yield": TYield,
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
