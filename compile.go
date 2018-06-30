@@ -166,7 +166,6 @@ func init() {
 		"<": OP_LESS, "<=": OP_LESS_EQ, "eq": OP_EQ, "neq": OP_NEQ, "not": OP_NOT,
 		"~": OP_BIT_NOT, "&": OP_BIT_AND, "|": OP_BIT_OR, "^": OP_BIT_XOR, "<<": OP_BIT_LSH, ">>": OP_BIT_RSH,
 		"store": OP_STORE, "load": OP_LOAD, "assert": OP_ASSERT,
-		"nil": OP_NIL, "true": OP_TRUE, "false": OP_FALSE,
 	}
 }
 

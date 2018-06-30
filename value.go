@@ -126,8 +126,8 @@ func NewClosureValue(c *Closure) Value {
 }
 
 // NewGenericValue returns a generic value
-func NewGenericValue(g interface{}) Value {
-	return Value{ty: Tgeneric, ptr: unsafe.Pointer(&g)}
+func NewGenericValue(g unsafe.Pointer) Value {
+	return Value{ty: Tgeneric, ptr: g}
 }
 
 // Type returns the type of value
@@ -179,8 +179,8 @@ func (v Value) AsMap() *Map { return (*Map)(v.ptr) }
 // AsClosure cast value to closure
 func (v Value) AsClosure() *Closure { return (*Closure)(v.ptr) }
 
-// AsGeneric cast value to interface{}
-func (v Value) AsGeneric() interface{} { return *(*interface{})(v.ptr) }
+// AsGeneric cast value to unsafe.Pointer
+func (v Value) AsGeneric() unsafe.Pointer { return v.ptr }
 
 // AsList cast value to slice of values
 func (v Value) AsList() []Value {

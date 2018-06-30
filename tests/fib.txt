@@ -4,5 +4,35 @@ fib = function(n)
     return fib(n-2)+fib(n-1)
 end
 
-set ans = fib(35 )
+set K, OP = std.opcode.closure, std.opcode
+set fib2 = K.empty()
+
+K.setparam(fib2, "argscount", 1)
+K.setparam(fib2, "envescaped", 0)
+
+K.writeconst(fib2, 2)
+K.writeconst(fib2, 1)
+
+K.write(fib2, OP.R0, 0, 0)
+K.write(fib2, OP.R1K, 0, 0)
+K.write(fib2, OP.LESS, 0, 0)
+K.write(fib2, OP.IFNOT, OP.A, 1)
+K.write(fib2, OP.RET, 0, 0)
+K.write(fib2, OP.SUB, 0, 0)
+K.write(fib2, OP.PUSH, OP.A, 0)
+K.write(fib2, OP.CALL, 0x00010008, 0)
+K.write(fib2, OP.R2, OP.A, 0)
+K.write(fib2, OP.R1K, 1, 0)
+K.write(fib2, OP.SUB, 0, 0)
+K.write(fib2, OP.PUSH, OP.A, 0)
+K.write(fib2, OP.CALL, 0x00010008, 0)
+K.write(fib2, OP.R0R2, 0, 0)
+K.write(fib2, OP.R1, OP.A, 0)
+K.write(fib2, OP.ADD, 0, 0)
+K.write(fib2, OP.RET, OP.A, 0)
+K.write(fib2, OP.EOB, 0, 0)
+
+io.println(fib2)
+
+set ans = fib2(35)
 return ans

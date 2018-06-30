@@ -346,7 +346,12 @@ func compileCallOp(sp uint16, nodes []*parser.Node, table *symtable) (code []uin
 	case "len":
 		return flatWrite(sp, append(nodes[1:2], nodes[2].Compound...), table, OP_LEN)
 	case "dup":
-		return flatWrite(sp, append(nodes[1:2], nodes[2].Compound...), table, OP_DUP)
+		x := append(nodes[1:2], nodes[2].Compound...)
+		if y, ok := x[3].Value.(float64); ok && y == 2 {
+			// return stack, env is escaped
+			table.envescape = true
+		}
+		return flatWrite(sp, x, table, OP_DUP)
 	case "typeof":
 		return flatWrite(sp, append(nodes[1:2], nodes[2].Compound...), table, OP_TYPEOF)
 	}

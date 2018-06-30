@@ -97,10 +97,6 @@ func ExecCursor(env *Env, code []uint64, consts []Value, cursor uint32) (Value, 
 	}
 MAIN:
 	for {
-		// lastCursor = cursor
-		// log.Println(cruop(caddr, &cursor))
-		// log.Println(op(cruRead64(caddr, &lastCursor)))
-		// os.Exit(1)
 		// log.Println(cursor)
 		bop, opa, opb := cruop(caddr, &cursor)
 		switch bop {
@@ -109,12 +105,6 @@ MAIN:
 		case OP_EOB:
 			break MAIN
 		case OP_NOP:
-		case OP_NIL:
-			env.A = NewValue()
-		case OP_TRUE:
-			env.A = NewBoolValue(true)
-		case OP_FALSE:
-			env.A = NewBoolValue(false)
 		case OP_SET:
 			env.Set(opa, env.Get(opb))
 		case OP_SETK:
@@ -344,6 +334,10 @@ MAIN:
 			env.R3 = env.Get(opa)
 		case OP_R3K:
 			env.R3 = konst(kaddr, uint16(opa))
+		case OP_R0R2:
+			env.R0 = env.R2
+		case OP_R1R2:
+			env.R1 = env.R2
 		case OP_PUSH:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
@@ -399,7 +393,9 @@ MAIN:
 			cls := v.AsClosure()
 			if cls.lastenv != nil {
 				env.A = cls.Exec(newEnv)
-				if newEnv != nil {
+				if cls.lastenv != nil {
+					env.E = cls.lastenv.E
+				} else if newEnv != nil {
 					env.E = newEnv.E
 				}
 				newEnv = nil
@@ -415,7 +411,7 @@ MAIN:
 				}
 			} else {
 				if newEnv == nil {
-					newEnv = NewEnv(nil)
+					newEnv = NewEnv(env)
 				}
 				if len(cls.preArgs) > 0 {
 					newEnv.SInsert(0, cls.preArgs)
@@ -459,19 +455,14 @@ MAIN:
 			}
 
 		case OP_JMP:
-			off := int32(opb)
-			cursor = uint32(int32(cursor) + off)
+			cursor = uint32(int32(cursor) + int32(opb))
 		case OP_IFNOT:
-			cond := env.Get(opa)
-			off := int32(opb)
-			if cond.IsZero() || cond.IsFalse() {
-				cursor = uint32(int32(cursor) + off)
+			if cond := env.Get(opa); cond.IsZero() || cond.IsFalse() {
+				cursor = uint32(int32(cursor) + int32(opb))
 			}
 		case OP_IF:
-			cond := env.Get(opa)
-			off := int32(opb)
-			if !cond.IsZero() || !cond.IsFalse() {
-				cursor = uint32(int32(cursor) + off)
+			if cond := env.Get(opa); !cond.IsZero() || !cond.IsFalse() {
+				cursor = uint32(int32(cursor) + int32(opb))
 			}
 		case OP_DUP:
 			doDup(env)

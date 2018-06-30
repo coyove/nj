@@ -163,9 +163,6 @@ var singleOp = map[byte]string{
 	OP_BIT_RSH: "bit-rsh",
 	OP_ERROR:   "error",
 	OP_TYPEOF:  "typeof",
-	OP_NIL:     "nil",
-	OP_TRUE:    "true",
-	OP_FALSE:   "false",
 	OP_MAKEMAP: "make-map",
 }
 

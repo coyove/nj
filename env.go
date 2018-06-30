@@ -186,6 +186,22 @@ func (c *Closure) Yieldable() bool {
 	return (c.ye & 0x01) > 0
 }
 
+func (c *Closure) setYieldable(b bool) {
+	if b {
+		c.ye |= 0x01
+	} else {
+		c.ye &= 0x10
+	}
+}
+
+func (c *Closure) setErrorable(b bool) {
+	if b {
+		c.ye |= 0x10
+	} else {
+		c.ye &= 0x01
+	}
+}
+
 func (c *Closure) AppendPreArgs(preArgs []Value) {
 	if c.preArgs == nil {
 		c.preArgs = make([]Value, 0, 4)
@@ -252,14 +268,14 @@ func (c *Closure) String() string {
 
 // Exec executes the closure with the given env
 func (c *Closure) Exec(newEnv *Env) Value {
-
-	if c.lastenv != nil {
-		newEnv = c.lastenv
-	} else {
-		newEnv.SetParent(c.env)
-	}
-
 	if c.native == nil {
+
+		if c.lastenv != nil {
+			newEnv = c.lastenv
+		} else {
+			newEnv.SetParent(c.env)
+		}
+
 		v, np, yield := ExecCursor(newEnv, c.code, c.consts, c.lastp)
 		if yield {
 			c.lastp = np

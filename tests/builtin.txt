@@ -5,7 +5,12 @@ function foo1(c)
 end
 
 set ans = foo1()(2)
-assert ans[len(ans)-1] == 4 and ans[len(ans)-2] == 6
+function assertans(a, b)
+    assert a == b
+end
+ 
+assertans(ans[len(ans)-1], 4)
+assertans(ans[len(ans)-2], 6)
 
 function sum()
     set x = dup() 

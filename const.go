@@ -5,9 +5,6 @@ const regA = 0x00ffffff
 const (
 	// basic flat op
 	OP_ASSERT = iota + 1
-	OP_NIL
-	OP_TRUE
-	OP_FALSE
 	OP_STORE
 	OP_LOAD
 	OP_ADD
@@ -46,6 +43,8 @@ const (
 	OP_R2K
 	OP_R3
 	OP_R3K
+	OP_R0R2
+	OP_R1R2
 	OP_PUSH
 	OP_PUSHK
 	OP_RET

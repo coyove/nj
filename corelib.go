@@ -3,6 +3,7 @@ package potatolang
 import (
 	"log"
 	"sync"
+	"unsafe"
 )
 
 var CoreLibNames = []string{
@@ -10,6 +11,8 @@ var CoreLibNames = []string{
 }
 
 var CoreLibs = map[string]Value{}
+
+var cancelled = 1
 
 func char(v float64, ascii bool) string {
 	if ascii {
@@ -20,6 +23,7 @@ func char(v float64, ascii bool) string {
 
 func initCoreLibs() {
 	lcore := NewMap()
+	lcore.Puts("cancelled", NewGenericValue(unsafe.Pointer(&cancelled)))
 	lcore.Puts("genlist", NewNativeValue(1, func(env *Env) Value {
 		v := env.SGet(0)
 		if v.ty != Tnumber {
@@ -128,6 +132,63 @@ func initCoreLibs() {
 			m.Puts("wait", NewNativeValue(0, func(env *Env) Value { wg.Wait(); return NewValue() }))
 			return NewMapValue(m)
 		}))))
+
+	lcore.Puts("opcode", NewMapValue(NewMap().
+		Puts("A", NewNumberValue(regA)).
+		Puts("EOB", NewNumberValue(OP_EOB)).
+		Puts("ADD", NewNumberValue(OP_ADD)).
+		Puts("SUB", NewNumberValue(OP_SUB)).
+		Puts("LESS", NewNumberValue(OP_LESS)).
+		Puts("IFNOT", NewNumberValue(OP_IFNOT)).
+		Puts("RET", NewNumberValue(OP_RET)).
+		Puts("PUSH", NewNumberValue(OP_PUSH)).
+		Puts("CALL", NewNumberValue(OP_CALL)).
+		Puts("R0", NewNumberValue(OP_R0)).
+		Puts("R0K", NewNumberValue(OP_R0K)).
+		Puts("R1", NewNumberValue(OP_R1)).
+		Puts("R1K", NewNumberValue(OP_R1K)).
+		Puts("R2", NewNumberValue(OP_R2)).
+		Puts("R2K", NewNumberValue(OP_R2K)).
+		Puts("R3", NewNumberValue(OP_R3)).
+		Puts("R3K", NewNumberValue(OP_R3K)).
+		Puts("R0R2", NewNumberValue(OP_R0R2)).
+		Puts("SET", NewNumberValue(OP_SET)).
+		Puts("closure", NewMapValue(NewMap().
+			Puts("empty", NewNativeValue(0, func(env *Env) Value {
+				cls := NewClosure(make([]uint64, 0), make([]Value, 0), env.parent, 0, false, false, false, false)
+				return NewClosureValue(cls)
+			})).
+			Puts("setparam", NewNativeValue(3, func(env *Env) Value {
+				cls := env.SGet(0).AsClosure()
+				switch name := env.SGet(1).AsString(); name {
+				case "env":
+
+				case "argscount":
+					cls.argsCount = byte(env.SGet(2).AsNumber())
+				case "yieldable":
+					cls.setYieldable(!env.SGet(2).IsFalse())
+				case "envescaped":
+					cls.noenvescape = env.SGet(2).IsFalse()
+				case "errorable":
+					cls.setErrorable(!env.SGet(2).IsFalse())
+				}
+				return NewClosureValue(cls)
+			})).
+			Puts("write", NewNativeValue(4, func(env *Env) Value {
+				cls := env.SGet(0).AsClosure()
+				cls.code = append(cls.code, makeop(
+					byte(env.SGet(1).AsNumber()),
+					uint32(env.SGet(2).AsNumber()),
+					uint32(env.SGet(3).AsNumber()),
+				))
+				return Value{}
+			})).
+			Puts("writeconst", NewNativeValue(2, func(env *Env) Value {
+				cls := env.SGet(0).AsClosure()
+				cls.consts = append(cls.consts, env.SGet(1))
+				return Value{}
+			})))).
+		Puts("_", Value{})))
 
 	CoreLibs["std"] = NewMapValue(lcore)
 
