@@ -17,7 +17,7 @@ type Env struct {
 	trace  []stacktrace
 	stack  []Value
 
-	A, E, R0, R1, R2, R3 Value
+	A, R0, R1, R2, R3 Value
 }
 
 // NewEnv creates the Env for closure to run within

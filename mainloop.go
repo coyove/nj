@@ -87,7 +87,7 @@ func ExecCursor(env *Env, code []uint64, consts []Value, cursor uint32) (Value, 
 		code = r.code
 		caddr = kodeaddr(code)
 		kaddr = r.kaddr
-		r.env.A, r.env.E = v, env.E
+		r.env.A = v
 		if r.noenvescape {
 			newEnv = env
 			newEnv.SClear()
@@ -177,14 +177,14 @@ MAIN:
 			env.A.SetBoolValue(env.R0.IsFalse())
 		case OP_BIT_NOT:
 			if env.R0.ty == Tnumber {
-				env.A.SetNumberValue(float64(^int64(env.R0.AsNumber())))
+				env.A.SetNumberValue(float64(^int32(env.R0.AsNumber())))
 			} else {
 				log.Panicf("can't apply 'bit not' on %+v", env.R0)
 			}
 		case OP_BIT_AND:
 			switch testTypes(env.R0, env.R1) {
 			case _Tnumbernumber:
-				env.A.SetNumberValue(float64(int64(env.R0.AsNumber()) & int64(env.R1.AsNumber())))
+				env.A.SetNumberValue(float64(int32(env.R0.AsNumber()) & int32(env.R1.AsNumber())))
 			case _Tmapmap:
 				tr, m := env.R0.AsMap().Dup(nil), env.R1.AsMap()
 				for _, v := range m.l {
@@ -224,25 +224,25 @@ MAIN:
 			}
 		case OP_BIT_OR:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
-				env.A.SetNumberValue(float64(int64(env.R0.AsNumber()) | int64(env.R1.AsNumber())))
+				env.A.SetNumberValue(float64(int32(env.R0.AsNumber()) | int32(env.R1.AsNumber())))
 			} else {
 				log.Panicf("can't apply 'bit or' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_BIT_XOR:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
-				env.A.SetNumberValue(float64(int64(env.R0.AsNumber()) ^ int64(env.R1.AsNumber())))
+				env.A.SetNumberValue(float64(int32(env.R0.AsNumber()) ^ int32(env.R1.AsNumber())))
 			} else {
 				log.Panicf("can't apply 'bit xor' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_BIT_LSH:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
-				env.A.SetNumberValue(float64(uint64(env.R0.AsNumber()) << uint64(env.R1.AsNumber())))
+				env.A.SetNumberValue(float64(int32(env.R0.AsNumber()) << uint32(env.R1.AsNumber())))
 			} else {
 				log.Panicf("can't apply 'bit lsh' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_BIT_RSH:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
-				env.A.SetNumberValue(float64(uint64(env.R0.AsNumber()) >> uint64(env.R1.AsNumber())))
+				env.A.SetNumberValue(float64(int32(env.R0.AsNumber()) >> uint32(env.R1.AsNumber())))
 			} else {
 				log.Panicf("can't apply 'bit rsh' on %+v and %+v", env.R0, env.R1)
 			}
@@ -331,6 +331,19 @@ MAIN:
 			env.R0 = env.R2
 		case OP_R1R2:
 			env.R1 = env.R2
+		case OP_POP:
+			if x := env.R0; x.ty != Tmap {
+				x.panicType(Tmap)
+			} else {
+				m := x.AsMap()
+				l := m.l
+				if len(l) == 0 {
+					env.A = Value{}
+				} else {
+					env.A = l[len(l)-1]
+					m.l = l[:len(l)-1]
+				}
+			}
 		case OP_PUSH:
 			if newEnv == nil {
 				newEnv = NewEnv(nil)
@@ -386,11 +399,6 @@ MAIN:
 			cls := v.AsClosure()
 			if cls.lastenv != nil {
 				env.A = cls.Exec(newEnv)
-				if cls.lastenv != nil {
-					env.E = cls.lastenv.E
-				} else if newEnv != nil {
-					env.E = newEnv.E
-				}
 				newEnv = nil
 			} else if (newEnv == nil && cls.argsCount > 0) ||
 				(newEnv != nil && newEnv.SSize() < int(cls.argsCount)) {
@@ -415,7 +423,6 @@ MAIN:
 				if cls.Yieldable() || cls.native != nil {
 					newEnv.trace = retStack
 					env.A = cls.Exec(newEnv)
-					env.E = newEnv.E
 				} else {
 					if retStack == nil {
 						retStack = make([]stacktrace, 0, 1)
@@ -552,9 +559,6 @@ func doDup(env *Env) {
 				newEnv.SPush(NewNumberValue(float64(i)))
 				newEnv.SPush(NewNumberValue(float64(v)))
 				newEnv.SPush(NewNumberValue(float64(len(newstr))))
-				if newEnv.E.Type() != Tnil {
-					break
-				}
 				if alloc {
 					v, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
 					newstr = append(newstr, v)
@@ -593,44 +597,13 @@ func doDup(env *Env) {
 	switch env.R1.Type() {
 	case Tmap:
 		if alloc {
-			if cls.Errorable() {
-				// the predicator may return error and interrupt the dup, so full copy is not used here
-				// however cls.errorable is not 100% accurate because calling error() (to check error) and
-				// calling error(...) (to throw error) are different behaviors, but i will left this as a TODO
-				m2 := NewMap()
-				m := env.R1.AsMap()
-				for i, v := range m.l {
-					idx := NewNumberValue(float64(i))
-					newEnv.SClear()
-					newEnv.SPush(idx)
-					newEnv.SPush(v)
-					ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
-					if newEnv.E.Type() != Tnil {
-						break
-					}
-					m2.Put(idx, ret)
-				}
-				for _, v := range m.m {
-					newEnv.SClear()
-					newEnv.SPush(v[0])
-					newEnv.SPush(v[1])
-					ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
-					if newEnv.E.Type() != Tnil {
-						break
-					}
-					m2.Put(v[0], ret)
-				}
-				env.A = NewMapValue(m2)
-			} else {
-				// full copy
-				env.A = NewMapValue(env.R1.AsMap().Dup(func(k Value, v Value) Value {
-					newEnv.SClear()
-					newEnv.SPush(k)
-					newEnv.SPush(v)
-					ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
-					return ret
-				}))
-			}
+			env.A = NewMapValue(env.R1.AsMap().Dup(func(k Value, v Value) Value {
+				newEnv.SClear()
+				newEnv.SPush(k)
+				newEnv.SPush(v)
+				ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
+				return ret
+			}))
 		} else {
 			m := env.R1.AsMap()
 			for i, v := range m.l {
@@ -638,18 +611,12 @@ func doDup(env *Env) {
 				newEnv.SPush(NewNumberValue(float64(i)))
 				newEnv.SPush(v)
 				ExecCursor(newEnv, cls.code, cls.consts, 0)
-				if newEnv.E.Type() != Tnil {
-					break
-				}
 			}
 			for _, v := range m.m {
 				newEnv.SClear()
 				newEnv.SPush(v[0])
 				newEnv.SPush(v[1])
 				ExecCursor(newEnv, cls.code, cls.consts, 0)
-				if newEnv.E.Type() != Tnil {
-					break
-				}
 			}
 		}
 	}

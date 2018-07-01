@@ -380,11 +380,15 @@ expr:
             $$.Compound[0].Pos = $2.Pos
         } |
         '~' expr %prec UNARY {
-            $$ = NewCompoundNode("bitnot", $2)
+            $$ = NewCompoundNode("~", $2)
             $$.Compound[0].Pos = $2.Pos
         } |
         '!' expr %prec UNARY {
             $$ = NewCompoundNode("!", $2)
+            $$.Compound[0].Pos = $2.Pos
+        } |
+        '#' expr %prec UNARY {
+            $$ = NewCompoundNode("#", $2)
             $$.Compound[0].Pos = $2.Pos
         }
 

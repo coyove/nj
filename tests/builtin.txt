@@ -12,6 +12,10 @@ func assertans(a, b) {
 assertans(ans[len(ans)-1], 4);
 assertans(ans[len(ans)-2], 6);
 
+assertans(#ans, 4);
+assertans(#ans, 6);
+assert len(ans) == 1; // left var: c
+
 var dz = for(1);
 assert dz == 1;
 
