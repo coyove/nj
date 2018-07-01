@@ -42,9 +42,13 @@ func TestSStd(t *testing.T) {
 	runFile(t, "tests/std.txt")
 }
 
+func TestSLoop(t *testing.T) {
+	runFile(t, "tests/loop.txt")
+}
+
 func TestArithmeticUnfold(t *testing.T) {
 	cls, err := LoadString(`
-		return 1 + 2 * 3 / 4
+		return 1 + 2 * 3 / 4;
 `, false)
 	if err != nil {
 		t.Error(err)
@@ -66,15 +70,15 @@ func TestArithmeticUnfold(t *testing.T) {
 
 func TestRegisterOptimzation(t *testing.T) {
 	cls, err := LoadString(`
-		set a, b = 1, 2
-		set c = 0
-		if 0 then
-			a = 2
-			b = 3
-			c = a + b
-		end
-		c = a + b
-		return c
+		var a, b = 1, 2;
+		var c = 0;
+		if (0) {
+			a = 2;
+			b = 3;
+			c = a + b;
+	}
+		c = a + b;
+		return c;
 `, false)
 	if err != nil {
 		t.Error(err)

@@ -57,7 +57,6 @@ const (
 
 	// special builtin op
 	OP_DUP
-	OP_ERROR
 	OP_LEN
 	OP_TYPEOF
 

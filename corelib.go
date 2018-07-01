@@ -31,12 +31,19 @@ func initCoreLibs() {
 		}
 		return NewMapValue(NewMapSize(int(v.AsNumber())))
 	}))
-	lcore.Puts("noenvescape", NewNativeValue(1, func(env *Env) Value {
-		if env.SGet(0).ty != Tclosure {
-			env.SGet(0).panicType(Tclosure)
+	lcore.Puts("apply", NewNativeValue(2, func(env *Env) Value {
+		x, y := env.SGet(0), env.SGet(1)
+		if x.ty != Tclosure {
+			x.panicType(Tclosure)
 		}
-		env.SGet(0).AsClosure().noenvescape = true
-		return env.SGet(0)
+		if y.ty != Tmap {
+			y.panicType(Tmap)
+		}
+		newEnv := NewEnv(x.AsClosure().env)
+		for _, v := range y.AsMap().l {
+			newEnv.SPush(v)
+		}
+		return x.AsClosure().Exec(newEnv)
 	}))
 	lcore.Puts("stacktrace", NewNativeValue(0, func(env *Env) Value {
 		e := ExecError{stacks: env.trace}
@@ -138,6 +145,8 @@ func initCoreLibs() {
 		Puts("EOB", NewNumberValue(OP_EOB)).
 		Puts("ADD", NewNumberValue(OP_ADD)).
 		Puts("SUB", NewNumberValue(OP_SUB)).
+		Puts("MUL", NewNumberValue(OP_MUL)).
+		Puts("DIV", NewNumberValue(OP_DIV)).
 		Puts("LESS", NewNumberValue(OP_LESS)).
 		Puts("IFNOT", NewNumberValue(OP_IFNOT)).
 		Puts("RET", NewNumberValue(OP_RET)).

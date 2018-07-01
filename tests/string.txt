@@ -1,39 +1,13 @@
-assert "abc" == "abc"
-assert "abc" == "\97\98\99"
-assert "abc" == "\x61\x62\x63"
-assert "abc吱吱吱" == "abc" + "吱吱" + "吱"
-assert "abc吱吱吱" == "abc\u5431\u5431\u5431"
+assert "abc" == "abc";
+assert "abc" == "\97\98\99";
+assert "abc" == "\x61\x62\x63";
+assert "abc吱吱吱" == "abc" + "吱吱" + "吱";
+assert "abc吱吱吱" == "abc\u5431\u5431\u5431";
 
-assert ssszzz
- text block \n
-endzzz == " " + "text block \\n" + "\n"
+var dupcheck = {97,98,99,32452};
+for(std.sub("abc组织者",0, 6), func (i, r)  {
+    assert dupcheck[i] == r ;
+});
 
-assert sss一 
- text block \n
-end一 == "\n " + "text block \\n" + "\n"
-
-assert sss 
- text block \nend == "\n " + "text block \\n"
-
-set stR = 1 # normal var name starts with 'st' should not be affected
-assert stR == 1
-
-set dupcheck = {97,98,99,32452}
-dup("abc组织者", function (i, r) 
-    assert dupcheck[i] == r 
-    if i == 3 then error(1) end
- end)
-
-
-set m ={}
-set i = 0 for i < 100 , i = i +1 do m["" & i] = i end
-dup(m, function(k,v)
-    if k == "50" then
-        std.remove(m, k)
-        std.remove(m, "51")
-    end 
-end)
-io.println(m)
-
-assert "" & 1  == "1"
-assert "" & 10000000000 == "10000000000"
+assert "" & 1  == "1";
+assert "" & 10000000000 == "10000000000";

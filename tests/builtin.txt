@@ -1,92 +1,85 @@
-function foo1(c)
-    set a = 3 * c
-    set b = 2 * c
-    return dup()
-end
-
-set ans = foo1()(2)
-function assertans(a, b)
-    assert a == b
-end
- 
-assertans(ans[len(ans)-1], 4)
-assertans(ans[len(ans)-2], 6)
-
-function sum()
-    set x = dup() 
-    set s = 0
-    if typeof(x[0], string) then s = "" end
-
-    dup(x, function(i, n) s = s + n end)
-    return s
-end
-
-assert sum(1, -1) == 0
-assert sum(1, 2, 3) == 6 
-assert sum("1", "2") == "12"
-
-set m = {
-    "c" = 123, 
-    "a" = "a",
-    "incr" = function(this)
-        this.c = this.c + 1
-        return this
-    end
+func foo1(c) {
+    var a = 3 * c;
+    var b = 2 * c;
+    return for();
 }
-set mp = m
-set  m2 = dup(m)
 
-m.incr()
-assert m.c == 124
-mp.incr()
-assert m.c == 125
+var ans = foo1()(2);
+func assertans(a, b) {
+    assert a == b;
+}
+ 
+assertans(ans[len(ans)-1], 4);
+assertans(ans[len(ans)-2], 6);
 
-m2.incr().incr()
+var dz = for(1);
+assert dz == 1;
 
-assert m.c == 125
-assert m2.c == 125
+func sum() {
+    var x = for(for()) ;
+    var s = 0;
+    if (typeof(x[0], string)) { 
+        s = "";
+    }
 
-function errtest(a, b)
-    if b == 0 then 
-        error("divided by zero")
-        return
-    else
-        return a / b
-    end
-end
+    for(x, func(i, n) {s = s + n;});
+    return s;
+}
 
-assert errtest(1, 2) == 0.5
-errtest(1, 1 - 1)
-assert error() == "divided by zero"
+assert sum(1, -1) == 0;
+assert sum(1, 2, 3) == 6 ;
+assert sum("1", "2") == "12";
 
-set a = {1,2,3}
-dup(a, function(i, v) a[i] = v + 1 end)
-assert a == {2,3,4}
+var m = {
+    "c": 123, 
+    "a": "a",
+    "incr": func(this) {
+        this.c = this.c + 1;
+        return this;
+    }
+};
 
-a = "hello world"
-set upper = function(i, r) if i == 0 then return r - 32 else return r end end
-dup(a, upper)
-assert a == "hello world"
-a = dup(a, upper)
-assert "" & a == "Hello world"
+var mp = m;
+var  m2 = for(m);
 
-assert typeof(a) == "map"
-assert typeof(a, map)
+m.incr();
+assert m.c == 124;
+mp.incr();
+assert m.c == 125;
 
-a = dup(a, function(i,b) if i == 5 then error(true) end return b end)
-assert "" & a == "Hello"
+m2.incr().incr();
+
+assert m.c == 125;
+assert m2.c == 125;
+
+var a = {1,2,3};
+for(a, func(i, v) {a[i] = v + 1;});
+assert a == {2,3,4};
+
+a = "hello world";
+var upper = func(i, r) { if (i == 0 ) { return r - 32; } else { return r;}};
+for(a, upper);
+assert a == "hello world";
+a = for(a, upper);
+assert "" & a == "Hello world";
+
+assert typeof(a) == "map";
+assert typeof(a, map);
+
+// a = for(a, func(i,b) { if (i == 5) { error(true) end return b end);
+// assert "" & a == "Hello";
 
 a = {
-    (function() return "key" end)() = "value"
-}
-assert a.key == "value" and a["key"] == "value"
+    (func() {return "key";})() : "value",
+};
+assert a.key == "value" && a["key"] == "value";
 
-assert(0 & ("0x0")) == 0
-assert(0 & ("0xa")) == 10
-assert(0 & ("0xA")) == 10
-assert(0 & ("1")) == 1
-assert(0 & ("+0.0")) == 0.0
-assert(0 & ("0i12345678")) == 0i12345678
-assert(0 & ("-10e-2")) == -10e-2
-assert(0 & ("1.2a")) == nil
-assert(0 & ("0xabcdefg")) == nil
+assert(0 & ("0x0")) == 0;
+assert(0 & ("0xa")) == 10;
+assert(0 & ("0xA")) == 10;
+assert(0 & ("1")) == 1;
+assert(0 & ("+0.0")) == 0.0;
+assert(0 & ("0i12345678")) == 0i12345678;
+assert(0 & ("-10e-2")) == -10e-2;
+assert(0 & ("1.2a")) == nil;
+assert(0 & ("0xabcdefg")) == nil;

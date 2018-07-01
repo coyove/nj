@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"os"
 
 	"github.com/coyove/potatolang/parser"
 )
@@ -163,7 +165,7 @@ func init() {
 
 	flatOpMapping = map[string]byte{
 		"+": OP_ADD, "-": OP_SUB, "*": OP_MUL, "/": OP_DIV, "%": OP_MOD,
-		"<": OP_LESS, "<=": OP_LESS_EQ, "eq": OP_EQ, "neq": OP_NEQ, "not": OP_NOT,
+		"<": OP_LESS, "<=": OP_LESS_EQ, "==": OP_EQ, "!=": OP_NEQ, "!": OP_NOT,
 		"~": OP_BIT_NOT, "&": OP_BIT_AND, "|": OP_BIT_OR, "^": OP_BIT_XOR, "<<": OP_BIT_LSH, ">>": OP_BIT_RSH,
 		"store": OP_STORE, "load": OP_LOAD, "assert": OP_ASSERT,
 	}
@@ -310,7 +312,9 @@ func compile(sp uint16, nodes []*parser.Node, table *symtable) (code []uint64, y
 		return f(sp, nodes, table)
 	}
 
-	panic(nodes[0].Value)
+	nodes[0].Dump(os.Stderr)
+	log.Panicf("invalid op: %v", nodes)
+	return
 }
 
 func compileChainOp(sp uint16, chain *parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
@@ -380,7 +384,8 @@ func LoadFile(path string, lineinfo bool) (*Closure, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	// n.Dump(os.Stderr)
+	// panic(10)
 	return compileNode(n, lineinfo)
 }
 

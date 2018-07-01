@@ -340,12 +340,18 @@ func compileCallOp(sp uint16, nodes []*parser.Node, table *symtable) (code []uin
 	callee := nodes[1]
 	name, _ := callee.Value.(string)
 	switch name {
-	case "error":
-		table.e = true
-		return flatWrite(sp, append(nodes[1:2], nodes[2].Compound...), table, OP_ERROR)
+	case "addressof":
+		varname := nodes[2].Compound[0].Value.(string)
+		address, ok := table.get(varname)
+		if !ok {
+			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, callee)
+			return
+		}
+		buf.WriteOP(OP_SETK, regA, uint32(table.addConst(float64(address))))
+		return buf.data, regA, sp, nil
 	case "len":
 		return flatWrite(sp, append(nodes[1:2], nodes[2].Compound...), table, OP_LEN)
-	case "dup":
+	case "foreach":
 		x := append(nodes[1:2], nodes[2].Compound...)
 		if y, ok := x[3].Value.(float64); ok && y == 2 {
 			// return stack, env is escaped

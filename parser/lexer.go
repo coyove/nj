@@ -117,6 +117,20 @@ func (sc *Scanner) skipComments(ch int) error {
 	return nil
 }
 
+func (sc *Scanner) skipBlockComments() error {
+	for {
+		a := sc.Next()
+		if a == EOF {
+			return sc.Error("", "unterminated block comments")
+		}
+		b := sc.Peek()
+		if a == '*' && b == '/' {
+			sc.Next()
+			return nil
+		}
+	}
+}
+
 func (sc *Scanner) scanIdent(ch int, buf *bytes.Buffer) error {
 	writeChar(buf, ch)
 	for isIdent(sc.Peek(), 1) {
@@ -292,9 +306,9 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 }
 
 var reservedWords = map[string]int{
-	"and": TAnd, "assert": TAssert, "break": TBreak, "continue": TContinue, "do": TDo, "else": TElse, "elseif": TElseIf,
-	"end": TEnd, "for": TFor, "function": TLambda, "list": TList, "if": TIf, "set": TSet, "nil": TNil,
-	"not": TNot, "or": TOr, "return": TReturn, "require": TRequire, "then": TThen, "yield": TYield,
+	"assert": TAssert, "break": TBreak, "continue": TContinue, "else": TElse,
+	"for": TFor, "func": TFunc, "if": TIf, "nil": TNil,
+	"return": TReturn, "require": TRequire, "var": TVar, "yield": TYield,
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
@@ -321,23 +335,24 @@ redo:
 
 	switch {
 	case isIdent(ch, 0):
-		if ch == 's' && sc.Peek() == 's' {
-			if sc.Next(); sc.Peek() == 's' {
-				sc.Next()
-				tok.Type = TString
-				err = sc.scanBlockString(buf)
-				tok.Str = buf.String()
-				break
-			}
+		// if ch == 's' && sc.Peek() == 's' {
+		// 	if sc.Next(); sc.Peek() == 's' {
+		// 		sc.Next()
+		// 		tok.Type = TString
+		// 		err = sc.scanBlockString(buf)
+		// 		tok.Str = buf.String()
+		// 		break
+		// 	}
 
-			writeChar(buf, 's')
-			ch = 's'
-			// continue normal identifier scanning
-		}
+		// 	writeChar(buf, 's')
+		// 	ch = 's'
+		// 	// continue normal identifier scanning
+		// }
 
 		tok.Type = TIdent
 		err = sc.scanIdent(ch, buf)
 		tok.Str = buf.String()
+
 		if err != nil {
 			goto finally
 		}
@@ -352,12 +367,25 @@ redo:
 		switch ch {
 		case EOF:
 			tok.Type = EOF
-		case '#':
-			err = sc.skipComments(sc.Next())
-			if err != nil {
-				goto finally
+		case '/':
+			switch sc.Peek() {
+			case '/':
+				err = sc.skipComments(sc.Next())
+				if err != nil {
+					goto finally
+				}
+				goto redo
+			case '*':
+				sc.Next()
+				err = sc.skipBlockComments()
+				if err != nil {
+					goto finally
+				}
+				goto redo
+			default:
+				tok.Type = ch
+				tok.Str = string(ch)
 			}
-			goto redo
 		case '"', '\'':
 			tok.Type = TString
 			err = sc.scanString(ch, buf)
@@ -365,10 +393,17 @@ redo:
 		case '[':
 			tok.Type = ch
 			tok.Str = string(ch)
-		case '=':
-			if sc.Peek() == '=' {
-				tok.Type = TEqeq
-				tok.Str = "=="
+		case '=', '&', '|':
+			if sc.Peek() == ch {
+				switch ch {
+				case '=':
+					tok.Type = TEqeq
+				case '&':
+					tok.Type = TAnd
+				case '|':
+					tok.Type = TOr
+				}
+				tok.Str = string(ch) + string(ch)
 				sc.Next()
 			} else {
 				tok.Type = ch
@@ -380,7 +415,8 @@ redo:
 				tok.Str = "!="
 				sc.Next()
 			} else {
-				err = sc.Error("!", "invalid '!' token")
+				tok.Type = ch
+				tok.Str = string(ch)
 			}
 		case '<':
 			if sc.Peek() == '=' {
@@ -419,7 +455,7 @@ redo:
 				tok.Type = '.'
 			}
 			tok.Str = buf.String()
-		case '-', '+', '*', '/', '%', '^', '(', ')', '{', '}', ']', ';', ':', ',', '|', '&', '~':
+		case '+', '-', '*', '%', '^', '(', ')', '{', '}', ']', ';', ':', ',', '~':
 			tok.Type = ch
 			tok.Str = string(ch)
 		default:
@@ -469,11 +505,11 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 func Parse(reader io.Reader, name string) (chunk *Node, err error) {
 	lexer := &Lexer{NewScanner(reader, name), nil, false, Token{Str: ""}, TNil}
 	chunk = nil
-	defer func() {
-		if e := recover(); e != nil {
-			err, _ = e.(error)
-		}
-	}()
+	// defer func() {
+	// 	if e := recover(); e != nil {
+	// 		err, _ = e.(error)
+	// 	}
+	// }()
 	yyParse(lexer)
 	chunk = lexer.Stmts
 	return

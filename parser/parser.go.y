@@ -8,41 +8,38 @@ import (
 )
 
 %}
-%type<stmts> block
-%type<stmt>  stat
-%type<stmts> elseifs
-%type<expr> var
-%type<namelist> namelist
-%type<exprlist> exprlist
-%type<exprlist> exprlistassign
+%type<expr> stats
+%type<expr> block
+%type<expr> stat
+%type<expr> declarator
+%type<expr> ident_list
+%type<expr> expr_list
+%type<expr> expr_assign_list
 %type<expr> expr
 %type<expr> string
-%type<expr> prefixexp
-%type<expr> functioncall
-%type<expr> afunctioncall
-%type<exprlist> args
+
+%type<expr> prefix_expr
+%type<expr> assign_stat
+%type<expr> for_stat
+%type<expr> if_stat
+%type<expr> jmp_stat
+%type<expr> func_stat
+%type<expr> flow_stat
+
+%type<expr> func_call
+%type<expr> func_args
 %type<expr> function
-%type<expr> functionargnames
-%type<expr> mapgen
-%type<expr> mapgenlist
+%type<expr> func_params_list
+%type<expr> map_gen
+%type<expr> _map_gen
 
 %union {
   token  Token
-
-  stmts    *Node
-  stmt     *Node
-
-  funcname interface{}
-  funcexpr interface{}
-
-  exprlist *Node
-  expr     *Node
-
-  namelist *Node
+  expr   *Node
 }
 
 /* Reserved words */
-%token<token> TAnd TAssert TBreak TContinue TDo TElse TElseIf TEnd TFor TIf TLambda TList TNil TNot TOr TReturn TRequire TSet TThen TYield
+%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TNil TReturn TRequire TVar TYield
 
 /* Literals */
 %token<token> TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
@@ -60,32 +57,79 @@ import (
 
 %% 
 
-block: 
+stats: 
         {
             $$ = NewCompoundNode("chain")
             if l, ok := yylex.(*Lexer); ok {
                 l.Stmts = $$
             }
         } |
-        block stat {
-            if $2.isIsolatedDupCall() {
-                $2.Compound[2].Compound[0] = NewNumberNode("0")
-            }
+        stats stat {
             $1.Compound = append($1.Compound, $2)
-            $$ = $1
-            if l, ok := yylex.(*Lexer); ok {
-                l.Stmts = $$
-            }
-        } | 
-        block ';' {
             $$ = $1
             if l, ok := yylex.(*Lexer); ok {
                 l.Stmts = $$
             }
         }
 
+block: 
+        '{' stats '}' {
+            $$ = $2
+        }
+
 stat:
-        var '=' expr {
+        ';' {
+            $$ = NewCompoundNode()
+        } |
+        assign_stat ';' {
+            if $1.isIsolatedDupCall() {
+                $1.Compound[2].Compound[0] = NewNumberNode("0")
+            }
+            $$ = $1
+        } |
+        jmp_stat ';' {
+            $$ = $1
+        } |
+        flow_stat {
+            $$ = $1
+        }
+
+flow_stat:
+        for_stat {
+            $$ = $1
+        } |
+        if_stat {
+            $$ = $1
+        } |
+        func_stat {
+            $$ = $1
+        }
+
+assign_stat:
+        TVar ident_list '=' expr_list {
+            $$ = NewCompoundNode("chain")
+            for i, name := range $2.Compound {
+                var e *Node
+                if i < len($4.Compound) {
+                    e = $4.Compound[i]
+                } else {
+                    e = $4.Compound[len($4.Compound) - 1]
+                }
+                c := NewCompoundNode("set", name, e)
+                name.Pos, e.Pos = $1.Pos, $1.Pos
+                c.Compound[0].Pos = $1.Pos
+                $$.Compound = append($$.Compound, c)
+            }
+        } |
+        TVar ident_list {
+            $$ = NewCompoundNode("chain")
+            for _, name := range $2.Compound {
+                c := NewCompoundNode("set", name, NewNilNode())
+                c.Compound[0].Pos = $1.Pos
+                $$.Compound = append($$.Compound, c)
+            }
+        } |
+        declarator '=' expr {
             $$ = NewCompoundNode("move", $1, $3)
             if len($1.Compound) > 0 {
                 if c, _ := $1.Compound[0].Value.(string); c == "load" {
@@ -105,60 +149,47 @@ stat:
             }
             $$.Compound[0].Pos = $1.Pos
         } |
-        /* 'stat = functioncal' causes a reduce/reduce conflict */
-        prefixexp {
-            // if _, ok := $1.(*FuncCallExpr); !ok {
-            //    yylex.(*Lexer).Error("parse error")
-            // } else {
+        prefix_expr {
             $$ = $1
-            // }
-        } |
-        TFor expr TDo block TEnd {
-            $$ = NewCompoundNode("for", $2, NewCompoundNode(), $4)
+        }
+
+for_stat:
+        TFor '(' expr ')' block {
+            $$ = NewCompoundNode("for", $3, NewCompoundNode(), $5)
             $$.Compound[0].Pos = $1.Pos
         } |
-        TFor expr ',' stat TDo block TEnd {
-            $$ = NewCompoundNode("for", $2, NewCompoundNode("chain", $4), $6)
+        TFor '(' ';' expr ';' assign_stat ')' block {
+            $$ = NewCompoundNode("for", $4, NewCompoundNode("chain", $6), $8)
             $$.Compound[0].Pos = $1.Pos
         } |
-        TLambda TIdent functionargnames block TEnd {
+        TFor '(' assign_stat ';' expr ';' assign_stat ')' block {
+            $$ = NewCompoundNode("chain",
+                $3,
+                NewCompoundNode("for", $5, NewCompoundNode("chain", $7), $9))
+            $$.Compound[0].Pos = $1.Pos
+        }
+
+if_stat:
+        TIf '(' expr ')' block {
+            $$ = NewCompoundNode("if", $3, $5, NewCompoundNode())
+        } |
+        TIf '(' expr ')' block TElse block {
+            $$ = NewCompoundNode("if", $3, $5, $7)
+        } |
+        TIf '(' expr ')' block TElse if_stat {
+            $$ = NewCompoundNode("if", $3, $5, NewCompoundNode("chain", $7))
+        }
+
+func_stat:
+        TFunc TIdent func_params_list block {
             funcname := NewAtomNode($2)
-            $$ = NewCompoundNode("chain", NewCompoundNode("set", funcname, NewNilNode()), NewCompoundNode("move", funcname, NewCompoundNode("lambda", $3, $4)))
-        } |
-        TIf expr TThen block elseifs TEnd {
-            $$ = NewCompoundNode("if", $2, $4, NewCompoundNode())
-            $$.Compound[0].Pos = $1.Pos
-            cur := $$
-            for _, e := range $5.Compound {
-                cur.Compound[3] = NewCompoundNode("chain", e)
-                cur = e
-            }
-        } |
-        TIf expr TThen block elseifs TElse block TEnd {
-            $$ = NewCompoundNode("if", $2, $4, NewCompoundNode())
-            $$.Compound[0].Pos = $1.Pos
-            cur := $$
-            for _, e := range $5.Compound {
-                cur.Compound[3] = NewCompoundNode("chain", e)
-                cur = e
-            }
-            cur.Compound[3] = $7
-        } |
-        TSet namelist '=' exprlist {
-            $$ = NewCompoundNode("chain")
-            for i, name := range $2.Compound {
-                var e *Node
-                if i < len($4.Compound) {
-                    e = $4.Compound[i]
-                } else {
-                    e = $4.Compound[len($4.Compound) - 1]
-                }
-                c := NewCompoundNode("set", name, e)
-                name.Pos, e.Pos = $1.Pos, $1.Pos
-                c.Compound[0].Pos = $1.Pos
-                $$.Compound = append($$.Compound, c)
-            }
-        } |
+            $$ = NewCompoundNode(
+                "chain", 
+                NewCompoundNode("set", funcname, NewNilNode()), 
+                NewCompoundNode("move", funcname, NewCompoundNode("lambda", $3, $4)))
+        }
+
+jmp_stat:
         TReturn {
             $$ = NewCompoundNode("ret")
             $$.Compound[0].Pos = $1.Pos
@@ -213,48 +244,40 @@ stat:
             $$ = NewCompoundNode("set", filename, call)
         }
 
-elseifs: 
-        {
-            $$ = NewCompoundNode()
-        } | 
-        elseifs TElseIf expr TThen block {
-            $$.Compound = append($1.Compound, NewCompoundNode("if", $3, $5, NewCompoundNode()))
-        }
-
-var:
+declarator:
         TIdent {
             $$ = NewAtomNode($1)
         } |
-        prefixexp '[' expr ']' {
+        prefix_expr '[' expr ']' {
             $$ = NewCompoundNode("load", $1, $3)
         } |
-        prefixexp '.' TIdent {
+        prefix_expr '.' TIdent {
             $$ = NewCompoundNode("load", $1, NewStringNode($3.Str))
         }
 
-namelist:
+ident_list:
         TIdent {
             $$ = NewCompoundNode($1.Str)
         } | 
-        namelist ',' TIdent {
+        ident_list ',' TIdent {
             $1.Compound = append($1.Compound, NewAtomNode($3))
             $$ = $1
         }
 
-exprlist:
+expr_list:
         expr {
             $$ = NewCompoundNode($1)
         } |
-        exprlist ',' expr {
+        expr_list ',' expr {
             $1.Compound = append($1.Compound, $3)
             $$ = $1
         }
 
-exprlistassign:
-        expr '=' expr {
+expr_assign_list:
+        expr ':' expr {
             $$ = NewCompoundNode($1, $3)
         } |
-        exprlistassign ',' expr '=' expr {
+        expr_assign_list ',' expr ':' expr {
             $1.Compound = append($1.Compound, $3, $5)
             $$ = $1
         }
@@ -271,10 +294,10 @@ expr:
         function {
             $$ = $1
         } |
-        mapgen {
+        map_gen {
             $$ = $1
-        } | 
-        prefixexp {
+        } |
+        prefix_expr {
             $$ = $1
         } |
         string {
@@ -305,11 +328,11 @@ expr:
             $$.Compound[0].Pos = $1.Pos
         } |
         expr TEqeq expr {
-            $$ = NewCompoundNode("eq", $1,$3)
+            $$ = NewCompoundNode("==", $1,$3)
             $$.Compound[0].Pos = $1.Pos
         } |
         expr TNeq expr {
-            $$ = NewCompoundNode("neq", $1,$3)
+            $$ = NewCompoundNode("!=", $1,$3)
             $$.Compound[0].Pos = $1.Pos
         } |
         expr '+' expr {
@@ -357,11 +380,11 @@ expr:
             $$.Compound[0].Pos = $2.Pos
         } |
         '~' expr %prec UNARY {
-            $$ = NewCompoundNode("~", $2)
+            $$ = NewCompoundNode("bitnot", $2)
             $$.Compound[0].Pos = $2.Pos
         } |
-        TNot expr %prec UNARY {
-            $$ = NewCompoundNode("not", $2)
+        '!' expr %prec UNARY {
+            $$ = NewCompoundNode("!", $2)
             $$.Compound[0].Pos = $2.Pos
         }
 
@@ -371,47 +394,35 @@ string:
             $$.Pos = $1.Pos
         } 
 
-prefixexp:
-        var {
+prefix_expr:
+        declarator {
             $$ = $1
         } |
-        afunctioncall {
-            $$ = $1
+        '(' func_call ')' {
+            $$ = $2
         } |
-        functioncall {
+        func_call {
             $$ = $1
         } |
         '(' expr ')' {
             $$ = $2
-        }
+        }        
 
-afunctioncall:
-        '(' functioncall ')' {
-            $$ = $2
-        }
-
-functioncall:
-        prefixexp args {
+func_call:
+        TFor '(' ')' {
+            $$ = NewCompoundNode("call", "foreach", NewCompoundNode(NewNumberNode("1"), NewNumberNode("1"), NewNumberNode("1")))
+        } |
+        TFor '(' expr ')' {
+            $$ = NewCompoundNode("call", "foreach", NewCompoundNode(NewNumberNode("1"), $3, NewNumberNode("0")))
+        } |
+        TFor '(' expr ',' expr ')' {
+            if $5.Type != NTCompound && $5.Type != NTAtom {
+                yylex.(*Lexer).Error("the second argument of 'for' must be a closure")
+            }
+            $$ = NewCompoundNode("call", "foreach", NewCompoundNode(NewNumberNode("1"), $3, $5))
+        } |
+        prefix_expr func_args {
             switch c, _ := $1.Value.(string); c {
-            case "dup":
-                switch len($2.Compound) {
-                case 0:
-                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), NewNumberNode("1"), NewNumberNode("1")))
-                case 1:
-                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), $2.Compound[0], NewNumberNode("0")))
-                default:
-                    p := $2.Compound[1]
-                    if p.Type != NTCompound && p.Type != NTAtom {
-                        yylex.(*Lexer).Error("the second argument of dup must be a closure")
-                    }
-                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), $2.Compound[0], p))
-                }
-            case "error":
-                if len($2.Compound) == 0 {
-                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNilNode()))
-                } else {
-                    $$ = NewCompoundNode("call", $1, $2)
-                }
             case "typeof":
                 switch len($2.Compound) {
                 case 0:
@@ -436,6 +447,14 @@ functioncall:
                         $$ = NewCompoundNode("call", $1, NewCompoundNode($2.Compound[0], $2.Compound[1]))
                     }
                 }
+            case "addressof":
+                if len($2.Compound) != 1 {
+                    yylex.(*Lexer).Error("addressof takes 1 argument")
+                }
+                if $2.Compound[0].Type != NTAtom {
+                    yylex.(*Lexer).Error("addressof can only get the address of a variable")
+                }
+                $$ = NewCompoundNode("call", $1, $2)
             case "len":
                 switch len($2.Compound) {
                 case 0:
@@ -448,14 +467,14 @@ functioncall:
             }
         }
 
-args:
+func_args:
         '(' ')' {
             if yylex.(*Lexer).PNewLine {
                yylex.(*Lexer).TokenError($1, "ambiguous syntax (function call x new statement)")
             }
             $$ = NewCompoundNode()
         } |
-        '(' exprlist ')' {
+        '(' expr_list ')' {
             if yylex.(*Lexer).PNewLine {
                yylex.(*Lexer).TokenError($1, "ambiguous syntax (function call x new statement)")
             }
@@ -463,39 +482,39 @@ args:
         }
 
 function:
-        TLambda functionargnames block TEnd {
+        TFunc func_params_list block {
             $$ = NewCompoundNode("lambda", $2, $3)
             $$.Compound[0].Pos = $1.Pos
         }
 
-functionargnames:
+func_params_list:
         '(' ')' {
             $$ = NewCompoundNode()
         } |
-        '(' namelist ')' {
+        '(' ident_list ')' {
             $$ = $2
         }
 
-mapgen:
+map_gen:
         '{' '}' {
             $$ = NewCompoundNode("map", NewCompoundNode())
             $$.Compound[0].Pos = $1.Pos
         } |
-        '{' mapgenlist '}' {
+        '{' _map_gen '}' {
             $$ = $2
             $$.Compound[0].Pos = $1.Pos
         }
 
-mapgenlist:
-        exprlistassign {
+_map_gen:
+        expr_assign_list {
             $$ = NewCompoundNode("map", $1)
             $$.Compound[0].Pos = $1.Pos
         } |
-        exprlistassign ',' {
+        expr_assign_list ',' {
             $$ = NewCompoundNode("map", $1)
             $$.Compound[0].Pos = $1.Pos
         } |
-        exprlist {
+        expr_list {
             table := NewCompoundNode()
             for i, v := range $1.Compound {
                 table.Compound = append(table.Compound, 
@@ -505,7 +524,7 @@ mapgenlist:
             $$ = NewCompoundNode("map", table)
             $$.Compound[0].Pos = $1.Pos
         } |
-        exprlist ',' {
+        expr_list ',' {
             table := NewCompoundNode()
             for i, v := range $1.Compound {
                 table.Compound = append(table.Compound, 

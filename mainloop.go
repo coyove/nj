@@ -261,13 +261,6 @@ MAIN:
 			default:
 				log.Panicf("can't evaluate the length of %+v", v)
 			}
-		case OP_ERROR:
-			if env.R0.ty != Tnil {
-				env.E = env.R0
-			} else {
-				env.A = env.E
-				env.E = NewValue()
-			}
 		case OP_MAKEMAP:
 			if newEnv == nil {
 				env.A = NewMapValue(NewMap())
