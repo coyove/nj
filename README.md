@@ -1,6 +1,6 @@
 # potatolang
 
-potatolang is a C-like language.
+potatolang is a C/js-like language written in golang.
 
 ## Quick go through
 
@@ -38,9 +38,11 @@ potatolang is a C-like language.
             assert k == ("" & v);
         });
 
-        // provide a function as the second function:
+        // provide a second argument to copy:
         var c = copy(a, func(i, n) { return n + 1; });
         assert c == { 2, 3 } and a == { 1, 2 };
+
+2. Advanced `copy`:
 
         // if you want to return multiple results, use this trick:
         func foo(c) {
@@ -68,7 +70,7 @@ potatolang is a C-like language.
         }
 
         assert sum(1, 2, 3) == 6;
-        assert sum("a", "b", "c") == "abc";
+        assert sum("a", "b", "c") == "cba";  // goto "Misc" section to see why
 
         // string is immutable, copy(str) will return an array of its bytes:
         var a = "text";
@@ -91,7 +93,7 @@ potatolang is a C-like language.
 
         // a and b are dead, and back to the start state, so now: a() == 1 && b() == 1
 
-2. Use `&` to concat strings and numbers:
+2. Use `&` to concatenate two values, `+` to add or append values:
 
         var a = 1;
         var b = a + "2";         // runtime panic
@@ -122,20 +124,18 @@ potatolang is a C-like language.
         // func(this, a, b) and func(a, this, b) are the same,
         // both of them will be compiled into: func(a, b, this)
 
-2. Other than 'func', using '{' and '}' don't create a new namespace:
+2. Other than `func`, `if` and `for` don't create a new namespace:
 
-        if (1) {
-            var a = 0;
-        }
-        if (1) {
-            var a = 1;
-        }
-        // both 'a' are the same 'a'
+        if (1) var a = 0; 
+        if (1) var a = 1; 
+        for (1) var a = 1;
+        // all 'a' are the same 'a'
         // a == 1
 
 2. Misc:
 
-        There is no 'switch' statement;
+        There is no 'switch' statement, 'if' is enough;
         There is no '++' or '--' expressions;
-        When using 'copy' to iterate over an array, it loops in a reversed order; 
-
+        When using 'copy' to iterate over an array, it loops in a reversed order;
+        And-or trick: 'a && b || c' means 'a ? b : c';
+        Bitwise operations are all based on signed 32bit integers;

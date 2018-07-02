@@ -107,8 +107,8 @@ assert m2 == m;
 
 a = 0i0;
 var b = 0iffffffffffffffff;
-assert math.u64.ieq(math.u64.ixor(a, b), b);
-a = math.u64.ieq(12);
+assert math.u64.eq(math.u64.xor(a, b), b);
+a = math.u64.eq(12);
 assert a(12);
 
 func select(cond, t, f) {
