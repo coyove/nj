@@ -62,7 +62,7 @@ func compileSetOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint
 
 	if atoms[0].Value.(string) == "set" {
 		_, redecl := table.get(aDest.Value.(string))
-		if redecl {
+		if redecl && table.noredecl {
 			err = fmt.Errorf("redeclare: %+v", aDest)
 			return
 		}
@@ -351,7 +351,7 @@ func compileCallOp(sp uint16, nodes []*parser.Node, table *symtable) (code []uin
 		return buf.data, regA, sp, nil
 	case "len":
 		return flatWrite(sp, append(nodes[1:2], nodes[2].Compound...), table, OP_LEN)
-	case "foreach":
+	case "copy":
 		x := append(nodes[1:2], nodes[2].Compound...)
 		if y, ok := x[3].Value.(float64); ok && y == 2 {
 			// return stack, env is escaped
@@ -428,6 +428,7 @@ func compileLambdaOp(sp uint16, atoms []*parser.Node, table *symtable) (code []u
 	table.envescape = true
 	newtable := newsymtable()
 	newtable.parent = table
+	newtable.noredecl = table.noredecl
 	newtable.lineInfo = table.lineInfo
 
 	params := atoms[1]
@@ -466,7 +467,7 @@ func compileLambdaOp(sp uint16, atoms []*parser.Node, table *symtable) (code []u
 	buf.WriteOP(OP_LAMBDA, uint32(len(newtable.consts)),
 		uint32(byte(ln))<<24+
 			uint32(btob(newtable.y))<<20+
-			uint32(btob(newtable.e))<<16+
+			uint32(btob(false))<<16+
 			uint32(btob(!newtable.envescape))<<12+
 			uint32(btob(this))<<8)
 	for _, k := range newtable.consts {

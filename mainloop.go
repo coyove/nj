@@ -398,7 +398,7 @@ MAIN:
 			}
 			cls := v.AsClosure()
 			if cls.lastenv != nil {
-				env.A = cls.Exec(newEnv)
+				env.A = cls.Exec(nil)
 				newEnv = nil
 			} else if (newEnv == nil && cls.argsCount > 0) ||
 				(newEnv != nil && newEnv.SSize() < int(cls.argsCount)) {
@@ -422,6 +422,7 @@ MAIN:
 				}
 				if cls.Yieldable() || cls.native != nil {
 					newEnv.trace = retStack
+					newEnv.parent = env
 					env.A = cls.Exec(newEnv)
 				} else {
 					if retStack == nil {
@@ -504,7 +505,6 @@ func shiftIndex(index Value, len int) int {
 func doDup(env *Env) {
 	alloc := env.R0.AsNumber() == 1
 	nopred := false
-
 	if env.R2.ty == Tnumber {
 		switch env.R2.AsNumber() {
 		case 0:
@@ -606,10 +606,10 @@ func doDup(env *Env) {
 			}))
 		} else {
 			m := env.R1.AsMap()
-			for i, v := range m.l {
+			for i := len(m.l) - 1; i >= 0; i-- {
 				newEnv.SClear()
 				newEnv.SPush(NewNumberValue(float64(i)))
-				newEnv.SPush(v)
+				newEnv.SPush(m.l[i])
 				ExecCursor(newEnv, cls.code, cls.consts, 0)
 			}
 			for _, v := range m.m {

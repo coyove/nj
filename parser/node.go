@@ -179,7 +179,7 @@ func (n *Node) isIsolatedDupCall() bool {
 	if c, _ := n.Compound[0].Value.(string); c != "call" {
 		return false
 	}
-	if c, _ := n.Compound[1].Value.(string); c != "foreach" {
+	if c, _ := n.Compound[1].Value.(string); c != "copy" {
 		return false
 	}
 	if n.Compound[2].Type != NTCompound || len(n.Compound[2].Compound) < 3 {

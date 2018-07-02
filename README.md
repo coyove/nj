@@ -1,180 +1,141 @@
 # potatolang
 
-potatolang is inspired by lua, particularly [gopher-lua](https://github.com/yuin/gopher-lua), but with some heavy modifications to the syntax and other designs.
+potatolang is a C-like language.
 
 ## Quick go through
 
-1. Declare before use.
+1. Multi-declaration:
 
-        a = 1                  # compile error
-        set a = 1              # declare first
-        set b = nil            # nil type
-        set c = { 1, 2, 3 }    # array
-        set d = { 
-            "key1" = "value1", 
-            "key2" = "value2", 
-            3 = "value3",
-        }                      # map
-        set f, g = 1, 2        # converted to: set i = 1; set j = 2
-        set h, i = 1           # converted to: set k = 1; set l = 1
-        a, b = 1, 2            # illegal, sorry
-    
-    To define a string block, use `sss<ident>` to start and `end<ident>` to end. `<ident>` should be a valid identifer name:
+        var a, b;         // compile into: var a = nil; var b = nil;
+        var a, b = 1, 2;  // compile into: var a = 1; var b = 2;
+        var a, b, c = 1;  // compile into: var a = 1; var b = 1; var c = 1;
+        a, b = 1, 2;      // illegal, the above are just special syntax sugar, you can't use it here
 
-        set s = ssshello
-            ... raw string literal ...
-        endhello
+2. Array and map:
 
-2. `dup` is an important builtin function, it can create a duplicate of a map or a string:
+        // like Lua, array and map are all "map" in potatolang
 
-        set a = 1
-        set b = dup(a)
-        assert b == 1      # ok
+        var a = {1, 2, 3};
+        // a[0] = 1, a[1] = 2, a[2] = 3
 
-        set c = { 1, 2 }
-        set d = dup(c) 
-        c[0] = 0    
-        assert d[0] == 1   # d is another map now
+        var a = {"key1": "value1", 2: "value2"};
+        // keys of the map can be any value
 
-    Iterate over a map:
+        var a = {"key1": "value1"};
+        a[0] = 1;
+        // a now contains an array of {1} and a map of {key1: value1}
 
-        set m = {
-            "1" = 1,
-            "2" = 2
+2. Builtin function `copy`:
+
+        var a = { 1, 2 };
+        var b = copy(a);
+        a[0] = 0;
+        assert b[0] == 1;  // d is another map now
+
+        // iterate over a map:
+        var m = {"1": 1, "2": 2 };
+        copy(m, func(k, v) {
+            assert k == ("" & v);
+        });
+
+        // provide a function as the second function:
+        var c = copy(a, func(i, n) { return n + 1; });
+        assert c == { 2, 3 } and a == { 1, 2 };
+
+        // if you want to return multiple results, use this trick:
+        func foo(c) {
+            var a = 1 + c;
+            var b = 2 + c;
+
+            // copy() without arguments will return a copy of the current stack
+            return copy();
         }
-        dup(m, function(k, v)
-            assert k == ("" & v)
-        end)
 
-        # map value in dup
-        set e = dup(d, function(i, n) return n + 1 end)
-        assert e == { 2, 3 } and d == { 1, 2 }
+        //         0   1   2
+        //  foo  +---+---+---+
+        // stack | c | a | b |
+        //       +---+---+---+
 
-    Use error(...) to interrupt the dup:
+        var r = foo(2);
+        assert r[len(r)-2] == 3 and r[len(r)-1] == 4;
 
-        set f = dup(d, function(i, n) 
-            if i == 1 then error(1) end 
-            return n + 1 
-        end)
-        assert f == {2}
+        // the same trick can be used to accept varargs:
+        func sum() {
+            var x = copy();
+            var s = 0;
+            copy(x, func(i, n) {s = s + n;});
+            return s;
+        }
 
-2. If you want to return multiple results, use this trick:
+        assert sum(1, 2, 3) == 6;
+        assert sum("a", "b", "c") == "abc";
 
-        function foo(c)
-            set a = 1 + c
-            set b = 2 + c
+        // string is immutable, copy(str) will return an array of its bytes:
+        var a = "text";
+        a[0] = 96;  // won't work
 
-            # dup() without arguments will return a copy of the current stack
-            return dup()
-        end
-
-        #         0   1   2
-        #  foo  +---+---+---+
-        # stack | c | a | b |
-        #       +---+---+---+
-
-        set r = foo(2)
-        assert r[len(r)-2] == 3 and r[len(r)-1] == 4
-
-    The same trick can be used to accept varargs:
-
-        function sum()
-            set x = dup() 
-            set s = 0
-            dup(x, function(i, n) s = s + n end)
-            return s
-        end
-
-        assert sum(1, -1) == 0    # when calling dup() in sum(), since there is no
-                                  # other variables yet on the stack, x = [1, -1]
-        assert sum(1, 2, 3) == 6  # x = [1, 2, 3]
-
-    String is immutable, dup(str) will return an array of its bytes:
-
-        set a = "text"
-        a[0] = 96      # panic
-
-        set b = dup(a)
-        assert typeof(b, "map")            # ok
-        assert b == {0x74,0x65,0x73,0x74}  # ok
+        var b = copy(a);
+        assert typeof(b, "map");            // ok
+        assert b == {0x74,0x65,0x73,0x74};  // ok
 
 2. Yield:
 
-        function a()
-            yield 1
-            yield 2
-            yield 3
-        end
-
-        set b = dup(a)
-
-        assert a() == 1 and a() == 2 and a() == 3 and a() == nil
-        assert b() == 1 and b() == 2 and b() == 3 and b() == nil
-
-    Now the life of `a` is terminated, everything starts from the beginning:
-
-        assert a() == 1 and a() == 2 and a() == 3 and a() == nil
-
-2. Strings and numbers can't be summed up. however `&` (concat) can:
-
-        set a = 1
-        set b = a + "2"         # runtime panic
-        set c = {} + a          # { 1 }
-        set d = { 0 } + c       # { 0, { 1 } }
-        set e = { 0 } & c       # { 0, 1 }
-        set f = "" & a & "2"    # "12" 
-                                # this is the de facto tostring() in potatolang
-        set g = 7 & 8           # bit and: 0
-        set h = 0 & "1"         # h = 1
-                                # this is the de facto tonumber() in potatolang
-
-2. Using `this` as an argument name in the function definition to simulate member functions:
-
-        set counter = {
-            "tick" = 0,
-            "add" = function(step, this)
-                this.tick = this.tick + step
-            end
+        func a() {
+            yield 1;
+            yield 2;
+            yield 3;
         }
+        var b = copy(a);
+        assert a() == 1 && a() == 2 && a() == 3 && a() == nil;
+        assert b() == 1 && b() == 2 && b() == 3 && b() == nil;
 
-        set c = dup(counter)
-        c.add(1)
-        c.add(1)
-        assert c.tick == 2
+        // a and b are dead, and back to the start state, so now: a() == 1 && b() == 1
 
-    Note that the order of `this` and other arguments does not matter, e.g.: `function(this, a, b)` and `function(a, this, b)` are the same: both of them will be compiled into `function(a, b, this)`.
+2. Use `&` to concat strings and numbers:
 
-2. potatolang doesn't have exceptions, its error handling will be like:
+        var a = 1;
+        var b = a + "2";         // runtime panic
+        var c = {} + a;          // { 1 }
+        var d = { 0 } + c;       // { 0, { 1 } }
+        var e = { 0 } & c;       // { 0, 1 }
+        var f = "" & a & "2";    // "12" 
+                                 // this is the de facto tostring() in potatolang
+        var g = 7 & 8;           // bit and: 0
+        var h = 0 & "1";         // h = 1
+                                 // this is the de facto tonumber() in potatolang
 
-        function foo(n)
-            if n < 2 then error("n is less than 2") end
-            return n + 1
-        end
+2. Use `this` as an argument name to simulate member functions:
 
-        foo(1)
-        assert error() == "n is less than 2"
-        foo(2)
-        assert error() == nil
+        var counter = {
+            "tick": 0,
+            "add": func (step, this) {
+                this.tick = this.tick + step;
+            }
+        };
 
-    Note that calling error(...) will not interrupt the execution, you should manually return after it if needed:
+        var c = copy(counter);
+        c.add(1);
+        c.add(1);
+        assert c.tick == 2;
 
-        set ans = foo(1)
-        assert error() == "n is less than 2"   # as expected
-        assert ans == 2                        # still as expected (return n + 1)
+        // note that the order of 'this' and other arguments does not matter, e.g.: 
+        // func(this, a, b) and func(a, this, b) are the same,
+        // both of them will be compiled into: func(a, b, this)
 
-    Also, do check the error if you see error(...) in source code, otherwise the error gets propagated implicitly:
+2. Other than 'func', using '{' and '}' don't create a new namespace:
 
-        function bar(n)
-            error("error" + n)
-        end
+        if (1) {
+            var a = 0;
+        }
+        if (1) {
+            var a = 1;
+        }
+        // both 'a' are the same 'a'
+        // a == 1
 
-        function foo(n)
-            bar(n)
-            # not calling error() to check the error
-            # now the error (if any) belongs to foo(n)
-        end
+2. Misc:
 
-        bar(1)
-        assert error() == "error1"   # as expected
-        foo(1)
-        assert error() == "error1"   # oops
+        There is no 'switch' statement;
+        There is no '++' or '--' expressions;
+        When using 'copy' to iterate over an array, it loops in a reversed order; 
+

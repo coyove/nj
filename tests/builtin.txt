@@ -1,7 +1,7 @@
 func foo1(c) {
     var a = 3 * c;
     var b = 2 * c;
-    return for();
+    return copy();
 }
 
 var ans = foo1()(2);
@@ -16,17 +16,18 @@ assertans(#ans, 4);
 assertans(#ans, 6);
 assert len(ans) == 1; // left var: c
 
-var dz = for(1);
+var dz = copy(1);
 assert dz == 1;
 
 func sum() {
-    var x = for(for()) ;
+    var x = copy(copy()) ;
     var s = 0;
     if (typeof(x[0], string)) { 
         s = "";
     }
 
-    for(x, func(i, n) {s = s + n;});
+    // note it is in reverse order
+    copy(x, func(i, n) {s = n + s;});
     return s;
 }
 
@@ -44,7 +45,7 @@ var m = {
 };
 
 var mp = m;
-var  m2 = for(m);
+var  m2 = copy(m);
 
 m.incr();
 assert m.c == 124;
@@ -57,14 +58,14 @@ assert m.c == 125;
 assert m2.c == 125;
 
 var a = {1,2,3};
-for(a, func(i, v) {a[i] = v + 1;});
+copy(a, func(i, v) {a[i] = v + 1;});
 assert a == {2,3,4};
 
 a = "hello world";
 var upper = func(i, r) { if (i == 0 ) { return r - 32; } else { return r;}};
-for(a, upper);
+copy(a, upper);
 assert a == "hello world";
-a = for(a, upper);
+a = copy(a, upper);
 assert "" & a == "Hello world";
 
 assert typeof(a) == "map";

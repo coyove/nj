@@ -9,7 +9,7 @@ var K, OP = std.opcode.closure, std.opcode;
 var A2 = K.empty();
 var call = (func(){
     return func() {
-        var stack = for();
+        var stack = copy();
         var x = K[stack[0]];
         stack[0] = A2;
         std.apply(x, stack);

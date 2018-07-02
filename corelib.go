@@ -45,6 +45,21 @@ func initCoreLibs() {
 		}
 		return x.AsClosure().Exec(newEnv)
 	}))
+	lcore.Puts("storeinto", NewNativeValue(3, func(env *Env) Value {
+		e, x, y := env.SGet(0), env.SGet(1), env.SGet(2)
+		if x.ty != Tnumber {
+			x.panicType(Tnumber)
+		}
+		if e.ty != Tgeneric {
+			e.panicType(Tgeneric)
+		}
+		(*Env)(e.AsGeneric()).Set(uint32(x.AsNumber()), y)
+		return y
+	}))
+	lcore.Puts("currentenv", NewNativeValue(0, func(env *Env) Value {
+		log.Println(env, env.parent)
+		return NewGenericValue(unsafe.Pointer(env.parent))
+	}))
 	lcore.Puts("stacktrace", NewNativeValue(0, func(env *Env) Value {
 		e := ExecError{stacks: env.trace}
 		return NewStringValue(e.Error())

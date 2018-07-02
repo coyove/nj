@@ -28,10 +28,9 @@ type symtable struct {
 	// has yield op
 	y bool
 
-	// has error op
-	e bool
-
 	envescape bool
+
+	noredecl bool
 
 	// record line info at chain
 	lineInfo bool

@@ -5,7 +5,7 @@ assert "abc吱吱吱" == "abc" + "吱吱" + "吱";
 assert "abc吱吱吱" == "abc\u5431\u5431\u5431";
 
 var dupcheck = {97,98,99,32452};
-for(std.sub("abc组织者",0, 6), func (i, r)  {
+copy(std.sub("abc组织者",0, 6), func (i, r)  {
     assert dupcheck[i] == r ;
 });
 

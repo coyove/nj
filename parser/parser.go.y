@@ -22,6 +22,7 @@ import (
 %type<expr> assign_stat
 %type<expr> for_stat
 %type<expr> if_stat
+%type<expr> if_body
 %type<expr> jmp_stat
 %type<expr> func_stat
 %type<expr> flow_stat
@@ -45,6 +46,9 @@ import (
 %token<token> TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
 
 /* Operators */
+%right 'T'
+%right TElse
+
 %left TOr
 %left TAnd
 %left '|' '&' '^'
@@ -54,6 +58,7 @@ import (
 %left '*' '/' '%'
 %right UNARY /* not # -(unary) */
 %right '~'
+%right '#'
 
 %% 
 
@@ -91,6 +96,29 @@ stat:
             $$ = $1
         } |
         flow_stat {
+            $$ = $1
+        }
+
+if_body:
+        ';' {
+            $$ = NewCompoundNode()
+        } |
+        assign_stat ';' {
+            if $1.isIsolatedDupCall() {
+                $1.Compound[2].Compound[0] = NewNumberNode("0")
+            }
+            $$ = NewCompoundNode("chain", $1)
+        } |
+        jmp_stat ';' {
+            $$ = NewCompoundNode("chain", $1)
+        } |
+        for_stat {
+            $$ = NewCompoundNode("chain", $1)
+        } |
+        if_stat {
+            $$ = NewCompoundNode("chain", $1)
+        } |
+        block {
             $$ = $1
         }
 
@@ -154,30 +182,33 @@ assign_stat:
         }
 
 for_stat:
-        TFor '(' expr ')' block {
+        TFor '(' expr ')' if_body {
             $$ = NewCompoundNode("for", $3, NewCompoundNode(), $5)
             $$.Compound[0].Pos = $1.Pos
         } |
-        TFor '(' ';' expr ';' assign_stat ')' block {
+        TFor '(' ';' expr ';' assign_stat ')' if_body {
             $$ = NewCompoundNode("for", $4, NewCompoundNode("chain", $6), $8)
             $$.Compound[0].Pos = $1.Pos
         } |
-        TFor '(' assign_stat ';' expr ';' assign_stat ')' block {
-            $$ = NewCompoundNode("chain",
-                $3,
-                NewCompoundNode("for", $5, NewCompoundNode("chain", $7), $9))
+        TFor '(' assign_stat ';' expr ';' assign_stat ')' if_body {
+            $$ = NewCompoundNode("chain", $3, NewCompoundNode("for", $5, NewCompoundNode("chain", $7), $9))
+            $$.Compound[0].Pos = $1.Pos
+        } |
+        TFor '(' assign_stat ';' expr ';' ')' if_body {
+            $$ = NewCompoundNode("chain", $3, NewCompoundNode("for", $5, NewCompoundNode(), $8))
+            $$.Compound[0].Pos = $1.Pos
+        } |
+        TFor '(' assign_stat ';' ';' assign_stat ')' if_body {
+            $$ = NewCompoundNode("chain", $3, NewCompoundNode("for", NewNumberNode("1"), NewCompoundNode("chain", $6), $8))
             $$.Compound[0].Pos = $1.Pos
         }
 
 if_stat:
-        TIf '(' expr ')' block {
+        TIf '(' expr ')' if_body %prec 'T' {
             $$ = NewCompoundNode("if", $3, $5, NewCompoundNode())
         } |
-        TIf '(' expr ')' block TElse block {
+        TIf '(' expr ')' if_body TElse if_body {
             $$ = NewCompoundNode("if", $3, $5, $7)
-        } |
-        TIf '(' expr ')' block TElse if_stat {
-            $$ = NewCompoundNode("if", $3, $5, NewCompoundNode("chain", $7))
         }
 
 func_stat:
@@ -413,20 +444,21 @@ prefix_expr:
         }        
 
 func_call:
-        TFor '(' ')' {
-            $$ = NewCompoundNode("call", "foreach", NewCompoundNode(NewNumberNode("1"), NewNumberNode("1"), NewNumberNode("1")))
-        } |
-        TFor '(' expr ')' {
-            $$ = NewCompoundNode("call", "foreach", NewCompoundNode(NewNumberNode("1"), $3, NewNumberNode("0")))
-        } |
-        TFor '(' expr ',' expr ')' {
-            if $5.Type != NTCompound && $5.Type != NTAtom {
-                yylex.(*Lexer).Error("the second argument of 'for' must be a closure")
-            }
-            $$ = NewCompoundNode("call", "foreach", NewCompoundNode(NewNumberNode("1"), $3, $5))
-        } |
         prefix_expr func_args {
             switch c, _ := $1.Value.(string); c {
+            case "copy":
+                switch len($2.Compound) {
+                case 0:
+                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), NewNumberNode("1"), NewNumberNode("1")))
+                case 1:
+                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), $2.Compound[0], NewNumberNode("0")))
+                default:
+                    p := $2.Compound[1]
+                    if p.Type != NTCompound && p.Type != NTAtom {
+                        yylex.(*Lexer).Error("invalid argument for S")
+                    }
+                    $$ = NewCompoundNode("call", $1, NewCompoundNode(NewNumberNode("1"), $2.Compound[0], p))
+                }
             case "typeof":
                 switch len($2.Compound) {
                 case 0:
@@ -521,9 +553,7 @@ _map_gen:
         expr_list {
             table := NewCompoundNode()
             for i, v := range $1.Compound {
-                table.Compound = append(table.Compound, 
-                    &Node{ Type:  NTNumber, Value: float64(i) },
-                    v)
+                table.Compound = append(table.Compound, &Node{ Type:  NTNumber, Value: float64(i) }, v)
             }
             $$ = NewCompoundNode("map", table)
             $$.Compound[0].Pos = $1.Pos
@@ -531,9 +561,7 @@ _map_gen:
         expr_list ',' {
             table := NewCompoundNode()
             for i, v := range $1.Compound {
-                table.Compound = append(table.Compound, 
-                    &Node{ Type:  NTNumber, Value: float64(i) },
-                    v)
+                table.Compound = append(table.Compound, &Node{ Type:  NTNumber, Value: float64(i) }, v)
             }
             $$ = NewCompoundNode("map", table)
             $$.Compound[0].Pos = $1.Pos

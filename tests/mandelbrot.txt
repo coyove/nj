@@ -98,6 +98,6 @@ std.sync.run(worker);
 wg.wait();
  
 io.write("P4\n" & size & " " & size & "\n");
-for(rows, func (i,row)  {
+copy(rows, func (i,row)  {
     io.write(row);
 }) ;
