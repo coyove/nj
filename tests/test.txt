@@ -152,3 +152,11 @@ else
         af = 3;
 
 assert af == 3;
+
+var af = 1;
+
+if (af == 0)
+    if (af < 2)
+        assert 1;
+else
+    assert 0;  // shouldn't be here

@@ -23,7 +23,6 @@ const (
 	OP_BIT_XOR
 	OP_BIT_LSH
 	OP_BIT_RSH
-	OP_POP
 
 	// make map op
 	OP_MAKEMAP
@@ -53,10 +52,9 @@ const (
 	OP_YIELD
 	OP_YIELDK
 
-	// inc op
-	OP_INC
-
 	// special builtin op
+	OP_POP
+	OP_INC
 	OP_DUP
 	OP_LEN
 	OP_TYPEOF

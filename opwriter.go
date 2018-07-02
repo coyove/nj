@@ -10,6 +10,11 @@ import (
 	"unsafe"
 )
 
+// +---------+----------+----------+
+// | op (1b) | opA (3b) | opB (4b) |
+// +---------+----------+----------+
+// opA is only 24bit long, jmp offset is stored in opB
+
 func makeop(op byte, a, b uint32) uint64 {
 	return uint64(op)<<56 + uint64(a&0x00ffffff)<<32 + uint64(b)
 }
@@ -132,6 +137,7 @@ func cruRead64(data uintptr, cursor *uint32) uint64 {
 }
 
 // little endian only
+// equivalent to: op, opa, opb := op(cruRead64(...))
 func cruop(data uintptr, cursor *uint32) (byte, uint32, uint32) {
 	addr := uintptr(*cursor) * 8
 	*cursor++
@@ -149,7 +155,7 @@ var singleOp = map[byte]string{
 	OP_EQ:      "eq",
 	OP_NEQ:     "neq",
 	OP_LESS:    "less",
-	OP_LESS_EQ: "lesseq",
+	OP_LESS_EQ: "less-eq",
 	OP_LEN:     "len",
 	OP_DUP:     "dup",
 	OP_LOAD:    "load",
@@ -241,22 +247,16 @@ MAIN:
 		case OP_R0K:
 			sb.WriteString("r0 = " + readKAddr(uint16(a)))
 		case OP_R1:
-			// sb.Truncate(lastIdx)
 			sb.WriteString("r1 = " + readAddr(a))
 		case OP_R1K:
-			// sb.Truncate(lastIdx)
 			sb.WriteString("r1 = " + readKAddr(uint16(a)))
 		case OP_R2:
-			// sb.Truncate(lastIdx)
 			sb.WriteString("r2 = " + readAddr(a))
 		case OP_R2K:
-			// sb.Truncate(lastIdx)
 			sb.WriteString("r2 = " + readKAddr(uint16(a)))
 		case OP_R3:
-			// sb.Truncate(lastIdx)
 			sb.WriteString("r3 = " + readAddr(a))
 		case OP_R3K:
-			// sb.Truncate(lastIdx)
 			sb.WriteString("r3 = " + readKAddr(uint16(a)))
 		case OP_PUSH, OP_PUSHK:
 			if lastBop == OP_PUSH || lastBop == OP_PUSHK {

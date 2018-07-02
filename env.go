@@ -5,13 +5,10 @@ import (
 )
 
 // Env is the environment for a closure in potatolang to run within.
-// The stack contains arguments used to execute the closure,
-// all the local variables will sequentially take the following spaces.
-// A stores the result of executing a closure, or a builtin operator;
-// E stores the error;
-// R0 ~ R3 store the arguments to call builtin operators (+, -, *, ...).
-// After each function calling in potato, E will be propagated to the upper Env.
-// Explicitly calling error() will get E and clear E.
+// Env.stack contains arguments used to execute the closure,
+// then the local variables will sequentially take the following spaces.
+// Env.A stores the result of executing a closure, or a builtin operator;
+// Env.R0 ~ Env.R3 store the arguments to call builtin operators (+, -, *, ...).
 type Env struct {
 	parent *Env
 	trace  []stacktrace
@@ -286,5 +283,8 @@ func (c *Closure) Exec(newEnv *Env) Value {
 		}
 		return v
 	}
+
+	// for a native closure, it doesn't have its own env,
+	// so newEnv's parent is the env where this native function was called.
 	return c.native(newEnv)
 }

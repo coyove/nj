@@ -25,6 +25,19 @@ potatolang is a C/js-like language written in golang.
         a[0] = 1;
         // a now contains an array of {1} and a map of {key1: value1}
 
+2. Use `&` to concatenate two values, `+` to add or append values:
+
+        var a = 1;
+        var b = a + "2";         // runtime panic
+        var c = {} + a;          // { 1 }
+        var d = { 0 } + c;       // { 0, { 1 } }
+        var e = { 0 } & c;       // { 0, 1 }
+        var f = "" & a & "2";    // "12" 
+                                 // this is the de facto tostring() in potatolang
+        var g = 7 & 8;           // bit and: 0
+        var h = 0 & "1";         // h = 1
+                                 // this is the de facto tonumber() in potatolang
+
 2. Builtin function `copy`:
 
         var a = { 1, 2 };
@@ -91,22 +104,10 @@ potatolang is a C/js-like language written in golang.
         assert a() == 1 && a() == 2 && a() == 3 && a() == nil;
         assert b() == 1 && b() == 2 && b() == 3 && b() == nil;
 
-        // a and b are dead, and back to the start state, so now: a() == 1 && b() == 1
+        // now a and b are back to the start state
+        // continue running: a() == 1 && b() == 1
 
-2. Use `&` to concatenate two values, `+` to add or append values:
-
-        var a = 1;
-        var b = a + "2";         // runtime panic
-        var c = {} + a;          // { 1 }
-        var d = { 0 } + c;       // { 0, { 1 } }
-        var e = { 0 } & c;       // { 0, 1 }
-        var f = "" & a & "2";    // "12" 
-                                 // this is the de facto tostring() in potatolang
-        var g = 7 & 8;           // bit and: 0
-        var h = 0 & "1";         // h = 1
-                                 // this is the de facto tonumber() in potatolang
-
-2. Use `this` as an argument name to simulate member functions:
+2. Use `this` as a parameter to simulate member functions:
 
         var counter = {
             "tick": 0,
@@ -124,13 +125,14 @@ potatolang is a C/js-like language written in golang.
         // func(this, a, b) and func(a, this, b) are the same,
         // both of them will be compiled into: func(a, b, this)
 
-2. Other than `func`, `if` and `for` don't create a new namespace:
+2. `if` and `for` don't create a new namespace:
 
-        if (1) var a = 0; 
-        if (1) var a = 1; 
-        for (1) var a = 1;
+        if (...) var a = 0; 
+        if (...) var a = 1; 
+        for (...) var a = 2;
+        
         // all 'a' are the same 'a'
-        // a == 1
+        // a == 2
 
 2. Misc:
 
