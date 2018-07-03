@@ -15,6 +15,7 @@ import (
 %type<expr> ident_list
 %type<expr> expr_list
 %type<expr> expr_assign_list
+%type<expr> expr_declare_list
 %type<expr> expr
 %type<expr> string
 
@@ -134,28 +135,8 @@ flow_stat:
         }
 
 assign_stat:
-        TVar ident_list '=' expr_list {
-            $$ = NewCompoundNode("chain")
-            for i, name := range $2.Compound {
-                var e *Node
-                if i < len($4.Compound) {
-                    e = $4.Compound[i]
-                } else {
-                    e = $4.Compound[len($4.Compound) - 1]
-                }
-                c := NewCompoundNode("set", name, e)
-                name.Pos, e.Pos = $1.Pos, $1.Pos
-                c.Compound[0].Pos = $1.Pos
-                $$.Compound = append($$.Compound, c)
-            }
-        } |
-        TVar ident_list {
-            $$ = NewCompoundNode("chain")
-            for _, name := range $2.Compound {
-                c := NewCompoundNode("set", name, NewNilNode())
-                c.Compound[0].Pos = $1.Pos
-                $$.Compound = append($$.Compound, c)
-            }
+        TVar expr_declare_list {
+            $$ = $2
         } |
         declarator '=' expr {
             $$ = NewCompoundNode("move", $1, $3)
@@ -310,6 +291,22 @@ expr_assign_list:
         } |
         expr_assign_list ',' expr ':' expr {
             $1.Compound = append($1.Compound, $3, $5)
+            $$ = $1
+        }
+
+expr_declare_list:
+        TIdent {
+            $$ = NewCompoundNode("chain", NewCompoundNode("set", NewAtomNode($1), NewNilNode()))
+        } |
+        TIdent '=' expr {
+            $$ = NewCompoundNode("chain", NewCompoundNode("set", NewAtomNode($1), $3))
+        } |
+        expr_declare_list ',' TIdent '=' expr {
+            $1.Compound = append($$.Compound, NewCompoundNode("set", NewAtomNode($3), $5))
+            $$ = $1
+        } |
+        expr_declare_list ',' TIdent {
+            $1.Compound = append($1.Compound, NewCompoundNode("set", NewAtomNode($3), NewNilNode()))
             $$ = $1
         }
 

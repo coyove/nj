@@ -70,7 +70,7 @@ func TestArithmeticUnfold(t *testing.T) {
 
 func TestRegisterOptimzation(t *testing.T) {
 	cls, err := LoadString(`
-		var a, b = 1, 2;
+		var a = 1, b = 2;
 		var c = 0;
 		if (0) {
 			a = 2;
