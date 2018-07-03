@@ -130,7 +130,7 @@ func (m *symtable) addConst(v interface{}) uint16 {
 	return idx
 }
 
-type compileFunc func(*uint16, []*parser.Node, *symtable) (packet, error)
+type compileFunc func(uint16, []*parser.Node, *symtable) ([]uint64, uint32, uint16, error)
 
 var opMapping map[string]compileFunc
 
@@ -138,11 +138,11 @@ var flatOpMapping map[string]byte
 
 func init() {
 	clearI := func(f compileFunc) compileFunc {
-		return func(s *uint16, n []*parser.Node, v *symtable) (packet, error) {
-			p, err := f(s, n, v)
+		return func(s uint16, n []*parser.Node, v *symtable) ([]uint64, uint32, uint16, error) {
+			a, b, c, d := f(s, n, v)
 			v.im = nil
 			v.ims = nil
-			return p, err
+			return a, b, c, d
 		}
 	}
 
@@ -231,7 +231,13 @@ func fill(buf *opwriter, n *parser.Node, table *symtable, op, opk byte) (err err
 	return nil
 }
 
-func compileCompoundToAddr(sp *uint16, compound *parser.Node, table *symtable, incrsp bool, addr uint32) (p packet, err error) {
+func compileCompoundIntoVariable(
+	sp uint16,
+	compound *parser.Node,
+	table *symtable,
+	intoNewVar bool,
+	intoExistedVar uint32,
+) (code []uint64, yx uint32, newsp uint16, err error) {
 	buf := newopwriter()
 
 	var newYX uint32
@@ -281,9 +287,9 @@ func extract(sp uint16, n *parser.Node, table *symtable) (code []uint64, yx uint
 	return code, varIndex, sp, nil
 }
 
-func compile(sp *uint16, nodes []*parser.Node, table *symtable) (p packet, err error) {
+func compile(sp uint16, nodes []*parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
 	if len(nodes) == 0 {
-		return packet{a: regA}, nil
+		return nil, regA, sp, nil
 	}
 	name, ok := nodes[0].Value.(string)
 	if ok {
@@ -310,8 +316,8 @@ func compile(sp *uint16, nodes []*parser.Node, table *symtable) (p packet, err e
 	return
 }
 
-func compileChainOp(sp *uint16, chain *parser.Node, table *symtable) (p packet, err error) {
-	buf := newpacket()
+func compileChainOp(sp uint16, chain *parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
+	buf := newopwriter()
 	table.im = nil
 
 	for _, a := range chain.Compound {
@@ -327,14 +333,14 @@ func compileChainOp(sp *uint16, chain *parser.Node, table *symtable) (p packet, 
 				}
 			}
 		}
-		p, err = compile(sp, a.Compound, table)
+		code, yx, sp, err = compile(sp, a.Compound, table)
 		if err != nil {
 			return
 		}
-		buf.Write(p)
+		buf.Write(code)
 	}
 
-	return buf, err
+	return buf.data, yx, sp, err
 }
 
 func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
