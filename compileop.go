@@ -14,18 +14,18 @@ const (
 	ERR_UNDECLARED_VARIABLE = "undeclared variable: %+v"
 )
 
-func compileSetOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
+func compileSetOp(sp *uint16, atoms []*parser.Node, table *symtable) (p packet, err error) {
 	aDest, aSrc := atoms[1], atoms[2]
 	varIndex := uint32(0)
-	buf := newopwriter()
+	np := newpacket()
 	var newYX uint32
 	var ok bool
 
 	if atoms[0].Value.(string) == "set" {
 		// compound has its own logic, we won't incr stack here
 		if aSrc.Type != parser.NTCompound {
-			newYX = uint32(sp)
-			sp++
+			newYX = uint32(*sp)
+			(*sp)++
 		}
 	} else {
 		varIndex, ok = table.get(aDest.Value.(string))
@@ -40,24 +40,23 @@ func compileSetOp(sp uint16, atoms []*parser.Node, table *symtable) (code []uint
 	switch aSrc.Type {
 	case parser.NTAtom:
 		if aSrc.Value.(string) == "nil" {
-			buf.WriteOP(OP_SETK, newYX, 0)
+			np.WriteOP(OP_SETK, newYX, 0)
 		} else {
 			valueIndex, ok := table.get(aSrc.Value.(string))
 			if !ok {
 				err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, aSrc)
 				return
 			}
-			buf.WriteOP(OP_SET, newYX, valueIndex)
+			np.WriteOP(OP_SET, newYX, valueIndex)
 		}
 	case parser.NTNumber, parser.NTString:
-		buf.WriteOP(OP_SETK, newYX, uint32(table.addConst(aSrc.Value)))
+		np.WriteOP(OP_SETK, newYX, uint32(table.addConst(aSrc.Value)))
 	case parser.NTCompound:
-		code, newYX, sp, err = compileCompoundIntoVariable(sp, aSrc, table,
-			atoms[0].Value.(string) == "set", varIndex)
+		code, newYX, sp, err = compileCompoundIntoVariable(sp, aSrc, table, atoms[0].Value.(string) == "set", varIndex)
 		if err != nil {
 			return
 		}
-		buf.Write(code)
+		np.Write(code)
 	}
 
 	if atoms[0].Value.(string) == "set" {

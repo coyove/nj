@@ -54,59 +54,53 @@ func slice8to64(p []byte) []uint64 {
 	return *(*[]uint64)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
 }
 
-type opwriter struct {
+type packet struct {
 	data []uint64
+	a    uint32
 }
 
-func newopwriter() *opwriter {
-	const defaultBufferSize = 2
-	return &opwriter{
-		make([]uint64, 0, defaultBufferSize),
-	}
+func newpacket() packet {
+	return packet{data: make([]uint64, 0, 2)}
 }
 
-func (b *opwriter) Dup() *opwriter {
-	b2 := *b
-	return &b2
+func (b *packet) Dup() packet {
+	return *b
 }
 
-func (b *opwriter) Clear() {
+func (b *packet) Clear() {
 	b.data = b.data[:0]
 }
 
-func (b *opwriter) Data() []uint64 {
-	return b.data
+func (b *packet) Write(p packet) {
+	b.data = append(b.data, p.data...)
+	b.a = p.a
 }
 
-func (b *opwriter) Write(buf []uint64) {
-	b.data = append(b.data, buf...)
-}
-
-func (b *opwriter) Write64(v uint64) {
+func (b *packet) Write64(v uint64) {
 	b.data = append(b.data, v)
 }
 
-func (b *opwriter) WriteOP(op byte, opa, opb uint32) {
+func (b *packet) WriteOP(op byte, opa, opb uint32) {
 	b.data = append(b.data, makeop(op, opa, opb))
 }
 
-func (b *opwriter) WriteDouble(v float64) {
+func (b *packet) WriteDouble(v float64) {
 	d := *(*uint64)(unsafe.Pointer(&v))
 	b.Write64(d)
 }
 
-func (b *opwriter) WriteString(v string) {
+func (b *packet) WriteString(v string) {
 	b.Write64(uint64(len(v)))
 	b.Write(slice8to64([]byte(v)))
 }
 
-func (b *opwriter) TruncateLast(n int) {
+func (b *packet) TruncateLast(n int) {
 	if len(b.data) > n {
 		b.data = b.data[:len(b.data)-n]
 	}
 }
 
-func (b *opwriter) Len() int {
+func (b *packet) Len() int {
 	return len(b.data)
 }
 
