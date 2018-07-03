@@ -2,6 +2,7 @@ package potatolang
 
 import (
 	"flag"
+	"log"
 	"testing"
 	// _ "net/http/pprof"
 	"runtime"
@@ -19,7 +20,7 @@ func runFile(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 
-	t.Log(b.String())
+	log.Println(b.String())
 
 	i := b.Exec(nil)
 	t.Log(i.I())

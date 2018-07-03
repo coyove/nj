@@ -15,7 +15,7 @@ type kinfo struct {
 	value interface{}
 }
 
-// symtable is responsible for recording extra states of compilation
+// symtable is responsible for recording the state of compilation
 type symtable struct {
 	// variable name lookup
 	parent *symtable
@@ -34,6 +34,8 @@ type symtable struct {
 
 	// record line info at chain
 	lineInfo bool
+
+	sp uint16
 
 	regs [4]struct {
 		addr  uint32
@@ -63,116 +65,83 @@ func newsymtable() *symtable {
 	return t
 }
 
-func (m *symtable) get(varname string) (uint32, bool) {
+func (table *symtable) get(varname string) (uint32, bool) {
 	depth := uint32(0)
 
-	for m != nil {
-		k, e := m.sym[varname]
+	for table != nil {
+		k, e := table.sym[varname]
 		if e {
 			return (depth << 16) | uint32(k), true
 		}
 
 		depth++
-		m = m.parent
+		table = table.parent
 	}
 
 	return 0, false
 }
 
-func (m *symtable) put(varname string, addr uint16) {
-	m.sym[varname] = addr
+func (table *symtable) put(varname string, addr uint16) {
+	table.sym[varname] = addr
 }
 
-func (m *symtable) clearRegRecord(addr uint32) {
-	for i, x := range m.regs {
+func (table *symtable) clearRegRecord(addr uint32) {
+	for i, x := range table.regs {
 		if !x.k && x.addr == addr {
-			m.regs[i].addr = regA
+			table.regs[i].addr = regA
 		}
 	}
 }
 
-func (m *symtable) clearAllRegRecords() {
-	for i := range m.regs {
-		m.regs[i].k = false
-		m.regs[i].addr = regA
+func (table *symtable) clearAllRegRecords() {
+	for i := range table.regs {
+		table.regs[i].k = false
+		table.regs[i].addr = regA
 	}
 }
 
-func (m *symtable) addConst(v interface{}) uint16 {
+func (table *symtable) addConst(v interface{}) uint16 {
 	var k kinfo
 	k.value = v
 
 	switch v.(type) {
 	case float64:
 		k.ty = Tnumber
-		if i, ok := m.constFloatMap[v.(float64)]; ok {
+		if i, ok := table.constFloatMap[v.(float64)]; ok {
 			return i
 		}
 	case string:
 		k.ty = Tstring
-		if i, ok := m.constStringMap[v.(string)]; ok {
+		if i, ok := table.constStringMap[v.(string)]; ok {
 			return i
 		}
 	default:
 		panic("shouldn't happen")
 	}
 
-	m.consts = append(m.consts, k)
-	idx := uint16(len(m.consts))
+	table.consts = append(table.consts, k)
+	idx := uint16(len(table.consts))
 
 	switch v.(type) {
 	case float64:
-		m.constFloatMap[v.(float64)] = idx
+		table.constFloatMap[v.(float64)] = idx
 	case string:
-		m.constStringMap[v.(string)] = idx
+		table.constStringMap[v.(string)] = idx
 	}
 
 	return idx
 }
 
-type compileFunc func(uint16, []*parser.Node, *symtable) ([]uint64, uint32, uint16, error)
-
-var opMapping map[string]compileFunc
-
-var flatOpMapping map[string]byte
-
-func init() {
-	clearI := func(f compileFunc) compileFunc {
-		return func(s uint16, n []*parser.Node, v *symtable) ([]uint64, uint32, uint16, error) {
-			a, b, c, d := f(s, n, v)
-			v.im = nil
-			v.ims = nil
-			return a, b, c, d
-		}
-	}
-
-	opMapping = make(map[string]compileFunc)
-	opMapping["set"] = clearI(compileSetOp)
-	opMapping["move"] = clearI(compileSetOp)
-	opMapping["ret"] = clearI(compileRetOp(OP_RET, OP_RETK))
-	opMapping["yield"] = clearI(compileRetOp(OP_YIELD, OP_YIELDK))
-	opMapping["lambda"] = clearI(compileLambdaOp)
-	opMapping["if"] = clearI(compileIfOp)
-	opMapping["for"] = clearI(compileWhileOp)
-	opMapping["continue"] = clearI(compileContinueBreakOp)
-	opMapping["break"] = clearI(compileContinueBreakOp)
-	opMapping["call"] = clearI(compileCallOp)
-	opMapping["map"] = clearI(compileMapOp)
-	opMapping["or"] = clearI(compileAndOrOp(OP_IF))
-	opMapping["and"] = clearI(compileAndOrOp(OP_IFNOT))
-	opMapping["inc"] = clearI(compileIncOp)
-
-	flatOpMapping = map[string]byte{
-		"+": OP_ADD, "-": OP_SUB, "*": OP_MUL, "/": OP_DIV, "%": OP_MOD,
-		"<": OP_LESS, "<=": OP_LESS_EQ, "==": OP_EQ, "!=": OP_NEQ, "!": OP_NOT,
-		"~": OP_BIT_NOT, "&": OP_BIT_AND, "|": OP_BIT_OR, "^": OP_BIT_XOR, "<<": OP_BIT_LSH, ">>": OP_BIT_RSH,
-		"#": OP_POP, "store": OP_STORE, "load": OP_LOAD, "assert": OP_ASSERT,
-	}
+var flatOpMapping = map[string]byte{
+	"+": OP_ADD, "-": OP_SUB, "*": OP_MUL, "/": OP_DIV, "%": OP_MOD,
+	"<": OP_LESS, "<=": OP_LESS_EQ, "==": OP_EQ, "!=": OP_NEQ, "!": OP_NOT,
+	"~": OP_BIT_NOT, "&": OP_BIT_AND, "|": OP_BIT_OR, "^": OP_BIT_XOR, "<<": OP_BIT_LSH, ">>": OP_BIT_RSH,
+	"#": OP_POP, "store": OP_STORE, "load": OP_LOAD, "assert": OP_ASSERT,
 }
 
 var registerOpMappings = map[byte]int{OP_R0: 0, OP_R1: 1, OP_R2: 2, OP_R3: 3}
 
-func fill(buf *opwriter, n *parser.Node, table *symtable, op, opk byte) (err error) {
+func (table *symtable) fill(buf *packet, n *parser.Node, op, opk byte) (err error) {
 	idx, isreg := registerOpMappings[op]
 	if isreg {
 		if rs := table.regs[idx]; rs.k {
@@ -231,93 +200,106 @@ func fill(buf *opwriter, n *parser.Node, table *symtable, op, opk byte) (err err
 	return nil
 }
 
-func compileCompoundIntoVariable(
-	sp uint16,
-	compound *parser.Node,
-	table *symtable,
-	intoNewVar bool,
-	intoExistedVar uint32,
-) (code []uint64, yx uint32, newsp uint16, err error) {
-	buf := newopwriter()
+func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, existedVar uint32) (code packet, yx uint32, err error) {
+	buf := newpacket()
 
 	var newYX uint32
-	code, newYX, sp, err = compile(sp, compound.Compound, table)
+	code, newYX, err = table.compileCompound(compound)
 	if err != nil {
-		return nil, 0, 0, err
+		return
 	}
 
 	buf.Write(code)
-	if intoNewVar {
-		yx = uint32(sp)
-		sp++
+	if newVar {
+		yx = uint32(table.sp)
+		table.sp++
 	} else {
-		yx = intoExistedVar
+		yx = existedVar
 		table.clearRegRecord(yx)
 	}
 	buf.WriteOP(OP_SET, yx, newYX)
-	return buf.data, yx, sp, nil
+	return buf, yx, nil
 }
 
-func extract(sp uint16, n *parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
+func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint32, err error) {
 	var varIndex uint32
 
 	switch n.Type {
 	case parser.NTAtom:
 		if n.Value.(string) == "nil" {
-			buf := newopwriter()
-			buf.WriteOP(OP_SETK, uint32(sp), 0)
-			return buf.data, uint32(sp), sp + 1, nil
-		} else {
-			var ok bool
-			varIndex, ok = table.get(n.Value.(string))
-			if !ok {
-				err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
-				return
-			}
+			buf := newpacket()
+			yx = uint32(table.sp)
+			buf.WriteOP(OP_SETK, yx, 0)
+			table.sp++
+			return buf.data, yx, nil
+		}
+
+		var ok bool
+		varIndex, ok = table.get(n.Value.(string))
+		if !ok {
+			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
+			return
 		}
 	case parser.NTAddr:
 		varIndex = n.Value.(uint32)
 	default:
-		code, yx, sp, err = compile(sp, n.Compound, table)
+		code, yx, err = table.compileCompound(n)
 		if err != nil {
 			return
 		}
 		varIndex = yx
 	}
-	return code, varIndex, sp, nil
+	return code, varIndex, nil
 }
 
-func compile(sp uint16, nodes []*parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
+func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx uint32, err error) {
+	nodes := compound.Compound
 	if len(nodes) == 0 {
-		return nil, regA, sp, nil
+		return nil, regA, nil
 	}
 	name, ok := nodes[0].Value.(string)
-	if ok {
-		if name == "chain" {
-			return compileChainOp(sp, &parser.Node{
-				Type:     parser.NTCompound,
-				Compound: nodes,
-			}, table)
-		}
-
-		f := opMapping[name]
-		if f == nil {
-			if flatOpMapping[name] != 0 {
-				return compileFlatOp(sp, nodes, table)
-			}
-			panic(name)
-		}
-
-		return f(sp, nodes, table)
+	if !ok {
+		nodes[0].Dump(os.Stderr)
+		log.Panicf("invalid op: %v", nodes)
 	}
 
-	nodes[0].Dump(os.Stderr)
-	log.Panicf("invalid op: %v", nodes)
+	switch name {
+	case "chain":
+		code, yx, err = table.compileChainOp(compound)
+	case "set":
+		code, yx, err = table.compileSetOp(nodes)
+	case "move":
+		code, yx, err = table.compileSetOp(nodes)
+	case "ret", "yield":
+		code, yx, err = table.compileRetOp(nodes)
+	case "lambda":
+		code, yx, err = table.compileLambdaOp(nodes)
+	case "if":
+		code, yx, err = table.compileIfOp(nodes)
+	case "for":
+		code, yx, err = table.compileWhileOp(nodes)
+	case "continue", "break":
+		code, yx, err = table.compileContinueBreakOp(nodes)
+	case "call":
+		code, yx, err = table.compileCallOp(nodes)
+	case "map":
+		code, yx, err = table.compileMapOp(nodes)
+	case "or", "and":
+		code, yx, err = table.compileAndOrOp(nodes)
+	case "inc":
+		code, yx, err = table.compileIncOp(nodes)
+	default:
+		if flatOpMapping[name] != 0 {
+			return table.compileFlatOp(nodes)
+		}
+		panic(name)
+	}
+	table.im, table.ims = nil, nil
 	return
 }
 
-func compileChainOp(sp uint16, chain *parser.Node, table *symtable) (code []uint64, yx uint32, newsp uint16, err error) {
-	buf := newopwriter()
+func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint32, err error) {
+	buf := newpacket()
 	table.im = nil
 
 	for _, a := range chain.Compound {
@@ -333,14 +315,14 @@ func compileChainOp(sp uint16, chain *parser.Node, table *symtable) (code []uint
 				}
 			}
 		}
-		code, yx, sp, err = compile(sp, a.Compound, table)
+		code, yx, err = table.compileCompound(a)
 		if err != nil {
 			return
 		}
 		buf.Write(code)
 	}
 
-	return buf.data, yx, sp, err
+	return buf.data, yx, err
 }
 
 func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
@@ -350,7 +332,8 @@ func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
 		table.sym[n] = uint16(i)
 	}
 
-	code, _, _, err := compileChainOp(uint16(len(table.sym)), n, table)
+	table.sp = uint16(len(table.sym))
+	code, _, err := table.compileChainOp(n)
 	if err != nil {
 		return nil, err
 	}
