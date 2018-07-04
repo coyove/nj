@@ -480,12 +480,18 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 
 	code.WriteOP(OP_EOB, 0, 0)
 	buf := newpacket()
-	buf.WriteOP(OP_LAMBDA, uint32(len(newtable.consts)),
-		uint32(byte(ln))<<24+
-			uint32(btob(newtable.y))<<20+
-			uint32(btob(false))<<16+
-			uint32(btob(!newtable.envescape))<<12+
-			uint32(btob(this))<<8)
+	cls := Closure{}
+	if newtable.y {
+		cls.Set(CLS_YIELDABLE)
+	}
+	if this {
+		cls.Set(CLS_HASRECEIVER)
+	}
+	if !newtable.envescape {
+		cls.Set(CLS_NOENVESCAPE)
+	}
+
+	buf.WriteOP(OP_LAMBDA, uint32(len(newtable.consts)), uint32(byte(ln))<<24+uint32(cls.options))
 	for _, k := range newtable.consts {
 		if k.ty == Tnumber {
 			buf.Write64(Tnumber)
@@ -497,9 +503,14 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 			panic("shouldn't happen")
 		}
 	}
+	buf.WriteString(code.source)
 	buf.Write64(uint64(len(code.pos)))
 	buf.WriteRaw(code.pos)
 	buf.Write64(uint64(len(code.data)))
+
+	// note buf.source = code.source in buf.Write
+	// buf.source shouldn't be changed
+	code.source = buf.source
 	buf.Write(code)
 	buf.WritePos(atoms[0].Pos)
 	return buf, regA, nil

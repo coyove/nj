@@ -174,7 +174,7 @@ func initCoreLibs() {
 		Puts("SET", NewNumberValue(OP_SET)).Puts("SETK", NewNumberValue(OP_SETK)).
 		Puts("closure", NewMapValue(NewMap().
 			Puts("empty", NewNativeValue(0, func(env *Env) Value {
-				cls := NewClosure(make([]uint64, 0), make([]Value, 0), env.parent, 0, false, false, false, false)
+				cls := NewClosure(make([]uint64, 0), make([]Value, 0), env.parent, 0)
 				return NewClosureValue(cls)
 			})).
 			Puts("setparam", NewNativeValue(3, func(env *Env) Value {
@@ -183,9 +183,17 @@ func initCoreLibs() {
 				case "argscount":
 					cls.argsCount = byte(env.SGet(2).AsNumber())
 				case "yieldable":
-					cls.setYieldable(!env.SGet(2).IsFalse())
+					if !env.SGet(2).IsFalse() {
+						cls.Set(CLS_YIELDABLE)
+					} else {
+						cls.Unset(CLS_YIELDABLE)
+					}
 				case "envescaped":
-					cls.noenvescape = env.SGet(2).IsFalse()
+					if env.SGet(2).IsFalse() {
+						cls.Set(CLS_NOENVESCAPE)
+					} else {
+						cls.Unset(CLS_NOENVESCAPE)
+					}
 				}
 				return NewClosureValue(cls)
 			})).

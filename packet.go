@@ -68,8 +68,9 @@ func slice8to64(p []byte) []uint64 {
 }
 
 type packet struct {
-	data []uint64
-	pos  []uint64
+	data   []uint64
+	pos    []uint64
+	source string
 }
 
 func newpacket() packet {
@@ -90,6 +91,7 @@ func (b *packet) Write(buf packet) {
 		op += uint32(datalen)
 		b.pos[i] = makeop2(op, line, col)
 	}
+	b.source = buf.source
 }
 
 func (b *packet) WriteRaw(buf []uint64) {
@@ -106,6 +108,9 @@ func (b *packet) WriteOP(op byte, opa, opb uint32) {
 
 func (b *packet) WritePos(p parser.Position) {
 	b.pos = append(b.pos, makeop2(uint32(len(b.data)), uint32(p.Line), uint16(p.Column)))
+	if p.Source != "" {
+		b.source = p.Source
+	}
 }
 
 func (b *packet) WriteDouble(v float64) {
@@ -202,13 +207,13 @@ func (c *Closure) crPrettify(tab int) string {
 	if len(c.preArgs) > 0 {
 		sb.WriteString(spaces + "<curry(" + strconv.Itoa(len(c.preArgs)) + ")>\n")
 	}
-	if c.Yieldable() {
+	if c.Isset(CLS_YIELDABLE) {
 		sb.WriteString(spaces + "<yieldable>\n")
 	}
-	if c.receiver {
+	if c.Isset(CLS_HASRECEIVER) {
 		sb.WriteString(spaces + "<receiver>\n")
 	}
-	if !c.noenvescape {
+	if !c.Isset(CLS_NOENVESCAPE) {
 		sb.WriteString(spaces + "<envescaped>\n")
 	}
 	for i, k := range c.consts {
@@ -249,7 +254,7 @@ MAIN:
 			}
 
 			if op == cursor {
-				sb.WriteString(spaces + fmt.Sprintf("---- <%x> %d:%d\n", hash, line, col))
+				sb.WriteString(spaces + fmt.Sprintf("---- <%x> ---- %s:%d:%d\n", hash, c.source, line, col))
 				c.pos = c.pos[1:]
 			}
 		}
@@ -348,10 +353,7 @@ MAIN:
 func crReadClosure(code []uint64, cursor *uint32, env *Env, opa, opb uint32) *Closure {
 	metadata := opb
 	argsCount := byte(metadata >> 24)
-	yieldable := byte(metadata<<8>>28) == 1
-	errorable := byte(metadata<<12>>28) == 1
-	noenvescape := byte(metadata<<16>>28) == 1
-	receiver := byte(metadata<<20>>28) == 1
+	options := byte(metadata)
 	constsLen := opa
 	consts := make([]Value, constsLen+1)
 	for i := uint32(1); i <= constsLen; i++ {
@@ -364,9 +366,12 @@ func crReadClosure(code []uint64, cursor *uint32, env *Env, opa, opb uint32) *Cl
 			panic("shouldn't happen")
 		}
 	}
+	src := crReadString(code, cursor)
 	pos := crRead(code, cursor, int(crRead64(code, cursor)))
 	buf := crRead(code, cursor, int(crRead64(code, cursor)))
-	cls := NewClosure(buf, consts, env, byte(argsCount), yieldable, errorable, receiver, noenvescape)
+	cls := NewClosure(buf, consts, env, byte(argsCount))
 	cls.pos = pos
+	cls.options = options
+	cls.source = src
 	return cls
 }

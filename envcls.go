@@ -131,74 +131,53 @@ func (env *Env) Stack() []Value {
 	return env.stack
 }
 
+const (
+	CLS_NOENVESCAPE = 1 << iota
+	CLS_HASRECEIVER
+	CLS_YIELDABLE
+)
+
 // Closure is the closure struct used in potatolang
 type Closure struct {
-	code        []uint64
-	pos         []uint64
-	consts      []Value
-	env         *Env
-	caller      Value
-	preArgs     []Value
-	native      func(env *Env) Value
-	argsCount   byte
-	noenvescape bool
-	receiver    bool
-	ye          byte
-	lastp       uint32
-	lastenv     *Env
+	code      []uint64
+	pos       []uint64
+	source    string
+	consts    []Value
+	env       *Env
+	caller    Value
+	preArgs   []Value
+	native    func(env *Env) Value
+	argsCount byte
+	options   byte
+	lastp     uint32
+	lastenv   *Env
 }
 
 // NewClosure creates a new closure
-func NewClosure(code []uint64, consts []Value, env *Env, argsCount byte, y, e, r, noenvescape bool) *Closure {
-	cls := &Closure{
-		code:        code,
-		consts:      consts,
-		env:         env,
-		argsCount:   argsCount,
-		noenvescape: noenvescape,
-		receiver:    r,
+func NewClosure(code []uint64, consts []Value, env *Env, argsCount byte) *Closure {
+	return &Closure{
+		code:      code,
+		consts:    consts,
+		env:       env,
+		argsCount: argsCount,
 	}
-	if y {
-		cls.ye = 0x01
-	}
-	if e {
-		cls.ye |= 0x10
-	}
-	return cls
 }
 
 // NewNativeValue creates a native function in potatolang
 func NewNativeValue(argsCount int, f func(env *Env) Value) Value {
-	return NewClosureValue(&Closure{
-		argsCount:   byte(argsCount),
-		native:      f,
-		noenvescape: true,
-	})
-}
-
-func (c *Closure) Errorable() bool {
-	return (c.ye >> 4) > 0
-}
-
-func (c *Closure) Yieldable() bool {
-	return (c.ye & 0x01) > 0
-}
-
-func (c *Closure) setYieldable(b bool) {
-	if b {
-		c.ye |= 0x01
-	} else {
-		c.ye &= 0x10
+	cls := &Closure{
+		argsCount: byte(argsCount),
+		native:    f,
 	}
+	cls.Set(CLS_NOENVESCAPE)
+	return NewClosureValue(cls)
 }
 
-func (c *Closure) setErrorable(b bool) {
-	if b {
-		c.ye |= 0x10
-	} else {
-		c.ye &= 0x01
-	}
-}
+func (c *Closure) Set(opt byte) { c.options |= opt }
+
+func (c *Closure) Unset(opt byte) { c.options &= ^opt }
+
+func (c *Closure) Isset(opt byte) bool { return (c.options & opt) > 0 }
 
 func (c *Closure) AppendPreArgs(preArgs []Value) {
 	if c.preArgs == nil {
@@ -244,15 +223,12 @@ func (c *Closure) Env() *Env {
 
 // Dup duplicates the closure
 func (c *Closure) Dup() *Closure {
-	cls := NewClosure(c.code, c.consts, c.env, c.argsCount, c.Yieldable(), c.Errorable(), c.receiver, c.noenvescape)
-	cls.caller = c.caller
-	cls.lastp = c.lastp
-	cls.native = c.native
+	cls := *c
 	if c.preArgs != nil {
 		cls.preArgs = make([]Value, len(c.preArgs))
 		copy(cls.preArgs, c.preArgs)
 	}
-	return cls
+	return &cls
 }
 
 func (c *Closure) String() string {

@@ -26,7 +26,7 @@ type stacktrace struct {
 	env         *Env
 	code        []uint64
 	kaddr       uintptr
-	line        string
+	cls         *Closure
 }
 
 // ExecError represents the runtime error
@@ -51,7 +51,7 @@ func kodeaddr(code []uint64) uintptr { return (*reflect.SliceHeader)(unsafe.Poin
 
 // ExecCursor executes code under the given env from the given start cursor and returns:
 // 1. final result 2. yield cursor 3. is yield or not
-func ExecCursor(env *Env, code []uint64, consts []Value, cursor uint32) (Value, uint32, bool) {
+func ExecCursor(env *Env, K *Closure, cursor uint32) (Value, uint32, bool) {
 	var newEnv *Env
 	// var lastCursor uint32
 	var lineinfo = "<unknown>"
@@ -398,10 +398,10 @@ MAIN:
 				if len(cls.preArgs) > 0 {
 					newEnv.SInsert(0, cls.preArgs)
 				}
-				if cls.receiver {
+				if cls.Isset(CLS_HASRECEIVER) {
 					newEnv.SPush(cls.caller)
 				}
-				if cls.Yieldable() || cls.native != nil {
+				if cls.Isset(CLS_YIELDABLE) || cls.native != nil {
 					newEnv.trace = retStack
 					newEnv.parent = env
 					env.A = cls.Exec(newEnv)
@@ -416,7 +416,7 @@ MAIN:
 						code:        code,
 						kaddr:       kaddr,
 						line:        lineinfo,
-						noenvescape: cls.noenvescape,
+						noenvescape: cls.Isset(CLS_NOENVESCAPE),
 					}
 
 					// switch to the env of cls

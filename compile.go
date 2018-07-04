@@ -348,9 +348,10 @@ func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
 			consts[i+1] = NewStringValue(k.value.(string))
 		}
 	}
-	cls = NewClosure(code.data, consts, nil, 0, false, false, false, false)
+	cls = NewClosure(code.data, consts, nil, 0)
 	cls.lastenv = NewEnv(nil)
 	cls.pos = code.pos
+	cls.source = code.source
 	for _, name := range CoreLibNames {
 		cls.lastenv.SPush(CoreLibs[name])
 	}
