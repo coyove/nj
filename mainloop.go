@@ -371,26 +371,7 @@ MAIN:
 		case OP_YIELDK:
 			return konst(kaddr, uint16(opa)), cursor, true
 		case OP_LAMBDA:
-			metadata := opb
-			argsCount := byte(metadata >> 24)
-			yieldable := byte(metadata<<8>>28) == 1
-			errorable := byte(metadata<<12>>28) == 1
-			noenvescape := byte(metadata<<16>>28) == 1
-			receiver := byte(metadata<<20>>28) == 1
-			constsLen := opa
-			consts := make([]Value, constsLen+1)
-			for i := uint32(1); i <= constsLen; i++ {
-				switch cruRead64(caddr, &cursor) {
-				case Tnumber:
-					consts[i] = NewNumberValue(crReadDouble(code, &cursor))
-				case Tstring:
-					consts[i] = NewStringValue(crReadString(code, &cursor))
-				default:
-					panic("shouldn't happen")
-				}
-			}
-			buf := crRead(code, &cursor, int(cruRead64(caddr, &cursor)))
-			env.A = NewClosureValue(NewClosure(buf, consts, env, byte(argsCount), yieldable, errorable, receiver, noenvescape))
+			env.A = NewClosureValue(crReadClosure(code, &cursor, env, opa, opb))
 		case OP_CALL:
 			v := env.Get(opa)
 			if v.ty != Tclosure {

@@ -5,7 +5,7 @@ func A(i, j) {
     return ((i+j)*(i+j+1)/2 + i + 1);
 }
 
-var K, OP = std.opcode.closure, std.opcode;
+var K = std.opcode.closure, OP= std.opcode;
 var A2 = K.empty();
 var call = (func(){
     return func() {
@@ -85,7 +85,7 @@ func ATimesTransp(v, u) {
     wg.wait();
 }
 
-n = 5500;
+n = 550;
 var u = {};
 var v = {};
  
@@ -101,8 +101,8 @@ for (var i = 0 ; i < 10; i = i + 1) {
     ATimesTransp(u, v);
 }
 
-var vBv, vv = 0;
-for(v, func(i, x) {
+var vBv = 0, vv = 0;
+copy(v, func(i, x) {
     vBv = vBv + u[i] * x;
     vv = vv + x * x;
 });

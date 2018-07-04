@@ -259,12 +259,17 @@ jmp_stat:
 declarator:
         TIdent {
             $$ = NewAtomNode($1)
+            $$.Pos = $1.Pos
         } |
         prefix_expr '[' expr ']' {
             $$ = NewCompoundNode("load", $1, $3)
+            $$.Compound[0].Pos = $1.Pos
+            $$.Pos = $1.Pos
         } |
         prefix_expr '.' TIdent {
             $$ = NewCompoundNode("load", $1, NewStringNode($3.Str))
+            $$.Compound[0].Pos = $1.Pos
+            $$.Pos = $1.Pos
         }
 
 ident_list:
@@ -297,16 +302,22 @@ expr_assign_list:
 expr_declare_list:
         TIdent {
             $$ = NewCompoundNode("chain", NewCompoundNode("set", NewAtomNode($1), NewNilNode()))
+            $$.Compound[1].Compound[0].Pos = $1.Pos
         } |
         TIdent '=' expr {
             $$ = NewCompoundNode("chain", NewCompoundNode("set", NewAtomNode($1), $3))
+            $$.Compound[1].Compound[0].Pos = $1.Pos
         } |
         expr_declare_list ',' TIdent '=' expr {
-            $1.Compound = append($$.Compound, NewCompoundNode("set", NewAtomNode($3), $5))
+            x := NewCompoundNode("set", NewAtomNode($3), $5)
+            x.Compound[0].Pos = $1.Pos
+            $1.Compound = append($$.Compound, x)
             $$ = $1
         } |
         expr_declare_list ',' TIdent {
-            $1.Compound = append($1.Compound, NewCompoundNode("set", NewAtomNode($3), NewNilNode()))
+            x := NewCompoundNode("set", NewAtomNode($3), NewNilNode())
+            x.Compound[0].Pos = $1.Pos
+            $1.Compound = append($1.Compound, x)
             $$ = $1
         }
 
@@ -429,15 +440,19 @@ string:
 prefix_expr:
         declarator {
             $$ = $1
+            $$.Pos = $1.Pos
         } |
         '(' func_call ')' {
             $$ = $2
+            $$.Pos = $2.Pos
         } |
         func_call {
             $$ = $1
+            $$.Pos = $1.Pos
         } |
         '(' expr ')' {
             $$ = $2
+            $$.Pos = $2.Pos
         }        
 
 func_call:
@@ -498,6 +513,7 @@ func_call:
             default:
                 $$ = NewCompoundNode("call", $1, $2)
             }
+            $$.Compound[0].Pos = $1.Pos
         }
 
 func_args:

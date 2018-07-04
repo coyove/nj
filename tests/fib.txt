@@ -3,7 +3,7 @@ func fib(n) {
     return fib(n-2)+fib(n-1);
 }
 
-var K, OP = std.opcode.closure, std.opcode;
+var K = std.opcode.closure,OP= std.opcode;
 var fib2 = K.empty();
 
 K.setparam(fib2, "argscount", 1);

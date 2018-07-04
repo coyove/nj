@@ -134,6 +134,7 @@ func (env *Env) Stack() []Value {
 // Closure is the closure struct used in potatolang
 type Closure struct {
 	code        []uint64
+	pos         []uint64
 	consts      []Value
 	env         *Env
 	caller      Value
@@ -255,12 +256,10 @@ func (c *Closure) Dup() *Closure {
 }
 
 func (c *Closure) String() string {
-	if c.native == nil {
-		return "closure (\n" +
-			crPrettifyLambda(int(c.argsCount), len(c.preArgs),
-				c.Yieldable(), c.Errorable(), c.receiver, !c.noenvescape, c.code, c.consts, 4) + ")"
+	if c.native != nil {
+		return fmt.Sprintf("closure (\n    <args: %d>\n    <curry: %d>\n    [...] native code\n)", c.argsCount, len(c.preArgs))
 	}
-	return fmt.Sprintf("closure (\n    <args: %d>\n    <curry: %d>\n    [...] native code\n)", c.argsCount, len(c.preArgs))
+	return "closure (\n" + c.crPrettify(4) + ")"
 }
 
 // Exec executes the closure with the given env

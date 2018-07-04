@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"unsafe"
+
+	"github.com/coyove/potatolang/parser"
 )
 
 // +---------+----------+----------+
@@ -23,6 +25,17 @@ func op(x uint64) (op byte, a, b uint32) {
 	op = byte(x >> 56)
 	a = uint32(x>>32) & 0x00ffffff
 	b = uint32(x)
+	return
+}
+
+func makeop2(a, b uint32, c uint16) uint64 {
+	return uint64(a&0x00ffffff)<<40 + uint64(b&0x00ffffff)<<16 + uint64(c)
+}
+
+func op2(x uint64) (a, b uint32, c uint16) {
+	a = uint32(x>>40) & 0x00ffffff
+	b = uint32(x>>16) & 0x00ffffff
+	c = uint16(x)
 	return
 }
 
@@ -54,20 +67,13 @@ func slice8to64(p []byte) []uint64 {
 	return *(*[]uint64)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
 }
 
-type _pos struct {
-	source   string
-	line     uint32
-	col      uint32
-	opcursor uint32
-}
-
 type packet struct {
 	data []uint64
-	pos  []_pos
+	pos  []uint64
 }
 
 func newpacket() packet {
-	return packet{data: make([]uint64, 0, 2)}
+	return packet{data: make([]uint64, 0, 1), pos: make([]uint64, 0, 1)}
 }
 
 func (b *packet) Clear() {
@@ -75,12 +81,19 @@ func (b *packet) Clear() {
 }
 
 func (b *packet) Write(buf packet) {
+	datalen := len(b.data)
 	b.data = append(b.data, buf.data...)
 	idx := len(b.pos)
 	b.pos = append(b.pos, buf.pos...)
 	for i := idx; i < len(b.pos); i++ {
-		b.pos[i].opcursor += uint32(len(b.data))
+		op, line, col := op2(b.pos[i])
+		op += uint32(datalen)
+		b.pos[i] = makeop2(op, line, col)
 	}
+}
+
+func (b *packet) WriteRaw(buf []uint64) {
+	b.data = append(b.data, buf...)
 }
 
 func (b *packet) Write64(v uint64) {
@@ -89,7 +102,10 @@ func (b *packet) Write64(v uint64) {
 
 func (b *packet) WriteOP(op byte, opa, opb uint32) {
 	b.data = append(b.data, makeop(op, opa, opb))
-	b.opcursor++
+}
+
+func (b *packet) WritePos(p parser.Position) {
+	b.pos = append(b.pos, makeop2(uint32(len(b.data)), uint32(p.Line), uint16(p.Column)))
 }
 
 func (b *packet) WriteDouble(v float64) {
@@ -99,7 +115,7 @@ func (b *packet) WriteDouble(v float64) {
 
 func (b *packet) WriteString(v string) {
 	b.Write64(uint64(len(v)))
-	b.Write(slice8to64([]byte(v)))
+	b.WriteRaw(slice8to64([]byte(v)))
 }
 
 func (b *packet) TruncateLast(n int) {
@@ -179,38 +195,28 @@ func crHash(data []uint64) uint32 {
 	return e.Sum32()
 }
 
-func crPrettifyLambda(args, curry int, y, e, r, esc bool, code []uint64, consts []Value, tab int) string {
+func (c *Closure) crPrettify(tab int) string {
 	sb := &bytes.Buffer{}
 	spaces := strings.Repeat(" ", tab)
-	sb.WriteString(spaces + "<args(" + strconv.Itoa(args) + ")>\n")
-	if curry > 0 {
-		sb.WriteString(spaces + "<curry(" + strconv.Itoa(curry) + ")>\n")
+	sb.WriteString(spaces + "<args(" + strconv.Itoa(int(c.argsCount)) + ")>\n")
+	if len(c.preArgs) > 0 {
+		sb.WriteString(spaces + "<curry(" + strconv.Itoa(len(c.preArgs)) + ")>\n")
 	}
-	if y {
+	if c.Yieldable() {
 		sb.WriteString(spaces + "<yieldable>\n")
 	}
-	if e {
-		sb.WriteString(spaces + "<errorable>\n")
-	}
-	if r {
+	if c.receiver {
 		sb.WriteString(spaces + "<receiver>\n")
 	}
-	if esc {
+	if !c.noenvescape {
 		sb.WriteString(spaces + "<envescaped>\n")
 	}
-	for i, k := range consts {
+	for i, k := range c.consts {
 		sb.WriteString(spaces + fmt.Sprintf("<k$%d(%+v)>\n", i, k))
 	}
-	sb.WriteString(crPrettify(code, consts, tab))
-	return sb.String()
-}
 
-func crPrettify(data []uint64, consts []Value, tab int) string {
-
-	sb := &bytes.Buffer{}
-	pre := strings.Repeat(" ", tab)
-	hash := crHash(data)
-	sb.WriteString(pre)
+	hash := crHash(c.code)
+	sb.WriteString(spaces)
 	sb.WriteString(fmt.Sprintf("<%08x>\n", hash))
 
 	var cursor uint32
@@ -222,21 +228,37 @@ func crPrettify(data []uint64, consts []Value, tab int) string {
 		return fmt.Sprintf("$%d$%d", a>>16, uint16(a))
 	}
 	readKAddr := func(a uint16) string {
-		return fmt.Sprintf("k$%d(%+v)", a, consts[a])
+		return fmt.Sprintf("k$%d(%+v)", a, c.consts[a])
 	}
 
 	lastBop := byte(OP_EOB)
 MAIN:
 	for {
-		bop, a, b := op(crRead64(data, &cursor))
+		bop, a, b := op(crRead64(c.code, &cursor))
+		if len(c.pos) > 0 {
+			op, line, col := op2(c.pos[0])
+			// log.Println(cursor, op, unsafe.Pointer(&pos))
+			for cursor > op {
+				c.pos = c.pos[1:]
+				if len(c.pos) == 0 {
+					break
+				}
+				if op, line, col = op2(c.pos[0]); cursor <= op {
+					break
+				}
+			}
+
+			if op == cursor {
+				sb.WriteString(spaces + fmt.Sprintf("---- <%x> %d:%d\n", hash, line, col))
+				c.pos = c.pos[1:]
+			}
+		}
 
 		lastIdx := sb.Len() - 1
-		sb.WriteString(pre + "[")
+		sb.WriteString(spaces + "[")
 		sb.WriteString(strconv.Itoa(int(cursor) - 1))
 		sb.WriteString("] ")
 		switch bop {
-		case OP_LINE:
-			sb.WriteString(fmt.Sprintf("---- <%x> %s", hash, crReadString(data, &cursor)))
 		case OP_EOB:
 			sb.WriteString("end\n")
 			break MAIN
@@ -274,7 +296,7 @@ MAIN:
 				sb.WriteString(readKAddr(uint16(a)))
 			}
 		case OP_ASSERT:
-			tt := crReadString(data, &cursor)
+			tt := crReadString(c.code, &cursor)
 			sb.WriteString(tt)
 		case OP_RET:
 			sb.WriteString("ret " + readAddr(a))
@@ -285,27 +307,10 @@ MAIN:
 		case OP_YIELDK:
 			sb.WriteString("yield " + readKAddr(uint16(a)))
 		case OP_LAMBDA:
-			sb.WriteString("$a = lambda (\n")
-			argsCount := byte(b >> 24)
-			yieldable := byte(b<<8>>28) == 1
-			errorable := byte(b<<12>>28) == 1
-			noenvescape := byte(b<<16>>28) == 1
-			receiver := byte(b<<20>>28) == 1
-			constsLen := a
-			consts := make([]Value, constsLen+1)
-			for i := uint32(1); i <= constsLen; i++ {
-				switch crRead64(data, &cursor) {
-				case Tnumber:
-					consts[i] = NewNumberValue(crReadDouble(data, &cursor))
-				case Tstring:
-					consts[i] = NewStringValue(crReadString(data, &cursor))
-				default:
-					panic("shouldn't happen")
-				}
-			}
-			buf := crRead(data, &cursor, int(crRead64(data, &cursor)))
-			sb.WriteString(crPrettifyLambda(int(argsCount), 0, yieldable, errorable, receiver, !noenvescape, buf, consts, tab+4))
-			sb.WriteString(pre + ")")
+			sb.WriteString("$a = closure (\n")
+			cls := crReadClosure(c.code, &cursor, nil, a, b)
+			sb.WriteString(cls.crPrettify(tab + 4))
+			sb.WriteString(spaces + ")")
 		case OP_CALL:
 			sb.WriteString("call " + readAddr(a))
 		case OP_JMP:
@@ -338,4 +343,30 @@ MAIN:
 	}
 
 	return sb.String()
+}
+
+func crReadClosure(code []uint64, cursor *uint32, env *Env, opa, opb uint32) *Closure {
+	metadata := opb
+	argsCount := byte(metadata >> 24)
+	yieldable := byte(metadata<<8>>28) == 1
+	errorable := byte(metadata<<12>>28) == 1
+	noenvescape := byte(metadata<<16>>28) == 1
+	receiver := byte(metadata<<20>>28) == 1
+	constsLen := opa
+	consts := make([]Value, constsLen+1)
+	for i := uint32(1); i <= constsLen; i++ {
+		switch crRead64(code, cursor) {
+		case Tnumber:
+			consts[i] = NewNumberValue(crReadDouble(code, cursor))
+		case Tstring:
+			consts[i] = NewStringValue(crReadString(code, cursor))
+		default:
+			panic("shouldn't happen")
+		}
+	}
+	pos := crRead(code, cursor, int(crRead64(code, cursor)))
+	buf := crRead(code, cursor, int(crRead64(code, cursor)))
+	cls := NewClosure(buf, consts, env, byte(argsCount), yieldable, errorable, receiver, noenvescape)
+	cls.pos = pos
+	return cls
 }

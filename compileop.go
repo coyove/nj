@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	ERR_UNDECLARED_VARIABLE = " %+v: undeclared variable"
+	errUndeclaredVariable = " %+v: undeclared variable"
 )
 
 func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
@@ -30,7 +30,7 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint3
 	} else {
 		varIndex, ok = table.get(aDest.Value.(string))
 		if !ok {
-			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, aDest)
+			err = fmt.Errorf(errUndeclaredVariable, aDest)
 			return
 		}
 		newYX = varIndex
@@ -44,7 +44,7 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint3
 		} else {
 			valueIndex, ok := table.get(aSrc.Value.(string))
 			if !ok {
-				err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, aSrc)
+				err = fmt.Errorf(errUndeclaredVariable, aSrc)
 				return
 			}
 			buf.WriteOP(OP_SET, newYX, valueIndex)
@@ -67,7 +67,8 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint3
 		}
 		table.put(aDest.Value.(string), uint16(newYX))
 	}
-	return buf.data, newYX, nil
+	buf.WritePos(atoms[0].Pos)
+	return buf, newYX, nil
 }
 
 func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
@@ -81,12 +82,12 @@ func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint3
 	buf := newpacket()
 	if len(atoms) == 1 {
 		buf.WriteOP(op, regA, 0)
-		return buf.data, yx, nil
+		return buf, yx, nil
 	}
 
 	switch atom := atoms[1]; atom.Type {
 	case parser.NTAtom, parser.NTNumber, parser.NTString, parser.NTAddr:
-		if err = table.fill(buf, atom, op, opk); err != nil {
+		if err = table.fill(&buf, atom, op, opk); err != nil {
 			return
 		}
 	case parser.NTCompound:
@@ -96,7 +97,8 @@ func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint3
 		buf.Write(code)
 		buf.WriteOP(op, yx, 0)
 	}
-	return buf.data, yx, nil
+	buf.WritePos(atoms[0].Pos)
+	return buf, yx, nil
 }
 
 func (table *symtable) compileMapOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
@@ -104,20 +106,21 @@ func (table *symtable) compileMapOp(atoms []*parser.Node) (code packet, yx uint3
 		err = fmt.Errorf("%+v: every key in map must have a value", atoms[1])
 		return
 	}
-	var buf *packet
+	var buf packet
 	if buf, err = table.flaten(atoms[1].Compound); err != nil {
 		return
 	}
 	for _, atom := range atoms[1].Compound {
-		if err = table.fill(buf, atom, OP_PUSH, OP_PUSHK); err != nil {
+		if err = table.fill(&buf, atom, OP_PUSH, OP_PUSHK); err != nil {
 			return
 		}
 	}
 	buf.WriteOP(OP_MAKEMAP, 0, 0)
-	return buf.data, regA, nil
+	buf.WritePos(atoms[0].Pos)
+	return buf, regA, nil
 }
 
-func (table *symtable) flaten(atoms []*parser.Node) (buf *packet, err error) {
+func (table *symtable) flaten(atoms []*parser.Node) (buf packet, err error) {
 	replacedAtoms := []*parser.Node{}
 	buf = newpacket()
 
@@ -153,7 +156,7 @@ func (table *symtable) flaten(atoms []*parser.Node) (buf *packet, err error) {
 }
 
 func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, yx uint32, err error) {
-	var buf *packet
+	var buf packet
 	buf, err = table.flaten(atoms[1:])
 	if err != nil {
 		return
@@ -175,26 +178,26 @@ func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, y
 			buf.Clear()
 			buf.WriteOP(OP_SETK, regA, uint32(table.addConst(str)))
 			table.ims = &str
-			return buf.data, regA, nil
+			return buf, regA, nil
 		}
 		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {
 			immediateRet(v1() + v2())
-			return buf.data, regA, nil
+			return buf, regA, nil
 		}
 	case OP_SUB:
 		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {
 			immediateRet(v1() - v2())
-			return buf.data, regA, nil
+			return buf, regA, nil
 		}
 	case OP_MUL:
 		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {
 			immediateRet(v1() * v2())
-			return buf.data, regA, nil
+			return buf, regA, nil
 		}
 	case OP_DIV:
 		if atoms[1].Type == parser.NTNumber && atoms[2].Type == parser.NTNumber {
 			immediateRet(v1() / v2())
-			return buf.data, regA, nil
+			return buf, regA, nil
 		}
 	}
 
@@ -207,7 +210,7 @@ func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, y
 
 	count := buf.Len()
 	for i := 1; i < len(atoms); i++ {
-		if err = table.fill(buf, atoms[i], byte(op[i-1]>>8), byte(op[i-1])); err != nil {
+		if err = table.fill(&buf, atoms[i], byte(op[i-1]>>8), byte(op[i-1])); err != nil {
 			return
 		}
 	}
@@ -226,7 +229,7 @@ func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, y
 		buf.WriteString(atoms[0].String())
 	}
 
-	return buf.data, regA, nil
+	return buf, regA, nil
 }
 
 func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
@@ -236,18 +239,21 @@ func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint
 		err = fmt.Errorf("%+v: invalid op", atoms[0])
 		return
 	}
-	return table.flatWrite(atoms, op)
+	code, yx, err = table.flatWrite(atoms, op)
+	code.WritePos(atoms[0].Pos)
+	return
 }
 
 func (table *symtable) compileIncOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
 	subject, ok := table.get(atoms[1].Value.(string))
 	buf := newpacket()
 	if !ok {
-		return nil, 0, fmt.Errorf(ERR_UNDECLARED_VARIABLE, atoms[1])
+		return newpacket(), 0, fmt.Errorf(errUndeclaredVariable, atoms[1])
 	}
 	table.clearRegRecord(subject)
 	buf.WriteOP(OP_INC, subject, uint32(table.addConst(atoms[2].Value)))
-	return buf.data, regA, nil
+	code.WritePos(atoms[1].Pos)
+	return buf, regA, nil
 }
 
 // [and a b] => $a = a if not a then return else $a = b end
@@ -266,7 +272,7 @@ func (table *symtable) compileAndOrOp(atoms []*parser.Node) (code packet, yx uin
 	case parser.NTAtom, parser.NTCompound:
 		code, yx, err = table.compileNode(a1)
 		if err != nil {
-			return nil, 0, err
+			return newpacket(), 0, err
 		}
 		buf.Write(code)
 		buf.WriteOP(OP_SET, regA, yx)
@@ -280,7 +286,7 @@ func (table *symtable) compileAndOrOp(atoms []*parser.Node) (code packet, yx uin
 	case parser.NTAtom, parser.NTCompound:
 		code, yx, err = table.compileNode(a2)
 		if err != nil {
-			return nil, 0, err
+			return newpacket(), 0, err
 		}
 		buf.Write(code)
 		if yx != regA {
@@ -291,7 +297,8 @@ func (table *symtable) compileAndOrOp(atoms []*parser.Node) (code packet, yx uin
 
 	_, yx, _ = op(buf.data[c2-1])
 	buf.data[c2-1] = makeop(bop, yx, uint32(int32(jmp)))
-	return buf.data, regA, nil
+	code.WritePos(atoms[0].Pos)
+	return buf, regA, nil
 }
 
 // [if condition [true-chain ...] [false-chain ...]]
@@ -307,7 +314,7 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint32
 	case parser.NTAtom, parser.NTCompound:
 		code, yx, err = table.compileNode(condition)
 		if err != nil {
-			return nil, 0, err
+			return newpacket(), 0, err
 		}
 		buf.Write(code)
 	}
@@ -321,17 +328,19 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint32
 	if err != nil {
 		return
 	}
-	if len(falseCode) > 0 {
-		buf.WriteOP(OP_IFNOT, condyx, uint32(len(trueCode))+1)
+	if len(falseCode.data) > 0 {
+		buf.WriteOP(OP_IFNOT, condyx, uint32(len(trueCode.data))+1)
+		buf.WritePos(condition.Pos)
 		buf.Write(trueCode)
-		buf.WriteOP(OP_JMP, 0, uint32(len(falseCode)))
+		buf.WriteOP(OP_JMP, 0, uint32(len(falseCode.data)))
 		buf.Write(falseCode)
 	} else {
-		buf.WriteOP(OP_IFNOT, condyx, uint32(len(trueCode)))
+		buf.WriteOP(OP_IFNOT, condyx, uint32(len(trueCode.data)))
+		buf.WritePos(condition.Pos)
 		buf.Write(trueCode)
 	}
 	table.clearAllRegRecords()
-	return buf.data, regA, nil
+	return buf, regA, nil
 }
 
 // [call func-name [args ...]]
@@ -344,20 +353,24 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		varname := nodes[2].Compound[0].Value.(string)
 		address, ok := table.get(varname)
 		if !ok {
-			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, callee)
+			err = fmt.Errorf(errUndeclaredVariable, callee)
 			return
 		}
 		buf.WriteOP(OP_SETK, regA, uint32(table.addConst(float64(address))))
-		return buf.data, regA, nil
+		return buf, regA, nil
 	case "len":
-		return table.flatWrite(append(nodes[1:2], nodes[2].Compound...), OP_LEN)
+		code, yx, err = table.flatWrite(append(nodes[1:2], nodes[2].Compound...), OP_LEN)
+		code.WritePos(nodes[0].Pos)
+		return
 	case "copy":
 		x := append(nodes[1:2], nodes[2].Compound...)
 		if y, ok := x[3].Value.(float64); ok && y == 2 {
 			// return stack, env is escaped
 			table.envescape = true
 		}
-		return table.flatWrite(x, OP_DUP)
+		code, yx, err = table.flatWrite(x, OP_DUP)
+		code.WritePos(nodes[0].Pos)
+		return
 	case "typeof":
 		return table.flatWrite(append(nodes[1:2], nodes[2].Compound...), OP_TYPEOF)
 	}
@@ -390,7 +403,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 	case parser.NTAtom:
 		varIndex, ok = table.get(callee.Value.(string))
 		if !ok {
-			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, callee)
+			err = fmt.Errorf(errUndeclaredVariable, callee)
 			return
 		}
 	case parser.NTCompound:
@@ -400,8 +413,8 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		}
 		varIndex = yx
 		if len(replacedAtoms) == 0 {
-			_, _, varIndex = op(code[len(code)-1])
-			code = code[:len(code)-1]
+			_, _, varIndex = op(code.data[len(code.data)-1])
+			code.data = code.data[:len(code.data)-1]
 			table.sp--
 		}
 		buf.Write(code)
@@ -413,14 +426,15 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 	}
 
 	for i := 0; i < len(atoms); i++ {
-		err = table.fill(buf, atoms[i], OP_PUSH, OP_PUSHK)
+		err = table.fill(&buf, atoms[i], OP_PUSH, OP_PUSHK)
 		if err != nil {
 			return
 		}
 	}
 
 	buf.WriteOP(OP_CALL, varIndex, 0)
-	return buf.data, regA, nil
+	buf.WritePos(nodes[0].Pos)
+	return buf, regA, nil
 }
 
 // [lambda [namelist] [chain ...]]
@@ -455,7 +469,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	}
 
 	if ln > 255 {
-		return nil, 0, fmt.Errorf("do you really need more than 255 arguments?")
+		return newpacket(), 0, fmt.Errorf("do you really need more than 255 arguments?")
 	}
 
 	newtable.sp = uint16(ln)
@@ -464,7 +478,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		return
 	}
 
-	code = append(code, makeop(OP_EOB, 0, 0))
+	code.WriteOP(OP_EOB, 0, 0)
 	buf := newpacket()
 	buf.WriteOP(OP_LAMBDA, uint32(len(newtable.consts)),
 		uint32(byte(ln))<<24+
@@ -483,24 +497,27 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 			panic("shouldn't happen")
 		}
 	}
-	buf.Write64(uint64(len(code)))
+	buf.Write64(uint64(len(code.pos)))
+	buf.WriteRaw(code.pos)
+	buf.Write64(uint64(len(code.data)))
 	buf.Write(code)
-	return buf.data, regA, nil
+	buf.WritePos(atoms[0].Pos)
+	return buf, regA, nil
 }
 
 var staticWhileHack struct {
 	sync.Mutex
-	continueFlag packet
-	breakFlag    packet
+	continueFlag []uint64
+	breakFlag    []uint64
 }
 
 // [continue | break]
 func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
 	staticWhileHack.Lock()
 	defer staticWhileHack.Unlock()
-	gen := func(p *packet) {
+	gen := func(p *[]uint64) {
 		const ln = 2
-		*p = make(packet, ln)
+		*p = make([]uint64, ln)
 		buf := [ln * 8]byte{}
 		if _, err := rand.Read(buf[:]); err != nil {
 			panic(err)
@@ -508,23 +525,24 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 		copy(*p, (*(*[ln]uint64)(unsafe.Pointer(&buf)))[:])
 	}
 
+	buf := newpacket()
 	if atoms[0].Value.(string) == "continue" {
 		if staticWhileHack.continueFlag == nil {
 			gen(&staticWhileHack.continueFlag)
 		}
-		buf := newpacket()
 		code, yx, err = table.compileChainOp(table.continueNode[len(table.continueNode)-1])
 		if err != nil {
 			return
 		}
 		buf.Write(code)
-		buf.Write(staticWhileHack.continueFlag)
-		return buf.data, regA, nil
+		buf.WriteRaw(staticWhileHack.continueFlag)
+		return buf, regA, nil
 	}
 	if staticWhileHack.breakFlag == nil {
 		gen(&staticWhileHack.breakFlag)
 	}
-	return staticWhileHack.breakFlag, regA, nil
+	buf.WriteRaw(staticWhileHack.breakFlag)
+	return buf, regA, nil
 }
 
 // [for condition incr [chain ...]]
@@ -562,13 +580,13 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 	}
 	table.continueNode = table.continueNode[:len(table.continueNode)-1]
 
-	code = append(code, icode...)
-	buf.WriteOP(OP_IFNOT, varIndex, uint32(len(code))+1)
+	code.Write(icode)
+	buf.WriteOP(OP_IFNOT, varIndex, uint32(len(code.data))+1)
 	buf.Write(code)
 	buf.WriteOP(OP_JMP, 0, -uint32(buf.Len())-1)
 
-	code = buf.data
-	code2 := slice64to8(code)
+	code = buf
+	code2 := slice64to8(code.data)
 	if staticWhileHack.continueFlag != nil {
 		flag := slice64to8(staticWhileHack.continueFlag)
 		for i := 0; i < len(code2); {
@@ -577,8 +595,8 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 				break
 			}
 			idx := (i + x) / 8
-			code[idx] = makeop(OP_JMP, 0, uint32(int32(-idx-1)))
-			code[idx+1] = makeop(OP_NOP, 0, 0)
+			code.data[idx] = makeop(OP_JMP, 0, uint32(int32(-idx-1)))
+			code.data[idx+1] = makeop(OP_NOP, 0, 0)
 			i = idx*8 + 2
 		}
 	}
@@ -591,11 +609,11 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 				break
 			}
 			idx := (i + x) / 8
-			code[idx] = makeop(OP_JMP, 0, uint32(int32(len(code)-idx-1)))
-			code[idx+1] = makeop(OP_NOP, 0, 0)
+			code.data[idx] = makeop(OP_JMP, 0, uint32(int32(len(code.data)-idx-1)))
+			code.data[idx+1] = makeop(OP_NOP, 0, 0)
 			i = idx*8 + 2
 		}
 	}
 	table.clearAllRegRecords()
-	return buf.data, regA, nil
+	return buf, regA, nil
 }

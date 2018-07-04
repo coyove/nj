@@ -176,7 +176,7 @@ func (table *symtable) fill(buf *packet, n *parser.Node, op, opk byte) (err erro
 		} else {
 			addr, ok := table.get(n.Value.(string))
 			if !ok {
-				return fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
+				return fmt.Errorf(errUndeclaredVariable, n)
 			}
 			buf.WriteOP(op, addr, 0)
 			if isreg {
@@ -231,13 +231,13 @@ func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint32, err 
 			yx = uint32(table.sp)
 			buf.WriteOP(OP_SETK, yx, 0)
 			table.sp++
-			return buf.data, yx, nil
+			return buf, yx, nil
 		}
 
 		var ok bool
 		varIndex, ok = table.get(n.Value.(string))
 		if !ok {
-			err = fmt.Errorf(ERR_UNDECLARED_VARIABLE, n)
+			err = fmt.Errorf(errUndeclaredVariable, n)
 			return
 		}
 	case parser.NTAddr:
@@ -255,7 +255,7 @@ func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint32, err 
 func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx uint32, err error) {
 	nodes := compound.Compound
 	if len(nodes) == 0 {
-		return nil, regA, nil
+		return newpacket(), regA, nil
 	}
 	name, ok := nodes[0].Value.(string)
 	if !ok {
@@ -322,7 +322,7 @@ func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint3
 		buf.Write(code)
 	}
 
-	return buf.data, yx, err
+	return buf, yx, err
 }
 
 func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
@@ -338,7 +338,7 @@ func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
 		return nil, err
 	}
 
-	code = append(code, makeop(OP_EOB, 0, 0))
+	code.WriteOP(OP_EOB, 0, 0)
 	consts := make([]Value, len(table.consts)+1)
 	for i, k := range table.consts {
 		switch k.ty {
@@ -348,8 +348,9 @@ func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
 			consts[i+1] = NewStringValue(k.value.(string))
 		}
 	}
-	cls = NewClosure(code, consts, nil, 0, false, false, false, false)
+	cls = NewClosure(code.data, consts, nil, 0, false, false, false, false)
 	cls.lastenv = NewEnv(nil)
+	cls.pos = code.pos
 	for _, name := range CoreLibNames {
 		cls.lastenv.SPush(CoreLibs[name])
 	}

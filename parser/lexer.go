@@ -1,3 +1,29 @@
+// Taken from: https://github.com/yuin/gopher-lua/blob/master/parse
+
+/*
+The MIT License (MIT)
+
+Copyright (c) 2015 Yusuke Inuzuka
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 package parser
 
 import (
@@ -5,9 +31,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"reflect"
 	"strconv"
-	"strings"
 )
 
 const EOF = -1
@@ -516,67 +540,3 @@ func Parse(reader io.Reader, name string) (chunk *Node, err error) {
 }
 
 // }}}
-
-// Dump {{{
-
-func isInlineDumpNode(rv reflect.Value) bool {
-	switch rv.Kind() {
-	case reflect.Struct, reflect.Slice, reflect.Interface, reflect.Ptr:
-		return false
-	default:
-		return true
-	}
-}
-
-func dump(node interface{}, level int, s string) string {
-	rt := reflect.TypeOf(node)
-	if fmt.Sprint(rt) == "<nil>" {
-		return strings.Repeat(s, level) + "<nil>"
-	}
-
-	rv := reflect.ValueOf(node)
-	buf := []string{}
-	switch rt.Kind() {
-	case reflect.Slice:
-		if rv.Len() == 0 {
-			return strings.Repeat(s, level) + "<empty>"
-		}
-		for i := 0; i < rv.Len(); i++ {
-			buf = append(buf, dump(rv.Index(i).Interface(), level, s))
-		}
-	case reflect.Ptr:
-		vt := rv.Elem()
-		tt := rt.Elem()
-		indicies := []int{}
-		for i := 0; i < tt.NumField(); i++ {
-			if strings.Index(tt.Field(i).Name, "Base") > -1 {
-				continue
-			}
-			indicies = append(indicies, i)
-		}
-		switch {
-		case len(indicies) == 0:
-			return strings.Repeat(s, level) + "<empty>"
-		case len(indicies) == 1 && isInlineDumpNode(vt.Field(indicies[0])):
-			for _, i := range indicies {
-				buf = append(buf, strings.Repeat(s, level)+"- Node$"+tt.Name()+": "+dump(vt.Field(i).Interface(), 0, s))
-			}
-		default:
-			buf = append(buf, strings.Repeat(s, level)+"- Node$"+tt.Name())
-			for _, i := range indicies {
-				if isInlineDumpNode(vt.Field(i)) {
-					inf := dump(vt.Field(i).Interface(), 0, s)
-					buf = append(buf, strings.Repeat(s, level+1)+tt.Field(i).Name+": "+inf)
-				} else {
-					buf = append(buf, strings.Repeat(s, level+1)+tt.Field(i).Name+": ")
-					buf = append(buf, dump(vt.Field(i).Interface(), level+2, s))
-				}
-			}
-		}
-	default:
-		buf = append(buf, strings.Repeat(s, level)+fmt.Sprint(node))
-	}
-	return strings.Join(buf, "\n")
-}
-
-// }}
