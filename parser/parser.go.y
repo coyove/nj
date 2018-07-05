@@ -199,6 +199,9 @@ func_stat:
                 "chain", 
                 NewCompoundNode("set", funcname, NewNilNode()), 
                 NewCompoundNode("move", funcname, NewCompoundNode("lambda", $3, $4)))
+            $$.Compound[1].Compound[0].Pos = $1.Pos
+            $$.Compound[2].Compound[0].Pos = $1.Pos
+            $$.Compound[2].Compound[2].Compound[0].Pos = $1.Pos
         }
 
 jmp_stat:

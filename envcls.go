@@ -233,9 +233,26 @@ func (c *Closure) Dup() *Closure {
 
 func (c *Closure) String() string {
 	if c.native != nil {
-		return fmt.Sprintf("closure (\n    <args: %d>\n    <curry: %d>\n    [...] native code\n)", c.argsCount, len(c.preArgs))
+		return fmt.Sprintf("<native_%d_%d>", c.argsCount, len(c.preArgs))
 	}
-	return "closure (\n" + c.crPrettify(4) + ")"
+	x := fmt.Sprintf("closure_%d_%d", c.argsCount, len(c.preArgs))
+	if c.Isset(CLS_YIELDABLE) {
+		x += "_yd"
+	}
+	if c.Isset(CLS_HASRECEIVER) {
+		x += "_this"
+	}
+	if !c.Isset(CLS_NOENVESCAPE) {
+		x += "_esc"
+	}
+	return "<" + x + ">"
+}
+
+func (c *Closure) PrettyString() string {
+	if c.native != nil {
+		return "[native code]"
+	}
+	return c.crPrettify(0)
 }
 
 // Exec executes the closure with the given env
@@ -248,7 +265,7 @@ func (c *Closure) Exec(newEnv *Env) Value {
 			newEnv.SetParent(c.env)
 		}
 
-		v, np, yield := ExecCursor(newEnv, c.code, c.consts, c.lastp)
+		v, np, yield := ExecCursor(newEnv, c, c.lastp)
 		if yield {
 			c.lastp = np
 			c.lastenv = newEnv

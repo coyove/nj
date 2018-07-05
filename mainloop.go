@@ -24,8 +24,6 @@ type stacktrace struct {
 	cursor      uint32
 	noenvescape bool
 	env         *Env
-	code        []uint64
-	kaddr       uintptr
 	cls         *Closure
 }
 
@@ -39,8 +37,21 @@ func (e *ExecError) Error() string {
 	msg := "stacktrace:\n"
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
+		src := "<unknown>"
+		// binary search would be better?
+		for i, pos := range r.cls.pos {
+			op, line, col := op2(pos)
+			opx := uint32(0xffffffff)
+			if i < len(r.cls.pos)-1 {
+				opx, _, _ = op2(r.cls.pos[i+1])
+			}
+			if r.cursor >= op && r.cursor < opx {
+				src = fmt.Sprintf("%s:%d:%d", r.cls.source, line, col)
+				break
+			}
+		}
 		// the recorded cursor was advanced by 1 already
-		msg += fmt.Sprintf("cursor: %d at <%08x>, source: %s\n", r.cursor-1, crHash(r.code), r.line)
+		msg += fmt.Sprintf("cursor: %d at <%08x>, source: %s\n", r.cursor-1, crHash(r.cls.code), src)
 	}
 	return msg
 }
@@ -54,18 +65,18 @@ func kodeaddr(code []uint64) uintptr { return (*reflect.SliceHeader)(unsafe.Poin
 func ExecCursor(env *Env, K *Closure, cursor uint32) (Value, uint32, bool) {
 	var newEnv *Env
 	// var lastCursor uint32
-	var lineinfo = "<unknown>"
 	var retStack []stacktrace
+	var code = K.code
 	var caddr = kodeaddr(code)
-	var kaddr = (*reflect.SliceHeader)(unsafe.Pointer(&consts)).Data
+	var kaddr = (*reflect.SliceHeader)(unsafe.Pointer(&K.consts)).Data
 
 	defer func() {
 		if r := recover(); r != nil {
 			rr := stacktrace{
 				cursor: cursor,
-				code:   code,
-				line:   lineinfo,
+				cls:    K,
 			}
+
 			if re, ok := r.(*ExecError); ok {
 				retStack = append(retStack, rr)
 				re.stacks = append(retStack, re.stacks...)
@@ -84,9 +95,10 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (Value, uint32, bool) {
 	returnUpperWorld := func(v Value) {
 		r := retStack[len(retStack)-1]
 		cursor = r.cursor
-		code = r.code
+		K = r.cls
+		code = r.cls.code
 		caddr = kodeaddr(code)
-		kaddr = r.kaddr
+		kaddr = (*reflect.SliceHeader)(unsafe.Pointer(&r.cls.consts)).Data
 		r.env.A = v
 		if r.noenvescape {
 			newEnv = env
@@ -100,8 +112,6 @@ MAIN:
 		// log.Println(cursor)
 		bop, opa, opb := cruop(caddr, &cursor)
 		switch bop {
-		case OP_LINE:
-			lineinfo = crReadString(code, &cursor)
 		case OP_EOB:
 			break MAIN
 		case OP_NOP:
@@ -413,14 +423,13 @@ MAIN:
 					last := stacktrace{
 						cursor:      cursor,
 						env:         env,
-						code:        code,
-						kaddr:       kaddr,
-						line:        lineinfo,
+						cls:         K,
 						noenvescape: cls.Isset(CLS_NOENVESCAPE),
 					}
 
 					// switch to the env of cls
 					cursor = 0
+					K = cls
 					newEnv.parent = cls.env
 					env = newEnv
 					code = cls.code
@@ -541,7 +550,7 @@ func doDup(env *Env) {
 				newEnv.SPush(NewNumberValue(float64(v)))
 				newEnv.SPush(NewNumberValue(float64(len(newstr))))
 				if alloc {
-					v, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
+					v, _, _ := ExecCursor(newEnv, cls, 0)
 					newstr = append(newstr, v)
 				}
 			}
@@ -582,7 +591,7 @@ func doDup(env *Env) {
 				newEnv.SClear()
 				newEnv.SPush(k)
 				newEnv.SPush(v)
-				ret, _, _ := ExecCursor(newEnv, cls.code, cls.consts, 0)
+				ret, _, _ := ExecCursor(newEnv, cls, 0)
 				return ret
 			}))
 		} else {
@@ -591,13 +600,13 @@ func doDup(env *Env) {
 				newEnv.SClear()
 				newEnv.SPush(NewNumberValue(float64(i)))
 				newEnv.SPush(m.l[i])
-				ExecCursor(newEnv, cls.code, cls.consts, 0)
+				ExecCursor(newEnv, cls, 0)
 			}
 			for _, v := range m.m {
 				newEnv.SClear()
 				newEnv.SPush(v[0])
 				newEnv.SPush(v[1])
-				ExecCursor(newEnv, cls.code, cls.consts, 0)
+				ExecCursor(newEnv, cls, 0)
 			}
 		}
 	}

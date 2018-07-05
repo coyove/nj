@@ -10,6 +10,10 @@ import (
 
 var lineinfo = flag.Bool("li", false, "toggle lineinfo")
 
+func init() {
+	log.SetFlags(log.Lshortfile | log.Ltime)
+}
+
 func runFile(t *testing.T, path string) {
 	if !flag.Parsed() {
 		flag.Parse()

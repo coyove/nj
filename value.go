@@ -280,7 +280,7 @@ func (v Value) toString(lv int) string {
 		}
 		for _, v := range m.m {
 			buf.WriteString(v[0].String())
-			buf.WriteString("=")
+			buf.WriteString(":")
 			buf.WriteString(v[1].toString(lv + 1))
 			buf.WriteString(",")
 		}

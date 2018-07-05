@@ -57,7 +57,6 @@ func initCoreLibs() {
 		return y
 	}))
 	lcore.Puts("currentenv", NewNativeValue(0, func(env *Env) Value {
-		log.Println(env, env.parent)
 		return NewGenericValue(unsafe.Pointer(env.parent))
 	}))
 	lcore.Puts("stacktrace", NewNativeValue(0, func(env *Env) Value {

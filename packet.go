@@ -203,26 +203,28 @@ func crHash(data []uint64) uint32 {
 func (c *Closure) crPrettify(tab int) string {
 	sb := &bytes.Buffer{}
 	spaces := strings.Repeat(" ", tab)
-	sb.WriteString(spaces + "<args(" + strconv.Itoa(int(c.argsCount)) + ")>\n")
+	metaprefix := spaces + "|    m    [-] "
+
+	sb.WriteString(metaprefix + "args: " + strconv.Itoa(int(c.argsCount)) + "\n")
+	sb.WriteString(metaprefix + "source: " + c.source + "\n")
+
 	if len(c.preArgs) > 0 {
-		sb.WriteString(spaces + "<curry(" + strconv.Itoa(len(c.preArgs)) + ")>\n")
+		sb.WriteString(metaprefix + "curried args:" + strconv.Itoa(len(c.preArgs)) + "\n")
 	}
 	if c.Isset(CLS_YIELDABLE) {
-		sb.WriteString(spaces + "<yieldable>\n")
+		sb.WriteString(metaprefix + "yieldable: true\n")
 	}
 	if c.Isset(CLS_HASRECEIVER) {
-		sb.WriteString(spaces + "<receiver>\n")
+		sb.WriteString(metaprefix + "receiver: true\n")
 	}
 	if !c.Isset(CLS_NOENVESCAPE) {
-		sb.WriteString(spaces + "<envescaped>\n")
-	}
-	for i, k := range c.consts {
-		sb.WriteString(spaces + fmt.Sprintf("<k$%d(%+v)>\n", i, k))
+		sb.WriteString(metaprefix + "envescaped: true\n")
 	}
 
+	sb.WriteString(metaprefix + fmt.Sprintf("consts: %d\n", len(c.consts)))
+
 	hash := crHash(c.code)
-	sb.WriteString(spaces)
-	sb.WriteString(fmt.Sprintf("<%08x>\n", hash))
+	sb.WriteString(metaprefix + fmt.Sprintf("hash: %08x\n", hash))
 
 	var cursor uint32
 
@@ -236,10 +238,13 @@ func (c *Closure) crPrettify(tab int) string {
 		return fmt.Sprintf("k$%d(%+v)", a, c.consts[a])
 	}
 
-	lastBop := byte(OP_EOB)
+	oldpos := c.pos
+	lastopcurosor := uint32(0xffffffff)
 MAIN:
 	for {
 		bop, a, b := op(crRead64(c.code, &cursor))
+		sb.WriteString(spaces)
+
 		if len(c.pos) > 0 {
 			op, line, col := op2(c.pos[0])
 			// log.Println(cursor, op, unsafe.Pointer(&pos))
@@ -254,15 +259,25 @@ MAIN:
 			}
 
 			if op == cursor {
-				sb.WriteString(spaces + fmt.Sprintf("---- <%x> ---- %s:%d:%d\n", hash, c.source, line, col))
+				x := fmt.Sprintf("%d:%d", line, col)
+				if cursor == lastopcurosor+1 {
+					sb.WriteString(fmt.Sprintf("| %-7s   [%d] ", x, cursor-1))
+				} else {
+					sb.WriteString(fmt.Sprintf("| %-7s ┴─[%d] ", x, cursor-1))
+				}
 				c.pos = c.pos[1:]
+				lastopcurosor = op
+			} else {
+				if cursor == lastopcurosor+1 {
+					sb.WriteString(fmt.Sprintf("|         ┌─[%d] ", cursor-1))
+				} else {
+					sb.WriteString(fmt.Sprintf("|         │ [%d] ", cursor-1))
+				}
 			}
+		} else {
+			sb.WriteString(fmt.Sprintf("|         . [%d] ", cursor-1))
 		}
 
-		lastIdx := sb.Len() - 1
-		sb.WriteString(spaces + "[")
-		sb.WriteString(strconv.Itoa(int(cursor) - 1))
-		sb.WriteString("] ")
 		switch bop {
 		case OP_EOB:
 			sb.WriteString("end\n")
@@ -288,12 +303,7 @@ MAIN:
 		case OP_R3K:
 			sb.WriteString("r3 = " + readKAddr(uint16(a)))
 		case OP_PUSH, OP_PUSHK:
-			if lastBop == OP_PUSH || lastBop == OP_PUSHK {
-				sb.Truncate(lastIdx)
-				sb.WriteString(", ")
-			} else {
-				sb.WriteString("push ")
-			}
+			sb.WriteString("push ")
 			switch bop {
 			case OP_PUSH:
 				sb.WriteString(readAddr(a))
@@ -312,10 +322,9 @@ MAIN:
 		case OP_YIELDK:
 			sb.WriteString("yield " + readKAddr(uint16(a)))
 		case OP_LAMBDA:
-			sb.WriteString("$a = closure (\n")
+			sb.WriteString("$a = closure:\n\n")
 			cls := crReadClosure(c.code, &cursor, nil, a, b)
 			sb.WriteString(cls.crPrettify(tab + 4))
-			sb.WriteString(spaces + ")")
 		case OP_CALL:
 			sb.WriteString("call " + readAddr(a))
 		case OP_JMP:
@@ -344,9 +353,9 @@ MAIN:
 		}
 
 		sb.WriteString("\n")
-		lastBop = bop
 	}
 
+	c.pos = oldpos
 	return sb.String()
 }
 
