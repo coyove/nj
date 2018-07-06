@@ -1,4 +1,1 @@
-set a = nil or 2
-set b = nil and 1
-io.println(a,b)
-
+return 1;

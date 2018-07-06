@@ -55,11 +55,10 @@ const (
 	// special builtin op
 	OP_POP
 	OP_INC
-	OP_DUP
+	OP_COPY
 	OP_LEN
 	OP_TYPEOF
 
-	OP_LINE = 0xFD
-	OP_NOP  = 0xFE
-	OP_EOB  = 0xFF
+	OP_NOP = 0xFE
+	OP_EOB = 0xFF
 )

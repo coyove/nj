@@ -6,8 +6,8 @@ func fib(n) {
 var K = std.opcode.closure,OP= std.opcode;
 var fib2 = K.empty();
 
-K.setparam(fib2, "argscount", 1);
-K.setparam(fib2, "envescaped", 0);
+K.set(fib2, "argscount", 1);
+K.set(fib2, "envescaped", 0);
 
 K.writeconst(fib2, 2);
 K.writeconst(fib2, 1);

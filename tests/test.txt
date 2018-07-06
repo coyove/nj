@@ -160,3 +160,12 @@ if (af == 0)
         assert 1;
 else
     assert 0;  // shouldn't be here
+
+var a = require "simple.txt" + 1;
+assert a == 2;
+
+func! safeexec() {
+    assert 0;
+}
+
+safeexec();

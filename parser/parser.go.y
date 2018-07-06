@@ -28,6 +28,7 @@ import (
 %type<expr> func_stat
 %type<expr> flow_stat
 
+%type<str>  func
 %type<expr> func_call
 %type<expr> func_args
 %type<expr> function
@@ -36,8 +37,9 @@ import (
 %type<expr> _map_gen
 
 %union {
-  token  Token
-  expr   *Node
+  token Token
+  expr  *Node
+  str   string
 }
 
 /* Reserved words */
@@ -192,16 +194,24 @@ if_stat:
             $$ = NewCompoundNode("if", $3, $5, $7)
         }
 
+func:
+        TFunc {
+            $$ = "func"
+        } |
+        TFunc '!' {
+            $$ = "safefunc"
+        }
+
 func_stat:
-        TFunc TIdent func_params_list block {
+        func TIdent func_params_list block {
             funcname := NewAtomNode($2)
             $$ = NewCompoundNode(
                 "chain", 
                 NewCompoundNode("set", funcname, NewNilNode()), 
-                NewCompoundNode("move", funcname, NewCompoundNode("lambda", $3, $4)))
-            $$.Compound[1].Compound[0].Pos = $1.Pos
-            $$.Compound[2].Compound[0].Pos = $1.Pos
-            $$.Compound[2].Compound[2].Compound[0].Pos = $1.Pos
+                NewCompoundNode("move", funcname, NewCompoundNode($1, $3, $4)))
+            $$.Compound[1].Compound[0].Pos = $2.Pos
+            $$.Compound[2].Compound[0].Pos = $2.Pos
+            $$.Compound[2].Compound[2].Compound[0].Pos = $2.Pos
         }
 
 jmp_stat:
@@ -236,27 +246,7 @@ jmp_stat:
         } |
         TAssert expr {
             $$ = NewCompoundNode("assert", $2)
-            $$.Compound[0].Pos = $2.Pos
-        } |
-        TRequire TString {
-            path := filepath.Dir($1.Pos.Source)
-            path = filepath.Join(path, $2.Str)
-            filename := filepath.Base($2.Str)
-            filename = filename[:len(filename) - len(filepath.Ext(filename))]
-
-            code, err := ioutil.ReadFile(path)
-            if err != nil {
-                yylex.(*Lexer).Error(err.Error())
-            }
-            n, err := Parse(bytes.NewReader(code), path)
-            if err != nil {
-                yylex.(*Lexer).Error(err.Error())
-            }
-
-            // now the required code is loaded, for naming scope we will wrap them into a closure
-            cls := NewCompoundNode("lambda", NewCompoundNode(), n)
-            call := NewCompoundNode("call", cls, NewCompoundNode())
-            $$ = NewCompoundNode("set", filename, call)
+            $$.Compound[0].Pos = $1.Pos
         }
 
 declarator:
@@ -335,6 +325,23 @@ expr:
         } |
         function {
             $$ = $1
+        } |
+        TRequire TString {
+            path := filepath.Dir($1.Pos.Source)
+            path = filepath.Join(path, $2.Str)
+
+            code, err := ioutil.ReadFile(path)
+            if err != nil {
+                yylex.(*Lexer).Error(err.Error())
+            }
+            n, err := Parse(bytes.NewReader(code), path)
+            if err != nil {
+                yylex.(*Lexer).Error(err.Error())
+            }
+
+            // now the required code is loaded, for naming scope we will wrap them into a closure
+            cls := NewCompoundNode("func", NewCompoundNode(), n)
+            $$ = NewCompoundNode("call", cls, NewCompoundNode())
         } |
         map_gen {
             $$ = $1
@@ -534,9 +541,9 @@ func_args:
         }
 
 function:
-        TFunc func_params_list block {
-            $$ = NewCompoundNode("lambda", $2, $3)
-            $$.Compound[0].Pos = $1.Pos
+        func func_params_list block {
+            $$ = NewCompoundNode($1, $2, $3)
+            $$.Compound[0].Pos = $2.Pos
         }
 
 func_params_list:

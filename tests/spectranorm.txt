@@ -16,8 +16,8 @@ var call = (func(){
     };
 })();
 
-call("setparam", "argscount", 2);
-call("setparam", "envescaped", 0);
+call("set", "argscount", 2);
+call("set", "envescaped", 0);
 
 call("writeconst", 1);
 call("writeconst", 2);

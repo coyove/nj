@@ -170,6 +170,7 @@ func cruop(data uintptr, cursor *uint32) (byte, uint32, uint32) {
 }
 
 var singleOp = map[byte]string{
+	OP_ASSERT:  "assert",
 	OP_ADD:     "add",
 	OP_SUB:     "sub",
 	OP_MUL:     "mul",
@@ -180,7 +181,7 @@ var singleOp = map[byte]string{
 	OP_LESS:    "less",
 	OP_LESS_EQ: "less-eq",
 	OP_LEN:     "len",
-	OP_DUP:     "dup",
+	OP_COPY:    "copy",
 	OP_LOAD:    "load",
 	OP_STORE:   "store",
 	OP_NOT:     "not",
@@ -202,7 +203,7 @@ func crHash(data []uint64) uint32 {
 
 func (c *Closure) crPrettify(tab int) string {
 	sb := &bytes.Buffer{}
-	spaces := strings.Repeat(" ", tab)
+	spaces := strings.Repeat("|   ", tab)
 	metaprefix := spaces + "M "
 
 	sb.WriteString(metaprefix + "args: " + strconv.Itoa(int(c.argsCount)) + "\n")
@@ -211,16 +212,23 @@ func (c *Closure) crPrettify(tab int) string {
 	if len(c.preArgs) > 0 {
 		sb.WriteString(metaprefix + "curried args:" + strconv.Itoa(len(c.preArgs)) + "\n")
 	}
+
+	sb.WriteString(metaprefix + "opts:")
 	if c.Isset(CLS_YIELDABLE) {
-		sb.WriteString(metaprefix + "yieldable: true\n")
+		sb.WriteString(" yieldable")
 	}
 	if c.Isset(CLS_HASRECEIVER) {
-		sb.WriteString(metaprefix + "receiver: true\n")
+		sb.WriteString(" receiver")
 	}
 	if !c.Isset(CLS_NOENVESCAPE) {
-		sb.WriteString(metaprefix + "envescaped: true\n")
+		sb.WriteString(" envescaped")
+	} else {
+		sb.WriteString(" pure")
 	}
-
+	if c.Isset(CLS_RECOVERALL) {
+		sb.WriteString(" safeexec")
+	}
+	sb.WriteString("\n")
 	sb.WriteString(metaprefix + fmt.Sprintf("consts: %d\n", len(c.consts)))
 
 	hash := crHash(c.code)
@@ -300,9 +308,6 @@ MAIN:
 			case OP_PUSHK:
 				sb.WriteString(readKAddr(uint16(a)))
 			}
-		case OP_ASSERT:
-			tt := crReadString(c.code, &cursor)
-			sb.WriteString(tt)
 		case OP_RET:
 			sb.WriteString("ret " + readAddr(a))
 		case OP_RETK:
@@ -312,9 +317,12 @@ MAIN:
 		case OP_YIELDK:
 			sb.WriteString("yield " + readKAddr(uint16(a)))
 		case OP_LAMBDA:
-			sb.WriteString("$a = closure:\n\n")
+			sb.WriteString("$a = closure:\n")
+			prefix := strings.Repeat("|   ", tab+1)
+			sb.WriteString(prefix + "\n")
 			cls := crReadClosure(c.code, &cursor, nil, a, b)
-			sb.WriteString(cls.crPrettify(tab + 4))
+			sb.WriteString(cls.crPrettify(tab + 1))
+			sb.WriteString(prefix)
 		case OP_CALL:
 			sb.WriteString("call " + readAddr(a))
 		case OP_JMP:

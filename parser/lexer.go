@@ -302,30 +302,11 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 		if ch == EOF {
 			return sc.Error(buf.String(), "unexpected end of string block")
 		}
-		if ch == ' ' || ch == '\t' || ch == '\n' {
+		if ch == '`' {
 			break
 		}
 		writeChar(buf, ch)
 	}
-
-	flag := append([]byte("end"), buf.Bytes()...)
-	buf.Reset()
-
-	for {
-		ch := sc.Next()
-		if ch == EOF {
-			if bytes.HasSuffix(buf.Bytes(), flag) {
-				break
-			}
-			return sc.Error(buf.String(), "unexpected end of string block")
-		}
-		writeChar(buf, ch)
-		if bytes.HasSuffix(buf.Bytes(), flag) {
-			break
-		}
-	}
-
-	buf.Truncate(buf.Len() - len(flag))
 	return nil
 }
 
@@ -359,20 +340,6 @@ redo:
 
 	switch {
 	case isIdent(ch, 0):
-		// if ch == 's' && sc.Peek() == 's' {
-		// 	if sc.Next(); sc.Peek() == 's' {
-		// 		sc.Next()
-		// 		tok.Type = TString
-		// 		err = sc.scanBlockString(buf)
-		// 		tok.Str = buf.String()
-		// 		break
-		// 	}
-
-		// 	writeChar(buf, 's')
-		// 	ch = 's'
-		// 	// continue normal identifier scanning
-		// }
-
 		tok.Type = TIdent
 		err = sc.scanIdent(ch, buf)
 		tok.Str = buf.String()
@@ -413,6 +380,10 @@ redo:
 		case '"', '\'':
 			tok.Type = TString
 			err = sc.scanString(ch, buf)
+			tok.Str = buf.String()
+		case '`':
+			tok.Type = TString
+			err = sc.scanBlockString(buf)
 			tok.Str = buf.String()
 		case '[':
 			tok.Type = ch

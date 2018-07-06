@@ -63,9 +63,16 @@ func initCoreLibs() {
 		e := ExecError{stacks: env.trace}
 		return NewStringValue(e.Error())
 	}))
-	lcore.Puts("yreset", NewNativeValue(1, func(env *Env) Value {
-		env.SGet(0).AsClosure().lastenv = nil
-		return NewValue()
+	lcore.Puts("eval", NewNativeValue(1, func(env *Env) Value {
+		x := env.SGet(0)
+		if x.ty != Tstring {
+			x.panicType(Tstring)
+		}
+		cls, err := LoadString(x.AsString())
+		if err != nil {
+			return NewStringValue(err.Error())
+		}
+		return NewClosureValue(cls)
 	}))
 	lcore.Puts("remove", NewNativeValue(2, func(env *Env) Value {
 		s := env.SGet(0)
@@ -176,7 +183,11 @@ func initCoreLibs() {
 				cls := NewClosure(make([]uint64, 0), make([]Value, 0), env.parent, 0)
 				return NewClosureValue(cls)
 			})).
-			Puts("setparam", NewNativeValue(3, func(env *Env) Value {
+			Puts("yieldreset", NewNativeValue(1, func(env *Env) Value {
+				env.SGet(0).AsClosure().lastenv = nil
+				return env.SGet(0)
+			})).
+			Puts("set", NewNativeValue(3, func(env *Env) Value {
 				cls := env.SGet(0).AsClosure()
 				switch name := env.SGet(1).AsString(); name {
 				case "argscount":
@@ -193,6 +204,8 @@ func initCoreLibs() {
 					} else {
 						cls.Unset(CLS_NOENVESCAPE)
 					}
+				case "source":
+					cls.source = env.SGet(2).AsString()
 				}
 				return NewClosureValue(cls)
 			})).

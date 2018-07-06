@@ -225,10 +225,6 @@ func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, y
 	}
 	buf.WriteOP(bop, 0, 0)
 
-	if bop == OP_ASSERT {
-		buf.WriteString(atoms[0].String())
-	}
-
 	return buf, regA, nil
 }
 
@@ -368,7 +364,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 			// return stack, env is escaped
 			table.envescape = true
 		}
-		code, yx, err = table.flatWrite(x, OP_DUP)
+		code, yx, err = table.flatWrite(x, OP_COPY)
 		code.WritePos(nodes[0].Pos)
 		return
 	case "typeof":
@@ -440,10 +436,10 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 // [lambda [namelist] [chain ...]]
 func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
 	table.envescape = true
+	isSafe := atoms[0].Value.(string) == "safefunc"
 	newtable := newsymtable()
 	newtable.parent = table
 	newtable.noredecl = table.noredecl
-	newtable.lineInfo = table.lineInfo
 
 	params := atoms[1]
 	if params.Type != parser.NTCompound {
@@ -481,7 +477,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	code.WriteOP(OP_EOB, 0, 0)
 	buf := newpacket()
 	cls := Closure{}
-	if newtable.y {
+	if newtable.y || isSafe {
 		cls.Set(CLS_YIELDABLE)
 	}
 	if this {
@@ -489,6 +485,9 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	}
 	if !newtable.envescape {
 		cls.Set(CLS_NOENVESCAPE)
+	}
+	if isSafe {
+		cls.Set(CLS_RECOVERALL)
 	}
 
 	buf.WriteOP(OP_LAMBDA, uint32(len(newtable.consts)), uint32(byte(ln))<<24+uint32(cls.options))

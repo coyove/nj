@@ -62,7 +62,7 @@ func kodeaddr(code []uint64) uintptr { return (*reflect.SliceHeader)(unsafe.Poin
 
 // ExecCursor executes code under the given env from the given start cursor and returns:
 // 1. final result 2. yield cursor 3. is yield or not
-func ExecCursor(env *Env, K *Closure, cursor uint32) (Value, uint32, bool) {
+func ExecCursor(env *Env, K *Closure, cursor uint32) (_v Value, _p uint32, _y bool) {
 	var newEnv *Env
 	// var lastCursor uint32
 	var retStack []stacktrace
@@ -72,6 +72,11 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (Value, uint32, bool) {
 
 	defer func() {
 		if r := recover(); r != nil {
+			if K.Isset(CLS_RECOVERALL) {
+				_v, _p, _y = NewStringValue(fmt.Sprintf("%v", r)), 0, false
+				return
+			}
+
 			rr := stacktrace{
 				cursor: cursor,
 				cls:    K,
@@ -257,9 +262,8 @@ MAIN:
 				log.Panicf("can't apply 'bit rsh' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_ASSERT:
-			loc := crReadString(code, &cursor)
 			if env.R0.IsFalse() {
-				panic("assertion failed: " + loc)
+				panic("assertion failed: " + env.R0.String())
 			}
 			env.A = NewBoolValue(true)
 		case OP_LEN:
@@ -455,8 +459,8 @@ MAIN:
 			if cond := env.Get(opa); !cond.IsZero() || !cond.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(opb))
 			}
-		case OP_DUP:
-			doDup(env)
+		case OP_COPY:
+			doCopy(env)
 		case OP_TYPEOF:
 			if env.R1.ty == Tnumber {
 				if n := byte(env.R1.AsNumber()); n == 255 {
@@ -488,20 +492,20 @@ func shiftIndex(index Value, len int) int {
 	return i + len
 }
 
-// OP_DUP takes 3 arguments:
-//   1. number: 0 means the dup result will be discarded, 1 means the result will be stored into somewhere
+// OP_COPY takes 3 arguments:
+//   1. number: 0 means the copy result will be discarded, 1 means the result will be stored into somewhere
 //   2. any: the subject to be duplicated
-//   3. number/closure: 0 means no predicator, 1 means dup stack, 2 means return stack, otherwise the closure will be used
-func doDup(env *Env) {
+//   3. number/closure: 0 means no predicator, 1 means copy stack, 2 means return stack, otherwise the closure will be used
+func doCopy(env *Env) {
 	alloc := env.R0.AsNumber() == 1
 	nopred := false
 	if env.R2.ty == Tnumber {
 		switch env.R2.AsNumber() {
 		case 0:
-			// dup(a)
+			// copy(a)
 			nopred = true
 		case 1:
-			// dup()
+			// copy()
 			ret := NewMapSize(len(env.stack))
 			copy(ret.l, env.stack)
 			env.A = NewMapValue(ret)

@@ -135,6 +135,7 @@ const (
 	CLS_NOENVESCAPE = 1 << iota
 	CLS_HASRECEIVER
 	CLS_YIELDABLE
+	CLS_RECOVERALL
 )
 
 // Closure is the closure struct used in potatolang
@@ -244,6 +245,9 @@ func (c *Closure) String() string {
 	}
 	if !c.Isset(CLS_NOENVESCAPE) {
 		x += "_esc"
+	}
+	if c.Isset(CLS_RECOVERALL) {
+		x += "_safe"
 	}
 	return "<" + x + ">"
 }

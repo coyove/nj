@@ -32,9 +32,6 @@ type symtable struct {
 
 	noredecl bool
 
-	// record line info at chain
-	lineInfo bool
-
 	sp uint16
 
 	regs [4]struct {
@@ -272,7 +269,7 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 		code, yx, err = table.compileSetOp(nodes)
 	case "ret", "yield":
 		code, yx, err = table.compileRetOp(nodes)
-	case "lambda":
+	case "func", "safefunc":
 		code, yx, err = table.compileLambdaOp(nodes)
 	case "if":
 		code, yx, err = table.compileIfOp(nodes)
@@ -306,15 +303,6 @@ func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint3
 		if a.Type != parser.NTCompound {
 			continue
 		}
-		if table.lineInfo {
-			for _, n := range a.Compound {
-				if n.Pos.Source != "" {
-					buf.WriteOP(OP_LINE, 0, 0)
-					buf.WriteString(n.Pos.String())
-					break
-				}
-			}
-		}
 		code, yx, err = table.compileCompound(a)
 		if err != nil {
 			return
@@ -325,9 +313,8 @@ func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint3
 	return buf, yx, err
 }
 
-func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
+func compileNode(n *parser.Node) (cls *Closure, err error) {
 	table := newsymtable()
-	table.lineInfo = lineinfo
 	for i, n := range CoreLibNames {
 		table.sym[n] = uint16(i)
 	}
@@ -358,7 +345,7 @@ func compileNode(n *parser.Node, lineinfo bool) (cls *Closure, err error) {
 	return cls, err
 }
 
-func LoadFile(path string, lineinfo bool) (*Closure, error) {
+func LoadFile(path string) (*Closure, error) {
 	code, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -370,13 +357,13 @@ func LoadFile(path string, lineinfo bool) (*Closure, error) {
 	}
 	// n.Dump(os.Stderr)
 	// panic(10)
-	return compileNode(n, lineinfo)
+	return compileNode(n)
 }
 
-func LoadString(code string, lineinfo bool) (*Closure, error) {
+func LoadString(code string) (*Closure, error) {
 	n, err := parser.Parse(bytes.NewReader([]byte(code)), "mem")
 	if err != nil {
 		return nil, err
 	}
-	return compileNode(n, lineinfo)
+	return compileNode(n)
 }

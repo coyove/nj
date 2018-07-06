@@ -88,3 +88,8 @@ assert(0 & ("0i12345678")) == 0i12345678;
 assert(0 & ("-10e-2")) == -10e-2;
 assert(0 & ("1.2a")) == nil;
 assert(0 & ("0xabcdefg")) == nil;
+
+var a = 0i0000000000000001;
+var a = 0i0000000000001000;
+var a = 0i4000000000000000;
+var a = 0i3fffffffffffffff;

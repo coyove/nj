@@ -8,8 +8,6 @@ import (
 	"runtime"
 )
 
-var lineinfo = flag.Bool("li", false, "toggle lineinfo")
-
 func init() {
 	log.SetFlags(log.Lshortfile | log.Ltime)
 }
@@ -19,7 +17,7 @@ func runFile(t *testing.T, path string) {
 		flag.Parse()
 	}
 
-	b, err := LoadFile(path, *lineinfo)
+	b, err := LoadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +52,7 @@ func TestSLoop(t *testing.T) {
 func TestArithmeticUnfold(t *testing.T) {
 	cls, err := LoadString(`
 		return 1 + 2 * 3 / 4;
-`, false)
+`)
 	if err != nil {
 		t.Error(err)
 	}
@@ -84,7 +82,7 @@ func TestRegisterOptimzation(t *testing.T) {
 	}
 		c = a + b;
 		return c;
-`, false)
+`)
 	if err != nil {
 		t.Error(err)
 	}
