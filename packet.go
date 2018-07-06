@@ -203,7 +203,7 @@ func crHash(data []uint64) uint32 {
 func (c *Closure) crPrettify(tab int) string {
 	sb := &bytes.Buffer{}
 	spaces := strings.Repeat(" ", tab)
-	metaprefix := spaces + "|    m    [-] "
+	metaprefix := spaces + "M "
 
 	sb.WriteString(metaprefix + "args: " + strconv.Itoa(int(c.argsCount)) + "\n")
 	sb.WriteString(metaprefix + "source: " + c.source + "\n")
@@ -239,7 +239,6 @@ func (c *Closure) crPrettify(tab int) string {
 	}
 
 	oldpos := c.pos
-	lastopcurosor := uint32(0xffffffff)
 MAIN:
 	for {
 		bop, a, b := op(crRead64(c.code, &cursor))
@@ -260,22 +259,13 @@ MAIN:
 
 			if op == cursor {
 				x := fmt.Sprintf("%d:%d", line, col)
-				if cursor == lastopcurosor+1 {
-					sb.WriteString(fmt.Sprintf("| %-7s   [%d] ", x, cursor-1))
-				} else {
-					sb.WriteString(fmt.Sprintf("| %-7s ┴─[%d] ", x, cursor-1))
-				}
+				sb.WriteString(fmt.Sprintf("L %-7s [%d] ", x, cursor-1))
 				c.pos = c.pos[1:]
-				lastopcurosor = op
 			} else {
-				if cursor == lastopcurosor+1 {
-					sb.WriteString(fmt.Sprintf("|         ┌─[%d] ", cursor-1))
-				} else {
-					sb.WriteString(fmt.Sprintf("|         │ [%d] ", cursor-1))
-				}
+				sb.WriteString(fmt.Sprintf("|       I [%d] ", cursor-1))
 			}
 		} else {
-			sb.WriteString(fmt.Sprintf("|         . [%d] ", cursor-1))
+			sb.WriteString(fmt.Sprintf("        . [%d] ", cursor-1))
 		}
 
 		switch bop {

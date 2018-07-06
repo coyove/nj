@@ -24,7 +24,7 @@ func runFile(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 
-	log.Println(b.String())
+	log.Println(b.PrettyString())
 
 	i := b.Exec(nil)
 	t.Log(i.I())
