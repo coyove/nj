@@ -3,6 +3,7 @@ package potatolang
 import (
 	"flag"
 	"log"
+	"math"
 	"testing"
 	// _ "net/http/pprof"
 	"runtime"
@@ -94,5 +95,18 @@ func TestRegisterOptimzation(t *testing.T) {
 
 	if n := cls.Exec(nil).AsNumber(); n != 3 {
 		t.Error("exec failed:", n, cls)
+	}
+}
+
+func TestArithmeticNAN(t *testing.T) {
+	cls, err := LoadString(`
+		return (1 / 0 + 1) * 0;
+`)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if !math.IsNaN(cls.Exec(nil).AsNumber()) {
+		t.Error("wrong answer")
 	}
 }

@@ -34,7 +34,7 @@ func stdWrite(f *os.File) func(env *Env) Value {
 			case Tmap:
 				buf := make([]byte, 1)
 				for _, b := range a.AsMap().l {
-					buf[0] = byte(b.AsNumber())
+					buf[0] = byte(b.Num())
 					f.Write(buf)
 				}
 			default:

@@ -473,6 +473,9 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	if err != nil {
 		return
 	}
+	if len(code.source) > 4096 {
+		return newpacket(), 0, fmt.Errorf("does your path really contain more than 4096 chars?")
+	}
 
 	code.WriteOP(OP_EOB, 0, 0)
 	buf := newpacket()
@@ -491,26 +494,8 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	}
 
 	buf.WriteOP(OP_LAMBDA, uint32(len(newtable.consts)), uint32(byte(ln))<<24+uint32(cls.options))
-	for _, k := range newtable.consts {
-		if k.ty == Tnumber {
-			buf.Write64(Tnumber)
-			buf.WriteDouble(k.value.(float64))
-		} else if k.ty == Tstring {
-			buf.Write64(Tstring)
-			buf.WriteString(k.value.(string))
-		} else {
-			panic("shouldn't happen")
-		}
-	}
-	buf.WriteString(code.source)
-	buf.Write64(uint64(len(code.pos)))
-	buf.WriteRaw(code.pos)
-	buf.Write64(uint64(len(code.data)))
-
-	// note buf.source = code.source in buf.Write
-	// buf.source shouldn't be changed
-	code.source = buf.source
-	buf.Write(code)
+	buf.WriteConsts(newtable.consts)
+	buf.WriteCode(code)
 	buf.WritePos(atoms[0].Pos)
 	return buf, regA, nil
 }

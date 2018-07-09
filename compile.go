@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"runtime"
 
 	"github.com/coyove/potatolang/parser"
 )
@@ -263,9 +264,7 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 	switch name {
 	case "chain":
 		code, yx, err = table.compileChainOp(compound)
-	case "set":
-		code, yx, err = table.compileSetOp(nodes)
-	case "move":
+	case "set", "move":
 		code, yx, err = table.compileSetOp(nodes)
 	case "ret", "yield":
 		code, yx, err = table.compileRetOp(nodes)
@@ -361,7 +360,12 @@ func LoadFile(path string) (*Closure, error) {
 }
 
 func LoadString(code string) (*Closure, error) {
-	n, err := parser.Parse(bytes.NewReader([]byte(code)), "mem")
+	_, fn, _, _ := runtime.Caller(1)
+	return LoadStringName(code, fn)
+}
+
+func LoadStringName(code, name string) (*Closure, error) {
+	n, err := parser.Parse(bytes.NewReader([]byte(code)), name)
 	if err != nil {
 		return nil, err
 	}

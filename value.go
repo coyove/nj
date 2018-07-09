@@ -135,18 +135,6 @@ func (v Value) Type() byte {
 	return v.ty
 }
 
-func (v Value) u64() uint64 {
-	if v.ty != Tnumber {
-		log.Panicf("expecting number, got %+v", v)
-	}
-	return math.Float64bits(v.AsNumber())
-}
-
-// AsNumber cast value to float64
-func (v Value) AsNumber() float64 {
-	return (*(*[2]float64)(unsafe.Pointer(&v)))[1]
-}
-
 var (
 	// Zero is +0
 	Zero = NewNumberValue(0)
@@ -158,9 +146,10 @@ var (
 )
 
 // IsZero is a fast way to check whether number value equals to +0
-func (v Value) IsZero() bool {
-	return *(*[2]uint64)(unsafe.Pointer(&v)) == _zeroRaw
-}
+func (v Value) IsZero() bool { return *(*[2]uint64)(unsafe.Pointer(&v)) == _zeroRaw }
+
+// AsNumber cast value to float64
+func (v Value) AsNumber() float64 { return (*(*[2]float64)(unsafe.Pointer(&v)))[1] }
 
 // AsString cast value to string
 func (v Value) AsString() string {
@@ -182,13 +171,22 @@ func (v Value) AsClosure() *Closure { return (*Closure)(v.ptr) }
 // AsGeneric cast value to unsafe.Pointer
 func (v Value) AsGeneric() unsafe.Pointer { return v.ptr }
 
-// AsList cast value to slice of values
-func (v Value) AsList() []Value {
-	if v.ptr == nil {
-		return nil
-	}
-	return *(*[]Value)(v.ptr)
-}
+func (v Value) u64() uint64 { return math.Float64bits(v.Num()) }
+
+// Num cast value to float64
+func (v Value) Num() float64 { v.testType(Tnumber); return v.AsNumber() }
+
+// Str cast value to string
+func (v Value) Str() string { v.testType(Tstring); return v.AsString() }
+
+// Map cast value to map of values
+func (v Value) Map() *Map { v.testType(Tmap); return (*Map)(v.ptr) }
+
+// Cls cast value to closure
+func (v Value) Cls() *Closure { v.testType(Tclosure); return (*Closure)(v.ptr) }
+
+// Gen cast value to unsafe.Pointer
+func (v Value) Gen() unsafe.Pointer { v.testType(Tgeneric); return v.ptr }
 
 // I returns the golang interface representation of value
 // it is not the same as AsGeneric()

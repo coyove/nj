@@ -25,35 +25,19 @@ func initCoreLibs() {
 	lcore := NewMap()
 	lcore.Puts("cancelled", NewGenericValue(unsafe.Pointer(&cancelled)))
 	lcore.Puts("genlist", NewNativeValue(1, func(env *Env) Value {
-		v := env.SGet(0)
-		if v.ty != Tnumber {
-			v.panicType(Tnumber)
-		}
-		return NewMapValue(NewMapSize(int(v.AsNumber())))
+		return NewMapValue(NewMapSize(int(env.SGet(0).Num())))
 	}))
 	lcore.Puts("apply", NewNativeValue(2, func(env *Env) Value {
 		x, y := env.SGet(0), env.SGet(1)
-		if x.ty != Tclosure {
-			x.panicType(Tclosure)
-		}
-		if y.ty != Tmap {
-			y.panicType(Tmap)
-		}
-		newEnv := NewEnv(x.AsClosure().env)
-		for _, v := range y.AsMap().l {
+		newEnv := NewEnv(x.Cls().env)
+		for _, v := range y.Map().l {
 			newEnv.SPush(v)
 		}
-		return x.AsClosure().Exec(newEnv)
+		return x.Cls().Exec(newEnv)
 	}))
 	lcore.Puts("storeinto", NewNativeValue(3, func(env *Env) Value {
 		e, x, y := env.SGet(0), env.SGet(1), env.SGet(2)
-		if x.ty != Tnumber {
-			x.panicType(Tnumber)
-		}
-		if e.ty != Tgeneric {
-			e.panicType(Tgeneric)
-		}
-		(*Env)(e.AsGeneric()).Set(uint32(x.AsNumber()), y)
+		(*Env)(e.Gen()).Set(uint32(x.Num()), y)
 		return y
 	}))
 	lcore.Puts("currentenv", NewNativeValue(0, func(env *Env) Value {
@@ -64,34 +48,27 @@ func initCoreLibs() {
 		return NewStringValue(e.Error())
 	}))
 	lcore.Puts("eval", NewNativeValue(1, func(env *Env) Value {
-		x := env.SGet(0)
-		if x.ty != Tstring {
-			x.panicType(Tstring)
-		}
-		cls, err := LoadString(x.AsString())
+		x := env.SGet(0).Str()
+		cls, err := LoadString(x)
 		if err != nil {
 			return NewStringValue(err.Error())
 		}
 		return NewClosureValue(cls)
 	}))
 	lcore.Puts("remove", NewNativeValue(2, func(env *Env) Value {
-		s := env.SGet(0)
-		if s.ty != Tmap {
-			s.panicType(Tmap)
-		}
-		return s.AsMap().Remove(env.Get(1))
+		return env.SGet(0).Map().Remove(env.Get(1))
 	}))
 	lcore.Puts("copy", NewNativeValue(5, func(env *Env) Value {
-		dst, src := env.SGet(0).testType(Tmap).AsMap(), env.SGet(2).testType(Tmap).AsMap()
-		dstPos, srcPos := int(env.SGet(1).testType(Tnumber).AsNumber()), int(env.SGet(3).testType(Tnumber).AsNumber())
-		length := int(env.SGet(4).testType(Tnumber).AsNumber())
+		dst, src := env.SGet(0).Map(), env.SGet(2).Map()
+		dstPos, srcPos := int(env.SGet(1).Num()), int(env.SGet(3).Num())
+		length := int(env.SGet(4).Num())
 		return NewNumberValue(float64(copy(dst.l[dstPos:], src.l[srcPos:srcPos+length])))
 	}))
 	lcore.Puts("sub", NewNativeValue(2, func(env *Env) Value {
 		src := env.SGet(0)
-		start, end := int(env.SGet(1).testType(Tnumber).AsNumber()), -1
+		start, end := int(env.SGet(1).Num()), -1
 		if env.SSize() > 2 {
-			end = int(env.SGet(2).testType(Tnumber).AsNumber())
+			end = int(env.SGet(2).Num())
 		}
 		switch src.ty {
 		case Tmap:
@@ -116,33 +93,30 @@ func initCoreLibs() {
 		return Value{}
 	}))
 	lcore.Puts("char", NewNativeValue(1, func(env *Env) Value {
-		return NewStringValue(char(env.SGet(0).AsNumber(), true))
+		return NewStringValue(char(env.SGet(0).Num(), true))
 	}))
 	lcore.Puts("utf8char", NewNativeValue(1, func(env *Env) Value {
-		return NewStringValue(char(env.SGet(0).AsNumber(), false))
+		return NewStringValue(char(env.SGet(0).Num(), false))
 	}))
 	lcore.Puts("append", NewNativeValue(2, func(env *Env) Value {
 		src, v := env.SGet(0), env.SGet(1)
-		if src.ty != Tmap {
-			src.panicType(Tmap)
-		}
-		m := src.AsMap()
+		m := src.Map()
 		m.l = append(m.l, v)
 		return src
 	}))
 
 	lcore.Puts("sync", NewMapValue(NewMap().
 		Puts("run", NewNativeValue(1, func(env *Env) Value {
-			if env.SGet(0).ty != Tclosure {
-				env.SGet(0).panicType(Tclosure)
-			}
-			cls := env.SGet(0).AsClosure()
+			cls := env.SGet(0).Cls()
 			newEnv := NewEnv(cls.env)
 			if cls.ArgsCount() > env.SSize()-1 {
-				panic("not enough arguments to start")
+				panic("not enough arguments to start a goroutine")
 			}
 			for i := 1; i < env.SSize(); i++ {
 				newEnv.SPush(env.SGet(i))
+			}
+			if cls.Isset(CLS_HASRECEIVER) {
+				newEnv.SPush(cls.caller)
 			}
 			go cls.Exec(newEnv)
 			return NewValue()
@@ -155,7 +129,7 @@ func initCoreLibs() {
 		})).
 		Puts("waitgroup", NewNativeValue(0, func(env *Env) Value {
 			m, wg := NewMap(), &sync.WaitGroup{}
-			m.Puts("add", NewNativeValue(1, func(env *Env) Value { wg.Add(int(env.SGet(0).AsNumber())); return NewValue() }))
+			m.Puts("add", NewNativeValue(1, func(env *Env) Value { wg.Add(int(env.SGet(0).Num())); return NewValue() }))
 			m.Puts("done", NewNativeValue(0, func(env *Env) Value { wg.Done(); return NewValue() }))
 			m.Puts("wait", NewNativeValue(0, func(env *Env) Value { wg.Wait(); return NewValue() }))
 			return NewMapValue(m)
@@ -184,14 +158,14 @@ func initCoreLibs() {
 				return NewClosureValue(cls)
 			})).
 			Puts("yieldreset", NewNativeValue(1, func(env *Env) Value {
-				env.SGet(0).AsClosure().lastenv = nil
+				env.SGet(0).Cls().lastenv = nil
 				return env.SGet(0)
 			})).
 			Puts("set", NewNativeValue(3, func(env *Env) Value {
-				cls := env.SGet(0).AsClosure()
-				switch name := env.SGet(1).AsString(); name {
+				cls := env.SGet(0).Cls()
+				switch name := env.SGet(1).Str(); name {
 				case "argscount":
-					cls.argsCount = byte(env.SGet(2).AsNumber())
+					cls.argsCount = byte(env.SGet(2).Num())
 				case "yieldable":
 					if !env.SGet(2).IsFalse() {
 						cls.Set(CLS_YIELDABLE)
@@ -205,21 +179,21 @@ func initCoreLibs() {
 						cls.Unset(CLS_NOENVESCAPE)
 					}
 				case "source":
-					cls.source = env.SGet(2).AsString()
+					cls.source = env.SGet(2).Str()
 				}
 				return NewClosureValue(cls)
 			})).
 			Puts("write", NewNativeValue(4, func(env *Env) Value {
-				cls := env.SGet(0).AsClosure()
+				cls := env.SGet(0).Cls()
 				cls.code = append(cls.code, makeop(
-					byte(env.SGet(1).AsNumber()),
-					uint32(env.SGet(2).AsNumber()),
-					uint32(env.SGet(3).AsNumber()),
+					byte(env.SGet(1).Num()),
+					uint32(env.SGet(2).Num()),
+					uint32(env.SGet(3).Num()),
 				))
 				return Value{}
 			})).
 			Puts("writeconst", NewNativeValue(2, func(env *Env) Value {
-				cls := env.SGet(0).AsClosure()
+				cls := env.SGet(0).Cls()
 				cls.consts = append(cls.consts, env.SGet(1))
 				return Value{}
 			})))).

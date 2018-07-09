@@ -481,17 +481,6 @@ MAIN:
 	return NewValue(), 0, false
 }
 
-func shiftIndex(index Value, len int) int {
-	if index.ty != Tnumber {
-		index.panicType(Tnumber)
-	}
-	i := int(index.AsNumber())
-	if i >= 0 {
-		return i
-	}
-	return i + len
-}
-
 // OP_COPY takes 3 arguments:
 //   1. number: 0 means the copy result will be discarded, 1 means the result will be stored into somewhere
 //   2. any: the subject to be duplicated
@@ -538,10 +527,7 @@ func doCopy(env *Env) {
 			}
 			env.A = NewMapValue(m)
 		} else {
-			if env.R2.ty != Tclosure {
-				env.R2.panicType(Tclosure)
-			}
-			cls := env.R2.AsClosure()
+			cls := env.R2.Cls()
 			newEnv := NewEnv(cls.Env())
 			str := env.R1.AsString()
 			var newstr []Value
@@ -554,8 +540,9 @@ func doCopy(env *Env) {
 				newEnv.SPush(NewNumberValue(float64(v)))
 				newEnv.SPush(NewNumberValue(float64(len(newstr))))
 				if alloc {
-					v, _, _ := ExecCursor(newEnv, cls, 0)
-					newstr = append(newstr, v)
+					newstr = append(newstr, cls.Exec(newEnv))
+				} else {
+					cls.Exec(newEnv)
 				}
 			}
 			if alloc {
@@ -583,10 +570,7 @@ func doCopy(env *Env) {
 	}
 
 	// now R2 should be closure
-	if env.R2.ty != Tclosure {
-		env.R2.panicType(Tclosure)
-	}
-	cls := env.R2.AsClosure()
+	cls := env.R2.Cls()
 	newEnv := NewEnv(cls.Env())
 	switch env.R1.Type() {
 	case Tmap:
@@ -595,22 +579,21 @@ func doCopy(env *Env) {
 				newEnv.SClear()
 				newEnv.SPush(k)
 				newEnv.SPush(v)
-				ret, _, _ := ExecCursor(newEnv, cls, 0)
-				return ret
+				return cls.Exec(newEnv)
 			}))
 		} else {
 			m := env.R1.AsMap()
-			for i := len(m.l) - 1; i >= 0; i-- {
+			for i, v := range m.l {
 				newEnv.SClear()
 				newEnv.SPush(NewNumberValue(float64(i)))
-				newEnv.SPush(m.l[i])
-				ExecCursor(newEnv, cls, 0)
+				newEnv.SPush(v)
+				cls.Exec(newEnv)
 			}
 			for _, v := range m.m {
 				newEnv.SClear()
 				newEnv.SPush(v[0])
 				newEnv.SPush(v[1])
-				ExecCursor(newEnv, cls, 0)
+				cls.Exec(newEnv)
 			}
 		}
 	}

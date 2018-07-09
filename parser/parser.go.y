@@ -22,6 +22,8 @@ import (
 %type<expr> prefix_expr
 %type<expr> assign_stat
 %type<expr> for_stat
+%type<expr> for_stat1
+%type<expr> for_stat2
 %type<expr> if_stat
 %type<expr> if_body
 %type<expr> jmp_stat
@@ -164,25 +166,35 @@ assign_stat:
             $$ = $1
         }
 
+for_stat1:
+        assign_stat ';' {
+            $$ = NewCompoundNode("chain", $1)
+        } |
+        ';' {
+            $$ = NewCompoundNode("chain")
+        }
+
+for_stat2:
+        expr ';' {
+            $$ = $1
+        } |
+        ';' {
+            $$ = NewNumberNode("1")
+        }
+
 for_stat:
         TFor '(' expr ')' if_body {
             $$ = NewCompoundNode("for", $3, NewCompoundNode(), $5)
             $$.Compound[0].Pos = $1.Pos
         } |
-        TFor '(' ';' expr ';' assign_stat ')' if_body {
-            $$ = NewCompoundNode("for", $4, NewCompoundNode("chain", $6), $8)
+        TFor '(' for_stat1 for_stat2 assign_stat ')' if_body {
+            $$ = $3
+            $$.Compound = append($$.Compound, NewCompoundNode("for", $4, NewCompoundNode("chain", $5), $7))
             $$.Compound[0].Pos = $1.Pos
         } |
-        TFor '(' assign_stat ';' expr ';' assign_stat ')' if_body {
-            $$ = NewCompoundNode("chain", $3, NewCompoundNode("for", $5, NewCompoundNode("chain", $7), $9))
-            $$.Compound[0].Pos = $1.Pos
-        } |
-        TFor '(' assign_stat ';' expr ';' ')' if_body {
-            $$ = NewCompoundNode("chain", $3, NewCompoundNode("for", $5, NewCompoundNode(), $8))
-            $$.Compound[0].Pos = $1.Pos
-        } |
-        TFor '(' assign_stat ';' ';' assign_stat ')' if_body {
-            $$ = NewCompoundNode("chain", $3, NewCompoundNode("for", NewNumberNode("1"), NewCompoundNode("chain", $6), $8))
+        TFor '(' for_stat1 for_stat2 ')' if_body {
+            $$ = $3
+            $$.Compound = append($$.Compound, NewCompoundNode("for", $4, NewCompoundNode(), $6))
             $$.Compound[0].Pos = $1.Pos
         }
 

@@ -27,7 +27,7 @@ func sum() {
     }
 
     // note it is in reverse order
-    copy(x, func(i, n) {s = n + s;});
+    copy(x, func(i, n) {s = s+n;});
     return s;
 }
 
