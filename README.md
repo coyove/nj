@@ -83,9 +83,8 @@ func sum() {
     return s;
 }
 
-// note when using 'copy' to iterate over an array, it goes in a reversed order
-assert sum(1, 2, 3) == 6;            // 3 + 2 + 1
-assert sum("a", "b", "c") == "cba";  // c + b + a
+assert sum(1, 2, 3) == 6;
+assert sum("a", "b", "c") == "abc";
 
 // string is immutable, copy(str) will return an array of its bytes:
 var a = "text";
@@ -94,6 +93,12 @@ a[0] = 96;  // won't work
 var b = copy(a);
 assert typeof(b, "map");            // ok
 assert b == {0x74,0x65,0x73,0x74};  // ok
+
+var a = {1, 2, 3};
+copy(a, func(i) { std.remove(a, i); });  // don't remove items when iterating an array
+
+var a = {1: 1, 2: 2, 3: 3};
+copy(a, func(i) { std.remove(a, i); });  // you can remove items when iterating a map, this is an expected behavior in golang
 
 /*
  * yield return
