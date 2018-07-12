@@ -173,3 +173,26 @@ safeexec();
 var m = {1,2,{1,2,{1,2,{1,2,3}}}};
 m[2][2][2][2] = 4;
 assert m == {1,2,{1,2,{1,2,{1,2,4}}}};
+
+func safeexec(f, args) {
+    var result = "none";
+    var x = (func! () {
+        result = std.apply(f, args);
+    })();
+
+    var b = x == nil;
+    var a = result;
+    return copy();
+}
+
+var r = safeexec(func(a, b) {
+    return a / b;
+}, {1,2});
+ 
+assert #r == 0.5;
+
+var r = safeexec(func(a, b) {
+    return a / b;
+}, {1,"2"});
+  
+assert #r == "none" && !#r ;

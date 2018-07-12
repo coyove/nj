@@ -346,17 +346,33 @@ MAIN:
 		case OP_R1R2:
 			env.R1 = env.R2
 		case OP_POP:
-			if x := env.R0; x.ty != Tmap {
-				x.panicType(Tmap)
+			m := env.R3.Map()
+			l := m.l
+			if len(l) == 0 {
+				env.A = Value{}
 			} else {
-				m := x.AsMap()
-				l := m.l
-				if len(l) == 0 {
-					env.A = Value{}
+				env.A = l[len(l)-1]
+				m.l = l[:len(l)-1]
+			}
+		case OP_SLICE:
+			start, end := int(env.R2.Num()), int(env.R1.Num())
+			switch x := env.R3; x.ty {
+			case Tstring:
+				if end == -1 {
+					env.A = NewStringValue(x.AsString()[start:])
 				} else {
-					env.A = l[len(l)-1]
-					m.l = l[:len(l)-1]
+					env.A = NewStringValue(x.AsString()[start:end])
 				}
+			case Tmap:
+				m := NewMap()
+				if end == -1 {
+					m.l = x.AsMap().l[start:]
+				} else {
+					m.l = x.AsMap().l[start:end]
+				}
+				env.A = NewMapValue(m)
+			default:
+				log.Panicf("can't slice %+v", x)
 			}
 		case OP_PUSH:
 			if newEnv == nil {
@@ -500,6 +516,7 @@ func doCopy(env *Env) {
 			env.A = NewMapValue(ret)
 			return
 		case 2:
+			// return copy()
 			ret := NewMap()
 			ret.l = env.stack
 			env.A = NewMapValue(ret)

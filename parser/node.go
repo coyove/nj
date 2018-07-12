@@ -10,8 +10,8 @@ import (
 
 type Position struct {
 	Source string
-	Line   int
-	Column int
+	Line   uint32
+	Column uint32
 }
 
 func (pos *Position) String() string {
@@ -23,13 +23,12 @@ func (pos *Position) String() string {
 
 type Token struct {
 	Type int
-	Name string
 	Str  string
 	Pos  Position
 }
 
 func (self *Token) String() string {
-	return fmt.Sprintf("<type:%v, str:%v>", self.Name, self.Str)
+	return self.Str
 }
 
 const (
@@ -45,7 +44,6 @@ type Node struct {
 	Value    interface{}
 	Pos      Position
 	Compound []*Node
-	LibWH    bool
 }
 
 func NewCompoundNode(args ...interface{}) *Node {
@@ -133,6 +131,16 @@ func NewNumberNode(arg string) *Node {
 		Type:  NTNumber,
 		Value: num,
 	}
+}
+
+func (n *Node) setPos0(p Position) *Node {
+	n.Compound[0].Pos = p
+	return n
+}
+
+func (n *Node) setPos(p Position) *Node {
+	n.Pos = p
+	return n
 }
 
 func (n *Node) Dump(w io.Writer) {

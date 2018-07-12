@@ -1,5 +1,5 @@
 var a = "hello world";
-assert std.sub(a, 6) == "world";
+assert a[6:]  == "world";
 ;
 var m = {};
 var i = 0; for (;i < 20;i = i + 1) { m[i] = i ;}

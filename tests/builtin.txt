@@ -93,3 +93,12 @@ var a = 0i0000000000000001;
 var a = 0i0000000000001000;
 var a = 0i4000000000000000;
 var a = 0i3fffffffffffffff;
+
+var a = {1,2,3,4};
+assert a[2:3] == {3};
+
+func! outofrange() {
+    return a[5:];
+}
+
+outofrange();

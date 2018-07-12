@@ -203,7 +203,7 @@ func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, y
 
 	var op = [4]uint16{OP_R0<<8 | OP_R0K, OP_R1<<8 | OP_R1K, OP_R2<<8 | OP_R2K, OP_R3<<8 | OP_R3K}
 	switch bop {
-	case OP_LEN, OP_STORE, OP_LOAD:
+	case OP_LEN, OP_STORE, OP_LOAD, OP_SLICE, OP_POP:
 		op[0], op[3] = op[3], op[0]
 		op[1], op[2] = op[2], op[1]
 	}

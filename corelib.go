@@ -1,7 +1,6 @@
 package potatolang
 
 import (
-	"log"
 	"sync"
 	"unsafe"
 )
@@ -64,47 +63,12 @@ func initCoreLibs() {
 		length := int(env.SGet(4).Num())
 		return NewNumberValue(float64(copy(dst.l[dstPos:], src.l[srcPos:srcPos+length])))
 	}))
-	lcore.Puts("sub", NewNativeValue(2, func(env *Env) Value {
-		src := env.SGet(0)
-		start, end := int(env.SGet(1).Num()), -1
-		if env.SSize() > 2 {
-			end = int(env.SGet(2).Num())
-		}
-		switch src.ty {
-		case Tmap:
-			m, m2 := NewMap(), src.AsMap()
-			if end == -1 {
-				end = len(m2.l)
-			}
-			m.l = make([]Value, end-start)
-			copy(m.l, m2.l[start:end])
-			return NewMapValue(m)
-		case Tstring:
-			buf2 := src.AsString()
-			if end == -1 {
-				end = len(buf2)
-			}
-			buf := make([]byte, end-start)
-			copy(buf, buf2[start:end])
-			return NewStringValue(string(buf))
-		default:
-			log.Panicf("can't call sub on %v", src)
-		}
-		return Value{}
-	}))
 	lcore.Puts("char", NewNativeValue(1, func(env *Env) Value {
 		return NewStringValue(char(env.SGet(0).Num(), true))
 	}))
 	lcore.Puts("utf8char", NewNativeValue(1, func(env *Env) Value {
 		return NewStringValue(char(env.SGet(0).Num(), false))
 	}))
-	lcore.Puts("append", NewNativeValue(2, func(env *Env) Value {
-		src, v := env.SGet(0), env.SGet(1)
-		m := src.Map()
-		m.l = append(m.l, v)
-		return src
-	}))
-
 	lcore.Puts("sync", NewMapValue(NewMap().
 		Puts("run", NewNativeValue(1, func(env *Env) Value {
 			cls := env.SGet(0).Cls()

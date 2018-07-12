@@ -34,7 +34,7 @@ import (
 	"strconv"
 )
 
-const EOF = -1
+const EOF = 0xffffffff
 const whitespace1 = 1<<'\t' | 1<<' '
 const whitespace2 = 1<<'\t' | 1<<'\n' | 1<<'\r' | 1<<' '
 
@@ -320,18 +320,10 @@ func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
 redo:
 	var err error
 	tok := Token{}
-	newline := false
 
 	ch := sc.skipWhiteSpace(whitespace1)
 	if ch == '\n' || ch == '\r' {
-		newline = true
 		ch = sc.skipWhiteSpace(whitespace2)
-	}
-
-	if ch == '(' && lexer.PrevTokenType == ')' {
-		lexer.PNewLine = newline
-	} else {
-		lexer.PNewLine = false
 	}
 
 	var _buf bytes.Buffer
@@ -461,22 +453,18 @@ redo:
 	}
 
 finally:
-	tok.Name = TokenName(int(tok.Type))
 	return tok, err
 }
 
 // yacc interface {{{
 
 type Lexer struct {
-	scanner       *Scanner
-	Stmts         *Node
-	PNewLine      bool
-	Token         Token
-	PrevTokenType int
+	scanner *Scanner
+	Stmts   *Node
+	Token   Token
 }
 
 func (lx *Lexer) Lex(lval *yySymType) int {
-	lx.PrevTokenType = lx.Token.Type
 	tok, err := lx.scanner.Scan(lx)
 	if err != nil {
 		panic(err)
@@ -486,7 +474,11 @@ func (lx *Lexer) Lex(lval *yySymType) int {
 	}
 	lval.token = tok
 	lx.Token = tok
-	return int(tok.Type)
+	t := int(tok.Type)
+	if t == EOF {
+		t = -1
+	}
+	return t
 }
 
 func (lx *Lexer) Error(message string) {
@@ -498,13 +490,13 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 }
 
 func Parse(reader io.Reader, name string) (chunk *Node, err error) {
-	lexer := &Lexer{NewScanner(reader, name), nil, false, Token{Str: ""}, TNil}
+	lexer := &Lexer{NewScanner(reader, name), nil, Token{Str: ""}}
 	chunk = nil
-	// defer func() {
-	// 	if e := recover(); e != nil {
-	// 		err, _ = e.(error)
-	// 	}
-	// }()
+	defer func() {
+		if e := recover(); e != nil {
+			err, _ = e.(error)
+		}
+	}()
 	yyParse(lexer)
 	chunk = lexer.Stmts
 	return

@@ -86,3 +86,24 @@ var a = copy({1,2,3}, func(i,a) {
 });
 
 assert a =={"1","2","3"};
+
+var a = {};
+for (var i = 0, j = 1; i < 10; {
+    i=i+1;
+    j=j*2;
+}) {
+    if (i == 5) {
+        a[i] = "a";
+        continue;
+    }
+    a[i] = j;
+}
+
+assert a == {1,2,4,8,16,"a",64,128,256,512};
+
+for {
+    var last = #a;
+    if (last == "a") break;
+}
+
+assert a == {1,2,4,8,16,};

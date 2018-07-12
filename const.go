@@ -54,6 +54,7 @@ const (
 
 	// special builtin op
 	OP_POP
+	OP_SLICE
 	OP_INC
 	OP_COPY
 	OP_LEN
