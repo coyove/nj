@@ -495,6 +495,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 
 	buf.WriteOP(OP_LAMBDA, uint32(len(newtable.consts)), uint32(byte(ln))<<24+uint32(cls.options))
 	buf.WriteConsts(newtable.consts)
+	code.data = patchGotoCode(code.data, newtable.gotoTable)
 	buf.WriteCode(code)
 	buf.WritePos(atoms[0].Pos)
 	return buf, regA, nil
@@ -506,24 +507,25 @@ var staticWhileHack struct {
 	breakFlag    []uint64
 }
 
+func gen128bit() ([2]uint64, []uint64) {
+	var p [2]uint64
+	buf := [16]byte{}
+	if _, err := rand.Read(buf[:]); err != nil {
+		panic(err)
+	}
+	copy(p[:], (*(*[2]uint64)(unsafe.Pointer(&buf)))[:])
+	return p, p[:]
+}
+
 // [continue | break]
 func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
 	staticWhileHack.Lock()
 	defer staticWhileHack.Unlock()
-	gen := func(p *[]uint64) {
-		const ln = 2
-		*p = make([]uint64, ln)
-		buf := [ln * 8]byte{}
-		if _, err := rand.Read(buf[:]); err != nil {
-			panic(err)
-		}
-		copy(*p, (*(*[ln]uint64)(unsafe.Pointer(&buf)))[:])
-	}
 
 	buf := newpacket()
 	if atoms[0].Value.(string) == "continue" {
 		if staticWhileHack.continueFlag == nil {
-			gen(&staticWhileHack.continueFlag)
+			_, staticWhileHack.continueFlag = gen128bit()
 		}
 		code, yx, err = table.compileChainOp(table.continueNode[len(table.continueNode)-1])
 		if err != nil {
@@ -534,9 +536,32 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 		return buf, regA, nil
 	}
 	if staticWhileHack.breakFlag == nil {
-		gen(&staticWhileHack.breakFlag)
+		_, staticWhileHack.breakFlag = gen128bit()
 	}
 	buf.WriteRaw(staticWhileHack.breakFlag)
+	return buf, regA, nil
+}
+
+func (table *symtable) compileLabelGotoOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
+	buf := newpacket()
+	label := atoms[1].Value.(string)
+
+	if atoms[0].Value.(string) == "label" {
+		if _, exist := table.gotoTable[label]; exist {
+			return buf, 0, fmt.Errorf("label '%s' already exists", label)
+		}
+		x, _ := gen128bit() // placeholder
+		table.gotoTable[label] = x
+		buf.WriteRaw(x[:])
+		return buf, regA, nil
+	}
+
+	x, exist := table.gotoTable[label]
+	if !exist {
+		return buf, 0, fmt.Errorf("label '%s' doesn't exist", label)
+	}
+	buf.WriteOP(OP_JMP, 0xffffffff, 0)
+	buf.WriteRaw(x[:])
 	return buf, regA, nil
 }
 

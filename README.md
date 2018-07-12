@@ -6,7 +6,7 @@ potatolang is a C/js-like language written in golang. It only works on 64bit mac
 
 ```javascript
 /* 
- * like Lua, array and map are all "map" in potatolang
+ * Like Lua, array and map are all "map" in potatolang
  */
 
 var a = {1, 2, 3};
@@ -20,13 +20,11 @@ a[0] = 1;
 a[1] = 2;
 a[3] = "in the map";
 // 'a' now contains an array of {1, 2} and a map of {"key1": "value1", 3: "in the map"}
-// '3' is inside the map because it is out of the array's index range
-// if you continue adding: a[2] = 3; a[3] = 4; 'a' now contains an array of {1, 2, 3, 4}
-// this time when accessing 'a[3]', '3' in the map will be masked and you can only get '4'
-// however 'copy' will still find two '3's in the iteration (see below)
+// '3' is inside the map because it is out of the array's index range.
+// in this case, the valid index range is: [0, 2], anything outside it will go into the map.
 
 /* 
- * use `&` to concatenate two values, `+` to add or append values
+ * Use `&` to concatenate two values, `+` to add or append values
  */
 
 var a = 1;
@@ -34,14 +32,12 @@ var b = a + "2";       // runtime panic
 var c = {} + a;        // { 1 }
 var d = { 0 } + c;     // { 0, { 1 } }
 var e = { 0 } & c;     // { 0, 1 }
-var f = "" & a & "2";  // "12" 
-                       // this is the de facto tostring() in potatolang
 var g = 7 & 8;         // bitwise and: 0
-var h = 0 & "1";       // h = 1
-                       // this is the de facto tonumber() in potatolang
+var f = "" & a & "2";  // "12", this is the de facto tostring() in potatolang
+var h = 0 & "1";       // 1, this is the de facto tonumber() in potatolang
 
 /*
- * builtin function 'copy'
+ * Builtin function 'copy'
  */
 
 // 'copy' does shallow copy of a value
@@ -50,11 +46,11 @@ var b = copy(a);
 a[0] = 0;
 assert b[0] == 1;  // b is another map now
 
-// use a standalone 'copy' to iterate over a map, its returned value will be discarded:
+// use a standalone 'copy' to iterate over a map:
 var m = {"1": 1, "2": 2 };
 copy(m, func(k, v) { assert k == ("" & v); });
 
-// provide a second argument to copy:
+// the second function can return a value to the newly copied container:
 var c = copy(a, func(i, n) { return n + 1; });
 assert c == { 2, 3 } and a == { 1, 2 };
 
@@ -77,7 +73,7 @@ assert r[len(r)-2] == 3 and r[len(r)-1] == 4;
 
 // the same trick can be used to accept varargs:
 func sum() {
-    var x = copy();
+    var x = copy(); // this line must be the first line of the whole function
     var s = 0;
     copy(x, func(i, n) {s = s + n;});
     return s;
@@ -101,7 +97,7 @@ var a = {1: 1, 2: 2, 3: 3};
 copy(a, func(i) { std.remove(a, i); });  // you can remove items when iterating a map, this is an expected behavior in golang
 
 /*
- * yield return
+ * Builtin operator 'yield'
  */
 
 func a() {
@@ -117,7 +113,7 @@ assert b() == 1 && b() == 2 && b() == 3 && b() == nil;
 // continue running: a() == 1 && b() == 1
 
 /*
- * use `this` as a parameter to simulate member functions
+ * Use 'this' as a parameter to simulate member functions
  */
 
 var counter = {
@@ -134,7 +130,7 @@ assert c.tick == 2;
 // both of them will be compiled into: func(a, b, this)
 
 /*
- * 'if' and 'for' don't create a new namespace
+ * Statements 'if' and 'for' don't create a new namespace
  */
 
 var a = 0;
@@ -145,7 +141,7 @@ for (...) var a = 3;
 // now a == 3
 
 /* 
- * other things worth mentioning
+ * Other things worth mentioning
  */
 
 // null type is written as 'nil', not 'null'

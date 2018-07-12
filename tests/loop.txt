@@ -107,3 +107,19 @@ for {
 }
 
 assert a == {1,2,4,8,16,};
+
+var a = 0;
+X:
+a = a + 1;
+if (a < 5) goto X;
+assert a == 5;
+
+// hacky use
+var a = 1;
+if ( a == 0) {
+    L: a = a +1;
+} else {
+    a = a * 2;
+    goto L;
+}
+assert a == 3;

@@ -46,7 +46,7 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TNil TReturn TRequire TVar TYield
+%token<token> TAssert TBreak TContinue TElse TFor TFunc TGoto TIf TNil TReturn TRequire TVar TYield
 
 /* Literals */
 %token<token> TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
@@ -98,7 +98,8 @@ stat:
         ';'              { $$ = NewCompoundNode() } |
         jmp_stat ';'     { $$ = $1 } |
         flow_stat        { $$ = $1 } |
-        assign_stat_semi { $$ = $1 }
+        assign_stat_semi { $$ = $1 } |
+        TIdent ':'       { $$ = NewCompoundNode("label", NewAtomNode($1)) }
 
 if_body:
         ';'              { $$ = NewCompoundNode() } |
@@ -193,6 +194,7 @@ func_stat:
         }
 
 jmp_stat:
+        TGoto TIdent { $$ = NewCompoundNode("goto", NewAtomNode($2)).setPos0($1.Pos) } |
         TYield       { $$ = NewCompoundNode("yield").setPos0($1.Pos) } |
         TYield expr  { $$ = NewCompoundNode("yield", $2).setPos0($1.Pos) } |
         TBreak       { $$ = NewCompoundNode("break").setPos0($1.Pos) } |

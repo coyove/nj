@@ -46,6 +46,8 @@ type symtable struct {
 	consts         []kinfo
 	constStringMap map[string]uint16
 	constFloatMap  map[float64]uint16
+
+	gotoTable map[string][2]uint64
 }
 
 func newsymtable() *symtable {
@@ -55,6 +57,7 @@ func newsymtable() *symtable {
 		constStringMap: make(map[string]uint16),
 		constFloatMap:  make(map[float64]uint16),
 		continueNode:   make([]*parser.Node, 0),
+		gotoTable:      make(map[string][2]uint64),
 	}
 	for i := range t.regs {
 		t.regs[i].addr = regA
@@ -276,6 +279,8 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 		code, yx, err = table.compileWhileOp(nodes)
 	case "continue", "break":
 		code, yx, err = table.compileContinueBreakOp(nodes)
+	case "label", "goto":
+		code, yx, err = table.compileLabelGotoOp(nodes)
 	case "call":
 		code, yx, err = table.compileCallOp(nodes)
 	case "map":
@@ -334,7 +339,7 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 			consts[i+1] = NewStringValue(k.value.(string))
 		}
 	}
-	cls = NewClosure(code.data, consts, nil, 0)
+	cls = NewClosure(patchGotoCode(code.data, table.gotoTable), consts, nil, 0)
 	cls.lastenv = NewEnv(nil)
 	cls.pos = code.pos
 	cls.source = code.source
@@ -342,6 +347,40 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 		cls.lastenv.SPush(CoreLibs[name])
 	}
 	return cls, err
+}
+
+// not a good solution for now, but works
+func patchGotoCode(code []uint64, table map[string][2]uint64) []uint64 {
+	if len(table) == 0 {
+		return code
+	}
+	rtable := make(map[[2]uint64]uint32)
+	for _, v := range table {
+		rtable[v] = 0xffffffff
+	}
+	for i := 0; i < len(code)-1; i++ {
+		x := [2]uint64{code[i], code[i+1]}
+		if _, ok := rtable[x]; ok {
+			if i > 0 {
+				op, opa, opb := op(code[i-1])
+				if op == OP_JMP && opa == 0x00ffffff && opb == 0 {
+					continue
+				}
+			}
+			rtable[x] = uint32(i)
+			code[i] = makeop(OP_NOP, 0, 0)
+			code[i+1] = makeop(OP_NOP, 0, 0)
+		}
+	}
+	for i := 0; i < len(code)-1; i++ {
+		x := [2]uint64{code[i], code[i+1]}
+		if x, ok := rtable[x]; ok && i > 0 {
+			code[i-1] = makeop(OP_JMP, 0, uint32(int32(x)-int32(i-1)))
+			code[i] = makeop(OP_NOP, 0, 0)
+			code[i+1] = makeop(OP_NOP, 0, 0)
+		}
+	}
+	return code
 }
 
 func LoadFile(path string) (*Closure, error) {
