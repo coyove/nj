@@ -52,7 +52,7 @@ copy(m, func(k, v) { assert k == ("" & v); });
 
 // the second function can return a value to the newly copied container:
 var c = copy(a, func(i, n) { return n + 1; });
-assert c == { 2, 3 } and a == { 1, 2 };
+assert c == { 2, 3 } && a == { 1, 2 };
 
 // if you want to return multiple results, use this copy trick:
 func foo(c) {
@@ -69,7 +69,7 @@ func foo(c) {
 // stack | c | a | b |
 //       +---+---+---+
 var r = foo(2);
-assert r[len(r)-2] == 3 and r[len(r)-1] == 4;
+assert r[len(r)-2] == 3 && r[len(r)-1] == 4;
 
 // the same trick can be used to accept varargs:
 func sum() {

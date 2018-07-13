@@ -417,7 +417,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 	case parser.NTAddr:
 		varIndex = callee.Value.(uint32)
 	default:
-		err = fmt.Errorf("invalid callee: %+v", callee)
+		err = fmt.Errorf("%+v: invalid callee", callee)
 		return
 	}
 
@@ -548,7 +548,7 @@ func (table *symtable) compileLabelGotoOp(atoms []*parser.Node) (code packet, yx
 
 	if atoms[0].Value.(string) == "label" {
 		if _, exist := table.gotoTable[label]; exist {
-			return buf, 0, fmt.Errorf("label '%s' already exists", label)
+			return buf, 0, fmt.Errorf("%s: label already exists", label)
 		}
 		x, _ := gen128bit() // placeholder
 		table.gotoTable[label] = x
@@ -558,7 +558,7 @@ func (table *symtable) compileLabelGotoOp(atoms []*parser.Node) (code packet, yx
 
 	x, exist := table.gotoTable[label]
 	if !exist {
-		return buf, 0, fmt.Errorf("label '%s' doesn't exist", label)
+		return buf, 0, fmt.Errorf("%s: label doesn't exist", label)
 	}
 	buf.WriteOP(OP_JMP, 0xffffffff, 0)
 	buf.WriteRaw(x[:])
