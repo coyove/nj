@@ -1,0 +1,45 @@
+// a simple example to demo the 'placeholder' concept
+
+var _ = std.unique();
+
+var curry = func(f) {
+    var __args = {};
+    var __argscount = std.opcode.closure.get(f, "argscount");
+    var __remain = __argscount;
+
+    func appendargs(args) {
+        copy(__args, func(i, __arg) {
+            if (__arg == _ && len(args) > 0) {
+                __args[i] = args[0];
+                args = args[1:];
+            }
+        });
+
+        copy(args, func(i, arg) {
+            __args[len(__args)] = arg;
+        });
+
+        __remain = __argscount - len(__args);
+        copy(__args, func(i, __arg) {
+            if (__arg == _) {
+                __remain = __remain+1;
+            }
+        });
+    }
+
+    func __f() { 
+        appendargs(copy());
+        
+        if (__remain > 0) return __f;
+
+        return std.apply(f, __args);
+    };
+    return __f;
+};
+
+func add(a, b, c) { return a + b + c; }
+
+assert curry(add)(1,2)(3) == 6;
+assert curry(add)(_,2)(1)(3) == 6;
+assert curry(add)(_,_,_)("a")(_,"c")("b") == "abc";
+ 

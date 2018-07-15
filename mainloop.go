@@ -2,7 +2,6 @@ package potatolang
 
 import (
 	"fmt"
-	"log"
 	"reflect"
 	"strconv"
 	"unsafe"
@@ -18,6 +17,10 @@ func init() {
 	if *(*byte)(unsafe.Pointer(&one)) != 1 {
 		panic("potatolang only support little endian arch now")
 	}
+}
+
+func panicf(msg string, args ...interface{}) {
+	panic(fmt.Sprintf(msg, args...))
 }
 
 type stacktrace struct {
@@ -139,32 +142,32 @@ MAIN:
 					m.l = append(m.l, env.R1)
 					env.A = NewMapValue(m)
 				} else {
-					log.Panicf("can't apply 'add' on %+v and %+v", env.R0, env.R1)
+					panicf("can't apply 'add' on %+v and %+v", env.R0, env.R1)
 				}
 			}
 		case OP_SUB:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
 				env.A.SetNumberValue(env.R0.AsNumber() - env.R1.AsNumber())
 			} else {
-				log.Panicf("can't apply 'sub' on %+v and %+v", env.R0, env.R1)
+				panicf("can't apply 'sub' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_MUL:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
 				env.A = NewNumberValue(env.R0.AsNumber() * env.R1.AsNumber())
 			} else {
-				log.Panicf("can't apply 'mul' on %+v and %+v", env.R0, env.R1)
+				panicf("can't apply 'mul' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_DIV:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
 				env.A.SetNumberValue(env.R0.AsNumber() / env.R1.AsNumber())
 			} else {
-				log.Panicf("can't apply 'div' on %+v and %+v", env.R0, env.R1)
+				panicf("can't apply 'div' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_MOD:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
 				env.A.SetNumberValue(float64(int64(env.R0.AsNumber()) % int64(env.R1.AsNumber())))
 			} else {
-				log.Panicf("can't apply 'mod' on %+v and %+v", env.R0, env.R1)
+				panicf("can't apply 'mod' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_EQ:
 			env.A.SetBoolValue(env.R0.Equal(env.R1))
@@ -177,7 +180,7 @@ MAIN:
 			case _Tstringstring:
 				env.A.SetBoolValue(env.R0.AsString() < env.R1.AsString())
 			default:
-				log.Panicf("can't apply 'less' on %+v and %+v", env.R0, env.R1)
+				panicf("can't apply 'less' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_LESS_EQ:
 			switch testTypes(env.R0, env.R1) {
@@ -186,7 +189,7 @@ MAIN:
 			case _Tstringstring:
 				env.A.SetBoolValue(env.R0.AsString() <= env.R1.AsString())
 			default:
-				log.Panicf("can't apply 'less equal' on %+v and %+v", env.R0, env.R1)
+				panicf("can't apply 'less equal' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_NOT:
 			env.A.SetBoolValue(env.R0.IsFalse())
@@ -194,7 +197,7 @@ MAIN:
 			if env.R0.ty == Tnumber {
 				env.A.SetNumberValue(float64(^int32(env.R0.AsNumber())))
 			} else {
-				log.Panicf("can't apply 'bit not' on %+v", env.R0)
+				panicf("can't apply 'bit not' on %+v", env.R0)
 			}
 		case OP_BIT_AND:
 			switch testTypes(env.R0, env.R1) {
@@ -234,32 +237,32 @@ MAIN:
 						env.A = NewStringValue(ss + env.R1.ToPrintString())
 					}
 				} else {
-					log.Panicf("can't apply 'bit and (concat)' on %+v and %+v", env.R0, env.R1)
+					panicf("can't apply 'bit and (concat)' on %+v and %+v", env.R0, env.R1)
 				}
 			}
 		case OP_BIT_OR:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
 				env.A.SetNumberValue(float64(int32(env.R0.AsNumber()) | int32(env.R1.AsNumber())))
 			} else {
-				log.Panicf("can't apply 'bit or' on %+v and %+v", env.R0, env.R1)
+				panicf("can't apply 'bit or' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_BIT_XOR:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
 				env.A.SetNumberValue(float64(int32(env.R0.AsNumber()) ^ int32(env.R1.AsNumber())))
 			} else {
-				log.Panicf("can't apply 'bit xor' on %+v and %+v", env.R0, env.R1)
+				panicf("can't apply 'bit xor' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_BIT_LSH:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
 				env.A.SetNumberValue(float64(int32(env.R0.AsNumber()) << uint32(env.R1.AsNumber())))
 			} else {
-				log.Panicf("can't apply 'bit lsh' on %+v and %+v", env.R0, env.R1)
+				panicf("can't apply 'bit lsh' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_BIT_RSH:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
 				env.A.SetNumberValue(float64(int32(env.R0.AsNumber()) >> uint32(env.R1.AsNumber())))
 			} else {
-				log.Panicf("can't apply 'bit rsh' on %+v and %+v", env.R0, env.R1)
+				panicf("can't apply 'bit rsh' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_ASSERT:
 			if env.R0.IsFalse() {
@@ -273,7 +276,7 @@ MAIN:
 			case Tmap:
 				env.A.SetNumberValue(float64(v.AsMap().Size()))
 			default:
-				log.Panicf("can't evaluate the length of %+v", v)
+				panicf("can't evaluate the length of %+v", v)
 			}
 		case OP_MAKEMAP:
 			if newEnv == nil {
@@ -300,7 +303,7 @@ MAIN:
 					m.putIntoMap(env.R2, env.R1)
 				}
 			} else {
-				log.Panicf("can't store %+v into %+v with key %+v", env.R1, env.R3, env.R2)
+				panicf("can't store %+v into %+v with key %+v", env.R1, env.R3, env.R2)
 			}
 			env.A = env.R2
 		case OP_LOAD:
@@ -321,7 +324,7 @@ MAIN:
 						v.AsClosure().SetCaller(env.R3)
 					}
 				} else {
-					log.Panicf("can't load from %+v with key %+v", env.R3, env.R2)
+					panicf("can't load from %+v with key %+v", env.R3, env.R2)
 				}
 			}
 			env.A = v
@@ -372,7 +375,7 @@ MAIN:
 				}
 				env.A = NewMapValue(m)
 			default:
-				log.Panicf("can't slice %+v", x)
+				panicf("can't slice %+v", x)
 			}
 		case OP_PUSH:
 			if newEnv == nil {

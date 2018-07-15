@@ -28,29 +28,29 @@ a[3] = "in the map";
  */
 
 var a = 1;
-var b = a + "2";       // runtime panic
-var c = {} + a;        // { 1 }
-var d = { 0 } + c;     // { 0, { 1 } }
-var e = { 0 } & c;     // { 0, 1 }
-var g = 7 & 8;         // bitwise and: 0
-var f = "" & a & "2";  // "12", this is the de facto tostring() in potatolang
-var h = 0 & "1";       // 1, this is the de facto tonumber() in potatolang
+var b = a + "2";   // runtime panic
+var c = {} + a;    // { 1 }
+var d = { 0 } + c; // { 0, { 1 } }
+var e = { 0 } & c; // { 0, 1 }
+var g = 7 & 8;     // bitwise and: 0
+var f = "" & 1;    // "1", this is the de facto tostring() in potatolang
+var h = 0 & "1";   // 1, this is the de facto tonumber() in potatolang
 
 /*
  * Builtin function 'copy'
  */
 
 // 'copy' does shallow copy of a value
-var a = { 1, 2 };
+var a = { 1, 2, {1, 2} };
 var b = copy(a);
 a[0] = 0;
-assert b[0] == 1;  // b is another map now
+a[2][0] = 0;
+assert b[0] == 1 && b[2][0] == 0;
 
-// use a standalone 'copy' to iterate over a map:
+// iterate over a map:
 var m = {"1": 1, "2": 2 };
 copy(m, func(k, v) { assert k == ("" & v); });
 
-// the second function can return a value to the newly copied container:
 var c = copy(a, func(i, n) { return n + 1; });
 assert c == { 2, 3 } && a == { 1, 2 };
 
@@ -58,17 +58,11 @@ assert c == { 2, 3 } && a == { 1, 2 };
 func foo(c) {
     var a = 1 + c;
     var b = 2 + c;
-
     // copy() without arguments will return a copy of the current stack
     return copy();
 }
-
-// index:  0   1   2
-//
-//  foo  +---+---+---+
-// stack | c | a | b |
-//       +---+---+---+
 var r = foo(2);
+// r is the stack of foo(2), the last two elements would be 'a' and 'b':
 assert r[len(r)-2] == 3 && r[len(r)-1] == 4;
 
 // the same trick can be used to accept varargs:
@@ -78,39 +72,37 @@ func sum() {
     copy(x, func(i, n) {s = s + n;});
     return s;
 }
-
 assert sum(1, 2, 3) == 6;
 assert sum("a", "b", "c") == "abc";
 
 // string is immutable, copy(str) will return an array of its bytes:
 var a = "text";
 a[0] = 96;  // won't work
-
 var b = copy(a);
 assert typeof(b, "map");            // ok
 assert b == {0x74,0x65,0x73,0x74};  // ok
 
+// don't remove items when iterating an array
 var a = {1, 2, 3};
-copy(a, func(i) { std.remove(a, i); });  // don't remove items when iterating an array
+copy(a, func(i) { std.remove(a, i); });
 
+// you can remove items when iterating a map, this is an expected behavior in golang
 var a = {1: 1, 2: 2, 3: 3};
-copy(a, func(i) { std.remove(a, i); });  // you can remove items when iterating a map, this is an expected behavior in golang
+copy(a, func(i) { std.remove(a, i); });
 
 /*
  * Builtin operator 'yield'
  */
 
 func a() {
-    yield 1;
-    yield 2;
-    yield 3;
+    yield 1; yield 2; yield 3;
+    // if you don't explicitly return, func itself returns nil here
 }
 
 var b = copy(a);
 assert a() == 1 && a() == 2 && a() == 3 && a() == nil;
 assert b() == 1 && b() == 2 && b() == 3 && b() == nil;
 // now a and b are back to the start state
-// continue running: a() == 1 && b() == 1
 
 /*
  * Use 'this' as a parameter to simulate member functions
@@ -137,8 +129,7 @@ var a = 0;
 if (...) var a = 1;
 if (...) var a = 2;
 for (...) var a = 3;
-// all 'a' are the same 'a'
-// now a == 3
+// all 'a' are the same 'a', now a == 3
 
 /* 
  * Other things worth mentioning

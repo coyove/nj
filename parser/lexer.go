@@ -133,7 +133,7 @@ func (sc *Scanner) skipWhiteSpace(whitespace int64) int {
 
 func (sc *Scanner) skipComments(ch int) error {
 	for {
-		if ch == '\n' || ch == '\r' || ch < 0 {
+		if ch == '\n' || ch == '\r' || ch < 0 || ch == EOF {
 			break
 		}
 		ch = sc.Next()

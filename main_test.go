@@ -50,6 +50,10 @@ func TestSLoop(t *testing.T) {
 	runFile(t, "tests/loop.txt")
 }
 
+func TestSPlaceholder(t *testing.T) {
+	runFile(t, "tests/placeholder.txt")
+}
+
 func TestArithmeticUnfold(t *testing.T) {
 	cls, err := LoadString(`
 		return 1 + 2 * 3 / 4;

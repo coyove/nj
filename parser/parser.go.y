@@ -98,8 +98,7 @@ stat:
         ';'              { $$ = NewCompoundNode() } |
         jmp_stat ';'     { $$ = $1 } |
         flow_stat        { $$ = $1 } |
-        assign_stat_semi { $$ = $1 } |
-        TIdent ':'       { $$ = NewCompoundNode("label", NewAtomNode($1)) }
+        assign_stat_semi { $$ = $1 }
 
 if_body:
         ';'              { $$ = NewCompoundNode() } |
@@ -194,7 +193,6 @@ func_stat:
         }
 
 jmp_stat:
-        TGoto TIdent { $$ = NewCompoundNode("goto", NewAtomNode($2)).setPos0($1.Pos) } |
         TYield       { $$ = NewCompoundNode("yield").setPos0($1.Pos) } |
         TYield expr  { $$ = NewCompoundNode("yield", $2).setPos0($1.Pos) } |
         TBreak       { $$ = NewCompoundNode("break").setPos0($1.Pos) } |

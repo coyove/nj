@@ -2,9 +2,9 @@ package potatolang
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math"
 	"reflect"
 	"strconv"
@@ -266,7 +266,11 @@ func (v Value) toString(lv int) string {
 
 	switch v.Type() {
 	case Tnumber:
-		return strconv.FormatFloat(v.AsNumber(), 'f', -1, 64)
+		x := v.AsNumber()
+		if float64(uint64(x)) == x {
+			return strconv.FormatUint(uint64(x), 10)
+		}
+		return strconv.FormatFloat(x, 'f', -1, 64)
 	case Tstring:
 		return v.AsString()
 	case Tmap:
@@ -296,12 +300,12 @@ func (v Value) toString(lv int) string {
 }
 
 func (v Value) panicType(expected byte) {
-	log.Panicf("expecting %s, got %+v", TMapping[expected], v)
+	panicf("expecting %s, got %+v", TMapping[expected], v)
 }
 
 func (v Value) testType(expected byte) Value {
 	if v.ty != expected {
-		log.Panicf("expecting %s, got %+v", TMapping[expected], v)
+		panicf("expecting %s, got %+v", TMapping[expected], v)
 	}
 	return v
 }
@@ -434,4 +438,18 @@ func (v Value) Hash() hash128 {
 		}
 	}
 	return a
+}
+
+func (v Value) hashstr() string {
+	h := v.Hash()
+	return fmt.Sprintf("%x", *(*[16]byte)(unsafe.Pointer(&h)))
+}
+
+var __hash2Salt = rand.New().Fetch(16)
+
+func (v Value) hash2() [2]uint64 {
+	h := v.Hash()
+	b := *(*[16]byte)(unsafe.Pointer(&h))
+	s := sha1.Sum(append(b[:], __hash2Salt...))
+	return *(*[2]uint64)(unsafe.Pointer(&s)) // 20 > 16
 }

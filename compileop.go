@@ -495,7 +495,6 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 
 	buf.WriteOP(OP_LAMBDA, uint32(len(newtable.consts)), uint32(byte(ln))<<24+uint32(cls.options))
 	buf.WriteConsts(newtable.consts)
-	code.data = patchGotoCode(code.data, newtable.gotoTable)
 	buf.WriteCode(code)
 	buf.WritePos(atoms[0].Pos)
 	return buf, regA, nil
@@ -527,6 +526,10 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 		if staticWhileHack.continueFlag == nil {
 			_, staticWhileHack.continueFlag = gen128bit()
 		}
+		if len(table.continueNode) == 0 {
+			err = fmt.Errorf("%+v: invalid continue statement", atoms[0])
+			return
+		}
 		code, yx, err = table.compileChainOp(table.continueNode[len(table.continueNode)-1])
 		if err != nil {
 			return
@@ -539,29 +542,6 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 		_, staticWhileHack.breakFlag = gen128bit()
 	}
 	buf.WriteRaw(staticWhileHack.breakFlag)
-	return buf, regA, nil
-}
-
-func (table *symtable) compileLabelGotoOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
-	buf := newpacket()
-	label := atoms[1].Value.(string)
-
-	if atoms[0].Value.(string) == "label" {
-		if _, exist := table.gotoTable[label]; exist {
-			return buf, 0, fmt.Errorf("%s: label already exists", label)
-		}
-		x, _ := gen128bit() // placeholder
-		table.gotoTable[label] = x
-		buf.WriteRaw(x[:])
-		return buf, regA, nil
-	}
-
-	x, exist := table.gotoTable[label]
-	if !exist {
-		return buf, 0, fmt.Errorf("%s: label doesn't exist", label)
-	}
-	buf.WriteOP(OP_JMP, 0xffffffff, 0)
-	buf.WriteRaw(x[:])
 	return buf, regA, nil
 }
 

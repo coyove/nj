@@ -11,8 +11,6 @@ var CoreLibNames = []string{
 
 var CoreLibs = map[string]Value{}
 
-var cancelled = 1
-
 func char(v float64, ascii bool) string {
 	if ascii {
 		return string([]byte{byte(v)})
@@ -22,7 +20,10 @@ func char(v float64, ascii bool) string {
 
 func initCoreLibs() {
 	lcore := NewMap()
-	lcore.Puts("cancelled", NewGenericValue(unsafe.Pointer(&cancelled)))
+	lcore.Puts("unique", NewNativeValue(0, func(env *Env) Value {
+		a := new(int)
+		return NewGenericValue(unsafe.Pointer(a))
+	}))
 	lcore.Puts("genlist", NewNativeValue(1, func(env *Env) Value {
 		return NewMapValue(NewMapSize(int(env.SGet(0).Num())))
 	}))
@@ -33,6 +34,9 @@ func initCoreLibs() {
 			newEnv.SPush(v)
 		}
 		return x.Cls().Exec(newEnv)
+	}))
+	lcore.Puts("id", NewNativeValue(1, func(env *Env) Value {
+		return NewStringValue(env.SGet(0).hashstr())
 	}))
 	lcore.Puts("storeinto", NewNativeValue(3, func(env *Env) Value {
 		e, x, y := env.SGet(0), env.SGet(1), env.SGet(2)
@@ -144,6 +148,20 @@ func initCoreLibs() {
 					}
 				case "source":
 					cls.source = env.SGet(2).Str()
+				}
+				return NewClosureValue(cls)
+			})).
+			Puts("get", NewNativeValue(2, func(env *Env) Value {
+				cls := env.SGet(0).Cls()
+				switch name := env.SGet(1).Str(); name {
+				case "argscount":
+					return NewNumberValue(float64(cls.argsCount))
+				case "yieldable":
+					return NewBoolValue(cls.Isset(CLS_YIELDABLE))
+				case "envescaped":
+					return NewBoolValue(!cls.Isset(CLS_NOENVESCAPE))
+				case "source":
+					return NewStringValue(cls.source)
 				}
 				return NewClosureValue(cls)
 			})).
