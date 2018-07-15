@@ -280,8 +280,8 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 		code, yx, err = table.compileContinueBreakOp(nodes)
 	case "call":
 		code, yx, err = table.compileCallOp(nodes)
-	case "map":
-		code, yx, err = table.compileMapOp(nodes)
+	case "map", "array":
+		code, yx, err = table.compileMapArrayOp(nodes)
 	case "or", "and":
 		code, yx, err = table.compileAndOrOp(nodes)
 	case "inc":

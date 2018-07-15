@@ -105,7 +105,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line parser.go.y:415
+//line parser.go.y:403
 
 var typesLookup = map[string]string{
 	"nil": "0", "number": "1", "string": "2", "map": "3", "closure": "4", "generic": "5",
@@ -1391,21 +1391,13 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		//line parser.go.y:400
 		{
-			table := NewCompoundNode()
-			for i, v := range yyDollar[1].expr.Compound {
-				table.Compound = append(table.Compound, &Node{Type: NTNumber, Value: float64(i)}, v)
-			}
-			yyVAL.expr = NewCompoundNode("map", table).setPos0(yyDollar[1].expr.Pos)
+			yyVAL.expr = NewCompoundNode("array", yyDollar[1].expr).setPos0(yyDollar[1].expr.Pos)
 		}
 	case 103:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line parser.go.y:407
+		//line parser.go.y:401
 		{
-			table := NewCompoundNode()
-			for i, v := range yyDollar[1].expr.Compound {
-				table.Compound = append(table.Compound, &Node{Type: NTNumber, Value: float64(i)}, v)
-			}
-			yyVAL.expr = NewCompoundNode("map", table).setPos0(yyDollar[1].expr.Pos)
+			yyVAL.expr = NewCompoundNode("array", yyDollar[1].expr).setPos0(yyDollar[1].expr.Pos)
 		}
 	}
 	goto yystack /* stack new state and value */

@@ -101,11 +101,7 @@ func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint3
 	return buf, yx, nil
 }
 
-func (table *symtable) compileMapOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
-	if len(atoms[1].Compound)%2 != 0 {
-		err = fmt.Errorf("%+v: every key in map must have a value", atoms[1])
-		return
-	}
+func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
 	var buf packet
 	if buf, err = table.flaten(atoms[1].Compound); err != nil {
 		return
@@ -115,7 +111,11 @@ func (table *symtable) compileMapOp(atoms []*parser.Node) (code packet, yx uint3
 			return
 		}
 	}
-	buf.WriteOP(OP_MAKEMAP, 0, 0)
+	if atoms[0].Value.(string) == "map" {
+		buf.WriteOP(OP_MAKEMAP, 0, 0)
+	} else {
+		buf.WriteOP(OP_MAKEMAP, 1, 0)
+	}
 	buf.WritePos(atoms[0].Pos)
 	return buf, regA, nil
 }

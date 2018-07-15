@@ -397,20 +397,8 @@ map_gen:
 _map_gen:
         expr_assign_list     { $$ = NewCompoundNode("map", $1).setPos0($1.Pos) } |
         expr_assign_list ',' { $$ = NewCompoundNode("map", $1).setPos0($1.Pos) } |
-        expr_list {
-            table := NewCompoundNode()
-            for i, v := range $1.Compound {
-                table.Compound = append(table.Compound, &Node{ Type:  NTNumber, Value: float64(i) }, v)
-            }
-            $$ = NewCompoundNode("map", table).setPos0($1.Pos)
-        } |
-        expr_list ',' {
-            table := NewCompoundNode()
-            for i, v := range $1.Compound {
-                table.Compound = append(table.Compound, &Node{ Type:  NTNumber, Value: float64(i) }, v)
-            }
-            $$ = NewCompoundNode("map", table).setPos0($1.Pos)
-        }
+        expr_list            { $$ = NewCompoundNode("array", $1).setPos0($1.Pos) } |
+        expr_list ','        { $$ = NewCompoundNode("array", $1).setPos0($1.Pos) }
 
 %%
 

@@ -282,12 +282,20 @@ MAIN:
 			if newEnv == nil {
 				env.A = NewMapValue(NewMap())
 			} else {
-				size, m := newEnv.SSize(), NewMap()
-				for i := 0; i < size; i += 2 {
-					m.Put(newEnv.SGet(i), newEnv.SGet(i+1))
+				if opa == 1 {
+					size := newEnv.SSize()
+					m := NewMapSize(size)
+					copy(m.l, newEnv.stack)
+					newEnv.SClear()
+					env.A = NewMapValue(m)
+				} else {
+					size, m := newEnv.SSize(), NewMap()
+					for i := 0; i < size; i += 2 {
+						m.Put(newEnv.SGet(i), newEnv.SGet(i+1))
+					}
+					newEnv.SClear()
+					env.A = NewMapValue(m)
 				}
-				newEnv.SClear()
-				env.A = NewMapValue(m)
 			}
 		case OP_STORE:
 			if env.R3.ty == Tmap {
