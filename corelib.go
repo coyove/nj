@@ -11,6 +11,19 @@ var CoreLibNames = []string{
 
 var CoreLibs = map[string]Value{}
 
+// AddCoreValue adds a value to the core libraries
+// duplicated name will result in panicking
+func AddCoreValue(name string, value Value) {
+	if name == "" {
+		return
+	}
+	if CoreLibs[name].ty != Tnil {
+		panicf("core value %s already exists", name)
+	}
+	CoreLibNames = append(CoreLibNames, name)
+	CoreLibs[name] = value
+}
+
 func char(v float64, ascii bool) string {
 	if ascii {
 		return string([]byte{byte(v)})

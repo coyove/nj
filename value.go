@@ -173,19 +173,19 @@ func (v Value) AsGeneric() unsafe.Pointer { return v.ptr }
 
 func (v Value) u64() uint64 { return math.Float64bits(v.Num()) }
 
-// Num cast value to float64
+// Num safely cast value to float64
 func (v Value) Num() float64 { v.testType(Tnumber); return v.AsNumber() }
 
-// Str cast value to string
+// Str safely cast value to string
 func (v Value) Str() string { v.testType(Tstring); return v.AsString() }
 
-// Map cast value to map of values
+// Map safely cast value to map of values
 func (v Value) Map() *Map { v.testType(Tmap); return (*Map)(v.ptr) }
 
-// Cls cast value to closure
+// Cls safely cast value to closure
 func (v Value) Cls() *Closure { v.testType(Tclosure); return (*Closure)(v.ptr) }
 
-// Gen cast value to unsafe.Pointer
+// Gen safely cast value to unsafe.Pointer
 func (v Value) Gen() unsafe.Pointer { v.testType(Tgeneric); return v.ptr }
 
 // I returns the golang interface representation of value
@@ -247,7 +247,24 @@ func (v Value) Equal(r Value) bool {
 	case _Tmapmap:
 		return v.AsMap().Equal(r.AsMap())
 	case _Tclosureclosure:
-		return bytes.Equal(slice64to8(v.AsClosure().code), slice64to8(r.AsClosure().code))
+		c0, c1 := v.AsClosure(), r.AsClosure()
+		e := c0.argsCount == c1.argsCount &&
+			c0.options == c1.options &&
+			c0.env == c1.env &&
+			c0.lastenv == c1.lastenv &&
+			c0.lastp == c1.lastp &&
+			bytes.Equal(slice64to8(c0.code), slice64to8(c1.code)) &&
+			c0.caller.Equal(c1.caller) &&
+			len(c0.preArgs) == len(c1.preArgs)
+		if !e {
+			return false
+		}
+		for i, arg := range c0.preArgs {
+			if !arg.Equal(c1.preArgs[i]) {
+				return false
+			}
+		}
+		return true
 	case _Tgenericgeneric:
 		return v.AsGeneric() == r.AsGeneric()
 	}

@@ -233,7 +233,6 @@ var singleOp = map[byte]string{
 	OP_BIT_LSH: "bit-lsh",
 	OP_BIT_RSH: "bit-rsh",
 	OP_TYPEOF:  "typeof",
-	OP_MAKEMAP: "make-map",
 	OP_SLICE:   "slice",
 }
 
@@ -368,6 +367,12 @@ MAIN:
 			sb.WriteString("nop")
 		case OP_INC:
 			sb.WriteString("inc " + readAddr(a) + " " + readKAddr(uint16(b)))
+		case OP_MAKEMAP:
+			if a == 1 {
+				sb.WriteString("make-array")
+			} else {
+				sb.WriteString("make-map")
+			}
 		default:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs)

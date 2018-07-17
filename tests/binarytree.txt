@@ -2,7 +2,7 @@ var n = 15;
 
 func bottomUpTree(depth) {
    if (depth <= 0) {
-      return { nil, nil };
+      return { };
    }
    return { bottomUpTree(depth-1), bottomUpTree(depth-1) };
 }
