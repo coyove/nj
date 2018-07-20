@@ -234,6 +234,9 @@ var singleOp = map[byte]string{
 	OP_BIT_RSH: "bit-rsh",
 	OP_TYPEOF:  "typeof",
 	OP_SLICE:   "slice",
+	OP_POP:     "pop",
+	OP_R0R2:    "r0r2",
+	OP_R1R2:    "r1r2",
 }
 
 func crHash(data []uint64) uint32 {

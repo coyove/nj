@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -344,6 +345,11 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 	buf := newpacket()
 	callee := nodes[1]
 	name, _ := callee.Value.(string)
+
+	if strings.HasPrefix(name, "$") {
+		return table.compileRawOp(nodes)
+	}
+
 	switch name {
 	case "addressof":
 		varname := nodes[2].Compound[0].Value.(string)

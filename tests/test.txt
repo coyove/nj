@@ -196,3 +196,15 @@ var r = safeexec(func(a, b) {
 }, {1,"2"});
   
 assert #r == "none" && !#r ;
+
+func raw() {
+    var a = 1;
+    $set(a, 2);
+    $r0(a);
+    $r1(0.5);
+    $add();
+    $set(a, $a);
+    assert  a == 2.5;
+}
+
+raw();

@@ -331,7 +331,7 @@ redo:
 	tok.Pos = sc.Pos
 
 	switch {
-	case isIdent(ch, 0):
+	case ch == '$', isIdent(ch, 0):
 		tok.Type = TIdent
 		err = sc.scanIdent(ch, buf)
 		tok.Str = buf.String()
