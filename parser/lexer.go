@@ -460,6 +460,8 @@ finally:
 
 type Lexer struct {
 	scanner *Scanner
+	loop    string
+	cache   map[string]*Node
 	Stmts   *Node
 	Token   Token
 }
@@ -489,9 +491,14 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 	panic(lx.scanner.TokenError(tok, message))
 }
 
-func Parse(reader io.Reader, name string) (chunk *Node, err error) {
-	lexer := &Lexer{NewScanner(reader, name), nil, Token{Str: ""}}
-	chunk = nil
+func parse(reader io.Reader, name string, cache map[string]*Node, loop string) (chunk *Node, lexer *Lexer, err error) {
+	lexer = &Lexer{
+		scanner: NewScanner(reader, name),
+		loop:    loop,
+		Stmts:   nil,
+		Token:   Token{Str: ""},
+		cache:   cache,
+	}
 	defer func() {
 		if e := recover(); e != nil {
 			err, _ = e.(error)
@@ -499,6 +506,11 @@ func Parse(reader io.Reader, name string) (chunk *Node, err error) {
 	}()
 	yyParse(lexer)
 	chunk = lexer.Stmts
+	return
+}
+
+func Parse(reader io.Reader, name string) (chunk *Node, err error) {
+	chunk, _, err = parse(reader, name, make(map[string]*Node), name)
 	return
 }
 

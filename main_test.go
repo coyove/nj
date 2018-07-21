@@ -2,8 +2,11 @@ package potatolang
 
 import (
 	"flag"
+	"io/ioutil"
 	"log"
 	"math"
+	"os"
+	"strings"
 	"testing"
 	// _ "net/http/pprof"
 	"runtime"
@@ -23,7 +26,9 @@ func runFile(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 
-	log.Println(b.PrettyString())
+	if !strings.Contains(path, "import.txt") {
+		log.Println(b.PrettyString())
+	}
 
 	i := b.Exec(nil)
 	t.Log(i.I())
@@ -52,6 +57,10 @@ func TestSLoop(t *testing.T) {
 
 func TestSPlaceholder(t *testing.T) {
 	runFile(t, "tests/placeholder.txt")
+}
+
+func TestSImport(t *testing.T) {
+	runFile(t, "tests/import.txt")
 }
 
 func TestArithmeticUnfold(t *testing.T) {
@@ -112,5 +121,28 @@ func TestArithmeticNAN(t *testing.T) {
 
 	if !math.IsNaN(cls.Exec(nil).AsNumber()) {
 		t.Error("wrong answer")
+	}
+}
+
+func TestImportLoop(t *testing.T) {
+	os.MkdirAll("tmp/src", 0777)
+	defer os.RemoveAll("tmp")
+
+	ioutil.WriteFile("tmp/1.txt", []byte(`
+		require "2.txt"; 
+		require "src/3.txt";`), 0777)
+	ioutil.WriteFile("tmp/2.txt", []byte(`require "src/3.txt";`), 0777)
+	ioutil.WriteFile("tmp/src/3.txt", []byte(`var a = require "1.txt";`), 0777)
+	ioutil.WriteFile("tmp/src/1.txt", []byte(`require "../1.txt";`), 0777)
+
+	_, err := LoadFile("tmp/1.txt")
+	if !strings.Contains(err.Error(), "importing each other") {
+		t.Error("something wrong")
+	}
+
+	ioutil.WriteFile("tmp/1.txt", []byte(`require "1.txt";`), 0777)
+	_, err = LoadFile("tmp/1.txt")
+	if !strings.Contains(err.Error(), "importing each other") {
+		t.Error("something wrong")
 	}
 }

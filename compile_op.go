@@ -361,11 +361,11 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		buf.WriteOP(OP_SETK, regA, uint32(table.addConst(float64(address))))
 		return buf, regA, nil
 	case "len":
-		code, yx, err = table.flatWrite(append(nodes[1:2], nodes[2].Compound...), OP_LEN)
+		code, yx, err = table.flatWrite(append([]*parser.Node{nodes[1]}, nodes[2].Compound...), OP_LEN)
 		code.WritePos(nodes[0].Pos)
 		return
 	case "copy":
-		x := append(nodes[1:2], nodes[2].Compound...)
+		x := append([]*parser.Node{nodes[1]}, nodes[2].Compound...)
 		if y, ok := x[3].Value.(float64); ok && y == 2 {
 			// return stack, env is escaped
 			table.envescape = true
@@ -374,7 +374,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		code.WritePos(nodes[0].Pos)
 		return
 	case "typeof":
-		return table.flatWrite(append(nodes[1:2], nodes[2].Compound...), OP_TYPEOF)
+		return table.flatWrite(append([]*parser.Node{nodes[1]}, nodes[2].Compound...), OP_TYPEOF)
 	}
 
 	atoms, replacedAtoms := nodes[2].Compound, []*parser.Node{}

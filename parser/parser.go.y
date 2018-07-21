@@ -2,8 +2,6 @@
 package parser
 
 import (
-    "bytes"
-    "io/ioutil"
     "path/filepath"
 )
 
@@ -206,6 +204,10 @@ jmp_stat:
                 }
             }
             $$ = NewCompoundNode("ret", $2).setPos0($1.Pos)
+        } |
+        TRequire TString {
+            path := filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)
+            $$ = yylex.(*Lexer).loadFile(path)
         }
 
 declarator:
@@ -273,21 +275,8 @@ expr:
             $$.Pos = $1.Pos
         } |
         TRequire TString {
-            path := filepath.Dir($1.Pos.Source)
-            path = filepath.Join(path, $2.Str)
-
-            code, err := ioutil.ReadFile(path)
-            if err != nil {
-                yylex.(*Lexer).Error(err.Error())
-            }
-            n, err := Parse(bytes.NewReader(code), path)
-            if err != nil {
-                yylex.(*Lexer).Error(err.Error())
-            }
-
-            // now the required code is loaded, for naming scope we will wrap them into a closure
-            cls := NewCompoundNode("func", "<a>", NewCompoundNode(), n)
-            $$ = NewCompoundNode("call", cls, NewCompoundNode())
+            path := filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)
+            $$ = yylex.(*Lexer).loadFile(path)
         } |
         function             { $$ = $1 } |
         map_gen              { $$ = $1 } |
