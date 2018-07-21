@@ -152,20 +152,6 @@ func (b *packet) WriteConsts(consts []kinfo) {
 	}
 }
 
-func (b *packet) WriteCode(code packet) {
-	// 26bit: pos len, 26bit: code len, 12bit: source len
-	b.Write64(uint64(uint32(len(code.pos))&0x03ffffff)<<38 +
-		uint64(uint32(len(code.data))&0x03ffffff)<<12 +
-		uint64(uint16(len(code.source))&0x0fff))
-	b.WriteRaw(slice8to64([]byte(code.source)))
-	b.WriteRaw(code.pos)
-
-	// note buf.source = code.source in buf.Write
-	// buf.source shouldn't be changed
-	code.source = b.source
-	b.Write(code)
-}
-
 func (b *packet) Len() int {
 	return len(b.data)
 }

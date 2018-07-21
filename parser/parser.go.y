@@ -186,7 +186,7 @@ func_stat:
             $$ = NewCompoundNode(
                 "chain", 
                 NewCompoundNode("set", funcname, NewNilNode()), 
-                NewCompoundNode("move", funcname, NewCompoundNode($1, $3, $4)))
+                NewCompoundNode("move", funcname, NewCompoundNode($1, funcname, $3, $4)))
             $$.Compound[1].Compound[0].Pos = $2.Pos
             $$.Compound[2].Compound[0].Pos = $2.Pos
             $$.Compound[2].Compound[2].Compound[0].Pos = $2.Pos
@@ -286,7 +286,7 @@ expr:
             }
 
             // now the required code is loaded, for naming scope we will wrap them into a closure
-            cls := NewCompoundNode("func", NewCompoundNode(), n)
+            cls := NewCompoundNode("func", "<a>", NewCompoundNode(), n)
             $$ = NewCompoundNode("call", cls, NewCompoundNode())
         } |
         function             { $$ = $1 } |
@@ -384,7 +384,7 @@ func_args:
         '(' expr_list ')' { $$ = $2 }
 
 function:
-        func func_params_list block { $$ = NewCompoundNode($1, $2, $3).setPos0($2.Pos) }
+        func func_params_list block { $$ = NewCompoundNode($1, "<a>", $2, $3).setPos0($2.Pos) }
 
 func_params_list:
         '(' ')'            { $$ = NewCompoundNode() } |

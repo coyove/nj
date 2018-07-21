@@ -439,15 +439,16 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 	return buf, regA, nil
 }
 
-// [lambda [namelist] [chain ...]]
+// [lambda name? [namelist] [chain ...]]
 func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
 	table.envescape = true
 	isSafe := atoms[0].Value.(string) == "safefunc"
+	name := atoms[1].Value.(string)
 	newtable := newsymtable()
 	newtable.parent = table
 	newtable.noredecl = table.noredecl
 
-	params := atoms[1]
+	params := atoms[2]
 	if params.Type != parser.NTCompound {
 		err = fmt.Errorf("%+v: invalid arguments list", atoms[0])
 		return
@@ -475,17 +476,15 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	}
 
 	newtable.sp = uint16(ln)
-	code, yx, err = newtable.compileChainOp(atoms[2])
+	code, yx, err = newtable.compileChainOp(atoms[3])
 	if err != nil {
 		return
-	}
-	if len(code.source) > 4096 {
-		return newpacket(), 0, fmt.Errorf("does your path really contain more than 4096 chars?")
 	}
 
 	code.WriteOP(OP_EOB, 0, 0)
 	buf := newpacket()
 	cls := Closure{}
+	cls.argsCount = byte(ln)
 	if newtable.y || isSafe {
 		cls.Set(CLS_YIELDABLE)
 	}
@@ -501,7 +500,23 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 
 	buf.WriteOP(OP_LAMBDA, uint32(len(newtable.consts)), uint32(byte(ln))<<24+uint32(cls.options))
 	buf.WriteConsts(newtable.consts)
-	buf.WriteCode(code)
+
+	src := name + cls.String() + "@" + code.source
+	if len(src) > 4095 {
+		src = src[:4095]
+	}
+
+	// 26bit code pos length, 26bit code data length, 12bit code source length
+	buf.Write64(uint64(uint32(len(code.pos))&0x03ffffff)<<38 +
+		uint64(uint32(len(code.data))&0x03ffffff)<<12 +
+		uint64(uint16(len(src))&0x0fff))
+	buf.WriteRaw(slice8to64([]byte(src)))
+	buf.WriteRaw(code.pos)
+
+	// Note buf.source will be set to code.source in buf.Write
+	// but buf.source shouldn't be changed
+	code.source = buf.source
+	buf.Write(code)
 	buf.WritePos(atoms[0].Pos)
 	return buf, regA, nil
 }

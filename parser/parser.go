@@ -1,9 +1,9 @@
-//line parser.go.y:2
+//line parser.go.y:1
 package parser
 
 import __yyfmt__ "fmt"
 
-//line parser.go.y:2
+//line parser.go.y:3
 import (
 	"bytes"
 	"io/ioutil"
@@ -903,7 +903,7 @@ yydefault:
 			yyVAL.expr = NewCompoundNode(
 				"chain",
 				NewCompoundNode("set", funcname, NewNilNode()),
-				NewCompoundNode("move", funcname, NewCompoundNode(yyDollar[1].str, yyDollar[3].expr, yyDollar[4].expr)))
+				NewCompoundNode("move", funcname, NewCompoundNode(yyDollar[1].str, funcname, yyDollar[3].expr, yyDollar[4].expr)))
 			yyVAL.expr.Compound[1].Compound[0].Pos = yyDollar[2].token.Pos
 			yyVAL.expr.Compound[2].Compound[0].Pos = yyDollar[2].token.Pos
 			yyVAL.expr.Compound[2].Compound[2].Compound[0].Pos = yyDollar[2].token.Pos
@@ -1091,7 +1091,7 @@ yydefault:
 			}
 
 			// now the required code is loaded, for naming scope we will wrap them into a closure
-			cls := NewCompoundNode("func", NewCompoundNode(), n)
+			cls := NewCompoundNode("func", "<a>", NewCompoundNode(), n)
 			yyVAL.expr = NewCompoundNode("call", cls, NewCompoundNode())
 		}
 	case 61:
@@ -1349,7 +1349,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		//line parser.go.y:387
 		{
-			yyVAL.expr = NewCompoundNode(yyDollar[1].str, yyDollar[2].expr, yyDollar[3].expr).setPos0(yyDollar[2].expr.Pos)
+			yyVAL.expr = NewCompoundNode(yyDollar[1].str, "<a>", yyDollar[2].expr, yyDollar[3].expr).setPos0(yyDollar[2].expr.Pos)
 		}
 	case 96:
 		yyDollar = yyS[yypt-2 : yypt+1]

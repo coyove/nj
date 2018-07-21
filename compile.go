@@ -339,7 +339,7 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 	cls = NewClosure(code.data, consts, nil, 0)
 	cls.lastenv = NewEnv(nil)
 	cls.pos = code.pos
-	cls.source = code.source
+	cls.source = "<root>@" + code.source
 	for _, name := range CoreLibNames {
 		cls.lastenv.SPush(CoreLibs[name])
 	}
@@ -363,10 +363,10 @@ func LoadFile(path string) (*Closure, error) {
 
 func LoadString(code string) (*Closure, error) {
 	_, fn, _, _ := runtime.Caller(1)
-	return LoadStringName(code, fn)
+	return loadStringName(code, fn)
 }
 
-func LoadStringName(code, name string) (*Closure, error) {
+func loadStringName(code, name string) (*Closure, error) {
 	n, err := parser.Parse(bytes.NewReader([]byte(code)), name)
 	if err != nil {
 		return nil, err

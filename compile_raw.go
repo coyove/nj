@@ -7,35 +7,34 @@ import (
 )
 
 var _rawOP0 = map[string]byte{
-	"assert":  OP_ASSERT,
-	"store":   OP_STORE,
-	"load":    OP_LOAD,
-	"add":     OP_ADD,
-	"sub":     OP_SUB,
-	"mul":     OP_MUL,
-	"div":     OP_DIV,
-	"mod":     OP_MOD,
-	"not":     OP_NOT,
-	"eq":      OP_EQ,
-	"neq":     OP_NEQ,
-	"less":    OP_LESS,
-	"lesseq":  OP_LESS_EQ,
-	"bnot":    OP_BIT_NOT,
-	"band":    OP_BIT_AND,
-	"bor":     OP_BIT_OR,
-	"bxor":    OP_BIT_XOR,
-	"blsh":    OP_BIT_LSH,
-	"brsh":    OP_BIT_RSH,
-	"makemap": OP_MAKEMAP,
-	"pop":     OP_POP,
-	"slice":   OP_SLICE,
-	"len":     OP_LEN,
-	"typeof":  OP_TYPEOF,
-	"nop":     OP_NOP,
-	"eob":     OP_EOB,
-	"r0r2":    OP_R0R2,
-	"r1r2":    OP_R1R2,
-	"copy":    OP_COPY,
+	"assert": OP_ASSERT,
+	"store":  OP_STORE,
+	"load":   OP_LOAD,
+	"add":    OP_ADD,
+	"sub":    OP_SUB,
+	"mul":    OP_MUL,
+	"div":    OP_DIV,
+	"mod":    OP_MOD,
+	"not":    OP_NOT,
+	"eq":     OP_EQ,
+	"neq":    OP_NEQ,
+	"less":   OP_LESS,
+	"lesseq": OP_LESS_EQ,
+	"bnot":   OP_BIT_NOT,
+	"band":   OP_BIT_AND,
+	"bor":    OP_BIT_OR,
+	"bxor":   OP_BIT_XOR,
+	"blsh":   OP_BIT_LSH,
+	"brsh":   OP_BIT_RSH,
+	"pop":    OP_POP,
+	"slice":  OP_SLICE,
+	"len":    OP_LEN,
+	"typeof": OP_TYPEOF,
+	"nop":    OP_NOP,
+	"eob":    OP_EOB,
+	"r0r2":   OP_R0R2,
+	"r1r2":   OP_R1R2,
+	"copy":   OP_COPY,
 }
 
 func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
@@ -101,6 +100,9 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 	case "call":
 		code.WriteOP(OP_CALL, a, 0)
 		return
+	case "makemap":
+		code.WriteOP(OP_MAKEMAP, uint32(o), 0)
+		return
 	case "r0":
 		if !isk {
 			code.WriteOP(OP_R0, a, 0)
@@ -153,7 +155,7 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 	}
 
 	if len(atoms[2].Compound) < 2 {
-		err = fmt.Errorf("%v: not enough arguments", atoms[0])
+		err = fmt.Errorf("%v: not enough arguments", head)
 		return
 	}
 
@@ -164,15 +166,19 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 	switch opname {
 	case "if":
 		code.WriteOP(OP_IF, a, uint32(o2))
+		return
 	case "ifnot":
 		code.WriteOP(OP_IFNOT, a, uint32(o2))
+		return
 	case "set":
 		if !isk2 {
 			code.WriteOP(OP_SET, a, a2)
 		} else {
 			code.WriteOP(OP_SETK, a, uint32(k2))
 		}
+		return
 	}
 
+	err = fmt.Errorf("%v: unknow raw operations", head)
 	return
 }
