@@ -51,6 +51,22 @@ func initCoreLibs() {
 	lcore.Puts("id", NewNativeValue(1, func(env *Env) Value {
 		return NewStringValue(env.SGet(0).hashstr())
 	}))
+	lcore.Puts("r0", NewNativeValue(1, func(env *Env) Value {
+		env.parent.R0 = env.SGet(0)
+		return Value{}
+	}))
+	lcore.Puts("r1", NewNativeValue(1, func(env *Env) Value {
+		env.parent.R1 = env.SGet(0)
+		return Value{}
+	}))
+	lcore.Puts("r2", NewNativeValue(1, func(env *Env) Value {
+		env.parent.R2 = env.SGet(0)
+		return Value{}
+	}))
+	lcore.Puts("r3", NewNativeValue(1, func(env *Env) Value {
+		env.parent.R3 = env.SGet(0)
+		return Value{}
+	}))
 	lcore.Puts("storeinto", NewNativeValue(3, func(env *Env) Value {
 		e, x, y := env.SGet(0), env.SGet(1), env.SGet(2)
 		(*Env)(e.Gen()).Set(uint32(x.Num()), y)

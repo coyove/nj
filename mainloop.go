@@ -76,7 +76,11 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (_v Value, _p uint32, _y bo
 	defer func() {
 		if r := recover(); r != nil {
 			if K.Isset(CLS_RECOVERALL) {
-				_v, _p, _y = NewStringValue(fmt.Sprintf("%v", r)), 0, false
+				if rv, ok := r.(Value); ok {
+					_v, _p, _y = rv, 0, false
+				} else {
+					_v, _p, _y = NewStringValue(fmt.Sprintf("%v", r)), 0, false
+				}
 				return
 			}
 
@@ -266,7 +270,7 @@ MAIN:
 			}
 		case OP_ASSERT:
 			if env.R0.IsFalse() {
-				panic("assertion failed: " + env.R0.String())
+				panic(env.R1)
 			}
 			env.A = NewBoolValue(true)
 		case OP_LEN:

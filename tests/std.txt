@@ -16,3 +16,12 @@ var ptr_test = std.eval(`return func (env, a) {
 
 ptr_test(std.currentenv(), addressof(a));
 assert a == 10;
+
+
+func! testAssert() {
+    std.r1("hello");
+    assert 0;
+}
+
+var msg = testAssert();
+assert msg == "hello";
