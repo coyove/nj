@@ -1,6 +1,7 @@
 package potatolang
 
 import (
+	"io/ioutil"
 	"runtime"
 	"strconv"
 	"testing"
@@ -25,7 +26,7 @@ func TestNewStringValue(t *testing.T) {
 		stringChannel(ch, NewStringValue(strconv.Itoa(i)), true)
 	}
 
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 1000000; i++ {
 		stringChannel(ch, NewValue(), false)
 	}
 	close(ch)
@@ -37,5 +38,33 @@ func TestNewStringValue(t *testing.T) {
 			t.Error(c)
 		}
 		i = i + 1
+	}
+}
+
+func TestStringValueHash(t *testing.T) {
+	buf, _ := ioutil.ReadFile("value_test.go")
+	parts := make([]Value, 0)
+	i := 0
+	// read 8 bytes at a time, small enough to keep them in a single Value struct
+	for i < len(buf) {
+		if i+8 < len(buf) {
+			parts = append(parts, NewStringValue(string(buf[i:i+8])))
+			i += 8
+			continue
+		}
+
+		parts = append(parts, NewStringValue(string(buf[i:])))
+		break
+	}
+
+	str := ""
+	for _, p := range parts {
+		str += p.Str()
+	}
+
+	a := NewStringValue(str).Hash()
+	b := NewStringValue(string(buf)).Hash()
+	if a.a != b.a || a.b != b.b {
+		t.Error("hash not matched")
 	}
 }

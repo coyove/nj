@@ -1,6 +1,7 @@
 package potatolang
 
 import (
+	"strings"
 	"sync"
 	"unsafe"
 )
@@ -101,6 +102,17 @@ func initCoreLibs() {
 	}))
 	lcore.Puts("utf8char", NewNativeValue(1, func(env *Env) Value {
 		return NewStringValue(char(env.SGet(0).Num(), false))
+	}))
+	lcore.Puts("contains", NewNativeValue(2, func(env *Env) Value {
+		switch s := env.SGet(0); s.ty {
+		case Tstring:
+			return NewBoolValue(strings.Contains(s.AsString(), env.SGet(1).Str()))
+		case Tmap:
+			_, ok := s.AsMap().Get(env.SGet(1))
+			return NewBoolValue(ok)
+		default:
+			return NewBoolValue(false)
+		}
 	}))
 	lcore.Puts("sync", NewMapValue(NewMap().
 		Puts("run", NewNativeValue(1, func(env *Env) Value {
