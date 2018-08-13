@@ -1,9 +1,5 @@
 package potatolang
 
-type hash128 struct {
-	a, b uint64
-}
-
 // Map represents the map structure in potatolang
 // Like lua it has a linear slice and a hash table.
 // We use a 128bit hash to identify the key,
@@ -11,7 +7,7 @@ type hash128 struct {
 // in a foreseeable period of time (though this is not a good practice).
 type Map struct {
 	l []Value
-	m map[hash128][2]Value
+	m map[hashv][2]Value
 }
 
 // NewMap creates a new map
@@ -37,7 +33,7 @@ func (m *Map) Dup(duper func(Value, Value) Value) *Map {
 	}
 
 	if m.m != nil {
-		m2.m = make(map[hash128][2]Value)
+		m2.m = make(map[hashv][2]Value)
 		for k, v := range m.m {
 			if duper != nil {
 				v[1] = duper(v[0], v[1])
@@ -79,7 +75,7 @@ func (m *Map) Put(key Value, value Value) *Map {
 		}
 	}
 	if m.m == nil {
-		m.m = make(map[hash128][2]Value)
+		m.m = make(map[hashv][2]Value)
 	}
 	m.m[key.Hash()] = [2]Value{key, value}
 	return m
@@ -87,7 +83,7 @@ func (m *Map) Put(key Value, value Value) *Map {
 
 func (m *Map) putIntoMap(key Value, value Value) *Map {
 	if m.m == nil {
-		m.m = make(map[hash128][2]Value)
+		m.m = make(map[hashv][2]Value)
 	}
 	m.m[key.Hash()] = [2]Value{key, value}
 	return m
