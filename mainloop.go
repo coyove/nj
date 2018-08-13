@@ -13,10 +13,6 @@ func init() {
 	if strconv.IntSize != 64 {
 		panic("potatolang can only run under 64bit")
 	}
-	one := uint32(1)
-	if *(*byte)(unsafe.Pointer(&one)) != 1 {
-		panic("potatolang only support little endian arch now")
-	}
 }
 
 func panicf(msg string, args ...interface{}) {

@@ -1,3 +1,5 @@
+//+build amd64 arm64 ppc64le ppc64 mips64 mips64le s390x
+
 package potatolang
 
 import (
