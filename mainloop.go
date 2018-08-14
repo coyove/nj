@@ -9,12 +9,6 @@ import (
 	"github.com/coyove/potatolang/parser"
 )
 
-func init() {
-	if strconv.IntSize != 64 {
-		panic("potatolang can only run under 64bit")
-	}
-}
-
 func panicf(msg string, args ...interface{}) {
 	panic(fmt.Sprintf(msg, args...))
 }
@@ -55,7 +49,9 @@ func (e *ExecError) Error() string {
 	return msg
 }
 
-func konst(addr uintptr, idx uint16) Value { return *(*Value)(unsafe.Pointer(addr + uintptr(idx)*16)) }
+func konst(addr uintptr, idx uint16) Value {
+	return *(*Value)(unsafe.Pointer(addr + uintptr(idx)*SizeofValue))
+}
 
 func kodeaddr(code []uint64) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&code)).Data }
 

@@ -1,15 +1,12 @@
-//+build 386 arm
+//+build 386 arm mips mipsle
 
 package potatolang
 
 import (
 	"crypto/sha1"
-	"encoding/binary"
 	"fmt"
 	"reflect"
 	"unsafe"
-
-	"github.com/coyove/common/rand"
 )
 
 // Value is the basic value used by VM
@@ -20,13 +17,15 @@ type Value struct {
 	p       [4]byte
 }
 
+const SizeofValue = 12
+
 func (v *Value) SetNumberValue(f float64) {
-	*(*[2]uint64)(unsafe.Pointer(v)) = _zeroRaw
+	*(*[3]uint32)(unsafe.Pointer(v)) = _zeroRaw
 	*(*float64)(unsafe.Pointer(&v.ptr)) = f
 }
 
 func (v *Value) SetBoolValue(b bool) {
-	*(*[2]uint64)(unsafe.Pointer(v)) = _zeroRaw
+	*(*[3]uint32)(unsafe.Pointer(v)) = _zeroRaw
 	*(*float64)(unsafe.Pointer(&v.ptr)) = float64(*(*byte)(unsafe.Pointer(&b)))
 }
 
@@ -45,7 +44,7 @@ var (
 func (v Value) IsZero() bool { return *(*[3]uint32)(unsafe.Pointer(&v)) == _zeroRaw }
 
 // AsNumber cast value to float64
-func (v Value) AsNumber() float64 { return *(*float64)(v.ptr) }
+func (v Value) AsNumber() float64 { return *(*float64)(unsafe.Pointer(&v.ptr)) }
 
 // AsString cast value to string
 func (v Value) AsString() string {
@@ -61,7 +60,7 @@ func (v Value) IsFalse() bool {
 		return true
 	}
 	if v.ty == Tstring {
-		return v.i == 1
+		return len(*(*string)(v.ptr)) == 0
 	}
 	if v.ty == Tmap {
 		m := (*Map)(v.ptr)
@@ -71,46 +70,21 @@ func (v Value) IsFalse() bool {
 }
 
 const (
-	// Constants for multiplication: four random odd 64-bit numbers.
-	m1    = 16877499708836156737
-	m2    = 2820277070424839065
-	m3    = 9497967016996688599
-	m4    = 15839092249703872147
-	m5    = 0x9a81d0a6d5a123ed
+	// Constants for multiplication: four random odd 32-bit numbers.
+	m1    = 3168982561
+	m2    = 3339683297
+	m3    = 832293441
+	m4    = 2336365089
 	iseed = 0x930731
 )
 
-var hashkey [4]uintptr
-
-func init() {
-	buf := rand.New().Fetch(32)
-	for i := 0; i < 4; i++ {
-		hashkey[i] = uintptr(binary.LittleEndian.Uint64(buf[i*8:]))
-		hashkey[i] |= 1
-	}
-	initCoreLibs()
-}
-
-// The following code is taken from src/runtime/hash64.go
-
-//go:nosplit
-func add(p unsafe.Pointer, x uintptr) unsafe.Pointer {
-	return unsafe.Pointer(uintptr(p) + x)
-}
+// The following code is taken from src/runtime/hash32.go
 
 // Note: in order to get the compiler to issue rotl instructions, we
 // need to constant fold the shift amount by hand.
 // TODO: convince the compiler to issue rotl instructions after inlining.
-func rotl_31(x uint64) uint64 {
-	return (x << 31) | (x >> (64 - 31))
-}
-
-func readUnaligned32(p unsafe.Pointer) uint32 {
-	return *(*uint32)(p)
-}
-
-func readUnaligned64(p unsafe.Pointer) uint64 {
-	return *(*uint64)(p)
+func rotl_15(x uint32) uint32 {
+	return (x << 15) | (x >> (32 - 15))
 }
 
 type hashv struct {
@@ -125,76 +99,80 @@ func (v Value) Hash() hashv {
 	case Tstring:
 
 		hdr := (*reflect.StringHeader)(v.ptr)
-		seed := uintptr(v.ty) ^ iseed
+		seed := iseed
 		s := uintptr(hdr.Len)
 		p := unsafe.Pointer(hdr.Data)
-		h := uint64(seed + s*hashkey[0])
-		h0 := uint64(seed<<1 + s*hashkey[0])
+		h := uint32(seed + s*hashkey[0])
+		h1 := uint32(seed>>1 + s*hashkey[0])
+		h2 := uint32(seed>>2 + s*hashkey[0])
 
 	tail:
 		switch {
 		case s == 0:
 		case s < 4:
-			h ^= uint64(*(*byte)(p))
-			h ^= uint64(*(*byte)(add(p, s>>1))) << 8
-			h ^= uint64(*(*byte)(add(p, s-1))) << 16
-			h = rotl_31(h*m1) * m2
+			h ^= uint32(*(*byte)(p))
+			h ^= uint32(*(*byte)(add(p, s>>1))) << 8
+			h ^= uint32(*(*byte)(add(p, s-1))) << 16
+			h = rotl_15(h*m1) * m2
+			h1 ^= h
+		case s == 4:
+			h ^= readUnaligned32(p)
+			h = rotl_15(h*m1) * m2
+			h1 ^= h
 		case s <= 8:
-			h ^= uint64(readUnaligned32(p))
-			h ^= uint64(readUnaligned32(add(p, s-4))) << 32
-			h = rotl_31(h*m1) * m2
+			h ^= readUnaligned32(p)
+			h = rotl_15(h*m1) * m2
+			h ^= readUnaligned32(add(p, s-4))
+			h = rotl_15(h*m1) * m2
+			h2 ^= h
 		case s <= 16:
-			h ^= readUnaligned64(p)
-			h = rotl_31(h*m1) * m2
-			h ^= readUnaligned64(add(p, s-8))
-			h = rotl_31(h*m1) * m2
-			h0 ^= h
-		case s <= 32:
-			h ^= readUnaligned64(p)
-			h = rotl_31(h*m1) * m2
-			h ^= readUnaligned64(add(p, 8))
-			h = rotl_31(h*m1) * m2
-			h ^= readUnaligned64(add(p, s-16))
-			h = rotl_31(h*m1) * m2
-			h ^= readUnaligned64(add(p, s-8))
-			h = rotl_31(h*m1) * m2
-			h0 ^= h
+			h ^= readUnaligned32(p)
+			h = rotl_15(h*m1) * m2
+			h ^= readUnaligned32(add(p, 4))
+			h = rotl_15(h*m1) * m2
+			h ^= readUnaligned32(add(p, s-8))
+			h = rotl_15(h*m1) * m2
+			h ^= readUnaligned32(add(p, s-4))
+			h = rotl_15(h*m1) * m2
+			h2 ^= h
 		default:
 			v1 := h
-			v2 := uint64(seed * hashkey[1])
-			v3 := uint64(seed * hashkey[2])
-			v4 := uint64(seed * hashkey[3])
-			for s >= 32 {
-				v1 ^= readUnaligned64(p)
-				v1 = rotl_31(v1*m1) * m2
-				p = add(p, 8)
-				v2 ^= readUnaligned64(p)
-				v2 = rotl_31(v2*m2) * m3
-				p = add(p, 8)
-				v3 ^= readUnaligned64(p)
-				v3 = rotl_31(v3*m3) * m4
-				p = add(p, 8)
-				v4 ^= readUnaligned64(p)
-				v4 = rotl_31(v4*m4) * m1
-				p = add(p, 8)
-				s -= 32
+			v2 := uint32(seed * hashkey[1])
+			v3 := uint32(seed * hashkey[2])
+			v4 := uint32(seed * hashkey[3])
+			for s >= 16 {
+				v1 ^= readUnaligned32(p)
+				v1 = rotl_15(v1*m1) * m2
+				p = add(p, 4)
+				v2 ^= readUnaligned32(p)
+				v2 = rotl_15(v2*m2) * m3
+				p = add(p, 4)
+				v3 ^= readUnaligned32(p)
+				v3 = rotl_15(v3*m3) * m4
+				p = add(p, 4)
+				v4 ^= readUnaligned32(p)
+				v4 = rotl_15(v4*m4) * m1
+				p = add(p, 4)
+				s -= 16
 			}
 			h = v1 ^ v2 ^ v3 ^ v4
-			h0 ^= h
+			h2 ^= h
+			h1 ^= h
 			goto tail
 		}
 
-		h ^= h >> 29
-		h *= m3
-		h ^= h >> 32
-
-		h0 ^= h0 >> 29
-		h0 *= m5
-		h0 ^= h0 >> 32
-
-		a = hashv{uint32(h), uint32(h>>32) * uint32(h0>>32), uint32(h0)}
+		a = hashv{rt(h), rt(h1), rt(h2)}
 	}
 	return a
+}
+
+func rt(h uint32) uint32 {
+	h ^= h >> 17
+	h *= m3
+	h ^= h >> 13
+	h *= m4
+	h ^= h >> 16
+	return h
 }
 
 func (v Value) hashstr() string {
@@ -202,11 +180,9 @@ func (v Value) hashstr() string {
 	return fmt.Sprintf("%x", *(*[12]byte)(unsafe.Pointer(&h)))
 }
 
-var __hash2Salt = rand.New().Fetch(16)
-
 func (v Value) hash2() [2]uint64 {
 	h := v.Hash()
 	b := *(*[12]byte)(unsafe.Pointer(&h))
-	s := sha1.Sum(append(b[:], __hash2Salt...))
+	s := sha1.Sum(append(b[:], hash2Salt...))
 	return *(*[2]uint64)(unsafe.Pointer(&s)) // 20 > 16
 }

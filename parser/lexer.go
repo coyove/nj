@@ -53,15 +53,15 @@ func (e *Error) Error() string {
 	}
 }
 
-func writeChar(buf *bytes.Buffer, c int) { buf.WriteByte(byte(c)) }
+func writeChar(buf *bytes.Buffer, c uint32) { buf.WriteByte(byte(c)) }
 
-func isDecimal(ch int) bool { return '0' <= ch && ch <= '9' }
+func isDecimal(ch uint32) bool { return '0' <= ch && ch <= '9' }
 
-func isIdent(ch int, pos int) bool {
+func isIdent(ch uint32, pos int) bool {
 	return ch == '_' || 'A' <= ch && ch <= 'Z' || 'a' <= ch && ch <= 'z' || isDecimal(ch) && pos > 0
 }
 
-func isDigit(ch int) bool {
+func isDigit(ch uint32) bool {
 	return '0' <= ch && ch <= '9' || 'a' <= ch && ch <= 'f' || 'A' <= ch && ch <= 'F'
 }
 
@@ -81,19 +81,19 @@ func (sc *Scanner) Error(tok string, msg string) *Error { return &Error{sc.Pos, 
 
 func (sc *Scanner) TokenError(tok Token, msg string) *Error { return &Error{tok.Pos, msg, tok.Str} }
 
-func (sc *Scanner) readNext() int {
+func (sc *Scanner) readNext() uint32 {
 	ch, err := sc.reader.ReadByte()
 	if err == io.EOF {
 		return EOF
 	}
-	return int(ch)
+	return uint32(ch)
 }
 
-func (sc *Scanner) Newline(ch int) {
+func (sc *Scanner) Newline(ch uint32) {
 	if ch < 0 {
 		return
 	}
-	sc.Pos.Line += 1
+	sc.Pos.Line++
 	sc.Pos.Column = 0
 	next := sc.Peek()
 	if ch == '\n' && next == '\r' || ch == '\r' && next == '\n' {
@@ -101,12 +101,12 @@ func (sc *Scanner) Newline(ch int) {
 	}
 }
 
-func (sc *Scanner) Next() int {
+func (sc *Scanner) Next() uint32 {
 	ch := sc.readNext()
 	switch ch {
 	case '\n', '\r':
 		sc.Newline(ch)
-		ch = int('\n')
+		ch = uint32('\n')
 	case EOF:
 		sc.Pos.Line = EOF
 		sc.Pos.Column = 0
@@ -116,7 +116,7 @@ func (sc *Scanner) Next() int {
 	return ch
 }
 
-func (sc *Scanner) Peek() int {
+func (sc *Scanner) Peek() uint32 {
 	ch := sc.readNext()
 	if ch != EOF {
 		sc.reader.UnreadByte()
@@ -124,14 +124,14 @@ func (sc *Scanner) Peek() int {
 	return ch
 }
 
-func (sc *Scanner) skipWhiteSpace(whitespace int64) int {
+func (sc *Scanner) skipWhiteSpace(whitespace int64) uint32 {
 	ch := sc.Next()
 	for ; whitespace&(1<<uint(ch)) != 0; ch = sc.Next() {
 	}
 	return ch
 }
 
-func (sc *Scanner) skipComments(ch int) error {
+func (sc *Scanner) skipComments(ch uint32) error {
 	for {
 		if ch == '\n' || ch == '\r' || ch < 0 || ch == EOF {
 			break
@@ -155,7 +155,7 @@ func (sc *Scanner) skipBlockComments() error {
 	}
 }
 
-func (sc *Scanner) scanIdent(ch int, buf *bytes.Buffer) error {
+func (sc *Scanner) scanIdent(ch uint32, buf *bytes.Buffer) error {
 	writeChar(buf, ch)
 	for isIdent(sc.Peek(), 1) {
 		writeChar(buf, sc.Next())
@@ -163,7 +163,7 @@ func (sc *Scanner) scanIdent(ch int, buf *bytes.Buffer) error {
 	return nil
 }
 
-func (sc *Scanner) scanDecimal(ch int, buf *bytes.Buffer) error {
+func (sc *Scanner) scanDecimal(ch uint32, buf *bytes.Buffer) error {
 	writeChar(buf, ch)
 	for isDecimal(sc.Peek()) {
 		writeChar(buf, sc.Next())
@@ -171,7 +171,7 @@ func (sc *Scanner) scanDecimal(ch int, buf *bytes.Buffer) error {
 	return nil
 }
 
-func (sc *Scanner) scanNumber(ch int, buf *bytes.Buffer) error {
+func (sc *Scanner) scanNumber(ch uint32, buf *bytes.Buffer) error {
 	if ch == '0' { // octal
 		switch sc.Peek() {
 		case 'x', 'X', 'b', 'B', 'i', 'I':
@@ -203,7 +203,7 @@ func (sc *Scanner) scanNumber(ch int, buf *bytes.Buffer) error {
 	return nil
 }
 
-func (sc *Scanner) scanString(quote int, buf *bytes.Buffer) error {
+func (sc *Scanner) scanString(quote uint32, buf *bytes.Buffer) error {
 	ch := sc.Next()
 	for ch != quote {
 		if ch == '\n' || ch == '\r' || ch < 0 {
@@ -221,7 +221,7 @@ func (sc *Scanner) scanString(quote int, buf *bytes.Buffer) error {
 	return nil
 }
 
-func (sc *Scanner) scanEscape(ch int, buf *bytes.Buffer) error {
+func (sc *Scanner) scanEscape(ch uint32, buf *bytes.Buffer) error {
 	ch = sc.Next()
 	switch ch {
 	case 'a':
@@ -278,7 +278,7 @@ func (sc *Scanner) scanEscape(ch int, buf *bytes.Buffer) error {
 				bytes = append(bytes, byte(sc.Next()))
 			}
 			val, _ := strconv.ParseInt(string(bytes), 10, 32)
-			writeChar(buf, int(val))
+			writeChar(buf, uint32(val))
 		} else {
 			buf.WriteByte('\\')
 			writeChar(buf, ch)
@@ -288,7 +288,7 @@ func (sc *Scanner) scanEscape(ch int, buf *bytes.Buffer) error {
 	return nil
 }
 
-func (sc *Scanner) countSep(ch int) (int, int) {
+func (sc *Scanner) countSep(ch uint32) (int, uint32) {
 	count := 0
 	for ; ch == '='; count = count + 1 {
 		ch = sc.Next()
@@ -310,7 +310,7 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 	return nil
 }
 
-var reservedWords = map[string]int{
+var reservedWords = map[string]uint32{
 	"assert": TAssert, "break": TBreak, "continue": TContinue, "else": TElse, "goto": TGoto,
 	"for": TFor, "func": TFunc, "if": TIf, "nil": TNil,
 	"return": TReturn, "require": TRequire, "var": TVar, "yield": TYield,
@@ -476,11 +476,11 @@ func (lx *Lexer) Lex(lval *yySymType) int {
 	}
 	lval.token = tok
 	lx.Token = tok
-	t := int(tok.Type)
-	if t == EOF {
+	t := int32(tok.Type)
+	if tok.Type == EOF {
 		t = -1
 	}
-	return t
+	return int(t)
 }
 
 func (lx *Lexer) Error(message string) {

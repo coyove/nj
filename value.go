@@ -2,10 +2,13 @@ package potatolang
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"strconv"
 	"unsafe"
+
+	"github.com/coyove/common/rand"
 )
 
 // the order can't be changed, for any new type, please also add it in parser.go.y typeof
@@ -35,11 +38,6 @@ const (
 	_Tmapnumber      = Tmap<<8 | Tnumber
 )
 
-// TMapping maps type to its string representation
-var TMapping = map[byte]string{
-	Tnil: "nil", Tnumber: "number", Tstring: "string", Tclosure: "closure", Tgeneric: "generic", Tmap: "map",
-}
-
 // Type returns the type of value
 func (v Value) Type() byte {
 	return v.ty
@@ -56,7 +54,25 @@ var (
 
 	// One is 1
 	One = NewNumberValue(1)
+
+	// TMapping maps type to its string representation
+	TMapping = map[byte]string{
+		Tnil: "nil", Tnumber: "number", Tstring: "string", Tclosure: "closure", Tgeneric: "generic", Tmap: "map",
+	}
+
+	hashkey [4]uintptr
+
+	hash2Salt = rand.New().Fetch(16)
 )
+
+func init() {
+	buf := rand.New().Fetch(32)
+	for i := 0; i < 4; i++ {
+		hashkey[i] = uintptr(binary.LittleEndian.Uint64(buf[i*8:]))
+		hashkey[i] |= 1
+	}
+	initCoreLibs()
+}
 
 // NewNumberValue returns a number value
 func NewNumberValue(f float64) Value {
@@ -237,4 +253,17 @@ func (v Value) testType(expected byte) Value {
 
 func testTypes(v1, v2 Value) uint16 {
 	return uint16(v1.ty)<<8 + uint16(v2.ty)
+}
+
+//go:nosplit
+func add(p unsafe.Pointer, x uintptr) unsafe.Pointer {
+	return unsafe.Pointer(uintptr(p) + x)
+}
+
+func readUnaligned32(p unsafe.Pointer) uint32 {
+	return *(*uint32)(p)
+}
+
+func readUnaligned64(p unsafe.Pointer) uint64 {
+	return *(*uint64)(p)
 }

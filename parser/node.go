@@ -22,7 +22,7 @@ func (pos *Position) String() string {
 }
 
 type Token struct {
-	Type int
+	Type uint32
 	Str  string
 	Pos  Position
 }

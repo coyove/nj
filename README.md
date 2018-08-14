@@ -1,6 +1,6 @@
 # potatolang
 
-potatolang is a C/js-like language written in golang. It only works on 64bit machine.
+potatolang is a C/js-like language written in golang. 
 
 ## Quick go through in 150 LOC
 

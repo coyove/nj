@@ -4,20 +4,9 @@ package potatolang
 
 import (
 	"crypto/sha1"
-	"encoding/binary"
 	"fmt"
 	"reflect"
 	"unsafe"
-
-	"github.com/coyove/common/rand"
-)
-
-var safePointerAddr = unsafe.Pointer(uintptr(0x400000000000ffff))
-
-const (
-	minPhysPageSize = 4096 // (0x1000) in mheap.go
-	trueValue       = minPhysPageSize + 1
-	falseValue      = minPhysPageSize + 2
 )
 
 // Value is the basic value used by VM
@@ -37,6 +26,8 @@ type Value struct {
 	ptr unsafe.Pointer
 }
 
+const SizeofValue = 16
+
 func (v *Value) SetNumberValue(f float64) {
 	*(*[2]uint64)(unsafe.Pointer(v)) = _zeroRaw
 	*(*float64)(unsafe.Pointer(&v.ptr)) = f
@@ -52,7 +43,6 @@ func NewStringValue(s string) Value {
 	v := Value{ty: Tstring}
 
 	if len(s) < 11 {
-		v.ptr = safePointerAddr
 		copy((*(*[10]byte)(unsafe.Pointer(&v.p[0])))[:], s)
 		v.i = byte(len(s) + 1)
 	} else {
@@ -110,37 +100,13 @@ const (
 	iseed = 0x930731
 )
 
-var hashkey [4]uintptr
-
-func init() {
-	buf := rand.New().Fetch(32)
-	for i := 0; i < 4; i++ {
-		hashkey[i] = uintptr(binary.LittleEndian.Uint64(buf[i*8:]))
-		hashkey[i] |= 1
-	}
-	initCoreLibs()
-}
-
 // The following code is taken from src/runtime/hash64.go
-
-//go:nosplit
-func add(p unsafe.Pointer, x uintptr) unsafe.Pointer {
-	return unsafe.Pointer(uintptr(p) + x)
-}
 
 // Note: in order to get the compiler to issue rotl instructions, we
 // need to constant fold the shift amount by hand.
 // TODO: convince the compiler to issue rotl instructions after inlining.
 func rotl_31(x uint64) uint64 {
 	return (x << 31) | (x >> (64 - 31))
-}
-
-func readUnaligned32(p unsafe.Pointer) uint32 {
-	return *(*uint32)(p)
-}
-
-func readUnaligned64(p unsafe.Pointer) uint64 {
-	return *(*uint64)(p)
 }
 
 type hashv struct {
@@ -235,11 +201,9 @@ func (v Value) hashstr() string {
 	return fmt.Sprintf("%x", *(*[16]byte)(unsafe.Pointer(&h)))
 }
 
-var __hash2Salt = rand.New().Fetch(16)
-
 func (v Value) hash2() [2]uint64 {
 	h := v.Hash()
 	b := *(*[16]byte)(unsafe.Pointer(&h))
-	s := sha1.Sum(append(b[:], __hash2Salt...))
+	s := sha1.Sum(append(b[:], hash2Salt...))
 	return *(*[2]uint64)(unsafe.Pointer(&s)) // 20 > 16
 }
