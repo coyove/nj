@@ -11,39 +11,23 @@ import (
 
 // Value is the basic value used by VM
 type Value struct {
-	ty byte
+	ptr         unsafe.Pointer // 8b
+	ty          byte           // 1b
+	i           byte           // 1b
+	smallstring byte           // 1b
 
-	a byte
-
-	// Number (float64) will be stored at &i
-	// It can't be stored in ptr because pointer value smaller than minPhysPageSize will violate the heap.
-	// For ty == Tstring and len(str) <= 10, i == len(str) + 1
-	i byte
-
-	// For ty == Tstring and i > 0, 10 bytes starting from p[0] will be used to store small strings
-	p [4]byte
-
-	ptr unsafe.Pointer
+	// 5b
+	num float64 // 8b
 }
 
-const SizeofValue = 16
-
-func (v *Value) SetNumberValue(f float64) {
-	*(*[2]uint64)(unsafe.Pointer(v)) = _zeroRaw
-	*(*float64)(unsafe.Pointer(&v.ptr)) = f
-}
-
-func (v *Value) SetBoolValue(b bool) {
-	*(*[2]uint64)(unsafe.Pointer(v)) = _zeroRaw
-	*(*float64)(unsafe.Pointer(&v.ptr)) = float64(*(*byte)(unsafe.Pointer(&b)))
-}
+const SizeofValue = 24
 
 // NewStringValue returns a string value
 func NewStringValue(s string) Value {
 	v := Value{ty: Tstring}
 
-	if len(s) < 11 {
-		copy((*(*[10]byte)(unsafe.Pointer(&v.p[0])))[:], s)
+	if len(s) <= 14 {
+		copy((*(*[14]byte)(unsafe.Pointer(&v.smallstring)))[:], s)
 		v.i = byte(len(s) + 1)
 	} else {
 		v.ptr = unsafe.Pointer(&s)
@@ -51,22 +35,12 @@ func NewStringValue(s string) Value {
 	return v
 }
 
-var (
-	_zeroRaw = *(*[2]uint64)(unsafe.Pointer(&Zero))
-)
-
-// IsZero is a fast way to check whether number value equals to +0
-func (v Value) IsZero() bool { return *(*[2]uint64)(unsafe.Pointer(&v)) == _zeroRaw }
-
-// AsNumber cast value to float64
-func (v Value) AsNumber() float64 { return (*(*[2]float64)(unsafe.Pointer(&v)))[1] }
-
 // AsString cast value to string
 func (v Value) AsString() string {
 	if v.i > 0 {
 		hdr := reflect.StringHeader{}
 		hdr.Len = int(v.i - 1)
-		hdr.Data = uintptr(unsafe.Pointer(&v.p[0]))
+		hdr.Data = uintptr(unsafe.Pointer(&v.smallstring))
 		return *(*string)(unsafe.Pointer(&hdr))
 	}
 	return *(*string)(v.ptr)
@@ -75,7 +49,7 @@ func (v Value) AsString() string {
 // IsFalse tests whether value contains a "false" value
 func (v Value) IsFalse() bool {
 	if v.ty == Tnumber {
-		return *(*[2]uint64)(unsafe.Pointer(&v)) == _zeroRaw
+		return v.num == 0
 	}
 	if v.ty == Tnil {
 		return true
@@ -116,7 +90,9 @@ type hashv struct {
 func (v Value) Hash() hashv {
 	var a hashv
 	switch v.ty {
-	case Tnumber, Tnil, Tclosure, Tmap, Tgeneric:
+	case Tnumber:
+		a = *(*hashv)(unsafe.Pointer(&v.ty))
+	case Tnil, Tclosure, Tmap, Tgeneric:
 		a = *(*hashv)(unsafe.Pointer(&v))
 	case Tstring:
 		if v.i > 0 {

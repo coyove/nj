@@ -49,12 +49,6 @@ func NewValue() Value {
 }
 
 var (
-	// Zero is +0
-	Zero = NewNumberValue(0)
-
-	// One is 1
-	One = NewNumberValue(1)
-
 	// TMapping maps type to its string representation
 	TMapping = map[byte]string{
 		Tnil: "nil", Tnumber: "number", Tstring: "string", Tclosure: "closure", Tgeneric: "generic", Tmap: "map",
@@ -77,16 +71,23 @@ func init() {
 // NewNumberValue returns a number value
 func NewNumberValue(f float64) Value {
 	v := Value{ty: Tnumber}
-	*(*float64)(unsafe.Pointer(&v.ptr)) = f
+	v.num = f
 	return v
 }
 
 // NewBoolValue returns a boolean value
 func NewBoolValue(b bool) Value {
-	if b {
-		return One
-	}
-	return Zero
+	return Value{ty: Tnumber, num: float64(*(*byte)(unsafe.Pointer(&b)))}
+}
+
+func (v *Value) SetNumberValue(f float64) {
+	v.ty = Tnumber
+	v.num = f
+}
+
+func (v *Value) SetBoolValue(b bool) {
+	v.ty = Tnumber
+	v.num = float64(*(*byte)(unsafe.Pointer(&b)))
 }
 
 // NewMapValue returns a map value
@@ -103,6 +104,11 @@ func NewClosureValue(c *Closure) Value {
 func NewGenericValue(g unsafe.Pointer) Value {
 	return Value{ty: Tgeneric, ptr: g}
 }
+
+func (v Value) IsZero() bool { return v.num == 0 }
+
+// AsNumber cast value to float64
+func (v Value) AsNumber() float64 { return v.num }
 
 // AsMap cast value to map of values
 func (v Value) AsMap() *Map { return (*Map)(v.ptr) }

@@ -446,7 +446,7 @@ MAIN:
 					if retStack == nil {
 						retStack = make([]stacktrace, 0, 1)
 					}
-					//  log.Println(newEnv.stack)
+					// log.Println(newEnv.stack)
 					last := stacktrace{
 						cursor:      cursor,
 						env:         env,
