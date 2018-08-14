@@ -101,8 +101,8 @@ func NewClosureValue(c *Closure) Value {
 }
 
 // NewGenericValue returns a generic value
-func NewGenericValue(g unsafe.Pointer) Value {
-	return Value{ty: Tgeneric, ptr: g}
+func NewGenericValue(g unsafe.Pointer, tag uint64) Value {
+	return Value{ty: Tgeneric, ptr: g, num: math.Float64frombits(tag)}
 }
 
 func (v Value) IsZero() bool { return v.num == 0 }

@@ -271,6 +271,8 @@ MAIN:
 				env.A.SetNumberValue(float64(len(v.AsString())))
 			case Tmap:
 				env.A.SetNumberValue(float64(v.AsMap().Size()))
+			case Tgeneric:
+				env.A.SetNumberValue(float64(LenGeneric(v)))
 			default:
 				panicf("can't evaluate the length of %+v", v)
 			}
@@ -306,10 +308,12 @@ MAIN:
 				} else {
 					m.putIntoMap(env.R2, env.R1)
 				}
+			} else if env.R3.ty == Tgeneric {
+				StoreToGeneric(env.R3, int(env.R2.Num()), env.R1)
 			} else {
 				panicf("can't store %+v into %+v with key %+v", env.R1, env.R3, env.R2)
 			}
-			env.A = env.R2
+			env.A = env.R1
 		case OP_LOAD:
 			var v Value
 			switch testTypes(env.R3, env.R2) {
@@ -327,6 +331,8 @@ MAIN:
 					if v.Type() == Tclosure {
 						v.AsClosure().SetCaller(env.R3)
 					}
+				} else if env.R3.ty == Tgeneric {
+					env.A = LoadFromGeneric(env.R3, int(env.R2.Num()))
 				} else {
 					panicf("can't load from %+v with key %+v", env.R3, env.R2)
 				}

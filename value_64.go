@@ -13,7 +13,7 @@ import (
 type Value struct {
 	ptr         unsafe.Pointer // 8b
 	ty          byte           // 1b
-	i           byte           // 1b
+	a           byte           // 1b
 	smallstring byte           // 1b
 
 	// 5b
@@ -28,7 +28,7 @@ func NewStringValue(s string) Value {
 
 	if len(s) <= 14 {
 		copy((*(*[14]byte)(unsafe.Pointer(&v.smallstring)))[:], s)
-		v.i = byte(len(s) + 1)
+		v.a = byte(len(s) + 1)
 	} else {
 		v.ptr = unsafe.Pointer(&s)
 	}
@@ -37,9 +37,9 @@ func NewStringValue(s string) Value {
 
 // AsString cast value to string
 func (v Value) AsString() string {
-	if v.i > 0 {
+	if v.a > 0 {
 		hdr := reflect.StringHeader{}
-		hdr.Len = int(v.i - 1)
+		hdr.Len = int(v.a - 1)
 		hdr.Data = uintptr(unsafe.Pointer(&v.smallstring))
 		return *(*string)(unsafe.Pointer(&hdr))
 	}
@@ -55,7 +55,7 @@ func (v Value) IsFalse() bool {
 		return true
 	}
 	if v.ty == Tstring {
-		return v.i == 1
+		return v.a == 1
 	}
 	if v.ty == Tmap {
 		m := (*Map)(v.ptr)
@@ -95,7 +95,7 @@ func (v Value) Hash() hashv {
 	case Tnil, Tclosure, Tmap, Tgeneric:
 		a = *(*hashv)(unsafe.Pointer(&v))
 	case Tstring:
-		if v.i > 0 {
+		if v.a > 0 {
 			a = *(*hashv)(unsafe.Pointer(&v))
 		} else {
 			hdr := (*reflect.StringHeader)(v.ptr)

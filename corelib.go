@@ -36,7 +36,7 @@ func initCoreLibs() {
 	lcore := NewMap()
 	lcore.Puts("unique", NewNativeValue(0, func(env *Env) Value {
 		a := new(int)
-		return NewGenericValue(unsafe.Pointer(a))
+		return NewGenericValue(unsafe.Pointer(a), 0)
 	}))
 	lcore.Puts("genlist", NewNativeValue(1, func(env *Env) Value {
 		return NewMapValue(NewMapSize(int(env.SGet(0).Num())))
@@ -74,7 +74,7 @@ func initCoreLibs() {
 		return y
 	}))
 	lcore.Puts("currentenv", NewNativeValue(0, func(env *Env) Value {
-		return NewGenericValue(unsafe.Pointer(env.parent))
+		return NewGenericValue(unsafe.Pointer(env.parent), 0)
 	}))
 	lcore.Puts("stacktrace", NewNativeValue(0, func(env *Env) Value {
 		e := ExecError{stacks: env.trace}
