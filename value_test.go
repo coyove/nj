@@ -9,7 +9,7 @@ import (
 
 func stringChannel(ch chan string, s Value, flag bool) {
 	// prevent inlining
-	switch s.ty {
+	switch s.Type() {
 	case Tstring, Tnil:
 	default:
 		panic(1)
@@ -68,5 +68,5 @@ func TestStringValueHash(t *testing.T) {
 		t.Error("hash not matched")
 	}
 
-	t.Error(NewStringValue("zzz").hashstr(), NewStringValue("zzy").hashstr())
+	// t.Error(NewStringValue("zzz").hashstr(), NewStringValue("zzy").hashstr())
 }

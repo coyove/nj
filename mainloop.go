@@ -133,7 +133,7 @@ MAIN:
 			case _Tstringstring:
 				env.A = NewStringValue(env.R0.AsString() + env.R1.AsString())
 			default:
-				if env.R0.ty == Tmap {
+				if env.R0.Type() == Tmap {
 					m := env.R0.AsMap().Dup(nil)
 					m.l = append(m.l, env.R1)
 					env.A = NewMapValue(m)
@@ -190,7 +190,7 @@ MAIN:
 		case OP_NOT:
 			env.A.SetBoolValue(env.R0.IsFalse())
 		case OP_BIT_NOT:
-			if env.R0.ty == Tnumber {
+			if env.R0.Type() == Tnumber {
 				env.A.SetNumberValue(float64(^int32(env.R0.AsNumber())))
 			} else {
 				panicf("can't apply 'bit not' on %+v", env.R0)
@@ -216,8 +216,8 @@ MAIN:
 					env.A = NewNumberValue(env.R0.AsNumber() + num)
 				}
 			default:
-				if env.R0.ty == Tstring {
-					switch ss := env.R0.AsString(); env.R1.ty {
+				if env.R0.Type() == Tstring {
+					switch ss := env.R0.AsString(); env.R1.Type() {
 					case Tnumber:
 						env.A = NewStringValue(ss + strconv.FormatFloat(env.R1.AsNumber(), 'f', -1, 64))
 					case Tstring:
@@ -272,7 +272,7 @@ MAIN:
 			case Tmap:
 				env.A.SetNumberValue(float64(v.AsMap().Size()))
 			case Tgeneric:
-				env.A.SetNumberValue(float64(LenGeneric(v)))
+				// env.A.SetNumberValue(float64(LenGeneric(v)))
 			default:
 				panicf("can't evaluate the length of %+v", v)
 			}
@@ -296,8 +296,8 @@ MAIN:
 				}
 			}
 		case OP_STORE:
-			if env.R3.ty == Tmap {
-				if m := env.R3.AsMap(); env.R2.ty == Tnumber {
+			if env.R3.Type() == Tmap {
+				if m := env.R3.AsMap(); env.R2.Type() == Tnumber {
 					if idx, ln := int(env.R2.AsNumber()), len(m.l); idx < ln {
 						m.l[idx] = env.R1
 					} else if idx == ln {
@@ -308,8 +308,8 @@ MAIN:
 				} else {
 					m.putIntoMap(env.R2, env.R1)
 				}
-			} else if env.R3.ty == Tgeneric {
-				StoreToGeneric(env.R3, int(env.R2.Num()), env.R1)
+			} else if env.R3.Type() == Tgeneric {
+				// StoreToGeneric(env.R3, int(env.R2.Num()), env.R1)
 			} else {
 				panicf("can't store %+v into %+v with key %+v", env.R1, env.R3, env.R2)
 			}
@@ -326,13 +326,13 @@ MAIN:
 				}
 				fallthrough
 			default:
-				if env.R3.ty == Tmap {
+				if env.R3.Type() == Tmap {
 					v, _ = env.R3.AsMap().getFromMap(env.R2)
 					if v.Type() == Tclosure {
 						v.AsClosure().SetCaller(env.R3)
 					}
-				} else if env.R3.ty == Tgeneric {
-					env.A = LoadFromGeneric(env.R3, int(env.R2.Num()))
+				} else if env.R3.Type() == Tgeneric {
+					// env.A = LoadFromGeneric(env.R3, int(env.R2.Num()))
 				} else {
 					panicf("can't load from %+v with key %+v", env.R3, env.R2)
 				}
@@ -369,7 +369,7 @@ MAIN:
 			}
 		case OP_SLICE:
 			start, end := int(env.R2.Num()), int(env.R1.Num())
-			switch x := env.R3; x.ty {
+			switch x := env.R3; x.Type() {
 			case Tstring:
 				if end == -1 {
 					env.A = NewStringValue(x.AsString()[start:])
@@ -417,7 +417,7 @@ MAIN:
 			env.A = NewClosureValue(crReadClosure(code, &cursor, env, opa, opb))
 		case OP_CALL:
 			v := env.Get(opa)
-			if v.ty != Tclosure {
+			if v.Type() != Tclosure {
 				v.panicType(Tclosure)
 			}
 			cls := v.AsClosure()
@@ -491,14 +491,14 @@ MAIN:
 		case OP_COPY:
 			doCopy(env)
 		case OP_TYPEOF:
-			if env.R1.ty == Tnumber {
+			if env.R1.Type() == Tnumber {
 				if n := byte(env.R1.AsNumber()); n == 255 {
-					env.A = NewStringValue(TMapping[env.R0.ty])
+					env.A = NewStringValue(TMapping[env.R0.Type()])
 				} else {
-					env.A.SetBoolValue(env.R0.ty == n)
+					env.A.SetBoolValue(env.R0.Type() == n)
 				}
 			} else {
-				env.A.SetBoolValue(TMapping[env.R0.ty] == env.R1.AsString())
+				env.A.SetBoolValue(TMapping[env.R0.Type()] == env.R1.AsString())
 			}
 		}
 	}
@@ -517,7 +517,7 @@ MAIN:
 func doCopy(env *Env) {
 	alloc := env.R0.AsNumber() == 1
 	nopred := false
-	if env.R2.ty == Tnumber {
+	if env.R2.Type() == Tnumber {
 		switch env.R2.AsNumber() {
 		case 0:
 			// copy(a)
@@ -586,7 +586,7 @@ func doCopy(env *Env) {
 
 	if alloc && nopred {
 		// simple dup of map
-		if env.R1.ty != Tmap {
+		if env.R1.Type() != Tmap {
 			env.R1.panicType(Tmap)
 		}
 		env.A = NewMapValue(env.R1.AsMap().Dup(nil))

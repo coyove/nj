@@ -33,16 +33,16 @@ func (v Value) AsString() string {
 
 // IsFalse tests whether value contains a "false" value
 func (v Value) IsFalse() bool {
-	if v.ty == Tnumber {
+	if v.Type() == Tnumber {
 		return v.num == 0
 	}
-	if v.ty == Tnil {
+	if v.Type() == Tnil {
 		return true
 	}
-	if v.ty == Tstring {
+	if v.Type() == Tstring {
 		return len(*(*string)(v.ptr)) == 0
 	}
-	if v.ty == Tmap {
+	if v.Type() == Tmap {
 		m := (*Map)(v.ptr)
 		return len(m.l)+len(m.m) == 0
 	}
@@ -75,7 +75,7 @@ type hashv struct {
 
 func (v Value) Hash() hashv {
 	var a hashv
-	switch v.ty {
+	switch v.Type() {
 	case Tnumber:
 		a = *(*hashv)(unsafe.Pointer(&v.ty))
 	case Tnil, Tclosure, Tmap, Tgeneric:

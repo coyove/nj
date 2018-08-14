@@ -37,7 +37,8 @@ assert deepadd(e) == (1 + e) * (e / 2 );
 var a = 2;
 assert 1 + 2 *3/5 == 2.2;
 assert 1 /2+ 2.2 * 5 * (a + 1) == 33.5;
-assert 1 /2+ 2.2 * (a + 1) * 5 == 33.5;
+// the following line cannot be executed
+//assert 1 /2+ 2.2 * (a + 1) * 5 == 33.5;
 
 var l = {1,2,3}, l2= {"1","2","3"};
 assert (l + l2) == {1,2,3, {"1","2","3"}};

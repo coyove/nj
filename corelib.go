@@ -18,7 +18,7 @@ func AddCoreValue(name string, value Value) {
 	if name == "" {
 		return
 	}
-	if CoreLibs[name].ty != Tnil {
+	if CoreLibs[name].Type() != Tnil {
 		panicf("core value %s already exists", name)
 	}
 	CoreLibNames = append(CoreLibNames, name)
@@ -104,7 +104,7 @@ func initCoreLibs() {
 		return NewStringValue(char(env.SGet(0).Num(), false))
 	}))
 	lcore.Puts("contains", NewNativeValue(2, func(env *Env) Value {
-		switch s := env.SGet(0); s.ty {
+		switch s := env.SGet(0); s.Type() {
 		case Tstring:
 			return NewBoolValue(strings.Contains(s.AsString(), env.SGet(1).Str()))
 		case Tmap:

@@ -14,17 +14,17 @@ import (
 // the order can't be changed, for any new type, please also add it in parser.go.y typeof
 const (
 	// Tnil represents nil type
-	Tnil = iota
+	Tnil = 0
 	// Tnumber represents number type
-	Tnumber
+	Tnumber = 1
 	// Tstring represents string type
-	Tstring
+	Tstring = 2
 	// Tmap represents map type
-	Tmap
+	Tmap = 4
 	// Tclosure represents closure type
-	Tclosure
+	Tclosure = 6
 	// Tgeneric represents generic type
-	Tgeneric
+	Tgeneric = 8
 )
 
 const (
@@ -40,12 +40,14 @@ const (
 
 // Type returns the type of value
 func (v Value) Type() byte {
-	return v.ty
+	return byte(v.num&0xf) & ^(0xe * byte(v.num&1))
 }
+
+const clear3LSB = 0xfffffffffffffffe
 
 // NewValue returns a nil value
 func NewValue() Value {
-	return Value{ty: Tnil}
+	return Value{num: 0}
 }
 
 var (
@@ -70,45 +72,47 @@ func init() {
 
 // NewNumberValue returns a number value
 func NewNumberValue(f float64) Value {
-	v := Value{ty: Tnumber}
-	v.num = f
+	v := Value{}
+	v.num = math.Float64bits(f)&clear3LSB + Tnumber
 	return v
 }
 
 // NewBoolValue returns a boolean value
 func NewBoolValue(b bool) Value {
-	return Value{ty: Tnumber, num: float64(*(*byte)(unsafe.Pointer(&b)))}
+	v := Value{}
+	v.num = uint64(*(*byte)(unsafe.Pointer(&b)))*0x3ff0000000000000 + Tnumber
+	return v
 }
 
 func (v *Value) SetNumberValue(f float64) {
-	v.ty = Tnumber
-	v.num = f
+	v.ptr = unsafe.Pointer(uintptr(0))
+	v.num = math.Float64bits(f)&clear3LSB + Tnumber
 }
 
 func (v *Value) SetBoolValue(b bool) {
-	v.ty = Tnumber
-	v.num = float64(*(*byte)(unsafe.Pointer(&b)))
+	v.ptr = unsafe.Pointer(uintptr(0))
+	v.num = uint64(*(*byte)(unsafe.Pointer(&b)))*0x3ff0000000000000 + Tnumber
 }
 
 // NewMapValue returns a map value
 func NewMapValue(m *Map) Value {
-	return Value{ty: Tmap, ptr: unsafe.Pointer(m)}
+	return Value{num: Tmap, ptr: unsafe.Pointer(m)}
 }
 
 // NewClosureValue returns a closure value
 func NewClosureValue(c *Closure) Value {
-	return Value{ty: Tclosure, ptr: unsafe.Pointer(c)}
+	return Value{num: Tclosure, ptr: unsafe.Pointer(c)}
 }
 
 // NewGenericValue returns a generic value
 func NewGenericValue(g unsafe.Pointer, tag uint64) Value {
-	return Value{ty: Tgeneric, ptr: g, num: math.Float64frombits(tag)}
+	return Value{num: Tgeneric, ptr: g}
 }
 
-func (v Value) IsZero() bool { return v.num == 0 }
+func (v Value) IsZero() bool { return v.num&clear3LSB == 0 }
 
 // AsNumber cast value to float64
-func (v Value) AsNumber() float64 { return v.num }
+func (v Value) AsNumber() float64 { return math.Float64frombits(v.num & clear3LSB) }
 
 // AsMap cast value to map of values
 func (v Value) AsMap() *Map { return (*Map)(v.ptr) }
@@ -139,7 +143,7 @@ func (v Value) Str() string { v.testType(Tstring); return v.AsString() }
 // I returns the golang interface representation of value
 // it is not the same as AsGeneric()
 func (v Value) I() interface{} {
-	switch v.ty {
+	switch v.Type() {
 	case Tnumber:
 		return v.AsNumber()
 	case Tstring:
@@ -155,7 +159,7 @@ func (v Value) I() interface{} {
 }
 
 func (v Value) String() string {
-	switch v.ty {
+	switch v.Type() {
 	case Tstring:
 		return strconv.Quote(v.AsString())
 	default:
@@ -166,8 +170,8 @@ func (v Value) String() string {
 // Equal tests whether value is equal to another value
 // This is a strict test
 func (v Value) Equal(r Value) bool {
-	if v.ty == Tnil || r.ty == Tnil {
-		return v.ty == r.ty
+	if v.Type() == Tnil || r.Type() == Tnil {
+		return v.Type() == r.Type()
 	}
 	switch testTypes(v, r) {
 	case _Tnumbernumber:
@@ -251,14 +255,14 @@ func (v Value) panicType(expected byte) {
 }
 
 func (v Value) testType(expected byte) Value {
-	if v.ty != expected {
+	if v.Type() != expected {
 		panicf("expecting %s, got %+v", TMapping[expected], v)
 	}
 	return v
 }
 
 func testTypes(v1, v2 Value) uint16 {
-	return uint16(v1.ty)<<8 + uint16(v2.ty)
+	return uint16(v1.Type())<<8 + uint16(v2.Type())
 }
 
 //go:nosplit

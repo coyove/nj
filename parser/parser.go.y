@@ -392,5 +392,5 @@ _map_gen:
 %%
 
 var typesLookup = map[string]string {
-    "nil": "0", "number": "1", "string": "2", "map": "3", "closure": "4", "generic": "5",
+    "nil": "0", "number": "1", "string": "2", "map": "4", "closure": "6", "generic": "8",
 }

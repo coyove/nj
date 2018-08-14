@@ -64,7 +64,7 @@ func (m *Map) Equal(m2 *Map) bool {
 
 // Put puts a new entry into the map
 func (m *Map) Put(key Value, value Value) *Map {
-	if key.ty == Tnumber {
+	if key.Type() == Tnumber {
 		idx, ln := int(key.AsNumber()), len(m.l)
 		if idx < ln {
 			m.l[idx] = value
@@ -96,7 +96,7 @@ func (m *Map) Puts(key string, value Value) *Map {
 
 // Get gets the corresponding value with the key
 func (m *Map) Get(key Value) (value Value, found bool) {
-	if key.ty == Tnumber {
+	if key.Type() == Tnumber {
 		if idx, ln := int(key.AsNumber()), len(m.l); idx < ln {
 			return m.l[idx], true
 		}
@@ -115,7 +115,7 @@ func (m *Map) getFromMap(key Value) (value Value, found bool) {
 
 // Remove removes the key from map and return the corresponding value
 func (m *Map) Remove(key Value) Value {
-	if key.ty == Tnumber {
+	if key.Type() == Tnumber {
 		if idx, ln := int(key.AsNumber()), len(m.l); idx < ln {
 			v := m.l[idx]
 			m.l = append(m.l[:idx], m.l[idx+1:]...)

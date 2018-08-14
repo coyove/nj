@@ -79,7 +79,7 @@ func stdPrintln(f *os.File) func(env *Env) Value {
 func stdWrite(f *os.File) func(env *Env) Value {
 	return func(env *Env) Value {
 		for i := 0; i < env.SSize(); i++ {
-			switch a := env.SGet(i); a.ty {
+			switch a := env.SGet(i); a.Type() {
 			case Tstring:
 				f.WriteString(env.SGet(i).AsString())
 			case Tmap:

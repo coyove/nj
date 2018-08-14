@@ -89,7 +89,7 @@ func TestMap_Put(t *testing.T) {
 	}
 	m.Put(NewStringValue("0"), NewValue()) // overwrite
 
-	if v, f := m.Get(NewStringValue("0")); v.ty != Tnil || !f {
+	if v, f := m.Get(NewStringValue("0")); v.Type() != Tnil || !f {
 		t.Error(0)
 	}
 	for j := 0; j < 10; j++ {
