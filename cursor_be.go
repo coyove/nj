@@ -1,4 +1,4 @@
-//+build mips64 ppc64 s390x
+//+build mips mips64 ppc64 s390x
 
 package potatolang
 

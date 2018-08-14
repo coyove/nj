@@ -67,4 +67,6 @@ func TestStringValueHash(t *testing.T) {
 	if a.a != b.a || a.b != b.b {
 		t.Error("hash not matched")
 	}
+
+	t.Error(NewStringValue("zzz").hashstr(), NewStringValue("zzy").hashstr())
 }

@@ -75,6 +75,8 @@ const (
 	m2    = 3339683297
 	m3    = 832293441
 	m4    = 2336365089
+	m5    = 0xb9ea8671
+	m6    = 0xae7f19fb
 	iseed = 0x930731
 )
 
@@ -99,7 +101,7 @@ func (v Value) Hash() hashv {
 	case Tstring:
 
 		hdr := (*reflect.StringHeader)(v.ptr)
-		seed := iseed
+		seed := uintptr(iseed)
 		s := uintptr(hdr.Len)
 		p := unsafe.Pointer(hdr.Data)
 		h := uint32(seed + s*hashkey[0])
@@ -156,8 +158,8 @@ func (v Value) Hash() hashv {
 				s -= 16
 			}
 			h = v1 ^ v2 ^ v3 ^ v4
-			h2 ^= h
-			h1 ^= h
+			h2 ^= h * m5
+			h1 ^= h * m6
 			goto tail
 		}
 

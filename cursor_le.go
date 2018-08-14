@@ -1,4 +1,4 @@
-//+build amd64 arm64 ppc64le 386 arm mipsle
+//+build amd64 arm64 ppc64le 386 arm mipsle mips64le
 
 package potatolang
 
