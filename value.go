@@ -24,7 +24,7 @@ const (
 	// Tclosure represents closure type
 	Tclosure = 6
 	// Tgeneric represents generic type
-	Tgeneric = 8
+	Tgeneric = 7
 )
 
 const (
@@ -40,10 +40,11 @@ const (
 
 // Type returns the type of value
 func (v Value) Type() byte {
-	return byte(v.num&0xf) & ^(0xe * byte(v.num&1))
+	// return byte(v.num&0xf) & ^(0xe * byte(v.num&1))
+	return byte(v.num & 0x7)
 }
 
-const clear3LSB = 0xfffffffffffffffe
+const clear3LSB = 0xfffffffffffffff8
 
 // NewValue returns a nil value
 func NewValue() Value {
@@ -59,6 +60,8 @@ var (
 	hashkey [4]uintptr
 
 	hash2Salt = rand.New().Fetch(16)
+
+	anchor = uintptr(unsafe.Pointer(new(int64)))
 )
 
 func init() {
@@ -73,25 +76,31 @@ func init() {
 // NewNumberValue returns a number value
 func NewNumberValue(f float64) Value {
 	v := Value{}
-	v.num = math.Float64bits(f)&clear3LSB + Tnumber
+	x := math.Float64bits(f)
+	v.ptr = unsafe.Pointer(uintptr(x&7) + anchor)
+	v.num = x&clear3LSB + Tnumber
 	return v
 }
 
 // NewBoolValue returns a boolean value
 func NewBoolValue(b bool) Value {
 	v := Value{}
-	v.num = uint64(*(*byte)(unsafe.Pointer(&b)))*0x3ff0000000000000 + Tnumber
+	x := uint64(*(*byte)(unsafe.Pointer(&b)))
+	v.ptr = unsafe.Pointer(anchor)
+	v.num = x*0x3ff0000000000000 + Tnumber
 	return v
 }
 
 func (v *Value) SetNumberValue(f float64) {
-	v.ptr = unsafe.Pointer(uintptr(0))
-	v.num = math.Float64bits(f)&clear3LSB + Tnumber
+	x := math.Float64bits(f)
+	v.ptr = unsafe.Pointer(uintptr(x&7) + anchor)
+	v.num = x&clear3LSB + Tnumber
 }
 
 func (v *Value) SetBoolValue(b bool) {
-	v.ptr = unsafe.Pointer(uintptr(0))
-	v.num = uint64(*(*byte)(unsafe.Pointer(&b)))*0x3ff0000000000000 + Tnumber
+	x := uint64(*(*byte)(unsafe.Pointer(&b)))
+	v.ptr = unsafe.Pointer(anchor)
+	v.num = x*0x3ff0000000000000 + Tnumber
 }
 
 // NewMapValue returns a map value
@@ -109,10 +118,12 @@ func NewGenericValue(g unsafe.Pointer, tag uint64) Value {
 	return Value{num: Tgeneric, ptr: g}
 }
 
-func (v Value) IsZero() bool { return v.num&clear3LSB == 0 }
+func (v Value) IsZero() bool { return v.num&clear3LSB == 0 && uintptr(v.ptr) == anchor }
 
 // AsNumber cast value to float64
-func (v Value) AsNumber() float64 { return math.Float64frombits(v.num & clear3LSB) }
+func (v Value) AsNumber() float64 {
+	return math.Float64frombits(v.num&clear3LSB + uint64(uintptr(v.ptr)-anchor))
+}
 
 // AsMap cast value to map of values
 func (v Value) AsMap() *Map { return (*Map)(v.ptr) }

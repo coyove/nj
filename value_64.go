@@ -32,7 +32,7 @@ func (v Value) AsString() string {
 // IsFalse tests whether value contains a "false" value
 func (v Value) IsFalse() bool {
 	if v.Type() == Tnumber {
-		return v.num&0xfffffffffffffff8 == 0
+		return v.IsZero()
 	}
 	if v.Type() == Tnil {
 		return true

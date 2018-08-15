@@ -92,9 +92,9 @@ func TestMap_Put(t *testing.T) {
 	if v, f := m.Get(NewStringValue("0")); v.Type() != Tnil || !f {
 		t.Error(0)
 	}
-	for j := 0; j < 10; j++ {
+	for j := 1; j < 10; j++ {
 		if v, _ := m.Get(NewStringValue(strconv.Itoa(j))); v.AsNumber() != float64(j) {
-			t.Error(j)
+			t.Error(j, v)
 		}
 	}
 
