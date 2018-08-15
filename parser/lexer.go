@@ -380,7 +380,7 @@ redo:
 		case '[':
 			tok.Type = ch
 			tok.Str = string(ch)
-		case '=', '&', '|':
+		case '=', '&', '|', '+', '-':
 			if sc.Peek() == ch {
 				switch ch {
 				case '=':
@@ -389,6 +389,10 @@ redo:
 					tok.Type = TAnd
 				case '|':
 					tok.Type = TOr
+				case '+':
+					tok.Type = TAddAdd
+				case '-':
+					tok.Type = TMinMin
 				}
 				tok.Str = string(ch) + string(ch)
 				sc.Next()
@@ -442,7 +446,7 @@ redo:
 				tok.Type = '.'
 			}
 			tok.Str = buf.String()
-		case '+', '-', '*', '%', '^', '(', ')', '{', '}', ']', ';', ':', ',', '~', '#':
+		case '*', '%', '^', '(', ')', '{', '}', ']', ';', ':', ',', '~', '#':
 			tok.Type = ch
 			tok.Str = string(ch)
 		default:
