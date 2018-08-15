@@ -1,9 +1,9 @@
-//line parser.go.y:2
+//line parser.go.y:1
 package parser
 
 import __yyfmt__ "fmt"
 
-//line parser.go.y:2
+//line parser.go.y:3
 import (
 	"path/filepath"
 )
@@ -106,7 +106,7 @@ const yyInitialStackSize = 16
 //line parser.go.y:392
 
 var typesLookup = map[string]string{
-	"nil": "0", "number": "1", "string": "2", "map": "4", "closure": "6", "generic": "8",
+	"nil": "0", "number": "1", "string": "2", "map": "4", "closure": "6", "generic": "7",
 }
 
 //line yacctab:1

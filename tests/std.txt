@@ -25,3 +25,11 @@ func! testAssert() {
 
 var msg = testAssert();
 assert msg == "hello";
+
+
+var tarr = std.typed.bytearray(10);
+for (var i = 0; i < 10; i=i+1) {
+    tarr[i] = 0x61 + i;
+}
+
+assert std.char(tarr) == "abcdefghij";

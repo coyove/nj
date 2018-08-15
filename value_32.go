@@ -9,45 +9,7 @@ import (
 	"unsafe"
 )
 
-// Value is the basic value used by VM
-type Value struct {
-	ptr     unsafe.Pointer
-	ty      byte
-	a, b, c byte
-	num     float64
-}
-
-const SizeofValue = 16
-
-// NewStringValue returns a string value
-func NewStringValue(s string) Value {
-	v := Value{ty: Tstring}
-	v.ptr = unsafe.Pointer(&s)
-	return v
-}
-
-// AsString cast value to string
-func (v Value) AsString() string {
-	return *(*string)(v.ptr)
-}
-
-// IsFalse tests whether value contains a "false" value
-func (v Value) IsFalse() bool {
-	if v.Type() == Tnumber {
-		return v.num == 0
-	}
-	if v.Type() == Tnil {
-		return true
-	}
-	if v.Type() == Tstring {
-		return len(*(*string)(v.ptr)) == 0
-	}
-	if v.Type() == Tmap {
-		m := (*Map)(v.ptr)
-		return len(m.l)+len(m.m) == 0
-	}
-	return false
-}
+const SizeofValue = 12
 
 const (
 	// Constants for multiplication: four random odd 32-bit numbers.
@@ -76,11 +38,13 @@ type hashv struct {
 func (v Value) Hash() hashv {
 	var a hashv
 	switch v.Type() {
-	case Tnumber:
-		a = *(*hashv)(unsafe.Pointer(&v.ty))
-	case Tnil, Tclosure, Tmap, Tgeneric:
+	case Tnumber, Tnil, Tclosure, Tmap, Tgeneric:
 		a = *(*hashv)(unsafe.Pointer(&v))
 	case Tstring:
+		if byte(v.num)>>4 > 0 {
+			a = *(*hashv)(unsafe.Pointer(&v))
+			break
+		}
 
 		hdr := (*reflect.StringHeader)(v.ptr)
 		seed := uintptr(iseed)

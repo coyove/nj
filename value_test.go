@@ -2,6 +2,7 @@ package potatolang
 
 import (
 	"io/ioutil"
+	"math"
 	"runtime"
 	"strconv"
 	"testing"
@@ -69,4 +70,26 @@ func TestStringValueHash(t *testing.T) {
 	}
 
 	// t.Error(NewStringValue("zzz").hashstr(), NewStringValue("zzy").hashstr())
+}
+
+func TestFalsyValue(t *testing.T) {
+	assert := func(b bool) {
+		if !b {
+			_, fn, ln, _ := runtime.Caller(1)
+			t.Fatal(fn, ln)
+		}
+	}
+
+	assert(NewNumberValue(0).IsZero())
+	assert(NewNumberValue(0).IsFalse())
+	assert(!NewNumberValue(1 / math.Inf(-1)).IsFalse())
+	assert(!NewNumberValue(1 / math.Inf(-1)).IsZero())
+	assert(!NewNumberValue(math.NaN()).IsFalse())
+
+	s := NewStringValue("")
+	assert(s.IsFalse())
+	s.SetBoolValue(true)
+	assert(!s.IsFalse())
+	s.SetBoolValue(false)
+	assert(s.IsFalse())
 }

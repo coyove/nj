@@ -88,6 +88,14 @@ func stdWrite(f *os.File) func(env *Env) Value {
 					buf[0] = byte(b.Num())
 					f.Write(buf)
 				}
+			case Tgeneric:
+				ap, at := a.AsGeneric()
+				switch at {
+				case GTagByteArray, GTagByteClampedArray, GTagInt8Array:
+					f.Write(*(*[]byte)(ap))
+				default:
+					panicf("stdWrite can't write: %+v", a)
+				}
 			default:
 				panicf("stdWrite can't write: %+v", a)
 			}

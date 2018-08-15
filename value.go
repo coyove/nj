@@ -38,6 +38,12 @@ const (
 	_Tmapnumber      = Tmap<<8 | Tnumber
 )
 
+// Value is the basic value used by VM
+type Value struct {
+	ptr unsafe.Pointer // 8b
+	num uint64
+}
+
 // Type returns the type of value
 func (v Value) Type() byte {
 	// return byte(v.num&0xf) & ^(0xe * byte(v.num&1))
@@ -47,9 +53,7 @@ func (v Value) Type() byte {
 const clear3LSB = 0xfffffffffffffff8
 
 // NewValue returns a nil value
-func NewValue() Value {
-	return Value{num: 0}
-}
+func NewValue() Value { return Value{num: 0} }
 
 var (
 	// TMapping maps type to its string representation
@@ -57,11 +61,12 @@ var (
 		Tnil: "nil", Tnumber: "number", Tstring: "string", Tclosure: "closure", Tgeneric: "generic", Tmap: "map",
 	}
 
-	hashkey [4]uintptr
-
+	hashkey   [4]uintptr
 	hash2Salt = rand.New().Fetch(16)
 
-	anchor = uintptr(unsafe.Pointer(new(int64)))
+	// for a numeric Value, its 'ptr' = _Anchor64 + last 3 bits of 'num'
+	_anchor64 = new(int64)
+	_Anchor64 = uintptr(unsafe.Pointer(_anchor64))
 )
 
 func init() {
@@ -77,7 +82,7 @@ func init() {
 func NewNumberValue(f float64) Value {
 	v := Value{}
 	x := math.Float64bits(f)
-	v.ptr = unsafe.Pointer(uintptr(x&7) + anchor)
+	v.ptr = unsafe.Pointer(uintptr(x&7) + _Anchor64)
 	v.num = x&clear3LSB + Tnumber
 	return v
 }
@@ -86,20 +91,22 @@ func NewNumberValue(f float64) Value {
 func NewBoolValue(b bool) Value {
 	v := Value{}
 	x := uint64(*(*byte)(unsafe.Pointer(&b)))
-	v.ptr = unsafe.Pointer(anchor)
+	v.ptr = unsafe.Pointer(_Anchor64)
 	v.num = x*0x3ff0000000000000 + Tnumber
 	return v
 }
 
+// SetNumberValue turns any Value into a numeric Value
 func (v *Value) SetNumberValue(f float64) {
 	x := math.Float64bits(f)
-	v.ptr = unsafe.Pointer(uintptr(x&7) + anchor)
+	v.ptr = unsafe.Pointer(uintptr(x&7) + _Anchor64)
 	v.num = x&clear3LSB + Tnumber
 }
 
+// SetBoolValue turns any Value into a numeric Value with its value being 0.0 or 1.0
 func (v *Value) SetBoolValue(b bool) {
 	x := uint64(*(*byte)(unsafe.Pointer(&b)))
-	v.ptr = unsafe.Pointer(anchor)
+	v.ptr = unsafe.Pointer(_Anchor64)
 	v.num = x*0x3ff0000000000000 + Tnumber
 }
 
@@ -114,15 +121,66 @@ func NewClosureValue(c *Closure) Value {
 }
 
 // NewGenericValue returns a generic value
-func NewGenericValue(g unsafe.Pointer, tag uint64) Value {
-	return Value{num: Tgeneric, ptr: g}
+func NewGenericValue(g unsafe.Pointer, tag uint32) Value {
+	return Value{num: uint64(tag)<<32 + Tgeneric, ptr: g}
 }
 
-func (v Value) IsZero() bool { return v.num&clear3LSB == 0 && uintptr(v.ptr) == anchor }
+// NewGenericValueInterface returns a generic value from an interface{}
+func NewGenericValueInterface(i interface{}, tag uint32) Value {
+	g := (*(*[2]unsafe.Pointer)(unsafe.Pointer(&i)))[1]
+	return Value{num: uint64(tag)<<32 + Tgeneric, ptr: g}
+}
+
+// NewStringValue returns a string value
+func NewStringValue(s string) Value {
+	v := Value{}
+	if len(s) < 7 {
+		// for a string containing only 0~6 bytes, it will be stored into Value directly
+		copy((*(*[8]byte)(unsafe.Pointer(&v.num)))[1:7], s)
+		v.num |= uint64(Tstring + (len(s)+1)<<4)
+	} else {
+		v.num = Tstring
+		v.ptr = unsafe.Pointer(&s)
+	}
+	return v
+}
+
+// AsString cast value to string
+func (v Value) AsString() string {
+	if ln := byte(v.num) >> 4; ln > 0 {
+		buf := make([]byte, ln-1)
+		copy(buf, (*(*[8]byte)(unsafe.Pointer(&v.num)))[1:ln])
+		return string(buf)
+	}
+	return *(*string)(v.ptr)
+}
+
+// IsFalse tests whether value contains a "false" value
+func (v Value) IsFalse() bool {
+	if v.Type() == Tnumber {
+		return v.IsZero()
+	}
+	if v.Type() == Tnil {
+		return true
+	}
+	if v.Type() == Tstring {
+		return byte(v.num)>>4 == 1
+	}
+	if v.Type() == Tmap {
+		m := (*Map)(v.ptr)
+		return len(m.l)+len(m.m) == 0
+	}
+	return false
+}
+
+// IsZero is a fast way to check if a numeric Value is +0
+func (v Value) IsZero() bool {
+	return v.num&clear3LSB == 0 && uintptr(v.ptr) == _Anchor64
+}
 
 // AsNumber cast value to float64
 func (v Value) AsNumber() float64 {
-	return math.Float64frombits(v.num&clear3LSB + uint64(uintptr(v.ptr)-anchor))
+	return math.Float64frombits(v.num&clear3LSB + uint64(uintptr(v.ptr)-_Anchor64))
 }
 
 // AsMap cast value to map of values
@@ -132,7 +190,7 @@ func (v Value) AsMap() *Map { return (*Map)(v.ptr) }
 func (v Value) AsClosure() *Closure { return (*Closure)(v.ptr) }
 
 // AsGeneric cast value to unsafe.Pointer
-func (v Value) AsGeneric() unsafe.Pointer { return v.ptr }
+func (v Value) AsGeneric() (unsafe.Pointer, uint32) { return v.ptr, uint32(v.num >> 32) }
 
 // Map safely cast value to map of values
 func (v Value) Map() *Map { v.testType(Tmap); return (*Map)(v.ptr) }
@@ -141,7 +199,19 @@ func (v Value) Map() *Map { v.testType(Tmap); return (*Map)(v.ptr) }
 func (v Value) Cls() *Closure { v.testType(Tclosure); return (*Closure)(v.ptr) }
 
 // Gen safely cast value to unsafe.Pointer
-func (v Value) Gen() unsafe.Pointer { v.testType(Tgeneric); return v.ptr }
+func (v Value) Gen() (unsafe.Pointer, uint32) { v.testType(Tgeneric); return v.AsGeneric() }
+
+func (v Value) GenTags(tags ...uint32) unsafe.Pointer {
+	v.testType(Tgeneric)
+	vp, vt := v.AsGeneric()
+	for _, tag := range tags {
+		if vt == tag {
+			return vp
+		}
+	}
+	panicf("expecting tags: %v, got %d", tags, vt)
+	return vp
+}
 
 func (v Value) u64() uint64 { return math.Float64bits(v.Num()) }
 
@@ -152,7 +222,7 @@ func (v Value) Num() float64 { v.testType(Tnumber); return v.AsNumber() }
 func (v Value) Str() string { v.testType(Tstring); return v.AsString() }
 
 // I returns the golang interface representation of value
-// it is not the same as AsGeneric()
+// Tgeneric will not be returned, use Gen() instead
 func (v Value) I() interface{} {
 	switch v.Type() {
 	case Tnumber:
@@ -163,8 +233,6 @@ func (v Value) I() interface{} {
 		return v.AsMap()
 	case Tclosure:
 		return v.AsClosure()
-	case Tgeneric:
-		return v.AsGeneric()
 	}
 	return nil
 }
@@ -211,7 +279,9 @@ func (v Value) Equal(r Value) bool {
 		}
 		return true
 	case _Tgenericgeneric:
-		return v.AsGeneric() == r.AsGeneric()
+		vp, vt := v.AsGeneric()
+		rp, rt := r.AsGeneric()
+		return vp == rp && vt == rt
 	}
 	return false
 }
@@ -256,7 +326,8 @@ func (v Value) toString(lv int) string {
 	case Tclosure:
 		return v.AsClosure().String()
 	case Tgeneric:
-		return fmt.Sprintf("%v", v.AsGeneric())
+		vp, vt := v.AsGeneric()
+		return fmt.Sprintf("<tag%d:%v>", vt, vp)
 	}
 	return "nil"
 }

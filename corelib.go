@@ -6,6 +6,21 @@ import (
 	"unsafe"
 )
 
+const (
+	GTagEnv = iota + 1
+	GTagByteArray
+	GTagByteClampedArray
+	GTagInt8Array
+	GTagInt16Array
+	GTagUint16Array
+	GTagInt32Array
+	GTagUint32Array
+	GTagStringArray
+	GTagBoolArray
+	GTagFloat32Array
+	GTagFloat64Array
+)
+
 var CoreLibNames = []string{
 	"std", "io", "math",
 }
@@ -70,11 +85,15 @@ func initCoreLibs() {
 	}))
 	lcore.Puts("storeinto", NewNativeValue(3, func(env *Env) Value {
 		e, x, y := env.SGet(0), env.SGet(1), env.SGet(2)
-		(*Env)(e.Gen()).Set(uint32(x.Num()), y)
+		ep, et := e.Gen()
+		if et != GTagEnv {
+			panicf("invalid generic tag: %d", et)
+		}
+		(*Env)(ep).Set(uint32(x.Num()), y)
 		return y
 	}))
 	lcore.Puts("currentenv", NewNativeValue(0, func(env *Env) Value {
-		return NewGenericValue(unsafe.Pointer(env.parent), 0)
+		return NewGenericValue(unsafe.Pointer(env.parent), GTagEnv)
 	}))
 	lcore.Puts("stacktrace", NewNativeValue(0, func(env *Env) Value {
 		e := ExecError{stacks: env.trace}
@@ -92,13 +111,29 @@ func initCoreLibs() {
 		return env.SGet(0).Map().Remove(env.Get(1))
 	}))
 	lcore.Puts("copy", NewNativeValue(5, func(env *Env) Value {
-		dst, src := env.SGet(0).Map(), env.SGet(2).Map()
 		dstPos, srcPos := int(env.SGet(1).Num()), int(env.SGet(3).Num())
 		length := int(env.SGet(4).Num())
-		return NewNumberValue(float64(copy(dst.l[dstPos:], src.l[srcPos:srcPos+length])))
+
+		switch dst, src := env.SGet(0), env.SGet(2); dst.Type() {
+		case Tmap:
+			return NewNumberValue(float64(copy(dst.Map().l[dstPos:], src.Map().l[srcPos:srcPos+length])))
+		case Tgeneric:
+			return NewNumberValue(float64(GCopy(dst, src, dstPos, srcPos, srcPos+length)))
+		default:
+			panicf("can't copy from %+v to %+v", src, dst)
+			return NewValue()
+		}
 	}))
 	lcore.Puts("char", NewNativeValue(1, func(env *Env) Value {
-		return NewStringValue(char(env.SGet(0).Num(), true))
+		switch c := env.SGet(0); c.Type() {
+		case Tnumber:
+			return NewStringValue(char(c.AsNumber(), true))
+		case Tgeneric:
+			return NewStringValue(string(*(*[]byte)(c.GenTags(GTagByteArray, GTagByteClampedArray, GTagInt8Array))))
+		default:
+			panicf("std.char: %+v", c)
+			return NewValue()
+		}
 	}))
 	lcore.Puts("utf8char", NewNativeValue(1, func(env *Env) Value {
 		return NewStringValue(char(env.SGet(0).Num(), false))
@@ -221,6 +256,22 @@ func initCoreLibs() {
 				return Value{}
 			})))).
 		Puts("_", Value{})))
+
+	_genTyped := func(i interface{}, t uint32) Value {
+		return NewGenericValueInterface(i, t)
+	}
+	lcore.Puts("typed", NewMapValue(NewMap().
+		Puts("bytearray", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagByteArray) })).
+		Puts("int8array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagInt8Array) })).
+		Puts("uint16array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagUint16Array) })).
+		Puts("int16array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagInt16Array) })).
+		Puts("uint32array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagUint32Array) })).
+		Puts("int32array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagInt32Array) })).
+		Puts("float32array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagFloat32Array) })).
+		Puts("float64array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagFloat64Array) })).
+		Puts("stringarray", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagStringArray) })).
+		Puts("boolarray", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagBoolArray) })).
+		Puts("_", NewValue())))
 
 	CoreLibs["std"] = NewMapValue(lcore)
 
