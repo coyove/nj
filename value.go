@@ -254,8 +254,11 @@ func (v Value) Equal(r Value) bool {
 	}
 	switch testTypes(v, r) {
 	case _Tnumbernumber:
-		return r.AsNumber() == v.AsNumber()
+		return *(*[SizeofValue]byte)(unsafe.Pointer(&v)) == *(*[SizeofValue]byte)(unsafe.Pointer(&r))
 	case _Tstringstring:
+		if ln := byte(v.num) >> 4; ln > 0 {
+			return *(*[SizeofValue]byte)(unsafe.Pointer(&v)) == *(*[SizeofValue]byte)(unsafe.Pointer(&r))
+		}
 		return r.AsString() == v.AsString()
 	case _Tmapmap:
 		return v.AsMap().Equal(r.AsMap())

@@ -92,4 +92,20 @@ func TestFalsyValue(t *testing.T) {
 	assert(!s.IsFalse())
 	s.SetBoolValue(false)
 	assert(s.IsFalse())
+
+	assert(NewStringValue("123") == NewStringValue("123"))
+}
+
+func BenchmarkSmallStringEquality(b *testing.B) {
+	a, a0 := NewStringValue("true"), NewStringValue("true")
+	for i := 0; i < b.N; i++ {
+		a.Equal(a0)
+	}
+}
+
+func BenchmarkSmallStringEquality2(b *testing.B) {
+	a, a0 := NewBoolValue(true), NewBoolValue(true)
+	for i := 0; i < b.N; i++ {
+		a.Equal(a0)
+	}
 }
