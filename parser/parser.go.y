@@ -9,30 +9,17 @@ import (
 %type<expr> stats
 %type<expr> block
 %type<expr> stat
-%type<expr> stat_block
+%type<expr> declarator
 %type<expr> ident_list
 %type<expr> expr_list
 %type<expr> expr_assign_list
 %type<expr> expr_declare_list
 %type<expr> expr
+%type<expr> postfix_incdec
+%type<expr> _postfix_incdec
 %type<expr> string
 
-%type<expr> primary_expr
-%type<expr> postfix_expr
-%type<expr> unary_expr
-%type<expr> mul_expr
-%type<expr> add_expr
-%type<expr> shift_expr
-%type<expr> comp_expr
-%type<expr> eq_expr
-%type<expr> bit_and_expr
-%type<expr> bit_xor_expr
-%type<expr> bit_or_expr
-%type<expr> and_expr
-%type<expr> or_expr
-%type<expr> assign_expr
-%type<expr> map_expr
-
+%type<expr> prefix_expr
 %type<expr> assign_stat
 %type<expr> assign_stat_semi
 %type<expr> for_stat
@@ -41,14 +28,14 @@ import (
 %type<expr> if_stat
 %type<expr> if_body
 %type<expr> jmp_stat
+%type<expr> func_stat
 %type<expr> flow_stat
 
 %type<str>  func
 %type<expr> func_call
 %type<expr> func_args
+%type<expr> function
 %type<expr> func_params_list
-%type<expr> named_func
-%type<expr> anon_func
 %type<expr> map_gen
 %type<expr> _map_gen
 
@@ -62,12 +49,13 @@ import (
 %token<token> TAssert TBreak TContinue TElse TFor TFunc TGoto TIf TNil TReturn TRequire TVar TYield
 
 /* Literals */
-%token<token> TAddAdd TMinMin TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
+%token<token> TAddAdd TSubSub TAddEq TSubEq TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
 
 /* Operators */
 %right 'T'
 %right TElse
 
+%left TAddEq TSubEq
 %left TOr
 %left TAnd
 %left '|' '&' '^'
@@ -78,7 +66,7 @@ import (
 %right UNARY /* not # -(unary) */
 %right '~'
 %right '#'
-%right TAddAdd TMinMin
+%left TAddAdd TMinMin
 
 %% 
 
@@ -112,27 +100,54 @@ stat:
         ';'              { $$ = NewCompoundNode() } |
         jmp_stat ';'     { $$ = $1 } |
         flow_stat        { $$ = $1 } |
-        named_func       { $$ = $1 } |
-        expr ';'         { $$ = $1 } | 
         assign_stat_semi { $$ = $1 }
-
-stat_block:
-        stat  { $$ = $1 } |
-        block { $$ = $1 }
 
 if_body:
         ';'              { $$ = NewCompoundNode() } |
-        assign_expr { $$ = NewCompoundNode("chain", $1) } |
+        assign_stat_semi { $$ = NewCompoundNode("chain", $1) } |
+        jmp_stat ';'     { $$ = NewCompoundNode("chain", $1) } |
+        for_stat         { $$ = NewCompoundNode("chain", $1) } |
+        if_stat          { $$ = NewCompoundNode("chain", $1) } |
         block            { $$ = $1 }
 
 flow_stat:
         for_stat  { $$ = $1 } |
-        if_stat   { $$ = $1 }
+        if_stat   { $$ = $1 } |
+        func_stat { $$ = $1 }
 
 assign_stat:
-        TVar expr_declare_list {
-            $$ = $2
-        } 
+        TVar expr_declare_list { $$ = $2 } |
+        prefix_expr            { $$ = $1 } |
+        postfix_incdec         { $$ = $1 } |
+        declarator '=' expr {
+            $$ = NewCompoundNode("move", $1, $3)
+            if len($1.Compound) > 0 {
+                if c, _ := $1.Compound[0].Value.(string); c == "load" {
+                    $$ = NewCompoundNode("store", $1.Compound[1], $1.Compound[2], $3)
+                }
+            }
+            if c, _ := $1.Value.(string); c != "" && $1.Type == NTAtom {
+                if a, b, s := $3.isSimpleAddSub(); a == c {
+                    $3.Compound[2].Value = $3.Compound[2].Value.(float64) * s
+                    $$ = NewCompoundNode("inc", $1, $3.Compound[2])
+                    $$.Compound[1].Pos = $1.Pos
+                } else if b == c {
+                    $3.Compound[1].Value = $3.Compound[1].Value.(float64) * s
+                    $$ = NewCompoundNode("inc", $1, $3.Compound[1])
+                    $$.Compound[1].Pos = $1.Pos
+                }
+            }
+            $$.Compound[0].Pos = $1.Pos
+        }
+
+_postfix_incdec:
+        TAddAdd { $$ = NewNumberNode("1") } |
+        TSubSub { $$ = NewNumberNode("-1") }
+
+postfix_incdec:
+        TIdent _postfix_incdec                    { $$ = NewCompoundNode("inc", NewAtomNode($1).setPos($1.Pos), $2) } |
+        prefix_expr '[' expr ']' _postfix_incdec  { $$ = NewCompoundNode("store", $1, $3, NewCompoundNode("+", NewCompoundNode("load", $1, $3).setPos0($1.Pos), $5).setPos0($1.Pos)) } |
+        prefix_expr '.' TIdent   _postfix_incdec  { $$ = NewCompoundNode("store", $1, $3, NewCompoundNode("+", NewCompoundNode("load", $1, $3).setPos0($1.Pos), $4).setPos0($1.Pos)) }
 
 for_stat1:
         assign_stat ';' { $$ = NewCompoundNode("chain", $1) } |
@@ -149,9 +164,14 @@ for_stat:
         TFor '(' expr ')' if_body {
             $$ = NewCompoundNode("for", $3, NewCompoundNode(), $5).setPos0($1.Pos)
         } |
-        TFor '(' for_stat1 for_stat2 expr ')' if_body {
+        TFor '(' for_stat1 for_stat2 assign_stat ')' if_body {
             $$ = $3
             $$.Compound = append($$.Compound, NewCompoundNode("for", $4, NewCompoundNode("chain", $5), $7))
+            $$.Compound[0].Pos = $1.Pos
+        } |
+        TFor '(' for_stat1 for_stat2 block ')' if_body {
+            $$ = $3
+            $$.Compound = append($$.Compound, NewCompoundNode("for", $4, $5, $7))
             $$.Compound[0].Pos = $1.Pos
         } |
         TFor '(' for_stat1 for_stat2 ')' if_body {
@@ -161,14 +181,14 @@ for_stat:
         }
 
 if_stat:
-        TIf '(' expr ')' stat_block %prec 'T'     { $$ = NewCompoundNode("if", $3, $5, NewCompoundNode()) } |
-        TIf '(' expr ')' stat_block TElse stat_block { $$ = NewCompoundNode("if", $3, $5, $7) }
+        TIf '(' expr ')' if_body %prec 'T'     { $$ = NewCompoundNode("if", $3, $5, NewCompoundNode()) } |
+        TIf '(' expr ')' if_body TElse if_body { $$ = NewCompoundNode("if", $3, $5, $7) }
 
 func:
         TFunc     { $$ = "func" } |
         TFunc '!' { $$ = "safefunc" }
 
-named_func:
+func_stat:
         func TIdent func_params_list block {
             funcname := NewAtomNode($2)
             $$ = NewCompoundNode(
@@ -179,9 +199,6 @@ named_func:
             $$.Compound[2].Compound[0].Pos = $2.Pos
             $$.Compound[2].Compound[2].Compound[0].Pos = $2.Pos
         }
-
-anon_func:
-        func func_params_list block { $$ = NewCompoundNode($1, "<a>", $2, $3).setPos0($2.Pos) }
 
 jmp_stat:
         TYield       { $$ = NewCompoundNode("yield").setPos0($1.Pos) } |
@@ -203,6 +220,14 @@ jmp_stat:
             $$ = yylex.(*Lexer).loadFile(path)
         }
 
+declarator:
+        TIdent                            { $$ = NewAtomNode($1).setPos($1.Pos) } |
+        prefix_expr '[' expr ']'          { $$ = NewCompoundNode("load", $1, $3).setPos0($1.Pos).setPos($1.Pos) } |
+        prefix_expr '[' expr ':' expr ']' { $$ = NewCompoundNode("slice", $1, $3, $5).setPos0($1.Pos).setPos($1.Pos) } |
+        prefix_expr '[' expr ':' ']'      { $$ = NewCompoundNode("slice", $1, $3, NewNumberNode("-1")).setPos0($1.Pos).setPos($1.Pos) } |
+        prefix_expr '[' ':' expr ']'      { $$ = NewCompoundNode("slice", $1, NewNumberNode("0"), $4).setPos0($1.Pos).setPos($1.Pos) } |
+        prefix_expr '.' TIdent            { $$ = NewCompoundNode("load", $1, NewStringNode($3.Str)).setPos0($1.Pos).setPos($1.Pos) }
+
 ident_list:
         TIdent {
             $$ = NewCompoundNode($1.Str)
@@ -213,19 +238,19 @@ ident_list:
         }
 
 expr_list:
-        or_expr {
+        expr {
             $$ = NewCompoundNode($1)
         } |
-        expr_list ',' or_expr {
+        expr_list ',' expr {
             $1.Compound = append($1.Compound, $3)
             $$ = $1
         }
 
 expr_assign_list:
-        or_expr ':' or_expr {
+        expr ':' expr {
             $$ = NewCompoundNode($1, $3)
         } |
-        expr_assign_list ',' or_expr ':' or_expr {
+        expr_assign_list ',' expr ':' expr {
             $1.Compound = append($1.Compound, $3, $5)
             $$ = $1
         }
@@ -235,11 +260,11 @@ expr_declare_list:
             $$ = NewCompoundNode("chain", NewCompoundNode("set", NewAtomNode($1), NewNilNode()))
             $$.Compound[1].Compound[0].Pos = $1.Pos
         } |
-        TIdent '=' or_expr {
+        TIdent '=' expr {
             $$ = NewCompoundNode("chain", NewCompoundNode("set", NewAtomNode($1), $3))
             $$.Compound[1].Compound[0].Pos = $1.Pos
         } |
-        expr_declare_list ',' TIdent '=' or_expr {
+        expr_declare_list ',' TIdent '=' expr {
             x := NewCompoundNode("set", NewAtomNode($3), $5).setPos0($1.Pos)
             $1.Compound = append($$.Compound, x)
             $$ = $1
@@ -250,17 +275,7 @@ expr_declare_list:
             $$ = $1
         }
 
-string: 
-        TString {
-            $$ = NewStringNode($1.Str)
-            $$.Pos = $1.Pos
-        }
-
-primary_expr:
-        TIdent            { $$ = NewAtomNode($1).setPos($1.Pos) } |
-        string            { $$ = $1 } |
-        '(' expr ')'      { $$ = $2 } |
-        anon_func { $$ = $1 } |
+expr:
         TNil {
             $$ = NewNilNode()
             $$.Pos = $1.Pos
@@ -272,116 +287,49 @@ primary_expr:
         TRequire TString {
             path := filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)
             $$ = yylex.(*Lexer).loadFile(path)
-        }
+        } |
+        function             { $$ = $1 } |
+        map_gen              { $$ = $1 } |
+        prefix_expr          { $$ = $1 } |
+        postfix_incdec       { $$ = $1 } |
+        string               { $$ = $1 } |
+        expr TOr expr        { $$ = NewCompoundNode("or", $1,$3).setPos0($1.Pos) } |
+        expr TAnd expr       { $$ = NewCompoundNode("and", $1,$3).setPos0($1.Pos) } |
+        expr '>' expr        { $$ = NewCompoundNode("<", $3,$1).setPos0($1.Pos) } |
+        expr '<' expr        { $$ = NewCompoundNode("<", $1,$3).setPos0($1.Pos) } |
+        expr TGte expr       { $$ = NewCompoundNode("<=", $3,$1).setPos0($1.Pos) } |
+        expr TLte expr       { $$ = NewCompoundNode("<=", $1,$3).setPos0($1.Pos) } |
+        expr TEqeq expr      { $$ = NewCompoundNode("==", $1,$3).setPos0($1.Pos) } |
+        expr TNeq expr       { $$ = NewCompoundNode("!=", $1,$3).setPos0($1.Pos) } |
+        expr '+' expr        { $$ = NewCompoundNode("+", $1,$3).setPos0($1.Pos) } |
+        expr '-' expr        { $$ = NewCompoundNode("-", $1,$3).setPos0($1.Pos) } |
+        expr '*' expr        { $$ = NewCompoundNode("*", $1,$3).setPos0($1.Pos) } |
+        expr '/' expr        { $$ = NewCompoundNode("/", $1,$3).setPos0($1.Pos) } |
+        expr '%' expr        { $$ = NewCompoundNode("%", $1,$3).setPos0($1.Pos) } |
+        expr '^' expr        { $$ = NewCompoundNode("^", $1,$3).setPos0($1.Pos) } |
+        expr TLsh expr       { $$ = NewCompoundNode("<<", $1,$3).setPos0($1.Pos) } |
+        expr TRsh expr       { $$ = NewCompoundNode(">>", $1,$3).setPos0($1.Pos) } |
+        expr '|' expr        { $$ = NewCompoundNode("|", $1,$3).setPos0($1.Pos) } |
+        expr '&' expr        { $$ = NewCompoundNode("&", $1,$3).setPos0($1.Pos) } |
+        '-' expr %prec UNARY { $$ = NewCompoundNode("-", NewNumberNode("0"), $2).setPos0($2.Pos) } |
+        '~' expr %prec UNARY { $$ = NewCompoundNode("~", $2).setPos0($2.Pos) } |
+        '!' expr %prec UNARY { $$ = NewCompoundNode("!", $2).setPos0($2.Pos) } |
+        '#' expr %prec UNARY { $$ = NewCompoundNode("#", $2).setPos0($2.Pos) }
 
-postfix_expr:
-        primary_expr          { $$ = $1 } |
-        postfix_expr '[' expr ']'          { $$ = NewCompoundNode("load", $1, $3).setPos0($1.Pos).setPos($1.Pos) } |
-        postfix_expr '[' expr ':' expr ']' { $$ = NewCompoundNode("slice", $1, $3, $5).setPos0($1.Pos).setPos($1.Pos) } |
-        postfix_expr '[' expr ':' ']'      { $$ = NewCompoundNode("slice", $1, $3, NewNumberNode("-1")).setPos0($1.Pos).setPos($1.Pos) } |
-        postfix_expr '[' ':' expr ']'      { $$ = NewCompoundNode("slice", $1, NewNumberNode("0"), $4).setPos0($1.Pos).setPos($1.Pos) } |
-        postfix_expr '.' TIdent            { $$ = NewCompoundNode("load", $1, NewStringNode($3.Str)).setPos0($1.Pos).setPos($1.Pos) } |
+string: 
+        TString {
+            $$ = NewStringNode($1.Str)
+            $$.Pos = $1.Pos
+        } 
+
+prefix_expr:
+        declarator        { $$ = $1 } |
+        '(' func_call ')' { $$ = $2 } |
         func_call         { $$ = $1 } |
-        TIdent TAddAdd         { $$ = NewCompoundNode("inc", NewAtomNode($1), NewNumberNode("1")).setPos0($1.Pos) } |
-        TIdent TMinMin         { $$ = NewCompoundNode("inc", NewAtomNode($1), NewNumberNode("-1")).setPos0($1.Pos) }
+        '(' expr ')'      { $$ = $2 }
 
-unary_expr:
-        postfix_expr { $$ = $1 } |
-        '-' unary_expr { $$ = NewCompoundNode("-", NewNumberNode("0"), $2).setPos0($2.Pos) } |
-        '~' unary_expr { $$ = NewCompoundNode("~", $2).setPos0($2.Pos) } |
-        '!' unary_expr { $$ = NewCompoundNode("!", $2).setPos0($2.Pos) } |
-        '#' unary_expr { $$ = NewCompoundNode("#", $2).setPos0($2.Pos) }
-
-mul_expr:
-        unary_expr { $$ = $1 } |
-        mul_expr '*' unary_expr        { $$ = NewCompoundNode("*", $1,$3).setPos0($1.Pos) } |
-        mul_expr '/' unary_expr        { $$ = NewCompoundNode("/", $1,$3).setPos0($1.Pos) } |
-        mul_expr '%' unary_expr        { $$ = NewCompoundNode("%", $1,$3).setPos0($1.Pos) }
-
-add_expr:
-        mul_expr { $$ = $1 } |
-        add_expr '+' mul_expr        { $$ = NewCompoundNode("+", $1,$3).setPos0($1.Pos) } |
-        add_expr '-' mul_expr        { $$ = NewCompoundNode("-", $1,$3).setPos0($1.Pos) }
-
-shift_expr:
-        add_expr { $$ = $1 } |
-        shift_expr TLsh add_expr       { $$ = NewCompoundNode("<<", $1,$3).setPos0($1.Pos) } |
-        shift_expr TRsh add_expr       { $$ = NewCompoundNode(">>", $1,$3).setPos0($1.Pos) }
-
-comp_expr:
-        shift_expr { $$ = $1 } |
-        comp_expr '>'  shift_expr        { $$ = NewCompoundNode("<", $3,$1).setPos0($1.Pos) } |
-        comp_expr '<'  shift_expr        { $$ = NewCompoundNode("<", $1,$3).setPos0($1.Pos) } |
-        comp_expr TGte shift_expr       { $$ = NewCompoundNode("<=", $3,$1).setPos0($1.Pos) } |
-        comp_expr TLte shift_expr       { $$ = NewCompoundNode("<=", $1,$3).setPos0($1.Pos) }
-
-eq_expr:
-        comp_expr { $$ = $1 } |
-        eq_expr TEqeq comp_expr      { $$ = NewCompoundNode("==", $1,$3).setPos0($1.Pos) } |
-        eq_expr TNeq  comp_expr       { $$ = NewCompoundNode("!=", $1,$3).setPos0($1.Pos) }
-
-bit_and_expr:
-        eq_expr { $$ = $1 } |
-        bit_and_expr '&' eq_expr { $$ = NewCompoundNode("&", $1,$3).setPos0($1.Pos) }
-       
-bit_xor_expr:
-        bit_and_expr { $$ = $1 } |
-        bit_xor_expr '^' bit_and_expr { $$ = NewCompoundNode("^", $1,$3).setPos0($1.Pos) }
-
-bit_or_expr:
-        bit_xor_expr { $$ = $1 } |
-        bit_or_expr '|' bit_xor_expr { $$ = NewCompoundNode("|", $1,$3).setPos0($1.Pos) }
-
-and_expr:
-        bit_or_expr { $$ = $1 } |
-        and_expr TAnd bit_or_expr { $$ = NewCompoundNode("and", $1,$3).setPos0($1.Pos) }
- 
-or_expr:
-        and_expr { $$ = $1 } |
-        or_expr TOr and_expr { $$ = NewCompoundNode("or", $1,$3).setPos0($1.Pos) }
-
-assign_expr:
-        or_expr { $$ = $1 } |
-        unary_expr '=' assign_expr {
-            $$ = NewCompoundNode("move", $1, $3)
-            if len($1.Compound) > 0 {
-                if c, _ := $1.Compound[0].Value.(string); c == "load" {
-                    $$ = NewCompoundNode("store", $1.Compound[1], $1.Compound[2], $3)
-                }
-            }
-            if c, _ := $1.Value.(string); c != "" && $1.Type == NTAtom {
-                if a, b, s := $3.isSimpleAddSub(); a == c {
-                    $3.Compound[2].Value = $3.Compound[2].Value.(float64) * s
-                    $$ = NewCompoundNode("inc", $1, $3.Compound[2])
-                    $$.Compound[1].Pos = $1.Pos
-                } else if b == c {
-                    $3.Compound[1].Value = $3.Compound[1].Value.(float64) * s
-                    $$ = NewCompoundNode("inc", $1, $3.Compound[1])
-                    $$.Compound[1].Pos = $1.Pos
-                }
-            }
-            $$.Compound[0].Pos = $1.Pos
-        }
-
-map_expr:
-        assign_expr       { $$ = $1 } |
-        map_gen           { $$ = $1 }
-
-expr:
-    map_expr {
-        $$ = $1
-    } |
-    expr ',' map_expr {
-        if $1.Type != NTCompound || len($1.Compound) == 0 || $1.Compound[0].Value.(string) != "chain" {
-            $$ = NewCompoundNode("chain", $1)
-        } else {
-            $$ = $1
-        }
-        $$.Compound = append($$.Compound, $3)
-    }
- 
 func_call:
-        postfix_expr func_args {
+        prefix_expr func_args {
             switch c, _ := $1.Value.(string); c {
             case "copy":
                 switch len($2.Compound) {
@@ -434,6 +382,9 @@ func_call:
 func_args:
         '(' ')'           { $$ = NewCompoundNode() } |
         '(' expr_list ')' { $$ = $2 }
+
+function:
+        func func_params_list block { $$ = NewCompoundNode($1, "<a>", $2, $3).setPos0($2.Pos) }
 
 func_params_list:
         '(' ')'            { $$ = NewCompoundNode() } |

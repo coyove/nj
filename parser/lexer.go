@@ -392,7 +392,7 @@ redo:
 				case '+':
 					tok.Type = TAddAdd
 				case '-':
-					tok.Type = TMinMin
+					tok.Type = TSubSub
 				}
 				tok.Str = string(ch) + string(ch)
 				sc.Next()

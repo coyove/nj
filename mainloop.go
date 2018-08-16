@@ -125,7 +125,8 @@ MAIN:
 			env.Set(opa, konst(kaddr, uint16(opb)))
 		case OP_INC:
 			num := env.Get(opa).AsNumber()
-			env.Set(opa, NewNumberValue(num+konst(kaddr, uint16(opb)).AsNumber()))
+			env.A = NewNumberValue(num + konst(kaddr, uint16(opb)).AsNumber())
+			env.Set(opa, env.A)
 		case OP_ADD:
 			switch testTypes(env.R0, env.R1) {
 			case _Tnumbernumber:

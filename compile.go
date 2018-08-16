@@ -356,7 +356,7 @@ func LoadFile(path string) (*Closure, error) {
 	if err != nil {
 		return nil, err
 	}
-	n.Dump(os.Stderr)
+	// n.Dump(os.Stderr)
 	// panic(10)
 	return compileNode(n)
 }
