@@ -109,3 +109,10 @@ func BenchmarkSmallStringEquality2(b *testing.B) {
 		a.Equal(a0)
 	}
 }
+
+func BenchmarkIsZero(b *testing.B) {
+	a := NewBoolValue(false)
+	for i := 0; i < b.N; i++ {
+		a.IsZero()
+	}
+}

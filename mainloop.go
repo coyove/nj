@@ -333,7 +333,7 @@ MAIN:
 						v.AsClosure().SetCaller(env.R3)
 					}
 				} else if env.R3.Type() == Tgeneric {
-					env.A = GLoad(env.R3, int(env.R2.Num()))
+					v = GLoad(env.R3, int(env.R2.Num()))
 				} else {
 					panicf("can't load from %+v with key %+v", env.R3, env.R2)
 				}
@@ -385,6 +385,12 @@ MAIN:
 					m.l = x.AsMap().l[start:end]
 				}
 				env.A = NewMapValue(m)
+			case Tgeneric:
+				if end == -1 {
+					env.A = GSlice(x, start, GLen(x))
+				} else {
+					env.A = GSlice(x, start, end)
+				}
 			default:
 				panicf("can't slice %+v", x)
 			}

@@ -1,5 +1,5 @@
 var n = 0;
-var nCPU = 4;
+var nCPU = 1;
 
 func A(i, j) {
     return ((i+j)*(i+j+1)/2 + i + 1);

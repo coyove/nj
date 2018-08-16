@@ -58,6 +58,37 @@ func GLoad(sub Value, idx int) Value {
 	}
 }
 
+func GSlice(sub Value, start, end int) Value {
+	sp, st := sub.AsGeneric()
+	switch st {
+	case GTagByteArray:
+		return NewGenericValueInterface((*(*[]byte)(sp))[start:end], GTagByteArray)
+	case GTagByteClampedArray:
+		return NewGenericValueInterface((*(*[]byte)(sp))[start:end], GTagByteClampedArray)
+	case GTagInt8Array:
+		return NewGenericValueInterface((*(*[]int8)(sp))[start:end], GTagInt8Array)
+	case GTagUint16Array:
+		return NewGenericValueInterface((*(*[]uint16)(sp))[start:end], GTagUint16Array)
+	case GTagInt16Array:
+		return NewGenericValueInterface((*(*[]int16)(sp))[start:end], GTagInt16Array)
+	case GTagUint32Array:
+		return NewGenericValueInterface((*(*[]uint32)(sp))[start:end], GTagUint32Array)
+	case GTagInt32Array:
+		return NewGenericValueInterface((*(*[]int32)(sp))[start:end], GTagInt32Array)
+	case GTagFloat32Array:
+		return NewGenericValueInterface((*(*[]float32)(sp))[start:end], GTagFloat32Array)
+	case GTagFloat64Array:
+		return NewGenericValueInterface((*(*[]float64)(sp))[start:end], GTagFloat64Array)
+	case GTagStringArray:
+		return NewGenericValueInterface((*(*[]string)(sp))[start:end], GTagStringArray)
+	case GTagBoolArray:
+		return NewGenericValueInterface((*(*[]bool)(sp))[start:end], GTagBoolArray)
+	default:
+		panicf("can't load from generic %+v with range %+v:%+v", sub, start, end)
+		return Value{}
+	}
+}
+
 func GStore(sub Value, idx int, v Value) {
 	sp, st := sub.AsGeneric()
 	switch st {

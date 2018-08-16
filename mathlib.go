@@ -2,10 +2,12 @@ package potatolang
 
 import (
 	"math"
+
+	"github.com/coyove/common/rand"
 )
 
 func initMathLib() {
-
+	r := rand.New()
 	lmath := NewMap()
 
 	var _bvalue, _bvalue2 = func(i uint64) Value { return NewNumberValue(math.Float64frombits(i)) }, NewBoolValue
@@ -30,9 +32,29 @@ func initMathLib() {
 		Puts("eq", NewNativeValue(2, func(env *Env) Value { return _bvalue2(env.SGet(0).u64() == env.SGet(1).u64()) })).
 		Puts("ne", NewNativeValue(2, func(env *Env) Value { return _bvalue2(env.SGet(0).u64() != env.SGet(1).u64()) }))))
 
+	var _bvalue32 = func(i uint32) Value { return NewNumberValue(float64(i)) }
+	lmath.Puts("u32", NewMapValue(NewMap().
+		Puts("add", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) + uint32(env.SGet(1).Num())) })).
+		Puts("sub", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) - uint32(env.SGet(1).Num())) })).
+		Puts("mul", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) * uint32(env.SGet(1).Num())) })).
+		Puts("div", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) / uint32(env.SGet(1).Num())) })).
+		Puts("mod", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) % uint32(env.SGet(1).Num())) })).
+		Puts("lsh", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) << uint32(env.SGet(1).Num())) })).
+		Puts("rsh", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) >> uint32(env.SGet(1).Num())) }))))
+
 	lmath.Puts("sqrt", NewNativeValue(1, func(env *Env) Value {
 		return NewNumberValue(math.Sqrt(env.SGet(0).Num()))
 	}))
+	lmath.Puts("rand", NewMapValue(NewMap().
+		Puts("intn", NewNativeValue(1, func(env *Env) Value {
+			return NewNumberValue(float64(r.Intn(int(env.SGet(0).Num()))))
+		})).
+		Puts("bytes", NewNativeValue(1, func(env *Env) Value {
+			return NewGenericValueInterface(
+				r.Fetch(int(env.SGet(0).Num())),
+				GTagByteArray,
+			)
+		}))))
 
 	CoreLibs["math"] = NewMapValue(lmath)
 }

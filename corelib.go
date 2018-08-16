@@ -21,6 +21,23 @@ const (
 	GTagFloat64Array
 )
 
+type GTagComparator interface {
+	Equal(a, b Value) bool
+}
+
+var gtagComparators = map[uint64]GTagComparator{}
+
+func RegisterGTagcomparator(a, b uint32, comp GTagComparator) bool {
+	x := uint64(a)<<32 + uint64(b)
+	y := uint64(b)<<32 + uint64(a)
+	if _, ok := gtagComparators[x]; ok {
+		return false
+	}
+	gtagComparators[x] = comp
+	gtagComparators[y] = comp
+	return true
+}
+
 var CoreLibNames = []string{
 	"std", "io", "math",
 }
@@ -138,15 +155,26 @@ func initCoreLibs() {
 	lcore.Puts("utf8char", NewNativeValue(1, func(env *Env) Value {
 		return NewStringValue(char(env.SGet(0).Num(), false))
 	}))
-	lcore.Puts("contains", NewNativeValue(2, func(env *Env) Value {
+	lcore.Puts("index", NewNativeValue(2, func(env *Env) Value {
 		switch s := env.SGet(0); s.Type() {
 		case Tstring:
-			return NewBoolValue(strings.Contains(s.AsString(), env.SGet(1).Str()))
+			return NewNumberValue(float64(strings.Index(s.AsString(), env.SGet(1).Str())))
 		case Tmap:
-			_, ok := s.AsMap().Get(env.SGet(1))
-			return NewBoolValue(ok)
+			m := s.AsMap()
+			x := env.SGet(1)
+			for i, a := range m.l {
+				if a.Equal(x) {
+					return NewNumberValue(float64(i))
+				}
+			}
+			for _, v := range m.m {
+				if v[1].Equal(x) {
+					return v[0]
+				}
+			}
+			return NewValue()
 		default:
-			return NewBoolValue(false)
+			return NewNumberValue(-1)
 		}
 	}))
 	lcore.Puts("sync", NewMapValue(NewMap().

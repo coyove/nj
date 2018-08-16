@@ -46,6 +46,9 @@ func TestSBuiltin(t *testing.T) {
 func TestSString(t *testing.T) {
 	runFile(t, "tests/string.txt")
 }
+func TestSStringIndex(t *testing.T) {
+	runFile(t, "tests/stringindex.txt")
+}
 
 func TestSStd(t *testing.T) {
 	runFile(t, "tests/std.txt")

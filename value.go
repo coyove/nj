@@ -173,9 +173,11 @@ func (v Value) IsFalse() bool {
 	return false
 }
 
+var _zero = NewNumberValue(0)
+
 // IsZero is a fast way to check if a numeric Value is +0
 func (v Value) IsZero() bool {
-	return v.num&clear3LSB == 0 && uintptr(v.ptr) == _Anchor64
+	return v == _zero
 }
 
 // AsNumber cast value to float64
@@ -254,10 +256,10 @@ func (v Value) Equal(r Value) bool {
 	}
 	switch testTypes(v, r) {
 	case _Tnumbernumber:
-		return *(*[SizeofValue]byte)(unsafe.Pointer(&v)) == *(*[SizeofValue]byte)(unsafe.Pointer(&r))
+		return v == r
 	case _Tstringstring:
 		if ln := byte(v.num) >> 4; ln > 0 {
-			return *(*[SizeofValue]byte)(unsafe.Pointer(&v)) == *(*[SizeofValue]byte)(unsafe.Pointer(&r))
+			return v == r
 		}
 		return r.AsString() == v.AsString()
 	case _Tmapmap:
@@ -284,12 +286,17 @@ func (v Value) Equal(r Value) bool {
 	case _Tgenericgeneric:
 		vp, vt := v.AsGeneric()
 		rp, rt := r.AsGeneric()
+		eq := gtagComparators[uint64(vt)<<32+uint64(rt)]
+		if eq != nil {
+			return eq.Equal(v, r)
+		}
 		return vp == rp && vt == rt
 	}
 	return false
 }
 
 // ToPrintString returns the printable string of value
+// it won't wrap a string with double quotes, String() will
 func (v Value) ToPrintString() string {
 	return v.toString(0)
 }
@@ -330,7 +337,7 @@ func (v Value) toString(lv int) string {
 		return v.AsClosure().String()
 	case Tgeneric:
 		vp, vt := v.AsGeneric()
-		return fmt.Sprintf("<tag%d:%v>", vt, vp)
+		return fmt.Sprintf("<tag%x:%v>", vt, vp)
 	}
 	return "nil"
 }

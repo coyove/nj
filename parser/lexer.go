@@ -311,7 +311,7 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 }
 
 var reservedWords = map[string]uint32{
-	"assert": TAssert, "break": TBreak, "continue": TContinue, "else": TElse, "goto": TGoto,
+	"assert": TAssert, "break": TBreak, "continue": TContinue, "else": TElse,
 	"for": TFor, "func": TFunc, "if": TIf, "nil": TNil,
 	"return": TReturn, "require": TRequire, "var": TVar, "yield": TYield,
 }

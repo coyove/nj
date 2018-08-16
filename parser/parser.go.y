@@ -46,7 +46,7 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAssert TBreak TContinue TElse TFor TFunc TGoto TIf TNil TReturn TRequire TVar TYield
+%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TNil TReturn TRequire TVar TYield
 
 /* Literals */
 %token<token> TAddAdd TSubSub TAddEq TSubEq TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
@@ -138,8 +138,8 @@ assign_stat:
         }
 
 _postfix_incdec:
-        TAddAdd { $$ = NNode("1") } |
-        TSubSub { $$ = NNode("-1") }
+        TAddAdd { $$ = NNode(1.0) } |
+        TSubSub { $$ = NNode(-1.0) }
 
 postfix_incdec:
         TIdent _postfix_incdec                    { $$ = CNode("inc", ANode($1).setPos($1), $2) } |
@@ -152,11 +152,11 @@ for_stat1:
 
 for_stat2:
         expr ';' { $$ = $1 } |
-        ';'      { $$ = NNode("1") }
+        ';'      { $$ = NNode(1.0) }
 
 for_stat:
         TFor block {
-            $$ = CNode("for", NNode("1"), CNode(), $2).setPos0($1)
+            $$ = CNode("for", NNode(1.0), CNode(), $2).setPos0($1)
         } |
         TFor '(' expr ')' if_body {
             $$ = CNode("for", $3, CNode(), $5).setPos0($1)
@@ -169,6 +169,13 @@ for_stat:
         } |
         TFor '(' for_stat1 for_stat2 ')' if_body {
             $$ = $3.Cappend(CNode("for", $4, CNode(), $6)).setPos0($1)
+        } |
+        TFor '(' TIdent ',' TIdent '=' expr ')' if_body {
+            $$ = CNode("call", "copy", CNode(
+               NNode(1.0),
+               $7,
+               CNode("func", "<a>", CNode($3.Str, $5.Str), $9),
+            ))
         }
 
 if_stat:
