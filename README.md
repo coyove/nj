@@ -138,12 +138,12 @@ for (...) var a = 3;
 // null type is written as 'nil', not 'null'
 // there is no boolean value, use '1' or '0' instead
 // there is no 'switch' statement, write 'else if' instead
-// there is no '++' or '--', write 'a = a + 1' instead, it has special optimization
+// there is no '+=, -=, *= ...', write 'a = a + b' instead
+// however you can write 'a++' or 'a--', they have special optimizations
 // there is no conditional operator '?', use and-or trick instead: 'a && b || c'
 // there is no 'while(cond)', write 'for(cond)' instead, but not 'for(;cond;)'
 // there is no 'do while'
-// bitwise operations are all based on signed 32bit integers
-// there is no '>>>' 
+// bitwise operations are all based on signed 32bit integers, and there is no '>>>' 
 // semi-colons can not be omitted
 // 'var a = func foo() { ... };' is illegal
 ```

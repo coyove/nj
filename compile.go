@@ -253,7 +253,7 @@ func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint32, err 
 }
 
 func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx uint32, err error) {
-	nodes := compound.Compound
+	nodes := compound.C()
 	if len(nodes) == 0 {
 		return newpacket(), regA, nil
 	}
@@ -300,7 +300,7 @@ func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint3
 	buf := newpacket()
 	table.im = nil
 
-	for _, a := range chain.Compound {
+	for _, a := range chain.C() {
 		if a.Type != parser.NTCompound {
 			continue
 		}

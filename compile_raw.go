@@ -40,7 +40,7 @@ var _rawOP0 = map[string]byte{
 func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
 	defer func() {
 		if err == nil {
-			code.WritePos(atoms[0].Pos)
+			code.WritePos(atoms[0].Meta)
 		}
 	}()
 	// $op(a, b, c)
@@ -52,7 +52,7 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 		return
 	}
 
-	for _, arg := range atoms[2].Compound {
+	for _, arg := range atoms[2].C() {
 		if arg.Type == parser.NTCompound {
 			err = fmt.Errorf("%v: can't use complex value in raw opcode", arg)
 			return
@@ -60,7 +60,7 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 	}
 
 	extract := func(idx int) (offset int32, addr uint32, k uint16, isK bool, ok bool) {
-		arg := atoms[2].Compound[idx]
+		arg := atoms[2].Cx(idx)
 		switch arg.Type {
 		case parser.NTNumber:
 			offset = int32(arg.Value.(float64))
@@ -83,14 +83,14 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 		return
 	}
 
-	if len(atoms[2].Compound) < 1 {
+	if atoms[2].Cn() == 0 {
 		err = fmt.Errorf("%v: not enough arguments", atoms[0])
 		return
 	}
 
 	o, a, k, isk, ok := extract(0)
 	if !ok {
-		err = fmt.Errorf("%v: invalid raw argument", atoms[2].Compound[0])
+		err = fmt.Errorf("%v: invalid raw argument", atoms[2].Cx(0))
 	}
 	// need 1 argument
 	switch opname {
@@ -154,14 +154,14 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 		return
 	}
 
-	if len(atoms[2].Compound) < 2 {
+	if atoms[2].Cn() < 2 {
 		err = fmt.Errorf("%v: not enough arguments", head)
 		return
 	}
 
 	o2, a2, k2, isk2, ok := extract(1)
 	if !ok {
-		err = fmt.Errorf("%v: invalid raw argument", atoms[2].Compound[1])
+		err = fmt.Errorf("%v: invalid raw argument", atoms[2].Cx(1))
 	}
 	switch opname {
 	case "if":

@@ -39,7 +39,7 @@ const whitespace1 = 1<<'\t' | 1<<' '
 const whitespace2 = 1<<'\t' | 1<<'\n' | 1<<'\r' | 1<<' '
 
 type Error struct {
-	Pos     Position
+	Pos     Meta
 	Message string
 	Token   string
 }
@@ -66,13 +66,13 @@ func isDigit(ch uint32) bool {
 }
 
 type Scanner struct {
-	Pos    Position
+	Pos    Meta
 	reader *bufio.Reader
 }
 
 func NewScanner(reader io.Reader, source string) *Scanner {
 	return &Scanner{
-		Pos:    Position{source, 1, 0},
+		Pos:    Meta{source, 1, 0, 0},
 		reader: bufio.NewReaderSize(reader, 4096),
 	}
 }

@@ -68,7 +68,7 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint3
 		}
 		table.put(aDest.Value.(string), uint16(newYX))
 	}
-	buf.WritePos(atoms[0].Pos)
+	buf.WritePos(atoms[0].Meta)
 	return buf, newYX, nil
 }
 
@@ -98,16 +98,16 @@ func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint3
 		buf.Write(code)
 		buf.WriteOP(op, yx, 0)
 	}
-	buf.WritePos(atoms[0].Pos)
+	buf.WritePos(atoms[0].Meta)
 	return buf, yx, nil
 }
 
 func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
 	var buf packet
-	if buf, err = table.flaten(atoms[1].Compound); err != nil {
+	if buf, err = table.flaten(atoms[1].C()); err != nil {
 		return
 	}
-	for _, atom := range atoms[1].Compound {
+	for _, atom := range atoms[1].C() {
 		if err = table.fill(&buf, atom, OP_PUSH, OP_PUSHK); err != nil {
 			return
 		}
@@ -117,7 +117,7 @@ func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx 
 	} else {
 		buf.WriteOP(OP_MAKEMAP, 1, 0)
 	}
-	buf.WritePos(atoms[0].Pos)
+	buf.WritePos(atoms[0].Meta)
 	return buf, regA, nil
 }
 
@@ -134,13 +134,13 @@ func (table *symtable) flaten(atoms []*parser.Node) (buf packet, err error) {
 				return
 			}
 			if table.im != nil {
-				atoms[i] = &parser.Node{Type: parser.NTNumber, Value: *table.im}
+				atoms[i] = parser.NNode(*table.im)
 				table.im = nil
 			} else if table.ims != nil {
-				atoms[i] = &parser.Node{Type: parser.NTString, Value: *table.ims}
+				atoms[i] = parser.SNode(*table.ims)
 				table.ims = nil
 			} else {
-				atoms[i] = &parser.Node{Type: parser.NTAddr, Value: yx}
+				atoms[i] = parser.NewNode(parser.NTAddr).SetValue(yx)
 				replacedAtoms = append(replacedAtoms, atoms[i])
 				buf.Write(code)
 			}
@@ -237,7 +237,7 @@ func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint
 		return
 	}
 	code, yx, err = table.flatWrite(atoms, op)
-	code.WritePos(atoms[0].Pos)
+	code.WritePos(atoms[0].Meta)
 	return
 }
 
@@ -249,7 +249,7 @@ func (table *symtable) compileIncOp(atoms []*parser.Node) (code packet, yx uint3
 	}
 	table.clearRegRecord(subject)
 	buf.WriteOP(OP_INC, subject, uint32(table.addConst(atoms[2].Value)))
-	code.WritePos(atoms[1].Pos)
+	code.WritePos(atoms[1].Meta)
 	return buf, regA, nil
 }
 
@@ -294,7 +294,7 @@ func (table *symtable) compileAndOrOp(atoms []*parser.Node) (code packet, yx uin
 
 	_, yx, _ = op(buf.data[c2-1])
 	buf.data[c2-1] = makeop(bop, yx, uint32(int32(jmp)))
-	code.WritePos(atoms[0].Pos)
+	code.WritePos(atoms[0].Meta)
 	return buf, regA, nil
 }
 
@@ -327,13 +327,13 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint32
 	}
 	if len(falseCode.data) > 0 {
 		buf.WriteOP(OP_IFNOT, condyx, uint32(len(trueCode.data))+1)
-		buf.WritePos(condition.Pos)
+		buf.WritePos(condition.Meta)
 		buf.Write(trueCode)
 		buf.WriteOP(OP_JMP, 0, uint32(len(falseCode.data)))
 		buf.Write(falseCode)
 	} else {
 		buf.WriteOP(OP_IFNOT, condyx, uint32(len(trueCode.data)))
-		buf.WritePos(condition.Pos)
+		buf.WritePos(condition.Meta)
 		buf.Write(trueCode)
 	}
 	table.clearAllRegRecords()
@@ -352,7 +352,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 
 	switch name {
 	case "addressof":
-		varname := nodes[2].Compound[0].Value.(string)
+		varname := nodes[2].Cx(0).Value.(string)
 		address, ok := table.get(varname)
 		if !ok {
 			err = fmt.Errorf(errUndeclaredVariable, callee)
@@ -361,23 +361,23 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		buf.WriteOP(OP_SETK, regA, uint32(table.addConst(float64(address))))
 		return buf, regA, nil
 	case "len":
-		code, yx, err = table.flatWrite(append([]*parser.Node{nodes[1]}, nodes[2].Compound...), OP_LEN)
-		code.WritePos(nodes[0].Pos)
+		code, yx, err = table.flatWrite(append([]*parser.Node{nodes[1]}, nodes[2].C()...), OP_LEN)
+		code.WritePos(nodes[0].Meta)
 		return
 	case "copy":
-		x := append([]*parser.Node{nodes[1]}, nodes[2].Compound...)
+		x := append([]*parser.Node{nodes[1]}, nodes[2].C()...)
 		if y, ok := x[3].Value.(float64); ok && y == 2 {
 			// return stack, env is escaped
 			table.envescape = true
 		}
 		code, yx, err = table.flatWrite(x, OP_COPY)
-		code.WritePos(nodes[0].Pos)
+		code.WritePos(nodes[0].Meta)
 		return
 	case "typeof":
-		return table.flatWrite(append([]*parser.Node{nodes[1]}, nodes[2].Compound...), OP_TYPEOF)
+		return table.flatWrite(append([]*parser.Node{nodes[1]}, nodes[2].C()...), OP_TYPEOF)
 	}
 
-	atoms, replacedAtoms := nodes[2].Compound, []*parser.Node{}
+	atoms, replacedAtoms := nodes[2].C(), []*parser.Node{}
 	for i := 0; i < len(atoms); i++ {
 		atom := atoms[i]
 
@@ -386,7 +386,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 			if err != nil {
 				return
 			}
-			atoms[i] = &parser.Node{Type: parser.NTAddr, Value: yx}
+			atoms[i] = parser.NewNode(parser.NTAddr).SetValue(yx)
 			replacedAtoms = append(replacedAtoms, atoms[i])
 			buf.Write(code)
 		}
@@ -435,7 +435,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 	}
 
 	buf.WriteOP(OP_CALL, varIndex, 0)
-	buf.WritePos(nodes[0].Pos)
+	buf.WritePos(nodes[0].Meta)
 	return buf, regA, nil
 }
 
@@ -456,7 +456,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 
 	var this bool
 	i := 0
-	for _, p := range params.Compound {
+	for _, p := range params.C() {
 		argname := p.Value.(string)
 		if argname == "this" {
 			this = true
@@ -517,7 +517,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	// but buf.source shouldn't be changed
 	code.source = buf.source
 	buf.Write(code)
-	buf.WritePos(atoms[0].Pos)
+	buf.WritePos(atoms[0].Meta)
 	return buf, regA, nil
 }
 

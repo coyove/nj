@@ -107,7 +107,7 @@ func (b *packet) WriteOP(op byte, opa, opb uint32) {
 	b.data = append(b.data, makeop(op, opa, opb))
 }
 
-func (b *packet) WritePos(p parser.Position) {
+func (b *packet) WritePos(p parser.Meta) {
 	b.pos = append(b.pos, makeop2(uint32(len(b.data)), uint32(p.Line), uint16(p.Column)))
 	if p.Source != "" {
 		b.source = p.Source

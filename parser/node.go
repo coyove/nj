@@ -8,13 +8,14 @@ import (
 	"strings"
 )
 
-type Position struct {
+type Meta struct {
 	Source string
 	Line   uint32
-	Column uint32
+	Column uint16
+	Type   byte
 }
 
-func (pos *Position) String() string {
+func (pos *Meta) String() string {
 	if pos.Source == "" {
 		return fmt.Sprintf("0:%d:%d", pos.Line, pos.Column)
 	}
@@ -24,7 +25,7 @@ func (pos *Position) String() string {
 type Token struct {
 	Type uint32
 	Str  string
-	Pos  Position
+	Pos  Meta
 }
 
 func (self *Token) String() string {
@@ -40,56 +41,104 @@ const (
 )
 
 type Node struct {
-	Type     byte
-	Value    interface{}
-	Pos      Position
-	Compound []*Node
+	Meta
+	Value interface{}
 }
 
-func NewCompoundNode(args ...interface{}) *Node {
-	n := &Node{
-		Type:     NTCompound,
-		Compound: make([]*Node, 0),
+func NewNode(t byte) *Node {
+	n := &Node{}
+	n.Type = t
+	return n
+}
+
+func (n *Node) SetPos(p interface{}) *Node {
+	var m Meta
+	switch x := p.(type) {
+	case *Node:
+		m = x.Meta
+	case Token:
+		m = x.Pos
+	case Meta:
+		m = x
+	default:
+		panic("shouldn't happen")
 	}
+	n.Meta.Column = m.Column
+	n.Meta.Line = m.Line
+	n.Meta.Source = m.Source
+	return n
+}
+
+func (n *Node) SetValue(v interface{}) *Node { n.Value = v; return n }
+
+func (n *Node) C() []*Node { return n.Value.([]*Node) }
+
+func (n *Node) Cappend(na *Node) *Node { n.Value = append(n.C(), na); return n }
+
+func (n *Node) Cx(i int) *Node { return n.Value.([]*Node)[i] }
+
+func (n *Node) Cn() int { a, _ := n.Value.([]*Node); return len(a) }
+
+func (n *Node) Cy() bool { _, ok := n.Value.([]*Node); return ok }
+
+func (n *Node) S() string { a, _ := n.Value.(string); return a }
+
+func (n *Node) N() float64 { a, _ := n.Value.(float64); return a }
+
+func CNode(args ...interface{}) *Node {
+	n := NewNode(NTCompound)
+	arr := make([]*Node, 0, len(args))
 	for _, arg := range args {
 		switch arg.(type) {
 		case string:
-			n.Compound = append(n.Compound, &Node{
-				Type:  NTAtom,
-				Value: arg.(string),
-			})
+			arr = append(arr, NewNode(NTAtom).SetValue(arg))
 		case *Node:
-			if n.Pos.Source == "" {
-				n.Pos = arg.(*Node).Pos
+			if n.Source == "" {
+				n.SetPos(arg.(*Node).Meta)
 			}
-			n.Compound = append(n.Compound, arg.(*Node))
+			arr = append(arr, arg.(*Node))
 		default:
 			panic("shouldn't happen")
 		}
 	}
+	n.Value = arr
 	return n
 }
 
-func NewAtomNode(tok Token) *Node {
-	return &Node{
-		Type:  NTAtom,
-		Value: tok.Str,
-		Pos:   tok.Pos,
-	}
+func ANode(tok Token) *Node {
+	n := NewNode(NTAtom)
+	n.Value = tok.Str
+	n.SetPos(tok.Pos)
+	return n
 }
 
-func NewNilNode() *Node {
-	return &Node{
-		Type:  NTAtom,
-		Value: "nil",
-	}
+func NilNode() *Node {
+	n := NewNode(NTAtom)
+	n.Value = "nil"
+	return n
 }
 
-func NewStringNode(arg string) *Node {
-	return &Node{
-		Type:  NTString,
-		Value: arg,
+func SNode(arg string) *Node {
+	n := NewNode(NTString)
+	n.Value = arg
+	return n
+}
+
+func NNode(arg interface{}) *Node {
+	n := NewNode(NTNumber)
+	switch x := arg.(type) {
+	case string:
+		num, err := StringToNumber(x)
+		if err != nil {
+			panic(err)
+		}
+		n.Value = num
+	case float64:
+		n.Value = x
+	default:
+		panic("shouldn't happen")
 	}
+	return n
 }
 
 func StringToNumber(arg string) (float64, error) {
@@ -122,26 +171,9 @@ func StringToNumber(arg string) (float64, error) {
 	return num, nil
 }
 
-func NewNumberNode(arg string) *Node {
-	num, err := StringToNumber(arg)
-	if err != nil {
-		panic(err)
-	}
-	return &Node{
-		Type:  NTNumber,
-		Value: num,
-	}
-}
+func (n *Node) setPos0(p interface{}) *Node { n.Cx(0).SetPos(p); return n }
 
-func (n *Node) setPos0(p Position) *Node {
-	n.Compound[0].Pos = p
-	return n
-}
-
-func (n *Node) setPos(p Position) *Node {
-	n.Pos = p
-	return n
-}
+func (n *Node) setPos(p interface{}) *Node { n.SetPos(p); return n }
 
 func (n *Node) Dump(w io.Writer) {
 	switch n.Type {
@@ -153,7 +185,7 @@ func (n *Node) Dump(w io.Writer) {
 		io.WriteString(w, n.Value.(string))
 	case NTCompound:
 		io.WriteString(w, "[")
-		for _, a := range n.Compound {
+		for _, a := range n.C() {
 			a.Dump(w)
 			io.WriteString(w, " ")
 		}
@@ -162,7 +194,7 @@ func (n *Node) Dump(w io.Writer) {
 }
 
 func (n *Node) String() string {
-	pos := fmt.Sprintf("@%s:%d:%d", n.Pos.Source, n.Pos.Line, n.Pos.Column)
+	pos := fmt.Sprintf("@%s:%d:%d", n.Source, n.Line, n.Column)
 	switch n.Type {
 	case NTNumber:
 		return strconv.FormatFloat(n.Value.(float64), 'f', 9, 64) + pos
@@ -171,8 +203,8 @@ func (n *Node) String() string {
 	case NTAtom:
 		return n.Value.(string) + pos
 	case NTCompound:
-		buf := make([]string, len(n.Compound))
-		for i, a := range n.Compound {
+		buf := make([]string, n.Cn())
+		for i, a := range n.C() {
 			buf[i] = a.String()
 		}
 		return "[" + strings.Join(buf, " ") + "]" + pos
@@ -181,40 +213,32 @@ func (n *Node) String() string {
 }
 
 func (n *Node) isIsolatedDupCall() bool {
-	if n.Type != NTCompound || len(n.Compound) < 3 {
+	if n.Cn() < 3 || n.Cx(0).S() != "call" || n.Cx(1).S() != "copy" {
 		return false
 	}
-	if c, _ := n.Compound[0].Value.(string); c != "call" {
-		return false
-	}
-	if c, _ := n.Compound[1].Value.(string); c != "copy" {
-		return false
-	}
-	if n.Compound[2].Type != NTCompound || len(n.Compound[2].Compound) < 3 {
-		return false
-	}
-	return true
+	// [call copy [a0, a1, a2]]
+	return n.Cx(2).Cn() == 3
 }
 
 func (n *Node) isSimpleAddSub() (a string, b string, s float64) {
-	if n.Type != NTCompound || len(n.Compound) < 3 {
+	if n.Type != NTCompound || n.Cn() < 3 {
 		return
 	}
 	s = 1
-	if c, _ := n.Compound[0].Value.(string); c != "+" && c != "-" {
+	if c := n.Cx(0).S(); c != "+" && c != "-" {
 		return
 	} else if c == "-" {
 		s = -1
 	}
-	if c, _ := n.Compound[1].Value.(string); n.Compound[1].Type == NTAtom {
+	if c := n.Cx(1).S(); n.Cx(1).Type == NTAtom {
 		a = c
-		if n.Compound[2].Type != NTNumber {
+		if n.Cx(2).Type != NTNumber {
 			a = ""
 		}
 	}
-	if c, _ := n.Compound[2].Value.(string); n.Compound[2].Type == NTAtom {
+	if c := n.Cx(2).S(); n.Cx(2).Type == NTAtom {
 		b = c
-		if n.Compound[1].Type != NTNumber {
+		if n.Cx(1).Type != NTNumber {
 			b = ""
 		}
 	}

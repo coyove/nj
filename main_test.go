@@ -146,3 +146,81 @@ func TestImportLoop(t *testing.T) {
 		t.Error("something wrong")
 	}
 }
+
+func TestCopyCall(t *testing.T) {
+	cls, err := LoadString("var a = copy(1);")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := cls.code
+	o, a, _ := op(code[0])
+	if o != OP_R0K || cls.consts[a].Num() != 1.0 {
+		t.Fatal("error opcode 0")
+	}
+
+	o, a, _ = op(code[1])
+	if o != OP_R1K || cls.consts[a].Num() != 1.0 {
+		t.Fatal("error opcode 1")
+	}
+
+	o, a, _ = op(code[2])
+	if o != OP_R2K || cls.consts[a].Num() != 0.0 {
+		t.Fatal("error opcode 2")
+	}
+
+	cls, err = LoadString("var a = copy();")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code = cls.code
+	o, a, _ = op(code[0])
+	if o != OP_R0K || cls.consts[a].Num() != 1.0 {
+		t.Fatal("error opcode 0 1")
+	}
+
+	o, a, _ = op(code[2])
+	if o != OP_R2K || cls.consts[a].Num() != 1.0 {
+		t.Fatal("error opcode 2 1")
+	}
+
+	cls, err = LoadString("return copy();")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code = cls.code
+	o, a, _ = op(code[0])
+	if o != OP_R0K || cls.consts[a].Num() != 1.0 {
+		t.Fatal("error opcode 0 2")
+	}
+
+	o, a, _ = op(code[2])
+	if o != OP_R2K || cls.consts[a].Num() != 2.0 {
+		t.Fatal("error opcode 2 2")
+	}
+
+	cls, err = LoadString("copy();")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code = cls.code
+	o, a, _ = op(code[0])
+	if o != OP_R0K || cls.consts[a].Num() != 0.0 {
+		t.Fatal("error opcode 0 3")
+	}
+
+}
+
+func BenchmarkCompiling(b *testing.B) {
+	buf, _ := ioutil.ReadFile("tests/string.txt")
+	src := "(func() {" + string(buf) + "})();"
+	for i := 0; i < b.N; i++ {
+		y := make([]byte, len(src)*i)
+		for x := 0; x < i; x++ {
+			copy(y[x*len(src):], src)
+		}
+		_, err := LoadString(string(y))
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
