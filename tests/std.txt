@@ -35,3 +35,14 @@ for (var i = 0; i < 10; i=i+1) {
 assert std.char(tarr) == "abcdefghij";
 tarr[5]++;
 assert std.char(tarr) == "abcdegghij";
+
+var a = {
+    "a": {"hello": nil, "3": {
+        "0": {1,2,3},
+    }},
+};
+
+var j = std.json.stringify(a);
+assert std.json.parse(j) == a;
+assert std.json.parse("true") == 1;
+assert std.json.parse("     true") == 1;

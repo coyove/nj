@@ -9,7 +9,7 @@ import (
 func stdPrint(f *os.File) func(env *Env) Value {
 	return func(env *Env) Value {
 		for i := 0; i < env.SSize(); i++ {
-			f.WriteString(env.SGet(i).ToPriNstring())
+			f.WriteString(env.SGet(i).ToPrintString())
 		}
 
 		return NewValue()
@@ -49,7 +49,7 @@ func _sprintf(env *Env) string {
 		}
 		i = j
 		num, _ := strconv.Atoi(numbuf.String())
-		buf.WriteString(env.SGet(num).ToPriNstring())
+		buf.WriteString(env.SGet(num).ToPrintString())
 	}
 
 	return buf.String()
@@ -69,7 +69,7 @@ func stdSprintf(env *Env) Value {
 func stdPrintln(f *os.File) func(env *Env) Value {
 	return func(env *Env) Value {
 		for i := 0; i < env.SSize(); i++ {
-			f.WriteString(env.SGet(i).ToPriNstring() + " ")
+			f.WriteString(env.SGet(i).ToPrintString() + " ")
 		}
 		f.WriteString("\n")
 		return NewValue()

@@ -4,10 +4,13 @@ import (
 	"strings"
 	"sync"
 	"unsafe"
+
+	"github.com/buger/jsonparser"
 )
 
 const (
-	GTagEnv = iota + 1
+	GTagError = iota + 1
+	GTagEnv
 	GTagByteArray
 	GTagByteClampedArray
 	GTagInt8Array
@@ -301,8 +304,105 @@ func initCoreLibs() {
 		Puts("boolarray", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagBoolArray) })).
 		Puts("_", NewValue())))
 
+	lcore.Puts("json", NewMapValue(NewMap().
+		Puts("parse", NewNativeValue(1, func(env *Env) Value {
+			json := []byte{}
+			switch x := env.SGet(0); x.Type() {
+			case Tstring:
+				json = []byte(x.AsString())
+			case Tgeneric:
+				json = *(*[]byte)(x.GenTags(GTagByteArray, GTagByteClampedArray, GTagInt8Array))
+			}
+			for i := 0; i < len(json); i++ {
+				switch json[i] {
+				case '[':
+					return walkArray(json)
+				case '{':
+					return walkObject(json)
+				case '"':
+					str, err := jsonparser.ParseString(json)
+					panicerr(err)
+					return NewStringValue(str)
+				case 't', 'f':
+					b, err := jsonparser.ParseBoolean(json)
+					panicerr(err)
+					return NewBoolValue(b)
+				case ' ', '\t', '\r', '\n':
+					// continue
+				default:
+					num, err := jsonparser.ParseFloat(json)
+					panicerr(err)
+					return NewNumberValue(num)
+				}
+			}
+			panic(json)
+		})).
+		Puts("stringify", NewNativeValue(1, func(env *Env) Value {
+			return NewStringValue(env.SGet(0).toString(0, true))
+		}))))
 	CoreLibs["std"] = NewMapValue(lcore)
 
 	initIOLib()
 	initMathLib()
+}
+
+func walkObject(buf []byte) Value {
+	m := NewMap()
+	jsonparser.ObjectEach(buf, func(key, value []byte, dataType jsonparser.ValueType, offset int) error {
+		switch dataType {
+		case jsonparser.Unknown:
+			panic(value)
+		case jsonparser.Null:
+			m.Put(NewStringValue(string(key)), NewValue())
+		case jsonparser.Boolean:
+			b, err := jsonparser.ParseBoolean(value)
+			panicerr(err)
+			m.Put(NewStringValue(string(key)), NewBoolValue(b))
+		case jsonparser.Number:
+			num, err := jsonparser.ParseFloat(value)
+			panicerr(err)
+			m.Put(NewStringValue(string(key)), NewNumberValue(num))
+		case jsonparser.String:
+			str, err := jsonparser.ParseString(value)
+			panicerr(err)
+			m.Put(NewStringValue(string(key)), NewStringValue(str))
+		case jsonparser.Array:
+			m.Put(NewStringValue(string(key)), walkArray(value))
+		case jsonparser.Object:
+			m.Put(NewStringValue(string(key)), walkObject(value))
+		}
+		return nil
+	})
+	return NewMapValue(m)
+}
+
+func walkArray(buf []byte) Value {
+	m := NewMap()
+	i := float64(0)
+	jsonparser.ArrayEach(buf, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+		switch dataType {
+		case jsonparser.Unknown:
+			panic(value)
+		case jsonparser.Null:
+			m.Put(NewNumberValue(i), NewValue())
+		case jsonparser.Boolean:
+			b, err := jsonparser.ParseBoolean(value)
+			panicerr(err)
+			m.Put(NewNumberValue(i), NewBoolValue(b))
+		case jsonparser.Number:
+			num, err := jsonparser.ParseFloat(value)
+			panicerr(err)
+			m.Put(NewNumberValue(i), NewNumberValue(num))
+		case jsonparser.String:
+			str, err := jsonparser.ParseString(value)
+			panicerr(err)
+			m.Put(NewNumberValue(i), NewStringValue(str))
+		case jsonparser.Array:
+			m.Put(NewNumberValue(i), walkArray(value))
+		case jsonparser.Object:
+			m.Put(NewNumberValue(i), walkObject(value))
+		}
+		i++
+	})
+	return NewMapValue(m)
 }

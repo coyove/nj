@@ -13,6 +13,12 @@ func panicf(msg string, args ...interface{}) {
 	panic(fmt.Sprintf(msg, args...))
 }
 
+func panicerr(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
 type stacktrace struct {
 	cursor      uint32
 	noenvescape bool
@@ -231,7 +237,7 @@ MAIN:
 						}
 						env.A = NewStringValue(ss + string(buf))
 					default:
-						env.A = NewStringValue(ss + env.R1.ToPriNstring())
+						env.A = NewStringValue(ss + env.R1.ToPrintString())
 					}
 				} else {
 					panicf("can't apply 'bit and (concat)' on %+v and %+v", env.R0, env.R1)

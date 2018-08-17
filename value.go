@@ -244,7 +244,7 @@ func (v Value) String() string {
 	case Tstring:
 		return strconv.Quote(v.AsString())
 	default:
-		return v.ToPriNstring()
+		return v.ToPrintString()
 	}
 }
 
@@ -295,14 +295,17 @@ func (v Value) Equal(r Value) bool {
 	return false
 }
 
-// ToPriNstring returns the printable string of value
+// ToPrintString returns the printable string of value
 // it won't wrap a string with double quotes, String() will
-func (v Value) ToPriNstring() string {
-	return v.toString(0)
+func (v Value) ToPrintString() string {
+	return v.toString(0, false)
 }
 
-func (v Value) toString(lv int) string {
+func (v Value) toString(lv int, json bool) string {
 	if lv > 32 {
+		if json {
+			return "\"<omit deep nesting>\""
+		}
 		return "<omit deep nesting>"
 	}
 
@@ -314,30 +317,78 @@ func (v Value) toString(lv int) string {
 		}
 		return strconv.FormatFloat(x, 'f', -1, 64)
 	case Tstring:
+		if json {
+			return "\"" + strconv.Quote(v.AsString()) + "\""
+		}
 		return v.AsString()
 	case Tmap:
 		m, buf := v.AsMap(), &bytes.Buffer{}
-		buf.WriteString("{")
-		for _, v := range m.l {
-			buf.WriteString(v.toString(lv + 1))
-			buf.WriteString(",")
+		if json {
+			if len(m.m) == 0 {
+				// treat it as an array
+				buf.WriteString("[")
+				for _, v := range m.l {
+					buf.WriteString(v.toString(lv+1, json))
+					buf.WriteString(",")
+				}
+				if len(m.l) > 0 {
+					buf.Truncate(buf.Len() - 1)
+				}
+				buf.WriteString("]")
+			} else {
+				// treat it as an object
+				buf.WriteString("{")
+				for i, v := range m.l {
+					buf.WriteString("\"" + strconv.Itoa(i) + "\":")
+					buf.WriteString(v.toString(lv+1, json))
+					buf.WriteString(",")
+				}
+				for _, v := range m.m {
+					if v[0].Type() != Tstring {
+						panicf("non-string key is not allowed")
+					}
+					buf.WriteString(v[0].String())
+					buf.WriteString(":")
+					buf.WriteString(v[1].toString(lv+1, json))
+					buf.WriteString(",")
+				}
+				if m.Size() > 0 {
+					buf.Truncate(buf.Len() - 1)
+				}
+				buf.WriteString("}")
+			}
+		} else {
+			buf.WriteString("{")
+			for _, v := range m.l {
+				buf.WriteString(v.toString(lv+1, json))
+				buf.WriteString(",")
+			}
+			for _, v := range m.m {
+				buf.WriteString(v[0].String())
+				buf.WriteString(":")
+				buf.WriteString(v[1].toString(lv+1, json))
+				buf.WriteString(",")
+			}
+			if m.Size() > 0 {
+				buf.Truncate(buf.Len() - 1)
+			}
+			buf.WriteString("}")
 		}
-		for _, v := range m.m {
-			buf.WriteString(v[0].String())
-			buf.WriteString(":")
-			buf.WriteString(v[1].toString(lv + 1))
-			buf.WriteString(",")
-		}
-		if m.Size() > 0 {
-			buf.Truncate(buf.Len() - 1)
-		}
-		buf.WriteString("}")
 		return buf.String()
 	case Tclosure:
+		if json {
+			return "\"" + v.AsClosure().String() + "\""
+		}
 		return v.AsClosure().String()
 	case Tgeneric:
 		vp, vt := v.AsGeneric()
+		if json {
+			return fmt.Sprintf("\"<tag%x:%v>\"", vt, vp)
+		}
 		return fmt.Sprintf("<tag%x:%v>", vt, vp)
+	}
+	if json {
+		return "null"
 	}
 	return "nil"
 }
