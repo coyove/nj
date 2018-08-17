@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	errUndeclaredVariable = " %+v: undeclared variable"
+	errUndeclaredVariable    = " %+v: undeclared variable"
+	anonyMapIterCallbackFlag = "<anony-map-iter-callback>"
 )
 
 func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
@@ -73,6 +74,11 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint3
 }
 
 func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
+	if len(table.continueNode) > 0 && table.continueNode[len(table.continueNode)-1].S() == anonyMapIterCallbackFlag {
+		err = fmt.Errorf("%+v: return/yield can't be used inside a pseudo for-loop", atoms[0])
+		return
+	}
+
 	var op, opk byte
 	op, opk = OP_RET, OP_RETK
 	if atoms[0].Value.(string) == "yield" {
@@ -475,10 +481,20 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		return newpacket(), 0, fmt.Errorf("do you really need more than 255 arguments?")
 	}
 
+	// this is a special function, inside it any 'continue' will be converted to 'return nil'
+	// and any 'break' will be converted to 'return #nil'
+	if name == anonyMapIterCallbackFlag {
+		newtable.continueNode = append(newtable.continueNode, parser.NewNode(parser.Natom).SetValue(name))
+	}
+
 	newtable.sp = uint16(ln)
 	code, yx, err = newtable.compileChainOp(atoms[3])
 	if err != nil {
 		return
+	}
+
+	if name == anonyMapIterCallbackFlag {
+		newtable.continueNode = newtable.continueNode[:len(newtable.continueNode)-1]
 	}
 
 	code.WriteOP(OP_EOB, 0, 0)
@@ -551,7 +567,12 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 			err = fmt.Errorf("%+v: invalid continue statement", atoms[0])
 			return
 		}
-		code, yx, err = table.compileChainOp(table.continueNode[len(table.continueNode)-1])
+		cn := table.continueNode[len(table.continueNode)-1]
+		if cn.S() == anonyMapIterCallbackFlag {
+			buf.WriteOP(OP_RETK, 0, 0)
+			return buf, regA, nil
+		}
+		code, yx, err = table.compileChainOp(cn)
 		if err != nil {
 			return
 		}
@@ -561,6 +582,16 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 	}
 	if staticWhileHack.breakFlag == nil {
 		_, staticWhileHack.breakFlag = gen128bit()
+	}
+	if len(table.continueNode) == 0 {
+		err = fmt.Errorf("%+v: invalid break statement", atoms[0])
+		return
+	}
+	if table.continueNode[len(table.continueNode)-1].S() == anonyMapIterCallbackFlag {
+		buf.WriteOP(OP_R3K, 0, 0)
+		buf.WriteOP(OP_POP, 0, 0)
+		buf.WriteOP(OP_RET, regA, 0)
+		return buf, regA, nil
 	}
 	buf.WriteRaw(staticWhileHack.breakFlag)
 	return buf, regA, nil

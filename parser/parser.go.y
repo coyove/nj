@@ -172,9 +172,9 @@ for_stat:
         } |
         TFor '(' TIdent ',' TIdent '=' expr ')' if_body {
             $$ = CNode("call", "copy", CNode(
-               NNode(1.0),
+               NNode(0.0),
                $7,
-               CNode("func", "<a>", CNode($3.Str, $5.Str), $9),
+               CNode("func", "<anony-map-iter-callback>", CNode($3.Str, $5.Str), $9),
             ))
         }
 

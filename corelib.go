@@ -10,6 +10,8 @@ import (
 
 const (
 	GTagError = iota + 1
+	GTagUnique
+	GTagPhantom
 	GTagEnv
 	GTagByteArray
 	GTagByteClampedArray
@@ -71,7 +73,7 @@ func initCoreLibs() {
 	lcore := NewMap()
 	lcore.Puts("unique", NewNativeValue(0, func(env *Env) Value {
 		a := new(int)
-		return NewGenericValue(unsafe.Pointer(a), 0)
+		return NewGenericValue(unsafe.Pointer(a), GTagUnique)
 	}))
 	lcore.Puts("genlist", NewNativeValue(1, func(env *Env) Value {
 		return NewMapValue(NewMapSize(int(env.SGet(0).Num())))
@@ -316,21 +318,21 @@ func initCoreLibs() {
 			for i := 0; i < len(json); i++ {
 				switch json[i] {
 				case '[':
-					return walkArray(json)
+					return walkArray(json[i:])
 				case '{':
-					return walkObject(json)
+					return walkObject(json[i:])
 				case '"':
-					str, err := jsonparser.ParseString(json)
+					str, err := jsonparser.ParseString(json[i:])
 					panicerr(err)
 					return NewStringValue(str)
 				case 't', 'f':
-					b, err := jsonparser.ParseBoolean(json)
+					b, err := jsonparser.ParseBoolean(json[i:])
 					panicerr(err)
 					return NewBoolValue(b)
 				case ' ', '\t', '\r', '\n':
 					// continue
 				default:
-					num, err := jsonparser.ParseFloat(json)
+					num, err := jsonparser.ParseFloat(json[i:])
 					panicerr(err)
 					return NewNumberValue(num)
 				}

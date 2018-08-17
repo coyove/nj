@@ -111,4 +111,39 @@ for {
 assert a == {1,2,4,8,16,};
 
 for (i, v = a) assert v == 1 << i;
- 
+
+
+var m = {};
+for (a,b={1,2,3}) {
+    m[len(m)] = b;
+    if (a == 1) break;
+} 
+
+assert m == {1,2};
+
+var m = {};
+var s = {1,2,3,4,5,6,7,8,9,10};
+for (var i = 0; i < 10; i++) {
+    var a = {};
+    if (i == 5) continue;
+    if (i == 8) break;
+
+    for (j, s = s) {
+        a[len(a)] = s; 
+        if (j == i) break;
+    }
+
+    m[len(m)] = a;
+}
+
+assert m == std.eval(`
+    return {
+        {1},
+        {1,2},
+        {1,2,3},
+        {1,2,3,4},
+        {1,2,3,4,5},
+      /*{1,2,3,4,5,6},*/
+        {1,2,3,4,5,6,7},
+        {1,2,3,4,5,6,7,8}};
+`)();

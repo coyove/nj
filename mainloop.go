@@ -366,13 +366,18 @@ MAIN:
 		case OP_R1R2:
 			env.R1 = env.R2
 		case OP_POP:
-			m := env.R3.Map()
-			l := m.l
-			if len(l) == 0 {
-				env.A = Value{}
-			} else {
-				env.A = l[len(l)-1]
-				m.l = l[:len(l)-1]
+			switch env.R3.Type() {
+			case Tmap:
+				m := env.R3.AsMap()
+				l := m.l
+				if len(l) == 0 {
+					env.A = Value{}
+				} else {
+					env.A = l[len(l)-1]
+					m.l = l[:len(l)-1]
+				}
+			default:
+				env.A = PhantomValue
 			}
 		case OP_SLICE:
 			start, end := int(env.R2.Num()), int(env.R1.Num())
@@ -457,7 +462,7 @@ MAIN:
 				if cls.Isset(CLS_HASRECEIVER) {
 					newEnv.SPush(cls.caller)
 				}
-				if cls.Isset(CLS_YIELDABLE) || cls.native != nil {
+				if cls.Isset(CLS_YIELDABLE) || cls.native != nil || cls.Isset(CLS_RECOVERALL) {
 					newEnv.trace = retStack
 					newEnv.parent = env
 					env.A = cls.Exec(newEnv)
@@ -585,7 +590,9 @@ func doCopy(env *Env) {
 				if alloc {
 					newstr = append(newstr, cls.Exec(newEnv))
 				} else {
-					cls.Exec(newEnv)
+					if cls.Exec(newEnv) == PhantomValue {
+						break
+					}
 				}
 			}
 			if alloc {
@@ -630,14 +637,19 @@ func doCopy(env *Env) {
 				newEnv.SClear()
 				newEnv.SPush(NewNumberValue(float64(i)))
 				newEnv.SPush(v)
-				cls.Exec(newEnv)
+				if cls.Exec(newEnv) == PhantomValue {
+					goto BREAK_ALL
+				}
 			}
 			for _, v := range m.m {
 				newEnv.SClear()
 				newEnv.SPush(v[0])
 				newEnv.SPush(v[1])
-				cls.Exec(newEnv)
+				if cls.Exec(newEnv) == PhantomValue {
+					goto BREAK_ALL
+				}
 			}
+		BREAK_ALL:
 		}
 	}
 }

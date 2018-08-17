@@ -1,9 +1,9 @@
-//line parser.go.y:2
+//line parser.go.y:1
 package parser
 
 import __yyfmt__ "fmt"
 
-//line parser.go.y:2
+//line parser.go.y:3
 import (
 	"path/filepath"
 )
@@ -112,6 +112,7 @@ const yyErrCode = 2
 const yyInitialStackSize = 16
 
 //line parser.go.y:358
+
 var typesLookup = map[string]string{
 	"nil": "0", "number": "1", "string": "2", "map": "4", "closure": "6", "generic": "7",
 }
@@ -930,9 +931,9 @@ yydefault:
 		//line parser.go.y:173
 		{
 			yyVAL.expr = CNode("call", "copy", CNode(
-				NNode(1.0),
+				NNode(0.0),
 				yyDollar[7].expr,
-				CNode("func", "<a>", CNode(yyDollar[3].token.Str, yyDollar[5].token.Str), yyDollar[9].expr),
+				CNode("func", "<anony-map-iter-callback>", CNode(yyDollar[3].token.Str, yyDollar[5].token.Str), yyDollar[9].expr),
 			))
 		}
 	case 37:

@@ -67,6 +67,9 @@ var (
 	// for a numeric Value, its 'ptr' = _Anchor64 + last 3 bits of 'num'
 	_anchor64 = new(int64)
 	_Anchor64 = uintptr(unsafe.Pointer(_anchor64))
+
+	// PhantomValue is a global readonly value to represent the true "void"
+	PhantomValue = NewGenericValue(unsafe.Pointer(_anchor64), GTagPhantom)
 )
 
 func init() {
