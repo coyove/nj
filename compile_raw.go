@@ -53,7 +53,7 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 	}
 
 	for _, arg := range atoms[2].C() {
-		if arg.Type == parser.NTCompound {
+		if arg.Type == parser.Ncompound {
 			err = fmt.Errorf("%v: can't use complex value in raw opcode", arg)
 			return
 		}
@@ -62,12 +62,12 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 	extract := func(idx int) (offset int32, addr uint32, k uint16, isK bool, ok bool) {
 		arg := atoms[2].Cx(idx)
 		switch arg.Type {
-		case parser.NTNumber:
+		case parser.Nnumber:
 			offset = int32(arg.Value.(float64))
 			k = table.addConst(arg.Value)
 			isK = true
 			ok = true
-		case parser.NTAtom:
+		case parser.Natom:
 			str := arg.Value.(string)
 			if str == "$a" {
 				addr = regA
@@ -75,7 +75,7 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 			} else {
 				addr, ok = table.get(str)
 			}
-		case parser.NTString:
+		case parser.Nstring:
 			k = table.addConst(arg.Value)
 			isK = true
 			ok = true

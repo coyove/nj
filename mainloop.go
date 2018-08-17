@@ -231,7 +231,7 @@ MAIN:
 						}
 						env.A = NewStringValue(ss + string(buf))
 					default:
-						env.A = NewStringValue(ss + env.R1.ToPrintString())
+						env.A = NewStringValue(ss + env.R1.ToPriNstring())
 					}
 				} else {
 					panicf("can't apply 'bit and (concat)' on %+v and %+v", env.R0, env.R1)

@@ -244,7 +244,7 @@ func (v Value) String() string {
 	case Tstring:
 		return strconv.Quote(v.AsString())
 	default:
-		return v.ToPrintString()
+		return v.ToPriNstring()
 	}
 }
 
@@ -295,9 +295,9 @@ func (v Value) Equal(r Value) bool {
 	return false
 }
 
-// ToPrintString returns the printable string of value
+// ToPriNstring returns the printable string of value
 // it won't wrap a string with double quotes, String() will
-func (v Value) ToPrintString() string {
+func (v Value) ToPriNstring() string {
 	return v.toString(0)
 }
 

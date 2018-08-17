@@ -20,9 +20,9 @@ func BenchmarkMap(b *testing.B) {
 		m.Put(NewNumberValue(float64(j)), NewNumberValue(float64(j)))
 	}
 
-	x := float64(rand.Intn(benchSize))
-	y := NewNumberValue(x)
 	for i := 0; i < b.N; i++ {
+		x := float64(rand.Intn(benchSize))
+		y := NewNumberValue(x)
 		if v, _ := m.Get(y); v.AsNumber() != x {
 			b.Error("shouldn't happen")
 		}

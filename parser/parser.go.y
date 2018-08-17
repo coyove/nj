@@ -123,7 +123,7 @@ assign_stat:
             if $1.Cn() > 0 && $1.Cx(0).S() == "load" {
                 $$ = CNode("store", $1.Cx(1), $1.Cx(2), $3)
             }
-            if c := $1.S(); c != "" && $1.Type == NTAtom {
+            if c := $1.S(); c != "" && $1.Type == Natom {
                 if a, b, s := $3.isSimpleAddSub(); a == c {
                     $3.Cx(2).Value = $3.Cx(2).N() * s
                     $$ = CNode("inc", $1, $3.Cx(2))
@@ -294,7 +294,7 @@ func_call:
                     $$ = CNode("call", $1, CNode(NNode("1"), $2.Cx(0), NNode("0")))
                 default:
                     p := $2.Cx(1)
-                    if p.Type != NTCompound && p.Type != NTAtom {
+                    if p.Type != Ncompound && p.Type != Natom {
                         yylex.(*Lexer).Error("invalid argument for S")
                     }
                     $$ = CNode("call", $1, CNode(NNode("1"), $2.Cx(0), p))
@@ -317,7 +317,7 @@ func_call:
                 if $2.Cn() != 1 {
                     yylex.(*Lexer).Error("addressof takes 1 argument")
                 }
-                if $2.Cx(0).Type != NTAtom {
+                if $2.Cx(0).Type != Natom {
                     yylex.(*Lexer).Error("addressof can only get the address of a variable")
                 }
                 $$ = CNode("call", $1, $2)

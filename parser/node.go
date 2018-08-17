@@ -33,11 +33,11 @@ func (self *Token) String() string {
 }
 
 const (
-	NTNumber = iota
-	NTString
-	NTAtom
-	NTCompound
-	NTAddr
+	Nnumber = iota
+	Nstring
+	Natom
+	Ncompound
+	Naddr
 )
 
 type Node struct {
@@ -86,12 +86,12 @@ func (n *Node) S() string { a, _ := n.Value.(string); return a }
 func (n *Node) N() float64 { a, _ := n.Value.(float64); return a }
 
 func CNode(args ...interface{}) *Node {
-	n := NewNode(NTCompound)
+	n := NewNode(Ncompound)
 	arr := make([]*Node, 0, len(args))
 	for _, arg := range args {
 		switch arg.(type) {
 		case string:
-			arr = append(arr, NewNode(NTAtom).SetValue(arg))
+			arr = append(arr, NewNode(Natom).SetValue(arg))
 		case *Node:
 			if n.Source == "" {
 				n.SetPos(arg.(*Node).Meta)
@@ -106,26 +106,26 @@ func CNode(args ...interface{}) *Node {
 }
 
 func ANode(tok Token) *Node {
-	n := NewNode(NTAtom)
+	n := NewNode(Natom)
 	n.Value = tok.Str
 	n.SetPos(tok.Pos)
 	return n
 }
 
 func NilNode() *Node {
-	n := NewNode(NTAtom)
+	n := NewNode(Natom)
 	n.Value = "nil"
 	return n
 }
 
 func SNode(arg string) *Node {
-	n := NewNode(NTString)
+	n := NewNode(Nstring)
 	n.Value = arg
 	return n
 }
 
 func NNode(arg interface{}) *Node {
-	n := NewNode(NTNumber)
+	n := NewNode(Nnumber)
 	switch x := arg.(type) {
 	case string:
 		num, err := StringToNumber(x)
@@ -177,13 +177,13 @@ func (n *Node) setPos(p interface{}) *Node { n.SetPos(p); return n }
 
 func (n *Node) Dump(w io.Writer) {
 	switch n.Type {
-	case NTNumber:
+	case Nnumber:
 		io.WriteString(w, "<"+strconv.FormatFloat(n.Value.(float64), 'f', 9, 64)+">")
-	case NTString:
+	case Nstring:
 		io.WriteString(w, strconv.Quote(n.Value.(string)))
-	case NTAtom:
+	case Natom:
 		io.WriteString(w, n.Value.(string))
-	case NTCompound:
+	case Ncompound:
 		io.WriteString(w, "[")
 		for _, a := range n.C() {
 			a.Dump(w)
@@ -196,13 +196,13 @@ func (n *Node) Dump(w io.Writer) {
 func (n *Node) String() string {
 	pos := fmt.Sprintf("@%s:%d:%d", n.Source, n.Line, n.Column)
 	switch n.Type {
-	case NTNumber:
+	case Nnumber:
 		return strconv.FormatFloat(n.Value.(float64), 'f', 9, 64) + pos
-	case NTString:
+	case Nstring:
 		return strconv.Quote(n.Value.(string)) + pos
-	case NTAtom:
+	case Natom:
 		return n.Value.(string) + pos
-	case NTCompound:
+	case Ncompound:
 		buf := make([]string, n.Cn())
 		for i, a := range n.C() {
 			buf[i] = a.String()
@@ -221,7 +221,7 @@ func (n *Node) isIsolatedDupCall() bool {
 }
 
 func (n *Node) isSimpleAddSub() (a string, b string, s float64) {
-	if n.Type != NTCompound || n.Cn() < 3 {
+	if n.Type != Ncompound || n.Cn() < 3 {
 		return
 	}
 	s = 1
@@ -230,15 +230,15 @@ func (n *Node) isSimpleAddSub() (a string, b string, s float64) {
 	} else if c == "-" {
 		s = -1
 	}
-	if c := n.Cx(1).S(); n.Cx(1).Type == NTAtom {
+	if c := n.Cx(1).S(); n.Cx(1).Type == Natom {
 		a = c
-		if n.Cx(2).Type != NTNumber {
+		if n.Cx(2).Type != Nnumber {
 			a = ""
 		}
 	}
-	if c := n.Cx(2).S(); n.Cx(2).Type == NTAtom {
+	if c := n.Cx(2).S(); n.Cx(2).Type == Natom {
 		b = c
-		if n.Cx(1).Type != NTNumber {
+		if n.Cx(1).Type != Nnumber {
 			b = ""
 		}
 	}

@@ -112,7 +112,6 @@ const yyErrCode = 2
 const yyInitialStackSize = 16
 
 //line parser.go.y:358
-
 var typesLookup = map[string]string{
 	"nil": "0", "number": "1", "string": "2", "map": "4", "closure": "6", "generic": "7",
 }
@@ -829,7 +828,7 @@ yydefault:
 			if yyDollar[1].expr.Cn() > 0 && yyDollar[1].expr.Cx(0).S() == "load" {
 				yyVAL.expr = CNode("store", yyDollar[1].expr.Cx(1), yyDollar[1].expr.Cx(2), yyDollar[3].expr)
 			}
-			if c := yyDollar[1].expr.S(); c != "" && yyDollar[1].expr.Type == NTAtom {
+			if c := yyDollar[1].expr.S(); c != "" && yyDollar[1].expr.Type == Natom {
 				if a, b, s := yyDollar[3].expr.isSimpleAddSub(); a == c {
 					yyDollar[3].expr.Cx(2).Value = yyDollar[3].expr.Cx(2).N() * s
 					yyVAL.expr = CNode("inc", yyDollar[1].expr, yyDollar[3].expr.Cx(2))
@@ -1344,7 +1343,7 @@ yydefault:
 					yyVAL.expr = CNode("call", yyDollar[1].expr, CNode(NNode("1"), yyDollar[2].expr.Cx(0), NNode("0")))
 				default:
 					p := yyDollar[2].expr.Cx(1)
-					if p.Type != NTCompound && p.Type != NTAtom {
+					if p.Type != Ncompound && p.Type != Natom {
 						yylex.(*Lexer).Error("invalid argument for S")
 					}
 					yyVAL.expr = CNode("call", yyDollar[1].expr, CNode(NNode("1"), yyDollar[2].expr.Cx(0), p))
@@ -1367,7 +1366,7 @@ yydefault:
 				if yyDollar[2].expr.Cn() != 1 {
 					yylex.(*Lexer).Error("addressof takes 1 argument")
 				}
-				if yyDollar[2].expr.Cx(0).Type != NTAtom {
+				if yyDollar[2].expr.Cx(0).Type != Natom {
 					yylex.(*Lexer).Error("addressof can only get the address of a variable")
 				}
 				yyVAL.expr = CNode("call", yyDollar[1].expr, yyDollar[2].expr)

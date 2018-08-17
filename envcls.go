@@ -192,35 +192,23 @@ func (c *Closure) AppendPreArgs(preArgs []Value) {
 	}
 }
 
-func (c *Closure) PreArgs() []Value {
-	return c.preArgs
-}
+func (c *Closure) PreArgs() []Value { return c.preArgs }
 
-func (c *Closure) SetCode(code []uint64) {
-	c.code = code
-}
+func (c *Closure) SetCode(code []uint64) { c.code = code }
 
-func (c *Closure) Code() []uint64 {
-	return c.code
-}
+func (c *Closure) Code() []uint64 { return c.code }
 
-func (c *Closure) SetCaller(cr Value) {
-	c.caller = cr
-}
+func (c *Closure) BytesCode() []byte { return slice64to8(c.code) }
 
-func (c *Closure) Caller() Value {
-	return c.caller
-}
+func (c *Closure) SetCaller(cr Value) { c.caller = cr }
+
+func (c *Closure) Caller() Value { return c.caller }
 
 // ArgsCount returns the minimal number of arguments closure accepts
-func (c *Closure) ArgsCount() int {
-	return int(c.argsCount)
-}
+func (c *Closure) ArgsCount() int { return int(c.argsCount) }
 
 // Env returns the env inside closure
-func (c *Closure) Env() *Env {
-	return c.env
-}
+func (c *Closure) Env() *Env { return c.env }
 
 // Dup duplicates the closure
 func (c *Closure) Dup() *Closure {

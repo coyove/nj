@@ -145,7 +145,7 @@ func (table *symtable) fill(buf *packet, n *parser.Node, op, opk byte) (err erro
 	idx, isreg := registerOpMappings[op]
 	if isreg {
 		if rs := table.regs[idx]; rs.k {
-			if n.Type == parser.NTNumber || n.Type == parser.NTString {
+			if n.Type == parser.Nnumber || n.Type == parser.Nstring {
 				if kidx := table.addConst(n.Value); kidx == rs.kaddr {
 					// the register contains what we want already,
 					return
@@ -154,9 +154,9 @@ func (table *symtable) fill(buf *packet, n *parser.Node, op, opk byte) (err erro
 		} else {
 			var addr uint32 = regA
 			switch n.Type {
-			case parser.NTAtom:
+			case parser.Natom:
 				addr, _ = table.get(n.Value.(string))
-			case parser.NTAddr:
+			case parser.Naddr:
 				addr = n.Value.(uint32)
 			}
 			if addr != regA && rs.addr == addr {
@@ -167,7 +167,7 @@ func (table *symtable) fill(buf *packet, n *parser.Node, op, opk byte) (err erro
 	}
 
 	switch n.Type {
-	case parser.NTAtom:
+	case parser.Natom:
 		if n.Value.(string) == "nil" {
 			buf.WriteOP(opk, 0, 0)
 			if isreg {
@@ -183,13 +183,13 @@ func (table *symtable) fill(buf *packet, n *parser.Node, op, opk byte) (err erro
 				table.regs[idx].k, table.regs[idx].addr = false, addr
 			}
 		}
-	case parser.NTNumber, parser.NTString:
+	case parser.Nnumber, parser.Nstring:
 		kidx := table.addConst(n.Value)
 		buf.WriteOP(opk, uint32(kidx), 0)
 		if isreg {
 			table.regs[idx].k, table.regs[idx].kaddr = true, kidx
 		}
-	case parser.NTAddr:
+	case parser.Naddr:
 		buf.WriteOP(op, n.Value.(uint32), 0)
 		if isreg {
 			table.regs[idx].k, table.regs[idx].addr = false, n.Value.(uint32)
@@ -225,7 +225,7 @@ func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint32, err 
 	var varIndex uint32
 
 	switch n.Type {
-	case parser.NTAtom:
+	case parser.Natom:
 		if n.Value.(string) == "nil" {
 			buf := newpacket()
 			yx = uint32(table.sp)
@@ -240,7 +240,7 @@ func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint32, err 
 			err = fmt.Errorf(errUndeclaredVariable, n)
 			return
 		}
-	case parser.NTAddr:
+	case parser.Naddr:
 		varIndex = n.Value.(uint32)
 	default:
 		code, yx, err = table.compileCompound(n)
@@ -301,7 +301,7 @@ func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint3
 	table.im = nil
 
 	for _, a := range chain.C() {
-		if a.Type != parser.NTCompound {
+		if a.Type != parser.Ncompound {
 			continue
 		}
 		code, yx, err = table.compileCompound(a)
