@@ -13,10 +13,13 @@ import (
 	"github.com/coyove/potatolang"
 )
 
+const VERSION = "0.1.0"
+
 var goroutinePerCPU = flag.Int("goroutine", 2, "goroutines per CPU")
-var output = flag.String("o", "none", "output [none, opcode, bytes, ret, timing]+")
+var output = flag.String("o", "none", "separated by comma: [none, compileonly, compiledsize, opcode, bytes, ret, timing]+")
 var input = flag.String("i", "f", "input source, 'f': file, '-': stdin, others: string")
-var version = flag.Bool("v", false, "print pol version")
+var version = flag.Bool("v", false, "print version and usage")
+var quiet = flag.Bool("quiet", false, "suppress the error output (if any)")
 
 func main() {
 	source := ""
@@ -32,7 +35,7 @@ func main() {
 	log.SetFlags(0)
 
 	if *version {
-		fmt.Println("\"pol\": potatolang virtual machine (" + runtime.GOOS + "/" + runtime.GOARCH + ")")
+		fmt.Println("\"pol\": potatolang virtual machine v" + VERSION + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")")
 		flag.Usage()
 		return
 	}
@@ -57,13 +60,14 @@ func main() {
 		}
 	}
 
-	var _opcode, _timing, _bytes, _ret bool
+	var _opcode, _timing, _bytes, _ret, _compileonly, _roughsize bool
 
 ARG:
 	for _, a := range strings.Split(*output, ",") {
 		switch a {
 		case "n", "no", "none":
-			_opcode, _ret, _bytes, _timing = false, false, false, false
+			_opcode, _ret, _bytes, _timing, _compileonly, _roughsize =
+				false, false, false, false, false, false
 			break ARG
 		case "o", "opcode", "op":
 			_opcode = true
@@ -73,19 +77,45 @@ ARG:
 			_bytes = true
 		case "t", "time", "timing":
 			_timing = true
+		case "co", "compile", "compileonly":
+			_compileonly = true
+		case "cs", "compiledsize", "rs", "roughsize":
+			_roughsize = true
 		}
 	}
 
 	runtime.GOMAXPROCS(runtime.NumCPU() * *goroutinePerCPU)
 	start := time.Now()
-	defer func() {
-		if _timing {
-			fmt.Println("Total execution time:", time.Now().Sub(start).Nanoseconds()/1e6, "ms")
-		}
-	}()
 
 	var b *potatolang.Closure
 	var err error
+
+	defer func() {
+		if r := recover(); r != nil && !*quiet {
+			log.Fatalln(r)
+		}
+
+		if _opcode {
+			fmt.Println(b.PrettyString())
+		}
+		if _bytes {
+			os.Stdout.Write(b.BytesCode())
+		}
+		if _roughsize {
+			ln := len(b.BytesCode())
+			ln += len(b.Consts()) * 16
+			ln += len(b.Pos())
+			fmt.Printf("Compiled size: ~%.1fK\n", float64(ln)/1024)
+		}
+		if _timing {
+			e := float64(time.Now().Sub(start).Nanoseconds()) / 1e6
+			if e < 1000 {
+				fmt.Printf("Time elapsed: %.1fms\n", e)
+			} else {
+				fmt.Printf("Time elapsed: %.3fs\n", e/1e3)
+			}
+		}
+	}()
 
 	if *input == "f" {
 		b, err = potatolang.LoadFile(source)
@@ -96,15 +126,12 @@ ARG:
 		log.Fatalln(err)
 	}
 
-	i := b.Exec(nil)
+	if _compileonly {
+		return
+	}
 
-	if _opcode {
-		fmt.Println(b.PrettyString())
-	}
-	if _bytes {
-		os.Stdout.Write(b.BytesCode())
-	}
+	i := b.Exec(nil)
 	if _ret {
-		fmt.Println(i.I())
+		fmt.Println(i.ToPrintString())
 	}
 }

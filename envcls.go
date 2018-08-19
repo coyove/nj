@@ -198,6 +198,10 @@ func (c *Closure) SetCode(code []uint64) { c.code = code }
 
 func (c *Closure) Code() []uint64 { return c.code }
 
+func (c *Closure) Pos() []uint64 { return c.pos }
+
+func (c *Closure) Consts() []Value { return c.consts }
+
 func (c *Closure) BytesCode() []byte { return slice64to8(c.code) }
 
 func (c *Closure) SetCaller(cr Value) { c.caller = cr }
