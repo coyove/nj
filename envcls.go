@@ -15,17 +15,27 @@ type Env struct {
 	stack  []Value
 
 	A, R0, R1, R2, R3 Value
+	Cancel            *uintptr
 }
 
 // NewEnv creates the Env for closure to run within
 // parent can be nil, which means this is a top Env
-func NewEnv(parent *Env) *Env {
+func NewEnv(parent *Env, cancel *uintptr) *Env {
 	const initCapacity = 16
 	return &Env{
 		parent: parent,
 		stack:  make([]Value, 0, initCapacity),
 		A:      Value{},
+		Cancel: cancel,
 	}
+}
+
+func NewTopEnv(cancel *uintptr) *Env {
+	e := NewEnv(nil, cancel)
+	for _, name := range CoreLibNames {
+		e.SPush(CoreLibs[name])
+	}
+	return e
 }
 
 func (env *Env) grow(newSize int) {
@@ -275,4 +285,11 @@ func (c *Closure) Exec(newEnv *Env) Value {
 	// for a native closure, it doesn't have its own env,
 	// so newEnv's parent is the env where this native function was called.
 	return c.native(newEnv)
+}
+
+// MakeCancelable make the closure and all its children cancelable
+// store 1 into the returned *uintptr to cancel them
+func (c *Closure) MakeCancelable() *uintptr {
+	c.lastenv.Cancel = new(uintptr)
+	return c.lastenv.Cancel
 }

@@ -337,7 +337,7 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 		}
 	}
 	cls = NewClosure(code.data, consts, nil, 0)
-	cls.lastenv = NewEnv(nil)
+	cls.lastenv = NewEnv(nil, nil)
 	cls.pos = code.pos
 	cls.source = "<root>@" + code.source
 	for _, name := range CoreLibNames {

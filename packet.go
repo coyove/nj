@@ -252,7 +252,7 @@ func (c *Closure) crPrettify(tab int) string {
 	sb.WriteString(metaprefix + fmt.Sprintf("consts: %d\n", len(c.consts)))
 
 	hash := crHash(c.code)
-	sb.WriteString(metaprefix + fmt.Sprintf("hash: %08x\n", hash))
+	sb.WriteString(metaprefix + fmt.Sprintf("hash: 0x%08x\n", hash))
 
 	var cursor uint32
 

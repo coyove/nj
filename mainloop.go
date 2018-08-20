@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/coyove/potatolang/parser"
@@ -37,7 +38,7 @@ func (e *ExecError) Error() string {
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
 		src := "<unknown>"
-		// binary search would be better?
+		// binary search would be better
 		for i, pos := range r.cls.pos {
 			op, line, col := op2(pos)
 			opx := uint32(0xffffffff)
@@ -50,7 +51,7 @@ func (e *ExecError) Error() string {
 			}
 		}
 		// the recorded cursor was advanced by 1 already
-		msg += fmt.Sprintf("cursor: %d at <%08x>, source: %s\n", r.cursor-1, crHash(r.cls.code), src)
+		msg += fmt.Sprintf("at %d in 0x%08x - %s\n", r.cursor-1, crHash(r.cls.code), src)
 	}
 	return msg
 }
@@ -65,7 +66,7 @@ func kodeaddr(code []uint64) uintptr { return (*reflect.SliceHeader)(unsafe.Poin
 // 1. final result 2. yield cursor 3. is yield or not
 func ExecCursor(env *Env, K *Closure, cursor uint32) (_v Value, _p uint32, _y bool) {
 	var newEnv *Env
-	// var lastCursor uint32
+	var flag *uintptr
 	var retStack []stacktrace
 	var code = K.code
 	var caddr = kodeaddr(code)
@@ -117,8 +118,14 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (_v Value, _p uint32, _y bo
 		env = r.env
 		retStack = retStack[:len(retStack)-1]
 	}
+
+	flag = env.Cancel
 MAIN:
 	for {
+		if flag != nil && atomic.LoadUintptr(flag) == 1 {
+			panicf("canceled")
+		}
+
 		// log.Println(cursor)
 		bop, opa, opb := cruop(caddr, &cursor)
 		switch bop {
@@ -407,12 +414,12 @@ MAIN:
 			}
 		case OP_PUSH:
 			if newEnv == nil {
-				newEnv = NewEnv(nil)
+				newEnv = NewEnv(nil, flag)
 			}
 			newEnv.SPush(env.Get(opa))
 		case OP_PUSHK:
 			if newEnv == nil {
-				newEnv = NewEnv(nil)
+				newEnv = NewEnv(nil, flag)
 			}
 			newEnv.SPush(konst(kaddr, uint16(opa)))
 		case OP_RET:
@@ -454,7 +461,7 @@ MAIN:
 				}
 			} else {
 				if newEnv == nil {
-					newEnv = NewEnv(env)
+					newEnv = NewEnv(env, flag)
 				}
 				if len(cls.preArgs) > 0 {
 					newEnv.SInsert(0, cls.preArgs)
@@ -576,7 +583,7 @@ func doCopy(env *Env) {
 			env.A = NewMapValue(m)
 		} else {
 			cls := env.R2.Cls()
-			newEnv := NewEnv(cls.Env())
+			newEnv := NewEnv(cls.Env(), env.Cancel)
 			str := env.R1.AsString()
 			var newstr []Value
 			if alloc {
@@ -621,7 +628,7 @@ func doCopy(env *Env) {
 
 	// now R2 should be closure
 	cls := env.R2.Cls()
-	newEnv := NewEnv(cls.Env())
+	newEnv := NewEnv(cls.Env(), env.Cancel)
 	switch env.R1.Type() {
 	case Tmap:
 		if alloc {

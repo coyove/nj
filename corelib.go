@@ -80,7 +80,7 @@ func initCoreLibs() {
 	}))
 	lcore.Puts("apply", NewNativeValue(2, func(env *Env) Value {
 		x, y := env.SGet(0), env.SGet(1)
-		newEnv := NewEnv(x.Cls().env)
+		newEnv := NewEnv(x.Cls().env, env.parent.Cancel)
 		for _, v := range y.Map().l {
 			newEnv.SPush(v)
 		}
@@ -185,7 +185,7 @@ func initCoreLibs() {
 	lcore.Puts("sync", NewMapValue(NewMap().
 		Puts("run", NewNativeValue(1, func(env *Env) Value {
 			cls := env.SGet(0).Cls()
-			newEnv := NewEnv(cls.env)
+			newEnv := NewEnv(cls.env, env.parent.Cancel)
 			if cls.ArgsCount() > env.SSize()-1 {
 				panic("not enough arguments to start a goroutine")
 			}
