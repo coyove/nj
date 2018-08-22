@@ -46,16 +46,15 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TNil TReturn TRequire TVar TYield
+%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TNil TNot TReturn TRequire TVar TWhile TYield
 
 /* Literals */
-%token<token> TAddAdd TSubSub TAddEq TSubEq TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '('
+%token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{'  '[' '('
 
 /* Operators */
 %right 'T'
 %right TElse
 
-%left TAddEq TSubEq
 %left TOr
 %left TAnd
 %left '|' '&' '^'
@@ -88,7 +87,7 @@ block:
         '{' stats '}' { $$ = $2 }
 
 assign_stat_semi:
-        assign_stat ';' {
+        assign_stat {
             if $1.isIsolatedDupCall() {
                 $1.Cx(2).C()[0] = NNode(0.0)
             }
@@ -96,16 +95,14 @@ assign_stat_semi:
         }
 
 stat:
-        ';'              { $$ = CNode() } |
-        jmp_stat ';'     { $$ = $1 } |
+        jmp_stat     { $$ = $1 } |
         flow_stat        { $$ = $1 } |
         assign_stat_semi { $$ = $1 }
 
 if_body:
-        ';'              { $$ = CNode() } |
-        assign_stat_semi { $$ = CNode("chain", $1) } |
-        jmp_stat ';'     { $$ = CNode("chain", $1) } |
-        for_stat         { $$ = CNode("chain", $1) } |
+       assign_stat_semi  { $$ = CNode("chain", $1) } |
+       jmp_stat          { $$ = CNode("chain", $1) } |
+        for_stat          { $$ = CNode("chain", $1) } |
         if_stat          { $$ = CNode("chain", $1) } |
         block            { $$ = $1 }
 
@@ -118,6 +115,7 @@ assign_stat:
         TVar expr_declare_list { $$ = $2 } |
         prefix_expr            { $$ = $1 } |
         postfix_incdec         { $$ = $1 } |
+        '_' { $$ = CNode("nop") } |
         declarator '=' expr {
             $$ = CNode("move", $1, $3)
             if $1.Cn() > 0 && $1.Cx(0).S() == "load" {
@@ -147,7 +145,7 @@ postfix_incdec:
         prefix_expr '.' TIdent   _postfix_incdec  { $$ = CNode("store", $1, $3, CNode("+", CNode("load", $1, $3).setPos0($1), $4).setPos0($1)) }
 
 for_stat1:
-        assign_stat ';' { $$ = CNode("chain", $1) } |
+        assign_stat_semi ';' { $$ = CNode("chain", $1) } |
         ';'             { $$ = CNode("chain") }
 
 for_stat2:
@@ -155,26 +153,17 @@ for_stat2:
         ';'      { $$ = NNode(1.0) }
 
 for_stat:
-        TFor block {
-            $$ = CNode("for", NNode(1.0), CNode(), $2).setPos0($1)
+        TWhile expr  if_body {
+            $$ = CNode("for", $2, CNode(), $3).setPos0($1)
         } |
-        TFor '(' expr ')' if_body {
-            $$ = CNode("for", $3, CNode(), $5).setPos0($1)
+        TFor  for_stat1 for_stat2 assign_stat  if_body {
+            $$ = $2.Cappend(CNode("for", $3, CNode("chain", $4), $5)).setPos0($1)
         } |
-        TFor '(' for_stat1 for_stat2 assign_stat ')' if_body {
-            $$ = $3.Cappend(CNode("for", $4, CNode("chain", $5), $7)).setPos0($1)
-        } |
-        TFor '(' for_stat1 for_stat2 block ')' if_body {
-            $$ = $3.Cappend(CNode("for", $4, $5, $7)).setPos0($1)
-        } |
-        TFor '(' for_stat1 for_stat2 ')' if_body {
-            $$ = $3.Cappend(CNode("for", $4, CNode(), $6)).setPos0($1)
-        } |
-        TFor '(' TIdent ',' TIdent '=' expr ')' if_body {
+        TFor TIdent ',' TIdent '=' expr if_body {
             $$ = CNode("call", "copy", CNode(
                NNode(0.0),
-               $7,
-               CNode("func", "<anony-map-iter-callback>", CNode($3.Str, $5.Str), $9),
+               $6,
+               CNode("func", "<anony-map-iter-callback>", CNode($2.Str, $4.Str), $7),
             ))
         }
 
@@ -199,13 +188,13 @@ func_stat:
         }
 
 jmp_stat:
-        TYield       { $$ = CNode("yield").setPos0($1) } |
-        TYield expr  { $$ = CNode("yield", $2).setPos0($1) } |
-        TBreak       { $$ = CNode("break").setPos0($1) } |
-        TContinue    { $$ = CNode("continue").setPos0($1) } |
-        TAssert expr { $$ = CNode("assert", $2).setPos0($1) } |
-        TReturn      { $$ = CNode("ret").setPos0($1) } |
-        TReturn expr {
+         TYield       '!'  { $$ = CNode("yield").setPos0($1) } |
+         TYield expr  '!'  { $$ = CNode("yield", $2).setPos0($1) } |
+         TBreak         { $$ = CNode("break").setPos0($1) } |
+        TContinue      { $$ = CNode("continue").setPos0($1) } |
+         TAssert expr '!'  { $$ = CNode("assert", $2).setPos0($1) } |
+         TReturn      '!'  { $$ = CNode("ret").setPos0($1) } |
+         TReturn expr '!'  {
             if $2.isIsolatedDupCall() && $2.Cx(2).Cx(2).N() == 1 {
                 $2.Cx(2).C()[2] = NNode(2.0)
             }
@@ -272,7 +261,7 @@ expr:
         expr '&' expr        { $$ = CNode("&", $1,$3).setPos0($1) } |
         '-' expr %prec UNARY { $$ = CNode("-", NNode(0.0), $2).setPos0($2) } |
         '~' expr %prec UNARY { $$ = CNode("~", $2).setPos0($2) } |
-        '!' expr %prec UNARY { $$ = CNode("!", $2).setPos0($2) } |
+        TNot expr %prec UNARY { $$ = CNode("!", $2).setPos0($2) } |
         '#' expr %prec UNARY { $$ = CNode("#", $2).setPos0($2) }
 
 string: 

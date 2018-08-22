@@ -143,7 +143,7 @@ for (...) var a = 3;
 // there is no conditional operator '?', use and-or trick instead: 'a && b || c'
 // there is no 'while(cond)', write 'for(cond)' instead, but not 'for(;cond;)'
 // there is no 'do while'
-// bitwise operations are all based on signed 32bit integers, and there is no '>>>' 
-// semi-colons can not be omitted
+// bitwise operations are identical to javascript 
+// semi-colons can NOT be omitted
 // 'var a = func foo() { ... };' is illegal
 ```
