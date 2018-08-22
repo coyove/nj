@@ -1,6 +1,7 @@
 package potatolang
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -34,7 +35,8 @@ type ExecError struct {
 }
 
 func (e *ExecError) Error() string {
-	msg := "stacktrace:\n"
+	msg := bytes.Buffer{}
+	msg.WriteString("stacktrace:\n")
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
 		src := "<unknown>"
@@ -51,9 +53,11 @@ func (e *ExecError) Error() string {
 			}
 		}
 		// the recorded cursor was advanced by 1 already
-		msg += fmt.Sprintf("at %d in 0x%08x - %s\n", r.cursor-1, crHash(r.cls.code), src)
+		msg.WriteString(fmt.Sprintf("at %d in 0x%08x - %s\n", r.cursor-1, crHash(r.cls.code), src))
 	}
-	return msg
+	msg.WriteString("root panic:\n")
+	msg.WriteString(fmt.Sprintf("%v\n", e.r))
+	return msg.String()
 }
 
 func konst(addr uintptr, idx uint16) Value {
@@ -273,6 +277,12 @@ MAIN:
 				env.A.SetNumberValue(float64(int32(env.R0.AsNumber()) >> uint32(env.R1.AsNumber())))
 			} else {
 				panicf("can't apply 'bit rsh' on %+v and %+v", env.R0, env.R1)
+			}
+		case OP_BIT_URSH:
+			if testTypes(env.R0, env.R1) == _Tnumbernumber {
+				env.A.SetNumberValue(float64(uint32(env.R0.AsNumber()) >> uint32(env.R1.AsNumber())))
+			} else {
+				panicf("can't apply 'bit unsigned rsh' on %+v and %+v", env.R0, env.R1)
 			}
 		case OP_ASSERT:
 			if env.R0.IsFalse() {

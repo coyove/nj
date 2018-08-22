@@ -26,6 +26,7 @@ var _rawOP0 = map[string]byte{
 	"bxor":   OP_BIT_XOR,
 	"blsh":   OP_BIT_LSH,
 	"brsh":   OP_BIT_RSH,
+	"bursh":  OP_BIT_URSH,
 	"pop":    OP_POP,
 	"slice":  OP_SLICE,
 	"len":    OP_LEN,

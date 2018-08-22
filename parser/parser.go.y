@@ -49,7 +49,7 @@ import (
 %token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TNil TReturn TRequire TVar TYield
 
 /* Literals */
-%token<token> TAddAdd TSubSub TAddEq TSubEq TEqeq TNeq TLsh TRsh TLte TGte TIdent TNumber TString '{' '('
+%token<token> TAddAdd TSubSub TAddEq TSubEq TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '('
 
 /* Operators */
 %right 'T'
@@ -60,7 +60,7 @@ import (
 %left TAnd
 %left '|' '&' '^'
 %left '>' '<' TGte TLte TEqeq TNeq
-%left TLsh TRsh
+%left TLsh TRsh TURsh
 %left '+' '-'
 %left '*' '/' '%'
 %right UNARY /* not # -(unary) */
@@ -267,6 +267,7 @@ expr:
         expr '^' expr        { $$ = CNode("^", $1,$3).setPos0($1) } |
         expr TLsh expr       { $$ = CNode("<<", $1,$3).setPos0($1) } |
         expr TRsh expr       { $$ = CNode(">>", $1,$3).setPos0($1) } |
+        expr TURsh expr      { $$ = CNode(">>>", $1,$3).setPos0($1) } |
         expr '|' expr        { $$ = CNode("|", $1,$3).setPos0($1) } |
         expr '&' expr        { $$ = CNode("&", $1,$3).setPos0($1) } |
         '-' expr %prec UNARY { $$ = CNode("-", NNode(0.0), $2).setPos0($2) } |

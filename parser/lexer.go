@@ -431,6 +431,11 @@ redo:
 				tok.Type = TRsh
 				tok.Str = ">>"
 				sc.Next()
+				if sc.Peek() == '>' {
+					tok.Type = TURsh
+					tok.Str = ">>>"
+					sc.Next()
+				}
 			} else {
 				tok.Type = ch
 				tok.Str = string(ch)

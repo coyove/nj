@@ -23,6 +23,7 @@ const (
 	OP_BIT_XOR
 	OP_BIT_LSH
 	OP_BIT_RSH
+	OP_BIT_URSH
 
 	// make map op
 	OP_MAKEMAP

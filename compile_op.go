@@ -88,7 +88,7 @@ func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint3
 
 	buf := newpacket()
 	if len(atoms) == 1 {
-		buf.WriteOP(op, regA, 0)
+		buf.WriteOP(opk, 0, 0)
 		return buf, yx, nil
 	}
 
