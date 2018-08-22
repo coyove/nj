@@ -1,54 +1,25 @@
-func fib(n) {
-    if (n < 2) return n;
-    return fib(n-2)+fib(n-1);
+fun fib(n) {
+    if (n < 2) return n
+    return fib(n-2)+fib(n-1)
 }
 
-//var K = std.opcode.closure,OP= std.opcode;
-//var fib2 = K.empty();
-//
-//K.set(fib2, "argscount", 1);
-//K.set(fib2, "envescaped", 0);
-//
-//K.writeconst(fib2, 2);
-//K.writeconst(fib2, 1);
-//
-//K.write(fib2, OP.R0, 0, 0);
-//K.write(fib2, OP.R1K, 0, 0);
-//K.write(fib2, OP.LESS, 0, 0);
-//K.write(fib2, OP.IFNOT, OP.A, 1);
-//K.write(fib2, OP.RET, 0, 0);
-//K.write(fib2, OP.SUB, 0, 0);
-//K.write(fib2, OP.PUSH, OP.A, 0);
-//K.write(fib2, OP.CALL, addressof(fib2) | 0x00010000, 0);
-//K.write(fib2, OP.R2, OP.A, 0);
-//K.write(fib2, OP.R1K, 1, 0);
-//K.write(fib2, OP.SUB, 0, 0);
-//K.write(fib2, OP.PUSH, OP.A, 0);
-//K.write(fib2, OP.CALL, addressof(fib2) | 0x00010000, 0);
-//K.write(fib2, OP.R0R2, 0, 0);
-//K.write(fib2, OP.R1, OP.A, 0);
-//K.write(fib2, OP.ADD, 0, 0);
-//K.write(fib2, OP.RET, OP.A, 0);
-//K.write(fib2, OP.EOB, 0, 0);
-
-
-func fib2(n) {
-    if (n < 2) return n;
-    $sub();
-    $push($a);
-    $call(fib2);
-    $r2($a);
-    $r1(1);
-    $sub();
-    $push($a);
-    $call(fib2);
-    $r0r2();
-    $r1($a);
-    $add();
-    $ret($a);
+fun fib2(n) {
+    if (n < 2) return n
+    $sub()
+    $push($a)
+    $call(fib2)
+    $r2($a)
+    $r1(1)
+    $sub()
+    $push($a)
+    $call(fib2)
+    $r0r2()
+    $r1($a)
+    $add()
+    $ret($a)
 }
 
-io.println(fib2);
+io.println(fib2)
 
-var ans = fib2(35);
-return ans;
+var ans = fib2(35)
+return ans

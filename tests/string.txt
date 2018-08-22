@@ -1,13 +1,13 @@
-assert "abc" == "abc";
-assert "abc" == "\97\98\99";
-assert "abc" == "\x61\x62\x63";
-assert "abc吱吱吱" == "abc" + "吱吱" + "吱";
-assert "abc吱吱吱" == "abc\u5431\u5431\u5431";
+assert "abc" == "abc"
+assert "abc" == "\97\98\99"
+assert "abc" == "\x61\x62\x63"
+assert "abc吱吱吱" == "abc" + "吱吱" + "吱"
+assert "abc吱吱吱" == "abc\u5431\u5431\u5431"
 
-var dupcheck = {97,98,99,32452};
-copy( ("abc组织者")[ :6], func (i, r)  {
-    assert dupcheck[i] == r ;
-});
+var dupcheck = {97,98,99,32452}
+copy( ("abc组织者")[ :6], fun (i, r)  {
+    assert dupcheck[i] == r 
+})
 
-assert "" & 1  == "1";
-assert "" & 10000000000 == "10000000000";
+assert "" & 1  == "1"
+assert "" & 10000000000 == "10000000000"

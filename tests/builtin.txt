@@ -1,104 +1,104 @@
-func foo1(c) {
-    var a = 3 * c;
-    var b = 2 * c;
-    return copy();
+fun foo1(c) {
+    var a = 3 * c 
+    var b = 2 * c 
+    return copy() 
 }
 
-var ans = foo1()(2);
-func assertans(a, b) {
-    assert a == b;
+var ans = foo1()(2) 
+fun assertans(a, b) {
+    assert a == b 
 }
  
-assertans(ans[len(ans)-1], 4);
-assertans(ans[len(ans)-2], 6);
+assertans(ans[len(ans)-1], 4) 
+assertans(ans[len(ans)-2], 6) 
 
-assertans(#ans, 4);
-assertans(#ans, 6);
-assert len(ans) == 1; // left var: c
+assertans(#ans, 4) 
+assertans(#ans, 6) 
+assert len(ans) == 1  // left var: c
 
-var dz = copy(1);
-assert dz == 1;
+var dz = copy(1) 
+assert dz == 1 
 
-func sum() {
-    var x = copy(copy()) ;
-    var s = 0;
+fun sum() {
+    var x = copy(copy())  
+    var s = 0 
     if (typeof(x[0], string)) { 
-        s = "";
+        s = "" 
     }
 
     // note it is in reverse order
-    copy(x, func(i, n) {s = s+n;});
-    return s;
+    copy(x, fun(i, n) {s = s+n }) 
+    return s 
 }
 
-assert sum(1, -1) == 0;
-assert sum(1, 2, 3) == 6 ;
-assert sum("1", "2") == "12";
+assert sum(1, -1) == 0 
+assert sum(1, 2, 3) == 6  
+assert sum("1", "2") == "12" 
 
 var m = {
     "c": 123, 
     "a": "a",
-    "incr": func(this) {
-        this.c = this.c + 1;
-        return this;
+    "incr": fun(this) {
+        this.c = this.c + 1 
+        return this 
     }
-};
+} 
 
-var mp = m;
-var  m2 = copy(m);
+var mp = m 
+var  m2 = copy(m) 
 
-m.incr();
-assert m.c == 124;
-mp.incr();
-assert m.c == 125;
+m.incr() 
+assert m.c == 124 
+mp.incr() 
+assert m.c == 125 
 
-m2.incr().incr();
+m2.incr().incr() 
 
-assert m.c == 125;
-assert m2.c == 125;
+assert m.c == 125 
+assert m2.c == 125 
 
-var a = {1,2,3};
-copy(a, func(i, v) {a[i] = v + 1;});
-assert a == {2,3,4};
+var a = {1,2,3} 
+copy(a, fun(i, v) {a[i] = v + 1 }) 
+assert a == {2,3,4} 
 
-a = "hello world";
-var upper = func(i, r) { if (i == 0 ) { return r - 32; } else { return r;}};
-copy(a, upper);
-assert a == "hello world";
-a = copy(a, upper);
-assert "" & a == "Hello world";
+a = "hello world" 
+var upper = fun(i, r) { if (i == 0 ) { return r - 32  } else { return r }} 
+copy(a, upper) 
+assert a == "hello world" 
+a = copy(a, upper) 
+assert "" & a == "Hello world" 
 
-assert typeof(a) == "map";
-assert typeof(a, map);
+assert typeof(a) == "map" 
+assert typeof(a, map) 
 
-// a = for(a, func(i,b) { if (i == 5) { error(true) end return b end);
-// assert "" & a == "Hello";
+// a = for(a, fun(i,b) { if (i == 5) { error(true) end return b end) 
+// assert "" & a == "Hello" 
 
 a = {
-    (func() {return "key";})() : "value",
-};
-assert a.key == "value" && a["key"] == "value";
+    (fun() {return "key" })() : "value",
+} 
+assert a.key == "value" and a["key"] == "value" 
 
-assert(0 & ("0x0")) == 0;
-assert(0 & ("0xa")) == 10;
-assert(0 & ("0xA")) == 10;
-assert(0 & ("1")) == 1;
-assert(0 & ("+0.0")) == 0.0;
-assert(0 & ("0i12345678")) == 0i12345678;
-assert(0 & ("-10e-2")) == -10e-2;
-assert(0 & ("1.2a")) == nil;
-assert(0 & ("0xabcdefg")) == nil;
+assert(0 & ("0x0")) == 0 
+assert(0 & ("0xa")) == 10 
+assert(0 & ("0xA")) == 10 
+assert(0 & ("1")) == 1 
+assert(0 & ("+0.0")) == 0.0 
+assert(0 & ("0i12345678")) == 0i12345678 
+assert(0 & ("-10e-2")) == -10e-2 
+assert(0 & ("1.2a")) == nil 
+assert(0 & ("0xabcdefg")) == nil 
 
-var a = 0i0000000000000001;
-var a = 0i0000000000001000;
-var a = 0i4000000000000000;
-var a = 0i3fffffffffffffff;
+var a = 0i0000000000000001 
+var a = 0i0000000000001000 
+var a = 0i4000000000000000 
+var a = 0i3fffffffffffffff 
 
-var a = {1,2,3,4};
-assert a[2:3] == {3};
+var a = {1,2,3,4} 
+assert a[2:3] == {3} 
 
-func! outofrange() {
-    return a[5:];
+fun! outofrange() {
+    return a[5:] 
 }
 
-outofrange();
+outofrange() 

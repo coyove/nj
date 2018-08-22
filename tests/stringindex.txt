@@ -1,70 +1,70 @@
-func IndexByte(s, b) {
-    for (var i = 0; i < len(s); i++) {
-        if (s[i] == b) return i;
+fun IndexByte(s, b) {
+    for  var i = 0 ; i < len(s);  i++  {
+        if (s[i] == b) return i 
     }
-    return -1;
+    return -1 
 }
 
-var primeRK = 16777619;
+var primeRK = 16777619 
 
 // hashStr returns the hash and the appropriate multiplicative
 // factor for use in Rabin-Karp algorithm.
-func hashStr(sep) {
-	var hash = 0;
-	for (var i = 0; i < len(sep); i++) {
-		hash = math.u32.add(math.u32.mul(hash, primeRK), sep[i]);
+fun hashStr(sep) {
+	var hash = 0 
+	for var i = 0 ; i < len(sep) ; i++ {
+		hash = math.u32.add(math.u32.mul(hash, primeRK), sep[i]) 
     }
     
-	var pow = 1, sq = primeRK;
-	for (var i = len(sep); i > 0; i = i >> 1) {
+	var pow = 1, sq = primeRK 
+	for  var i = len(sep) ; i > 0 ; i = i >> 1  {
 		if (i&1 != 0) {
-			pow = math.u32.mul(pow, sq);
+			pow = math.u32.mul(pow, sq) 
         }
-        sq = math.u32.mul(sq, sq);
+        sq = math.u32.mul(sq, sq) 
 	}
-	return { hash, pow };
+	return { hash, pow } 
 }
 // Index returns the index of the first instance of substr in s, or -1 if substr is not present in s.
-func Index(s, substr) {
-	var n = len(substr);
+fun Index(s, substr) {
+	var n = len(substr) 
 	if  (n == 0)
-		return 0;
+		return 0 
 	else if (n == 1)
-		return IndexByte(s, substr[0]);
+		return IndexByte(s, substr[0]) 
 	else if (n == len(s))
-		return substr == s && 0 || -1;
+		return substr == s and 0 or -1 
     else if (n > len(s))
-		return -1;
+		return -1 
 	
 	// Rabin-Karp search
-    var x = hashStr(substr);
-    var hashss = x[0], pow = x[1];
-    var h = 0;
+    var x = hashStr(substr) 
+    var hashss = x[0], pow = x[1] 
+    var h = 0 
 
-	for (var i = 0; i < n; i++) {
-		h = math.u32.add(math.u32.mul(h, primeRK), s[i]);
+	for var i = 0 ; i < n ; i++  {
+		h = math.u32.add(math.u32.mul(h, primeRK), s[i]) 
     }
 
-	if (h == hashss && s[:n] == substr) {
-		return 0;
+	if (h == hashss and s[:n] == substr) {
+		return 0 
     }
 
-	for (var i = n; i < len(s); ) {
-		h = math.u32.mul(h, primeRK);
-		h = math.u32.add(h, s[i]);
-		h = math.u32.sub(h, math.u32.mul(pow, s[i-n]));
-		i++;
-		if (h == hashss && s[i-n:i] == substr) {
-			return i - n;
+	for var i = n ; i < len(s); _ {
+		h = math.u32.mul(h, primeRK) 
+		h = math.u32.add(h, s[i]) 
+		h = math.u32.sub(h, math.u32.mul(pow, s[i-n])) 
+		i++ 
+		if (h == hashss and s[i-n:i] == substr) {
+			return i - n 
 		}
 	}
-	return -1;
+	return -1 
 }
 
-var ln = math.rand.intn(200) + 100;
-var buf = math.rand.bytes(ln);
+var ln = math.rand.intn(200) + 100 
+var buf = math.rand.bytes(ln) 
 
-var start = math.rand.intn(100);
-var substr = buf[start:start+10];
+var start = math.rand.intn(100) 
+var substr = buf[start:start+10] 
 
-assert Index(std.char(buf), std.char(substr)) == start;
+assert Index(std.char(buf), std.char(substr)) == start 

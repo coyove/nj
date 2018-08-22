@@ -237,6 +237,9 @@ func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, y
 
 func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
 	head := atoms[0].Value.(string)
+	if head == "nop" {
+		return newpacket(), regA, nil
+	}
 	op := flatOpMapping[head]
 	if op == 0 {
 		err = fmt.Errorf("%+v: invalid op", atoms[0])

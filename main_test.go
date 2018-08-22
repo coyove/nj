@@ -68,7 +68,7 @@ func TestSImport(t *testing.T) {
 
 func TestArithmeticUnfold(t *testing.T) {
 	cls, err := LoadString(`
-		return 1 + 2 * 3 / 4;
+		return 1 + 2 * 3 / 4
 `)
 	if err != nil {
 		t.Error(err)
@@ -90,15 +90,15 @@ func TestArithmeticUnfold(t *testing.T) {
 
 func TestRegisterOptimzation(t *testing.T) {
 	cls, err := LoadString(`
-		var a = 1, b = 2;
-		var c = 0;
+		var a = 1, b = 2
+		var c = 0
 		if (0) {
-			a = 2;
-			b = 3;
-			c = a + b;
+			a = 2
+			b = 3
+			c = a + b
 	}
-		c = a + b;
-		return c;
+		c = a + b
+		return c
 `)
 	if err != nil {
 		t.Error(err)
@@ -116,7 +116,7 @@ func TestRegisterOptimzation(t *testing.T) {
 
 func TestArithmeticNAN(t *testing.T) {
 	cls, err := LoadString(`
-		return (1 / 0 + 1) * 0;
+		return (1 / 0 + 1) * 0
 `)
 	if err != nil {
 		t.Error(err)
@@ -132,18 +132,18 @@ func TestImportLoop(t *testing.T) {
 	defer os.RemoveAll("tmp")
 
 	ioutil.WriteFile("tmp/1.txt", []byte(`
-		require "2.txt"; 
-		require "src/3.txt";`), 0777)
-	ioutil.WriteFile("tmp/2.txt", []byte(`require "src/3.txt";`), 0777)
-	ioutil.WriteFile("tmp/src/3.txt", []byte(`var a = require "1.txt";`), 0777)
-	ioutil.WriteFile("tmp/src/1.txt", []byte(`require "../1.txt";`), 0777)
+		require "2.txt" 
+		require "src/3.txt"`), 0777)
+	ioutil.WriteFile("tmp/2.txt", []byte(`require "src/3.txt"`), 0777)
+	ioutil.WriteFile("tmp/src/3.txt", []byte(`var a = require "1.txt"`), 0777)
+	ioutil.WriteFile("tmp/src/1.txt", []byte(`require "../1.txt"`), 0777)
 
 	_, err := LoadFile("tmp/1.txt")
 	if !strings.Contains(err.Error(), "importing each other") {
 		t.Error("something wrong")
 	}
 
-	ioutil.WriteFile("tmp/1.txt", []byte(`require "1.txt";`), 0777)
+	ioutil.WriteFile("tmp/1.txt", []byte(`require "1.txt"`), 0777)
 	_, err = LoadFile("tmp/1.txt")
 	if !strings.Contains(err.Error(), "importing each other") {
 		t.Error("something wrong")
@@ -151,7 +151,7 @@ func TestImportLoop(t *testing.T) {
 }
 
 func TestCopyCall(t *testing.T) {
-	cls, err := LoadString("var a = copy(1);")
+	cls, err := LoadString("var a = copy(1)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestCopyCall(t *testing.T) {
 		t.Fatal("error opcode 2")
 	}
 
-	cls, err = LoadString("var a = copy();")
+	cls, err = LoadString("var a = copy()")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestCopyCall(t *testing.T) {
 		t.Fatal("error opcode 2 1")
 	}
 
-	cls, err = LoadString("return copy();")
+	cls, err = LoadString("return copy()")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestCopyCall(t *testing.T) {
 		t.Fatal("error opcode 2 2")
 	}
 
-	cls, err = LoadString("copy();")
+	cls, err = LoadString("copy()")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestCopyCall(t *testing.T) {
 
 func BenchmarkCompiling(b *testing.B) {
 	buf, _ := ioutil.ReadFile("tests/string.txt")
-	src := "(func() {" + string(buf) + "})();"
+	src := "(fun() {" + string(buf) + "})()"
 	for i := 0; i < b.N; i++ {
 		y := make([]byte, len(src)*i)
 		for x := 0; x < i; x++ {

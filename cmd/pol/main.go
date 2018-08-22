@@ -93,8 +93,8 @@ ARG:
 	var err error
 
 	defer func() {
-		if r := recover(); r != nil && !*quiet {
-			log.Fatalln(r)
+		if *quiet {
+			recover()
 		}
 
 		if _opcode {

@@ -311,9 +311,9 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 }
 
 var reservedWords = map[string]uint32{
-	"assert": TAssert, "break": TBreak, "continue": TContinue, "else": TElse,
-	"for": TFor, "func": TFunc, "if": TIf, "nil": TNil,
-	"return": TReturn, "require": TRequire, "var": TVar, "yield": TYield,
+	"and": TAnd, "or": TOr, "assert": TAssert, "break": TBreak, "continue": TContinue, "else": TElse,
+	"for": TFor, "fun": TFunc, "if": TIf, "nil": TNil, "not": TNot,
+	"return": TReturn, "require": TRequire, "var": TVar, "while": TWhile, "yield": TYield,
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
@@ -380,15 +380,11 @@ redo:
 		case '[':
 			tok.Type = ch
 			tok.Str = string(ch)
-		case '=', '&', '|', '+', '-':
+		case '=', '+', '-':
 			if sc.Peek() == ch {
 				switch ch {
 				case '=':
 					tok.Type = TEqeq
-				case '&':
-					tok.Type = TAnd
-				case '|':
-					tok.Type = TOr
 				case '+':
 					tok.Type = TAddAdd
 				case '-':
@@ -451,7 +447,7 @@ redo:
 				tok.Type = '.'
 			}
 			tok.Str = buf.String()
-		case '*', '%', '^', '(', ')', '{', '}', ']', ';', ':', ',', '~', '#':
+		case '*', '%', '^', '(', ')', '{', '}', ']', ';', ':', ',', '~', '#', '&', '|':
 			tok.Type = ch
 			tok.Str = string(ch)
 		default:

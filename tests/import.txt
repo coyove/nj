@@ -1,12 +1,12 @@
-var a = 0;
-var add = require "imported.txt" ;
-add();
-assert a == 1;
+var a = 0
+var add = require "imported.txt" 
+add()
+assert a == 1
 
-require "imported2.txt";
-assert a == 1;
+require "imported2.txt"
+assert a == 1
 
-require "test.txt";
-require "std.txt";
-require "string.txt";
-require "loop.txt";
+require "test.txt"
+require "std.txt"
+require "string.txt"
+require "loop.txt"

@@ -1,3 +1,3 @@
-var a = 0;
-var add = require "imported.txt" ;
-add();
+var a = 0
+var add = require "imported.txt"
+add()
