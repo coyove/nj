@@ -1,19 +1,22 @@
 package parser
 
 import (
-	"os"
+	"bytes"
 	"strings"
 	"testing"
 )
 
-func TestTokenName(t *testing.T) {
-	c, err := Parse(strings.NewReader(`if (0 == 1 ) {
-		assert 0;
-	} else if (2 == 2) {
-		assert 1;
-	} else {
-		assert 0;
-	}`), "mem")
-	t.Error(err)
-	c.Dump(os.Stderr)
+func TestChainFuns(t *testing.T) {
+	c, err := Parse(strings.NewReader(`var a =fun a = fun b =
+		 fun c = a + b + c`), "mem")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	b := &bytes.Buffer{}
+	c.Dump(b)
+
+	if b.String() != "[chain [chain [set a [func <a> [a ] [chain [ret [func <a> [b ] [chain [ret [func <a> [c ] [chain [ret [+ [+ a b ] c ] ] ] ] ] ] ] ] ] ] ] ] ]" {
+		t.Fatal(b.String())
+	}
 }

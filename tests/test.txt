@@ -23,6 +23,12 @@ fun yieldtest() {
 
 assert yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 and yieldtest()==nil
 
+fun counter() for var i = 2; i >= 0; i-- yield i
+
+fun yieldtest() while 1 yield ({3, 2, 1})[counter()]
+
+assert yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 
+
 fun deepadd(a) {
     if (a <= 0) { return 0 }
     return add(a)(deepadd(a - 1))
@@ -52,7 +58,7 @@ if (0 == 1 ) {
     assert 0
 }
 
-var double = (fun (a = fun (b = a * b)))(2)
+var double = (fun a = fun b = a * b)(2)
 assert double(2) == 4
 
 if (1 or fun() {assert 0 }) {
@@ -208,3 +214,10 @@ fun raw() {
 }
 
 raw()
+
+// version 2
+var safeexec = fun f = (std.apply(f, copy()[1:]))
+safeexec(fun = (({})[1]))
+
+var a = fun a = fun b = fun c = a + b + (fun d = d * 2)(c)
+assert a(1)(2)(3) == 9

@@ -46,7 +46,7 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TNil TNot TReturn TRequire TVar TWhile TYield
+%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TNil TNot TReturn TRequire TNop TVar TWhile TYield
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '(' '_'
@@ -55,6 +55,7 @@ import (
 %right 'T'
 %right TElse
 
+%right FUN
 %left TOr
 %left TAnd
 %left '|' '&' '^'
@@ -88,7 +89,7 @@ block:
 
 assign_stat:
         _assign_stat {
-            if $1.isIsolatedDupCall() {
+            if $1.isIsolatedCopy() {
                 $1.Cx(2).C()[0] = NNode(0.0)
             }
             $$ = $1
@@ -97,7 +98,8 @@ assign_stat:
 stat:
         jmp_stat     { $$ = $1 } |
         flow_stat        { $$ = $1 } |
-        assign_stat { $$ = $1 }
+        assign_stat { $$ = $1 } |
+        block {$$ = $1 }
 
 oneline_or_body:
        assign_stat  { $$ = CNode("chain", $1) } |
@@ -115,7 +117,6 @@ _assign_stat:
         TVar expr_declare_list { $$ = $2 } |
         prefix_expr            { $$ = $1 } |
         postfix_incdec         { $$ = $1 } |
-        '_' { $$ = CNode("nop") } |
         declarator '=' expr {
             $$ = CNode("move", $1, $3)
             if $1.Cn() > 0 && $1.Cx(0).S() == "load" {
@@ -198,7 +199,7 @@ jmp_stat:
          TAssert expr   { $$ = CNode("assert", $2).setPos0($1) } |
          TReturn      '.'  { $$ = CNode("ret").setPos0($1) } |
          TReturn expr   {
-            if $2.isIsolatedDupCall() && $2.Cx(2).Cx(2).N() == 1 {
+            if $2.isIsolatedCopy() && $2.Cx(2).Cx(2).N() == 1 {
                 $2.Cx(2).C()[2] = NNode(2.0)
             }
             $$ = CNode("ret", $2).setPos0($1)
@@ -288,7 +289,7 @@ func_call:
                 default:
                     p := $2.Cx(1)
                     if p.Type != Ncompound && p.Type != Natom {
-                        yylex.(*Lexer).Error("invalid argument for S")
+                        yylex.(*Lexer).Error("invalid argument for copy")
                     }
                     $$ = CNode("call", $1, CNode(NNode("1"), $2.Cx(0), p))
                 }
@@ -332,9 +333,9 @@ func_args:
         '(' expr_list ')' { $$ = $2 }
 
 function:
-        func func_params_list block { $$ = CNode($1, "<a>", $2, $3).setPos0($2) } |
-        func '(' ident_list '='  expr ')' { $$ = CNode($1, "<a>", $3, CNode("chain", CNode("ret", $5))).setPos0($3) } |
-        func '(' '_' '=' expr ')' { $$ = CNode($1, "<a>", CNode(), CNode("chain", CNode("ret", $3))).setPos0($1) }
+        func func_params_list block %prec FUN{ $$ = CNode($1, "<a>", $2, $3).setPos0($2) } |
+        func ident_list '=' expr %prec FUN  { $$ = CNode($1, "<a>", $2, CNode("chain", CNode("ret", $4))).setPos0($2) } |
+        func '=' expr  %prec FUN { $$ = CNode($1, "<a>", CNode(), CNode("chain", CNode("ret", $3))).setPos0($3) }
 
 func_params_list:
         '(' ')'            { $$ = CNode() } |

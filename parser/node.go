@@ -61,7 +61,7 @@ func (n *Node) SetPos(p interface{}) *Node {
 	case Meta:
 		m = x
 	default:
-		panic("shouldn't happen")
+		panic(fmt.Sprintf("shouldn't happen: %v", p))
 	}
 	n.Meta.Column = m.Column
 	n.Meta.Line = m.Line
@@ -212,7 +212,7 @@ func (n *Node) String() string {
 	panic("shouldn't happen")
 }
 
-func (n *Node) isIsolatedDupCall() bool {
+func (n *Node) isIsolatedCopy() bool {
 	if n.Cn() < 3 || n.Cx(0).S() != "call" || n.Cx(1).S() != "copy" {
 		return false
 	}

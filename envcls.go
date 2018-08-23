@@ -30,14 +30,6 @@ func NewEnv(parent *Env, cancel *uintptr) *Env {
 	}
 }
 
-func NewTopEnv(cancel *uintptr) *Env {
-	e := NewEnv(nil, cancel)
-	for _, name := range CoreLibNames {
-		e.SPush(CoreLibs[name])
-	}
-	return e
-}
-
 func (env *Env) grow(newSize int) {
 	if newSize > cap(env.stack) {
 		old := env.stack
