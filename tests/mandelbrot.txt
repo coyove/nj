@@ -1,103 +1,103 @@
-var limit = 4.0;
-var maxIter = 50;
-var rows = 0;
-var bytesPerRow = 0;
-var initial_r = 0;
-var initial_i = 0;
-var ctr = 0;
-var renderRow = func(y0) {
-    var i,j,x,res,b,Zr1,Zr2,Zi1,Zi2,Tr1,Tr2,Ti1,Ti2 = 0;
-    var row = "";
-    var xByte = 0; for (xByte < bytesPerRow) {
-        res = 0;
-        var Ci = initial_i[y0];
+var limit = 4.0 
+var maxIter = 50 
+var rows = 0 
+var bytesPerRow = 0 
+var initial_r = 0 
+var initial_i = 0 
+var ctr = 0 
+var renderRow =  fun(y0) {
+    var i,j,x,res,b,Zr1,Zr2,Zi1,Zi2,Tr1,Tr2,Ti1,Ti2 = 0 
+    var row = "" 
+    var xByte = 0  while (xByte < bytesPerRow) {
+        res = 0 
+        var Ci = initial_i[y0] 
 
-        i = 0; for (i<8) {
-            x = xByte<<3;
-            var Cr1 = initial_r[x+i];
-            var Cr2 = initial_r[x+i+1];
+        i = 0  while (i<8) {
+            x = xByte<<3 
+            var Cr1 = initial_r[x+i] 
+            var Cr2 = initial_r[x+i+1] 
 
-            Zr1=Cr1;
-            Zi1=Ci;
-            Zr2=Cr2;
-            Zi2=Ci;
+            Zr1=Cr1 
+            Zi1=Ci 
+            Zr2=Cr2 
+            Zi2=Ci 
 
-            b=0;
+            b=0 
 
-            j = 0; for (j < maxIter) {
-                Tr1=Zr1*Zr1;
-                Ti1=Zi1*Zi1;
-                Zi1=(2*Zr1*Zi1)+Ci;
-                Zr1=(Tr1-Ti1)+Cr1;
+            j = 0  while (j < maxIter) {
+                Tr1=Zr1*Zr1 
+                Ti1=Zi1*Zi1 
+                Zi1=(2*Zr1*Zi1)+Ci 
+                Zr1=(Tr1-Ti1)+Cr1 
 
                 if (Tr1+Ti1>limit) {
-                    b = b | 2;
-                    if (b == 3) {break;}
+                    b = b | 2 
+                    if (b == 3) {break }
                 }
 
-                Tr2 = Zr2*Zr2;
-                Ti2 = Zi2*Zi2;
-                Zi2 = (2*Zr2*Zi2)+Ci;
-                Zr2 = Tr2-Ti2+Cr2;
+                Tr2 = Zr2*Zr2 
+                Ti2 = Zi2*Zi2 
+                Zi2 = (2*Zr2*Zi2)+Ci 
+                Zr2 = Tr2-Ti2+Cr2 
 
                 if (Tr2+Ti2>limit) {
-                    b = b | 1;
-                    if (b == 3) {break;}
+                    b = b | 1 
+                    if (b == 3) {break }
                 }
-                j=j+1;
+                j=j+1 
             }
 
-            res = res<<2 | b;
-            i=i+2;
+            res = res<<2 | b 
+            i=i+2 
         }
 
-        row = row + std.char(~res);
-        xByte=xByte+1;
+        row = row + std.char(~res) 
+        xByte=xByte+1 
     }
 
-    return row;
-};
+    return row 
+} 
 
-var size = 1600;
-bytesPerRow = size >> 3;
+var size = 1600
+bytesPerRow = size >> 3 
 
-initial_r = std.genlist(size);
-initial_i = std.genlist(size);
+initial_r = std.genlist(size) 
+initial_i = std.genlist(size) 
 
-var inv = 2 / size;
-var xy = 0; for(; xy < size ;xy = xy + 1){
-    var i = inv * xy;
-    initial_r[xy] = i - 1.5;
-    initial_i[xy] = i - 1.0;
+var inv = 2 / size 
+var xy = 0  for ;xy < size ; xy = xy + 1 {
+    var i = inv * xy 
+    initial_r[xy] = i - 1.5 
+    initial_i[xy] = i - 1.0 
 }
  
 
-rows = std.genlist(size);
-var y = -1;
-var mux = std.sync.mutex();
-var wg = std.sync.waitgroup();
-wg.add(4);
+rows = std.genlist(size) 
+var y = -1 
+var mux = std.sync.mutex() 
+var wg = std.sync.waitgroup() 
+wg.add(4) 
 
-var worker = func() {
-    for (y < size) {
-        mux.lock();
-        y = y + 1;
-        var y0 = y;
-        mux.unlock();
+var worker =  fun() {
+    while (y < size) {
+        mux.lock() 
+        y = y + 1 
+        var y0 = y 
+        mux.unlock() 
         if (y0 < size) {
-            rows[y0] = renderRow(y0);
+            rows[y0] = renderRow(y0) 
         } 
     }
-    wg.done();
-};
+    wg.done() 
+} 
 
-std.sync.run(worker) ;
-std.sync.run(worker) ;
-std.sync.run(worker) ;
-std.sync.run(worker);
-wg.wait();
+std.sync.run(worker)  
+std.sync.run(worker)  
+std.sync.run(worker)  
+std.sync.run(worker) 
+wg.wait() 
  
-io.write("P4\n" & size & " " & size & "\n");
-copy(rows, func (i,row)  {
-    io.write(row);
-}) ;
+io.write("P4\n" & size & " " & size & "\n") 
+copy(rows,  fun (i,row)  {
+    io.write(row) 
+})  

@@ -1,111 +1,111 @@
-var n = 0;
-var nCPU = 1;
+var n = 0 
+var nCPU = 1 
 
-func A(i, j) {
-    return ((i+j)*(i+j+1)/2 + i + 1);
+fun A(i, j) {
+    return ((i+j)*(i+j+1)/2 + i + 1) 
 }
 
-var K = std.opcode.closure, OP= std.opcode;
-var A2 = K.empty();
-var call = (func(){
-    return func() {
-        var stack = copy();
-        var x = K[stack[0]];
-        stack[0] = A2;
-        std.apply(x, stack);
-    };
-})();
+var K = std.opcode.closure, OP= std.opcode 
+var A2 = K.empty() 
+var call = (fun(){
+    return fun() {
+        var stack = copy() 
+        var x = K[stack[0]] 
+        stack[0] = A2 
+        std.apply(x, stack) 
+    } 
+})() 
 
-call("set", "argscount", 2);
-call("set", "envescaped", 0);
+call("set", "argscount", 2) 
+call("set", "envescaped", 0) 
 
-call("writeconst", 1);
-call("writeconst", 2);
+call("writeconst", 1) 
+call("writeconst", 2) 
 
-call("write", OP.R0, 0, 0);
-call("write", OP.R1, 1, 0);
-call("write", OP.ADD, 0, 0);
-call("write", OP.R0, OP.A, 0);
-call("write", OP.R1K, 0, 0);
-call("write", OP.ADD, 0, 0);
-call("write", OP.R1, OP.A, 0);
-call("write", OP.MUL, 0, 0);
-call("write", OP.R0, OP.A, 0);
-call("write", OP.R1K, 1, 0);
-call("write", OP.DIV, 0, 0);
-call("write", OP.R0, 0, 0);
-call("write", OP.R1, OP.A, 0);
-call("write", OP.ADD, 0, 0);
-call("write", OP.R0, OP.A, 0);
-call("write", OP.R1K, 0, 0);
-call("write", OP.ADD, 0, 0);
-call("write", OP.RET, OP.A, 0);
-call("write", OP.EOB, 0, 0);
+call("write", OP.R0, 0, 0) 
+call("write", OP.R1, 1, 0) 
+call("write", OP.ADD, 0, 0) 
+call("write", OP.R0, OP.A, 0) 
+call("write", OP.R1K, 0, 0) 
+call("write", OP.ADD, 0, 0) 
+call("write", OP.R1, OP.A, 0) 
+call("write", OP.MUL, 0, 0) 
+call("write", OP.R0, OP.A, 0) 
+call("write", OP.R1K, 1, 0) 
+call("write", OP.DIV, 0, 0) 
+call("write", OP.R0, 0, 0) 
+call("write", OP.R1, OP.A, 0) 
+call("write", OP.ADD, 0, 0) 
+call("write", OP.R0, OP.A, 0) 
+call("write", OP.R1K, 0, 0) 
+call("write", OP.ADD, 0, 0) 
+call("write", OP.RET, OP.A, 0) 
+call("write", OP.EOB, 0, 0) 
 
 // A2 can save 3 opcodes, 10% faster than A
 
-func TimesVec(v, s, n, u, wg) {
-    var ul = len(u);
-    for (var i = s ; i < n; i = i + 1) {
-        var vi = 0;
-        for (var j = 0 ; j < ul; j = j + 1) {
-            vi = vi + u[j] / A2(i, j);
+fun TimesVec(v, s, n, u, wg) {
+    var ul = len(u) 
+    for var i = s  ; i < n ; i = i + 1  {
+        var vi = 0 
+        for  var j = 0;   j < ul;  j = j + 1  {
+            vi = vi + u[j] / A2(i, j) 
         }
-        v[i] = vi;
+        v[i] = vi 
     }
-    wg.done();
+    wg.done() 
 }
 
-func TimesTranspVec(v, s, n, u, wg) {
-    var ul = len(u);
-    for (var i = s; i < n; i = i + 1) {
-        var vi = 0;
-        for (var j = 0 ;j < ul; j = j + 1) {
-            vi = vi + u[j] / A2(j, i);
+fun TimesTranspVec(v, s, n, u, wg) {
+    var ul = len(u) 
+    for  var i = s ; i < n ; i = i + 1  {
+        var vi = 0 
+        for  var j = 0 ; j < ul  ;j = j + 1  {
+            vi = vi + u[j] / A2(j, i) 
         }
-        v[i] = vi;
+        v[i] = vi 
     }
-    wg.done();
+    wg.done() 
 }
 
-func ATimesTransp(v, u) {
-    var x = std.genlist(len(u));
-    var wg = std.sync.waitgroup();
+fun ATimesTransp(v, u) {
+    var x = std.genlist(len(u)) 
+    var wg = std.sync.waitgroup() 
 
-    for (var i = 0; i < nCPU; i=i+1) {
-        wg.add(1);
-        std.sync.run(TimesVec, x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u, wg);
+    for  var i = 0 ; i < nCPU;  i=i+1  {
+        wg.add(1) 
+        std.sync.run(TimesVec, x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u, wg) 
     }
-    wg.wait();
+    wg.wait() 
 
-    for (i = 0; i < nCPU; i=i+1) {
-        wg.add(1);
-        std.sync.run(TimesTranspVec, v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x, wg);
+    for  i = 0 ; i < nCPU; i=i+1  {
+        wg.add(1) 
+        std.sync.run(TimesTranspVec, v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x, wg) 
     }
-    wg.wait();
+    wg.wait() 
 }
 
-n = 550;
-var u = {};
-var v = {};
+n = 550 
+var u = {} 
+var v = {} 
  
-assert A2(1,1) == A(1,1);
+assert A2(1,1) == A(1,1) 
 
-for (var idx = 0 ; idx < n; idx = idx+1)  {
-    u[idx] = 1;
-    v[idx] = 0;
+for  var idx = 0 ;  idx < n  ;idx = idx+1   {
+    u[idx] = 1 
+    v[idx] = 0 
 }
 
-for (var i = 0 ; i < 10; i = i + 1) {
-    ATimesTransp(v, u);
-    ATimesTransp(u, v);
+for  var i = 0  ; i < 10  ;i = i + 1  {
+    ATimesTransp(v, u) 
+    ATimesTransp(u, v) 
 }
 
-var vBv = 0, vv = 0;
-copy(v, func(i, x) {
-    vBv = vBv + u[i] * x;
-    vv = vv + x * x;
-});
+var vBv = 0, vv = 0 
+copy(v, fun(i, x) {
+    vBv = vBv + u[i] * x 
+    vv = vv + x * x 
+}) 
 
-io.println(math.sqrt(vBv/vv));
+io.println(math.sqrt(vBv/vv)) 
     
