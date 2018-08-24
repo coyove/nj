@@ -16,9 +16,7 @@ var a = {"key1": "value1", 2: "value2"}
 // keys of the map can be any value
 
 var a = {"key1": "value1"}
-a[0] = 1
-a[1] = 2
-a[3] = "in the map"
+a[0] = 1  a[1] = 2  a[3] = "in the map"
 // 'a' now contains an array of {1, 2} and a map of {"key1": "value1", 3: "in the map"}
 // '3' is inside the map because it is out of the array's index range.
 // in this case, the valid index range is: [0, 2], anything outside it will go into the map.
@@ -29,12 +27,17 @@ a[3] = "in the map"
 
 var a = 1
 var b = a + "2"   // runtime panic
-var c = {} + a    // { 1 }
-var d = { 0 } + c // { 0, { 1 } }
-var e = { 0 } & c // { 0, 1 }
-var g = 7 & 8     // bitwise and: 0
+var c = {} + a    // c == { 1 }
+var d = { 0 } + c // d == { 0, { 1 } }
+var e = { 0 } & c // e == { 0, 1 }
+var g = 7 & 8     // int32 bitwise and: 0
 var f = "" & 1    // "1", this is the de facto tostring() in potatolang
 var h = 0 & "1"   // 1, this is the de facto tonumber() in potatolang
+
+// note '+' and '&' on map will modify the original value
+var a = { 1, 2 }
+var b = a + 3
+assert a == b and a == { 1, 2, 3 } and b == { 1, 2, 3 }
 
 /*
  * Builtin function 'copy'
@@ -47,26 +50,16 @@ a[0] = 0
 a[2][0] = 0
 assert b[0] == 1 and b[2][0] == 0
 
-// iterate over a map:
+// it is the only way to iterate over a map in pol:
 var m = {"1": 1, "2": 2 }
 copy(m, fun(k, v) { assert k == ("" & v) })
 
 var c = copy(a, fun i, n = n + 1)
 assert c == { 2, 3 } and a == { 1, 2 }
 
-// if you want to return multiple results, use this copy trick:
-fun foo(c) {
-    var a = 1 + c
-    var b = 2 + c
-    // copy() without arguments will return a copy of the current stack
-    return copy()
-}
-var r = foo(2)
-// r is the stack of foo(2), the last two elements would be 'a' and 'b':
-assert r[len(r)-2] == 3 and r[len(r)-1] == 4
-
-// the same trick can be used to accept varargs:
+// varargs:
 fun sum() {
+    // copy() without arguments will return a copy of the current execution stack
     var x = copy() // normally this line MUST be the first line of the whole function
     var s = 0
     copy(x, fun(i, n) {s = s + n})
@@ -140,7 +133,6 @@ fun foo() {
     }
     return a
 }
-
 // all 'a' are the same 'a', foo() == 6
 
 /* 
@@ -150,8 +142,6 @@ fun foo() {
 // there is no boolean value, use '1' or '0' instead, actually, strings like "true" or "false" are also recommended
 // there is no 'switch' statement, write 'else if' instead
 // there is no '+=, -=, *= ...', write 'a = a + b' instead, however you can write 'a++' or 'a--', they have special optimizations
-// there is no conditional operator '?', use and-or trick instead: 'a and b or c'
-// since pol doesn't use paren, don't write 'for ;cond; ...' because it's ambiguous, write 'for ;cond; _ ...' instead, '_' means nop
-// there is no 'do while'
+// there is no conditional operator 'a ? b : c', use and-or trick instead: 'a and b or c'
 // bitwise operations are identical to javascript 
 ```

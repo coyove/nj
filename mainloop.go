@@ -152,7 +152,7 @@ MAIN:
 				env.A = NewStringValue(env.R0.AsString() + env.R1.AsString())
 			default:
 				if env.R0.Type() == Tmap {
-					m := env.R0.AsMap().Dup(nil)
+					m := env.R0.AsMap()
 					m.l = append(m.l, env.R1)
 					env.A = NewMapValue(m)
 				} else {
@@ -218,10 +218,8 @@ MAIN:
 			case _Tnumbernumber:
 				env.A.SetNumberValue(float64(int32(env.R0.AsNumber()) & int32(env.R1.AsNumber())))
 			case _Tmapmap:
-				tr, m := env.R0.AsMap().Dup(nil), env.R1.AsMap()
-				for _, v := range m.l {
-					tr.l = append(tr.l, v)
-				}
+				tr, m := env.R0.AsMap(), env.R1.AsMap()
+				tr.l = append(tr.l, m.l...)
 				for _, v := range m.m {
 					tr.Put(v[0], v[1])
 				}
