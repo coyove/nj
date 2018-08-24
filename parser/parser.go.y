@@ -172,8 +172,8 @@ for_stat:
         }
 
 if_stat:
-        TIf '(' expr ')' oneline_or_body %prec 'T'     { $$ = CNode("if", $3, $5, CNode()) } |
-        TIf '(' expr ')' oneline_or_body TElse oneline_or_body { $$ = CNode("if", $3, $5, $7) }
+        TIf expr oneline_or_body %prec 'T'     { $$ = CNode("if", $2, $3, CNode()) } |
+        TIf expr oneline_or_body TElse oneline_or_body { $$ = CNode("if", $2, $3, $5) }
 
 func:
         TFunc     { $$ = "func" } |
