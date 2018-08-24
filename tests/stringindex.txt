@@ -1,5 +1,5 @@
 fun IndexByte(s, b) {
-    for  var i = 0 ; i < len(s);  i++  {
+    for i = 0 , len(s) {
         if (s[i] == b) return i 
     }
     return -1 
@@ -11,12 +11,12 @@ var primeRK = 16777619
 // factor for use in Rabin-Karp algorithm.
 fun hashStr(sep) {
 	var hash = 0 
-	for var i = 0 ; i < len(sep) ; i++ {
+	for i = 0,len(sep) {
 		hash = math.u32.add(math.u32.mul(hash, primeRK), sep[i]) 
     }
     
 	var pow = 1, sq = primeRK 
-	for  var i = len(sep) ; i > 0 ; i = i >> 1  {
+	i = len(sep) while i > 0 continue = i = i >> 1  {
 		if (i&1 != 0) {
 			pow = math.u32.mul(pow, sq) 
         }
@@ -41,7 +41,7 @@ fun Index(s, substr) {
     var hashss = x[0], pow = x[1] 
     var h = 0 
 
-	for var i = 0 ; i < n ; i++  {
+	for i = 0,n {
 		h = math.u32.add(math.u32.mul(h, primeRK), s[i]) 
     }
 
@@ -49,7 +49,7 @@ fun Index(s, substr) {
 		return 0 
     }
 
-	for var i = n ; i < len(s); _ {
+	var i = n while i < len(s) {
 		h = math.u32.mul(h, primeRK) 
 		h = math.u32.add(h, s[i]) 
 		h = math.u32.sub(h, math.u32.mul(pow, s[i-n])) 

@@ -38,18 +38,18 @@ var longLivedTree = bottomUpTree(maxDepth)
 var wg = std.sync.waitgroup() 
 var result = std.genlist(maxDepth+1) 
 
-for  var depth_l = minDepth ; depth_l <= maxDepth ; depth_l = depth_l + 2  {
+for depth_l = minDepth,2,maxDepth  {
     ( fun( depth, check) {
         var iterations = 1 << (maxDepth - depth + minDepth) 
         check = 0 
 
-        for  var i = 1 ; i <= iterations ; i=i+1  {
+        for i = 0,iterations {
             check = check + itemCheck(bottomUpTree(depth)) 
         }
         result[depth] = io.sprintf("~1\t trees of depth ~2\t check: ~3", iterations, depth, check) 
     })(depth_l, check_l) 
 }
-for  var depth = minDepth ; depth <= maxDepth ; depth=depth+2  {
+for depth = minDepth,2,maxDepth  {
     io.println( result[depth]) 
 }
 io.printf("long lived tree of depth ~1\t check: ~2\n", maxDepth, itemCheck(longLivedTree)) 

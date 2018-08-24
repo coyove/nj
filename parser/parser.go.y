@@ -3,6 +3,8 @@ package parser
 
 import (
     "path/filepath"
+    "github.com/coyove/common/rand"
+    "fmt"
 )
 
 %}
@@ -23,10 +25,8 @@ import (
 %type<expr> _assign_stat
 %type<expr> assign_stat
 %type<expr> for_stat
-%type<expr> for_stat1
-%type<expr> for_stat2
 %type<expr> if_stat
-%type<expr> oneline_or_body
+%type<expr> oneline_or_block
 %type<expr> jmp_stat
 %type<expr> func_stat
 %type<expr> flow_stat
@@ -49,7 +49,7 @@ import (
 %token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TNil TNot TReturn TRequire TNop TVar TWhile TYield
 
 /* Literals */
-%token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '(' '_'
+%token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
 
 /* Operators */
 %right 'T'
@@ -101,17 +101,17 @@ stat:
         assign_stat { $$ = $1 } |
         block {$$ = $1 }
 
-oneline_or_body:
-       assign_stat  { $$ = CNode("chain", $1) } |
-       jmp_stat          { $$ = CNode("chain", $1) } |
-        for_stat          { $$ = CNode("chain", $1) } |
-        if_stat          { $$ = CNode("chain", $1) } |
-        block            { $$ = $1 }
+oneline_or_block:
+        assign_stat            { $$ = CNode("chain", $1) } |
+        jmp_stat               { $$ = CNode("chain", $1) } |
+        for_stat               { $$ = CNode("chain", $1) } |
+        if_stat                { $$ = CNode("chain", $1) } |
+        block                  { $$ = $1 }
 
 flow_stat:
-        for_stat  { $$ = $1 } |
-        if_stat   { $$ = $1 } |
-        func_stat { $$ = $1 }
+        for_stat               { $$ = $1 } |
+        if_stat                { $$ = $1 } |
+        func_stat              { $$ = $1 }
 
 _assign_stat:
         TVar expr_declare_list { $$ = $2 } |
@@ -145,25 +145,68 @@ postfix_incdec:
         prefix_expr '[' expr ']' _postfix_incdec  { $$ = CNode("store", $1, $3, CNode("+", CNode("load", $1, $3).setPos0($1), $5).setPos0($1)) } |
         prefix_expr '.' TIdent   _postfix_incdec  { $$ = CNode("store", $1, $3, CNode("+", CNode("load", $1, $3).setPos0($1), $4).setPos0($1)) }
 
-for_stat1:
-        assign_stat ';' { $$ = CNode("chain", $1) } |
-        ';'             { $$ = CNode("chain") }
-
-for_stat2:
-        expr ';' { $$ = $1 } |
-        ';'      { $$ = NNode(1.0) }
-
 for_stat:
-        TWhile expr  oneline_or_body {
+        TWhile expr oneline_or_block {
             $$ = CNode("for", $2, CNode(), $3).setPos0($1)
         } |
-        TFor  for_stat1 for_stat2 _assign_stat  oneline_or_body {
-            $$ = $2.Cappend(CNode("for", $3, CNode("chain", $4), $5)).setPos0($1)
+        TWhile expr TContinue '=' oneline_or_block oneline_or_block {
+            $$ = CNode("for", $2, $5, $6).setPos0($1)
         } |
-        TFor  for_stat1 for_stat2 block  oneline_or_body {
-            $$ = $2.Cappend(CNode("for", $3, $4, $5)).setPos0($1)
+        TFor TIdent '=' expr ',' expr oneline_or_block {
+            vname, ename := ANode($2), ANodeS($2.Str + randomName())
+            $$ = CNode("chain",
+                CNode("set", vname, $4),
+                CNode("set", ename, $6),
+                CNode("for", 
+                    CNode("<", vname, ename).setPos0($1), 
+                    CNode("chain", 
+                        CNode("inc", vname, NNode(1.0)).setPos0($1),
+                    ), 
+                    $7,
+                ).setPos0($1),
+            )
         } |
-        TFor TIdent ',' TIdent '=' expr oneline_or_body {
+        TFor TIdent '=' expr ',' expr ',' expr oneline_or_block {
+            vname, sname, ename := ANode($2), ANodeS($2.Str + randomName()), ANodeS($2.Str + randomName()) 
+            if $6.Type == Nnumber {
+                // easy case
+                chain, cmp := CNode("chain", CNode("inc", vname, $6).setPos0($1)), "<="
+                if $6.N() < 0 {
+                    cmp = ">="
+                }
+                $$ = CNode("chain",
+                    CNode("set", vname, $4),
+                    CNode("set", ename, $8),
+                    CNode("for", CNode(cmp, vname, ename), chain, $9).setPos0($1),
+                )
+            } else {
+                bname := ANodeS($2.Str + randomName())
+                $$ = CNode("chain", 
+                    CNode("set", vname, $4),
+                    CNode("set", bname, $4),
+                    CNode("set", sname, $6),
+                    CNode("set", ename, $8),
+                    CNode("if", CNode("<=", NNode(0.0), CNode("*", CNode("-", ename, vname).setPos0($1), sname).setPos0($1)),
+                        CNode("chain",
+                            CNode("for",
+                                CNode("<=",
+                                    CNode("*",
+                                        CNode("-", vname, bname).setPos0($1), 
+                                        CNode("-", vname, ename).setPos0($1),
+                                    ),
+                                    NNode(0.0),
+                                ),
+                                CNode("chain", CNode("move", vname, CNode("+", vname, sname).setPos0($1))),
+                                $9,
+                            ),
+                        ),
+                        CNode("chain"),
+                    ),
+                )
+            }
+            
+        } |
+        TFor TIdent ',' TIdent '=' expr oneline_or_block {
             $$ = CNode("call", "copy", CNode(
                NNode(0.0),
                $6,
@@ -172,15 +215,15 @@ for_stat:
         }
 
 if_stat:
-        TIf expr oneline_or_body %prec 'T'     { $$ = CNode("if", $2, $3, CNode()) } |
-        TIf expr oneline_or_body TElse oneline_or_body { $$ = CNode("if", $2, $3, $5) }
+        TIf expr oneline_or_block %prec 'T'     { $$ = CNode("if", $2, $3, CNode()) } |
+        TIf expr oneline_or_block TElse oneline_or_block { $$ = CNode("if", $2, $3, $5) }
 
 func:
         TFunc     { $$ = "func" } |
         TFunc '!' { $$ = "safefunc" }
 
 func_stat:
-        func TIdent func_params_list oneline_or_body {
+        func TIdent func_params_list oneline_or_block {
             funcname := ANode($2)
             $$ = CNode(
                 "chain", 
@@ -355,4 +398,10 @@ _map_gen:
 
 var typesLookup = map[string]string {
     "nil": "0", "number": "1", "string": "2", "map": "4", "closure": "6", "generic": "7",
+}
+
+var _rand = rand.New()
+
+func randomName() string {
+    return fmt.Sprintf("%x", _rand.Fetch(16))
 }

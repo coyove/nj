@@ -112,6 +112,12 @@ func ANode(tok Token) *Node {
 	return n
 }
 
+func ANodeS(s string) *Node {
+	n := NewNode(Natom)
+	n.Value = s
+	return n
+}
+
 func NilNode() *Node {
 	n := NewNode(Natom)
 	n.Value = "nil"

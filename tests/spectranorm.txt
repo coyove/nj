@@ -46,9 +46,9 @@ call("write", OP.EOB, 0, 0)
 
 fun TimesVec(v, s, n, u, wg) {
     var ul = len(u) 
-    for var i = s  ; i < n ; i = i + 1  {
+    for i = s  ,n {
         var vi = 0 
-        for  var j = 0;   j < ul;  j = j + 1  {
+        for j = 0,ul {
             vi = vi + u[j] / A2(i, j) 
         }
         v[i] = vi 
@@ -58,9 +58,9 @@ fun TimesVec(v, s, n, u, wg) {
 
 fun TimesTranspVec(v, s, n, u, wg) {
     var ul = len(u) 
-    for  var i = s ; i < n ; i = i + 1  {
+    for i = s, n  {
         var vi = 0 
-        for  var j = 0 ; j < ul  ;j = j + 1  {
+        for j = 0, ul  {
             vi = vi + u[j] / A2(j, i) 
         }
         v[i] = vi 
@@ -72,13 +72,13 @@ fun ATimesTransp(v, u) {
     var x = std.genlist(len(u)) 
     var wg = std.sync.waitgroup() 
 
-    for  var i = 0 ; i < nCPU;  i=i+1  {
+    for i = 0, nCPU {
         wg.add(1) 
         std.sync.run(TimesVec, x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u, wg) 
     }
     wg.wait() 
 
-    for  i = 0 ; i < nCPU; i=i+1  {
+    for  i = 0, nCPU {
         wg.add(1) 
         std.sync.run(TimesTranspVec, v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x, wg) 
     }
@@ -91,12 +91,12 @@ var v = {}
  
 assert A2(1,1) == A(1,1) 
 
-for  var idx = 0 ;  idx < n  ;idx = idx+1   {
+for idx = 0, n {
     u[idx] = 1 
     v[idx] = 0 
 }
 
-for  var i = 0  ; i < 10  ;i = i + 1  {
+for i = 0, 10 {
     ATimesTransp(v, u) 
     ATimesTransp(u, v) 
 }

@@ -10,7 +10,7 @@ var fib2 = fun(a, b) {
 
 var fib3 = copy(fib2)
  
-for var i = 0; i < 33; i = i + 1 fib2(0,1)
+for i = 0,33 fib2(0,1)
 
 assert (fib2())==9227465
 assert (fib3(0, 1)+fib3()+fib3()+fib3()) == 11
@@ -23,7 +23,7 @@ fun yieldtest() {
 
 assert yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 and yieldtest()==nil
 
-fun counter() for var i = 2; i >= 0; i-- yield i
+fun counter() for i=2,-1,0 yield i
 
 fun yieldtest() while 1 yield ({3, 2, 1})[counter()]
 
@@ -88,7 +88,7 @@ assert cond.test() and not cond.test()
 fun test2() {
     fun test1() {
         var sum = 0
-        i = 0 for  ;i < 100 ; i=i+1 {
+        for i =0, 100 {
             sum = sum + i
             if (sum > 100) { break }
         }
@@ -108,7 +108,7 @@ assert m == copy(m)
 var m2 = {}
 m2.key1 = "value1"
 m2.key2 = {}
-i = 1 for ;i < 4; i = i + 1 { m2.key2 = m2.key2 + i }
+for i=1,4 { m2.key2 = m2.key2 + i }
 assert m2 == m
 
 a = 0i0

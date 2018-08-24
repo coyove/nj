@@ -65,7 +65,7 @@ initial_r = std.genlist(size)
 initial_i = std.genlist(size) 
 
 var inv = 2 / size 
-var xy = 0  for ;xy < size ; xy = xy + 1 {
+for xy =0, size {
     var i = inv * xy 
     initial_r[xy] = i - 1.5 
     initial_i[xy] = i - 1.0 
