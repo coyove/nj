@@ -62,11 +62,6 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint3
 	}
 
 	if atoms[0].Value.(string) == "set" {
-		_, redecl := table.get(aDest.Value.(string))
-		if redecl && table.noredecl {
-			err = fmt.Errorf("redeclare: %+v", aDest)
-			return
-		}
 		table.put(aDest.Value.(string), uint16(newYX))
 	}
 	buf.WritePos(atoms[0].Meta)
@@ -465,7 +460,6 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	name := atoms[1].Value.(string)
 	newtable := newsymtable()
 	newtable.parent = table
-	newtable.noredecl = table.noredecl
 
 	params := atoms[2]
 	if params.Type != parser.Ncompound {
@@ -506,7 +500,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		comps := append(atoms[3].C(), nil)
 		copy(comps[2:], comps[1:])
 		comps[1] = parser.CNode("set", "arguments", parser.CNode(
-			"call", "copy", parser.CNode(parser.NNode(1), parser.NNode(1), parser.NNode(1)),
+			"call", "copy", parser.CNode(parser.NNode(2), parser.NilNode(), parser.NilNode()),
 		))
 		atoms[3].SetValue(comps)
 	}

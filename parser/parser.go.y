@@ -210,7 +210,7 @@ for_stat:
         } |
         TFor TIdent ',' TIdent '=' expr oneline_or_block {
             $$ = CNode("call", "copy", CNode(
-               NNode(0.0),
+               NNode(0),
                $6,
                CNode("func", "<anony-map-iter-callback>", CNode($2.Str, $4.Str), $7),
             ))
@@ -326,15 +326,11 @@ func_call:
             case "copy":
                 switch $2.Cn() {
                 case 0:
-                    $$ = CNode("call", $1, CNode(NNode("1"), NNode("1"), NNode("1")))
+                    yylex.(*Lexer).Error("copy takes at least 1 argument")
                 case 1:
-                    $$ = CNode("call", $1, CNode(NNode("1"), $2.Cx(0), NNode("0")))
+                    $$ = CNode("call", $1, CNode(NNode(1), $2.Cx(0), NilNode()))
                 default:
-                    p := $2.Cx(1)
-                    if p.Type != Ncompound && p.Type != Natom {
-                        yylex.(*Lexer).Error("invalid argument for copy")
-                    }
-                    $$ = CNode("call", $1, CNode(NNode("1"), $2.Cx(0), p))
+                    $$ = CNode("call", $1, CNode(NNode(1), $2.Cx(0), $2.Cx(1)))
                 }
             case "len":
                 switch $2.Cn() {

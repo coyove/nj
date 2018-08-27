@@ -120,7 +120,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line .\parser.go.y:375
+//line .\parser.go.y:371
 
 var _rand = rand.New()
 
@@ -960,7 +960,7 @@ yydefault:
 		//line .\parser.go.y:211
 		{
 			yyVAL.expr = CNode("call", "copy", CNode(
-				NNode(0.0),
+				NNode(0),
 				yyDollar[6].expr,
 				CNode("func", "<anony-map-iter-callback>", CNode(yyDollar[2].token.Str, yyDollar[4].token.Str), yyDollar[7].expr),
 			))
@@ -1394,15 +1394,11 @@ yydefault:
 			case "copy":
 				switch yyDollar[2].expr.Cn() {
 				case 0:
-					yyVAL.expr = CNode("call", yyDollar[1].expr, CNode(NNode("1"), NNode("1"), NNode("1")))
+					yylex.(*Lexer).Error("copy takes at least 1 argument")
 				case 1:
-					yyVAL.expr = CNode("call", yyDollar[1].expr, CNode(NNode("1"), yyDollar[2].expr.Cx(0), NNode("0")))
+					yyVAL.expr = CNode("call", yyDollar[1].expr, CNode(NNode(1), yyDollar[2].expr.Cx(0), NilNode()))
 				default:
-					p := yyDollar[2].expr.Cx(1)
-					if p.Type != Ncompound && p.Type != Natom {
-						yylex.(*Lexer).Error("invalid argument for copy")
-					}
-					yyVAL.expr = CNode("call", yyDollar[1].expr, CNode(NNode("1"), yyDollar[2].expr.Cx(0), p))
+					yyVAL.expr = CNode("call", yyDollar[1].expr, CNode(NNode(1), yyDollar[2].expr.Cx(0), yyDollar[2].expr.Cx(1)))
 				}
 			case "len":
 				switch yyDollar[2].expr.Cn() {
@@ -1418,79 +1414,79 @@ yydefault:
 		}
 	case 101:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line .\parser.go.y:353
+		//line .\parser.go.y:349
 		{
 			yyVAL.expr = CNode()
 		}
 	case 102:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line .\parser.go.y:354
+		//line .\parser.go.y:350
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 103:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line .\parser.go.y:357
+		//line .\parser.go.y:353
 		{
 			yyVAL.expr = CNode(yyDollar[1].str, "<a>", yyDollar[2].expr, yyDollar[3].expr).setPos0(yyDollar[2].expr)
 		}
 	case 104:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line .\parser.go.y:358
+		//line .\parser.go.y:354
 		{
 			yyVAL.expr = CNode(yyDollar[1].str, "<a>", yyDollar[2].expr, CNode("chain", CNode("ret", yyDollar[4].expr))).setPos0(yyDollar[2].expr)
 		}
 	case 105:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line .\parser.go.y:359
+		//line .\parser.go.y:355
 		{
 			yyVAL.expr = CNode(yyDollar[1].str, "<a>", CNode(), CNode("chain", CNode("ret", yyDollar[3].expr))).setPos0(yyDollar[3].expr)
 		}
 	case 106:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line .\parser.go.y:362
+		//line .\parser.go.y:358
 		{
 			yyVAL.expr = CNode()
 		}
 	case 107:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line .\parser.go.y:363
+		//line .\parser.go.y:359
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 108:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line .\parser.go.y:366
+		//line .\parser.go.y:362
 		{
 			yyVAL.expr = CNode("map", CNode()).setPos0(yyDollar[1].token)
 		}
 	case 109:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line .\parser.go.y:367
+		//line .\parser.go.y:363
 		{
 			yyVAL.expr = yyDollar[2].expr.setPos0(yyDollar[1].token)
 		}
 	case 110:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line .\parser.go.y:370
+		//line .\parser.go.y:366
 		{
 			yyVAL.expr = CNode("map", yyDollar[1].expr).setPos0(yyDollar[1].expr)
 		}
 	case 111:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line .\parser.go.y:371
+		//line .\parser.go.y:367
 		{
 			yyVAL.expr = CNode("map", yyDollar[1].expr).setPos0(yyDollar[1].expr)
 		}
 	case 112:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line .\parser.go.y:372
+		//line .\parser.go.y:368
 		{
 			yyVAL.expr = CNode("array", yyDollar[1].expr).setPos0(yyDollar[1].expr)
 		}
 	case 113:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line .\parser.go.y:373
+		//line .\parser.go.y:369
 		{
 			yyVAL.expr = CNode("array", yyDollar[1].expr).setPos0(yyDollar[1].expr)
 		}

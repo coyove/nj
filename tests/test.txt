@@ -185,22 +185,23 @@ fun safeexec(f, args) {
         result = std.apply(f, args)
     })()
 
-    var b = x == nil
-    var a = result
-    return copy()
+    return {
+        "result": result,
+        "ok": x == nil,
+    }
 }
 
 var r = safeexec(fun(a, b) {
     return a / b
 }, {1,2})
  
-assert #r == 0.5
+assert r.result == 0.5
 
 var r = safeexec(fun(a, b) {
     return a / b
 }, {1,"2"})
   
-assert #r == "none" and not #r 
+assert r.result == "none" and not r.ok
 
 fun raw() {
     var a = 1
@@ -215,7 +216,7 @@ fun raw() {
 raw()
 
 // version 2
-var safeexec = fun f = (std.apply(f, copy()[1:]))
+var safeexec = fun var f = (std.apply(f, arguments[1:]))
 safeexec(fun = (({})[1]))
 
 var a = fun a = fun b = fun c = a + b + (fun d = d * 2)(c)

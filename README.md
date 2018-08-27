@@ -58,11 +58,10 @@ var c = copy(a, fun i, n = n + 1)
 assert c == { 2, 3 } and a == { 1, 2 }
 
 // varargs:
-fun sum() {
-    // copy() without arguments will return a copy of the current execution stack
-    var x = copy() // normally this line MUST be the first line of the whole function
+fun var sum() {
+    var x = arguments
     var s = 0
-    if typeof(x[0], string) s = ""
+    if typeof(x[0]) == "str" s = ""
     copy(x, fun(i, n) {s = s + n})
     return s
 }
@@ -73,7 +72,7 @@ assert sum("a", "b", "c") == "abc"
 var a = "text"
 a[0] = 96  // won't work
 var b = copy(a)
-assert typeof(b, "map")            // ok
+assert typeof b == "map"           // ok
 assert b == {0x74,0x65,0x73,0x74}  // ok
 
 // don't remove items when iterating an array

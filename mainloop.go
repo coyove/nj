@@ -542,26 +542,23 @@ MAIN:
 }
 
 // OP_COPY takes 3 arguments:
-//   1. number: 0 means the copy result will be discarded, 1 means the result will be stored into somewhere
+//   1. number:
+//		0: do a generic copy but the result will be discarded
+//		1: do a generic copy, the result will be stored into somewhere
+//		2: the result will be the current stack (copied)
+//      all other numbers panic
 //   2. any: the subject to be duplicated
-//   3. number/closure: 0 means no predicator, 1 means copy stack, otherwise the closure will be used
+//   3. predicator: a closure or nil
 func doCopy(env *Env) (_v Value, _b bool) {
-	alloc := env.R0.AsNumber() == 1
-	nopred := false
-	if env.R2.Type() == Tnumber {
-		switch env.R2.AsNumber() {
-		case 0:
-			// copy(a)
-			nopred = true
-		case 1:
-			// copy()
-			ret := NewMapSize(len(env.stack))
-			copy(ret.l, env.stack)
-			env.A = NewMapValue(ret)
-			return
-		default:
-			panic("serious error")
-		}
+	flag := env.R0.AsNumber()
+	nopred := env.R2.Type() == Tnil
+	alloc := flag == 1
+
+	if flag == 2 {
+		ret := NewMapSize(len(env.stack))
+		copy(ret.l, env.stack)
+		env.A = NewMapValue(ret)
+		return
 	}
 
 	// immediate value and generic will be returned directly since they can't be truly duplicated
@@ -571,16 +568,22 @@ func doCopy(env *Env) (_v Value, _b bool) {
 		env.A = env.R1
 		return
 	case Tclosure:
-		env.A = NewClosureValue(env.R1.AsClosure().Dup())
+		if alloc {
+			env.A = NewClosureValue(env.R1.AsClosure().Dup())
+		} else {
+			env.A = Value{}
+		}
 		return
 	case Tstring:
 		if nopred {
-			s := env.R1.AsString()
-			m := NewMapSize(len(s))
-			for _, x := range s {
-				m.l = append(m.l, NewNumberValue(float64(x)))
+			if alloc {
+				s := env.R1.AsString()
+				m := NewMapSize(len(s))
+				for _, x := range s {
+					m.l = append(m.l, NewNumberValue(float64(x)))
+				}
+				env.A = NewMapValue(m)
 			}
-			env.A = NewMapValue(m)
 		} else {
 			cls := env.R2.Cls()
 			newEnv := NewEnv(cls.Env(), env.Cancel)
@@ -617,6 +620,7 @@ func doCopy(env *Env) (_v Value, _b bool) {
 		return
 	}
 
+	// now R1 can only be a map
 	if alloc && nopred {
 		// simple dup of map
 		if env.R1.Type() != Tmap {
@@ -627,7 +631,7 @@ func doCopy(env *Env) (_v Value, _b bool) {
 	}
 
 	if !alloc && nopred {
-		// simple dup(a), but its value is discarded
+		// simple copy(a), but its value is discarded
 		// so nothing to do here
 		return
 	}

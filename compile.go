@@ -31,8 +31,6 @@ type symtable struct {
 
 	envescape bool
 
-	noredecl bool
-
 	sp uint16
 
 	regs [4]struct {
@@ -46,8 +44,6 @@ type symtable struct {
 	consts         []kinfo
 	constStringMap map[string]uint16
 	constFloatMap  map[float64]uint16
-
-	gotoTable map[string][2]uint64
 }
 
 func newsymtable() *symtable {
@@ -57,7 +53,6 @@ func newsymtable() *symtable {
 		constStringMap: make(map[string]uint16),
 		constFloatMap:  make(map[float64]uint16),
 		continueNode:   make([]*parser.Node, 0),
-		gotoTable:      make(map[string][2]uint64),
 	}
 	for i := range t.regs {
 		t.regs[i].addr = regA

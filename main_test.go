@@ -167,26 +167,11 @@ func TestCopyCall(t *testing.T) {
 	}
 
 	o, a, _ = op(code[2])
-	if o != OP_R2K || cls.consts[a].Num() != 0.0 {
+	if o != OP_R2K || cls.consts[a].Type() != Tnil {
 		t.Fatal("error opcode 2")
 	}
 
-	cls, err = LoadString("var a = copy()")
-	if err != nil {
-		t.Fatal(err)
-	}
-	code = cls.code
-	o, a, _ = op(code[0])
-	if o != OP_R0K || cls.consts[a].Num() != 1.0 {
-		t.Fatal("error opcode 0 1")
-	}
-
-	o, a, _ = op(code[2])
-	if o != OP_R2K || cls.consts[a].Num() != 1.0 {
-		t.Fatal("error opcode 2 1")
-	}
-
-	cls, err = LoadString("copy()")
+	cls, err = LoadString("copy(1)")
 	if err != nil {
 		t.Fatal(err)
 	}

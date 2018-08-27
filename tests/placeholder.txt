@@ -27,8 +27,8 @@ var curry = fun(f) {
         })
     }
 
-    fun __f() { 
-        appendargs(copy())
+    fun var __f() { 
+        appendargs(arguments)
         
         if (__remain > 0) return __f
 
