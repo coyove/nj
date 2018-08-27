@@ -138,6 +138,7 @@ const (
 	CLS_HASRECEIVER
 	CLS_YIELDABLE
 	CLS_RECOVERALL
+	CLS_PSEUDO_FOREACH
 )
 
 // Closure is the closure struct used in potatolang

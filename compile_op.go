@@ -74,16 +74,23 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint3
 }
 
 func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
-	if len(table.continueNode) > 0 && table.continueNode[len(table.continueNode)-1].S() == anonyMapIterCallbackFlag {
-		err = fmt.Errorf("%+v: return/yield can't be used inside a pseudo for-loop", atoms[0])
+	isyield := atoms[0].S() == "yield"
+	ispseudo := len(table.continueNode) > 0 && table.continueNode[len(table.continueNode)-1].S() == anonyMapIterCallbackFlag
+
+	if isyield && ispseudo {
+		err = fmt.Errorf("%+v: yield can't be used inside a pseudo for-loop", atoms[0])
 		return
 	}
 
 	var op, opk byte
 	op, opk = OP_RET, OP_RETK
-	if atoms[0].Value.(string) == "yield" {
+	if isyield {
 		op, opk = OP_YIELD, OP_YIELDK
 		table.y = true
+	}
+	if ispseudo {
+		// in a pseudo foreach, 'yield' is not allowed because we use them to simulate 'return'
+		op, opk = OP_YIELD, OP_YIELDK
 	}
 
 	buf := newpacket()
@@ -375,15 +382,9 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		return
 	case "copy":
 		x := append([]*parser.Node{nodes[1]}, nodes[2].C()...)
-		if y, ok := x[3].Value.(float64); ok && y == 2 {
-			// return stack, env is escaped
-			table.envescape = true
-		}
 		code, yx, err = table.flatWrite(x, OP_COPY)
 		code.WritePos(nodes[0].Meta)
 		return
-	case "typeof":
-		return table.flatWrite(append([]*parser.Node{nodes[1]}, nodes[2].C()...), OP_TYPEOF)
 	}
 
 	atoms, replacedAtoms := nodes[2].C(), []*parser.Node{}
@@ -451,7 +452,16 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 // [lambda name? [namelist] [chain ...]]
 func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
 	table.envescape = true
-	isSafe := atoms[0].Value.(string) == "safefunc"
+	isSafe, isVar := false, false
+	for _, s := range strings.Split(atoms[0].Value.(string), ",") {
+		switch s {
+		case "safe":
+			isSafe = true
+		case "var":
+			isVar = true
+		}
+	}
+
 	name := atoms[1].Value.(string)
 	newtable := newsymtable()
 	newtable.parent = table
@@ -491,6 +501,16 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	}
 
 	newtable.sp = uint16(ln)
+
+	if isVar {
+		comps := append(atoms[3].C(), nil)
+		copy(comps[2:], comps[1:])
+		comps[1] = parser.CNode("set", "arguments", parser.CNode(
+			"call", "copy", parser.CNode(parser.NNode(1), parser.NNode(1), parser.NNode(1)),
+		))
+		atoms[3].SetValue(comps)
+	}
+
 	code, yx, err = newtable.compileChainOp(atoms[3])
 	if err != nil {
 		return
@@ -515,6 +535,9 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	}
 	if isSafe {
 		cls.Set(CLS_RECOVERALL)
+	}
+	if name == anonyMapIterCallbackFlag {
+		cls.Set(CLS_PSEUDO_FOREACH)
 	}
 
 	buf.WriteOP(OP_LAMBDA, uint32(len(newtable.consts)), uint32(byte(ln))<<24+uint32(cls.options))

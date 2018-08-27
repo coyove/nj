@@ -32,4 +32,7 @@ func TestSprintf(t *testing.T) {
 	assert(sprintf("~1~~2~1", "a", "b"), "a~2a")
 	assert(sprintf("~1~a~1", "a", "b"), "aaa")
 	assert(sprintf("~1~a~1~", "a"), "aaa")
+	assert(sprintf("~1%2s%", "a"), " a")
+	assert(sprintf("~1%d%", 1.0), "1")
+	assert(sprintf("~1%02x%", 10.1), "0a")
 }

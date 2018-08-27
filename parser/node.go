@@ -89,9 +89,13 @@ func CNode(args ...interface{}) *Node {
 	n := NewNode(Ncompound)
 	arr := make([]*Node, 0, len(args))
 	for _, arg := range args {
-		switch arg.(type) {
+		switch x := arg.(type) {
 		case string:
-			arr = append(arr, NewNode(Natom).SetValue(arg))
+			if x == "chain" {
+				arr = append(arr, chainNode)
+			} else {
+				arr = append(arr, NewNode(Natom).SetValue(arg))
+			}
 		case *Node:
 			if n.Source == "" {
 				n.SetPos(arg.(*Node).Meta)
@@ -104,6 +108,8 @@ func CNode(args ...interface{}) *Node {
 	n.Value = arr
 	return n
 }
+
+var chainNode = ANodeS("chain")
 
 func ANode(tok Token) *Node {
 	n := NewNode(Natom)
@@ -141,6 +147,8 @@ func NNode(arg interface{}) *Node {
 		n.Value = num
 	case float64:
 		n.Value = x
+	case int:
+		n.Value = float64(x)
 	default:
 		panic("shouldn't happen")
 	}

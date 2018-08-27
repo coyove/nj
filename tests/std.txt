@@ -14,7 +14,7 @@ var ptr_test = std.eval(`return fun (env, a) {
     std.storeinto(env, a, 10)
 }`)()
 
-ptr_test(std.currentenv(), addressof(a))
+ptr_test(std.currentenv(), addressof a)
 assert a == 10
 
 

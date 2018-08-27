@@ -220,3 +220,5 @@ safeexec(fun = (({})[1]))
 
 var a = fun a = fun b = fun c = a + b + (fun d = d * 2)(c)
 assert a(1)(2)(3) == 9
+
+assert (fun var = arguments)(1,2,3) == {1,2,3}

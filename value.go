@@ -58,7 +58,7 @@ func NewValue() Value { return Value{num: 0} }
 var (
 	// TMapping maps type to its string representation
 	TMapping = map[byte]string{
-		Tnil: "nil", Tnumber: "number", Tstring: "string", Tclosure: "closure", Tgeneric: "generic", Tmap: "map",
+		Tnil: "nil", Tnumber: "num", Tstring: "str", Tclosure: "cls", Tgeneric: "gen", Tmap: "map",
 	}
 
 	hashkey   [4]uintptr

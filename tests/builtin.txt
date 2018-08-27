@@ -22,7 +22,7 @@ assert dz == 1
 fun sum() {
     var x = copy(copy())  
     var s = 0 
-    if (typeof(x[0], string)) { 
+    if typeof x[0] == "str" { 
         s = "" 
     }
 
@@ -68,8 +68,8 @@ assert a == "hello world"
 a = copy(a, upper) 
 assert "" & a == "Hello world" 
 
-assert typeof(a) == "map" 
-assert typeof(a, map) 
+assert typeof a + "a" == "mapa" 
+assert typeof (a + "a") == "map" 
 
 // a = for(a, fun(i,b) { if (i == 5) { error(true) end return b end) 
 // assert "" & a == "Hello" 

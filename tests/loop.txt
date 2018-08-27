@@ -181,3 +181,12 @@ var start = 10, end = 11, step = 1
 var results = {}
 for  i = start,step,end results = results + i
 assert results == {10, 11}
+
+
+fun foo(m)
+    for k,v=m
+        if k==2
+            return v
+
+assert foo({"a": 2, "b": 1, 2: "zzz"}) == "zzz"
+assert foo({1,2,3,4}) == 3

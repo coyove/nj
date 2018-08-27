@@ -62,6 +62,7 @@ fun sum() {
     // copy() without arguments will return a copy of the current execution stack
     var x = copy() // normally this line MUST be the first line of the whole function
     var s = 0
+    if typeof(x[0], string) s = ""
     copy(x, fun(i, n) {s = s + n})
     return s
 }

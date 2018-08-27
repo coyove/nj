@@ -32,6 +32,7 @@ import (
 %type<expr> flow_stat
 
 %type<str>  func
+%type<str>  _func
 %type<expr> func_call
 %type<expr> func_args
 %type<expr> function
@@ -46,7 +47,7 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TNil TNot TReturn TRequire TNop TVar TWhile TYield
+%token<token> TAddressof TAssert TBreak TContinue TElse TFor TFunc TIf TNil TNot TReturn TRequire TTypeof TVar TWhile TYield
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
@@ -67,6 +68,7 @@ import (
 %right '~'
 %right '#'
 %left TAddAdd TMinMin
+%right TTypeof, TAddressof
 
 %% 
 
@@ -96,10 +98,10 @@ assign_stat:
         }
 
 stat:
-        jmp_stat     { $$ = $1 } |
-        flow_stat        { $$ = $1 } |
-        assign_stat { $$ = $1 } |
-        block {$$ = $1 }
+        jmp_stat               { $$ = $1 } |
+        flow_stat              { $$ = $1 } |
+        assign_stat            { $$ = $1 } |
+        block                  { $$ = $1 }
 
 oneline_or_block:
         assign_stat            { $$ = CNode("chain", $1) } |
@@ -215,12 +217,16 @@ for_stat:
         }
 
 if_stat:
-        TIf expr oneline_or_block %prec 'T'     { $$ = CNode("if", $2, $3, CNode()) } |
+        TIf expr oneline_or_block %prec 'T'              { $$ = CNode("if", $2, $3, CNode()) } |
         TIf expr oneline_or_block TElse oneline_or_block { $$ = CNode("if", $2, $3, $5) }
 
+_func:
+        { $$ = "" } |
+        _func '!' { $$ = $1 + ",safe" } |
+        _func TVar { $$ = $1 + ",var" }
+
 func:
-        TFunc     { $$ = "func" } |
-        TFunc '!' { $$ = "safefunc" }
+        TFunc _func { $$ = "func," + $2 }
 
 func_stat:
         func TIdent func_params_list oneline_or_block {
@@ -235,42 +241,34 @@ func_stat:
         }
 
 jmp_stat:
-         TYield       '.'  { $$ = CNode("yield").setPos0($1) } |
-         TYield expr    { $$ = CNode("yield", $2).setPos0($1) } |
-         TBreak         { $$ = CNode("break").setPos0($1) } |
-        TContinue      { $$ = CNode("continue").setPos0($1) } |
-         TAssert expr   { $$ = CNode("assert", $2).setPos0($1) } |
-         TReturn      '.'  { $$ = CNode("ret").setPos0($1) } |
-         TReturn expr   {
-            if $2.isIsolatedCopy() && $2.Cx(2).Cx(2).N() == 1 {
-                $2.Cx(2).C()[2] = NNode(2.0)
-            }
-            $$ = CNode("ret", $2).setPos0($1)
-        } |
-        TRequire TString {
-            path := filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)
-            $$ = yylex.(*Lexer).loadFile(path)
-        }
+        TYield '.'       { $$ = CNode("yield").setPos0($1) } |
+        TYield expr      { $$ = CNode("yield", $2).setPos0($1) } |
+        TBreak           { $$ = CNode("break").setPos0($1) } |
+        TContinue        { $$ = CNode("continue").setPos0($1) } |
+        TAssert expr     { $$ = CNode("assert", $2).setPos0($1) } |
+        TReturn '.'      { $$ = CNode("ret").setPos0($1) } |
+        TReturn expr     { $$ = CNode("ret", $2).setPos0($1) } |
+        TRequire TString { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) }
 
 declarator:
-        TIdent                            { $$ = ANode($1).setPos($1) } |
-        prefix_expr '[' expr ']'          { $$ = CNode("load", $1, $3).setPos0($1).setPos($1) } |
-        prefix_expr '[' expr ':' expr ']' { $$ = CNode("slice", $1, $3, $5).setPos0($1).setPos($1) } |
-        prefix_expr '[' expr ':' ']'      { $$ = CNode("slice", $1, $3, NNode("-1")).setPos0($1).setPos($1) } |
-        prefix_expr '[' ':' expr ']'      { $$ = CNode("slice", $1, NNode("0"), $4).setPos0($1).setPos($1) } |
-        prefix_expr '.' TIdent            { $$ = CNode("load", $1, SNode($3.Str)).setPos0($1).setPos($1) }
+        TIdent                                { $$ = ANode($1).setPos($1) } |
+        prefix_expr '[' expr ']'              { $$ = CNode("load", $1, $3).setPos0($1).setPos($1) } |
+        prefix_expr '[' expr ':' expr ']'     { $$ = CNode("slice", $1, $3, $5).setPos0($1).setPos($1) } |
+        prefix_expr '[' expr ':' ']'          { $$ = CNode("slice", $1, $3, NNode("-1")).setPos0($1).setPos($1) } |
+        prefix_expr '[' ':' expr ']'          { $$ = CNode("slice", $1, NNode("0"), $4).setPos0($1).setPos($1) } |
+        prefix_expr '.' TIdent                { $$ = CNode("load", $1, SNode($3.Str)).setPos0($1).setPos($1) }
 
 ident_list:
-        TIdent                { $$ = CNode($1.Str) } | 
-        ident_list ',' TIdent { $$ = $1.Cappend(ANode($3)) }
+        TIdent                                { $$ = CNode($1.Str) } | 
+        ident_list ',' TIdent                 { $$ = $1.Cappend(ANode($3)) }
 
 expr_list:
-        expr               { $$ = CNode($1) } |
-        expr_list ',' expr { $$ = $1.Cappend($3) }
+        expr                                  { $$ = CNode($1) } |
+        expr_list ',' expr                    { $$ = $1.Cappend($3) }
 
 expr_assign_list:
-        expr ':' expr                      { $$ = CNode($1, $3) } |
-        expr_assign_list ',' expr ':' expr { $$ = $1.Cappend($3).Cappend($5) }
+        expr ':' expr                         { $$ = CNode($1, $3) } |
+        expr_assign_list ',' expr ':' expr    { $$ = $1.Cappend($3).Cappend($5) }
 
 expr_declare_list:
         TIdent                                { $$ = CNode("chain", CNode("set", ANode($1), NilNode()).setPos0($1)) } |
@@ -282,6 +280,8 @@ expr:
         TNil                 { $$ = NilNode().SetPos($1) } |
         TNumber              { $$ = NNode($1.Str).SetPos($1) } |
         TRequire TString     { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) } |
+        TTypeof expr         { $$ = CNode("typeof", $2) } |
+        TAddressof TIdent    { $$ = CNode("call", "addressof", CNode(ANode($2))) } |
         function             { $$ = $1 } |
         map_gen              { $$ = $1 } |
         prefix_expr          { $$ = $1 } |
@@ -336,28 +336,6 @@ func_call:
                     }
                     $$ = CNode("call", $1, CNode(NNode("1"), $2.Cx(0), p))
                 }
-            case "typeof":
-                switch $2.Cn() {
-                case 0:
-                    yylex.(*Lexer).Error("typeof takes at least 1 argument")
-                case 1:
-                    $$ = CNode("call", $1, CNode($2.Cx(0), NNode("255")))
-                default:
-                    x, _ := $2.Cx(1).Value.(string);
-                    if ti, ok := typesLookup[x]; ok {
-                        $$ = CNode("call", $1, CNode($2.Cx(0), NNode(ti)))
-                    } else {
-                        yylex.(*Lexer).Error("invalid typename in typeof")
-                    }
-                }
-            case "addressof":
-                if $2.Cn() != 1 {
-                    yylex.(*Lexer).Error("addressof takes 1 argument")
-                }
-                if $2.Cx(0).Type != Natom {
-                    yylex.(*Lexer).Error("addressof can only get the address of a variable")
-                }
-                $$ = CNode("call", $1, $2)
             case "len":
                 switch $2.Cn() {
                 case 0:
@@ -376,9 +354,9 @@ func_args:
         '(' expr_list ')' { $$ = $2 }
 
 function:
-        func func_params_list block %prec FUN{ $$ = CNode($1, "<a>", $2, $3).setPos0($2) } |
-        func ident_list '=' expr %prec FUN  { $$ = CNode($1, "<a>", $2, CNode("chain", CNode("ret", $4))).setPos0($2) } |
-        func '=' expr  %prec FUN { $$ = CNode($1, "<a>", CNode(), CNode("chain", CNode("ret", $3))).setPos0($3) }
+        func func_params_list block %prec FUN { $$ = CNode($1, "<a>", $2, $3).setPos0($2) } |
+        func ident_list '=' expr %prec FUN    { $$ = CNode($1, "<a>", $2, CNode("chain", CNode("ret", $4))).setPos0($2) } |
+        func '=' expr %prec FUN               { $$ = CNode($1, "<a>", CNode(), CNode("chain", CNode("ret", $3))).setPos0($3) }
 
 func_params_list:
         '(' ')'            { $$ = CNode() } |
@@ -395,10 +373,6 @@ _map_gen:
         expr_list ','        { $$ = CNode("array", $1).setPos0($1) }
 
 %%
-
-var typesLookup = map[string]string {
-    "nil": "0", "number": "1", "string": "2", "map": "4", "closure": "6", "generic": "7",
-}
 
 var _rand = rand.New()
 

@@ -311,9 +311,9 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 }
 
 var reservedWords = map[string]uint32{
-	"and": TAnd, "or": TOr, "assert": TAssert, "break": TBreak, "continue": TContinue, "else": TElse,
+	"addressof": TAddressof, "and": TAnd, "or": TOr, "assert": TAssert, "break": TBreak, "continue": TContinue, "else": TElse,
 	"for": TFor, "fun": TFunc, "if": TIf, "nil": TNil, "not": TNot,
-	"return": TReturn, "require": TRequire, "var": TVar, "while": TWhile, "yield": TYield,
+	"return": TReturn, "require": TRequire, "typeof": TTypeof, "var": TVar, "while": TWhile, "yield": TYield,
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {

@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/coyove/potatolang/parser"
 )
@@ -136,7 +137,7 @@ var flatOpMapping = map[string]byte{
 	"+": OP_ADD, "-": OP_SUB, "*": OP_MUL, "/": OP_DIV, "%": OP_MOD,
 	"<": OP_LESS, "<=": OP_LESS_EQ, "==": OP_EQ, "!=": OP_NEQ, "!": OP_NOT,
 	"~": OP_BIT_NOT, "&": OP_BIT_AND, "|": OP_BIT_OR, "^": OP_BIT_XOR, "<<": OP_BIT_LSH, ">>": OP_BIT_RSH, ">>>": OP_BIT_URSH,
-	"#": OP_POP, "store": OP_STORE, "load": OP_LOAD, "assert": OP_ASSERT, "slice": OP_SLICE, "nop": OP_NOP,
+	"#": OP_POP, "store": OP_STORE, "load": OP_LOAD, "assert": OP_ASSERT, "slice": OP_SLICE, "nop": OP_NOP, "typeof": OP_TYPEOF,
 }
 
 var registerOpMappings = map[byte]int{OP_R0: 0, OP_R1: 1, OP_R2: 2, OP_R3: 3}
@@ -270,8 +271,6 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 		code, yx, err = table.compileSetOp(nodes)
 	case "ret", "yield":
 		code, yx, err = table.compileRetOp(nodes)
-	case "func", "safefunc":
-		code, yx, err = table.compileLambdaOp(nodes)
 	case "if":
 		code, yx, err = table.compileIfOp(nodes)
 	case "for":
@@ -287,10 +286,14 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 	case "inc":
 		code, yx, err = table.compileIncOp(nodes)
 	default:
-		if flatOpMapping[name] != 0 {
-			return table.compileFlatOp(nodes)
+		if strings.Contains(name, "func") {
+			code, yx, err = table.compileLambdaOp(nodes)
+		} else {
+			if flatOpMapping[name] != 0 {
+				return table.compileFlatOp(nodes)
+			}
+			panic(name)
 		}
-		panic(name)
 	}
 	table.im, table.ims = nil, nil
 	return

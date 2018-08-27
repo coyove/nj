@@ -2,6 +2,7 @@ package potatolang
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -18,7 +19,7 @@ func stdPrint(f *os.File) func(env *Env) Value {
 
 func _sprintf(env *Env) string {
 	msg := []rune(env.SGet(0).Str())
-	buf, numbuf := bytes.Buffer{}, bytes.Buffer{}
+	buf, numbuf, formatbuf := bytes.Buffer{}, bytes.Buffer{}, bytes.Buffer{}
 	i := 0
 	for i < len(msg) {
 		if msg[i] != '~' {
@@ -29,18 +30,31 @@ func _sprintf(env *Env) string {
 		if i+1 >= len(msg) {
 			break
 		}
-		if msg[i+1] == '~' {
-			buf.WriteRune('~')
+		if msg[i+1] == '~' || msg[i+1] == '%' {
+			buf.WriteRune(msg[i+1])
 			i += 2
 			continue
 		}
 		numbuf.Reset()
+		formatbuf.Reset()
 		j := i + 1
+		currentbuf := &numbuf
 		for ; j < len(msg); j++ {
 			if msg[j] >= '0' && msg[j] <= '9' {
-				numbuf.WriteRune(msg[j])
+				currentbuf.WriteRune(msg[j])
+			} else if msg[j] == '%' {
+				if currentbuf == &formatbuf {
+					j++
+					break
+				}
+				currentbuf = &formatbuf
+				currentbuf.WriteRune(msg[j])
 			} else {
-				break
+				if currentbuf == &formatbuf {
+					currentbuf.WriteRune(msg[j])
+				} else {
+					break
+				}
 			}
 		}
 		if j == i+1 {
@@ -49,7 +63,22 @@ func _sprintf(env *Env) string {
 		}
 		i = j
 		num, _ := strconv.Atoi(numbuf.String())
-		buf.WriteString(env.SGet(num).ToPrintString())
+
+		if formatbuf.Len() == 0 {
+			buf.WriteString(env.SGet(num).ToPrintString())
+		} else {
+			format := formatbuf.Bytes()
+			i := env.SGet(num).I()
+
+			// TODO: handle cases like: %d %
+			switch format[len(format)-1] {
+			case 'b', 'c', 'd', 'o', 'q', 'x', 'X', 'U':
+				// do not report error
+				num, _ := i.(float64)
+				i = int64(num)
+			}
+			buf.WriteString(fmt.Sprintf(string(format), i))
+		}
 	}
 
 	return buf.String()

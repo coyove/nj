@@ -522,17 +522,15 @@ MAIN:
 				cursor = uint32(int32(cursor) + int32(opb))
 			}
 		case OP_COPY:
-			doCopy(env)
-		case OP_TYPEOF:
-			if env.R1.Type() == Tnumber {
-				if n := byte(env.R1.AsNumber()); n == 255 {
-					env.A = NewStringValue(TMapping[env.R0.Type()])
-				} else {
-					env.A.SetBoolValue(env.R0.Type() == n)
+			v, r := doCopy(env)
+			if r {
+				if len(retStack) == 0 {
+					return v, 0, false
 				}
-			} else {
-				env.A.SetBoolValue(TMapping[env.R0.Type()] == env.R1.AsString())
+				returnUpperWorld(v)
 			}
+		case OP_TYPEOF:
+			env.A = NewStringValue(TMapping[env.R0.Type()])
 		}
 	}
 
@@ -546,8 +544,8 @@ MAIN:
 // OP_COPY takes 3 arguments:
 //   1. number: 0 means the copy result will be discarded, 1 means the result will be stored into somewhere
 //   2. any: the subject to be duplicated
-//   3. number/closure: 0 means no predicator, 1 means copy stack, 2 means return stack, otherwise the closure will be used
-func doCopy(env *Env) {
+//   3. number/closure: 0 means no predicator, 1 means copy stack, otherwise the closure will be used
+func doCopy(env *Env) (_v Value, _b bool) {
 	alloc := env.R0.AsNumber() == 1
 	nopred := false
 	if env.R2.Type() == Tnumber {
@@ -559,12 +557,6 @@ func doCopy(env *Env) {
 			// copy()
 			ret := NewMapSize(len(env.stack))
 			copy(ret.l, env.stack)
-			env.A = NewMapValue(ret)
-			return
-		case 2:
-			// return copy()
-			ret := NewMap()
-			ret.l = env.stack
 			env.A = NewMapValue(ret)
 			return
 		default:
@@ -605,8 +597,14 @@ func doCopy(env *Env) {
 				if alloc {
 					newstr = append(newstr, cls.Exec(newEnv))
 				} else {
-					if cls.Exec(newEnv) == PhantomValue {
-						break
+					if cls.Isset(CLS_PSEUDO_FOREACH) {
+						if res := cls.Exec(newEnv); res == PhantomValue {
+							break
+						} else if cls.lastp > 0 {
+							_b = true
+							_v = res
+							return
+						}
 					}
 				}
 			}
@@ -652,19 +650,29 @@ func doCopy(env *Env) {
 				newEnv.SClear()
 				newEnv.SPush(NewNumberValue(float64(i)))
 				newEnv.SPush(v)
-				if cls.Exec(newEnv) == PhantomValue {
+				if res := cls.Exec(newEnv); res == PhantomValue {
 					goto BREAK_ALL
+				} else if cls.lastp > 0 {
+					_b = true
+					_v = res
+					return
 				}
 			}
 			for _, v := range m.m {
 				newEnv.SClear()
 				newEnv.SPush(v[0])
 				newEnv.SPush(v[1])
-				if cls.Exec(newEnv) == PhantomValue {
+				if res := cls.Exec(newEnv); res == PhantomValue {
 					goto BREAK_ALL
+				} else if cls.lastp > 0 {
+					_b = true
+					_v = res
+					return
 				}
 			}
 		BREAK_ALL:
 		}
 	}
+
+	return
 }
