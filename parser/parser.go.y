@@ -222,8 +222,8 @@ if_stat:
 
 _func:
         { $$ = "" } |
-        _func '!' { $$ = $1 + ",safe" } |
-        _func TVar { $$ = $1 + ",var" }
+        _func TFunc  { $$ = $1 + ",safe" } |
+        _func TVar   { $$ = $1 + ",var" }
 
 func:
         TFunc _func { $$ = "func," + $2 }

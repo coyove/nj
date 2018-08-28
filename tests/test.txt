@@ -169,7 +169,7 @@ else
 var a = require "simple.txt" + 1
 assert a == 2
 
-fun! safeexec() {
+fun fun safeexec() {
     assert 0
 }
 
@@ -181,7 +181,7 @@ assert m == {1,2,{1,2,{1,2,{1,2,4}}}}
 
 fun safeexec(f, args) {
     var result = "none"
-    var x = (fun! () {
+    var x = (fun fun () {
         result = std.apply(f, args)
     })()
 

@@ -18,7 +18,7 @@ ptr_test(std.currentenv(), addressof a)
 assert a == 10
 
 
-fun! testAssert() {
+fun fun testAssert() {
     std.r1("hello")
     assert 0
 }
