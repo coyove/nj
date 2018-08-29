@@ -89,11 +89,6 @@ func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint3
 	}
 
 	buf := newpacket()
-	if len(atoms) == 1 {
-		buf.WriteOP(opk, 0, 0)
-		return buf, yx, nil
-	}
-
 	switch atom := atoms[1]; atom.Type {
 	case parser.Natom, parser.Nnumber, parser.Nstring, parser.Naddr:
 		if err = table.fill(&buf, atom, op, opk); err != nil {

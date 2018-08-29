@@ -241,12 +241,10 @@ func_stat:
         }
 
 jmp_stat:
-        TYield '.'       { $$ = CNode("yield").setPos0($1) } |
         TYield expr      { $$ = CNode("yield", $2).setPos0($1) } |
         TBreak           { $$ = CNode("break").setPos0($1) } |
         TContinue        { $$ = CNode("continue").setPos0($1) } |
         TAssert expr     { $$ = CNode("assert", $2).setPos0($1) } |
-        TReturn '.'      { $$ = CNode("ret").setPos0($1) } |
         TReturn expr     { $$ = CNode("ret", $2).setPos0($1) } |
         TRequire TString { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) }
 
