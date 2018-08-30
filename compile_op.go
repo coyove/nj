@@ -73,7 +73,7 @@ func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint3
 	ispseudo := len(table.continueNode) > 0 && table.continueNode[len(table.continueNode)-1].S() == anonyMapIterCallbackFlag
 
 	if isyield && ispseudo {
-		err = fmt.Errorf("%+v: yield can't be used inside a pseudo for-loop", atoms[0])
+		err = fmt.Errorf("%+v: yield can't be used inside a pseudo foreach", atoms[0])
 		return
 	}
 
@@ -172,9 +172,6 @@ func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, y
 		table.im = &n
 	}
 
-	v1 := func() float64 { return atoms[1].Value.(float64) }
-	v2 := func() float64 { return atoms[2].Value.(float64) }
-
 	switch bop {
 	case OP_ADD:
 		if atoms[1].Type == parser.Nstring && atoms[2].Type == parser.Nstring {
@@ -185,26 +182,80 @@ func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, y
 			return buf, regA, nil
 		}
 		if atoms[1].Type == parser.Nnumber && atoms[2].Type == parser.Nnumber {
-			immediateRet(v1() + v2())
-			return buf, regA, nil
-		}
-	case OP_SUB:
-		if atoms[1].Type == parser.Nnumber && atoms[2].Type == parser.Nnumber {
-			immediateRet(v1() - v2())
-			return buf, regA, nil
-		}
-	case OP_MUL:
-		if atoms[1].Type == parser.Nnumber && atoms[2].Type == parser.Nnumber {
-			immediateRet(v1() * v2())
-			return buf, regA, nil
-		}
-	case OP_DIV:
-		if atoms[1].Type == parser.Nnumber && atoms[2].Type == parser.Nnumber {
-			immediateRet(v1() / v2())
+			immediateRet(atoms[1].Value.(float64) + atoms[2].Value.(float64))
 			return buf, regA, nil
 		}
 	}
 
+	if len(atoms) == 2 && atoms[1].Type == parser.Nnumber {
+		v1 := atoms[1].Value.(float64)
+		switch bop {
+		case OP_NOT:
+			if v1 == 0 {
+				immediateRet(1)
+			} else {
+				immediateRet(0)
+			}
+		case OP_BIT_NOT:
+			immediateRet(float64(^int32(v1)))
+			return buf, regA, nil
+		}
+	}
+
+	if len(atoms) > 2 && atoms[1].Type == parser.Nnumber && atoms[2].Type == parser.Nnumber {
+		v1, v2 := atoms[1].Value.(float64), atoms[2].Value.(float64)
+		switch bop {
+		case OP_SUB:
+			immediateRet(v1 - v2)
+		case OP_MUL:
+			immediateRet(v1 * v2)
+		case OP_DIV:
+			immediateRet(v1 / v2)
+		case OP_MOD:
+			immediateRet(float64(int64(v1) % int64(v2)))
+		case OP_EQ:
+			if v1 == v2 {
+				immediateRet(1)
+			} else {
+				immediateRet(0)
+			}
+		case OP_NEQ:
+			if v1 != v2 {
+				immediateRet(1)
+			} else {
+				immediateRet(0)
+			}
+		case OP_LESS:
+			if v1 < v2 {
+				immediateRet(1)
+			} else {
+				immediateRet(0)
+			}
+		case OP_LESS_EQ:
+			if v1 <= v2 {
+				immediateRet(1)
+			} else {
+				immediateRet(0)
+			}
+		case OP_BIT_AND:
+			immediateRet(float64(int32(v1) & int32(v2)))
+		case OP_BIT_OR:
+			immediateRet(float64(int32(v1) | int32(v2)))
+		case OP_BIT_XOR:
+			immediateRet(float64(int32(v1) ^ int32(v2)))
+		case OP_BIT_LSH:
+			immediateRet(float64(int32(v1) << uint32(v2)))
+		case OP_BIT_RSH:
+			immediateRet(float64(int32(v1) >> uint32(v2)))
+		case OP_BIT_URSH:
+			immediateRet(float64(uint32(v1) >> uint32(v2)))
+		default:
+			goto IM_PASS
+		}
+		return buf, regA, nil
+	}
+
+IM_PASS:
 	var op = [4]uint16{OP_R0<<8 | OP_R0K, OP_R1<<8 | OP_R1K, OP_R2<<8 | OP_R2K, OP_R3<<8 | OP_R3K}
 	switch bop {
 	case OP_LEN, OP_STORE, OP_LOAD, OP_SLICE, OP_POP:

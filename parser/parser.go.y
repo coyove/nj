@@ -47,7 +47,7 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAddressof TAssert TBreak TContinue TElse TFor TFunc TIf TNil TNot TReturn TRequire TTypeof TVar TWhile TYield
+%token<token> TAddressof TAssert TBreak TContinue TElse TFor TFunc TIf TLen TNew TNil TNot TReturn TRequire TTypeof TVar TWhile TYield
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
@@ -68,7 +68,8 @@ import (
 %right '~'
 %right '#'
 %left TAddAdd TMinMin
-%right TTypeof, TAddressof
+%right TTypeof, TAddressof, TLen
+%right COPY
 
 %% 
 
@@ -279,7 +280,9 @@ expr:
         TNumber              { $$ = NNode($1.Str).SetPos($1) } |
         TRequire TString     { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) } |
         TTypeof expr         { $$ = CNode("typeof", $2) } |
+        TLen expr            { $$ = CNode("len", $2) } |
         TAddressof TIdent    { $$ = CNode("call", "addressof", CNode(ANode($2))) } |
+        '+' expr %prec COPY  { $$ = CNode("call", "copy", CNode(NNode(1), $2, NilNode())) } |
         function             { $$ = $1 } |
         map_gen              { $$ = $1 } |
         prefix_expr          { $$ = $1 } |
@@ -329,13 +332,6 @@ func_call:
                     $$ = CNode("call", $1, CNode(NNode(1), $2.Cx(0), NilNode()))
                 default:
                     $$ = CNode("call", $1, CNode(NNode(1), $2.Cx(0), $2.Cx(1)))
-                }
-            case "len":
-                switch $2.Cn() {
-                case 0:
-                    yylex.(*Lexer).Error("len takes 1 argument")
-                default:
-                    $$ = CNode("call", $1, $2)
                 }
             default:
                 $$ = CNode("call", $1, $2)

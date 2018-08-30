@@ -596,7 +596,6 @@ func doCopy(env *Env) (_v Value, _b bool) {
 				newEnv.SClear()
 				newEnv.SPush(NewNumberValue(float64(i)))
 				newEnv.SPush(NewNumberValue(float64(v)))
-				newEnv.SPush(NewNumberValue(float64(len(newstr))))
 				if alloc {
 					newstr = append(newstr, cls.Exec(newEnv))
 				} else {

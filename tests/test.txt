@@ -8,7 +8,7 @@ var fib2 = fun(a, b) {
    }
 }
 
-var fib3 = copy(fib2)
+var fib3 = +(fib2)
  
 for i = 0,33 fib2(0,1)
 
@@ -103,7 +103,7 @@ var m = {
     "key2": {1,2,3}
 }
 
-assert m == copy(m)
+assert m == +m
 var m2 = {}
 m2.key1 = "value1"
 m2.key2 = {}
@@ -134,7 +134,7 @@ var counter = {
     },
 }
 
-var c = copy(counter)
+var c = +counter
 c.add()(2)
 c.add(1)
 assert c.tick == 3

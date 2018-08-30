@@ -8,11 +8,10 @@ fun A(i, j) {
 var K = std.opcode.closure, OP= std.opcode 
 var A2 = K.empty() 
 var call = (fun(){
-    return fun() {
-        var stack = copy() 
-        var x = K[stack[0]] 
-        stack[0] = A2 
-        std.apply(x, stack) 
+    return fun var() {
+        var x = K[arguments[0]] 
+        arguments[0] = A2 
+        std.apply(x,arguments) 
     } 
 })() 
 
@@ -102,10 +101,10 @@ for i = 0, 10 {
 }
 
 var vBv = 0, vv = 0 
-copy(v, fun(i, x) {
+for i, x = v {
     vBv = vBv + u[i] * x 
     vv = vv + x * x 
-}) 
+}
 
 io.println(math.sqrt(vBv/vv)) 
     

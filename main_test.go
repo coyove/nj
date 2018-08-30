@@ -151,7 +151,7 @@ func TestImportLoop(t *testing.T) {
 }
 
 func TestCopyCall(t *testing.T) {
-	cls, err := LoadString("var a = copy(1)")
+	cls, err := LoadString("var a = +1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestCopyCall(t *testing.T) {
 		t.Fatal("error opcode 2")
 	}
 
-	cls, err = LoadString("copy(1)")
+	cls, err = LoadString("(+1)")
 	if err != nil {
 		t.Fatal(err)
 	}
