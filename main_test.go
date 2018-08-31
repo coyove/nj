@@ -132,18 +132,18 @@ func TestImportLoop(t *testing.T) {
 	defer os.RemoveAll("tmp")
 
 	ioutil.WriteFile("tmp/1.txt", []byte(`
-		require "2.txt" 
-		require "src/3.txt"`), 0777)
-	ioutil.WriteFile("tmp/2.txt", []byte(`require "src/3.txt"`), 0777)
-	ioutil.WriteFile("tmp/src/3.txt", []byte(`var a = require "1.txt"`), 0777)
-	ioutil.WriteFile("tmp/src/1.txt", []byte(`require "../1.txt"`), 0777)
+		use "2.txt" 
+		use "src/3.txt"`), 0777)
+	ioutil.WriteFile("tmp/2.txt", []byte(`use "src/3.txt"`), 0777)
+	ioutil.WriteFile("tmp/src/3.txt", []byte(`var a = use "1.txt"`), 0777)
+	ioutil.WriteFile("tmp/src/1.txt", []byte(`use "../1.txt"`), 0777)
 
 	_, err := LoadFile("tmp/1.txt")
 	if !strings.Contains(err.Error(), "importing each other") {
 		t.Error("something wrong")
 	}
 
-	ioutil.WriteFile("tmp/1.txt", []byte(`require "1.txt"`), 0777)
+	ioutil.WriteFile("tmp/1.txt", []byte(`use "1.txt"`), 0777)
 	_, err = LoadFile("tmp/1.txt")
 	if !strings.Contains(err.Error(), "importing each other") {
 		t.Error("something wrong")
@@ -151,7 +151,7 @@ func TestImportLoop(t *testing.T) {
 }
 
 func TestCopyCall(t *testing.T) {
-	cls, err := LoadString("var a = +1")
+	cls, err := LoadString("var a = dup 1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestCopyCall(t *testing.T) {
 		t.Fatal("error opcode 2")
 	}
 
-	cls, err = LoadString("(+1)")
+	cls, err = LoadString("(dup 1)")
 	if err != nil {
 		t.Fatal(err)
 	}

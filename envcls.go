@@ -2,6 +2,7 @@ package potatolang
 
 import (
 	"fmt"
+	"unsafe"
 )
 
 // Env is the environment for a closure in potatolang to run within.
@@ -131,6 +132,10 @@ func (env *Env) Set(yx uint32, v Value) {
 // Stack returns the current stack
 func (env *Env) Stack() []Value {
 	return env.stack
+}
+
+func (env *Env) reg(i uint32) *Value {
+	return (*Value)(unsafe.Pointer(uintptr(unsafe.Pointer(&env.A)) + uintptr(i)))
 }
 
 const (

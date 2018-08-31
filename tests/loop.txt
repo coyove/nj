@@ -83,11 +83,11 @@ while 1 continue=a=a+1 {
 assert a == 2 
  
 
-var a = copy({1,2,3}, fun(i,a) {
+var a = dup ({1,2,3}) use fun(i,a) {
     yield "1" 
     yield "2" 
     yield "3" 
-}) 
+}
 
 assert a =={"1","2","3"} 
 
@@ -125,7 +125,7 @@ assert m == {1,2}
 
 var m = {} 
 var s = {1,2,3,4,5,6,7,8,9,10} 
-var s2 = copy(s, fun (i, a) { return "" & a  }) 
+var s2 = dup s use fun (i, a) { return "" & a  }
 
 for  i = 0,10  {
     var a = {} 

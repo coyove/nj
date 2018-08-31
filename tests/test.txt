@@ -8,7 +8,7 @@ var fib2 = fun(a, b) {
    }
 }
 
-var fib3 = +(fib2)
+var fib3 = dup (fib2)
  
 for i = 0,33 fib2(0,1)
 
@@ -103,7 +103,7 @@ var m = {
     "key2": {1,2,3}
 }
 
-assert m == +m
+assert m == dup m
 var m2 = {}
 m2.key1 = "value1"
 m2.key2 = {}
@@ -134,7 +134,7 @@ var counter = {
     },
 }
 
-var c = +counter
+var c = dup counter
 c.add()(2)
 c.add(1)
 assert c.tick == 3
@@ -166,7 +166,7 @@ if (af == 0)
 else
     assert 0  // shouldn't be here
 
-var a = require "simple.txt" + 1
+var a = use "simple.txt" + 1
 assert a == 2
 
 fun fun safeexec() {

@@ -47,7 +47,7 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAddressof TAssert TBreak TContinue TElse TFor TFunc TIf TLen TNew TNil TNot TReturn TRequire TTypeof TVar TWhile TYield
+%token<token> TAddressof TAssert TBreak TContinue TElse TFor TFunc TIf TLen TNew TNil TNot TReturn TUse TTypeof TVar TWhile TYield
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
@@ -68,8 +68,7 @@ import (
 %right '~'
 %right '#'
 %left TAddAdd TMinMin
-%right TTypeof, TAddressof, TLen
-%right COPY
+%right TTypeof, TAddressof, TLen, TNew, TUse
 
 %% 
 
@@ -247,7 +246,7 @@ jmp_stat:
         TContinue        { $$ = CNode("continue").setPos0($1) } |
         TAssert expr     { $$ = CNode("assert", $2).setPos0($1) } |
         TReturn expr     { $$ = CNode("ret", $2).setPos0($1) } |
-        TRequire TString { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) }
+        TUse TString     { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) }
 
 declarator:
         TIdent                                { $$ = ANode($1).setPos($1) } |
@@ -278,11 +277,12 @@ expr_declare_list:
 expr:
         TNil                 { $$ = NilNode().SetPos($1) } |
         TNumber              { $$ = NNode($1.Str).SetPos($1) } |
-        TRequire TString     { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) } |
+        TUse TString         { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) } |
         TTypeof expr         { $$ = CNode("typeof", $2) } |
         TLen expr            { $$ = CNode("len", $2) } |
         TAddressof TIdent    { $$ = CNode("call", "addressof", CNode(ANode($2))) } |
-        '+' expr %prec COPY  { $$ = CNode("call", "copy", CNode(NNode(1), $2, NilNode())) } |
+        TNew expr            { $$ = CNode("call", "copy", CNode(NNode(1), $2, NilNode())) } |
+        TNew expr TUse expr  { $$ = CNode("call", "copy", CNode(NNode(1), $2, $4)) } |
         function             { $$ = $1 } |
         map_gen              { $$ = $1 } |
         prefix_expr          { $$ = $1 } |
@@ -323,20 +323,7 @@ prefix_expr:
 
 func_call:
         prefix_expr func_args {
-            switch $1.S() {
-            case "copy":
-                switch $2.Cn() {
-                case 0:
-                    yylex.(*Lexer).Error("copy takes at least 1 argument")
-                case 1:
-                    $$ = CNode("call", $1, CNode(NNode(1), $2.Cx(0), NilNode()))
-                default:
-                    $$ = CNode("call", $1, CNode(NNode(1), $2.Cx(0), $2.Cx(1)))
-                }
-            default:
-                $$ = CNode("call", $1, $2)
-            }
-            $$.Cx(0).SetPos($1)
+            $$ = CNode("call", $1, $2).setPos0($1)
         }
 
 func_args:
