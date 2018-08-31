@@ -135,7 +135,7 @@ func (env *Env) Stack() []Value {
 }
 
 func (env *Env) reg(i uint32) *Value {
-	return (*Value)(unsafe.Pointer(uintptr(unsafe.Pointer(&env.A)) + uintptr(i)))
+	return (*Value)(unsafe.Pointer(uintptr(unsafe.Pointer(&env.A)) + SizeofValue*uintptr(i)))
 }
 
 const (

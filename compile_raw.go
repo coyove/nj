@@ -2,6 +2,8 @@ package potatolang
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/coyove/potatolang/parser"
 )
@@ -51,6 +53,14 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 	if o, ok := _rawOP0[opname]; ok {
 		code.WriteOP(o, 0, 0)
 		return
+	}
+
+	for i := 0; i < 4; i++ {
+		x := strconv.Itoa(i)
+		if o, ok := _rawOP0[strings.TrimSuffix(opname, x)]; ok {
+			code.WriteOP(o, uint32(i+1), 0)
+			return
+		}
 	}
 
 	for _, arg := range atoms[2].C() {

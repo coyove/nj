@@ -5,6 +5,24 @@ fun A(i, j) {
     return ((i+j)*(i+j+1)/2 + i + 1) 
 }
 
+fun A0(i, j) {
+    $r0(i)
+    $r1(j)
+    $add0()
+    $r1(1)
+    $add1()
+    $mul0()
+    $r1(2)
+    $div0()
+    $r1(i)
+    $add0()
+    $r1(1)
+    $add()
+    $ret($a)
+}
+
+assert  A0(1,2) == A(1,2)
+
 var K = std.opcode.closure, OP= std.opcode 
 var A2 = K.empty() 
 var call = (fun(){
@@ -88,7 +106,8 @@ n = 550
 var u = {} 
 var v = {} 
  
-assert A2(1,1) == A(1,1) 
+assert A2(1,1) == A(1,1)
+A2 = A0 
 
 for idx = 0, n {
     u[idx] = 1 

@@ -356,6 +356,9 @@ MAIN:
 		default:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs)
+				if a > 0 {
+					sb.WriteString(" -> R" + strconv.Itoa(int(a)-1))
+				}
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))
 			}

@@ -300,21 +300,21 @@ MAIN:
 			}
 		case OP_MAKEMAP:
 			if newEnv == nil {
-				*env.reg(opa) = NewMapValue(NewMap())
+				env.A = NewMapValue(NewMap())
 			} else {
 				if opa == 1 {
 					size := newEnv.SSize()
 					m := NewMapSize(size)
 					copy(m.l, newEnv.stack)
 					newEnv.SClear()
-					*env.reg(opa) = NewMapValue(m)
+					env.A = NewMapValue(m)
 				} else {
 					size, m := newEnv.SSize(), NewMap()
 					for i := 0; i < size; i += 2 {
 						m.Put(newEnv.SGet(i), newEnv.SGet(i+1))
 					}
 					newEnv.SClear()
-					*env.reg(opa) = NewMapValue(m)
+					env.A = NewMapValue(m)
 				}
 			}
 		case OP_STORE:
