@@ -107,7 +107,7 @@ func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint3
 
 func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
 	var buf packet
-	if buf, err = table.flaten(atoms[1].C()); err != nil {
+	if buf, err = table.flaten(atoms[1].C(), nil); err != nil {
 		return
 	}
 	for _, atom := range atoms[1].C() {
@@ -124,8 +124,12 @@ func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx 
 	return buf, regA, nil
 }
 
-func (table *symtable) flaten(atoms []*parser.Node) (buf packet, err error) {
-	replacedAtoms := []*parser.Node{}
+func (table *symtable) flaten(atoms []*parser.Node, ops []uint16) (buf packet, err error) {
+	// replacedAtoms := []*parser.Node{}
+	var lastReplacedAtom struct {
+		node  *parser.Node
+		index int
+	}
 	buf = newpacket()
 
 	for i, atom := range atoms {
@@ -144,24 +148,40 @@ func (table *symtable) flaten(atoms []*parser.Node) (buf packet, err error) {
 				table.ims = nil
 			} else {
 				atoms[i] = parser.NewNode(parser.Naddr).SetValue(yx)
-				replacedAtoms = append(replacedAtoms, atoms[i])
+				// replacedAtoms = append(replacedAtoms, atoms[i])
+				lastReplacedAtom.node = atoms[i]
+				lastReplacedAtom.index = i
 				buf.Write(code)
 			}
 		}
 	}
 
-	if len(replacedAtoms) > 0 {
-		_, _, replacedAtoms[len(replacedAtoms)-1].Value = op(buf.data[len(buf.data)-1])
+	if lastReplacedAtom.node != nil {
+		_, _, lastReplacedAtom.node.Value = op(buf.data[len(buf.data)-1])
 		buf.TruncateLast(1)
 		table.sp--
+		if ops != nil {
+			bop, _, _ := op(buf.data[len(buf.data)-1])
+			if flatOpMappingRev[bop] != "" {
+				buf.data[len(buf.data)-1] = makeop(bop, uint32(byte(ops[lastReplacedAtom.index]>>8)-OP_R0)/2+1, 0)
+				ops[lastReplacedAtom.index] = OP_NOP
+			}
+		}
 	}
 
 	return buf, nil
 }
 
 func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, yx uint32, err error) {
+	var op = []uint16{OP_R0<<8 | OP_R0K, OP_R1<<8 | OP_R1K, OP_R2<<8 | OP_R2K, OP_R3<<8 | OP_R3K}
+	switch bop {
+	case OP_LEN, OP_STORE, OP_LOAD, OP_SLICE, OP_POP:
+		op[0], op[3] = op[3], op[0]
+		op[1], op[2] = op[2], op[1]
+	}
+
 	var buf packet
-	buf, err = table.flaten(atoms[1:])
+	buf, err = table.flaten(atoms[1:], op)
 	if err != nil {
 		return
 	}
@@ -256,15 +276,13 @@ func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, y
 	}
 
 IM_PASS:
-	var op = [4]uint16{OP_R0<<8 | OP_R0K, OP_R1<<8 | OP_R1K, OP_R2<<8 | OP_R2K, OP_R3<<8 | OP_R3K}
-	switch bop {
-	case OP_LEN, OP_STORE, OP_LOAD, OP_SLICE, OP_POP:
-		op[0], op[3] = op[3], op[0]
-		op[1], op[2] = op[2], op[1]
-	}
 
 	count := buf.Len()
 	for i := 1; i < len(atoms); i++ {
+		if op[i-1] == OP_NOP {
+			// ignore me ...
+			continue
+		}
 		if err = table.fill(&buf, atoms[i], byte(op[i-1]>>8), byte(op[i-1])); err != nil {
 			return
 		}
