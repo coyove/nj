@@ -161,10 +161,18 @@ func (table *symtable) flaten(atoms []*parser.Node, ops []uint16) (buf packet, e
 		buf.TruncateLast(1)
 		table.sp--
 		if ops != nil {
-			bop, _, _ := op(buf.data[len(buf.data)-1])
+			bop, opa, _ := op(buf.data[len(buf.data)-1])
+			idx := uint32(byte(ops[lastReplacedAtom.index]>>8)-OP_R0) / 2
 			if flatOpMappingRev[bop] != "" {
-				buf.data[len(buf.data)-1] = makeop(bop, uint32(byte(ops[lastReplacedAtom.index]>>8)-OP_R0)/2+1, 0)
+				buf.data[len(buf.data)-1] = makeop(bop, idx+1, 0)
 				ops[lastReplacedAtom.index] = OP_NOP
+				table.regs[idx].k = false
+				table.regs[idx].addr = regA
+			} else if bop == OP_CALL {
+				buf.data[len(buf.data)-1] = makeop(bop, opa, idx+1)
+				ops[lastReplacedAtom.index] = OP_NOP
+				table.regs[idx].k = false
+				table.regs[idx].addr = regA
 			}
 		}
 	}

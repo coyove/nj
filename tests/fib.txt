@@ -7,14 +7,12 @@ fun fib2(n) {
     if (n < 2) return n
     $sub()
     $push($a)
-    $call(fib2)
-    $r2($a)
+    $call2(fib2)
     $r1(1)
     $sub()
     $push($a)
-    $call(fib2)
+    $call1(fib2)
     $r0r2()
-    $r1($a)
     $add()
     $ret($a)
 }

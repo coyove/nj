@@ -330,6 +330,9 @@ MAIN:
 			sb.WriteString(prefix)
 		case OP_CALL:
 			sb.WriteString("call " + readAddr(a))
+			if b > 0 {
+				sb.WriteString(" -> r" + strconv.Itoa(int(b)-1))
+			}
 		case OP_JMP:
 			pos := int32(b)
 			pos2 := uint32(int32(cursor) + pos)
@@ -357,7 +360,7 @@ MAIN:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs)
 				if a > 0 {
-					sb.WriteString(" -> R" + strconv.Itoa(int(a)-1))
+					sb.WriteString(" -> r" + strconv.Itoa(int(a)-1))
 				}
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))

@@ -22,10 +22,11 @@ func panicerr(err error) {
 }
 
 type stacktrace struct {
-	cursor      uint32
-	noenvescape bool
-	env         *Env
-	cls         *Closure
+	cursor         uint32
+	noenvescape    bool
+	callReturnInto byte
+	env            *Env
+	cls            *Closure
 }
 
 // ExecError represents the runtime error
@@ -114,7 +115,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (_v Value, _p uint32, _y bo
 		code = r.cls.code
 		caddr = kodeaddr(code)
 		kaddr = (*reflect.SliceHeader)(unsafe.Pointer(&r.cls.consts)).Data
-		r.env.A = v
+		*r.env.reg(uint32(r.callReturnInto)) = v
 		if r.noenvescape {
 			newEnv = env
 			newEnv.SClear()
@@ -455,16 +456,16 @@ MAIN:
 			}
 			cls := v.AsClosure()
 			if cls.lastenv != nil {
-				env.A = cls.Exec(nil)
+				*env.reg(opb) = cls.Exec(nil)
 				newEnv = nil
 			} else if (newEnv == nil && cls.argsCount > 0) ||
 				(newEnv != nil && newEnv.SSize() < int(cls.argsCount)) {
 				if newEnv == nil || newEnv.SSize() == 0 {
-					env.A = NewClosureValue(cls)
+					*env.reg(opb) = NewClosureValue(cls)
 				} else {
 					curry := cls.Dup()
 					curry.AppendPreArgs(newEnv.Stack())
-					env.A = NewClosureValue(curry)
+					*env.reg(opb) = NewClosureValue(curry)
 					newEnv.SClear()
 				}
 			} else {
@@ -480,17 +481,18 @@ MAIN:
 				if cls.Isset(CLS_YIELDABLE) || cls.native != nil || cls.Isset(CLS_RECOVERALL) {
 					newEnv.trace = retStack
 					newEnv.parent = env
-					env.A = cls.Exec(newEnv)
+					*env.reg(opb) = cls.Exec(newEnv)
 				} else {
 					if retStack == nil {
 						retStack = make([]stacktrace, 0, 1)
 					}
 					// log.Println(newEnv.stack)
 					last := stacktrace{
-						cursor:      cursor,
-						env:         env,
-						cls:         K,
-						noenvescape: cls.Isset(CLS_NOENVESCAPE),
+						cursor:         cursor,
+						env:            env,
+						cls:            K,
+						noenvescape:    cls.Isset(CLS_NOENVESCAPE),
+						callReturnInto: byte(opb),
 					}
 
 					// switch to the env of cls

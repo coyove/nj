@@ -98,10 +98,10 @@ ARG:
 		}
 
 		if _opcode {
-			fmt.Println(b.PrettyString())
+			log.Println(b.PrettyString())
 		}
 		if _bytes {
-			os.Stdout.Write(b.BytesCode())
+			os.Stderr.Write(b.BytesCode())
 		}
 		if _roughsize {
 			ln := len(b.BytesCode())
@@ -109,14 +109,14 @@ ARG:
 			ln += len(b.Pos()) * 8
 
 			// 1.1: a factor
-			fmt.Printf("Compiled size: ~%.1fK with %d opcode\n", float64(ln)/1024*1.1, len(b.Code()))
+			log.Printf("Compiled size: ~%.1fK with %d opcode\n", float64(ln)/1024*1.1, len(b.Code()))
 		}
 		if _timing {
 			e := float64(time.Now().Sub(start).Nanoseconds()) / 1e6
 			if e < 1000 {
-				fmt.Printf("Time elapsed: %.1fms\n", e)
+				log.Printf("Time elapsed: %.1fms\n", e)
 			} else {
-				fmt.Printf("Time elapsed: %.3fs\n", e/1e3)
+				log.Printf("Time elapsed: %.3fs\n", e/1e3)
 			}
 		}
 	}()

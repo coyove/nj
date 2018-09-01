@@ -111,6 +111,18 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 	case "call":
 		code.WriteOP(OP_CALL, a, 0)
 		return
+	case "call0":
+		code.WriteOP(OP_CALL, a, 1)
+		return
+	case "call1":
+		code.WriteOP(OP_CALL, a, 2)
+		return
+	case "call2":
+		code.WriteOP(OP_CALL, a, 3)
+		return
+	case "call3":
+		code.WriteOP(OP_CALL, a, 4)
+		return
 	case "makemap":
 		code.WriteOP(OP_MAKEMAP, uint32(o), 0)
 		return

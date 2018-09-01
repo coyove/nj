@@ -100,4 +100,4 @@ wg.wait()
 io.write("P4\n" & size & " " & size & "\n") 
 for i, row = rows {
     io.write(row) 
-})  
+}
