@@ -443,10 +443,6 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		}
 		buf.WriteOP(OP_SETK, regA, uint32(table.addConst(float64(address))))
 		return buf, regA, nil
-	case "len":
-		code, yx, err = table.flatWrite(append([]*parser.Node{nodes[1]}, nodes[2].C()...), OP_LEN)
-		code.WritePos(nodes[0].Meta)
-		return
 	case "copy":
 		x := append([]*parser.Node{nodes[1]}, nodes[2].C()...)
 		code, yx, err = table.flatWrite(x, OP_COPY)
