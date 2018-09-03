@@ -258,3 +258,35 @@ func (n *Node) isSimpleAddSub() (a string, b string, s float64) {
 	}
 	return
 }
+
+func (n *Node) WillAffectR2() bool {
+	switch n.Type {
+	case Nnumber, Natom, Naddr, Nstring:
+		return false
+	case Ncompound:
+		if n.Cn() == 0 {
+			return false
+		}
+		switch x := n.Cx(0).S(); x {
+		case "store", "load", "slice":
+			return true
+		case "call", "map", "array":
+			return false
+		case "<", "<=", "==", "!=", "+", "-", "*", "/", "%", "^", "<<", ">>", ">>>", "|", "&":
+			n1, n2 := n.Cx(1).Type, n.Cx(2).Type
+			if (n1 == Ncompound || n1 == Naddr) && (n2 == Ncompound || n2 == Naddr) {
+				return true
+			}
+			return n.Cx(1).WillAffectR2() || n.Cx(2).WillAffectR2()
+		case "~", "!", "#", "len", "typeof":
+			return n.Cx(1).WillAffectR2()
+		default:
+			if strings.Contains(x, "func") {
+				return false
+			}
+			panic(x)
+		}
+		return false
+	}
+	return true
+}

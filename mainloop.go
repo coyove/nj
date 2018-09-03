@@ -377,10 +377,8 @@ MAIN:
 			env.R3 = env.Get(opa)
 		case OP_R3K:
 			env.R3 = konst(kaddr, uint16(opa))
-		case OP_R0R2:
-			env.R0 = env.R2
-		case OP_R1R2:
-			env.R1 = env.R2
+		case OP_RX:
+			*env.reg(opa + 1) = *env.reg(opb + 1)
 		case OP_POP:
 			switch env.R3.Type() {
 			case Tmap:

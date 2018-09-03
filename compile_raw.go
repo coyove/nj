@@ -35,8 +35,6 @@ var _rawOP0 = map[string]byte{
 	"typeof": OP_TYPEOF,
 	"nop":    OP_NOP,
 	"eob":    OP_EOB,
-	"r0r2":   OP_R0R2,
-	"r1r2":   OP_R1R2,
 	"copy":   OP_COPY,
 }
 
@@ -199,6 +197,9 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 		} else {
 			code.WriteOP(OP_SETK, a, uint32(k2))
 		}
+		return
+	case "rx":
+		code.WriteOP(OP_RX, uint32(o), uint32(o2))
 		return
 	}
 

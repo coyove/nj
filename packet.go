@@ -212,8 +212,6 @@ var singleOp = map[byte]string{
 	OP_TYPEOF:   "typeof",
 	OP_SLICE:    "slice",
 	OP_POP:      "pop",
-	OP_R0R2:     "r0r2",
-	OP_R1R2:     "r1r2",
 }
 
 func crHash(data []uint64) uint32 {
@@ -346,6 +344,8 @@ MAIN:
 			} else {
 				sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
 			}
+		case OP_RX:
+			sb.WriteString("r" + strconv.Itoa(int(a)) + " = r" + strconv.Itoa(int(b)))
 		case OP_NOP:
 			sb.WriteString("nop")
 		case OP_INC:

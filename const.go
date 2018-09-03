@@ -44,8 +44,7 @@ const (
 	OP_R2K
 	OP_R3
 	OP_R3K
-	OP_R0R2
-	OP_R1R2
+	OP_RX
 	OP_PUSH
 	OP_PUSHK
 	OP_RET

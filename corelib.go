@@ -227,7 +227,6 @@ func initCoreLibs() {
 		Puts("R1", NewNumberValue(OP_R1)).Puts("R1K", NewNumberValue(OP_R1K)).
 		Puts("R2", NewNumberValue(OP_R2)).Puts("R2K", NewNumberValue(OP_R2K)).
 		Puts("R3", NewNumberValue(OP_R3)).Puts("R3K", NewNumberValue(OP_R3K)).
-		Puts("R0R2", NewNumberValue(OP_R0R2)).Puts("R1R2", NewNumberValue(OP_R1R2)).
 		Puts("SET", NewNumberValue(OP_SET)).Puts("SETK", NewNumberValue(OP_SETK)).
 		Puts("closure", NewMapValue(NewMap().
 			Puts("empty", NewNativeValue(0, func(env *Env) Value {

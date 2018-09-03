@@ -12,7 +12,7 @@ fun fib2(n) {
     $sub()
     $push($a)
     $call1(fib2)
-    $r0r2()
+    $rx(0, 2)
     $add()
     $ret($a)
 }
