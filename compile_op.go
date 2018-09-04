@@ -107,7 +107,7 @@ func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint3
 
 func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
 	var buf packet
-	if buf, err = table.flaten(atoms[1].C(), nil, true); err != nil {
+	if buf, err = table.decompound(atoms[1].C(), nil, true); err != nil {
 		return
 	}
 	for _, atom := range atoms[1].C() {
@@ -124,86 +124,6 @@ func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx 
 	return buf, regA, nil
 }
 
-func (table *symtable) flaten(atoms []*parser.Node, ops []uint16, useR2 bool) (buf packet, err error) {
-	// replacedAtoms := []*parser.Node{}
-	var lastReplacedAtom, lastlastReplacedAtom struct {
-		node, oldnode *parser.Node
-		index         int
-		lastopPos     int
-	}
-	buf = newpacket()
-
-	for i, atom := range atoms {
-		var yx uint32
-		var code packet
-
-		if atom.Type == parser.Ncompound {
-			if code, yx, err = table.compileCompoundInto(atom, true, 0); err != nil {
-				return
-			}
-			if table.im != nil {
-				atoms[i] = parser.NNode(*table.im)
-				table.im = nil
-			} else if table.ims != nil {
-				atoms[i] = parser.SNode(*table.ims)
-				table.ims = nil
-			} else {
-				// replacedAtoms = append(replacedAtoms, atoms[i])
-				lastlastReplacedAtom = lastReplacedAtom
-				lastReplacedAtom.oldnode = atom
-				atoms[i] = parser.NewNode(parser.Naddr).SetValue(yx)
-				buf.Write(code)
-				lastReplacedAtom.node = atoms[i]
-				lastReplacedAtom.index = i
-				lastReplacedAtom.lastopPos = buf.Len() - 1
-			}
-		}
-	}
-
-	if lastReplacedAtom.node != nil {
-		_, _, lastReplacedAtom.node.Value = op(buf.data[len(buf.data)-1])
-		buf.TruncateLast(1)
-		table.sp--
-		if ops != nil {
-			bop, opa, _ := op(buf.data[len(buf.data)-1])
-			idx := uint32(byte(ops[lastReplacedAtom.index]>>8)-OP_R0) / 2
-			flag := false
-
-			if flatOpMappingRev[bop] != "" {
-				buf.data[len(buf.data)-1] = makeop(bop, idx+1, 0)
-				flag = true
-			} else if bop == OP_CALL {
-				buf.data[len(buf.data)-1] = makeop(OP_CALL, opa, idx+1)
-				flag = true
-			}
-
-			if flag {
-				ops[lastReplacedAtom.index] = OP_NOP
-				table.regs[idx].k = false
-				table.regs[idx].addr = regA
-			}
-		}
-	}
-
-	if lastlastReplacedAtom.node != nil &&
-		ops != nil &&
-		!lastlastReplacedAtom.oldnode.WillAffectR2() &&
-		!lastReplacedAtom.oldnode.WillAffectR2() &&
-		useR2 {
-		_, _, srcaddr := op(buf.data[lastlastReplacedAtom.lastopPos])
-		buf.data[lastlastReplacedAtom.lastopPos] = makeop(OP_R2, srcaddr, 0)
-		idx := uint32(byte(ops[lastlastReplacedAtom.index]>>8)-OP_R0) / 2
-		if idx != 2 {
-			buf.WriteOP(OP_RX, idx, 2)
-		}
-		ops[lastlastReplacedAtom.index] = OP_NOP
-		table.regs[idx].k = false
-		table.regs[idx].addr = regA
-	}
-
-	return buf, nil
-}
-
 func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, yx uint32, err error) {
 	var op = []uint16{OP_R0<<8 | OP_R0K, OP_R1<<8 | OP_R1K, OP_R2<<8 | OP_R2K, OP_R3<<8 | OP_R3K}
 	var canWeUseR2 = true
@@ -218,7 +138,7 @@ func (table *symtable) flatWrite(atoms []*parser.Node, bop byte) (code packet, y
 	}
 
 	var buf packet
-	buf, err = table.flaten(atoms[1:], op, canWeUseR2)
+	buf, err = table.decompound(atoms[1:], op, canWeUseR2)
 	if err != nil {
 		return
 	}

@@ -50,6 +50,10 @@ func TestSStringIndex(t *testing.T) {
 	runFile(t, "tests/stringindex.txt")
 }
 
+func TestSR2(t *testing.T) {
+	runFile(t, "tests/r2.txt")
+}
+
 func TestSStd(t *testing.T) {
 	runFile(t, "tests/std.txt")
 }
