@@ -270,7 +270,10 @@ func (n *Node) WillAffectR2() bool {
 		switch x := n.Cx(0).S(); x {
 		case "store", "load", "slice":
 			return true
-		case "call", "map", "array":
+		case "call":
+			// copy will use r2
+			return n.Cx(1).S() == "copy"
+		case "map", "array":
 			return false
 		case "<", "<=", "==", "!=", "+", "-", "*", "/", "%", "^", "<<", ">>", ">>>", "|", "&":
 			n1, n2 := n.Cx(1).Type, n.Cx(2).Type
