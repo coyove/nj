@@ -138,7 +138,6 @@ func initIOLib() {
 	lio.Puts("println", NewNativeValue(0, stdPrintln(os.Stdout)))
 	lio.Puts("print", NewNativeValue(0, stdPrint(os.Stdout)))
 	lio.Puts("printf", NewNativeValue(1, stdPrintf(os.Stdout)))
-	lio.Puts("sprintf", NewNativeValue(1, stdSprintf))
 	lio.Puts("write", NewNativeValue(0, stdWrite(os.Stdout)))
 	lio.Puts("err", NewMapValue(NewMap().
 		Puts("println", NewNativeValue(0, stdPrintln(os.Stderr))).

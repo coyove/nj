@@ -12,15 +12,12 @@ var n = 15
     $r2(0) 
     $load() 
     $push($a) 
-    $call(itemCheck) 
-    $r0($a) 
+    $call0(itemCheck) 
     $r2(1) 
     $load() 
     $push($a) 
-    $call(itemCheck) 
-    $r1($a) 
-    $add() 
-    $r0($a) 
+    $call1(itemCheck) 
+    $add0() 
     $r1(1) 
     $add() 
     $ret($a) 
@@ -46,7 +43,7 @@ for depth_l = minDepth,2,maxDepth  {
         for i = 0,iterations {
             check = check + itemCheck(bottomUpTree(depth)) 
         }
-        result[depth] = io.sprintf("~1\t trees of depth ~2\t check: ~3", iterations, depth, check) 
+        result[depth] = std.sprintf("~1\t trees of depth ~2\t check: ~3", iterations, depth, check) 
     })(depth_l, check_l) 
 }
 for depth = minDepth,2,maxDepth  {

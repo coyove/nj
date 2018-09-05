@@ -247,6 +247,9 @@ func (c *Closure) crPrettify(tab int) string {
 	if c.Isset(CLS_RECOVERALL) {
 		sb.WriteString(" safeexec")
 	}
+	if c.Isset(CLS_PSEUDO_FOREACH) {
+		sb.WriteString(" pforeach")
+	}
 	sb.WriteString("\n")
 	sb.WriteString(metaprefix + fmt.Sprintf("consts: %d\n", len(c.consts)))
 

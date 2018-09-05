@@ -89,22 +89,6 @@ func initCoreLibs() {
 	lcore.Puts("id", NewNativeValue(1, func(env *Env) Value {
 		return NewStringValue(env.SGet(0).hashstr())
 	}))
-	lcore.Puts("r0", NewNativeValue(1, func(env *Env) Value {
-		env.parent.R0 = env.SGet(0)
-		return Value{}
-	}))
-	lcore.Puts("r1", NewNativeValue(1, func(env *Env) Value {
-		env.parent.R1 = env.SGet(0)
-		return Value{}
-	}))
-	lcore.Puts("r2", NewNativeValue(1, func(env *Env) Value {
-		env.parent.R2 = env.SGet(0)
-		return Value{}
-	}))
-	lcore.Puts("r3", NewNativeValue(1, func(env *Env) Value {
-		env.parent.R3 = env.SGet(0)
-		return Value{}
-	}))
 	lcore.Puts("storeinto", NewNativeValue(3, func(env *Env) Value {
 		e, x, y := env.SGet(0), env.SGet(1), env.SGet(2)
 		ep, et := e.Gen()
@@ -182,6 +166,7 @@ func initCoreLibs() {
 			return NewNumberValue(-1)
 		}
 	}))
+	lcore.Puts("sprintf", NewNativeValue(0, stdSprintf))
 	lcore.Puts("sync", NewMapValue(NewMap().
 		Puts("run", NewNativeValue(1, func(env *Env) Value {
 			cls := env.SGet(0).Cls()
@@ -213,21 +198,6 @@ func initCoreLibs() {
 		}))))
 
 	lcore.Puts("opcode", NewMapValue(NewMap().
-		Puts("A", NewNumberValue(regA)).Puts("EOB", NewNumberValue(OP_EOB)).
-		Puts("LOAD", NewNumberValue(OP_LOAD)).Puts("STORE", NewNumberValue(OP_STORE)).
-		Puts("ADD", NewNumberValue(OP_ADD)).Puts("SUB", NewNumberValue(OP_SUB)).
-		Puts("MUL", NewNumberValue(OP_MUL)).Puts("DIV", NewNumberValue(OP_DIV)).
-		Puts("LESS", NewNumberValue(OP_LESS)).Puts("LESSEQ", NewNumberValue(OP_LESS_EQ)).
-		Puts("IFNOT", NewNumberValue(OP_IFNOT)).Puts("IF", NewNumberValue(OP_IF)).
-		Puts("CALL", NewNumberValue(OP_CALL)).Puts("JMP", NewNumberValue(OP_JMP)).
-		Puts("PUSH", NewNumberValue(OP_PUSH)).Puts("PUSHK", NewNumberValue(OP_PUSHK)).
-		Puts("RET", NewNumberValue(OP_RET)).Puts("RETK", NewNumberValue(OP_RETK)).
-		Puts("YIELD", NewNumberValue(OP_YIELD)).Puts("YIELDK", NewNumberValue(OP_YIELDK)).
-		Puts("R0", NewNumberValue(OP_R0)).Puts("R0K", NewNumberValue(OP_R0K)).
-		Puts("R1", NewNumberValue(OP_R1)).Puts("R1K", NewNumberValue(OP_R1K)).
-		Puts("R2", NewNumberValue(OP_R2)).Puts("R2K", NewNumberValue(OP_R2K)).
-		Puts("R3", NewNumberValue(OP_R3)).Puts("R3K", NewNumberValue(OP_R3K)).
-		Puts("SET", NewNumberValue(OP_SET)).Puts("SETK", NewNumberValue(OP_SETK)).
 		Puts("closure", NewMapValue(NewMap().
 			Puts("empty", NewNativeValue(0, func(env *Env) Value {
 				cls := NewClosure(make([]uint64, 0), make([]Value, 0), env.parent, 0)
@@ -272,20 +242,6 @@ func initCoreLibs() {
 					return NewStringValue(cls.source)
 				}
 				return NewClosureValue(cls)
-			})).
-			Puts("write", NewNativeValue(4, func(env *Env) Value {
-				cls := env.SGet(0).Cls()
-				cls.code = append(cls.code, makeop(
-					byte(env.SGet(1).Num()),
-					uint32(env.SGet(2).Num()),
-					uint32(env.SGet(3).Num()),
-				))
-				return Value{}
-			})).
-			Puts("writeconst", NewNativeValue(2, func(env *Env) Value {
-				cls := env.SGet(0).Cls()
-				cls.consts = append(cls.consts, env.SGet(1))
-				return Value{}
 			})))).
 		Puts("_", Value{})))
 

@@ -241,12 +241,13 @@ func_stat:
         }
 
 jmp_stat:
-        TYield expr      { $$ = CNode("yield", $2).setPos0($1) } |
-        TBreak           { $$ = CNode("break").setPos0($1) } |
-        TContinue        { $$ = CNode("continue").setPos0($1) } |
-        TAssert expr     { $$ = CNode("assert", $2).setPos0($1) } |
-        TReturn expr     { $$ = CNode("ret", $2).setPos0($1) } |
-        TUse TString     { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) }
+        TYield expr           { $$ = CNode("yield", $2).setPos0($1) } |
+        TBreak                { $$ = CNode("break").setPos0($1) } |
+        TContinue             { $$ = CNode("continue").setPos0($1) } |
+        TAssert expr          { $$ = CNode("assert", $2, NilNode()).setPos0($1) } |
+        TAssert expr TString  { $$ = CNode("assert", $2, SNode($3.Str)).setPos0($1) } |
+        TReturn expr          { $$ = CNode("ret", $2).setPos0($1) } |
+        TUse TString          { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) }
 
 declarator:
         TIdent                                { $$ = ANode($1).setPos($1) } |

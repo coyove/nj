@@ -19,8 +19,8 @@ assert a == 10
 
 
 fun fun testAssert() {
-    std.r1("hello")
-    assert 0
+    assert 0 "hello"
+    return "world"
 }
 
 var msg = testAssert()
