@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 )
 
 const EOF = 0xffffffff
@@ -311,9 +312,9 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 }
 
 var reservedWords = map[string]uint32{
-	"addressof": TAddressof, "and": TAnd, "or": TOr, "assert": TAssert, "break": TBreak, "continue": TContinue, "else": TElse,
+	"addressof": TAddressof, "and": TAnd, "or": TOr, "assert": TAssert, "break": TBreak, "case": TCase, "continue": TContinue, "else": TElse,
 	"for": TFor, "fun": TFunc, "if": TIf, "len": TLen, "dup": TNew, "nil": TNil, "not": TNot,
-	"return": TReturn, "use": TUse, "typeof": TTypeof, "var": TVar, "while": TWhile, "yield": TYield,
+	"return": TReturn, "use": TUse, "switch": TSwitch, "typeof": TTypeof, "var": TVar, "while": TWhile, "yield": TYield,
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
@@ -365,6 +366,10 @@ redo:
 					goto finally
 				}
 				goto redo
+			case '=':
+				tok.Type = TDivEq
+				tok.Str = "/="
+				sc.Next()
 			default:
 				tok.Type = ch
 				tok.Str = string(ch)
@@ -381,7 +386,8 @@ redo:
 			tok.Type = ch
 			tok.Str = string(ch)
 		case '=', '+', '-':
-			if sc.Peek() == ch {
+			p := sc.Peek()
+			if p == ch {
 				switch ch {
 				case '=':
 					tok.Type = TEqeq
@@ -391,6 +397,15 @@ redo:
 					tok.Type = TSubSub
 				}
 				tok.Str = string(ch) + string(ch)
+				sc.Next()
+			} else if p == '=' && (ch == '+' || ch == '-') {
+				if ch == '+' {
+					tok.Str = "+="
+					tok.Type = TAddEq
+				} else {
+					tok.Str = "-="
+					tok.Type = TSubEq
+				}
 				sc.Next()
 			} else {
 				tok.Type = ch
@@ -414,6 +429,11 @@ redo:
 				tok.Type = TLsh
 				tok.Str = "<<"
 				sc.Next()
+				if sc.Peek() == '=' {
+					tok.Type = TLshEq
+					tok.Str = "<<="
+					sc.Next()
+				}
 			} else {
 				tok.Type = ch
 				tok.Str = string(ch)
@@ -427,9 +447,19 @@ redo:
 				tok.Type = TRsh
 				tok.Str = ">>"
 				sc.Next()
-				if sc.Peek() == '>' {
+				switch sc.Peek() {
+				case '>':
 					tok.Type = TURsh
 					tok.Str = ">>>"
+					sc.Next()
+					if sc.Peek() == '=' {
+						tok.Type = TURshEq
+						tok.Str = ">>>="
+						sc.Next()
+					}
+				case '=':
+					tok.Type = TRshEq
+					tok.Str = ">>="
 					sc.Next()
 				}
 			} else {
@@ -447,9 +477,19 @@ redo:
 				tok.Type = '.'
 			}
 			tok.Str = buf.String()
-		case '*', '%', '^', '(', ')', '{', '}', ']', ';', ':', ',', '~', '#', '&', '|':
+		case '(', ')', '{', '}', ']', ';', ':', ',', '~', '#':
 			tok.Type = ch
 			tok.Str = string(ch)
+		case '*', '%', '&', '|', '^':
+			switch sc.Peek() {
+			case '=':
+				tok.Type = [5]uint32{TMulEq, TModEq, TAndEq, TOrEq, TXorEq}[strings.Index("*%&|^", string(ch))]
+				tok.Str = string(ch) + "="
+				sc.Next()
+			default:
+				tok.Type = ch
+				tok.Str = string(ch)
+			}
 		default:
 			writeChar(buf, ch)
 			err = sc.Error(buf.String(), "invalid token")

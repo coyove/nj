@@ -73,7 +73,7 @@ func (n *Node) SetValue(v interface{}) *Node { n.Value = v; return n }
 
 func (n *Node) C() []*Node { return n.Value.([]*Node) }
 
-func (n *Node) Cappend(na *Node) *Node { n.Value = append(n.C(), na); return n }
+func (n *Node) Cappend(na ...*Node) *Node { n.Value = append(n.C(), na...); return n }
 
 func (n *Node) Cx(i int) *Node { return n.Value.([]*Node)[i] }
 

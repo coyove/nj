@@ -19,18 +19,19 @@ import (
 %type<expr> expr
 %type<expr> postfix_incdec
 %type<expr> _postfix_incdec
+%type<str>  _postfix_assign
 %type<expr> string
-
 %type<expr> prefix_expr
 %type<expr> _assign_stat
 %type<expr> assign_stat
 %type<expr> for_stat
 %type<expr> if_stat
+%type<expr> switch_stat
+%type<expr> switch_body
 %type<expr> oneline_or_block
 %type<expr> jmp_stat
 %type<expr> func_stat
 %type<expr> flow_stat
-
 %type<str>  func
 %type<str>  _func
 %type<expr> func_call
@@ -47,15 +48,17 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAddressof TAssert TBreak TContinue TElse TFor TFunc TIf TLen TNew TNil TNot TReturn TUse TTypeof TVar TWhile TYield
+%token<token> TAddressof TAssert TBreak TCase TContinue TElse TFor TFunc TIf TLen TNew TNil TNot TReturn TUse TSwitch TTypeof TVar TWhile TYield
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
+%token<token> TAddEq TSubEq TMulEq TDivEq TModEq TAndEq TOrEq TXorEq TLshEq TRshEq TURshEq
 
 /* Operators */
 %right 'T'
 %right TElse
 
+%left ASSIGN
 %right FUN
 %left TOr
 %left TAnd
@@ -108,11 +111,13 @@ oneline_or_block:
         jmp_stat               { $$ = CNode("chain", $1) } |
         for_stat               { $$ = CNode("chain", $1) } |
         if_stat                { $$ = CNode("chain", $1) } |
+        switch_stat            { $$ = CNode("chain", $1) } |
         block                  { $$ = $1 }
 
 flow_stat:
         for_stat               { $$ = $1 } |
         if_stat                { $$ = $1 } |
+        switch_stat            { $$ = $1 } |
         func_stat              { $$ = $1 }
 
 _assign_stat:
@@ -142,10 +147,30 @@ _postfix_incdec:
         TAddAdd { $$ = NNode(1.0) } |
         TSubSub { $$ = NNode(-1.0) }
 
+_postfix_assign:
+        TAddEq  { $$ = "+" } |
+        TSubEq  { $$ = "-" } |
+        TMulEq  { $$ = "*" } |
+        TDivEq  { $$ = "/" } |
+        TModEq  { $$ = "%" } |
+        TAndEq  { $$ = "&" } |
+        TOrEq   { $$ = "|" } |
+        TXorEq  { $$ = "^" } |
+        TLshEq  { $$ = "<<" } |
+        TRshEq  { $$ = ">>" } |
+        TURshEq { $$ = ">>>" }
+
 postfix_incdec:
         TIdent _postfix_incdec                    { $$ = CNode("inc", ANode($1).setPos($1), $2) } |
+        TIdent _postfix_assign expr %prec ASSIGN  { $$ = CNode("move", ANode($1), CNode($2, ANode($1).setPos($1), $3)) } |
         prefix_expr '[' expr ']' _postfix_incdec  { $$ = CNode("store", $1, $3, CNode("+", CNode("load", $1, $3).setPos0($1), $5).setPos0($1)) } |
-        prefix_expr '.' TIdent   _postfix_incdec  { $$ = CNode("store", $1, $3, CNode("+", CNode("load", $1, $3).setPos0($1), $4).setPos0($1)) }
+        prefix_expr '.' TIdent   _postfix_incdec  { $$ = CNode("store", $1, $3, CNode("+", CNode("load", $1, $3).setPos0($1), $4).setPos0($1)) } |
+        prefix_expr '[' expr ']' _postfix_assign expr %prec ASSIGN {
+            $$ = CNode("store", $1, $3, CNode($5, CNode("load", $1, $3).setPos0($1), $6).setPos0($1))
+        } |
+        prefix_expr '.' TIdent   _postfix_assign expr %prec ASSIGN {
+            $$ = CNode("store", $1, $3, CNode($4, CNode("load", $1, $3).setPos0($1), $5).setPos0($1))
+        }
 
 for_stat:
         TWhile expr oneline_or_block {
@@ -219,6 +244,15 @@ for_stat:
 if_stat:
         TIf expr oneline_or_block %prec 'T'              { $$ = CNode("if", $2, $3, CNode()) } |
         TIf expr oneline_or_block TElse oneline_or_block { $$ = CNode("if", $2, $3, $5) }
+
+switch_stat:
+        TSwitch expr '{' switch_body '}'         { $$ = expandSwitch($2, $4.C()) }
+
+switch_body:
+        TCase expr ':' stats             { $$ = CNode($2, $4) } |
+        TCase TElse ':' stats            { $$ = CNode(ANode($2), $4) } |
+        switch_body TCase expr ':' stats { $$ = $1.Cappend($3, $5) } |
+        switch_body TCase TElse ':' stats{ $$ = $1.Cappend(ANode($3), $5) }
 
 _func:
         { $$ = "" } |
@@ -356,4 +390,41 @@ var _rand = rand.New()
 
 func randomName() string {
     return fmt.Sprintf("%x", _rand.Fetch(16))
+}
+
+func expandSwitch(sub *Node, cases []*Node) *Node {
+    subject := ANodeS("switch" + randomName())
+    ret := CNode("chain", CNode("set", subject, sub))
+
+    var lastif, root *Node
+    var defaultCase *Node
+    
+    for i := 0; i < len(cases); i+=2 {
+        if cases[i].S() == "else" {
+            defaultCase = cases[i + 1]
+            continue
+        }
+
+        casestat := CNode("if", CNode("==", subject, cases[i]), cases[i + 1])
+        if lastif != nil {
+            lastif.Cappend(CNode("chain", casestat))
+        } else {
+            root = casestat
+        }
+        lastif = casestat
+    }
+
+    if defaultCase == nil {
+        lastif.Cappend(CNode("chain"))
+    } else {
+        if root == nil {
+            ret.Cappend(defaultCase)
+            return ret
+        }
+
+        lastif.Cappend(defaultCase)
+    }
+
+    ret.Cappend(root)
+    return ret
 }

@@ -223,3 +223,29 @@ var a = fun a = fun b = fun c = a + b + (fun d = d * 2)(c)
 assert a(1)(2)(3) == 9
 
 assert (fun var = arguments)(1,2,3) == {1,2,3}
+
+var a = "abc"
+switch a {
+    case "abc":
+        assert 1
+    case "a":
+        assert 0
+}
+
+var b = 0
+switch a{
+    case "b":
+        assert 0
+    case "a":
+        assert 0
+    case else:
+    b++
+}
+assert b == 1
+
+var b = 0
+switch (fun = b++)() {
+    case else: b+=2
+}
+
+assert b == 3

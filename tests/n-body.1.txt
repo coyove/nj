@@ -105,13 +105,13 @@ var sqrt = math.sqrt
             var mi = sysVi[3] * mag 
             var m = -sysVj[3] * mag 
 
-            _vx = _vx + dx * m 
-            _vy = _vy + dy * m 
-            _vz = _vz + dz * m 
+            _vx += dx * m 
+            _vy += dy * m 
+            _vz += dz * m 
 
-            sysVj[0] = sysVj[0] + dx * mi 
-            sysVj[1] = sysVj[1] + dy * mi 
-            sysVj[2] = sysVj[2] + dz * mi 
+            sysVj[0] += dx * mi 
+            sysVj[1] += dy * mi 
+            sysVj[2] += dz * mi 
         }
 
         sysVi[0] = _vx 
@@ -122,9 +122,9 @@ var sqrt = math.sqrt
     for i=0,N{
         sysSi = sysS[i] 
         sysVi = sysV[i] 
-        sysSi[0] = sysSi[0] + dt * sysVi[0] 
-        sysSi[1] = sysSi[1] + dt * sysVi[1] 
-        sysSi[2] = sysSi[2] + dt * sysVi[2] 
+        sysSi[0] += dt * sysVi[0] 
+        sysSi[1] += dt * sysVi[1] 
+        sysSi[2] += dt * sysVi[2] 
     }
 }
 
