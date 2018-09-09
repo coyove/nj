@@ -176,8 +176,8 @@ for_stat:
         TWhile expr oneline_or_block {
             $$ = CNode("for", $2, CNode(), $3).setPos0($1)
         } |
-        TWhile expr TContinue '=' oneline_or_block oneline_or_block {
-            $$ = CNode("for", $2, $5, $6).setPos0($1)
+        TWhile expr ',' oneline_or_block oneline_or_block {
+            $$ = CNode("for", $2, $4, $5).setPos0($1)
         } |
         TFor TIdent '=' expr ',' expr oneline_or_block {
             vname, ename := ANode($2), ANodeS($2.Str + randomName())

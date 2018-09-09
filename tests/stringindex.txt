@@ -16,7 +16,7 @@ fun hashStr(sep) {
     }
     
 	var pow = 1, sq = primeRK 
-	i = len(sep) while i > 0 continue = i = i >> 1  {
+	i = len(sep) while i > 0 , i = i >> 1  {
 		if (i&1 != 0) {
 			pow = math.u32.mul(pow, sq) 
         }
