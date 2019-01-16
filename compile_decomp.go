@@ -48,7 +48,7 @@ func (table *symtable) decompound(atoms []*parser.Node, ops []uint16, useR2 bool
 	if lastReplacedAtom.node != nil {
 		_, _, lastReplacedAtom.node.Value = op(buf.data[len(buf.data)-1])
 		buf.TruncateLast(1)
-		table.sp--
+		table.vp--
 		if ops != nil {
 			bop, opa, _ := op(buf.data[len(buf.data)-1])
 			idx := uint16(byte(ops[lastReplacedAtom.index]>>8)-OP_R0) / 2

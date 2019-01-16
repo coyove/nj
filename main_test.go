@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+
 	// _ "net/http/pprof"
 	"runtime"
 )
@@ -185,6 +186,25 @@ func TestCopyCall(t *testing.T) {
 		t.Fatal("error opcode 0 3")
 	}
 
+}
+
+func TestOverNested(t *testing.T) {
+	_, err := LoadString(`
+var a = 1
+var foo = fun = fun = fun = fun = fun = fun = (fun () {  a = 2 })
+foo()
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = LoadString(`
+var a = 1
+var foo = fun = fun = fun = fun = fun = fun = fun = (fun () {  a += 2 })
+foo()
+`)
+	if err == nil || !strings.Contains(err.Error(), "too many levels") {
+		t.FailNow()
+	}
 }
 
 func BenchmarkCompiling(b *testing.B) {

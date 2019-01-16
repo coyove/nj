@@ -133,7 +133,10 @@ MAIN:
 		}
 
 		//log.Println(cursor)
-		bop, opa, opb := cruop(caddr, &cursor)
+		v := *(*uint32)(unsafe.Pointer(uintptr(cursor)*4 + caddr))
+		cursor++
+		bop, opa, opb := op(v)
+
 		switch bop {
 		case OP_EOB:
 			break MAIN

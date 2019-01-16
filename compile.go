@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strings"
 
 	"github.com/coyove/potatolang/parser"
@@ -31,7 +32,7 @@ type symtable struct {
 
 	envescape bool
 
-	sp uint16
+	vp uint16
 
 	regs [4]struct {
 		addr  uint16
@@ -61,16 +62,23 @@ func newsymtable() *symtable {
 	return t
 }
 
+func (table *symtable) incrvp() {
+	if table.vp >= 1<<10 {
+		panic("too many variables (1024) in a single scope")
+	}
+	table.vp++
+}
+
 func (table *symtable) get(varname string) (uint16, bool) {
 	depth := uint16(0)
 
 	for table != nil {
 		k, e := table.sym[varname]
 		if e {
-			if depth > 7 {
-				panic("shouldn't happen")
+			if depth > 7 || (depth == 7 && k == 0x03ff) {
+				panic("too many levels (8) to refer a variable")
 			}
-			return (depth << 10) | (uint16(k) & 0x01ff), true
+			return (depth << 10) | (uint16(k) & 0x03ff), true
 		}
 
 		depth++
@@ -220,8 +228,8 @@ func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, e
 
 	buf.Write(code)
 	if newVar {
-		yx = uint16(table.sp)
-		table.sp++
+		yx = table.vp
+		table.incrvp()
 	} else {
 		yx = existedVar
 		table.clearRegRecord(yx)
@@ -237,9 +245,9 @@ func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint16, err 
 	case parser.Natom:
 		if n.Value.(string) == "nil" {
 			buf := newpacket()
-			yx = table.sp
+			yx = table.vp
 			buf.WriteOP(OP_SETK, yx, 0)
-			table.sp++
+			table.incrvp()
 			return buf, yx, nil
 		}
 
@@ -326,12 +334,19 @@ func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint1
 }
 
 func compileNode(n *parser.Node) (cls *Closure, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			cls = nil
+			err = fmt.Errorf("recovered panic: %v, from: %s", r, debug.Stack())
+		}
+	}()
+
 	table := newsymtable()
 	for i, n := range CoreLibNames {
 		table.sym[n] = uint16(i)
 	}
 
-	table.sp = uint16(len(table.sym))
+	table.vp = uint16(len(table.sym))
 	code, _, err := table.compileChainOp(n)
 	if err != nil {
 		return nil, err
@@ -350,7 +365,7 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 	cls = NewClosure(code.data, consts, nil, 0)
 	cls.lastenv = NewEnv(nil, nil)
 	cls.pos = code.pos
-	cls.source = "<root>@" + code.source
+	cls.source = "root" + cls.String() + "@" + code.source
 	for _, name := range CoreLibNames {
 		cls.lastenv.SPush(CoreLibs[name])
 	}

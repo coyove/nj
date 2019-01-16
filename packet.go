@@ -13,11 +13,6 @@ import (
 	"github.com/coyove/potatolang/parser"
 )
 
-// +---------+----------+----------+
-// | op (1b) | opA (3b) | opB (4b) |
-// +---------+----------+----------+
-// opA is only 24bit long, jmp offset is stored in opB
-
 func makeop(op byte, a, b uint16) uint32 {
 	// 6 + 13 + 13
 	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
@@ -207,42 +202,15 @@ func crHash(data []uint32) uint32 {
 
 func (c *Closure) crPrettify(tab int) string {
 	sb := &bytes.Buffer{}
-	spaces := strings.Repeat("|   ", tab)
-	metaprefix := spaces + "M "
-
-	sb.WriteString(metaprefix + "args: " + strconv.Itoa(int(c.argsCount)) + "\n")
-	sb.WriteString(metaprefix + "source: " + c.source + "\n")
-
-	if len(c.preArgs) > 0 {
-		sb.WriteString(metaprefix + "curried args:" + strconv.Itoa(len(c.preArgs)) + "\n")
+	spaces := strings.Repeat("        ", tab)
+	spaces2 := ""
+	if tab > 0 {
+		spaces2 = strings.Repeat("        ", tab-1) + "+-------"
 	}
 
-	sb.WriteString(metaprefix + "opts:")
-	if c.Isset(CLS_YIELDABLE) {
-		sb.WriteString(" yieldable")
-	}
-	if c.Isset(CLS_HASRECEIVER) {
-		sb.WriteString(" receiver")
-	}
-	if !c.Isset(CLS_NOENVESCAPE) {
-		sb.WriteString(" envescaped")
-	} else {
-		sb.WriteString(" pure")
-	}
-	if c.Isset(CLS_RECOVERALL) {
-		sb.WriteString(" safeexec")
-	}
-	if c.Isset(CLS_PSEUDO_FOREACH) {
-		sb.WriteString(" pforeach")
-	}
-	sb.WriteString("\n")
-	sb.WriteString(metaprefix + fmt.Sprintf("consts: %d\n", len(c.consts)))
-
-	hash := crHash(c.code)
-	sb.WriteString(metaprefix + fmt.Sprintf("hash: 0x%08x\n", hash))
+	sb.WriteString(spaces2 + "+ " + c.source + "\n")
 
 	var cursor uint32
-
 	readAddr := func(a uint16) string {
 		if a == regA {
 			return "$a"
@@ -274,13 +242,13 @@ MAIN:
 
 			if op == cursor {
 				x := fmt.Sprintf("%d:%d", line, col)
-				sb.WriteString(fmt.Sprintf("L %-7s [%d] ", x, cursor-1))
+				sb.WriteString(fmt.Sprintf("|%-7s %d| ", x, cursor-1))
 				c.pos = c.pos[2:]
 			} else {
-				sb.WriteString(fmt.Sprintf("|       I [%d] ", cursor-1))
+				sb.WriteString(fmt.Sprintf("|        %d| ", cursor-1))
 			}
 		} else {
-			sb.WriteString(fmt.Sprintf("        . [%d] ", cursor-1))
+			sb.WriteString(fmt.Sprintf("|      . %d| ", cursor-1))
 		}
 
 		switch bop {
@@ -309,11 +277,8 @@ MAIN:
 			sb.WriteString("yield " + readKAddr(uint16(a)))
 		case OP_LAMBDA:
 			sb.WriteString("$a = closure:\n")
-			prefix := strings.Repeat("|   ", tab+1)
-			sb.WriteString(prefix + "\n")
 			cls := crReadClosure(c.code, &cursor, nil, a, b)
 			sb.WriteString(cls.crPrettify(tab + 1))
-			sb.WriteString(prefix)
 		case OP_CALL:
 			sb.WriteString("call " + readAddr(a))
 			if b > 0 {
@@ -359,6 +324,8 @@ MAIN:
 	}
 
 	c.pos = oldpos
+
+	sb.WriteString(spaces2 + "+ " + c.source)
 	return sb.String()
 }
 

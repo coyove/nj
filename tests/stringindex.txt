@@ -61,10 +61,10 @@ fun Index(s, substr) {
 	return -1 
 }
 
-var ln = math.rand.intn(200) + 100 
+var ln = math.rand.intn(100) + 100 
 var buf = math.rand.bytes(ln) 
 
-var start = math.rand.intn(100) 
+var start = math.rand.intn(90) 
 var substr = buf[start:start+10] 
 
 assert Index(std.char(buf), std.char(substr)) == start 

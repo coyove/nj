@@ -23,13 +23,14 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 	buf := newpacket()
 	var newYX uint16
 	var ok bool
+	var noNeedToRecordPos bool
 	var varIndex uint16
 
 	if atoms[0].Value.(string) == "set" {
 		// compound has its own logic, we won't incr stack here
 		if aSrc.Type != parser.Ncompound {
-			newYX = table.sp
-			table.sp++
+			newYX = table.vp
+			table.incrvp()
 		}
 	} else {
 		varIndex, ok = table.get(aDest.Value.(string))
@@ -53,8 +54,10 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 			}
 			buf.WriteOP(OP_SET, newYX, valueIndex)
 		}
+		noNeedToRecordPos = true
 	case parser.Nnumber, parser.Nstring:
 		buf.WriteOP(OP_SETK, newYX, table.addConst(aSrc.Value))
+		noNeedToRecordPos = true
 	case parser.Ncompound:
 		code, newYX, err = table.compileCompoundInto(aSrc, atoms[0].Value.(string) == "set", varIndex)
 		if err != nil {
@@ -66,7 +69,9 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 	if atoms[0].Value.(string) == "set" {
 		table.put(aDest.Value.(string), uint16(newYX))
 	}
-	buf.WritePos(atoms[0].Meta)
+	if !noNeedToRecordPos {
+		buf.WritePos(atoms[0].Meta)
+	}
 	return buf, newYX, nil
 }
 
@@ -431,7 +436,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 	if len(replacedAtoms) == 1 && callee.Type != parser.Ncompound {
 		_, _, replacedAtoms[0].Value = op(buf.data[len(buf.data)-1])
 		buf.TruncateLast(1)
-		table.sp--
+		table.vp--
 	}
 
 	var varIndex uint16
@@ -452,7 +457,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		if len(replacedAtoms) == 0 {
 			_, _, varIndex = op(code.data[len(code.data)-1])
 			code.data = code.data[:len(code.data)-1]
-			table.sp--
+			table.vp--
 		}
 		buf.Write(code)
 	case parser.Naddr:
@@ -524,7 +529,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		newtable.continueNode = append(newtable.continueNode, parser.NewNode(parser.Natom).SetValue(name))
 	}
 
-	newtable.sp = uint16(ln)
+	newtable.vp = uint16(ln)
 
 	if isVar {
 		comps := append(atoms[3].C(), nil)
@@ -568,6 +573,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	buf.Write32(uint32(len(newtable.consts)))
 	buf.WriteConsts(newtable.consts)
 
+	cls.code = code.data
 	src := name + cls.String() + "@" + code.source
 	if len(src) > 4095 {
 		src = src[:4095]
@@ -659,8 +665,8 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 	case parser.Naddr:
 		varIndex = condition.Value.(uint16)
 	case parser.Nnumber, parser.Nstring:
-		varIndex = table.sp
-		table.sp++
+		varIndex = table.vp
+		table.incrvp()
 		buf.WriteOP(OP_SETK, varIndex, table.addConst(condition.Value))
 	case parser.Ncompound, parser.Natom:
 		code, yx, err = table.compileNode(condition)

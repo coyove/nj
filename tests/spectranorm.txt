@@ -1,5 +1,5 @@
 var n = 0 
-var nCPU = 1 
+var nCPU = 4 
 
 fun A(i, j) {
     return ((i+j)*(i+j+1)/2 + i + 1) 
@@ -23,50 +23,12 @@ fun A0(i, j) {
 
 assert  A0(1,2) == A(1,2)
 
-var K = std.opcode.closure, OP= std.opcode 
-var A2 = K.empty() 
-var call = (fun(){
-    return fun var() {
-        var x = K[arguments[0]] 
-        arguments[0] = A2 
-        std.apply(x,arguments) 
-    } 
-})() 
-
-call("set", "argscount", 2) 
-call("set", "envescaped", 0) 
-
-call("writeconst", 1) 
-call("writeconst", 2) 
-
-call("write", OP.R0, 0, 0) 
-call("write", OP.R1, 1, 0) 
-call("write", OP.ADD, 0, 0) 
-call("write", OP.R0, OP.A, 0) 
-call("write", OP.R1K, 0, 0) 
-call("write", OP.ADD, 0, 0) 
-call("write", OP.R1, OP.A, 0) 
-call("write", OP.MUL, 0, 0) 
-call("write", OP.R0, OP.A, 0) 
-call("write", OP.R1K, 1, 0) 
-call("write", OP.DIV, 0, 0) 
-call("write", OP.R0, 0, 0) 
-call("write", OP.R1, OP.A, 0) 
-call("write", OP.ADD, 0, 0) 
-call("write", OP.R0, OP.A, 0) 
-call("write", OP.R1K, 0, 0) 
-call("write", OP.ADD, 0, 0) 
-call("write", OP.RET, OP.A, 0) 
-call("write", OP.EOB, 0, 0) 
-
-// A2 can save 3 opcodes, 10% faster than A
-
 fun TimesVec(v, s, n, u, wg) {
     var ul = len(u) 
     for i = s  ,n {
         var vi = 0 
         for j = 0,ul {
-            vi = vi + u[j] / A2(i, j) 
+            vi = vi + u[j] / A0(i, j) 
         }
         v[i] = vi 
     }
@@ -78,7 +40,7 @@ fun TimesTranspVec(v, s, n, u, wg) {
     for i = s, n  {
         var vi = 0 
         for j = 0, ul  {
-            vi = vi + u[j] / A2(j, i) 
+            vi = vi + u[j] / A0(j, i) 
         }
         v[i] = vi 
     }
@@ -102,13 +64,10 @@ fun ATimesTransp(v, u) {
     wg.wait() 
 }
 
-n = 550 
+n = 550
 var u = {} 
 var v = {} 
  
-assert A2(1,1) == A(1,1)
-A2 = A0 
-
 for idx = 0, n {
     u[idx] = 1 
     v[idx] = 0 

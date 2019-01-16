@@ -234,22 +234,26 @@ func (c *Closure) Dup() *Closure {
 
 func (c *Closure) String() string {
 	if c.native != nil {
-		return fmt.Sprintf("<native_%d_%d>", c.argsCount, len(c.preArgs))
+		return fmt.Sprintf("<native%da%dc>", c.argsCount, len(c.preArgs))
 	}
-	x := fmt.Sprintf("closure_%d_%d", c.argsCount, len(c.preArgs))
+	p := "closure"
+	if c.Isset(CLS_NOENVESCAPE) {
+		p = "purefun"
+	}
+	x := fmt.Sprintf("<%s%da%dc%dk_%08x", p, c.argsCount, len(c.preArgs), len(c.consts), crHash(c.code))
 	if c.Isset(CLS_YIELDABLE) {
-		x += "_yd"
+		x += "_y"
 	}
 	if c.Isset(CLS_HASRECEIVER) {
-		x += "_this"
-	}
-	if !c.Isset(CLS_NOENVESCAPE) {
-		x += "_esc"
+		x += "_rcv"
 	}
 	if c.Isset(CLS_RECOVERALL) {
 		x += "_safe"
 	}
-	return "<" + x + ">"
+	if c.Isset(CLS_PSEUDO_FOREACH) {
+		x += "_psf"
+	}
+	return x + ">"
 }
 
 func (c *Closure) PrettyString() string {
