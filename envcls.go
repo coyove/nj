@@ -94,34 +94,34 @@ func (e *Env) SetParent(parent *Env) {
 	e.parent = parent
 }
 
-func (env *Env) Get(yx uint32) Value {
+func (env *Env) Get(yx uint16) Value {
 	if yx == regA {
 		return env.A
 	}
-	y := yx >> 16
+	y := yx >> 10
 REPEAT:
 	if y > 0 && env != nil {
 		y, env = y-1, env.parent
 		goto REPEAT
 	}
-	index := int(uint16(yx))
+	index := int(yx & 0x3ff)
 	if index >= len(env.stack) {
 		return Value{}
 	}
 	return env.stack[index]
 }
 
-func (env *Env) Set(yx uint32, v Value) {
+func (env *Env) Set(yx uint16, v Value) {
 	if yx == regA {
 		env.A = v
 	} else {
-		y := yx >> 16
+		y := yx >> 10
 	REPEAT:
 		if y > 0 && env != nil {
 			y, env = y-1, env.parent
 			goto REPEAT
 		}
-		index := int(uint16(yx))
+		index := int(yx & 0x3ff)
 		if index >= len(env.stack) {
 			env.grow(index + 1)
 		}
@@ -134,7 +134,7 @@ func (env *Env) Stack() []Value {
 	return env.stack
 }
 
-func (env *Env) reg(i uint32) *Value {
+func (env *Env) reg(i uint16) *Value {
 	return (*Value)(unsafe.Pointer(uintptr(unsafe.Pointer(&env.A)) + SizeofValue*uintptr(i)))
 }
 
@@ -148,8 +148,8 @@ const (
 
 // Closure is the closure struct used in potatolang
 type Closure struct {
-	code      []uint64
-	pos       []uint64
+	code      []uint32
+	pos       []uint32
 	source    string
 	consts    []Value
 	env       *Env
@@ -163,7 +163,7 @@ type Closure struct {
 }
 
 // NewClosure creates a new closure
-func NewClosure(code []uint64, consts []Value, env *Env, argsCount byte) *Closure {
+func NewClosure(code []uint32, consts []Value, env *Env, argsCount byte) *Closure {
 	return &Closure{
 		code:      code,
 		consts:    consts,
@@ -202,11 +202,11 @@ func (c *Closure) AppendPreArgs(preArgs []Value) {
 
 func (c *Closure) PreArgs() []Value { return c.preArgs }
 
-func (c *Closure) SetCode(code []uint64) { c.code = code }
+func (c *Closure) SetCode(code []uint32) { c.code = code }
 
-func (c *Closure) Code() []uint64 { return c.code }
+func (c *Closure) Code() []uint32 { return c.code }
 
-func (c *Closure) Pos() []uint64 { return c.pos }
+func (c *Closure) Pos() []uint32 { return c.pos }
 
 func (c *Closure) Consts() []Value { return c.consts }
 

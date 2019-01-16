@@ -18,25 +18,15 @@ import (
 // +---------+----------+----------+
 // opA is only 24bit long, jmp offset is stored in opB
 
-func makeop(op byte, a, b uint32) uint64 {
-	return uint64(op)<<56 + uint64(a&0x00ffffff)<<32 + uint64(b)
+func makeop(op byte, a, b uint16) uint32 {
+	// 6 + 13 + 13
+	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
 }
 
-func op(x uint64) (op byte, a, b uint32) {
-	op = byte(x >> 56)
-	a = uint32(x>>32) & 0x00ffffff
-	b = uint32(x)
-	return
-}
-
-func makeop2(a, b uint32, c uint16) uint64 {
-	return uint64(a&0x00ffffff)<<40 + uint64(b&0x00ffffff)<<16 + uint64(c)
-}
-
-func op2(x uint64) (a, b uint32, c uint16) {
-	a = uint32(x>>40) & 0x00ffffff
-	b = uint32(x>>16) & 0x00ffffff
-	c = uint16(x)
+func op(x uint32) (op byte, a, b uint16) {
+	op = byte(x >> 26)
+	a = uint16(x>>13) & 0x1fff
+	b = uint16(x) & 0x1fff
 	return
 }
 
@@ -47,35 +37,35 @@ func btob(b bool) byte {
 	return 0
 }
 
-func slice64to8(p []uint64) []byte {
+func slice64to8(p []uint32) []byte {
 	r := reflect.SliceHeader{}
-	r.Cap = cap(p) * 8
-	r.Len = len(p) * 8
+	r.Cap = cap(p) * 4
+	r.Len = len(p) * 4
 	r.Data = (*reflect.SliceHeader)(unsafe.Pointer(&p)).Data
 	return *(*[]byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
 }
 
 var filler = []byte{0, 0, 0, 0, 0, 0, 0}
 
-func slice8to64(p []byte) []uint64 {
-	if m := len(p) % 8; m != 0 {
-		p = append(p, filler[:8-m]...)
+func slice8to64(p []byte) []uint32 {
+	if m := len(p) % 4; m != 0 {
+		p = append(p, filler[:4-m]...)
 	}
 	r := reflect.SliceHeader{}
-	r.Cap = cap(p) / 8
-	r.Len = len(p) / 8
+	r.Cap = cap(p) / 4
+	r.Len = len(p) / 4
 	r.Data = (*reflect.SliceHeader)(unsafe.Pointer(&p)).Data
-	return *(*[]uint64)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
+	return *(*[]uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
 }
 
 type packet struct {
-	data   []uint64
-	pos    []uint64
+	data   []uint32
+	pos    []uint32
 	source string
 }
 
 func newpacket() packet {
-	return packet{data: make([]uint64, 0, 1), pos: make([]uint64, 0, 1)}
+	return packet{data: make([]uint32, 0, 1), pos: make([]uint32, 0, 1)}
 }
 
 func (b *packet) Clear() {
@@ -87,28 +77,23 @@ func (b *packet) Write(buf packet) {
 	b.data = append(b.data, buf.data...)
 	idx := len(b.pos)
 	b.pos = append(b.pos, buf.pos...)
-	for i := idx; i < len(b.pos); i++ {
-		op, line, col := op2(b.pos[i])
-		op += uint32(datalen)
-		b.pos[i] = makeop2(op, line, col)
+	for i := idx; i < len(b.pos); i += 2 {
+		b.pos[i] += uint32(datalen)
 	}
 	b.source = buf.source
 }
 
-func (b *packet) WriteRaw(buf []uint64) {
-	b.data = append(b.data, buf...)
-}
+func (b *packet) WriteRaw(buf []uint32) { b.data = append(b.data, buf...) }
 
-func (b *packet) Write64(v uint64) {
-	b.data = append(b.data, v)
-}
+func (b *packet) Write64(v uint64) { b.data = append(b.data, uint32(v>>32), uint32(v)) }
 
-func (b *packet) WriteOP(op byte, opa, opb uint32) {
-	b.data = append(b.data, makeop(op, opa, opb))
-}
+func (b *packet) Write32(v uint32) { b.data = append(b.data, v) }
+
+func (b *packet) WriteOP(op byte, opa, opb uint16) { b.data = append(b.data, makeop(op, opa, opb)) }
 
 func (b *packet) WritePos(p parser.Meta) {
-	b.pos = append(b.pos, makeop2(uint32(len(b.data)), uint32(p.Line), uint16(p.Column)))
+	b.pos = append(b.pos, uint32(len(b.data)))
+	b.pos = append(b.pos, (p.Line<<12)|uint32(p.Column&0x0fff))
 	if p.Source != "" {
 		b.source = p.Source
 	}
@@ -156,34 +141,34 @@ func (b *packet) Len() int {
 	return len(b.data)
 }
 
-func crRead(data []uint64, cursor *uint32, len int) []uint64 {
+func crRead(data []uint32, cursor *uint32, len int) []uint32 {
 	*cursor += uint32(len)
 	return data[*cursor-uint32(len) : *cursor]
 }
 
-func crRead64(data []uint64, cursor *uint32) uint64 {
+func crRead32(data []uint32, cursor *uint32) uint32 {
 	*cursor++
 	return data[*cursor-1]
 }
 
-func crReadDouble(data []uint64, cursor *uint32) float64 {
+func crRead64(data []uint32, cursor *uint32) uint64 {
+	*cursor += 2
+	return uint64(data[*cursor-2])<<32 + uint64(data[*cursor-1])
+}
+
+func crReadDouble(data []uint32, cursor *uint32) float64 {
 	d := crRead64(data, cursor)
 	return *(*float64)(unsafe.Pointer(&d))
 }
 
-func crReadString(data []uint64, cursor *uint32) string {
-	x := crRead64(data, cursor)
+func crReadString(data []uint32, cursor *uint32) string {
+	x := crRead32(data, cursor)
 	return crReadStringLen(data, int(x), cursor)
 }
 
-func crReadStringLen(data []uint64, length int, cursor *uint32) string {
-	buf := crRead(data, cursor, int((length+7)/8))
+func crReadStringLen(data []uint32, length int, cursor *uint32) string {
+	buf := crRead(data, cursor, int((length+3)/4))
 	return string(slice64to8(buf)[:length])
-}
-
-func cruRead64(data uintptr, cursor *uint32) uint64 {
-	*cursor++
-	return *(*uint64)(unsafe.Pointer(data + uintptr(*cursor-1)*8))
 }
 
 var singleOp = map[byte]string{
@@ -214,7 +199,7 @@ var singleOp = map[byte]string{
 	OP_POP:      "pop",
 }
 
-func crHash(data []uint64) uint32 {
+func crHash(data []uint32) uint32 {
 	e := crc32.New(crc32.IEEETable)
 	e.Write(slice64to8(data))
 	return e.Sum32()
@@ -258,11 +243,11 @@ func (c *Closure) crPrettify(tab int) string {
 
 	var cursor uint32
 
-	readAddr := func(a uint32) string {
+	readAddr := func(a uint16) string {
 		if a == regA {
 			return "$a"
 		}
-		return fmt.Sprintf("$%d$%d", a>>16, uint16(a))
+		return fmt.Sprintf("$%d$%d", a>>10, a&0x03ff)
 	}
 	readKAddr := func(a uint16) string {
 		return fmt.Sprintf("k$%d(%+v)", a, c.consts[a])
@@ -271,18 +256,18 @@ func (c *Closure) crPrettify(tab int) string {
 	oldpos := c.pos
 MAIN:
 	for {
-		bop, a, b := op(crRead64(c.code, &cursor))
+		bop, a, b := op(crRead32(c.code, &cursor))
 		sb.WriteString(spaces)
 
 		if len(c.pos) > 0 {
-			op, line, col := op2(c.pos[0])
+			op, line, col := c.pos[0], uint32(c.pos[1]>>12), uint32(c.pos[1]&0x0fff)
 			// log.Println(cursor, op, unsafe.Pointer(&pos))
 			for cursor > op {
-				c.pos = c.pos[1:]
+				c.pos = c.pos[2:]
 				if len(c.pos) == 0 {
 					break
 				}
-				if op, line, col = op2(c.pos[0]); cursor <= op {
+				if op, line, col = c.pos[0], uint32(c.pos[1]>>12), uint32(c.pos[1]&0x0fff); cursor <= op {
 					break
 				}
 			}
@@ -290,7 +275,7 @@ MAIN:
 			if op == cursor {
 				x := fmt.Sprintf("%d:%d", line, col)
 				sb.WriteString(fmt.Sprintf("L %-7s [%d] ", x, cursor-1))
-				c.pos = c.pos[1:]
+				c.pos = c.pos[2:]
 			} else {
 				sb.WriteString(fmt.Sprintf("|       I [%d] ", cursor-1))
 			}
@@ -335,12 +320,12 @@ MAIN:
 				sb.WriteString(" -> r" + strconv.Itoa(int(b)-1))
 			}
 		case OP_JMP:
-			pos := int32(b)
+			pos := int32(b) - 1<<12
 			pos2 := uint32(int32(cursor) + pos)
 			sb.WriteString("jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OP_IF, OP_IFNOT:
 			addr := readAddr(a)
-			pos := int32(b)
+			pos := int32(b) - 1<<12
 			pos2 := strconv.Itoa(int(int32(cursor) + pos))
 			if bop == OP_IFNOT {
 				sb.WriteString("if not " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
@@ -377,13 +362,12 @@ MAIN:
 	return sb.String()
 }
 
-func crReadClosure(code []uint64, cursor *uint32, env *Env, opa, opb uint32) *Closure {
-	metadata := opb
-	argsCount := byte(metadata >> 24)
-	options := byte(metadata)
-	constsLen := opa
+func crReadClosure(code []uint32, cursor *uint32, env *Env, opa, opb uint16) *Closure {
+	argsCount := byte(opa)
+	options := byte(opb)
+	constsLen := uint16(crRead32(code, cursor))
 	consts := make([]Value, constsLen+1)
-	for i := uint32(1); i <= constsLen; i++ {
+	for i := uint16(1); i <= constsLen; i++ {
 		x := crRead64(code, cursor)
 		if x != math.MaxUint64 {
 			consts[i] = NewNumberValue(math.Float64frombits(x))

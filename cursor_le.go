@@ -5,10 +5,9 @@ package potatolang
 import "unsafe"
 
 // equivalent to: op, opa, opb := op(cruRead64(...))
-func cruop(data uintptr, cursor *uint32) (byte, uint32, uint32) {
-	addr := uintptr(*cursor) * 8
+func cruop(data uintptr, cursor *uint32) (byte, uint16, uint16) {
+	addr := uintptr(*cursor) * 4
 	*cursor++
-	return *(*byte)(unsafe.Pointer(data + addr + 7)),
-		*(*uint32)(unsafe.Pointer(data + addr + 4)) & 0x00ffffff,
-		*(*uint32)(unsafe.Pointer(data + addr))
+	v := *(*uint32)(unsafe.Pointer(data + addr))
+	return op(v)
 }

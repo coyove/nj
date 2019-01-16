@@ -34,7 +34,7 @@ type symtable struct {
 	sp uint16
 
 	regs [4]struct {
-		addr  uint32
+		addr  uint16
 		kaddr uint16
 		k     bool
 	}
@@ -61,13 +61,16 @@ func newsymtable() *symtable {
 	return t
 }
 
-func (table *symtable) get(varname string) (uint32, bool) {
-	depth := uint32(0)
+func (table *symtable) get(varname string) (uint16, bool) {
+	depth := uint16(0)
 
 	for table != nil {
 		k, e := table.sym[varname]
 		if e {
-			return (depth << 16) | uint32(k), true
+			if depth > 7 {
+				panic("shouldn't happen")
+			}
+			return (depth << 10) | (uint16(k) & 0x01ff), true
 		}
 
 		depth++
@@ -81,7 +84,7 @@ func (table *symtable) put(varname string, addr uint16) {
 	table.sym[varname] = addr
 }
 
-func (table *symtable) clearRegRecord(addr uint32) {
+func (table *symtable) clearRegRecord(addr uint16) {
 	for i, x := range table.regs {
 		if !x.k && x.addr == addr {
 			table.regs[i].addr = regA
@@ -116,6 +119,9 @@ func (table *symtable) addConst(v interface{}) uint16 {
 	}
 
 	table.consts = append(table.consts, k)
+	if len(table.consts) > 1<<13-1 {
+		panic("too many consts")
+	}
 	idx := uint16(len(table.consts))
 
 	switch v.(type) {
@@ -151,16 +157,16 @@ func (table *symtable) fill(buf *packet, n *parser.Node, op, opk byte) (err erro
 			if n.Type == parser.Nnumber || n.Type == parser.Nstring {
 				if kidx := table.addConst(n.Value); kidx == rs.kaddr {
 					// the register contains what we want already,
-					return
+					return nil
 				}
 			}
 		} else {
-			var addr uint32 = regA
+			var addr uint16 = regA
 			switch n.Type {
 			case parser.Natom:
 				addr, _ = table.get(n.Value.(string))
 			case parser.Naddr:
-				addr = n.Value.(uint32)
+				addr = n.Value.(uint16)
 			}
 			if addr != regA && rs.addr == addr {
 				// the register contains what we want already,
@@ -188,14 +194,14 @@ func (table *symtable) fill(buf *packet, n *parser.Node, op, opk byte) (err erro
 		}
 	case parser.Nnumber, parser.Nstring:
 		kidx := table.addConst(n.Value)
-		buf.WriteOP(opk, uint32(kidx), 0)
+		buf.WriteOP(opk, kidx, 0)
 		if isreg {
 			table.regs[idx].k, table.regs[idx].kaddr = true, kidx
 		}
 	case parser.Naddr:
-		buf.WriteOP(op, n.Value.(uint32), 0)
+		buf.WriteOP(op, n.Value.(uint16), 0)
 		if isreg {
-			table.regs[idx].k, table.regs[idx].addr = false, n.Value.(uint32)
+			table.regs[idx].k, table.regs[idx].addr = false, n.Value.(uint16)
 		}
 	default:
 		return fmt.Errorf("unknown type: %d", n.Type)
@@ -203,10 +209,10 @@ func (table *symtable) fill(buf *packet, n *parser.Node, op, opk byte) (err erro
 	return nil
 }
 
-func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, existedVar uint32) (code packet, yx uint32, err error) {
+func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, existedVar uint16) (code packet, yx uint16, err error) {
 	buf := newpacket()
 
-	var newYX uint32
+	var newYX uint16
 	code, newYX, err = table.compileCompound(compound)
 	if err != nil {
 		return
@@ -214,7 +220,7 @@ func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, e
 
 	buf.Write(code)
 	if newVar {
-		yx = uint32(table.sp)
+		yx = uint16(table.sp)
 		table.sp++
 	} else {
 		yx = existedVar
@@ -224,14 +230,14 @@ func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, e
 	return buf, yx, nil
 }
 
-func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint32, err error) {
-	var varIndex uint32
+func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint16, err error) {
+	var varIndex uint16
 
 	switch n.Type {
 	case parser.Natom:
 		if n.Value.(string) == "nil" {
 			buf := newpacket()
-			yx = uint32(table.sp)
+			yx = table.sp
 			buf.WriteOP(OP_SETK, yx, 0)
 			table.sp++
 			return buf, yx, nil
@@ -244,7 +250,7 @@ func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint32, err 
 			return
 		}
 	case parser.Naddr:
-		varIndex = n.Value.(uint32)
+		varIndex = n.Value.(uint16)
 	default:
 		code, yx, err = table.compileCompound(n)
 		if err != nil {
@@ -255,7 +261,7 @@ func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint32, err 
 	return code, varIndex, nil
 }
 
-func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx uint32, err error) {
+func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx uint16, err error) {
 	nodes := compound.C()
 	if len(nodes) == 0 {
 		return newpacket(), regA, nil
@@ -291,7 +297,7 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 		if strings.Contains(name, "func") {
 			code, yx, err = table.compileLambdaOp(nodes)
 		} else {
-			if flatOpMapping[name] != 0 {
+			if _, ok := flatOpMapping[name]; ok {
 				return table.compileFlatOp(nodes)
 			}
 			panic(name)
@@ -301,7 +307,7 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 	return
 }
 
-func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint32, err error) {
+func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint16, err error) {
 	buf := newpacket()
 	table.im = nil
 

@@ -42,11 +42,12 @@ func (e *ExecError) Error() string {
 		r := e.stacks[i]
 		src := "<unknown>"
 		// binary search would be better
-		for i, pos := range r.cls.pos {
-			op, line, col := op2(pos)
+		for i := 0; i < len(r.cls.pos); i += 2 {
+			op, nextpos := r.cls.pos[i], r.cls.pos[i+1]
+			line, col := nextpos>>12, nextpos&0x0fff
 			opx := uint32(0xffffffff)
-			if i < len(r.cls.pos)-1 {
-				opx, _, _ = op2(r.cls.pos[i+1])
+			if i < len(r.cls.pos)-3 {
+				opx = r.cls.pos[i+2]
 			}
 			if r.cursor >= op && r.cursor < opx {
 				src = fmt.Sprintf("%s:%d:%d", r.cls.source, line, col)
@@ -65,7 +66,7 @@ func konst(addr uintptr, idx uint16) Value {
 	return *(*Value)(unsafe.Pointer(addr + uintptr(idx)*SizeofValue))
 }
 
-func kodeaddr(code []uint64) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&code)).Data }
+func kodeaddr(code []uint32) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&code)).Data }
 
 // ExecCursor executes code under the given env from the given start cursor and returns:
 // 1. final result 2. yield cursor 3. is yield or not
@@ -115,7 +116,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (_v Value, _p uint32, _y bo
 		code = r.cls.code
 		caddr = kodeaddr(code)
 		kaddr = (*reflect.SliceHeader)(unsafe.Pointer(&r.cls.consts)).Data
-		*r.env.reg(uint32(r.callReturnInto)) = v
+		*r.env.reg(uint16(r.callReturnInto)) = v
 		if r.noenvescape {
 			newEnv = env
 			newEnv.SClear()
@@ -131,7 +132,7 @@ MAIN:
 			panicf("canceled")
 		}
 
-		// log.Println(cursor)
+		//log.Println(cursor)
 		bop, opa, opb := cruop(caddr, &cursor)
 		switch bop {
 		case OP_EOB:
@@ -512,14 +513,14 @@ MAIN:
 			}
 
 		case OP_JMP:
-			cursor = uint32(int32(cursor) + int32(opb))
+			cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 		case OP_IFNOT:
 			if cond := env.Get(opa); cond.IsZero() || cond.IsFalse() {
-				cursor = uint32(int32(cursor) + int32(opb))
+				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
 		case OP_IF:
 			if cond := env.Get(opa); !cond.IsZero() || !cond.IsFalse() {
-				cursor = uint32(int32(cursor) + int32(opb))
+				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
 		case OP_COPY:
 			v, r := doCopy(env)

@@ -38,7 +38,7 @@ var _rawOP0 = map[string]byte{
 	"copy":   OP_COPY,
 }
 
-func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint32, err error) {
+func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
 	defer func() {
 		if err == nil {
 			code.WritePos(atoms[0].Meta)
@@ -56,7 +56,7 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 	for i := 0; i < 4; i++ {
 		x := strconv.Itoa(i)
 		if o, ok := _rawOP0[strings.TrimSuffix(opname, x)]; ok {
-			code.WriteOP(o, uint32(i+1), 0)
+			code.WriteOP(o, uint16(i+1), 0)
 			return
 		}
 	}
@@ -68,11 +68,11 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 		}
 	}
 
-	extract := func(idx int) (offset int32, addr uint32, k uint16, isK bool, ok bool) {
+	extract := func(idx int) (offset int, addr uint16, k uint16, isK bool, ok bool) {
 		arg := atoms[2].Cx(idx)
 		switch arg.Type {
 		case parser.Nnumber:
-			offset = int32(arg.Value.(float64))
+			offset = int(arg.Value.(float64))
 			k = table.addConst(arg.Value)
 			isK = true
 			ok = true
@@ -104,7 +104,7 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 	// need 1 argument
 	switch opname {
 	case "jmp":
-		code.WriteOP(OP_JMP, 0, uint32(o))
+		code.WriteOP(OP_JMP, 0, uint16(o))
 		return
 	case "call":
 		code.WriteOP(OP_CALL, a, 0)
@@ -122,55 +122,55 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 		code.WriteOP(OP_CALL, a, 4)
 		return
 	case "makemap":
-		code.WriteOP(OP_MAKEMAP, uint32(o), 0)
+		code.WriteOP(OP_MAKEMAP, uint16(o), 0)
 		return
 	case "r0":
 		if !isk {
 			code.WriteOP(OP_R0, a, 0)
 		} else {
-			code.WriteOP(OP_R0K, uint32(k), 0)
+			code.WriteOP(OP_R0K, uint16(k), 0)
 		}
 		return
 	case "r1":
 		if !isk {
 			code.WriteOP(OP_R1, a, 0)
 		} else {
-			code.WriteOP(OP_R1K, uint32(k), 0)
+			code.WriteOP(OP_R1K, uint16(k), 0)
 		}
 		return
 	case "r2":
 		if !isk {
 			code.WriteOP(OP_R2, a, 0)
 		} else {
-			code.WriteOP(OP_R2K, uint32(k), 0)
+			code.WriteOP(OP_R2K, uint16(k), 0)
 		}
 		return
 	case "r3":
 		if !isk {
 			code.WriteOP(OP_R3, a, 0)
 		} else {
-			code.WriteOP(OP_R3K, uint32(k), 0)
+			code.WriteOP(OP_R3K, uint16(k), 0)
 		}
 		return
 	case "push":
 		if !isk {
 			code.WriteOP(OP_PUSH, a, 0)
 		} else {
-			code.WriteOP(OP_PUSHK, uint32(k), 0)
+			code.WriteOP(OP_PUSHK, uint16(k), 0)
 		}
 		return
 	case "ret":
 		if !isk {
 			code.WriteOP(OP_RET, a, 0)
 		} else {
-			code.WriteOP(OP_RETK, uint32(k), 0)
+			code.WriteOP(OP_RETK, uint16(k), 0)
 		}
 		return
 	case "yield":
 		if !isk {
 			code.WriteOP(OP_YIELD, a, 0)
 		} else {
-			code.WriteOP(OP_YIELDK, uint32(k), 0)
+			code.WriteOP(OP_YIELDK, uint16(k), 0)
 		}
 		return
 	}
@@ -186,20 +186,20 @@ func (table *symtable) compileRawOp(atoms []*parser.Node) (code packet, yx uint3
 	}
 	switch opname {
 	case "if":
-		code.WriteOP(OP_IF, a, uint32(o2))
+		code.WriteOP(OP_IF, a, uint16(o2))
 		return
 	case "ifnot":
-		code.WriteOP(OP_IFNOT, a, uint32(o2))
+		code.WriteOP(OP_IFNOT, a, uint16(o2))
 		return
 	case "set":
 		if !isk2 {
 			code.WriteOP(OP_SET, a, a2)
 		} else {
-			code.WriteOP(OP_SETK, a, uint32(k2))
+			code.WriteOP(OP_SETK, a, uint16(k2))
 		}
 		return
 	case "rx":
-		code.WriteOP(OP_RX, uint32(o), uint32(o2))
+		code.WriteOP(OP_RX, uint16(o), uint16(o2))
 		return
 	}
 

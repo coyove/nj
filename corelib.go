@@ -95,7 +95,7 @@ func initCoreLibs() {
 		if et != GTagEnv {
 			panicf("invalid generic tag: %d", et)
 		}
-		(*Env)(ep).Set(uint32(x.Num()), y)
+		(*Env)(ep).Set(uint16(x.Num()), y)
 		return y
 	}))
 	lcore.Puts("currentenv", NewNativeValue(0, func(env *Env) Value {
@@ -200,7 +200,7 @@ func initCoreLibs() {
 	lcore.Puts("opcode", NewMapValue(NewMap().
 		Puts("closure", NewMapValue(NewMap().
 			Puts("empty", NewNativeValue(0, func(env *Env) Value {
-				cls := NewClosure(make([]uint64, 0), make([]Value, 0), env.parent, 0)
+				cls := NewClosure(make([]uint32, 0), make([]Value, 0), env.parent, 0)
 				return NewClosureValue(cls)
 			})).
 			Puts("yieldreset", NewNativeValue(1, func(env *Env) Value {

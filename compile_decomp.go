@@ -1,6 +1,8 @@
 package potatolang
 
-import "github.com/coyove/potatolang/parser"
+import (
+	"github.com/coyove/potatolang/parser"
+)
 
 // decompound() will accept a list of atoms, for every compound atom inside,
 // it will decompound it into a new temp variable and replace the original one with a Naddr node of this variable.
@@ -17,7 +19,7 @@ func (table *symtable) decompound(atoms []*parser.Node, ops []uint16, useR2 bool
 	buf = newpacket()
 
 	for i, atom := range atoms {
-		var yx uint32
+		var yx uint16
 		var code packet
 
 		if atom.Type == parser.Ncompound {
@@ -49,7 +51,7 @@ func (table *symtable) decompound(atoms []*parser.Node, ops []uint16, useR2 bool
 		table.sp--
 		if ops != nil {
 			bop, opa, _ := op(buf.data[len(buf.data)-1])
-			idx := uint32(byte(ops[lastReplacedAtom.index]>>8)-OP_R0) / 2
+			idx := uint16(byte(ops[lastReplacedAtom.index]>>8)-OP_R0) / 2
 			flag := false
 
 			if flatOpMappingRev[bop] != "" {
@@ -75,7 +77,8 @@ func (table *symtable) decompound(atoms []*parser.Node, ops []uint16, useR2 bool
 		// r2 trick
 		_, _, srcaddr := op(buf.data[lastlastReplacedAtom.lastopPos])
 		buf.data[lastlastReplacedAtom.lastopPos] = makeop(OP_R2, srcaddr, 0)
-		idx := uint32(byte(ops[lastlastReplacedAtom.index]>>8)-OP_R0) / 2
+		idx := uint16(byte(ops[lastlastReplacedAtom.index]>>8)-OP_R0) / 2
+
 		if idx != 2 {
 			buf.WriteOP(OP_RX, idx, 2)
 		}
