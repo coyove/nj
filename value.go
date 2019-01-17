@@ -274,7 +274,7 @@ func (v Value) Equal(r Value) bool {
 			c0.env == c1.env &&
 			c0.lastenv == c1.lastenv &&
 			c0.lastp == c1.lastp &&
-			bytes.Equal(slice64to8(c0.code), slice64to8(c1.code)) &&
+			bytes.Equal(u32Bytes(c0.code), u32Bytes(c1.code)) &&
 			c0.caller.Equal(c1.caller) &&
 			len(c0.preArgs) == len(c1.preArgs)
 		if !e {

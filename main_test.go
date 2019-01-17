@@ -11,6 +11,8 @@ import (
 
 	// _ "net/http/pprof"
 	"runtime"
+
+	"github.com/coyove/common/rand"
 )
 
 func init() {
@@ -204,6 +206,32 @@ foo()
 `)
 	if err == nil || !strings.Contains(err.Error(), "too many levels") {
 		t.FailNow()
+	}
+}
+
+func TestPosVByte(t *testing.T) {
+	p := posVByte{}
+	p2 := [][3]uint32{}
+	r := rand.New()
+
+	for i := 0; i < 1e6; i++ {
+		a, b, c := uint32(r.Uint64()), uint32(r.Uint64()), uint32(uint16(r.Uint64()))
+		if r.Intn(2) == 1 {
+			c = uint32(r.Intn(14))
+		}
+		p.appendABC(a, b, uint16(c))
+		p2 = append(p2, [3]uint32{a, b, c})
+	}
+
+	i, j := 0, 0
+	for i < len(p) {
+		var a, b uint32
+		var c uint16
+		i, a, b, c = p.readABC(i)
+		if [3]uint32{a, b, uint32(c)} != p2[j] {
+			t.Fatal(a, b, c, p2[j])
+		}
+		j++
 	}
 }
 

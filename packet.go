@@ -2,6 +2,7 @@ package potatolang
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"hash/crc32"
 	"math"
@@ -25,14 +26,7 @@ func op(x uint32) (op byte, a, b uint16) {
 	return
 }
 
-func btob(b bool) byte {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-func slice64to8(p []uint32) []byte {
+func u32Bytes(p []uint32) []byte {
 	r := reflect.SliceHeader{}
 	r.Cap = cap(p) * 4
 	r.Len = len(p) * 4
@@ -40,11 +34,10 @@ func slice64to8(p []uint32) []byte {
 	return *(*[]byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
 }
 
-var filler = []byte{0, 0, 0, 0, 0, 0, 0}
-
-func slice8to64(p []byte) []uint32 {
+func u32FromBytes(p []byte) []uint32 {
 	if m := len(p) % 4; m != 0 {
-		p = append(p, filler[:4-m]...)
+		p = append(p, 0, 0, 0, 0)
+		p = p[:len(p)+1-m]
 	}
 	r := reflect.SliceHeader{}
 	r.Cap = cap(p) / 4
@@ -53,29 +46,99 @@ func slice8to64(p []byte) []uint32 {
 	return *(*[]uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(&r))))
 }
 
+type posVByte []byte
+
+func (p *posVByte) appendABC(a, b uint32, c uint16) {
+	trunc := func(v uint32) (w byte, buf [4]byte) {
+		if v < 256 {
+			w = 0
+		} else if v < 256*256 {
+			w = 1
+		} else if v < 256*256*256 {
+			w = 2
+		} else {
+			w = 3
+		}
+		binary.LittleEndian.PutUint32(buf[:], v)
+		return
+	}
+	aw, ab := trunc(a)
+	bw, bb := trunc(b)
+	x := aw<<6 + bw<<4
+	cw := 0
+	c--
+	if c < 14 {
+		x |= byte(c)
+	} else if c < 256 {
+		cw = 1
+		x |= 0xe
+	} else {
+		cw = 2
+		x |= 0xf
+	}
+
+	*p = append(*p, x)
+	*p = append(*p, ab[:aw+1]...)
+	*p = append(*p, bb[:bw+1]...)
+	if cw == 1 {
+		*p = append(*p, byte(c))
+	} else if cw == 2 {
+		*p = append(*p, byte(c), byte(c>>8))
+	}
+}
+
+func (p posVByte) readABC(i int) (next int, a, b uint32, c uint16) {
+	x := p[i]
+
+	i++
+	buf := [4]byte{}
+	copy(buf[:], p[i:i+1+int(x>>6)])
+	a = binary.LittleEndian.Uint32(buf[:])
+
+	i = i + 1 + int(x>>6)
+	buf = [4]byte{}
+	copy(buf[:], p[i:i+1+int(x<<2>>6)])
+	b = binary.LittleEndian.Uint32(buf[:])
+
+	i = i + 1 + int(x<<2>>6)
+	x &= 0xf
+	if x < 14 {
+		c = uint16(x + 1)
+		next = i
+	} else {
+		buf = [4]byte{}
+		copy(buf[:], p[i:i+int(x-13)])
+		c = binary.LittleEndian.Uint16(buf[:2]) + 1
+		next = i + int(x-13)
+	}
+	return
+}
+
 type packet struct {
 	data   []uint32
-	pos    []uint32
+	pos    posVByte
 	source string
 }
 
 func newpacket() packet {
-	return packet{data: make([]uint32, 0, 1), pos: make([]uint32, 0, 1)}
+	return packet{data: make([]uint32, 0, 1), pos: make(posVByte, 0, 1)}
 }
 
 func (b *packet) Clear() {
 	b.data = b.data[:0]
 }
 
-func (b *packet) Write(buf packet) {
-	datalen := len(b.data)
-	b.data = append(b.data, buf.data...)
-	idx := len(b.pos)
-	b.pos = append(b.pos, buf.pos...)
-	for i := idx; i < len(b.pos); i += 2 {
-		b.pos[i] += uint32(datalen)
+func (p *packet) Write(buf packet) {
+	datalen := len(p.data)
+	p.data = append(p.data, buf.data...)
+	i := 0
+	for i < len(buf.pos) {
+		var a, b uint32
+		var c uint16
+		i, a, b, c = buf.pos.readABC(i)
+		p.pos.appendABC(a+uint32(datalen), b, c)
 	}
-	b.source = buf.source
+	p.source = buf.source
 }
 
 func (b *packet) WriteRaw(buf []uint32) { b.data = append(b.data, buf...) }
@@ -87,8 +150,7 @@ func (b *packet) Write32(v uint32) { b.data = append(b.data, v) }
 func (b *packet) WriteOP(op byte, opa, opb uint16) { b.data = append(b.data, makeop(op, opa, opb)) }
 
 func (b *packet) WritePos(p parser.Meta) {
-	b.pos = append(b.pos, uint32(len(b.data)))
-	b.pos = append(b.pos, (p.Line<<12)|uint32(p.Column&0x0fff))
+	b.pos.appendABC(uint32(len(b.data)), p.Line, p.Column)
 	if p.Source != "" {
 		b.source = p.Source
 	}
@@ -101,7 +163,7 @@ func (b *packet) WriteDouble(v float64) {
 
 func (b *packet) WriteString(v string) {
 	b.Write64(uint64(len(v)))
-	b.WriteRaw(slice8to64([]byte(v)))
+	b.WriteRaw(u32FromBytes([]byte(v)))
 }
 
 func (b *packet) TruncateLast(n int) {
@@ -162,8 +224,12 @@ func crReadString(data []uint32, cursor *uint32) string {
 }
 
 func crReadStringLen(data []uint32, length int, cursor *uint32) string {
+	return string(crReadBytesLen(data, length, cursor))
+}
+
+func crReadBytesLen(data []uint32, length int, cursor *uint32) []byte {
 	buf := crRead(data, cursor, int((length+3)/4))
-	return string(slice64to8(buf)[:length])
+	return u32Bytes(buf)[:length]
 }
 
 var singleOp = map[byte]string{
@@ -196,7 +262,7 @@ var singleOp = map[byte]string{
 
 func crHash(data []uint32) uint32 {
 	e := crc32.New(crc32.IEEETable)
-	e.Write(slice64to8(data))
+	e.Write(u32Bytes(data))
 	return e.Sum32()
 }
 
@@ -228,14 +294,14 @@ MAIN:
 		sb.WriteString(spaces)
 
 		if len(c.pos) > 0 {
-			op, line, col := c.pos[0], uint32(c.pos[1]>>12), uint32(c.pos[1]&0x0fff)
+			next, op, line, col := c.pos.readABC(0)
 			// log.Println(cursor, op, unsafe.Pointer(&pos))
 			for cursor > op {
-				c.pos = c.pos[2:]
+				c.pos = c.pos[next:]
 				if len(c.pos) == 0 {
 					break
 				}
-				if op, line, col = c.pos[0], uint32(c.pos[1]>>12), uint32(c.pos[1]&0x0fff); cursor <= op {
+				if next, op, line, col = c.pos.readABC(0); cursor <= op {
 					break
 				}
 			}
@@ -243,7 +309,7 @@ MAIN:
 			if op == cursor {
 				x := fmt.Sprintf("%d:%d", line, col)
 				sb.WriteString(fmt.Sprintf("|%-7s %d| ", x, cursor-1))
-				c.pos = c.pos[2:]
+				c.pos = c.pos[next:]
 			} else {
 				sb.WriteString(fmt.Sprintf("|        %d| ", cursor-1))
 			}
@@ -351,10 +417,10 @@ func crReadClosure(code []uint32, cursor *uint32, env *Env, opa, opb uint16) *Cl
 	xlen := crRead64(code, cursor)
 	poslen, codelen, srclen := uint32(xlen>>38), uint32(xlen<<26>>38), uint16(xlen<<52>>52)
 	src := crReadStringLen(code, int(srclen), cursor)
-	pos := crRead(code, cursor, int(poslen))
-	buf := crRead(code, cursor, int(codelen))
-	cls := NewClosure(buf, consts, env, byte(argsCount))
-	cls.pos = pos
+	pos := crReadBytesLen(code, int(poslen), cursor)
+	clscode := crRead(code, cursor, int(codelen))
+	cls := NewClosure(clscode, consts, env, byte(argsCount))
+	cls.pos = posVByte(pos)
 	cls.options = options
 	cls.source = src
 	return cls

@@ -41,13 +41,13 @@ func (e *ExecError) Error() string {
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
 		src := "<unknown>"
-		// binary search would be better
-		for i := 0; i < len(r.cls.pos); i += 2 {
-			op, nextpos := r.cls.pos[i], r.cls.pos[i+1]
-			line, col := nextpos>>12, nextpos&0x0fff
-			opx := uint32(0xffffffff)
-			if i < len(r.cls.pos)-3 {
-				opx = r.cls.pos[i+2]
+		for i := 0; i < len(r.cls.pos); {
+			var op, line uint32
+			var opx uint32 = 0xffffffff
+			var col uint16
+			i, op, line, col = r.cls.pos.readABC(i)
+			if i < len(r.cls.pos)-1 {
+				_, opx, _, _ = r.cls.pos.readABC(i)
 			}
 			if r.cursor >= op && r.cursor < opx {
 				src = fmt.Sprintf("%s:%d:%d", r.cls.source, line, col)

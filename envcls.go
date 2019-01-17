@@ -149,7 +149,7 @@ const (
 // Closure is the closure struct used in potatolang
 type Closure struct {
 	code      []uint32
-	pos       []uint32
+	pos       posVByte
 	source    string
 	consts    []Value
 	env       *Env
@@ -206,11 +206,9 @@ func (c *Closure) SetCode(code []uint32) { c.code = code }
 
 func (c *Closure) Code() []uint32 { return c.code }
 
-func (c *Closure) Pos() []uint32 { return c.pos }
-
 func (c *Closure) Consts() []Value { return c.consts }
 
-func (c *Closure) BytesCode() []byte { return slice64to8(c.code) }
+func (c *Closure) BytesCode() []byte { return u32Bytes(c.code) }
 
 func (c *Closure) SetCaller(cr Value) { c.caller = cr }
 

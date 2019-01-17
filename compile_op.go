@@ -583,8 +583,8 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	buf.Write64(uint64(uint32(len(code.pos))&0x03ffffff)<<38 +
 		uint64(uint32(len(code.data))&0x03ffffff)<<12 +
 		uint64(uint16(len(src))&0x0fff))
-	buf.WriteRaw(slice8to64([]byte(src)))
-	buf.WriteRaw(code.pos)
+	buf.WriteRaw(u32FromBytes([]byte(src)))
+	buf.WriteRaw(u32FromBytes(code.pos))
 
 	// Note buf.source will be set to code.source in buf.Write
 	// but buf.source shouldn't be changed
@@ -697,9 +697,9 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 	buf.WriteOP(OP_JMP, 0, uint16(-buf.Len()-1+1<<12))
 
 	code = buf
-	code2 := slice64to8(code.data)
+	code2 := u32Bytes(code.data)
 	if staticWhileHack.continueFlag != nil {
-		flag := slice64to8(staticWhileHack.continueFlag)
+		flag := u32Bytes(staticWhileHack.continueFlag)
 		for i := 0; i < len(code2); {
 			x := bytes.Index(code2[i:], flag)
 			if x == -1 {
@@ -714,7 +714,7 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 	}
 
 	if staticWhileHack.breakFlag != nil {
-		flag := slice64to8(staticWhileHack.breakFlag)
+		flag := u32Bytes(staticWhileHack.breakFlag)
 		for i := 0; i < len(code2); {
 			x := bytes.Index(code2[i:], flag)
 			if x == -1 {
