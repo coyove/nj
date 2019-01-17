@@ -285,11 +285,11 @@ jmp_stat:
 
 declarator:
         TIdent                                { $$ = ANode($1).setPos($1) } |
-        prefix_expr '[' expr ']'              { $$ = CNode("load", $1, $3).setPos0($1).setPos($1) } |
-        prefix_expr '[' expr ':' expr ']'     { $$ = CNode("slice", $1, $3, $5).setPos0($1).setPos($1) } |
-        prefix_expr '[' expr ':' ']'          { $$ = CNode("slice", $1, $3, NNode("-1")).setPos0($1).setPos($1) } |
-        prefix_expr '[' ':' expr ']'          { $$ = CNode("slice", $1, NNode("0"), $4).setPos0($1).setPos($1) } |
-        prefix_expr '.' TIdent                { $$ = CNode("load", $1, SNode($3.Str)).setPos0($1).setPos($1) }
+        prefix_expr '[' expr ']'              { $$ = CNode("load", $1, $3).setPos0($3).setPos($3) } |
+        prefix_expr '[' expr ':' expr ']'     { $$ = CNode("slice", $1, $3, $5).setPos0($3).setPos($3) } |
+        prefix_expr '[' expr ':' ']'          { $$ = CNode("slice", $1, $3, NNode("-1")).setPos0($3).setPos($3) } |
+        prefix_expr '[' ':' expr ']'          { $$ = CNode("slice", $1, NNode("0"), $4).setPos0($4).setPos($4) } |
+        prefix_expr '.' TIdent                { $$ = CNode("load", $1, SNode($3.Str)).setPos0($3).setPos($3) }
 
 ident_list:
         TIdent                                { $$ = CNode($1.Str) } | 
