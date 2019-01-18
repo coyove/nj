@@ -55,7 +55,7 @@ func (e *ExecError) Error() string {
 			}
 		}
 		// the recorded cursor was advanced by 1 already
-		msg.WriteString(fmt.Sprintf("at %d in 0x%08x - %s\n", r.cursor-1, crHash(r.cls.code), src))
+		msg.WriteString(fmt.Sprintf("at %d in %s\n", r.cursor-1, src))
 	}
 	msg.WriteString("root panic:\n")
 	msg.WriteString(fmt.Sprintf("%v\n", e.r))

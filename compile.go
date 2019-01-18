@@ -45,6 +45,8 @@ type symtable struct {
 	consts         []kinfo
 	constStringMap map[string]uint16
 	constFloatMap  map[float64]uint16
+
+	reusableV [][2]uint16
 }
 
 func newsymtable() *symtable {
@@ -54,6 +56,7 @@ func newsymtable() *symtable {
 		constStringMap: make(map[string]uint16),
 		constFloatMap:  make(map[float64]uint16),
 		continueNode:   make([]*parser.Node, 0),
+		reusableV:      make([][2]uint16, 0),
 	}
 	for i := range t.regs {
 		t.regs[i].addr = regA
@@ -67,6 +70,38 @@ func (table *symtable) incrvp() {
 		panic("too many variables (1024) in a single scope")
 	}
 	table.vp++
+}
+
+func (table *symtable) borrowTmp() (uint16, bool) {
+	for i, v := range table.reusableV {
+		if v[1] == 0 {
+			table.reusableV[i][1] = 1
+			return v[0], true
+		}
+	}
+	return 0, false
+}
+
+func (table *symtable) addUsedTmp(v uint16) {
+	table.reusableV = append(table.reusableV, [2]uint16{v, 1})
+}
+
+func (table *symtable) isReusableTmp(v uint16) bool {
+	for _, rv := range table.reusableV {
+		if rv[0] == v {
+			return true
+		}
+	}
+	return false
+}
+
+func (table *symtable) returnTmp(v uint16) {
+	for i, rv := range table.reusableV {
+		if rv[0] == v {
+			table.reusableV[i][1] = 0
+		}
+	}
+	panic("shouldn't happen")
 }
 
 func (table *symtable) get(varname string) (uint16, bool) {

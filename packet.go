@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"hash/crc32"
 	"math"
 	"reflect"
 	"strconv"
@@ -260,12 +259,6 @@ var singleOp = map[byte]string{
 	OP_POP:      "pop",
 }
 
-func crHash(data []uint32) uint32 {
-	e := crc32.New(crc32.IEEETable)
-	e.Write(u32Bytes(data))
-	return e.Sum32()
-}
-
 func (c *Closure) crPrettify(tab int) string {
 	sb := &bytes.Buffer{}
 	spaces := strings.Repeat("        ", tab)
@@ -274,7 +267,7 @@ func (c *Closure) crPrettify(tab int) string {
 		spaces2 = strings.Repeat("        ", tab-1) + "+-------"
 	}
 
-	sb.WriteString(spaces2 + "+ " + c.source + "\n")
+	sb.WriteString(spaces2 + "+ START " + c.source + "\n")
 
 	var cursor uint32
 	readAddr := func(a uint16) string {
@@ -391,7 +384,7 @@ MAIN:
 
 	c.pos = oldpos
 
-	sb.WriteString(spaces2 + "+ " + c.source)
+	sb.WriteString(spaces2 + "+ END " + c.source)
 	return sb.String()
 }
 

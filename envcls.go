@@ -1,7 +1,9 @@
 package potatolang
 
 import (
+	"encoding/base64"
 	"fmt"
+	"hash/crc32"
 	"unsafe"
 )
 
@@ -210,6 +212,8 @@ func (c *Closure) Consts() []Value { return c.consts }
 
 func (c *Closure) BytesCode() []byte { return u32Bytes(c.code) }
 
+func (c *Closure) Pos() []byte { return []byte(c.pos) }
+
 func (c *Closure) SetCaller(cr Value) { c.caller = cr }
 
 func (c *Closure) Caller() Value { return c.caller }
@@ -232,13 +236,17 @@ func (c *Closure) Dup() *Closure {
 
 func (c *Closure) String() string {
 	if c.native != nil {
-		return fmt.Sprintf("<native%da%dc>", c.argsCount, len(c.preArgs))
+		return fmt.Sprintf("<native_%da%dc>", c.argsCount, len(c.preArgs))
 	}
 	p := "closure"
 	if c.Isset(CLS_NOENVESCAPE) {
-		p = "purefun"
+		p = "pfun"
 	}
-	x := fmt.Sprintf("<%s%da%dc%dk_%08x", p, c.argsCount, len(c.preArgs), len(c.consts), crHash(c.code))
+	h := crc32.New(crc32.IEEETable)
+	h.Write(u32Bytes(c.code))
+	hash := base64.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzzz0123456789").EncodeToString(h.Sum(nil)[:3])
+
+	x := fmt.Sprintf("<%s_%s_%da%dc%dk", p, hash, c.argsCount, len(c.preArgs), len(c.consts))
 	if c.Isset(CLS_YIELDABLE) {
 		x += "_y"
 	}

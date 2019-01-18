@@ -422,7 +422,12 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		atom := atoms[i]
 
 		if atom.Type == parser.Ncompound {
-			code, yx, err = table.compileCompoundInto(atom, true, 0)
+			if tmp, ok := table.borrowTmp(); ok {
+				code, yx, err = table.compileCompoundInto(atom, false, tmp)
+			} else {
+				code, yx, err = table.compileCompoundInto(atom, true, 0)
+				table.addUsedTmp(yx)
+			}
 			if err != nil {
 				return
 			}
@@ -434,9 +439,15 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 
 	// note: [call [..] [..]] is different
 	if len(replacedAtoms) == 1 && callee.Type != parser.Ncompound {
-		_, _, replacedAtoms[0].Value = op(buf.data[len(buf.data)-1])
+		var lastYX uint16
+		_, lastYX, replacedAtoms[0].Value = op(buf.data[len(buf.data)-1])
 		buf.TruncateLast(1)
-		table.vp--
+		if table.isReusableTmp(lastYX) {
+			table.returnTmp(lastYX)
+		}
+		if lastYX == table.vp-1 {
+			table.vp--
+		}
 	}
 
 	var varIndex uint16
