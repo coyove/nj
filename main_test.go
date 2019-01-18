@@ -235,6 +235,25 @@ func TestPosVByte(t *testing.T) {
 	}
 }
 
+func TestReusingTmps(t *testing.T) {
+	cls, err := LoadString(`
+	fun add (a, b, c) { return a + b + c }
+	var d = 1
+	var sum = add(1 + d, 2 + d, d + 3)
+	assert sum == 9
+	var sum = add(4 + d, 5 + d, 6 + d)
+	assert sum == 18
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ExecCursor(cls.lastenv, cls, 0)
+	// all core libs + add + d + sum + 2 tmps
+	if cls.lastenv.SSize() != len(CoreLibs)+1+1+1+2 {
+		t.FailNow()
+	}
+}
+
 func BenchmarkCompiling(b *testing.B) {
 	buf, _ := ioutil.ReadFile("tests/string.txt")
 	src := "(fun() {" + string(buf) + "})()"

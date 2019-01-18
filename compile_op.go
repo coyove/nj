@@ -59,7 +59,7 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 		buf.WriteOP(OP_SETK, newYX, table.addConst(aSrc.Value))
 		noNeedToRecordPos = true
 	case parser.Ncompound:
-		code, newYX, err = table.compileCompoundInto(aSrc, atoms[0].Value.(string) == "set", varIndex)
+		code, newYX, err = table.compileCompoundInto(aSrc, atoms[0].Value.(string) == "set", varIndex, false)
 		if err != nil {
 			return
 		}
@@ -422,12 +422,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		atom := atoms[i]
 
 		if atom.Type == parser.Ncompound {
-			if tmp, ok := table.borrowTmp(); ok {
-				code, yx, err = table.compileCompoundInto(atom, false, tmp)
-			} else {
-				code, yx, err = table.compileCompoundInto(atom, true, 0)
-				table.addUsedTmp(yx)
-			}
+			code, yx, err = table.compileCompoundInto(atom, true, 0, true)
 			if err != nil {
 				return
 			}
@@ -437,16 +432,14 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		}
 	}
 
-	// note: [call [..] [..]] is different
-	if len(replacedAtoms) == 1 && callee.Type != parser.Ncompound {
-		var lastYX uint16
-		_, lastYX, replacedAtoms[0].Value = op(buf.data[len(buf.data)-1])
-		buf.TruncateLast(1)
-		if table.isReusableTmp(lastYX) {
-			table.returnTmp(lastYX)
-		}
-		if lastYX == table.vp-1 {
-			table.vp--
+	// note: [call [..] [..]] is different, which will be handled in more belowed code
+	if callee.Type != parser.Ncompound {
+		if len(replacedAtoms) >= 1 {
+			var tmp uint16
+			_, tmp, replacedAtoms[len(replacedAtoms)-1].Value = op(buf.data[len(buf.data)-1])
+			buf.TruncateLast(1)
+			//table.vp--
+			table.returnTmp(tmp)
 		}
 	}
 
@@ -460,7 +453,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 			return
 		}
 	case parser.Ncompound:
-		code, yx, err = table.compileCompoundInto(callee, true, 0)
+		code, yx, err = table.compileCompoundInto(callee, true, 0, false)
 		if err != nil {
 			return
 		}
@@ -482,6 +475,9 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		err = table.fill(&buf, atoms[i], OP_PUSH, OP_PUSHK)
 		if err != nil {
 			return
+		}
+		if atoms[i].Type == parser.Naddr {
+			table.returnTmp(atoms[i].Value.(uint16))
 		}
 	}
 

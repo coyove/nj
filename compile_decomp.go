@@ -23,7 +23,7 @@ func (table *symtable) decompound(atoms []*parser.Node, ops []uint16, useR2 bool
 		var code packet
 
 		if atom.Type == parser.Ncompound {
-			if code, yx, err = table.compileCompoundInto(atom, true, 0); err != nil {
+			if code, yx, err = table.compileCompoundInto(atom, true, 0, false); err != nil {
 				return
 			}
 			if table.im != nil {

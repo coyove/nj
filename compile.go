@@ -46,7 +46,7 @@ type symtable struct {
 	constStringMap map[string]uint16
 	constFloatMap  map[float64]uint16
 
-	reusableV [][2]uint16
+	reusableTmps map[uint16]bool
 }
 
 func newsymtable() *symtable {
@@ -56,7 +56,7 @@ func newsymtable() *symtable {
 		constStringMap: make(map[string]uint16),
 		constFloatMap:  make(map[float64]uint16),
 		continueNode:   make([]*parser.Node, 0),
-		reusableV:      make([][2]uint16, 0),
+		reusableTmps:   make(map[uint16]bool),
 	}
 	for i := range t.regs {
 		t.regs[i].addr = regA
@@ -72,36 +72,28 @@ func (table *symtable) incrvp() {
 	table.vp++
 }
 
-func (table *symtable) borrowTmp() (uint16, bool) {
-	for i, v := range table.reusableV {
-		if v[1] == 0 {
-			table.reusableV[i][1] = 1
-			return v[0], true
+func (table *symtable) borrowTmp() uint16 {
+	for tmp, ok := range table.reusableTmps {
+		if ok {
+			table.reusableTmps[tmp] = false
+			table.clearRegRecord(tmp)
+			return tmp
 		}
 	}
-	return 0, false
-}
-
-func (table *symtable) addUsedTmp(v uint16) {
-	table.reusableV = append(table.reusableV, [2]uint16{v, 1})
-}
-
-func (table *symtable) isReusableTmp(v uint16) bool {
-	for _, rv := range table.reusableV {
-		if rv[0] == v {
-			return true
-		}
-	}
-	return false
+	table.incrvp()
+	table.reusableTmps[table.vp-1] = false
+	return table.vp - 1
 }
 
 func (table *symtable) returnTmp(v uint16) {
-	for i, rv := range table.reusableV {
-		if rv[0] == v {
-			table.reusableV[i][1] = 0
-		}
+	table.clearRegRecord(v)
+	if v == table.vp-1 {
+		table.vp--
+		return
 	}
-	panic("shouldn't happen")
+	if _, existed := table.reusableTmps[v]; existed {
+		table.reusableTmps[v] = true
+	}
 }
 
 func (table *symtable) get(varname string) (uint16, bool) {
@@ -111,7 +103,7 @@ func (table *symtable) get(varname string) (uint16, bool) {
 		k, e := table.sym[varname]
 		if e {
 			if depth > 7 || (depth == 7 && k == 0x03ff) {
-				panic("too many levels (8) to refer a variable")
+				panic("too many levels (8) to refer a variable, try simplifing your code")
 			}
 			return (depth << 10) | (uint16(k) & 0x03ff), true
 		}
@@ -252,7 +244,7 @@ func (table *symtable) fill(buf *packet, n *parser.Node, op, opk byte) (err erro
 	return nil
 }
 
-func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, existedVar uint16) (code packet, yx uint16, err error) {
+func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, existedVar uint16, tmp bool) (code packet, yx uint16, err error) {
 	buf := newpacket()
 
 	var newYX uint16
@@ -263,8 +255,12 @@ func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, e
 
 	buf.Write(code)
 	if newVar {
-		yx = table.vp
-		table.incrvp()
+		if tmp {
+			yx = table.borrowTmp()
+		} else {
+			yx = table.vp
+			table.incrvp()
+		}
 	} else {
 		yx = existedVar
 		table.clearRegRecord(yx)
