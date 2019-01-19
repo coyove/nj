@@ -26,22 +26,14 @@ func (table *symtable) decompound(atoms []*parser.Node, ops []uint16, useR2 bool
 			if code, yx, err = table.compileCompoundInto(atom, true, 0, false); err != nil {
 				return
 			}
-			if table.im != nil {
-				atoms[i] = parser.NNode(*table.im)
-				table.im = nil
-			} else if table.ims != nil {
-				atoms[i] = parser.SNode(*table.ims)
-				table.ims = nil
-			} else {
-				// replacedAtoms = append(replacedAtoms, atoms[i])
-				lastlastReplacedAtom = lastReplacedAtom
-				lastReplacedAtom.oldnode = atom
-				atoms[i] = parser.NewNode(parser.Naddr).SetValue(yx)
-				buf.Write(code)
-				lastReplacedAtom.node = atoms[i]
-				lastReplacedAtom.index = i
-				lastReplacedAtom.lastopPos = buf.Len() - 1
-			}
+			// replacedAtoms = append(replacedAtoms, atoms[i])
+			lastlastReplacedAtom = lastReplacedAtom
+			lastReplacedAtom.oldnode = atom
+			atoms[i] = parser.NewNode(parser.Naddr).SetValue(yx)
+			buf.Write(code)
+			lastReplacedAtom.node = atoms[i]
+			lastReplacedAtom.index = i
+			lastReplacedAtom.lastopPos = buf.Len() - 1
 		}
 	}
 

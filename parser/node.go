@@ -86,6 +86,79 @@ func (n *Node) S() string { a, _ := n.Value.(string); return a }
 func (n *Node) N() float64 { a, _ := n.Value.(float64); return a }
 
 func CNode(args ...interface{}) *Node {
+	if len(args) >= 2 {
+		op, _ := args[0].(string)
+		a, _ := args[1].(*Node)
+		if len(args) == 3 {
+			b, _ := args[2].(*Node)
+			if a != nil && b != nil {
+				if op == "+" && a.Type == Nstring && b.Type == Nstring {
+					return SNode(a.Value.(string) + b.Value.(string))
+				}
+				if a.Type == Nnumber && b.Type == Nnumber {
+					v1, v2 := a.Value.(float64), b.Value.(float64)
+					switch op {
+					case "+":
+						return NNode(v1 + v2)
+					case "-":
+						return NNode(v1 - v2)
+					case "*":
+						return NNode(v1 * v2)
+					case "/":
+						return NNode(v1 / v2)
+					case "%":
+						return NNode(math.Mod(v1, v2))
+					case "==":
+						if v1 == v2 {
+							return NNode(1)
+						}
+						return NNode(0)
+					case "!=":
+						if v1 != v2 {
+							return NNode(1)
+						}
+						return NNode(0)
+					case "<":
+						if v1 < v2 {
+							return NNode(1)
+						}
+						return NNode(0)
+					case "<=":
+						if v1 <= v2 {
+							return NNode(1)
+						}
+						return NNode(0)
+					case "&":
+						return NNode(float64(int32(v1) & int32(v2)))
+					case "|":
+						return NNode(float64(int32(v1) | int32(v2)))
+					case "^":
+						return NNode(float64(int32(v1) ^ int32(v2)))
+					case "<<":
+						return NNode(float64(int32(v1) << uint32(v2)))
+					case ">>":
+						return NNode(float64(int32(v1) >> uint32(v2)))
+					case ">>>":
+						return NNode(float64(uint32(v1) >> uint32(v2)))
+					}
+				}
+			}
+		} else if len(args) == 2 {
+			if a != nil && a.Type == Nnumber {
+				v1 := a.Value.(float64)
+				switch op {
+				case "!":
+					if v1 == 0 {
+						return NNode(1)
+					}
+					return NNode(0)
+				case "~":
+					return NNode(float64(^int32(v1)))
+				}
+			}
+		}
+	}
+
 	n := NewNode(Ncompound)
 	arr := make([]*Node, 0, len(args))
 	for _, arg := range args {
@@ -185,7 +258,13 @@ func StringToNumber(arg string) (float64, error) {
 	return num, nil
 }
 
-func (n *Node) setPos0(p interface{}) *Node { n.Cx(0).SetPos(p); return n }
+func (n *Node) setPos0(p interface{}) *Node {
+	if n.Type == Nnumber || n.Type == Nstring {
+		return n
+	}
+	n.Cx(0).SetPos(p)
+	return n
+}
 
 func (n *Node) setPos(p interface{}) *Node { n.SetPos(p); return n }
 

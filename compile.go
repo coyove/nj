@@ -23,13 +23,8 @@ type symtable struct {
 	parent *symtable
 	sym    map[string]uint16
 
-	// flat op immediate value
-	im  *float64
-	ims *string
-
 	// has yield op
-	y bool
-
+	y         bool
 	envescape bool
 
 	vp uint16
@@ -342,13 +337,11 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 			panic(name)
 		}
 	}
-	table.im, table.ims = nil, nil
 	return
 }
 
 func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint16, err error) {
 	buf := newpacket()
-	table.im = nil
 
 	for _, a := range chain.C() {
 		if a.Type != parser.Ncompound {
@@ -413,7 +406,7 @@ func LoadFile(path string) (*Closure, error) {
 	if err != nil {
 		return nil, err
 	}
-	// n.Dump(os.Stderr)
+	//n.Dump(os.Stderr)
 	// panic(10)
 	return compileNode(n)
 }
