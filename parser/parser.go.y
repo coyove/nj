@@ -197,14 +197,17 @@ for_stat:
             vname, sname, ename := ANode($2), ANodeS($2.Str + randomName()), ANodeS($2.Str + randomName()) 
             if $6.Type == Nnumber {
                 // easy case
-                chain, cmp := CNode("chain", CNode("inc", vname, $6).setPos0($1)), "<="
+                chain := CNode("chain", CNode("inc", vname, $6).setPos0($1))
+                var cond *Node
                 if $6.N() < 0 {
-                    cmp = ">="
+                    cond = CNode("<=", ename, vname)
+                } else {
+                    cond = CNode("<=", vname, ename)
                 }
                 $$ = CNode("chain",
                     CNode("set", vname, $4),
                     CNode("set", ename, $8),
-                    CNode("for", CNode(cmp, vname, ename), chain, $9).setPos0($1),
+                    CNode("for", cond, chain, $9).setPos0($1),
                 )
             } else {
                 bname := ANodeS($2.Str + randomName())

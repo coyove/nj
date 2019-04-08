@@ -81,12 +81,7 @@ func TestArithmeticUnfold(t *testing.T) {
 		t.Error(err)
 	}
 
-	// 0: nil
-	// 1st const: 2 * 3 = 6
-	// 2nd const: 6 / 4 = 1.5
-	// 3rd const: 1 + 1.5 = 2.5
-
-	if len(cls.consts) != 4 || cls.consts[3].AsNumber() != 2.5 {
+	if len(cls.consts) != 2 || cls.consts[1].AsNumber() != 2.5 {
 		t.Error("unfolding failed")
 	}
 
