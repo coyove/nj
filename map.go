@@ -101,7 +101,7 @@ func (m *Map) Get(key Value) (value Value, found bool) {
 			return m.l[idx], true
 		}
 	}
-	if m.m == nil {
+	If m.m == nil {
 		return Value{}, false
 	}
 	v, ok := m.m[key.Hash()]

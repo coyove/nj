@@ -7,6 +7,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/coyove/potatolang/parser"
 )
 
 type Type byte
@@ -56,14 +58,39 @@ func (t *Token) Line() int { return int(t.line + 1) }
 
 func (t *Token) Column() int { return int(t.col) }
 
-func (t *Token) Is(ty Type) bool {
-	return t.ty&ty > 0
+func (t *Token) Is(ty Type) bool { return t.ty&ty > 0 }
+
+func (t *Token) IsIdent() bool { return t.Is(T_Common) && strings.HasPrefix(t.Name.(string), "'") }
+
+func (t *Token) IsVar() bool { return t.Is(T_Common) && isVar(t.Name.(string)) }
+
+func (t *Token) IsKey(keyword string) bool { return t.Is(T_Common) && t.Name.(string) == keyword }
+
+func (t *Token) ToNode() *parser.Node {
+	var n *parser.Node
+	if t.Is(T_Number) {
+		n = parser.NNode(t.Name)
+	} else if t.Is(T_String) {
+		n = parser.SNode(t.Name.(string))
+	} else if t.Is(T_Common) {
+		x := t.Name.(string)
+		if t.IsIdent() {
+			x = x[1:]
+		}
+		n = parser.ANodeS(x)
+	} else {
+		panic("shouldn't happen")
+	}
+	n.Line = t.line + 1
+	n.Column = t.col
+	return n
 }
 
 type Reader struct {
 	r         *bufio.Reader
 	dotNames  []byte
 	line, col int
+	lastTok   *Token
 }
 
 func NewReader(r io.Reader) *Reader {
@@ -74,7 +101,20 @@ func NewReaderFromString(str string) *Reader {
 	return NewReader(strings.NewReader(str))
 }
 
+func (r *Reader) UnreadToken(tok *Token) {
+	if r.lastTok != nil {
+		panic("can't unread 2 tokens continuously")
+	}
+	r.lastTok = tok
+}
+
 func (r *Reader) Token() (tok *Token, err error) {
+	if r.lastTok != nil {
+		tok = r.lastTok
+		r.lastTok = nil
+		return
+	}
+
 	defer func() {
 		if tok != nil {
 			tok.line = uint32(r.line)
@@ -255,27 +295,4 @@ func (r *Reader) readString() (*Token, error) {
 
 	return &Token{Name: buf.String(), ty: T_String}, nil
 
-}
-
-func isSep(r byte, sq bool) bool {
-	x := r == ' ' || r == '\t' || r == '\r' || r == '\n' || r == '[' || r == ']' || r == '"' || r == '!'
-	if sq {
-		x = x || r == '\''
-	}
-	return x
-}
-
-func isAlpha(r byte, num bool) bool {
-	if num {
-		return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
-	}
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_'
-}
-
-func isNum(r byte, e bool) bool {
-	x := (r >= '0' && r <= '9') || r == '.' || r == '+' || r == '-'
-	if e {
-		x = x || r == 'e' || r == 'E'
-	}
-	return x
 }
