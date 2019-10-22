@@ -1,5 +1,5 @@
 var n = 0 
-var nCPU = 4 
+var nCPU = 6
 
 fun A(i, j) {
     return ((i+j)*(i+j+1)/2 + i + 1) 
@@ -64,7 +64,7 @@ fun ATimesTransp(v, u) {
     wg.wait() 
 }
 
-n = 2000
+n = 1000
 var u = {} 
 var v = {} 
  
@@ -85,4 +85,5 @@ for i, x = v {
 }
 
 io.println(math.sqrt(vBv/vv)) 
+io.println(nil)
     

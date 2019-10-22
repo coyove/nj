@@ -45,7 +45,7 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 	switch aSrc.Type {
 	case parser.Natom:
 		if aSrc.Value.(string) == "nil" {
-			buf.WriteOP(OP_SETK, newYX, 0)
+			buf.WriteOP(OP_SET, newYX, 0)
 		} else {
 			valueIndex, ok := table.get(aSrc.Value.(string))
 			if !ok {

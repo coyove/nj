@@ -131,7 +131,7 @@ var sqrt = math.sqrt
 offsetMomentum() 
 io.println(energy()) 
 
-for i=0, 500000{
+for i=0, 5000000{
     advance(0.01) 
 }
 

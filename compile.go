@@ -52,6 +52,7 @@ func newsymtable() *symtable {
 		constFloatMap:  make(map[float64]uint16),
 		continueNode:   make([]*parser.Node, 0),
 		reusableTmps:   make(map[uint16]bool),
+		vp:             1,
 	}
 	for i := range t.regs {
 		t.regs[i].addr = regA
@@ -272,7 +273,7 @@ func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint16, err 
 		if n.Value.(string) == "nil" {
 			buf := newpacket()
 			yx = table.vp
-			buf.WriteOP(OP_SETK, yx, 0)
+			buf.WriteOP(OP_SET, yx, 0)
 			table.incrvp()
 			return buf, yx, nil
 		}

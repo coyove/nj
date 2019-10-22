@@ -101,6 +101,9 @@ func NewBoolValue(b bool) Value {
 // SetNumberValue turns any Value into a numeric Value
 func (v *Value) SetNumberValue(f float64) {
 	x := *(*uint64)(unsafe.Pointer(&f))
+	//if x>>52 == 0xfff && x<<12 > 0 {
+	//	x = math.MaxUint64
+	//}
 	v.ptr = unsafe.Pointer(^uintptr(x))
 }
 

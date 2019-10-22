@@ -101,12 +101,12 @@ func (env *Env) Get(yx uint16) Value {
 		return env.A
 	}
 	y := yx >> 10
+	index := int(yx & 0x3ff)
 REPEAT:
 	if y > 0 && env != nil {
 		y, env = y-1, env.parent
 		goto REPEAT
 	}
-	index := int(yx & 0x3ff)
 	if index >= len(env.stack) {
 		return Value{}
 	}
@@ -130,6 +130,39 @@ func (env *Env) Set(yx uint16, v Value) {
 		env.stack[index] = v
 	}
 }
+
+//func (env *Env) Move(to, from uint16) {
+//	var fromV Value
+//	if from == regA {
+//		fromV = env.A
+//	}
+//	y := yx >> 10
+//REPEAT:
+//	if y > 0 && env != nil {
+//		y, env = y-1, env.parent
+//		goto REPEAT
+//	}
+//	index := int(yx & 0x3ff)
+//	if index >= len(env.stack) {
+//		return Value{}
+//	}
+//	return env.stack[index]
+//	if yx == regA {
+//		env.A = v
+//	} else {
+//		y := yx >> 10
+//	REPEAT:
+//		if y > 0 && env != nil {
+//			y, env = y-1, env.parent
+//			goto REPEAT
+//		}
+//		index := int(yx & 0x3ff)
+//		if index >= len(env.stack) {
+//			env.grow(index + 1)
+//		}
+//		env.stack[index] = v
+//	}
+//}
 
 // Stack returns the current stack
 func (env *Env) Stack() []Value {
