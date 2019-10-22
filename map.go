@@ -8,6 +8,8 @@ package potatolang
 type Map struct {
 	l []Value
 	m map[hashv][2]Value
+	c *Closure
+	s *string
 }
 
 // NewMap creates a new map
@@ -101,7 +103,7 @@ func (m *Map) Get(key Value) (value Value, found bool) {
 			return m.l[idx], true
 		}
 	}
-	If m.m == nil {
+	if m.m == nil {
 		return Value{}, false
 	}
 	v, ok := m.m[key.Hash()]

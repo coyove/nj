@@ -13,7 +13,7 @@ func stdPrint(f *os.File) func(env *Env) Value {
 			f.WriteString(env.SGet(i).ToPrintString())
 		}
 
-		return NewValue()
+		return Value{}
 	}
 }
 
@@ -101,7 +101,7 @@ func stdPrintln(f *os.File) func(env *Env) Value {
 			f.WriteString(env.SGet(i).ToPrintString() + " ")
 		}
 		f.WriteString("\n")
-		return NewValue()
+		return Value{}
 	}
 }
 
@@ -129,7 +129,7 @@ func stdWrite(f *os.File) func(env *Env) Value {
 				panicf("stdWrite can't write: %+v", a)
 			}
 		}
-		return NewValue()
+		return Value{}
 	}
 }
 

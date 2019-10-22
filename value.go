@@ -41,19 +41,28 @@ const (
 // Value is the basic value used by VM
 type Value struct {
 	ptr unsafe.Pointer // 8b
-	num uint64
 }
 
 // Type returns the type of value
 func (v Value) Type() byte {
-	// return byte(v.num&0xf) & ^(0xe * byte(v.num&1))
-	return byte(v.num & 0x7)
+	x := uintptr(v.ptr)
+	if x == 0 {
+		return Tnil
+	}
+
+	if x <= 0xffffffffffff {
+		m := (*Map)(unsafe.Pointer(x))
+		if m.c != nil {
+			return Tclosure
+		}
+		if m.s != nil {
+			return Tstring
+		}
+		return Tmap
+	}
+
+	return Tnumber
 }
-
-const clear3LSB = 0xfffffffffffffff8
-
-// NewValue returns a nil value
-func NewValue() Value { return Value{num: 0} }
 
 var (
 	// TMapping maps type to its string representation
@@ -64,12 +73,8 @@ var (
 	hashkey   [4]uintptr
 	hash2Salt = rand.New().Fetch(16)
 
-	// for a numeric Value, its 'ptr' = _Anchor64 + last 3 bits of 'num'
-	_anchor64 = new(int64)
-	_Anchor64 = uintptr(unsafe.Pointer(_anchor64))
-
 	// PhantomValue is a global readonly value to represent the true "void"
-	PhantomValue = NewGenericValue(unsafe.Pointer(_anchor64), GTagPhantom)
+	PhantomValue = NewMapValue(&Map{})
 )
 
 func init() {
@@ -83,79 +88,58 @@ func init() {
 
 // NewNumberValue returns a number value
 func NewNumberValue(f float64) Value {
-	v := Value{}
-	x := math.Float64bits(f)
-	v.ptr = unsafe.Pointer(uintptr(x&7) + _Anchor64)
-	v.num = x&clear3LSB + Tnumber
-	return v
+	x := *(*uint64)(unsafe.Pointer(&f))
+	return Value{unsafe.Pointer(^uintptr(x))}
 }
 
 // NewBoolValue returns a boolean value
 func NewBoolValue(b bool) Value {
-	v := Value{}
 	x := uint64(*(*byte)(unsafe.Pointer(&b)))
-	v.ptr = unsafe.Pointer(_Anchor64)
-	v.num = x*0x3ff0000000000000 + Tnumber
-	return v
+	return Value{unsafe.Pointer(^uintptr(x))}
 }
 
 // SetNumberValue turns any Value into a numeric Value
 func (v *Value) SetNumberValue(f float64) {
-	x := math.Float64bits(f)
-	v.ptr = unsafe.Pointer(uintptr(x&7) + _Anchor64)
-	v.num = x&clear3LSB + Tnumber
+	x := *(*uint64)(unsafe.Pointer(&f))
+	v.ptr = unsafe.Pointer(^uintptr(x))
 }
 
 // SetBoolValue turns any Value into a numeric Value with its value being 0.0 or 1.0
 func (v *Value) SetBoolValue(b bool) {
 	x := uint64(*(*byte)(unsafe.Pointer(&b)))
-	v.ptr = unsafe.Pointer(_Anchor64)
-	v.num = x*0x3ff0000000000000 + Tnumber
+	v.ptr = unsafe.Pointer(^uintptr(x))
 }
 
 // NewMapValue returns a map value
 func NewMapValue(m *Map) Value {
-	return Value{num: Tmap, ptr: unsafe.Pointer(m)}
+	return Value{ptr: unsafe.Pointer(m)}
 }
 
 // NewClosureValue returns a closure value
 func NewClosureValue(c *Closure) Value {
-	return Value{num: Tclosure, ptr: unsafe.Pointer(c)}
+	m := &Map{c: c}
+	return Value{unsafe.Pointer(m)}
 }
 
 // NewGenericValue returns a generic value
 func NewGenericValue(g unsafe.Pointer, tag uint32) Value {
-	return Value{num: uint64(tag)<<32 + Tgeneric, ptr: g}
+	return Value{}
 }
 
 // NewGenericValueInterface returns a generic value from an interface{}
 func NewGenericValueInterface(i interface{}, tag uint32) Value {
-	g := (*(*[2]unsafe.Pointer)(unsafe.Pointer(&i)))[1]
-	return Value{num: uint64(tag)<<32 + Tgeneric, ptr: g}
+	return Value{}
 }
 
 // NewStringValue returns a string value
 func NewStringValue(s string) Value {
-	v := Value{}
-	if len(s) < 7 {
-		// for a string containing only 0~6 bytes, it will be stored into Value directly
-		copy((*(*[8]byte)(unsafe.Pointer(&v.num)))[1:7], s)
-		v.num |= uint64(Tstring + (len(s)+1)<<4)
-	} else {
-		v.num = Tstring
-		v.ptr = unsafe.Pointer(&s)
-	}
-	return v
+	m := &Map{s: &s}
+	return Value{unsafe.Pointer(m)}
 }
 
 // AsString cast value to string
 func (v Value) AsString() string {
-	if ln := byte(v.num) >> 4; ln > 0 {
-		buf := make([]byte, ln-1)
-		copy(buf, (*(*[8]byte)(unsafe.Pointer(&v.num)))[1:ln])
-		return string(buf)
-	}
-	return *(*string)(v.ptr)
+	return *((*Map)(v.ptr).s)
 }
 
 // IsFalse tests whether value contains a "false" value
@@ -166,9 +150,9 @@ func (v Value) IsFalse() bool {
 	if v.Type() == Tnil {
 		return true
 	}
-	if v.Type() == Tstring {
-		return byte(v.num)>>4 == 1
-	}
+	//if v.Type() == Tstring {
+	//	return byte(v.num)>>4 == 1
+	//}
 	if v.Type() == Tmap {
 		m := (*Map)(v.ptr)
 		return len(m.l)+len(m.m) == 0
@@ -185,23 +169,23 @@ func (v Value) IsZero() bool {
 
 // AsNumber cast value to float64
 func (v Value) AsNumber() float64 {
-	return math.Float64frombits(v.num&clear3LSB + uint64(uintptr(v.ptr)-_Anchor64))
+	return math.Float64frombits(^uint64(uintptr(v.ptr)))
 }
 
 // AsMap cast value to map of values
 func (v Value) AsMap() *Map { return (*Map)(v.ptr) }
 
 // AsClosure cast value to closure
-func (v Value) AsClosure() *Closure { return (*Closure)(v.ptr) }
+func (v Value) AsClosure() *Closure { return (*Map)(v.ptr).c }
 
 // AsGeneric cast value to unsafe.Pointer
-func (v Value) AsGeneric() (unsafe.Pointer, uint32) { return v.ptr, uint32(v.num >> 32) }
+func (v Value) AsGeneric() (unsafe.Pointer, uint32) { return v.ptr, 0 }
 
 // Map safely cast value to map of values
 func (v Value) Map() *Map { v.testType(Tmap); return (*Map)(v.ptr) }
 
 // Cls safely cast value to closure
-func (v Value) Cls() *Closure { v.testType(Tclosure); return (*Closure)(v.ptr) }
+func (v Value) Cls() *Closure { v.testType(Tclosure); return (*Map)(v.ptr).c }
 
 // Gen safely cast value to unsafe.Pointer
 func (v Value) Gen() (unsafe.Pointer, uint32) { v.testType(Tgeneric); return v.AsGeneric() }
@@ -261,9 +245,6 @@ func (v Value) Equal(r Value) bool {
 	case _Tnumbernumber:
 		return v == r
 	case _Tstringstring:
-		if ln := byte(v.num) >> 4; ln > 0 {
-			return v == r
-		}
 		return r.AsString() == v.AsString()
 	case _Tmapmap:
 		return v.AsMap().Equal(r.AsMap())
@@ -397,7 +378,7 @@ func (v Value) toString(lv int, json bool) string {
 }
 
 func (v Value) panicType(expected byte) {
-	panicf("expecting %s, got %+v", TMapping[expected], v)
+	panicf("expecting %s, got %+v, %v", TMapping[expected], v.Type(), v.ptr)
 }
 
 func (v Value) testType(expected byte) Value {

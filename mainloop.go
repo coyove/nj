@@ -150,38 +150,13 @@ MAIN:
 			env.A.SetNumberValue(num + konst(kaddr, uint16(opb)).AsNumber())
 			env.Set(opa, env.A)
 		case OP_ADD:
-			switch testTypes(env.R0, env.R1) {
-			case _Tnumbernumber:
-				env.reg(opa).SetNumberValue(env.R0.AsNumber() + env.R1.AsNumber())
-			case _Tstringstring:
-				*env.reg(opa) = NewStringValue(env.R0.AsString() + env.R1.AsString())
-			default:
-				if env.R0.Type() == Tmap {
-					m := env.R0.AsMap()
-					m.l = append(m.l, env.R1)
-					*env.reg(opa) = NewMapValue(m)
-				} else {
-					panicf("can't apply 'add' on %+v and %+v", env.R0, env.R1)
-				}
-			}
+			env.reg(opa).SetNumberValue(env.R0.AsNumber() + env.R1.AsNumber())
 		case OP_SUB:
-			if testTypes(env.R0, env.R1) == _Tnumbernumber {
-				env.reg(opa).SetNumberValue(env.R0.AsNumber() - env.R1.AsNumber())
-			} else {
-				panicf("can't apply 'sub' on %+v and %+v", env.R0, env.R1)
-			}
+			env.reg(opa).SetNumberValue(env.R0.AsNumber() - env.R1.AsNumber())
 		case OP_MUL:
-			if testTypes(env.R0, env.R1) == _Tnumbernumber {
-				env.reg(opa).SetNumberValue(env.R0.AsNumber() * env.R1.AsNumber())
-			} else {
-				panicf("can't apply 'mul' on %+v and %+v", env.R0, env.R1)
-			}
+			env.reg(opa).SetNumberValue(env.R0.AsNumber() * env.R1.AsNumber())
 		case OP_DIV:
-			if testTypes(env.R0, env.R1) == _Tnumbernumber {
-				env.reg(opa).SetNumberValue(env.R0.AsNumber() / env.R1.AsNumber())
-			} else {
-				panicf("can't apply 'div' on %+v and %+v", env.R0, env.R1)
-			}
+			env.reg(opa).SetNumberValue(env.R0.AsNumber() / env.R1.AsNumber())
 		case OP_MOD:
 			if testTypes(env.R0, env.R1) == _Tnumbernumber {
 				env.reg(opa).SetNumberValue(float64(int64(env.R0.AsNumber()) % int64(env.R1.AsNumber())))
@@ -539,10 +514,10 @@ MAIN:
 	}
 
 	if len(retStack) > 0 {
-		returnUpperWorld(NewValue())
+		returnUpperWorld(Value{})
 		goto MAIN
 	}
-	return NewValue(), 0, false
+	return Value{}, 0, false
 }
 
 // OP_COPY takes 3 arguments:

@@ -9,7 +9,7 @@ import (
 	"unsafe"
 )
 
-const SizeofValue = 16
+const SizeofValue = 8
 
 const (
 	// Constants for multiplication: four random odd 64-bit numbers.
@@ -40,12 +40,7 @@ func (v Value) Hash() hashv {
 	case Tnumber, Tnil, Tclosure, Tmap, Tgeneric:
 		a = *(*hashv)(unsafe.Pointer(&v))
 	case Tstring:
-		if byte(v.num)>>4 > 0 {
-			a = *(*hashv)(unsafe.Pointer(&v))
-			break
-		}
-
-		hdr := (*reflect.StringHeader)(v.ptr)
+		hdr := (*reflect.StringHeader)(unsafe.Pointer((*Map)(v.ptr).s))
 		seed := uintptr(iseed)
 		s := uintptr(hdr.Len)
 		p := unsafe.Pointer(hdr.Data)
