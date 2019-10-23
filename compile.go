@@ -102,7 +102,7 @@ func (table *symtable) put(varname string, addr uint16) {
 }
 
 func (table *symtable) getnil() uint16 {
-	return regA - 1
+	return 0x3ff - 1
 }
 
 func (table *symtable) loadK(buf *packet, v interface{}) uint16 {

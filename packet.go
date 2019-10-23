@@ -378,8 +378,8 @@ func crReadClosure(code []uint32, cursor *uint32, env *Env, opa, opb uint16) *Cl
 	argsCount := byte(opa)
 	options := byte(opb)
 	constsLen := uint16(crRead32(code, cursor))
-	consts := make([]Value, constsLen+1)
-	for i := uint16(1); i <= constsLen; i++ {
+	consts := make([]Value, constsLen)
+	for i := uint16(0); i < constsLen; i++ {
 		x := crRead64(code, cursor)
 		if x != math.MaxUint64 {
 			consts[i] = NewNumberValue(math.Float64frombits(x))
