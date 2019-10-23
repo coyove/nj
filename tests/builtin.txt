@@ -48,10 +48,10 @@ var upper = fun(i, r) { if (i == 0 ) { return r - 32  } else { return r }}
 (dup a use upper) 
 assert a == "hello world" 
 a = dup a use upper
-assert "" & a == "Hello world" 
+// assert "" & a == "Hello world" 
 
 assert typeof a + "a" == "mapa" 
-assert typeof (a + "a") == "map" 
+assert typeof (a << {"a"}) == "map" 
 
 // a = for(a, fun(i,b) { if (i == 5) { error(true) end return b end) 
 // assert "" & a == "Hello" 
@@ -61,15 +61,15 @@ a = {
 } 
 assert a.key == "value" and a["key"] == "value" 
 
-assert(0 & ("0x0")) == 0 
-assert(0 & ("0xa")) == 10 
-assert(0 & ("0xA")) == 10 
-assert(0 & ("1")) == 1 
-assert(0 & ("+0.0")) == 0.0 
-assert(0 & ("0i12345678")) == 0i12345678 
-assert(0 & ("-10e-2")) == -10e-2 
-assert(0 & ("1.2a")) == nil 
-assert(0 & ("0xabcdefg")) == nil 
+assert(atoi("0x0")) == 0 
+assert(atoi("0xa")) == 10 
+assert(atoi("0xA")) == 10 
+assert(atoi("1")) == 1 
+assert(atoi("+0.0")) == 0.0 
+assert(atoi("0i12345678")) == 0i12345678 
+assert(atoi("-10e-2")) == -10e-2 
+assert(atoi("1.2a")) == nil 
+assert(atoi("0xabcdefg")) == nil 
 
 var a = 0i0000000000000001 
 var a = 0i0000000000001000 

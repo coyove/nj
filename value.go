@@ -2,13 +2,10 @@ package potatolang
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"strconv"
 	"unsafe"
-
-	"github.com/coyove/common/rand"
 )
 
 // the order can't be changed, for any new type, please also add it in parser.go.y typeof
@@ -54,15 +51,11 @@ func (v Value) Type() byte {
 		return Tnil
 	}
 
-	if x <= 0xffffffffffff {
-		m := (*Map)(unsafe.Pointer(x))
-		if m.ptr != nil {
-			return m.ptype
-		}
-		return Tmap
+	m := (*Map)(unsafe.Pointer(x))
+	if m.ptr != nil {
+		return m.ptype
 	}
-
-	return Tnumber
+	return Tmap
 }
 
 var (
@@ -71,19 +64,11 @@ var (
 		Tnil: "nil", Tnumber: "num", Tstring: "str", Tclosure: "cls", Tgeneric: "gen", Tmap: "map",
 	}
 
-	hashkey   [4]uintptr
-	hash2Salt = rand.New().Fetch(16)
-
 	// PhantomValue is a global readonly value to represent the true "void"
 	PhantomValue = NewMapValue(&Map{})
 )
 
 func init() {
-	buf := rand.New().Fetch(32)
-	for i := 0; i < 4; i++ {
-		hashkey[i] = uintptr(binary.LittleEndian.Uint64(buf[i*8:]))
-		hashkey[i] |= 1
-	}
 	initCoreLibs()
 }
 

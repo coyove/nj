@@ -148,6 +148,7 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 		}
 
 		err = table.writeOpcode(&buf, bop, n0, n1)
+		buf.WritePos(atoms[1].Meta)
 		return buf, regA, err
 	}
 
@@ -186,7 +187,7 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 	}
 
 	switch bop {
-	case OP_TYPEOF, OP_NOT:
+	case OP_TYPEOF, OP_NOT, OP_BIT_NOT:
 		// unary op
 		err = table.writeOpcode(&buf, bop, atoms[1], nil)
 	case OP_ASSERT:

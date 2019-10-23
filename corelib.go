@@ -1,11 +1,13 @@
 package potatolang
 
 import (
+	"strconv"
 	"strings"
 	"sync"
 	"unsafe"
 
 	"github.com/buger/jsonparser"
+	"github.com/coyove/potatolang/parser"
 )
 
 const (
@@ -43,10 +45,6 @@ func RegisterGTagcomparator(a, b uint32, comp GTagComparator) bool {
 	return true
 }
 
-var CoreLibNames = []string{
-	"std", "io", "math",
-}
-
 var CoreLibs = map[string]Value{}
 
 // AddCoreValue adds a value to the core libraries
@@ -58,7 +56,6 @@ func AddCoreValue(name string, value Value) {
 	if CoreLibs[name].Type() != Tnil {
 		panicf("core value %s already exists", name)
 	}
-	CoreLibNames = append(CoreLibNames, name)
 	CoreLibs[name] = value
 }
 
@@ -85,9 +82,6 @@ func initCoreLibs() {
 			newEnv.SPush(v)
 		}
 		return x.Cls().Exec(newEnv)
-	}))
-	lcore.Puts("id", NewNativeValue(1, func(env *Env) Value {
-		return NewStringValue(env.SGet(0).hashstr())
 	}))
 	lcore.Puts("storeinto", NewNativeValue(3, func(env *Env) Value {
 		e, x, y := env.SGet(0), env.SGet(1), env.SGet(2)
@@ -297,7 +291,22 @@ func initCoreLibs() {
 		Puts("stringify", NewNativeValue(1, func(env *Env) Value {
 			return NewStringValue(env.SGet(0).toString(0, true))
 		}))))
+
 	CoreLibs["std"] = NewMapValue(lcore)
+	CoreLibs["atoi"] = NewNativeValue(1, func(env *Env) Value {
+		v, err := parser.StringToNumber(env.SGet(0).AsString())
+		if err != nil {
+			return Value{}
+		}
+		return NewNumberValue(v)
+	})
+	CoreLibs["itoa"] = NewNativeValue(1, func(env *Env) Value {
+		v := env.SGet(0).AsNumber()
+		if float64(int64(v)) == v {
+			return NewStringValue(strconv.FormatInt(int64(v), 10))
+		}
+		return NewStringValue(strings.TrimRight(strconv.FormatFloat(v, 'f', 15, 64), "0"))
+	})
 
 	initIOLib()
 	initMathLib()

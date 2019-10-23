@@ -326,8 +326,11 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 	}()
 
 	table := newsymtable()
-	for i, n := range CoreLibNames {
-		table.sym[n] = uint16(i)
+
+	coreStack := NewEnv(nil, nil)
+	for n, v := range CoreLibs {
+		table.sym[n] = uint16(coreStack.SSize())
+		coreStack.SPush(v)
 	}
 
 	table.vp = uint16(len(table.sym))
@@ -350,9 +353,7 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 	cls.lastenv = NewEnv(nil, nil)
 	cls.pos = code.pos
 	cls.source = "root" + cls.String() + "@" + code.source
-	for _, name := range CoreLibNames {
-		cls.lastenv.SPush(CoreLibs[name])
-	}
+	cls.lastenv.stack = coreStack.stack
 	return cls, err
 }
 

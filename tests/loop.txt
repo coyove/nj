@@ -125,7 +125,7 @@ assert m == {1,2}
 
 var m = {} 
 var s = {1,2,3,4,5,6,7,8,9,10} 
-var s2 = dup s use fun (i, a) { return "" & a  }
+var s2 = dup s use fun (i, a) { return itoa(a)  }
 
 for  i = 0,10  {
     var a = {} 
@@ -164,22 +164,22 @@ assert m == std.eval(`
 
 var start = 10, end = 1, step = -1
 var results = {}
-for  i = start,step,end results = results + i
+for  i = start,step,end results[len(results)] = i
 assert results == {10,9,8,7,6,5,4,3,2,1}
 
 var start = 10, end = 1, step = -2
 var results = {}
-for  i = start,step,end results = results + i
+for  i = start,step,end results[len(results)] = i
 assert results == {10,8,6,4,2}
 
 var start = 10, end = 11, step = -2
 var results = {}
-for  i = start,step,end results = results + i
+for  i = start,step,end results[len(results)] = i
 assert results == {}
 
 var start = 10, end = 11, step = 1
 var results = {}
-for  i = start,step,end results = results + i
+for  i = start,step,end results[len(results)] = i
 assert results == {10, 11}
 
 

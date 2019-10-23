@@ -97,7 +97,7 @@ std.sync.run(worker)
 std.sync.run(worker) 
 wg.wait() 
  
-io.write("P4\n" & size & " " & size & "\n") 
+io.write("P4\n" + itoa(size) + " " + itoa(size) + "\n") 
 for i, row = rows {
     io.write(row) 
 }

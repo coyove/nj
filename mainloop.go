@@ -4,11 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
-	"strconv"
 	"sync/atomic"
 	"unsafe"
-
-	"github.com/coyove/potatolang/parser"
 )
 
 func panicf(msg string, args ...interface{}) {
@@ -60,10 +57,6 @@ func (e *ExecError) Error() string {
 	msg.WriteString("root panic:\n")
 	msg.WriteString(fmt.Sprintf("%v\n", e.r))
 	return msg.String()
-}
-
-func konst(addr uintptr, idx uint16) Value {
-	return *(*Value)(unsafe.Pointer(addr + uintptr(idx)*SizeofValue))
 }
 
 func kodeaddr(code []uint32) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&code)).Data }
@@ -152,13 +145,7 @@ MAIN:
 			case _Tstringstring:
 				env.A = NewStringValue(va.AsString() + vb.AsString())
 			default:
-				if va.Type() == Tmap {
-					m := va.AsMap()
-					m.l = append(m.l, vb)
-					env.A = NewMapValue(m)
-				} else {
-					panicf("can't apply '+' on %+v and %+v", va, vb)
-				}
+				panicf("can't apply '+' on %+v and %+v", va, vb)
 			}
 		case OP_SUB:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
@@ -219,74 +206,54 @@ MAIN:
 				panicf("can't apply 'bit not' on %+v", env.Get(opa, K))
 			}
 		case OP_BIT_AND:
-			switch testTypes(env.Get(opa, K), env.Get(opb, K)) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
 			case _Tnumbernumber:
-				env.A.SetNumberValue(float64(int32(env.Get(opa, K).AsNumber()) & int32(env.Get(opb, K).AsNumber())))
-			case _Tmapmap:
-				tr, m := env.Get(opa, K).AsMap(), env.Get(opb, K).AsMap()
-				tr.l = append(tr.l, m.l...)
-				tr.m = make(map[interface{}]Value, len(m.m))
-				for k, v := range m.m {
-					tr.m[k] = v
-				}
-				env.A = NewMapValue(tr)
-			case Tnumber<<8 | Tstring:
-				num, err := parser.StringToNumber(env.Get(opb, K).AsString())
-				if err != nil {
-					env.A = Value{}
-				} else {
-					env.A = NewNumberValue(env.Get(opa, K).AsNumber() + num)
-				}
+				env.A.SetNumberValue(float64(int32(va.AsNumber()) & int32(vb.AsNumber())))
 			default:
-				if env.Get(opa, K).Type() == Tstring {
-					switch ss := env.Get(opa, K).AsString(); env.Get(opb, K).Type() {
-					case Tnumber:
-						env.A = NewStringValue(ss + strconv.FormatFloat(env.Get(opb, K).AsNumber(), 'f', -1, 64))
-					case Tstring:
-						env.A = NewStringValue(ss + env.Get(opb, K).AsString())
-					case Tmap:
-						m := env.Get(opb, K).AsMap()
-						buf := make([]byte, len(m.l))
-						for i, x := range m.l {
-							buf[i] = byte(x.AsNumber())
-						}
-						env.A = NewStringValue(ss + string(buf))
-					default:
-						env.A = NewStringValue(ss + env.Get(opb, K).ToPrintString())
-					}
-				} else {
-					panicf("can't apply 'bit and (concat)' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
-				}
+				panicf("can't apply '&' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_OR:
 			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _Tnumbernumber {
 				env.A.SetNumberValue(float64(int32(env.Get(opa, K).AsNumber()) | int32(env.Get(opb, K).AsNumber())))
 			} else {
-				panicf("can't apply 'bit or' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '|' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_XOR:
 			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _Tnumbernumber {
 				env.A.SetNumberValue(float64(int32(env.Get(opa, K).AsNumber()) ^ int32(env.Get(opb, K).AsNumber())))
 			} else {
-				panicf("can't apply 'bit xor' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '^' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_LSH:
-			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _Tnumbernumber {
-				env.A.SetNumberValue(float64(int32(env.Get(opa, K).AsNumber()) << uint32(env.Get(opb, K).AsNumber())))
-			} else {
-				panicf("can't apply 'bit lsh' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			case _Tnumbernumber:
+				env.A.SetNumberValue(float64(int32(va.AsNumber()) << uint32(vb.AsNumber())))
+			case _Tmapmap:
+				{
+					va, vb := va.AsMap(), vb.AsMap()
+					va.l = append(va.l, vb.l...)
+					if va.m == nil && vb.m != nil {
+						va.m = make(map[interface{}]Value, len(vb.m))
+						for k, v := range vb.m {
+							va.m[k] = v
+						}
+					}
+				}
+				env.A = va
+			default:
+				panicf("can't apply '<<' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_RSH:
 			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _Tnumbernumber {
 				env.A.SetNumberValue(float64(int32(env.Get(opa, K).AsNumber()) >> uint32(env.Get(opb, K).AsNumber())))
 			} else {
-				panicf("can't apply 'bit rsh' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '>>' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_URSH:
 			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _Tnumbernumber {
 				env.A.SetNumberValue(float64(uint32(env.Get(opa, K).AsNumber()) >> uint32(env.Get(opb, K).AsNumber())))
 			} else {
-				panicf("can't apply 'bit unsigned rsh' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '>>>' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_ASSERT:
 			if env.Get(opa, K).IsFalse() {
