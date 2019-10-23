@@ -1,15 +1,18 @@
 package potatolang
 
+import "unsafe"
+
 // Map represents the map structure in potatolang
 // Like lua it has a linear slice and a hash table.
 // We use a 128bit hash to identify the key,
 // and since 128bit is large enough, we will consider it impossible to collide
 // in a foreseeable period of time (though this is not a good practice).
 type Map struct {
-	l []Value
-	m map[hashv][2]Value
-	c *Closure
-	s *string
+	l     []Value
+	m     map[interface{}]Value
+	ptr   unsafe.Pointer
+	ptype byte
+	ptag  uint32
 }
 
 // NewMap creates a new map
@@ -35,10 +38,10 @@ func (m *Map) Dup(duper func(Value, Value) Value) *Map {
 	}
 
 	if m.m != nil {
-		m2.m = make(map[hashv][2]Value)
+		m2.m = make(map[interface{}]Value)
 		for k, v := range m.m {
 			if duper != nil {
-				v[1] = duper(v[0], v[1])
+				v = duper(NewValueFromInterface(k), v)
 			}
 			m2.m[k] = v
 		}
@@ -57,7 +60,7 @@ func (m *Map) Equal(m2 *Map) bool {
 		}
 	}
 	for k, v := range m.m {
-		if v2, ok := m2.m[k]; !ok || !v2[1].Equal(v[1]) {
+		if v2, ok := m2.m[k]; !ok || !v2.Equal(v) {
 			return false
 		}
 	}
@@ -77,17 +80,17 @@ func (m *Map) Put(key Value, value Value) *Map {
 		}
 	}
 	if m.m == nil {
-		m.m = make(map[hashv][2]Value)
+		m.m = make(map[interface{}]Value)
 	}
-	m.m[key.Hash()] = [2]Value{key, value}
+	m.m[key.I()] = value
 	return m
 }
 
 func (m *Map) putIntoMap(key Value, value Value) *Map {
 	if m.m == nil {
-		m.m = make(map[hashv][2]Value)
+		m.m = make(map[interface{}]Value)
 	}
-	m.m[key.Hash()] = [2]Value{key, value}
+	m.m[key.I()] = value
 	return m
 }
 
@@ -106,13 +109,13 @@ func (m *Map) Get(key Value) (value Value, found bool) {
 	if m.m == nil {
 		return Value{}, false
 	}
-	v, ok := m.m[key.Hash()]
-	return v[1], ok
+	v, ok := m.m[key.I()]
+	return v, ok
 }
 
 func (m *Map) getFromMap(key Value) (value Value, found bool) {
-	v, ok := m.m[key.Hash()]
-	return v[1], ok
+	v, ok := m.m[key.I()]
+	return v, ok
 }
 
 // Remove removes the key from map and return the corresponding value
@@ -127,10 +130,10 @@ func (m *Map) Remove(key Value) Value {
 	if m.m == nil {
 		return Value{}
 	}
-	hash := key.Hash()
+	hash := key.I()
 	v := m.m[hash]
 	delete(m.m, hash)
-	return v[1]
+	return v
 }
 
 // Size returns the size of map

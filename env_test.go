@@ -19,7 +19,7 @@ func TestNewStack(t *testing.T) {
 			break
 		}
 
-		st.SSet(idx, NewValue())
+		st.SSet(idx, Value{})
 	}
 
 	if !st.SGet(vi).Equal(v) {

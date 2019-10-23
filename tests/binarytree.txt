@@ -1,4 +1,4 @@
-var n = 15 
+var n = 21
 
  fun bottomUpTree(depth) {
    if (depth <= 0) {
@@ -9,18 +9,7 @@ var n = 15
 
  fun itemCheck(n) {
     if (len(n) == 0) return 1 
-    $r2(0) 
-    $load() 
-    $push($a) 
-    $call0(itemCheck) 
-    $r2(1) 
-    $load() 
-    $push($a) 
-    $call1(itemCheck) 
-    $add0() 
-    $r1(1) 
-    $add() 
-    $ret($a) 
+    return itemCheck(n[0]) + itemCheck(n[1]) + 1
 }
 
 var minDepth = 4 
@@ -35,8 +24,7 @@ var longLivedTree = bottomUpTree(maxDepth)
 var wg = std.sync.waitgroup() 
 var result = std.genlist(maxDepth+1) 
 
-for depth_l = minDepth,2,maxDepth  {
-    ( fun( depth, check) {
+fun worker( depth, check) {
         var iterations = 1 << (maxDepth - depth + minDepth) 
         check = 0 
 
@@ -44,8 +32,16 @@ for depth_l = minDepth,2,maxDepth  {
             check = check + itemCheck(bottomUpTree(depth)) 
         }
         result[depth] = std.sprintf("~1\t trees of depth ~2\t check: ~3", iterations, depth, check) 
-    })(depth_l, check_l) 
+        wg.done()
+    }
+
+for depth_l = minDepth,2,maxDepth  {
+    wg.add(1)
+    std.sync.run(worker, depth_l, check_l)
 }
+
+wg.wait()
+
 for depth = minDepth,2,maxDepth  {
     io.println( result[depth]) 
 }

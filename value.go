@@ -56,11 +56,8 @@ func (v Value) Type() byte {
 
 	if x <= 0xffffffffffff {
 		m := (*Map)(unsafe.Pointer(x))
-		if m.c != nil {
-			return Tclosure
-		}
-		if m.s != nil {
-			return Tstring
+		if m.ptr != nil {
+			return m.ptype
 		}
 		return Tmap
 	}
@@ -98,8 +95,11 @@ func NewNumberValue(f float64) Value {
 
 // NewBoolValue returns a boolean value
 func NewBoolValue(b bool) Value {
-	x := uint64(*(*byte)(unsafe.Pointer(&b)))
-	return Value{unsafe.Pointer(^uintptr(x))}
+	x := float64(0)
+	if b {
+		x = 1.0
+	}
+	return Value{unsafe.Pointer(^uintptr(*(*uint64)(unsafe.Pointer(&x))))}
 }
 
 // SetNumberValue turns any Value into a numeric Value
@@ -124,29 +124,32 @@ func NewMapValue(m *Map) Value {
 
 // NewClosureValue returns a closure value
 func NewClosureValue(c *Closure) Value {
-	m := &Map{c: c}
+	m := &Map{ptype: Tclosure, ptr: unsafe.Pointer(c)}
 	return Value{unsafe.Pointer(m)}
 }
 
 // NewGenericValue returns a generic value
 func NewGenericValue(g unsafe.Pointer, tag uint32) Value {
-	return Value{}
+	m := &Map{ptype: Tgeneric, ptr: g, ptag: tag}
+	return Value{unsafe.Pointer(m)}
 }
 
 // NewGenericValueInterface returns a generic value from an interface{}
 func NewGenericValueInterface(i interface{}, tag uint32) Value {
-	return Value{}
+	g := (*(*[2]unsafe.Pointer)(unsafe.Pointer(&i)))[1]
+	m := &Map{ptype: Tgeneric, ptr: g, ptag: tag}
+	return Value{unsafe.Pointer(m)}
 }
 
 // NewStringValue returns a string value
 func NewStringValue(s string) Value {
-	m := &Map{s: &s}
+	m := &Map{ptype: Tstring, ptr: unsafe.Pointer(&s)}
 	return Value{unsafe.Pointer(m)}
 }
 
 // AsString cast value to string
 func (v Value) AsString() string {
-	return *((*Map)(v.ptr).s)
+	return *(*string)((*Map)(v.ptr).ptr)
 }
 
 // IsFalse tests whether value contains a "false" value
@@ -183,16 +186,16 @@ func (v Value) AsNumber() float64 {
 func (v Value) AsMap() *Map { return (*Map)(v.ptr) }
 
 // AsClosure cast value to closure
-func (v Value) AsClosure() *Closure { return (*Map)(v.ptr).c }
+func (v Value) AsClosure() *Closure { return (*Closure)((*Map)(v.ptr).ptr) }
 
 // AsGeneric cast value to unsafe.Pointer
-func (v Value) AsGeneric() (unsafe.Pointer, uint32) { return v.ptr, 0 }
+func (v Value) AsGeneric() (unsafe.Pointer, uint32) { return (*Map)(v.ptr).ptr, (*Map)(v.ptr).ptag }
 
 // Map safely cast value to map of values
 func (v Value) Map() *Map { v.testType(Tmap); return (*Map)(v.ptr) }
 
 // Cls safely cast value to closure
-func (v Value) Cls() *Closure { v.testType(Tclosure); return (*Map)(v.ptr).c }
+func (v Value) Cls() *Closure { v.testType(Tclosure); return v.AsClosure() }
 
 // Gen safely cast value to unsafe.Pointer
 func (v Value) Gen() (unsafe.Pointer, uint32) { v.testType(Tgeneric); return v.AsGeneric() }
@@ -217,8 +220,21 @@ func (v Value) Num() float64 { v.testType(Tnumber); return v.AsNumber() }
 // Str safely cast value to string
 func (v Value) Str() string { v.testType(Tstring); return v.AsString() }
 
+func NewValueFromInterface(i interface{}) Value {
+	switch v := i.(type) {
+	case float64:
+		return NewNumberValue(v)
+	case string:
+		return NewStringValue(v)
+	case *Map:
+		return NewMapValue(v)
+	case *Closure:
+		return NewClosureValue(v)
+	}
+	return Value{}
+}
+
 // I returns the golang interface representation of value
-// Tgeneric will not be returned, use Gen() instead
 func (v Value) I() interface{} {
 	switch v.Type() {
 	case Tnumber:
@@ -333,13 +349,14 @@ func (v Value) toString(lv int, json bool) string {
 					buf.WriteString(v.toString(lv+1, json))
 					buf.WriteString(",")
 				}
-				for _, v := range m.m {
-					if v[0].Type() != Tstring {
+				for k, v := range m.m {
+					ks, ok := k.(string)
+					if !ok {
 						panicf("non-string key is not allowed")
 					}
-					buf.WriteString(v[0].String())
+					buf.WriteString(ks)
 					buf.WriteString(":")
-					buf.WriteString(v[1].toString(lv+1, json))
+					buf.WriteString(v.toString(lv+1, json))
 					buf.WriteString(",")
 				}
 				if m.Size() > 0 {
@@ -353,10 +370,10 @@ func (v Value) toString(lv int, json bool) string {
 				buf.WriteString(v.toString(lv+1, json))
 				buf.WriteString(",")
 			}
-			for _, v := range m.m {
-				buf.WriteString(v[0].String())
+			for k, v := range m.m {
+				buf.WriteString(fmt.Sprint(k))
 				buf.WriteString(":")
-				buf.WriteString(v[1].toString(lv+1, json))
+				buf.WriteString(v.toString(lv+1, json))
 				buf.WriteString(",")
 			}
 			if m.Size() > 0 {

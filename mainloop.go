@@ -146,12 +146,19 @@ MAIN:
 			env.A.SetNumberValue(num + env.Get(opb, K).AsNumber())
 			env.Set(opa, env.A)
 		case OP_ADD:
-			va, vb := env.Get(opa, K), env.Get(opb, K)
-			switch testTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
 			case _Tnumbernumber:
 				env.A.SetNumberValue(va.AsNumber() + vb.AsNumber())
 			case _Tstringstring:
 				env.A = NewStringValue(va.AsString() + vb.AsString())
+			default:
+				if va.Type() == Tmap {
+					m := va.AsMap()
+					m.l = append(m.l, vb)
+					env.A = NewMapValue(m)
+				} else {
+					panicf("can't apply '+' on %+v and %+v", va, vb)
+				}
 			}
 		case OP_SUB:
 			env.A.SetNumberValue(env.Get(opa, K).AsNumber() - env.Get(opb, K).AsNumber())
@@ -198,8 +205,9 @@ MAIN:
 			case _Tmapmap:
 				tr, m := env.Get(opa, K).AsMap(), env.Get(opb, K).AsMap()
 				tr.l = append(tr.l, m.l...)
-				for _, v := range m.m {
-					tr.Put(v[0], v[1])
+				tr.m = make(map[interface{}]Value, len(m.m))
+				for k, v := range m.m {
+					tr.m[k] = v
 				}
 				env.A = NewMapValue(tr)
 			case Tnumber<<8 | Tstring:
@@ -299,7 +307,8 @@ MAIN:
 			if env.A.Type() == Tmap {
 				vidx := env.Get(opa, K)
 				if m := env.A.AsMap(); vidx.Type() == Tnumber {
-					if idx, ln := int(vidx.AsNumber()), len(m.l); idx < ln {
+					idx, ln := int(vidx.AsNumber()), len(m.l)
+					if idx < ln {
 						m.l[idx] = env.Get(opb, K)
 					} else if idx == ln {
 						m.l = append(m.l, env.Get(opb, K))
@@ -309,6 +318,8 @@ MAIN:
 				} else {
 					m.putIntoMap(vidx, env.Get(opb, K))
 				}
+			} else if env.A.Type() == Tgeneric {
+				GStore(env.A, int(env.Get(opa, K).AsNumber()), env.Get(opb, K))
 			} else {
 				panicf("can't store %+v into %+v with key %+v", env.Get(opb, K), env.A, env.Get(opa, K))
 			}
@@ -332,6 +343,8 @@ MAIN:
 					if v.Type() == Tclosure {
 						v.AsClosure().SetCaller(a)
 					}
+				} else if a.Type() == Tgeneric {
+					v = GLoad(a, int(vidx.AsNumber()))
 				} else {
 					panicf("can't load from %+v with key %+v", a, vidx)
 				}
@@ -603,10 +616,10 @@ func doCopy(env *Env, flag float64, pred Value) (_v Value, _b bool) {
 					return
 				}
 			}
-			for _, v := range m.m {
+			for k, v := range m.m {
 				newEnv.SClear()
-				newEnv.SPush(v[0])
-				newEnv.SPush(v[1])
+				newEnv.SPush(NewValueFromInterface(k))
+				newEnv.SPush(v)
 				if res := cls.Exec(newEnv); res == PhantomValue {
 					goto BREAK_ALL
 				} else if cls.lastp > 0 {

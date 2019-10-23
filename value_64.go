@@ -31,7 +31,7 @@ func rotl_31(x uint64) uint64 {
 }
 
 type hashv struct {
-	a, b uint64
+	a uint64
 }
 
 func (v Value) Hash() hashv {
@@ -40,12 +40,11 @@ func (v Value) Hash() hashv {
 	case Tnumber, Tnil, Tclosure, Tmap, Tgeneric:
 		a = *(*hashv)(unsafe.Pointer(&v))
 	case Tstring:
-		hdr := (*reflect.StringHeader)(unsafe.Pointer((*Map)(v.ptr).s))
+		hdr := (*reflect.StringHeader)((*Map)(v.ptr).ptr)
 		seed := uintptr(iseed)
 		s := uintptr(hdr.Len)
 		p := unsafe.Pointer(hdr.Data)
 		h := uint64(seed + s*hashkey[0])
-		h0 := uint64(seed<<1 + s*hashkey[0])
 
 	tail:
 		switch {
@@ -64,7 +63,6 @@ func (v Value) Hash() hashv {
 			h = rotl_31(h*m1) * m2
 			h ^= readUnaligned64(add(p, s-8))
 			h = rotl_31(h*m1) * m2
-			h0 ^= h
 		case s <= 32:
 			h ^= readUnaligned64(p)
 			h = rotl_31(h*m1) * m2
@@ -74,7 +72,6 @@ func (v Value) Hash() hashv {
 			h = rotl_31(h*m1) * m2
 			h ^= readUnaligned64(add(p, s-8))
 			h = rotl_31(h*m1) * m2
-			h0 ^= h
 		default:
 			v1 := h
 			v2 := uint64(seed * hashkey[1])
@@ -96,7 +93,6 @@ func (v Value) Hash() hashv {
 				s -= 32
 			}
 			h = v1 ^ v2 ^ v3 ^ v4
-			h0 ^= h
 			goto tail
 		}
 
@@ -104,18 +100,14 @@ func (v Value) Hash() hashv {
 		h *= m3
 		h ^= h >> 32
 
-		h0 ^= h0 >> 29
-		h0 *= m5
-		h0 ^= h0 >> 32
-
-		a = hashv{h, h0}
+		a = hashv{h}
 	}
 	return a
 }
 
 func (v Value) hashstr() string {
 	h := v.Hash()
-	return fmt.Sprintf("%x", *(*[16]byte)(unsafe.Pointer(&h)))
+	return fmt.Sprintf("%x", *(*[8]byte)(unsafe.Pointer(&h)))
 }
 
 func (v Value) hash2() [2]uint64 {

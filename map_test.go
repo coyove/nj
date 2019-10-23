@@ -87,7 +87,7 @@ func TestMap_Put(t *testing.T) {
 	for j := 0; j < 10; j++ {
 		m.Put(NewStringValue(strconv.Itoa(j)), NewNumberValue(float64(j)))
 	}
-	m.Put(NewStringValue("0"), NewValue()) // overwrite
+	m.Put(NewStringValue("0"), Value{}) // overwrite
 
 	if v, f := m.Get(NewStringValue("0")); v.Type() != Tnil || !f {
 		t.Error(0)

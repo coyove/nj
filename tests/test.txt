@@ -203,17 +203,6 @@ var r = safeexec(fun(a, b) {
   
 assert r.result == "none" and not r.ok
 
-fun raw() {
-    var a = 1
-    $set(a, 2)
-    $r0(a)
-    $r1(0.5)
-    $add()
-    $set(a, $a)
-    assert  a == 2.5
-}
-
-raw()
 
 // version 2
 var safeexec = fun var f = (std.apply(f, arguments[1:]))

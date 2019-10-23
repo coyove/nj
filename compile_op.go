@@ -152,7 +152,6 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 	}
 
 	if bop == OP_COPY {
-
 		buf, err = table.decompound(atoms[1:], true)
 		if err != nil {
 			return
@@ -166,7 +165,6 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 	}
 
 	if bop == OP_STORE || bop == OP_SLICE {
-
 		buf, err = table.decompound(atoms[1:], true)
 		if err != nil {
 			return
@@ -176,14 +174,8 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 			return
 		}
 
-		if len(atoms) >= 3 {
-			n0 = atoms[2]
-		}
-
-		if len(atoms) == 4 {
-			n1 = atoms[3]
-		}
-
+		n0 = atoms[2]
+		n1 = atoms[3]
 		err = table.writeOpcode(&buf, bop, n0, n1)
 		return buf, regA, err
 	}
@@ -194,9 +186,17 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 	}
 
 	switch bop {
-	case OP_TYPEOF, OP_NOT, OP_ASSERT:
+	case OP_TYPEOF, OP_NOT:
+		// unary op
 		err = table.writeOpcode(&buf, bop, atoms[1], nil)
+	case OP_ASSERT:
+		if len(atoms) == 3 {
+			err = table.writeOpcode(&buf, bop, atoms[1], atoms[2])
+		} else {
+			err = table.writeOpcode(&buf, bop, atoms[1], nil)
+		}
 	default:
+		// binary op
 		err = table.writeOpcode(&buf, bop, atoms[1], atoms[2])
 	}
 
@@ -426,24 +426,18 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		return
 	}
 
-	var this bool
-	i := 0
-	for _, p := range params.C() {
+	for i, p := range params.C() {
 		argname := p.Value.(string)
-		if argname == "this" {
-			this = true
-			continue
+		if _, ok := newtable.sym[argname]; ok {
+			return newpacket(), 0, fmt.Errorf("duplicated parameter: %s", argname)
+		}
+		if argname == "this" && i != len(params.C())-1 {
+			return newpacket(), 0, fmt.Errorf("'this' must be the last parameter inside a lambda")
 		}
 		newtable.put(argname, uint16(i))
-		i++
 	}
 
-	ln := len(newtable.sym)
-	if this {
-		newtable.put("this", uint16(ln))
-	}
-
-	if ln > 255 {
+	if len(newtable.sym) > 255 {
 		return newpacket(), 0, fmt.Errorf("do you really need more than 255 arguments?")
 	}
 
@@ -453,7 +447,11 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		newtable.continueNode = append(newtable.continueNode, parser.NewNode(parser.Natom).SetValue(name))
 	}
 
-	newtable.vp = uint16(ln)
+	newtable.vp = uint16(len(newtable.sym))
+	ln := len(newtable.sym)
+	if _, ok := newtable.sym["this"]; ok {
+		ln--
+	}
 
 	if isVar {
 		comps := append(atoms[3].C(), nil)
@@ -480,7 +478,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	if newtable.y || isSafe {
 		cls.Set(CLS_YIELDABLE)
 	}
-	if this {
+	if _, ok := newtable.sym["this"]; ok {
 		cls.Set(CLS_HASRECEIVER)
 	}
 	if !newtable.envescape {
