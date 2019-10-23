@@ -81,7 +81,7 @@ func TestArithmeticUnfold(t *testing.T) {
 		t.Error(err)
 	}
 
-	if len(cls.consts) != 2 || cls.consts[1].AsNumber() != 2.5 {
+	if len(cls.consts) != 1 || cls.consts[0].AsNumber() != 2.5 {
 		t.Error("unfolding failed")
 	}
 

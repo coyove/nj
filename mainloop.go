@@ -161,13 +161,33 @@ MAIN:
 				}
 			}
 		case OP_SUB:
-			env.A.SetNumberValue(env.Get(opa, K).AsNumber() - env.Get(opb, K).AsNumber())
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			case _Tnumbernumber:
+				env.A.SetNumberValue(env.Get(opa, K).AsNumber() - env.Get(opb, K).AsNumber())
+			default:
+				panicf("can't apply '-' on %+v and %+v", va, vb)
+			}
 		case OP_MUL:
-			env.A.SetNumberValue(env.Get(opa, K).AsNumber() * env.Get(opb, K).AsNumber())
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			case _Tnumbernumber:
+				env.A.SetNumberValue(env.Get(opa, K).AsNumber() * env.Get(opb, K).AsNumber())
+			default:
+				panicf("can't apply '*' on %+v and %+v", va, vb)
+			}
 		case OP_DIV:
-			env.A.SetNumberValue(env.Get(opa, K).AsNumber() / env.Get(opb, K).AsNumber())
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			case _Tnumbernumber:
+				env.A.SetNumberValue(env.Get(opa, K).AsNumber() / env.Get(opb, K).AsNumber())
+			default:
+				panicf("can't apply '/' on %+v and %+v", va, vb)
+			}
 		case OP_MOD:
-			env.A.SetNumberValue(float64(int64(env.Get(opa, K).AsNumber()) % int64(env.Get(opb, K).AsNumber())))
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			case _Tnumbernumber:
+				env.A.SetNumberValue(float64(int64(env.Get(opa, K).AsNumber()) % int64(env.Get(opb, K).AsNumber())))
+			default:
+				panicf("can't apply '%%' on %+v and %+v", va, vb)
+			}
 		case OP_EQ:
 			env.A.SetBoolValue(env.Get(opa, K).Equal(env.Get(opb, K)))
 		case OP_NEQ:

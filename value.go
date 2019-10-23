@@ -154,16 +154,15 @@ func (v Value) AsString() string {
 
 // IsFalse tests whether value contains a "false" value
 func (v Value) IsFalse() bool {
-	if v.Type() == Tnumber {
+	switch v.Type() {
+	case Tnumber:
 		return v.IsZero()
-	}
-	if v.Type() == Tnil {
+	case Tnil:
 		return true
-	}
-	//if v.Type() == Tstring {
-	//	return byte(v.num)>>4 == 1
-	//}
-	if v.Type() == Tmap {
+	case Tstring:
+		m := (*Map)(v.ptr)
+		return len(*(*string)(m.ptr)) == 0
+	case Tmap:
 		m := (*Map)(v.ptr)
 		return len(m.l)+len(m.m) == 0
 	}

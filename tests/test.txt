@@ -110,9 +110,9 @@ m2.key2 = {}
 for i=1,4 { m2.key2 = m2.key2 + i }
 assert m2 == m
 
-a = 0i0
-var b = 0iffffffffffffffff
-assert math.u64.eq(math.u64.xor(a, b), b)
+//a = 0i0
+//var b = 0iffffffffffffffff
+//assert math.u64.eq(math.u64.xor(a, b), b)
 a = math.u64.eq(12)
 assert a(12)
 
@@ -129,7 +129,7 @@ assert a == 0
 
 var counter = {
     "tick" : 0,
-    "add": fun(this, step) {
+    "add": fun( step, this) {
         this.tick = this.tick + step
     },
 }

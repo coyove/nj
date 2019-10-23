@@ -422,7 +422,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 
 	params := atoms[2]
 	if params.Type != parser.Ncompound {
-		err = fmt.Errorf("%+v: invalid arguments list", atoms[0])
+		err = fmt.Errorf("%+v: invalid arguments list", atoms[2])
 		return
 	}
 
@@ -432,7 +432,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 			return newpacket(), 0, fmt.Errorf("duplicated parameter: %s", argname)
 		}
 		if argname == "this" && i != len(params.C())-1 {
-			return newpacket(), 0, fmt.Errorf("'this' must be the last parameter inside a lambda")
+			return newpacket(), 0, fmt.Errorf("%+v: 'this' must be the last parameter inside a lambda", atoms[2])
 		}
 		newtable.put(argname, uint16(i))
 	}
