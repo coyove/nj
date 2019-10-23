@@ -136,7 +136,28 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 
 	var n0, n1 *parser.Node
 
+	if bop == OP_LEN || bop == OP_LOAD || bop == OP_POP {
+		buf = newpacket()
+
+		if len(atoms) >= 2 {
+			n0 = atoms[1]
+		}
+
+		if len(atoms) == 3 {
+			n1 = atoms[2]
+		}
+
+		err = table.writeOpcode(&buf, bop, n0, n1)
+		return buf, regA, err
+	}
+
 	if bop == OP_COPY {
+
+		buf, err = table.decompound(atoms[1:], true)
+		if err != nil {
+			return
+		}
+
 		if err = table.writeOpcode(&buf, OP_SET, _nodeRegA, atoms[2]); err != nil {
 			return
 		}
@@ -144,7 +165,13 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 		return buf, regA, err
 	}
 
-	if bop == OP_STORE || bop == OP_SLICE || bop == OP_LEN || bop == OP_LOAD || bop == OP_POP {
+	if bop == OP_STORE || bop == OP_SLICE {
+
+		buf, err = table.decompound(atoms[1:], true)
+		if err != nil {
+			return
+		}
+
 		if err = table.writeOpcode(&buf, OP_SET, _nodeRegA, atoms[1]); err != nil {
 			return
 		}
@@ -192,15 +219,14 @@ func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint
 }
 
 func (table *symtable) compileIncOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	panic("TODO")
-	//subject, ok := table.get(atoms[1].Value.(string))
-	//buf := newpacket()
-	//if !ok {
-	//	return newpacket(), 0, fmt.Errorf(errUndeclaredVariable, atoms[1])
-	//}
-	//buf.WriteOP(OP_INC, subject, table.addConst(atoms[2].Value))
-	//code.WritePos(atoms[1].Meta)
-	//return buf, regA, nil
+	subject, ok := table.get(atoms[1].Value.(string))
+	buf := newpacket()
+	if !ok {
+		return newpacket(), 0, fmt.Errorf(errUndeclaredVariable, atoms[1])
+	}
+	buf.WriteOP(OP_INC, subject, table.loadK(&buf, atoms[2].Value))
+	code.WritePos(atoms[1].Meta)
+	return buf, regA, nil
 }
 
 func checkjmpdist(jmp int) int {
@@ -372,7 +398,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		}
 	}
 
-	buf.WriteOP(OP_CALL, varIndex, 0)
+	buf.WriteOP(OP_CALL, varIndex, regA)
 	buf.WritePos(nodes[0].Meta)
 	return buf, regA, nil
 }

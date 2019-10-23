@@ -301,6 +301,8 @@ func (n *Node) String() string {
 			buf[i] = a.String()
 		}
 		return "[" + strings.Join(buf, " ") + "]" + pos
+	case Naddr:
+		return "0x" + strconv.FormatInt(int64(n.Value.(uint16)), 16)
 	}
 	panic("shouldn't happen")
 }

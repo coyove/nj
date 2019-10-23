@@ -93,12 +93,17 @@ func (e *Env) SetParent(parent *Env) {
 	e.parent = parent
 }
 
-func (env *Env) Get(yx uint16) Value {
+func (env *Env) Get(yx uint16, cls *Closure) Value {
 	if yx == regA {
 		return env.A
 	}
 	y := yx >> 10
 	index := int(yx & 0x3ff)
+
+	if y == 7 {
+		return cls.consts[index]
+	}
+
 REPEAT:
 	if y > 0 && env != nil {
 		y, env = y-1, env.parent

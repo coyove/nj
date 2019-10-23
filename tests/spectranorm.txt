@@ -5,30 +5,30 @@ fun A(i, j) {
     return ((i+j)*(i+j+1)/2 + i + 1) 
 }
 
-fun A0(i, j) {
-    $r0(i)
-    $r1(j)
-    $add0()
-    $r1(1)
-    $add1()
-    $mul0()
-    $r1(2)
-    $div0()
-    $r1(i)
-    $add0()
-    $r1(1)
-    $add()
-    $ret($a)
-}
-
-assert  A0(1,2) == A(1,2)
+// fun A0(i, j) {
+//     $r0(i)
+//     $r1(j)
+//     $add0()
+//     $r1(1)
+//     $add1()
+//     $mul0()
+//     $r1(2)
+//     $div0()
+//     $r1(i)
+//     $add0()
+//     $r1(1)
+//     $add()
+//     $ret($a)
+// }
+// 
+// assert  A0(1,2) == A(1,2)
 
 fun TimesVec(v, s, n, u, wg) {
     var ul = len(u) 
     for i = s  ,n {
         var vi = 0 
         for j = 0,ul {
-            vi = vi + u[j] / A0(i, j) 
+            vi = vi + u[j] / A(i, j) 
         }
         v[i] = vi 
     }
@@ -40,7 +40,7 @@ fun TimesTranspVec(v, s, n, u, wg) {
     for i = s, n  {
         var vi = 0 
         for j = 0, ul  {
-            vi = vi + u[j] / A0(j, i) 
+            vi = vi + u[j] / A(j, i) 
         }
         v[i] = vi 
     }
@@ -64,7 +64,7 @@ fun ATimesTransp(v, u) {
     wg.wait() 
 }
 
-n = 1000
+n = 5500
 var u = {} 
 var v = {} 
  
@@ -85,5 +85,5 @@ for i, x = v {
 }
 
 io.println(math.sqrt(vBv/vv)) 
-io.println(nil)
+// io.println(v)
     

@@ -46,6 +46,10 @@ type Value struct {
 // Type returns the type of value
 func (v Value) Type() byte {
 	x := uintptr(v.ptr)
+	if x > 0xffffffffffff {
+		return Tnumber
+	}
+
 	if x == 0 {
 		return Tnil
 	}
@@ -241,10 +245,9 @@ func (v Value) String() string {
 // Equal tests whether value is equal to another value
 // This is a strict test
 func (v Value) Equal(r Value) bool {
-	if v.Type() == Tnil || r.Type() == Tnil {
-		return v.Type() == r.Type()
-	}
 	switch testTypes(v, r) {
+	case _Tnilnil:
+		return true
 	case _Tnumbernumber:
 		return v == r
 	case _Tstringstring:

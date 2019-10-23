@@ -275,10 +275,11 @@ func (c *Closure) crPrettify(tab int) string {
 		if a == regA {
 			return "$a"
 		}
-		return fmt.Sprintf("$%d$%d", a>>10, a&0x03ff)
-	}
-	readKAddr := func(a uint16) string {
-		return fmt.Sprintf("k$%d(%+v)", a, c.consts[a])
+		if a>>10 == 7 {
+			return fmt.Sprintf("k$%d(%v)", a&0x03ff, c.consts[a&0x3ff])
+		} else {
+			return fmt.Sprintf("$%d$%d", a>>10, a&0x03ff)
+		}
 	}
 
 	oldpos := c.pos
@@ -317,8 +318,6 @@ MAIN:
 			break MAIN
 		case OP_SET:
 			sb.WriteString(readAddr(a) + " = " + readAddr(b))
-		case OP_SETK:
-			sb.WriteString(readAddr(a) + " = " + readKAddr(uint16(b)))
 		case OP_PUSH:
 			sb.WriteString("push " + readAddr(a))
 		case OP_RET:
@@ -331,9 +330,6 @@ MAIN:
 			sb.WriteString(cls.crPrettify(tab + 1))
 		case OP_CALL:
 			sb.WriteString("call " + readAddr(a))
-			if b > 0 {
-				sb.WriteString(" -> r" + strconv.Itoa(int(b)-1))
-			}
 		case OP_JMP:
 			pos := int32(b) - 1<<12
 			pos2 := uint32(int32(cursor) + pos)
@@ -350,7 +346,7 @@ MAIN:
 		case OP_NOP:
 			sb.WriteString("nop")
 		case OP_INC:
-			sb.WriteString("inc " + readAddr(a) + " " + readKAddr(uint16(b)))
+			sb.WriteString("inc " + readAddr(a) + " " + readAddr(uint16(b)))
 		case OP_MAKEMAP:
 			if a == 1 {
 				sb.WriteString("make-array")

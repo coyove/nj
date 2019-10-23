@@ -84,7 +84,7 @@ func (table *symtable) get(varname string) (uint16, bool) {
 	for table != nil {
 		k, e := table.sym[varname]
 		if e {
-			if depth > 7 || (depth == 7 && k == 0x03ff) {
+			if depth > 6 || (depth == 6 && k == 0x03ff) {
 				panic("too many levels (8) to refer a variable, try simplifing your code")
 			}
 			return (depth << 10) | (uint16(k) & 0x03ff), true
@@ -111,14 +111,13 @@ func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
 		return addr
 	}
 
-	addr = table.vp
 	kaddr := func() uint16 {
 		if i, ok := table.constMap[v]; ok {
 			return i
 		}
 
 		table.consts = append(table.consts, v)
-		if len(table.consts) > 1<<13-1 {
+		if len(table.consts) > 1<<10-1 {
 			panic("too many consts")
 		}
 
@@ -127,8 +126,8 @@ func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
 		return idx
 	}()
 
-	buf.WriteOP(OP_SETK, addr, kaddr)
-	table.incrvp()
+	addr = 0x7<<10 | kaddr
+
 	table.constStack[v] = addr
 	return addr
 }
@@ -195,6 +194,7 @@ func (table *symtable) writeOpcode(buf *packet, op byte, n0, n1 *parser.Node) (e
 	if op == OP_SET && n0a == n1a {
 		return nil
 	}
+
 	buf.WriteOP(op, n0a, n1a)
 	return nil
 }
