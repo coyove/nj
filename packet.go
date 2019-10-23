@@ -171,24 +171,25 @@ func (b *packet) TruncateLast(n int) {
 	}
 }
 
-func (b *packet) WriteConsts(consts []kinfo) {
+func (b *packet) WriteConsts(consts []interface{}) {
 	// const table struct:
 	// all values are placed sequentially
 	// for numbers other than MaxUint64, they will be written directly
 	// for MaxUint64, it will be written twice
 	// for strings, a MaxUint64 will be written first, then the string
 	for _, k := range consts {
-		if k.ty == Tnumber {
-			n := k.value.(float64)
+		switch k := k.(type) {
+		case float64:
+			n := k
 			if math.Float64bits(n) == math.MaxUint64 {
 				b.Write64(math.MaxUint64)
 				b.Write64(math.MaxUint64)
 			} else {
 				b.WriteDouble(n)
 			}
-		} else {
+		case string:
 			b.Write64(math.MaxUint64)
-			b.WriteString(k.value.(string))
+			b.WriteString(k)
 		}
 	}
 }
@@ -318,22 +319,12 @@ MAIN:
 			sb.WriteString(readAddr(a) + " = " + readAddr(b))
 		case OP_SETK:
 			sb.WriteString(readAddr(a) + " = " + readKAddr(uint16(b)))
-		case OP_R0, OP_R1, OP_R2, OP_R3:
-			sb.WriteString("r" + strconv.Itoa(int(bop-OP_R0)/2) + " = " + readAddr(a))
-		case OP_R0K, OP_R1K, OP_R2K, OP_R3K:
-			sb.WriteString("r" + strconv.Itoa(int(bop-OP_R0K)/2) + " = " + readKAddr(uint16(a)))
 		case OP_PUSH:
 			sb.WriteString("push " + readAddr(a))
-		case OP_PUSHK:
-			sb.WriteString("push " + readKAddr(uint16(a)))
 		case OP_RET:
 			sb.WriteString("ret " + readAddr(a))
-		case OP_RETK:
-			sb.WriteString("ret " + readKAddr(uint16(a)))
 		case OP_YIELD:
 			sb.WriteString("yield " + readAddr(a))
-		case OP_YIELDK:
-			sb.WriteString("yield " + readKAddr(uint16(a)))
 		case OP_LAMBDA:
 			sb.WriteString("$a = closure:\n")
 			cls := crReadClosure(c.code, &cursor, nil, a, b)
@@ -356,8 +347,6 @@ MAIN:
 			} else {
 				sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
 			}
-		case OP_RX:
-			sb.WriteString("r" + strconv.Itoa(int(a)) + " = r" + strconv.Itoa(int(b)))
 		case OP_NOP:
 			sb.WriteString("nop")
 		case OP_INC:
@@ -370,10 +359,7 @@ MAIN:
 			}
 		default:
 			if bs, ok := singleOp[bop]; ok {
-				sb.WriteString(bs)
-				if a > 0 {
-					sb.WriteString(" -> r" + strconv.Itoa(int(a)-1))
-				}
+				sb.WriteString(bs + " " + readAddr(a) + " " + readAddr(b))
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))
 			}

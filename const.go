@@ -1,6 +1,6 @@
 package potatolang
 
-const regA = 0x1fff
+const regA uint16 = 0x1fff
 
 const (
 	OP_ASSERT = iota
@@ -26,26 +26,15 @@ const (
 	OP_IF
 	OP_IFNOT
 	OP_SET
+	OP_SETK
 	OP_MAKEMAP
 	OP_JMP
 	OP_LAMBDA
 	OP_CALL
-	OP_SETK
-	OP_R0
-	OP_R0K
-	OP_R1
-	OP_R1K
-	OP_R2
-	OP_R2K
-	OP_R3
-	OP_R3K
-	OP_RX
 	OP_PUSH
 	OP_PUSHK
 	OP_RET
-	OP_RETK
 	OP_YIELD
-	OP_YIELDK
 	OP_POP
 	OP_SLICE
 	OP_INC

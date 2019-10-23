@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"hash/crc32"
-	"unsafe"
 )
 
 // Env is the environment for a closure in potatolang to run within.
@@ -16,9 +15,8 @@ type Env struct {
 	parent *Env
 	trace  []stacktrace
 	stack  []Value
-
-	A, R0, R1, R2, R3 Value
-	Cancel            *uintptr
+	A      Value
+	Cancel *uintptr
 }
 
 // NewEnv creates the Env for closure to run within
@@ -28,7 +26,6 @@ func NewEnv(parent *Env, cancel *uintptr) *Env {
 	return &Env{
 		parent: parent,
 		stack:  make([]Value, 0, initCapacity),
-		A:      Value{},
 		Cancel: cancel,
 	}
 }
@@ -131,46 +128,9 @@ func (env *Env) Set(yx uint16, v Value) {
 	}
 }
 
-//func (env *Env) Move(to, from uint16) {
-//	var fromV Value
-//	if from == regA {
-//		fromV = env.A
-//	}
-//	y := yx >> 10
-//REPEAT:
-//	if y > 0 && env != nil {
-//		y, env = y-1, env.parent
-//		goto REPEAT
-//	}
-//	index := int(yx & 0x3ff)
-//	if index >= len(env.stack) {
-//		return Value{}
-//	}
-//	return env.stack[index]
-//	if yx == regA {
-//		env.A = v
-//	} else {
-//		y := yx >> 10
-//	REPEAT:
-//		if y > 0 && env != nil {
-//			y, env = y-1, env.parent
-//			goto REPEAT
-//		}
-//		index := int(yx & 0x3ff)
-//		if index >= len(env.stack) {
-//			env.grow(index + 1)
-//		}
-//		env.stack[index] = v
-//	}
-//}
-
 // Stack returns the current stack
 func (env *Env) Stack() []Value {
 	return env.stack
-}
-
-func (env *Env) reg(i uint16) *Value {
-	return (*Value)(unsafe.Pointer(uintptr(unsafe.Pointer(&env.A)) + SizeofValue*uintptr(i)))
 }
 
 const (
