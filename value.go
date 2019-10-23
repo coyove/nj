@@ -8,7 +8,6 @@ import (
 	"unsafe"
 )
 
-// the order can't be changed, for any new type, please also add it in parser.go.y typeof
 const (
 	// Tnil represents nil type
 	Tnil = 0
@@ -16,6 +15,8 @@ const (
 	Tnumber = 1
 	// Tstring represents string type
 	Tstring = 2
+	// Tbytes represents bytes type
+	Tbytes = 3
 	// Tmap represents map type
 	Tmap = 4
 	// Tclosure represents closure type
@@ -36,6 +37,9 @@ const (
 )
 
 // Value is the basic value used by VM
+// It assumes the OS will not map any memory higher than 1 << 48
+// Some valid NaN value will not be valid in Value struct
+// TODO: 32bit support with padding bytes
 type Value struct {
 	ptr unsafe.Pointer // 8b
 }
