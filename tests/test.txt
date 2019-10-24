@@ -22,6 +22,7 @@ fun yieldtest() {
 }
 
 assert yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 and yieldtest()==nil
+assert yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 and yieldtest()==nil
 
 fun counter() for i=2,-1,0 yield i
 

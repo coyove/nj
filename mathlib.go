@@ -50,10 +50,7 @@ func initMathLib() {
 			return NewNumberValue(float64(r.Intn(int(env.SGet(0).Num()))))
 		})).
 		Puts("bytes", NewNativeValue(1, func(env *Env) Value {
-			return NewGenericValueInterface(
-				r.Fetch(int(env.SGet(0).Num())),
-				GTagByteArray,
-			)
+			return NewStringValue(string(r.Fetch(int(env.SGet(0).Num()))))
 		}))))
 
 	CoreLibs["math"] = NewMapValue(lmath)

@@ -109,15 +109,15 @@ func stdWrite(f *os.File) func(env *Env) Value {
 	return func(env *Env) Value {
 		for i := 0; i < env.SSize(); i++ {
 			switch a := env.SGet(i); a.Type() {
-			case Tstring:
+			case StringType:
 				f.WriteString(env.SGet(i).AsString())
-			case Tmap:
+			case MapType:
 				buf := make([]byte, 1)
 				for _, b := range a.AsMap().l {
 					buf[0] = byte(b.Num())
 					f.Write(buf)
 				}
-			case Tgeneric:
+			case PointerType:
 				ap, at := a.AsGeneric()
 				switch at {
 				case GTagByteArray, GTagByteClampedArray, GTagInt8Array:

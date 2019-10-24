@@ -169,7 +169,7 @@ func TestCopyCall(t *testing.T) {
 	//	}
 	//
 	//	o, a, _ = op(code[2])
-	//	if o != OP_R2K || cls.consts[a].Type() != Tnil {
+	//	if o != OP_R2K || cls.consts[a].Type() != NilType {
 	//		t.Fatal("error opcode 2")
 	//	}
 	//

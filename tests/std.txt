@@ -27,14 +27,14 @@ var msg = testAssert()
 assert msg == "hello"
 
 
-var tarr = std.typed.bytearray(10)
+var tarr = "0123456789"
 for i = 0,10  {
     tarr[i] = 0x61 + i
 }
 
-assert std.char(tarr) == "abcdefghij"
+assert (tarr) == "abcdefghij"
 tarr[5]++
-assert std.char(tarr) == "abcdegghij"
+assert (tarr) == "abcdegghij"
 
 var a = {
     "a": {"hello": nil, "3": {

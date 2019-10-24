@@ -7,6 +7,8 @@ import (
 	"unsafe"
 )
 
+const max32 = 0xffffffff
+
 func panicf(msg string, args ...interface{}) {
 	panic(fmt.Sprintf(msg, args...))
 }
@@ -39,7 +41,7 @@ func (e *ExecError) Error() string {
 		src := "<unknown>"
 		for i := 0; i < len(r.cls.pos); {
 			var op, line uint32
-			var opx uint32 = 0xffffffff
+			var opx uint32 = max32
 			var col uint16
 			i, op, line, col = r.cls.pos.readABC(i)
 			if i < len(r.cls.pos)-1 {
@@ -132,37 +134,37 @@ MAIN:
 			env.Set(opa, env.A)
 		case OP_ADD:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
-			case _Tnumbernumber:
+			case _NumberNumber:
 				env.A.SetNumberValue(va.AsNumber() + vb.AsNumber())
-			case _Tstringstring:
+			case _StringString:
 				env.A = NewStringValue(va.AsString() + vb.AsString())
 			default:
 				panicf("can't apply '+' on %+v and %+v", va, vb)
 			}
 		case OP_SUB:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
-			case _Tnumbernumber:
+			case _NumberNumber:
 				env.A.SetNumberValue(env.Get(opa, K).AsNumber() - env.Get(opb, K).AsNumber())
 			default:
 				panicf("can't apply '-' on %+v and %+v", va, vb)
 			}
 		case OP_MUL:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
-			case _Tnumbernumber:
+			case _NumberNumber:
 				env.A.SetNumberValue(env.Get(opa, K).AsNumber() * env.Get(opb, K).AsNumber())
 			default:
 				panicf("can't apply '*' on %+v and %+v", va, vb)
 			}
 		case OP_DIV:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
-			case _Tnumbernumber:
+			case _NumberNumber:
 				env.A.SetNumberValue(env.Get(opa, K).AsNumber() / env.Get(opb, K).AsNumber())
 			default:
 				panicf("can't apply '/' on %+v and %+v", va, vb)
 			}
 		case OP_MOD:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
-			case _Tnumbernumber:
+			case _NumberNumber:
 				env.A.SetNumberValue(float64(int64(env.Get(opa, K).AsNumber()) % int64(env.Get(opb, K).AsNumber())))
 			default:
 				panicf("can't apply '%%' on %+v and %+v", va, vb)
@@ -173,18 +175,18 @@ MAIN:
 			env.A.SetBoolValue(!env.Get(opa, K).Equal(env.Get(opb, K)))
 		case OP_LESS:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
-			case _Tnumbernumber:
+			case _NumberNumber:
 				env.A.SetBoolValue(va.AsNumber() < vb.AsNumber())
-			case _Tstringstring:
+			case _StringString:
 				env.A.SetBoolValue(va.AsString() < vb.AsString())
 			default:
 				panicf("can't apply '<' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_LESS_EQ:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
-			case _Tnumbernumber:
+			case _NumberNumber:
 				env.A.SetBoolValue(va.AsNumber() <= vb.AsNumber())
-			case _Tstringstring:
+			case _StringString:
 				env.A.SetBoolValue(va.AsString() <= vb.AsString())
 			default:
 				panicf("can't apply '<=' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
@@ -192,35 +194,37 @@ MAIN:
 		case OP_NOT:
 			env.A.SetBoolValue(env.Get(opa, K).IsFalse())
 		case OP_BIT_NOT:
-			if env.Get(opa, K).Type() == Tnumber {
-				env.A.SetNumberValue(float64(^int32(env.Get(opa, K).AsNumber())))
+			if va := env.Get(opa, K); va.Type() == NumberType {
+				env.A.SetNumberValue(float64(^int32(int64(va.AsNumber()) & max32)))
 			} else {
-				panicf("can't apply 'bit not' on %+v", env.Get(opa, K))
+				panicf("can't apply 'bit not' on %+v", va)
 			}
 		case OP_BIT_AND:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
-			case _Tnumbernumber:
-				env.A.SetNumberValue(float64(int32(va.AsNumber()) & int32(vb.AsNumber())))
+			case _NumberNumber:
+				env.A.SetNumberValue(float64(int32(int64(va.AsNumber())&max32) & int32(int64(vb.AsNumber())&max32)))
 			default:
 				panicf("can't apply '&' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_OR:
-			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _Tnumbernumber {
-				env.A.SetNumberValue(float64(int32(env.Get(opa, K).AsNumber()) | int32(env.Get(opb, K).AsNumber())))
-			} else {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			case _NumberNumber:
+				env.A.SetNumberValue(float64(int32(int64(va.AsNumber())&max32) | int32(int64(vb.AsNumber())&max32)))
+			default:
 				panicf("can't apply '|' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_XOR:
-			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _Tnumbernumber {
-				env.A.SetNumberValue(float64(int32(env.Get(opa, K).AsNumber()) ^ int32(env.Get(opb, K).AsNumber())))
-			} else {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			case _NumberNumber:
+				env.A.SetNumberValue(float64(int32(int64(va.AsNumber())&max32) ^ int32(int64(vb.AsNumber())&max32)))
+			default:
 				panicf("can't apply '^' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_LSH:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
-			case _Tnumbernumber:
-				env.A.SetNumberValue(float64(int32(va.AsNumber()) << uint32(vb.AsNumber())))
-			case _Tmapmap:
+			case _NumberNumber:
+				env.A.SetNumberValue(float64(int32(int64(va.AsNumber())&max32) << uint(vb.AsNumber())))
+			case _MapMap:
 				{
 					va, vb := va.AsMap(), vb.AsMap()
 					va.l = append(va.l, vb.l...)
@@ -236,30 +240,32 @@ MAIN:
 				panicf("can't apply '<<' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_RSH:
-			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _Tnumbernumber {
-				env.A.SetNumberValue(float64(int32(env.Get(opa, K).AsNumber()) >> uint32(env.Get(opb, K).AsNumber())))
+			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _NumberNumber {
+				env.A.SetNumberValue(float64(int32(int64(env.Get(opa, K).AsNumber())&max32) >> uint(env.Get(opb, K).AsNumber())))
 			} else {
 				panicf("can't apply '>>' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_URSH:
-			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _Tnumbernumber {
-				env.A.SetNumberValue(float64(uint32(env.Get(opa, K).AsNumber()) >> uint32(env.Get(opb, K).AsNumber())))
+			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _NumberNumber {
+				env.A.SetNumberValue(float64(uint32(uint64(env.Get(opa, K).AsNumber())&max32) >> uint(env.Get(opb, K).AsNumber())))
 			} else {
 				panicf("can't apply '>>>' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_ASSERT:
-			if env.Get(opa, K).IsFalse() {
-				panic(env.Get(opb, K))
+			if a := env.Get(opa, K); a.IsFalse() {
+				msg := env.Get(opb, K)
+				if msg.Type() == StringType {
+					panic(msg.AsString())
+				}
+				panicf("assertion failed: %+v", a)
 			}
 			env.A = NewBoolValue(true)
 		case OP_LEN:
 			switch v := env.Get(opa, K); v.Type() {
-			case Tstring:
+			case StringType:
 				env.A.SetNumberValue(float64(len(v.AsString())))
-			case Tmap:
+			case MapType:
 				env.A.SetNumberValue(float64(v.AsMap().Size()))
-			case Tgeneric:
-				env.A.SetNumberValue(float64(GLen(v)))
 			default:
 				panicf("can't evaluate the length of %+v", v)
 			}
@@ -285,8 +291,8 @@ MAIN:
 		case OP_STORE:
 			vidx, v := env.Get(opa, K), env.Get(opb, K)
 			switch env.A.Type() {
-			case Tmap:
-				if m := env.A.AsMap(); vidx.Type() == Tnumber {
+			case MapType:
+				if m := env.A.AsMap(); vidx.Type() == NumberType {
 					idx, ln := int(vidx.AsNumber()), len(m.l)
 					if idx < ln {
 						m.l[idx] = v
@@ -298,13 +304,13 @@ MAIN:
 				} else {
 					m.putIntoMap(vidx, v)
 				}
-			case Tstring:
+			case StringType:
 				var p []byte
 				switch testTypes(vidx, v) {
-				case _Tnumbernumber:
+				case _NumberNumber:
 					p = []byte(env.A.AsString())
 					p[int(vidx.AsNumber())] = byte(v.AsNumber())
-				case Tnumber<<8 | Tstring:
+				case NumberType<<8 | StringType:
 					idx, as, vs := int(vidx.AsNumber()), env.A.AsString(), v.AsString()
 					if len(vs) == 1 {
 						p = []byte(as)
@@ -319,8 +325,6 @@ MAIN:
 					panicf("can't modify string %+v[%+v] to %+v", env.A, vidx, v)
 				}
 				(*Map)(env.A.ptr).ptr = unsafe.Pointer(&p) // unsafely cast p to string
-			case Tgeneric:
-				GStore(env.A, int(vidx.AsNumber()), v)
 			default:
 				panicf("can't modify %+v[%+v] to %+v", env.A, vidx, v)
 			}
@@ -330,18 +334,18 @@ MAIN:
 			a := env.Get(opa, K)
 			vidx := env.Get(opb, K)
 			switch testTypes(a, vidx) {
-			case _Tstringnumber:
+			case _StringNumber:
 				v.SetNumberValue(float64(a.AsString()[int(vidx.AsNumber())]))
-			case _Tmapnumber:
+			case _MapNumber:
 				if m, idx := a.AsMap(), int(vidx.AsNumber()); idx < len(m.l) {
 					v = m.l[idx]
 					break
 				}
 				fallthrough
 			default:
-				if a.Type() == Tmap {
+				if a.Type() == MapType {
 					v, _ = a.AsMap().getFromMap(vidx)
-					if v.Type() == Tclosure {
+					if v.Type() == ClosureType {
 						if cls := v.AsClosure(); cls.Isset(ClsHasReceiver) {
 							cls = cls.Dup()
 							if cls.argsCount > 0 {
@@ -354,8 +358,6 @@ MAIN:
 							v = NewClosureValue(cls)
 						}
 					}
-				} else if a.Type() == Tgeneric {
-					v = GLoad(a, int(vidx.AsNumber()))
 				} else {
 					panicf("can't load %+v[%+v]", a, vidx)
 				}
@@ -364,7 +366,7 @@ MAIN:
 		case OP_POP:
 			a := env.Get(opa, K)
 			switch a.Type() {
-			case Tmap:
+			case MapType:
 				m := a.AsMap()
 				l := m.l
 				if len(l) == 0 {
@@ -379,13 +381,13 @@ MAIN:
 		case OP_SLICE:
 			start, end := int(env.Get(opa, K).Num()), int(env.Get(opb, K).Num())
 			switch x := env.A; x.Type() {
-			case Tstring:
+			case StringType:
 				if end == -1 {
 					env.A = NewStringValue(x.AsString()[start:])
 				} else {
 					env.A = NewStringValue(x.AsString()[start:end])
 				}
-			case Tmap:
+			case MapType:
 				m := NewMap()
 				if end == -1 {
 					m.l = x.AsMap().l[start:]
@@ -393,12 +395,6 @@ MAIN:
 					m.l = x.AsMap().l[start:end]
 				}
 				env.A = NewMapValue(m)
-			case Tgeneric:
-				if end == -1 {
-					env.A = GSlice(x, start, GLen(x))
-				} else {
-					env.A = GSlice(x, start, end)
-				}
 			default:
 				panicf("can't slice %+v", x)
 			}
@@ -419,12 +415,12 @@ MAIN:
 			env.A = NewClosureValue(crReadClosure(K.code, &cursor, env, opa, opb))
 		case OP_CALL:
 			v := env.Get(opa, K)
-			if x := v.Type(); x != Tclosure {
-				if x == Tmap {
+			if x := v.Type(); x != ClosureType {
+				if x == MapType {
 					env.A = NewMapValue(v.AsMap().Dup())
 					continue
 				}
-				v.panicType(Tclosure)
+				v.panicType(ClosureType)
 			}
 			cls := v.AsClosure()
 			if cls.lastenv != nil {
@@ -495,9 +491,9 @@ MAIN:
 			}
 		//case OP_CHAR:
 		//	switch va := env.Get(opa, K); va.Type() {
-		//	case Tnumber:
+		//	case NumberType:
 		//		env.A = NewStringValue(string(rune(va.AsNumber())))
-		//	case Tstring:
+		//	case StringType:
 		//		env.A = va
 		//	default:
 		//		panicf("unknown type for char(): %v", va)
@@ -523,7 +519,7 @@ MAIN:
 //   2. any: the subject to be duplicated
 //   3. predicator: a closure or nil
 func doCopy(env *Env, flag float64, pred Value) (_v Value, _b bool) {
-	nopred := pred.Type() == Tnil
+	nopred := pred.Type() == NilType
 	alloc := flag == 1
 
 	if flag == 2 {
@@ -536,16 +532,16 @@ func doCopy(env *Env, flag float64, pred Value) (_v Value, _b bool) {
 	// immediate value and generic will be returned directly since they can't be truly duplicated
 	// however string is an exception
 	switch env.A.Type() {
-	case Tnil, Tnumber, Tgeneric:
+	case NilType, NumberType, PointerType:
 		return
-	case Tclosure:
+	case ClosureType:
 		if alloc {
 			env.A = NewClosureValue(env.A.AsClosure().Dup())
 		} else {
 			env.A = Value{}
 		}
 		return
-	case Tstring:
+	case StringType:
 		if nopred {
 			if alloc {
 				s := env.A.AsString()
@@ -593,8 +589,8 @@ func doCopy(env *Env, flag float64, pred Value) (_v Value, _b bool) {
 	// now R1 can only be a map
 	if alloc && nopred {
 		// simple dup of map
-		if env.A.Type() != Tmap {
-			env.A.panicType(Tmap)
+		if env.A.Type() != MapType {
+			env.A.panicType(MapType)
 		}
 		env.A = NewMapValue(env.A.AsMap().Dup())
 		return
@@ -610,7 +606,7 @@ func doCopy(env *Env, flag float64, pred Value) (_v Value, _b bool) {
 	cls := pred.Cls()
 	newEnv := NewEnv(cls.Env(), env.Cancel)
 	switch env.A.Type() {
-	case Tmap:
+	case MapType:
 		if alloc {
 			env.A = NewMapValue(env.A.AsMap().Dup())
 		} else {

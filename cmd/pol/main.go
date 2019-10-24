@@ -15,7 +15,7 @@ import (
 	"github.com/coyove/potatolang"
 )
 
-const VERSION = "0.1.0"
+const VERSION = "0.2.0"
 
 var goroutinePerCPU = flag.Int("goroutine", 2, "goroutines per CPU")
 var output = flag.String("o", "none", "separated by comma: [none, compileonly, compiledsize, opcode, bytes, ret, timing]+")

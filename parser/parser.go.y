@@ -62,11 +62,9 @@ import (
 %right FUN
 %left TOr
 %left TAnd
-%left '|' '&' '^'
 %left '>' '<' TGte TLte TEqeq TNeq
-%left TLsh TRsh TURsh
-%left '+' '-'
-%left '*' '/' '%'
+%left '+' '-' '|' '^'
+%left '*' '/' '%' TLsh TRsh TURsh '&'
 %right UNARY /* not # -(unary) */
 %right '~'
 %right '#'

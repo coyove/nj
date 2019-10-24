@@ -53,7 +53,7 @@ func AddCoreValue(name string, value Value) {
 	if name == "" {
 		return
 	}
-	if CoreLibs[name].Type() != Tnil {
+	if CoreLibs[name].Type() != NilType {
 		panicf("core value %s already exists", name)
 	}
 	CoreLibs[name] = value
@@ -70,7 +70,7 @@ func initCoreLibs() {
 	lcore := NewMap()
 	lcore.Puts("unique", NewNativeValue(0, func(env *Env) Value {
 		a := new(int)
-		return NewGenericValue(unsafe.Pointer(a), GTagUnique)
+		return NewPointerValue(unsafe.Pointer(a), GTagUnique)
 	}))
 	lcore.Puts("genlist", NewNativeValue(1, func(env *Env) Value {
 		return NewMapValue(NewMapSize(int(env.SGet(0).Num())))
@@ -93,7 +93,7 @@ func initCoreLibs() {
 		return y
 	}))
 	lcore.Puts("currentenv", NewNativeValue(0, func(env *Env) Value {
-		return NewGenericValue(unsafe.Pointer(env.parent), GTagEnv)
+		return NewPointerValue(unsafe.Pointer(env.parent), GTagEnv)
 	}))
 	lcore.Puts("stacktrace", NewNativeValue(0, func(env *Env) Value {
 		e := ExecError{stacks: env.trace}
@@ -112,9 +112,9 @@ func initCoreLibs() {
 		length := int(env.SGet(4).Num())
 
 		switch dst, src := env.SGet(0), env.SGet(2); dst.Type() {
-		case Tmap:
+		case MapType:
 			return NewNumberValue(float64(copy(dst.Map().l[dstPos:], src.Map().l[srcPos:srcPos+length])))
-		case Tgeneric:
+		case PointerType:
 			return NewNumberValue(float64(GCopy(dst, src, dstPos, srcPos, srcPos+length)))
 		default:
 			panicf("can't copy from %+v to %+v", src, dst)
@@ -123,9 +123,9 @@ func initCoreLibs() {
 	}))
 	lcore.Puts("char", NewNativeValue(1, func(env *Env) Value {
 		switch c := env.SGet(0); c.Type() {
-		case Tnumber:
+		case NumberType:
 			return NewStringValue(char(c.AsNumber(), true))
-		case Tgeneric:
+		case PointerType:
 			return NewStringValue(string(*(*[]byte)(c.GenTags(GTagByteArray, GTagByteClampedArray, GTagInt8Array))))
 		default:
 			panicf("std.char: %+v", c)
@@ -137,9 +137,9 @@ func initCoreLibs() {
 	}))
 	lcore.Puts("index", NewNativeValue(2, func(env *Env) Value {
 		switch s := env.SGet(0); s.Type() {
-		case Tstring:
+		case StringType:
 			return NewNumberValue(float64(strings.Index(s.AsString(), env.SGet(1).Str())))
-		case Tmap:
+		case MapType:
 			m := s.AsMap()
 			x := env.SGet(1)
 			for i, a := range m.l {
@@ -233,29 +233,13 @@ func initCoreLibs() {
 			})))).
 		Puts("_", Value{})))
 
-	_genTyped := func(i interface{}, t uint32) Value {
-		return NewGenericValueInterface(i, t)
-	}
-	lcore.Puts("typed", NewMapValue(NewMap().
-		Puts("bytearray", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagByteArray) })).
-		Puts("int8array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagInt8Array) })).
-		Puts("uint16array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagUint16Array) })).
-		Puts("int16array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagInt16Array) })).
-		Puts("uint32array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagUint32Array) })).
-		Puts("int32array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagInt32Array) })).
-		Puts("float32array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagFloat32Array) })).
-		Puts("float64array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagFloat64Array) })).
-		Puts("stringarray", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagStringArray) })).
-		Puts("boolarray", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagBoolArray) })).
-		Puts("_", Value{})))
-
 	lcore.Puts("json", NewMapValue(NewMap().
 		Puts("parse", NewNativeValue(1, func(env *Env) Value {
 			json := []byte{}
 			switch x := env.SGet(0); x.Type() {
-			case Tstring:
+			case StringType:
 				json = []byte(x.AsString())
-			case Tgeneric:
+			case PointerType:
 				json = *(*[]byte)(x.GenTags(GTagByteArray, GTagByteClampedArray, GTagInt8Array))
 			}
 			for i := 0; i < len(json); i++ {

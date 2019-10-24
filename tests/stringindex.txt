@@ -67,4 +67,4 @@ var buf = math.rand.bytes(ln)
 var start = math.rand.intn(90) 
 var substr = buf[start:start+10] 
 
-assert Index(std.char(buf), std.char(substr)) == start 
+assert Index(buf, substr) == start 

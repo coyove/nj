@@ -27,3 +27,8 @@ assert z == "125" z
 
 z[2] = "hello" + (z[2:3])
 assert z == "12hello5"
+
+z = "000"
+var z2 = z
+z[1] = "1"
+assert z2 == "000"

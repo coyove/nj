@@ -9,31 +9,34 @@ import (
 )
 
 const (
-	// Tnil represents nil type
-	Tnil = 0
-	// Tnumber represents number type
-	Tnumber = 1
-	// Tstring represents string type
-	Tstring = 2
-	// Tbytes represents bytes type
-	Tbytes = 3
-	// Tmap represents map type
-	Tmap = 4
-	// Tclosure represents closure type
-	Tclosure = 6
-	// Tgeneric represents generic type
-	Tgeneric = 7
+	// NilType represents nil type
+	NilType = 0
+
+	// NumberType represents number type
+	NumberType = 1
+
+	// StringType represents string type
+	StringType = 2
+
+	// MapType represents map type
+	MapType = 4
+
+	// ClosureType represents closure type
+	ClosureType = 6
+
+	// PointerType represents generic type
+	PointerType = 7
 )
 
 const (
-	_Tnilnil         = Tnil<<8 | Tnil
-	_Tnumbernumber   = Tnumber<<8 | Tnumber
-	_Tstringstring   = Tstring<<8 | Tstring
-	_Tmapmap         = Tmap<<8 | Tmap
-	_Tclosureclosure = Tclosure<<8 | Tclosure
-	_Tgenericgeneric = Tgeneric<<8 | Tgeneric
-	_Tstringnumber   = Tstring<<8 | Tnumber
-	_Tmapnumber      = Tmap<<8 | Tnumber
+	_NilNil         = NilType<<8 | NilType
+	_NumberNumber   = NumberType<<8 | NumberType
+	_StringString   = StringType<<8 | StringType
+	_MapMap         = MapType<<8 | MapType
+	_ClosureClosure = ClosureType<<8 | ClosureType
+	_PointerPointer = PointerType<<8 | PointerType
+	_StringNumber   = StringType<<8 | NumberType
+	_MapNumber      = MapType<<8 | NumberType
 )
 
 // Value is the basic value used by VM
@@ -48,24 +51,24 @@ type Value struct {
 func (v Value) Type() byte {
 	x := uintptr(v.ptr)
 	if x > 0xffffffffffff {
-		return Tnumber
+		return NumberType
 	}
 
 	if x == 0 {
-		return Tnil
+		return NilType
 	}
 
 	m := (*Map)(unsafe.Pointer(x))
 	if m.ptr != nil {
 		return m.ptype
 	}
-	return Tmap
+	return MapType
 }
 
 var (
 	// TMapping maps type to its string representation
 	TMapping = map[byte]string{
-		Tnil: "nil", Tnumber: "num", Tstring: "str", Tclosure: "cls", Tgeneric: "gen", Tmap: "map",
+		NilType: "nil", NumberType: "num", StringType: "str", ClosureType: "cls", PointerType: "ptr", MapType: "map",
 	}
 
 	// PhantomValue is a global readonly value to represent the true "void"
@@ -113,26 +116,26 @@ func NewMapValue(m *Map) Value {
 
 // NewClosureValue returns a closure value
 func NewClosureValue(c *Closure) Value {
-	m := &Map{ptype: Tclosure, ptr: unsafe.Pointer(c)}
+	m := &Map{ptype: ClosureType, ptr: unsafe.Pointer(c)}
 	return Value{unsafe.Pointer(m)}
 }
 
-// NewGenericValue returns a generic value
-func NewGenericValue(g unsafe.Pointer, tag uint32) Value {
-	m := &Map{ptype: Tgeneric, ptr: g, ptag: tag}
+// NewPointerValue returns a generic value
+func NewPointerValue(g unsafe.Pointer, tag uint32) Value {
+	m := &Map{ptype: PointerType, ptr: g, ptag: tag}
 	return Value{unsafe.Pointer(m)}
 }
 
 // NewGenericValueInterface returns a generic value from an interface{}
 func NewGenericValueInterface(i interface{}, tag uint32) Value {
 	g := (*(*[2]unsafe.Pointer)(unsafe.Pointer(&i)))[1]
-	m := &Map{ptype: Tgeneric, ptr: g, ptag: tag}
+	m := &Map{ptype: PointerType, ptr: g, ptag: tag}
 	return Value{unsafe.Pointer(m)}
 }
 
 // NewStringValue returns a string value
 func NewStringValue(s string) Value {
-	m := &Map{ptype: Tstring, ptr: unsafe.Pointer(&s)}
+	m := &Map{ptype: StringType, ptr: unsafe.Pointer(&s)}
 	return Value{unsafe.Pointer(m)}
 }
 
@@ -144,14 +147,14 @@ func (v Value) AsString() string {
 // IsFalse tests whether value contains a "false" value
 func (v Value) IsFalse() bool {
 	switch v.Type() {
-	case Tnumber:
+	case NumberType:
 		return v.IsZero()
-	case Tnil:
+	case NilType:
 		return true
-	case Tstring:
+	case StringType:
 		m := (*Map)(v.ptr)
 		return len(*(*string)(m.ptr)) == 0
-	case Tmap:
+	case MapType:
 		m := (*Map)(v.ptr)
 		return len(m.l)+len(m.m) == 0
 	}
@@ -180,16 +183,16 @@ func (v Value) AsClosure() *Closure { return (*Closure)((*Map)(v.ptr).ptr) }
 func (v Value) AsGeneric() (unsafe.Pointer, uint32) { return (*Map)(v.ptr).ptr, (*Map)(v.ptr).ptag }
 
 // Map safely cast value to map of values
-func (v Value) Map() *Map { v.testType(Tmap); return (*Map)(v.ptr) }
+func (v Value) Map() *Map { v.testType(MapType); return (*Map)(v.ptr) }
 
 // Cls safely cast value to closure
-func (v Value) Cls() *Closure { v.testType(Tclosure); return v.AsClosure() }
+func (v Value) Cls() *Closure { v.testType(ClosureType); return v.AsClosure() }
 
 // Gen safely cast value to unsafe.Pointer
-func (v Value) Gen() (unsafe.Pointer, uint32) { v.testType(Tgeneric); return v.AsGeneric() }
+func (v Value) Gen() (unsafe.Pointer, uint32) { v.testType(PointerType); return v.AsGeneric() }
 
 func (v Value) GenTags(tags ...uint32) unsafe.Pointer {
-	v.testType(Tgeneric)
+	v.testType(PointerType)
 	vp, vt := v.AsGeneric()
 	for _, tag := range tags {
 		if vt == tag {
@@ -203,10 +206,10 @@ func (v Value) GenTags(tags ...uint32) unsafe.Pointer {
 func (v Value) u64() uint64 { return math.Float64bits(v.Num()) }
 
 // Num safely cast value to float64
-func (v Value) Num() float64 { v.testType(Tnumber); return v.AsNumber() }
+func (v Value) Num() float64 { v.testType(NumberType); return v.AsNumber() }
 
 // Str safely cast value to string
-func (v Value) Str() string { v.testType(Tstring); return v.AsString() }
+func (v Value) Str() string { v.testType(StringType); return v.AsString() }
 
 func NewValueFromInterface(i interface{}) Value {
 	switch v := i.(type) {
@@ -225,13 +228,13 @@ func NewValueFromInterface(i interface{}) Value {
 // I returns the golang interface representation of value
 func (v Value) I() interface{} {
 	switch v.Type() {
-	case Tnumber:
+	case NumberType:
 		return v.AsNumber()
-	case Tstring:
+	case StringType:
 		return v.AsString()
-	case Tmap:
+	case MapType:
 		return v.AsMap()
-	case Tclosure:
+	case ClosureType:
 		return v.AsClosure()
 	}
 	return nil
@@ -239,7 +242,7 @@ func (v Value) I() interface{} {
 
 func (v Value) String() string {
 	switch v.Type() {
-	case Tstring:
+	case StringType:
 		return strconv.Quote(v.AsString())
 	default:
 		return v.ToPrintString()
@@ -250,15 +253,15 @@ func (v Value) String() string {
 // This is a strict test
 func (v Value) Equal(r Value) bool {
 	switch testTypes(v, r) {
-	case _Tnilnil:
+	case _NilNil:
 		return true
-	case _Tnumbernumber:
+	case _NumberNumber:
 		return v == r
-	case _Tstringstring:
+	case _StringString:
 		return r.AsString() == v.AsString()
-	case _Tmapmap:
+	case _MapMap:
 		return v.AsMap().Equal(r.AsMap())
-	case _Tclosureclosure:
+	case _ClosureClosure:
 		c0, c1 := v.AsClosure(), r.AsClosure()
 		e := c0.argsCount == c1.argsCount &&
 			c0.options == c1.options &&
@@ -276,7 +279,7 @@ func (v Value) Equal(r Value) bool {
 			}
 		}
 		return true
-	case _Tgenericgeneric:
+	case _PointerPointer:
 		vp, vt := v.AsGeneric()
 		rp, rt := r.AsGeneric()
 		eq := gtagComparators[uint64(vt)<<32+uint64(rt)]
@@ -303,18 +306,18 @@ func (v Value) toString(lv int, json bool) string {
 	}
 
 	switch v.Type() {
-	case Tnumber:
+	case NumberType:
 		x := v.AsNumber()
 		if float64(uint64(x)) == x {
 			return strconv.FormatUint(uint64(x), 10)
 		}
 		return strconv.FormatFloat(x, 'f', -1, 64)
-	case Tstring:
+	case StringType:
 		if json {
 			return "\"" + strconv.Quote(v.AsString()) + "\""
 		}
 		return v.AsString()
-	case Tmap:
+	case MapType:
 		m, buf := v.AsMap(), &bytes.Buffer{}
 		if json {
 			if len(m.m) == 0 {
@@ -369,12 +372,12 @@ func (v Value) toString(lv int, json bool) string {
 			buf.WriteString("}")
 		}
 		return buf.String()
-	case Tclosure:
+	case ClosureType:
 		if json {
 			return "\"" + v.AsClosure().String() + "\""
 		}
 		return v.AsClosure().String()
-	case Tgeneric:
+	case PointerType:
 		vp, vt := v.AsGeneric()
 		if json {
 			return fmt.Sprintf("\"<tag%x:%v>\"", vt, vp)
@@ -389,11 +392,11 @@ func (v Value) toString(lv int, json bool) string {
 
 func (v Value) Dup() Value {
 	switch v.Type() {
-	case Tnil, Tnumber, Tstring, Tgeneric:
+	case NilType, NumberType, StringType, PointerType:
 		return v
-	case Tclosure:
+	case ClosureType:
 		return NewClosureValue(v.AsClosure().Dup())
-	case Tmap:
+	case MapType:
 		return NewMapValue(v.AsMap().Dup())
 	default:
 		panic("unreachable code")
