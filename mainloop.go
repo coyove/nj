@@ -291,26 +291,48 @@ MAIN:
 				}
 			}
 		case OP_STORE:
-			if env.A.Type() == Tmap {
-				vidx := env.Get(opa, K)
+			vidx, v := env.Get(opa, K), env.Get(opb, K)
+			switch env.A.Type() {
+			case Tmap:
 				if m := env.A.AsMap(); vidx.Type() == Tnumber {
 					idx, ln := int(vidx.AsNumber()), len(m.l)
 					if idx < ln {
-						m.l[idx] = env.Get(opb, K)
+						m.l[idx] = v
 					} else if idx == ln {
-						m.l = append(m.l, env.Get(opb, K))
+						m.l = append(m.l, v)
 					} else {
-						m.putIntoMap(vidx, env.Get(opb, K))
+						m.putIntoMap(vidx, v)
 					}
 				} else {
-					m.putIntoMap(vidx, env.Get(opb, K))
+					m.putIntoMap(vidx, v)
 				}
-			} else if env.A.Type() == Tgeneric {
-				GStore(env.A, int(env.Get(opa, K).AsNumber()), env.Get(opb, K))
-			} else {
-				panicf("can't store %+v into %+v with key %+v", env.Get(opb, K), env.A, env.Get(opa, K))
+			case Tstring:
+				var p []byte
+				switch testTypes(vidx, v) {
+				case _Tnumbernumber:
+					p = []byte(env.A.AsString())
+					p[int(vidx.AsNumber())] = byte(v.AsNumber())
+				case Tnumber<<8 | Tstring:
+					idx, as, vs := int(vidx.AsNumber()), env.A.AsString(), v.AsString()
+					if len(vs) == 1 {
+						p = []byte(as)
+						p[idx] = vs[0]
+					} else {
+						p = make([]byte, len(as)+len(vs)-1)
+						copy(p, as[:idx])
+						copy(p[idx:], vs)
+						copy(p[idx+len(vs):], as[idx+1:])
+					}
+				default:
+					panicf("can't modify string %+v[%+v] to %+v", env.A, vidx, v)
+				}
+				(*Map)(env.A.ptr).ptr = unsafe.Pointer(&p) // unsafely cast p to string
+			case Tgeneric:
+				GStore(env.A, int(vidx.AsNumber()), v)
+			default:
+				panicf("can't modify %+v[%+v] to %+v", env.A, vidx, v)
 			}
-			env.A = env.Get(opb, K)
+			env.A = v
 		case OP_LOAD:
 			var v Value
 			a := env.Get(opa, K)
@@ -333,7 +355,7 @@ MAIN:
 				} else if a.Type() == Tgeneric {
 					v = GLoad(a, int(vidx.AsNumber()))
 				} else {
-					panicf("can't load from %+v with key %+v", a, vidx)
+					panicf("can't load %+v[%+v]", a, vidx)
 				}
 			}
 			env.A = v
@@ -473,6 +495,15 @@ MAIN:
 				}
 				returnUpperWorld(v)
 			}
+		//case OP_CHAR:
+		//	switch va := env.Get(opa, K); va.Type() {
+		//	case Tnumber:
+		//		env.A = NewStringValue(string(rune(va.AsNumber())))
+		//	case Tstring:
+		//		env.A = va
+		//	default:
+		//		panicf("unknown type for char(): %v", va)
+		//	}
 		case OP_TYPEOF:
 			env.A = NewStringValue(TMapping[env.Get(opa, K).Type()])
 		}

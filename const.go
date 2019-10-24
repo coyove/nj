@@ -37,6 +37,7 @@ const (
 	OP_SLICE
 	OP_INC
 	OP_COPY
+	OP_CHAR
 	OP_LEN
 	OP_TYPEOF
 	OP_NOP

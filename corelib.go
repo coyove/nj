@@ -107,9 +107,6 @@ func initCoreLibs() {
 		}
 		return NewClosureValue(cls)
 	}))
-	lcore.Puts("remove", NewNativeValue(2, func(env *Env) Value {
-		return env.SGet(0).Map().Remove(env.Get(1, nil))
-	}))
 	lcore.Puts("copy", NewNativeValue(5, func(env *Env) Value {
 		dstPos, srcPos := int(env.SGet(1).Num()), int(env.SGet(3).Num())
 		length := int(env.SGet(4).Num())
@@ -305,7 +302,10 @@ func initCoreLibs() {
 		if float64(int64(v)) == v {
 			return NewStringValue(strconv.FormatInt(int64(v), 10))
 		}
-		return NewStringValue(strings.TrimRight(strconv.FormatFloat(v, 'f', 15, 64), "0"))
+		return NewStringValue(strings.TrimRight(strconv.FormatFloat(v, 'f', 15, 64), "0."))
+	})
+	CoreLibs["delete"] = NewNativeValue(2, func(env *Env) Value {
+		return env.SGet(0).Map().Remove(env.Get(1, nil))
 	})
 
 	initIOLib()

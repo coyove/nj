@@ -187,7 +187,7 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 	}
 
 	switch bop {
-	case OP_TYPEOF, OP_NOT, OP_BIT_NOT:
+	case OP_TYPEOF, OP_NOT, OP_BIT_NOT, OP_CHAR:
 		// unary op
 		err = table.writeOpcode(&buf, bop, atoms[1], nil)
 	case OP_ASSERT:
@@ -331,6 +331,15 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 	case "copy":
 		x := append([]*parser.Node{nodes[1]}, nodes[2].C()...)
 		code, yx, err = table.writeOpcode3(x, OP_COPY)
+		code.WritePos(nodes[0].Meta)
+		return
+	case "char":
+		if nodes[2].Cn() != 1 {
+			err = fmt.Errorf("%+v: requires exactly 1 arguments", callee)
+			return
+		}
+		x := []*parser.Node{nodes[1], nodes[2].Cx(0)}
+		code, yx, err = table.writeOpcode3(x, OP_CHAR)
 		code.WritePos(nodes[0].Meta)
 		return
 	}
