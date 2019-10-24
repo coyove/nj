@@ -5,3 +5,5 @@ goyacc
 *.y
 y.output
 .vscode
+.idea
+cpuprofile

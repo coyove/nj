@@ -86,6 +86,8 @@ func (n *Node) S() string { a, _ := n.Value.(string); return a }
 func (n *Node) N() float64 { a, _ := n.Value.(float64); return a }
 
 func CNode(args ...interface{}) *Node {
+	const max32 = 0xffffffff
+
 	if len(args) >= 2 {
 		op, _ := args[0].(string)
 		a, _ := args[1].(*Node)
@@ -129,17 +131,17 @@ func CNode(args ...interface{}) *Node {
 						}
 						return NNode(0)
 					case "&":
-						return NNode(float64(int32(v1) & int32(v2)))
+						return NNode(float64(int32(int64(v1)&max32) & int32(int64(v2)&max32)))
 					case "|":
-						return NNode(float64(int32(v1) | int32(v2)))
+						return NNode(float64(int32(int64(v1)&max32) | int32(int64(v2)&max32)))
 					case "^":
-						return NNode(float64(int32(v1) ^ int32(v2)))
+						return NNode(float64(int32(int64(v1)&max32) ^ int32(int64(v2)&max32)))
 					case "<<":
-						return NNode(float64(int32(v1) << uint32(v2)))
+						return NNode(float64(int32(int64(v1)&max32) << uint(v2)))
 					case ">>":
-						return NNode(float64(int32(v1) >> uint32(v2)))
+						return NNode(float64(int32(int64(v1)&max32) >> uint(v2)))
 					case ">>>":
-						return NNode(float64(uint32(v1) >> uint32(v2)))
+						return NNode(float64(uint32(uint64(v1)&max32) >> uint(v2)))
 					}
 				}
 			}
@@ -147,13 +149,13 @@ func CNode(args ...interface{}) *Node {
 			if a != nil && a.Type == Nnumber {
 				v1 := a.Value.(float64)
 				switch op {
-				case "!":
+				case "not":
 					if v1 == 0 {
 						return NNode(1)
 					}
 					return NNode(0)
 				case "~":
-					return NNode(float64(^int32(v1)))
+					return NNode(float64(^int32(int64(v1) & max32)))
 				}
 			}
 		}
@@ -171,11 +173,11 @@ func CNode(args ...interface{}) *Node {
 			}
 		case *Node:
 			if n.Source == "" {
-				n.SetPos(arg.(*Node).Meta)
+				n.SetPos(x.Meta)
 			}
-			arr = append(arr, arg.(*Node))
+			arr = append(arr, x)
 		default:
-			panic("shouldn't happen")
+			panic(fmt.Sprintf("shouldn't happen: %v", x))
 		}
 	}
 	n.Value = arr
@@ -231,11 +233,6 @@ func StringToNumber(arg string) (float64, error) {
 			num, err = strconv.ParseUint(arg[2:], 16, 64)
 		case 'b', 'B':
 			num, err = strconv.ParseUint(arg[2:], 2, 64)
-		case 'i', 'I':
-			num, err = strconv.ParseUint(arg[2:], 16, 64)
-			if err == nil {
-				return math.Float64frombits(uint64(num)), nil
-			}
 		default:
 			num, err = strconv.ParseUint(arg[1:], 8, 64)
 		}
@@ -261,6 +258,8 @@ func (n *Node) setPos0(p interface{}) *Node {
 }
 
 func (n *Node) setPos(p interface{}) *Node { n.SetPos(p); return n }
+
+func (n *Node) SetPos0(p interface{}) *Node { return n.setPos0(p) }
 
 func (n *Node) Dump(w io.Writer) {
 	switch n.Type {

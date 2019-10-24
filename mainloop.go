@@ -140,7 +140,7 @@ MAIN:
 			env.A.SetNumberValue(num + env.Get(opb, K).AsNumber())
 			env.Set(opa, env.A)
 		case OP_ADD:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetNumberValue(va.AsNumber() + vb.AsNumber())
 			case _StringString:
@@ -149,28 +149,28 @@ MAIN:
 				panicf("can't apply '+' on %+v and %+v", va, vb)
 			}
 		case OP_SUB:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetNumberValue(env.Get(opa, K).AsNumber() - env.Get(opb, K).AsNumber())
 			default:
 				panicf("can't apply '-' on %+v and %+v", va, vb)
 			}
 		case OP_MUL:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetNumberValue(env.Get(opa, K).AsNumber() * env.Get(opb, K).AsNumber())
 			default:
 				panicf("can't apply '*' on %+v and %+v", va, vb)
 			}
 		case OP_DIV:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetNumberValue(env.Get(opa, K).AsNumber() / env.Get(opb, K).AsNumber())
 			default:
 				panicf("can't apply '/' on %+v and %+v", va, vb)
 			}
 		case OP_MOD:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetNumberValue(float64(int64(env.Get(opa, K).AsNumber()) % int64(env.Get(opb, K).AsNumber())))
 			default:
@@ -181,7 +181,7 @@ MAIN:
 		case OP_NEQ:
 			env.A.SetBoolValue(!env.Get(opa, K).Equal(env.Get(opb, K)))
 		case OP_LESS:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetBoolValue(va.AsNumber() < vb.AsNumber())
 			case _StringString:
@@ -190,7 +190,7 @@ MAIN:
 				panicf("can't apply '<' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_LESS_EQ:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetBoolValue(va.AsNumber() <= vb.AsNumber())
 			case _StringString:
@@ -207,28 +207,28 @@ MAIN:
 				panicf("can't apply 'bit not' on %+v", va)
 			}
 		case OP_BIT_AND:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetNumberValue(float64(int32(int64(va.AsNumber())&max32) & int32(int64(vb.AsNumber())&max32)))
 			default:
 				panicf("can't apply '&' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_OR:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetNumberValue(float64(int32(int64(va.AsNumber())&max32) | int32(int64(vb.AsNumber())&max32)))
 			default:
 				panicf("can't apply '|' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_XOR:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetNumberValue(float64(int32(int64(va.AsNumber())&max32) ^ int32(int64(vb.AsNumber())&max32)))
 			default:
 				panicf("can't apply '^' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_LSH:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); testTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetNumberValue(float64(int32(int64(va.AsNumber())&max32) << uint(vb.AsNumber())))
 			case _MapMap:
@@ -247,13 +247,13 @@ MAIN:
 				panicf("can't apply '<<' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_RSH:
-			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _NumberNumber {
+			if combineTypes(env.Get(opa, K), env.Get(opb, K)) == _NumberNumber {
 				env.A.SetNumberValue(float64(int32(int64(env.Get(opa, K).AsNumber())&max32) >> uint(env.Get(opb, K).AsNumber())))
 			} else {
 				panicf("can't apply '>>' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OP_BIT_URSH:
-			if testTypes(env.Get(opa, K), env.Get(opb, K)) == _NumberNumber {
+			if combineTypes(env.Get(opa, K), env.Get(opb, K)) == _NumberNumber {
 				env.A.SetNumberValue(float64(uint32(uint64(env.Get(opa, K).AsNumber())&max32) >> uint(env.Get(opb, K).AsNumber())))
 			} else {
 				panicf("can't apply '>>>' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
@@ -313,7 +313,7 @@ MAIN:
 				}
 			case StringType:
 				var p []byte
-				switch testTypes(vidx, v) {
+				switch combineTypes(vidx, v) {
 				case _NumberNumber:
 					p = []byte(env.A.AsString())
 					p[int(vidx.AsNumber())] = byte(v.AsNumber())
@@ -340,7 +340,7 @@ MAIN:
 			var v Value
 			a := env.Get(opa, K)
 			vidx := env.Get(opb, K)
-			switch testTypes(a, vidx) {
+			switch combineTypes(a, vidx) {
 			case _StringNumber:
 				v.SetNumberValue(float64(a.AsString()[int(vidx.AsNumber())]))
 			case _MapNumber:
@@ -386,7 +386,7 @@ MAIN:
 				env.A = PhantomValue
 			}
 		case OP_SLICE:
-			start, end := int(env.Get(opa, K).Num()), int(env.Get(opb, K).Num())
+			start, end := int(env.Get(opa, K).MustNumber()), int(env.Get(opb, K).MustNumber())
 			switch x := env.A; x.Type() {
 			case StringType:
 				if end == -1 {
@@ -560,7 +560,7 @@ func doCopy(env *Env, flag float64, pred Value) (_v Value, _b bool) {
 				env.A = NewMapValue(m)
 			}
 		} else {
-			cls := pred.Cls()
+			cls := pred.MustClosure()
 			newEnv := NewEnv(cls.Env(), env.Cancel)
 			str := env.A.AsString()
 			var newstr []Value
@@ -611,7 +611,7 @@ func doCopy(env *Env, flag float64, pred Value) (_v Value, _b bool) {
 	}
 
 	// now R2 should be closure
-	cls := pred.Cls()
+	cls := pred.MustClosure()
 	newEnv := NewEnv(cls.Env(), env.Cancel)
 	switch env.A.Type() {
 	case MapType:
@@ -633,7 +633,7 @@ func doCopy(env *Env, flag float64, pred Value) (_v Value, _b bool) {
 			}
 			for k, v := range m.m {
 				newEnv.SClear()
-				newEnv.SPush(NewValueFromInterface(k))
+				newEnv.SPush(NewInterfaceValue(k))
 				newEnv.SPush(v)
 				if res := cls.Exec(newEnv); res == PhantomValue {
 					goto BREAK_ALL

@@ -175,7 +175,7 @@ func (sc *Scanner) scanDecimal(ch uint32, buf *bytes.Buffer) error {
 func (sc *Scanner) scanNumber(ch uint32, buf *bytes.Buffer) error {
 	if ch == '0' { // octal
 		switch sc.Peek() {
-		case 'x', 'X', 'b', 'B', 'i', 'I':
+		case 'x', 'X', 'b', 'B':
 			writeChar(buf, ch)
 			writeChar(buf, sc.Next())
 			hasvalue := false
@@ -564,7 +564,7 @@ func parse(reader io.Reader, name string, cache map[string]*Node, loop string) (
 	}
 	defer func() {
 		if e := recover(); e != nil {
-			err, _ = e.(error)
+			err = fmt.Errorf("%v", e)
 		}
 	}()
 	yyParse(lexer)

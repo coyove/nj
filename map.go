@@ -2,7 +2,7 @@ package potatolang
 
 import "unsafe"
 
-// Map represents the map structure in potatolang
+// MustMap represents the map structure in potatolang
 // Like lua it has a linear slice and a hash table.
 // We use a 128bit hash to identify the key,
 // and since 128bit is large enough, we will consider it impossible to collide
@@ -75,7 +75,7 @@ func (m *Map) Put(key Value, value Value) *Map {
 	if m.m == nil {
 		m.m = make(map[interface{}]Value)
 	}
-	m.m[key.I()] = value
+	m.m[key.AsInterface()] = value
 	return m
 }
 
@@ -83,7 +83,7 @@ func (m *Map) putIntoMap(key Value, value Value) *Map {
 	if m.m == nil {
 		m.m = make(map[interface{}]Value)
 	}
-	m.m[key.I()] = value
+	m.m[key.AsInterface()] = value
 	return m
 }
 
@@ -102,12 +102,12 @@ func (m *Map) Get(key Value) (value Value, found bool) {
 	if m.m == nil {
 		return Value{}, false
 	}
-	v, ok := m.m[key.I()]
+	v, ok := m.m[key.AsInterface()]
 	return v, ok
 }
 
 func (m *Map) getFromMap(key Value) (value Value, found bool) {
-	v, ok := m.m[key.I()]
+	v, ok := m.m[key.AsInterface()]
 	return v, ok
 }
 
@@ -123,7 +123,7 @@ func (m *Map) Remove(key Value) Value {
 	if m.m == nil {
 		return Value{}
 	}
-	hash := key.I()
+	hash := key.AsInterface()
 	v := m.m[hash]
 	delete(m.m, hash)
 	return v

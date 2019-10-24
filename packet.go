@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"math"
+	"os"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -149,6 +152,12 @@ func (b *packet) Write32(v uint32) { b.data = append(b.data, v) }
 func (b *packet) WriteOP(op byte, opa, opb uint16) { b.data = append(b.data, makeop(op, opa, opb)) }
 
 func (b *packet) WritePos(p parser.Meta) {
+	if p.Line == 0 {
+		buf := make([]byte, 4096)
+		n := runtime.Stack(buf, false)
+		log.Println(string(buf[:n]))
+		os.Exit(1)
+	}
 	b.pos.appendABC(uint32(len(b.data)), p.Line, p.Column)
 	if p.Source != "" {
 		b.source = p.Source

@@ -1,14 +1,3 @@
-		var m = {
-        "c": 123, 
-        "a": "a",
-        "incr": fun(this) {
-            this.c = this.c + 1 
-            return this 
-        }
-    } 
 
-    var mp = m 
-    var  m2 = dup(m) 
+assert len(nil)
 
-    m.incr() 
-    assert m.c == 124

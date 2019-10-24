@@ -13,7 +13,7 @@ func initMathLib() {
 	var _bvalue, _bvalue2 = func(i uint64) Value { return NewNumberValue(math.Float64frombits(i)) }, NewBoolValue
 	lmath.Puts("u64", NewMapValue(NewMap().
 		Puts("num", NewNativeValue(1, func(env *Env) Value { return NewNumberValue(float64(env.SGet(0).u64())) })).
-		Puts("int", NewNativeValue(1, func(env *Env) Value { return _bvalue(uint64(env.SGet(0).Num())) })).
+		Puts("int", NewNativeValue(1, func(env *Env) Value { return _bvalue(uint64(env.SGet(0).MustNumber())) })).
 		Puts("add", NewNativeValue(2, func(env *Env) Value { return _bvalue(env.SGet(0).u64() + env.SGet(1).u64()) })).
 		Puts("sub", NewNativeValue(2, func(env *Env) Value { return _bvalue(env.SGet(0).u64() - env.SGet(1).u64()) })).
 		Puts("mul", NewNativeValue(2, func(env *Env) Value { return _bvalue(env.SGet(0).u64() * env.SGet(1).u64()) })).
@@ -34,23 +34,23 @@ func initMathLib() {
 
 	var _bvalue32 = func(i uint32) Value { return NewNumberValue(float64(i)) }
 	lmath.Puts("u32", NewMapValue(NewMap().
-		Puts("add", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) + uint32(env.SGet(1).Num())) })).
-		Puts("sub", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) - uint32(env.SGet(1).Num())) })).
-		Puts("mul", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) * uint32(env.SGet(1).Num())) })).
-		Puts("div", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) / uint32(env.SGet(1).Num())) })).
-		Puts("mod", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) % uint32(env.SGet(1).Num())) })).
-		Puts("lsh", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) << uint32(env.SGet(1).Num())) })).
-		Puts("rsh", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).Num()) >> uint32(env.SGet(1).Num())) }))))
+		Puts("add", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) + uint32(env.SGet(1).MustNumber())) })).
+		Puts("sub", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) - uint32(env.SGet(1).MustNumber())) })).
+		Puts("mul", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) * uint32(env.SGet(1).MustNumber())) })).
+		Puts("div", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) / uint32(env.SGet(1).MustNumber())) })).
+		Puts("mod", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) % uint32(env.SGet(1).MustNumber())) })).
+		Puts("lsh", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) << uint32(env.SGet(1).MustNumber())) })).
+		Puts("rsh", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) >> uint32(env.SGet(1).MustNumber())) }))))
 
 	lmath.Puts("sqrt", NewNativeValue(1, func(env *Env) Value {
-		return NewNumberValue(math.Sqrt(env.SGet(0).Num()))
+		return NewNumberValue(math.Sqrt(env.SGet(0).MustNumber()))
 	}))
 	lmath.Puts("rand", NewMapValue(NewMap().
 		Puts("intn", NewNativeValue(1, func(env *Env) Value {
-			return NewNumberValue(float64(r.Intn(int(env.SGet(0).Num()))))
+			return NewNumberValue(float64(r.Intn(int(env.SGet(0).MustNumber()))))
 		})).
 		Puts("bytes", NewNativeValue(1, func(env *Env) Value {
-			return NewStringValue(string(r.Fetch(int(env.SGet(0).Num()))))
+			return NewStringValue(string(r.Fetch(int(env.SGet(0).MustNumber()))))
 		}))))
 
 	CoreLibs["math"] = NewMapValue(lmath)

@@ -34,7 +34,7 @@ func runFile(t *testing.T, path string) {
 	}
 
 	i := b.Exec(nil)
-	t.Log(i.I())
+	t.Log(i.AsInterface())
 }
 
 func TestSMain(t *testing.T) {
@@ -159,12 +159,12 @@ func TestCopyCall(t *testing.T) {
 	//	}
 	//	code := cls.code
 	//	o, a, _ := op(code[0])
-	//	if o != OP_R0K || cls.consts[a].Num() != 1.0 {
+	//	if o != OP_R0K || cls.consts[a].MustNumber() != 1.0 {
 	//		t.Fatal("error opcode 0")
 	//	}
 	//
 	//	o, a, _ = op(code[1])
-	//	if o != OP_R1K || cls.consts[a].Num() != 1.0 {
+	//	if o != OP_R1K || cls.consts[a].MustNumber() != 1.0 {
 	//		t.Fatal("error opcode 1")
 	//	}
 	//
@@ -179,7 +179,7 @@ func TestCopyCall(t *testing.T) {
 	//	}
 	//	code = cls.code
 	//	o, a, _ = op(code[0])
-	//	if o != OP_R0K || cls.consts[a].Num() != 0.0 {
+	//	if o != OP_R0K || cls.consts[a].MustNumber() != 0.0 {
 	//		t.Fatal("error opcode 0 3")
 	//	}
 

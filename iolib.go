@@ -18,7 +18,7 @@ func stdPrint(f *os.File) func(env *Env) Value {
 }
 
 func _sprintf(env *Env) string {
-	msg := []rune(env.SGet(0).Str())
+	msg := []rune(env.SGet(0).MustString())
 	buf, numbuf, formatbuf := bytes.Buffer{}, bytes.Buffer{}, bytes.Buffer{}
 	i := 0
 	for i < len(msg) {
@@ -68,7 +68,7 @@ func _sprintf(env *Env) string {
 			buf.WriteString(env.SGet(num).ToPrintString())
 		} else {
 			format := formatbuf.Bytes()
-			i := env.SGet(num).I()
+			i := env.SGet(num).AsInterface()
 
 			// TODO: handle cases like: %d %
 			switch format[len(format)-1] {
@@ -114,11 +114,11 @@ func stdWrite(f *os.File) func(env *Env) Value {
 			case MapType:
 				buf := make([]byte, 1)
 				for _, b := range a.AsMap().l {
-					buf[0] = byte(b.Num())
+					buf[0] = byte(b.MustNumber())
 					f.Write(buf)
 				}
 			case PointerType:
-				ap, at := a.AsGeneric()
+				ap, at := a.AsPointer()
 				switch at {
 				case GTagByteArray, GTagByteClampedArray, GTagInt8Array:
 					f.Write(*(*[]byte)(ap))

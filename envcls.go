@@ -4,13 +4,13 @@ import (
 	"encoding/base64"
 	"fmt"
 	"hash/crc32"
+	"unsafe"
 )
 
 // Env is the environment for a closure in potatolang to run within.
 // Env.stack contains arguments used to execute the closure,
 // then the local variables will sequentially take the following spaces.
-// Env.A stores the result of executing a closure, or a builtin operator;
-// Env.R0 ~ Env.R3 store the arguments to call builtin operators (+, -, *, ...).
+// Env.A stores the result of an operation
 type Env struct {
 	parent *Env
 	trace  []stacktrace
@@ -22,21 +22,20 @@ type Env struct {
 // NewEnv creates the Env for closure to run within
 // parent can be nil, which means this is a top Env
 func NewEnv(parent *Env, cancel *uintptr) *Env {
-	const initCapacity = 16
 	return &Env{
 		parent: parent,
-		stack:  make([]Value, 0, initCapacity),
 		Cancel: cancel,
 	}
 }
 
 func (env *Env) grow(newSize int) {
-	if newSize > cap(env.stack) {
-		old := env.stack
-		env.stack = make([]Value, newSize, newSize*3/2)
-		copy(env.stack, old)
+	s := env.stack
+	if newSize > cap(s) {
+		old := s
+		s = make([]Value, newSize, newSize*2)
+		copy(s, old)
 	}
-	env.stack = env.stack[:newSize]
+	env.stack = s[:newSize]
 }
 
 // SGet gets a value from the current stack
@@ -109,11 +108,11 @@ REPEAT:
 		y, env = y-1, env.parent
 		goto REPEAT
 	}
-	s := env.stack
-	if index >= len(s) {
-		return Value{}
+	if s := env.stack; index < len(s) {
+		return *(*Value)(unsafe.Pointer(uintptr(unsafe.Pointer(&s[0])) + SizeOfValue*uintptr(index)))
+		// return s[index]
 	}
-	return s[index]
+	return Value{}
 }
 
 func (env *Env) Set(yx uint16, v Value) {
@@ -147,7 +146,7 @@ const (
 	_ClsPseudoForeach
 )
 
-// Closure is the closure struct used in potatolang
+// MustClosure is the closure struct used in potatolang
 type Closure struct {
 	code        []uint32
 	pos         posVByte

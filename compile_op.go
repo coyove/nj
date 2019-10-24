@@ -148,7 +148,12 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 		}
 
 		err = table.writeOpcode(&buf, bop, n0, n1)
-		buf.WritePos(atoms[1].Meta)
+		for _, a := range atoms {
+			if a.Source != "" {
+				buf.WritePos(a.Meta)
+				break
+			}
+		}
 		return buf, regA, err
 	}
 
@@ -215,7 +220,12 @@ func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint
 		return
 	}
 	code, yx, err = table.writeOpcode3(atoms, op)
-	code.WritePos(atoms[0].Meta)
+	for _, a := range atoms {
+		if a.Meta.Source != "" {
+			code.WritePos(a.Meta)
+			break
+		}
+	}
 	return
 }
 
@@ -294,7 +304,7 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint16
 	if len(falseCode.data) > 0 {
 		checkjmpdist(len(trueCode.data) + 1)
 		buf.WriteOP(OP_IFNOT, condyx, uint16(len(trueCode.data)+1+1<<12))
-		buf.WritePos(condition.Meta)
+		buf.WritePos(atoms[0].Meta)
 		buf.Write(trueCode)
 		checkjmpdist(len(falseCode.data))
 		buf.WriteOP(OP_JMP, 0, uint16(len(falseCode.data)+1<<12))
@@ -302,7 +312,7 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint16
 	} else {
 		checkjmpdist(len(trueCode.data))
 		buf.WriteOP(OP_IFNOT, condyx, uint16(len(trueCode.data)+1<<12))
-		buf.WritePos(condition.Meta)
+		buf.WritePos(atoms[0].Meta)
 		buf.Write(trueCode)
 	}
 	return buf, regA, nil
@@ -465,7 +475,8 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		copy(comps[2:], comps[1:])
 		comps[1] = parser.CNode("set", "arguments", parser.CNode(
 			"call", "copy", parser.CNode(parser.NNode(2), parser.ANodeS("nil"), parser.ANodeS("nil")),
-		))
+		).SetPos0(atoms[0].Meta),
+		).SetPos0(atoms[0].Meta)
 		atoms[3].SetValue(comps)
 	}
 

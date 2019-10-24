@@ -47,6 +47,8 @@ type Value struct {
 	ptr unsafe.Pointer // 8b
 }
 
+const SizeOfValue = unsafe.Sizeof(Value{})
+
 // Type returns the type of value
 func (v Value) Type() byte {
 	x := uintptr(v.ptr)
@@ -73,6 +75,8 @@ var (
 
 	// PhantomValue is a global readonly value to represent the true "void"
 	PhantomValue = NewMapValue(&Map{})
+
+	_zero = NewNumberValue(0)
 )
 
 func init() {
@@ -126,17 +130,24 @@ func NewPointerValue(g unsafe.Pointer, tag uint32) Value {
 	return Value{unsafe.Pointer(m)}
 }
 
-// NewGenericValueInterface returns a generic value from an interface{}
-func NewGenericValueInterface(i interface{}, tag uint32) Value {
-	g := (*(*[2]unsafe.Pointer)(unsafe.Pointer(&i)))[1]
-	m := &Map{ptype: PointerType, ptr: g, ptag: tag}
-	return Value{unsafe.Pointer(m)}
-}
-
 // NewStringValue returns a string value
 func NewStringValue(s string) Value {
 	m := &Map{ptype: StringType, ptr: unsafe.Pointer(&s)}
 	return Value{unsafe.Pointer(m)}
+}
+
+func NewInterfaceValue(i interface{}) Value {
+	switch v := i.(type) {
+	case float64:
+		return NewNumberValue(v)
+	case string:
+		return NewStringValue(v)
+	case *Map:
+		return NewMapValue(v)
+	case *Closure:
+		return NewClosureValue(v)
+	}
+	return Value{}
 }
 
 // AsString cast value to string
@@ -161,8 +172,6 @@ func (v Value) IsFalse() bool {
 	return false
 }
 
-var _zero = NewNumberValue(0)
-
 // IsZero is a fast way to check if a numeric Value is +0
 func (v Value) IsZero() bool {
 	return v == _zero
@@ -179,54 +188,28 @@ func (v Value) AsMap() *Map { return (*Map)(v.ptr) }
 // AsClosure cast value to closure
 func (v Value) AsClosure() *Closure { return (*Closure)((*Map)(v.ptr).ptr) }
 
-// AsGeneric cast value to unsafe.Pointer
-func (v Value) AsGeneric() (unsafe.Pointer, uint32) { return (*Map)(v.ptr).ptr, (*Map)(v.ptr).ptag }
+// AsPointer cast value to unsafe.Pointer
+func (v Value) AsPointer() (unsafe.Pointer, uint32) { return (*Map)(v.ptr).ptr, (*Map)(v.ptr).ptag }
 
-// Map safely cast value to map of values
-func (v Value) Map() *Map { v.testType(MapType); return (*Map)(v.ptr) }
+// MustMap safely cast value to map of values
+func (v Value) MustMap() *Map { v.testType(MapType); return (*Map)(v.ptr) }
 
-// Cls safely cast value to closure
-func (v Value) Cls() *Closure { v.testType(ClosureType); return v.AsClosure() }
+// MustClosure safely cast value to closure
+func (v Value) MustClosure() *Closure { v.testType(ClosureType); return v.AsClosure() }
 
-// Gen safely cast value to unsafe.Pointer
-func (v Value) Gen() (unsafe.Pointer, uint32) { v.testType(PointerType); return v.AsGeneric() }
+// MustPointer safely cast value to unsafe.Pointer
+func (v Value) MustPointer() (unsafe.Pointer, uint32) { v.testType(PointerType); return v.AsPointer() }
 
-func (v Value) GenTags(tags ...uint32) unsafe.Pointer {
-	v.testType(PointerType)
-	vp, vt := v.AsGeneric()
-	for _, tag := range tags {
-		if vt == tag {
-			return vp
-		}
-	}
-	panicf("expecting tags: %v, got %d", tags, vt)
-	return vp
-}
+func (v Value) u64() uint64 { return math.Float64bits(v.MustNumber()) }
 
-func (v Value) u64() uint64 { return math.Float64bits(v.Num()) }
+// MustNumber safely cast value to float64
+func (v Value) MustNumber() float64 { v.testType(NumberType); return v.AsNumber() }
 
-// Num safely cast value to float64
-func (v Value) Num() float64 { v.testType(NumberType); return v.AsNumber() }
+// MustString safely cast value to string
+func (v Value) MustString() string { v.testType(StringType); return v.AsString() }
 
-// Str safely cast value to string
-func (v Value) Str() string { v.testType(StringType); return v.AsString() }
-
-func NewValueFromInterface(i interface{}) Value {
-	switch v := i.(type) {
-	case float64:
-		return NewNumberValue(v)
-	case string:
-		return NewStringValue(v)
-	case *Map:
-		return NewMapValue(v)
-	case *Closure:
-		return NewClosureValue(v)
-	}
-	return Value{}
-}
-
-// I returns the golang interface representation of value
-func (v Value) I() interface{} {
+// AsInterface returns the golang interface representation of value
+func (v Value) AsInterface() interface{} {
 	switch v.Type() {
 	case NumberType:
 		return v.AsNumber()
@@ -252,7 +235,7 @@ func (v Value) String() string {
 // Equal tests whether value is equal to another value
 // This is a strict test
 func (v Value) Equal(r Value) bool {
-	switch testTypes(v, r) {
+	switch combineTypes(v, r) {
 	case _NilNil:
 		return true
 	case _NumberNumber:
@@ -280,12 +263,8 @@ func (v Value) Equal(r Value) bool {
 		}
 		return true
 	case _PointerPointer:
-		vp, vt := v.AsGeneric()
-		rp, rt := r.AsGeneric()
-		eq := gtagComparators[uint64(vt)<<32+uint64(rt)]
-		if eq != nil {
-			return eq.Equal(v, r)
-		}
+		vp, vt := v.AsPointer()
+		rp, rt := r.AsPointer()
 		return vp == rp && vt == rt
 	}
 	return false
@@ -378,7 +357,7 @@ func (v Value) toString(lv int, json bool) string {
 		}
 		return v.AsClosure().String()
 	case PointerType:
-		vp, vt := v.AsGeneric()
+		vp, vt := v.AsPointer()
 		if json {
 			return fmt.Sprintf("\"<tag%x:%v>\"", vt, vp)
 		}
@@ -404,7 +383,7 @@ func (v Value) Dup() Value {
 }
 
 func (v Value) panicType(expected byte) {
-	panicf("expecting %s, got %+v, %v", TMapping[expected], v.Type(), v.ptr)
+	panicf("expecting %s, got %+v", TMapping[expected], v)
 }
 
 func (v Value) testType(expected byte) Value {
@@ -414,6 +393,6 @@ func (v Value) testType(expected byte) Value {
 	return v
 }
 
-func testTypes(v1, v2 Value) uint16 {
+func combineTypes(v1, v2 Value) uint16 {
 	return uint16(v1.Type())<<8 + uint16(v2.Type())
 }

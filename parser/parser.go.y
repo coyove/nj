@@ -32,7 +32,7 @@ import (
 %type<expr> jmp_stat
 %type<expr> func_stat
 %type<expr> flow_stat
-%type<str>  func
+%type<expr> func
 %type<str>  _func
 %type<expr> func_call
 %type<expr> func_args
@@ -123,7 +123,7 @@ _assign_stat:
         prefix_expr            { $$ = $1 } |
         postfix_incdec         { $$ = $1 } |
         declarator '=' expr {
-            $$ = CNode("move", $1, $3)
+            $$ = CNode("move", $1, $3).setPos0($1)
             if $1.Cn() > 0 && $1.Cx(0).S() == "load" {
                 $$ = CNode("store", $1.Cx(1), $1.Cx(2), $3)
             }
@@ -161,7 +161,7 @@ _postfix_assign:
 
 postfix_incdec:
         TIdent _postfix_incdec                    { $$ = CNode("inc", ANode($1).setPos($1), $2) } |
-        TIdent _postfix_assign expr %prec ASSIGN  { $$ = CNode("move", ANode($1), CNode($2, ANode($1).setPos($1), $3)) } |
+        TIdent _postfix_assign expr %prec ASSIGN  { $$ = CNode("move", ANode($1), CNode($2, ANode($1).setPos($1), $3)).setPos0($1) } |
         prefix_expr '[' expr ']' _postfix_incdec  { $$ = CNode("store", $1, $3, CNode("+", CNode("load", $1, $3).setPos0($1), $5).setPos0($1)) } |
         prefix_expr '.' TIdent   _postfix_incdec  { $$ = CNode("store", $1, $3, CNode("+", CNode("load", $1, $3).setPos0($1), $4).setPos0($1)) } |
         prefix_expr '[' expr ']' _postfix_assign expr %prec ASSIGN {
@@ -181,8 +181,8 @@ for_stat:
         TFor TIdent '=' expr ',' expr oneline_or_block {
             vname, ename := ANode($2), ANodeS($2.Str + randomName())
             $$ = CNode("chain",
-                CNode("set", vname, $4),
-                CNode("set", ename, $6),
+                CNode("set", vname, $4).setPos0($1),
+                CNode("set", ename, $6).setPos0($1),
                 CNode("for", 
                     CNode("<", vname, ename).setPos0($1), 
                     CNode("chain", 
@@ -204,17 +204,17 @@ for_stat:
                     cond = CNode("<=", vname, ename)
                 }
                 $$ = CNode("chain",
-                    CNode("set", vname, $4),
-                    CNode("set", ename, $8),
+                    CNode("set", vname, $4).setPos0($1),
+                    CNode("set", ename, $8).setPos0($1),
                     CNode("for", cond, chain, $9).setPos0($1),
                 )
             } else {
                 bname := ANodeS($2.Str + randomName())
                 $$ = CNode("chain", 
-                    CNode("set", vname, $4),
-                    CNode("set", bname, $4),
-                    CNode("set", sname, $6),
-                    CNode("set", ename, $8),
+                    CNode("set", vname, $4).setPos0($1),
+                    CNode("set", bname, $4).setPos0($1),
+                    CNode("set", sname, $6).setPos0($1),
+                    CNode("set", ename, $8).setPos0($1),
                     CNode("if", CNode("<=", NNode(0.0), CNode("*", CNode("-", ename, vname).setPos0($1), sname).setPos0($1)),
                         CNode("chain",
                             CNode("for",
@@ -225,12 +225,14 @@ for_stat:
                                     ),
                                     NNode(0.0),
                                 ),
-                                CNode("chain", CNode("move", vname, CNode("+", vname, sname).setPos0($1))),
+                                CNode("chain", 
+                                    CNode("move", vname, CNode("+", vname, sname).setPos0($1),
+                                ).setPos0($1)),
                                 $9,
-                            ),
+                            ).setPos0($1),
                         ),
                         CNode("chain"),
-                    ),
+                    ).setPos0($1),
                 )
             }
             
@@ -239,20 +241,20 @@ for_stat:
             $$ = CNode("call", "copy", CNode(
                NNode(0),
                $6,
-               CNode("func", "<anony-map-iter-callback>", CNode($2.Str, $4.Str), $7),
-            ))
+               CNode("func", "<anony-map-iter-callback>", CNode($2.Str, $4.Str), $7).setPos0($1),
+            )).setPos0($1)
         }
 
 if_stat:
-        TIf expr oneline_or_block %prec 'T'              { $$ = CNode("if", $2, $3, CNode()) } |
-        TIf expr oneline_or_block TElse oneline_or_block { $$ = CNode("if", $2, $3, $5) }
+        TIf expr oneline_or_block %prec 'T'              { $$ = CNode("if", $2, $3, CNode()).setPos0($1) } |
+        TIf expr oneline_or_block TElse oneline_or_block { $$ = CNode("if", $2, $3, $5).setPos0($1) }
 
 switch_stat:
-        TSwitch expr '{' switch_body '}'         { $$ = expandSwitch($2, $4.C()) }
+        TSwitch expr '{' switch_body '}'         { $$ = expandSwitch($1, $2, $4.C()) }
 
 switch_body:
-        TCase expr ':' stats             { $$ = CNode($2, $4) } |
-        TCase TElse ':' stats            { $$ = CNode(ANode($2), $4) } |
+        TCase expr ':' stats             { $$ = CNode($2, $4).setPos0($1) } |
+        TCase TElse ':' stats            { $$ = CNode(ANode($2), $4).setPos0($1) } |
         switch_body TCase expr ':' stats { $$ = $1.Cappend($3, $5) } |
         switch_body TCase TElse ':' stats{ $$ = $1.Cappend(ANode($3), $5) }
 
@@ -262,7 +264,7 @@ _func:
         _func TVar   { $$ = $1 + ",var" }
 
 func:
-        TFunc _func { $$ = "func," + $2 }
+        TFunc _func { $$ = ANodeS("func," + $2).setPos($1) }
 
 func_stat:
         func TIdent func_params_list oneline_or_block {
@@ -283,7 +285,7 @@ jmp_stat:
         TAssert expr          { $$ = CNode("assert", $2, ANodeS("nil")).setPos0($1) } |
         TAssert expr TString  { $$ = CNode("assert", $2, SNode($3.Str)).setPos0($1) } |
         TReturn expr          { $$ = CNode("ret", $2).setPos0($1) } |
-        TUse TString          { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) }
+        TUse TString          { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str), $1) }
 
 declarator:
         TIdent                                { $$ = ANode($1).setPos($1) } |
@@ -313,7 +315,7 @@ expr_declare_list:
 
 expr:
         TNumber              { $$ = NNode($1.Str).SetPos($1) } |
-        TUse TString         { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) } |
+        TUse TString         { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str), $1) } |
         TTypeof expr         { $$ = CNode("typeof", $2) } |
         TLen expr            { $$ = CNode("len", $2) } |
         TAddressof TIdent    { $$ = CNode("call", "addressof", CNode(ANode($2))) } |
@@ -365,9 +367,9 @@ func_args:
         '(' expr_list ')' { $$ = $2 }
 
 function:
-        func func_params_list block %prec FUN { $$ = CNode($1, "<a>", $2, $3).setPos0($2) } |
-        func ident_list '=' expr %prec FUN    { $$ = CNode($1, "<a>", $2, CNode("chain", CNode("ret", $4))).setPos0($2) } |
-        func '=' expr %prec FUN               { $$ = CNode($1, "<a>", CNode(), CNode("chain", CNode("ret", $3))).setPos0($3) }
+        func func_params_list block %prec FUN { $$ = CNode($1, "<a>", $2, $3).setPos0($1) } |
+        func ident_list '=' expr %prec FUN    { $$ = CNode($1, "<a>", $2, CNode("chain", CNode("ret", $4).setPos0($1))).setPos0($1) } |
+        func '=' expr %prec FUN               { $$ = CNode($1, "<a>", CNode(), CNode("chain", CNode("ret", $3).setPos0($1))).setPos0($1) }
 
 func_params_list:
         '(' ')'            { $$ = CNode() } |
@@ -391,9 +393,9 @@ func randomName() string {
     return fmt.Sprintf("%x", _rand.Fetch(16))
 }
 
-func expandSwitch(sub *Node, cases []*Node) *Node {
+func expandSwitch(switchTok Token, sub *Node, cases []*Node) *Node {
     subject := ANodeS("switch" + randomName())
-    ret := CNode("chain", CNode("set", subject, sub))
+    ret := CNode("chain", CNode("set", subject, sub).setPos0(switchTok))
 
     var lastif, root *Node
     var defaultCase *Node
@@ -404,7 +406,7 @@ func expandSwitch(sub *Node, cases []*Node) *Node {
             continue
         }
 
-        casestat := CNode("if", CNode("==", subject, cases[i]), cases[i + 1])
+        casestat := CNode("if", CNode("==", subject, cases[i]), cases[i + 1]).setPos0(cases[i])
         if lastif != nil {
             lastif.Cappend(CNode("chain", casestat))
         } else {
