@@ -82,15 +82,6 @@ while 1 ,a=a+1 {
 }
 assert a == 2 
  
-
-var a = dup ({1,2,3}) use fun(i,a) {
-    yield "1" 
-    yield "2" 
-    yield "3" 
-}
-
-assert a =={"1","2","3"} 
-
 var a = {} 
 var i = 0, j = 1
 while i < 10,
@@ -112,11 +103,11 @@ while 1 {
 
 assert a == {1,2,4,8,16,} 
 
-for  i, v = a  assert v == 1 << i 
+foreach  i, v = a  assert v == 1 << i 
 
 
 var m = {} 
-for  a,b={1,2,3}  {
+foreach  a,b={1,2,3}  {
     m[len(m)] = b 
     if (a == 1) break 
 } 
@@ -125,14 +116,15 @@ assert m == {1,2}
 
 var m = {} 
 var s = {1,2,3,4,5,6,7,8,9,10} 
-var s2 = dup s use fun (i, a) { return itoa(a)  }
+var s2 = {}
+foreach i, v = s s2[i] = itoa(v)
 
 for  i = 0,10  {
     var a = {} 
     if (i == 5) continue 
     if (i == 8) break 
 
-    for j, s = s {
+    foreach j, s = s {
         a[len(a)] = s  
         if (j == i) {
             for  j = i + 1,len(s2)  {
@@ -184,7 +176,7 @@ assert results == {10, 11}
 
 
 fun foo(m)
-    for k,v=m
+    foreach k,v=m
         if k==2
             return v
 

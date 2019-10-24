@@ -139,27 +139,26 @@ func (env *Env) Stack() []Value {
 }
 
 const (
-	CLS_NOENVESCAPE = 1 << iota
-	CLS_HASRECEIVER
-	CLS_YIELDABLE
-	CLS_RECOVERALL
-	CLS_PSEUDO_FOREACH
+	ClsNoEnvescape = 1 << iota
+	ClsHasReceiver
+	ClsYieldable
+	ClsRecoverable
+	_ClsPseudoForeach
 )
 
 // Closure is the closure struct used in potatolang
 type Closure struct {
-	code      []uint32
-	pos       posVByte
-	source    string
-	consts    []Value
-	env       *Env
-	caller    Value
-	preArgs   []Value
-	native    func(env *Env) Value
-	argsCount byte
-	options   byte
-	lastp     uint32
-	lastenv   *Env
+	code        []uint32
+	pos         posVByte
+	source      string
+	consts      []Value
+	env         *Env
+	partialArgs []Value
+	argsCount   byte
+	options     byte
+	lastp       uint32
+	lastenv     *Env
+	native      func(env *Env) Value
 }
 
 // NewClosure creates a new closure
@@ -178,7 +177,7 @@ func NewNativeValue(argsCount int, f func(env *Env) Value) Value {
 		argsCount: byte(argsCount),
 		native:    f,
 	}
-	cls.Set(CLS_NOENVESCAPE)
+	cls.Set(ClsNoEnvescape)
 	return NewClosureValue(cls)
 }
 
@@ -189,18 +188,14 @@ func (c *Closure) Unset(opt byte) { c.options &= ^opt }
 func (c *Closure) Isset(opt byte) bool { return (c.options & opt) > 0 }
 
 func (c *Closure) AppendPreArgs(preArgs []Value) {
-	if c.preArgs == nil {
-		c.preArgs = make([]Value, 0, 4)
-	}
-
-	c.preArgs = append(c.preArgs, preArgs...)
-	c.argsCount -= byte(len(preArgs))
-	if c.argsCount < 0 {
+	c.partialArgs = append(c.partialArgs, preArgs...)
+	if c.argsCount < byte(len(preArgs)) {
 		panic("negative args count")
 	}
+	c.argsCount -= byte(len(preArgs))
 }
 
-func (c *Closure) PreArgs() []Value { return c.preArgs }
+func (c *Closure) PreArgs() []Value { return c.partialArgs }
 
 func (c *Closure) SetCode(code []uint32) { c.code = code }
 
@@ -212,10 +207,6 @@ func (c *Closure) BytesCode() []byte { return u32Bytes(c.code) }
 
 func (c *Closure) Pos() []byte { return []byte(c.pos) }
 
-func (c *Closure) SetCaller(cr Value) { c.caller = cr }
-
-func (c *Closure) Caller() Value { return c.caller }
-
 // ArgsCount returns the minimal number of arguments closure accepts
 func (c *Closure) ArgsCount() int { return int(c.argsCount) }
 
@@ -225,37 +216,36 @@ func (c *Closure) Env() *Env { return c.env }
 // Dup duplicates the closure
 func (c *Closure) Dup() *Closure {
 	cls := *c
-	if c.preArgs != nil {
-		cls.preArgs = make([]Value, len(c.preArgs))
-		copy(cls.preArgs, c.preArgs)
+	if len(c.partialArgs) > 0 {
+		cls.partialArgs = append([]Value{}, c.partialArgs...)
 	}
 	return &cls
 }
 
 func (c *Closure) String() string {
 	if c.native != nil {
-		return fmt.Sprintf("<native_%da%dc>", c.argsCount, len(c.preArgs))
+		return fmt.Sprintf("<native_%da%dc>", c.argsCount, len(c.partialArgs))
 	}
 	p := "closure"
-	if c.Isset(CLS_NOENVESCAPE) {
+	if c.Isset(ClsNoEnvescape) {
 		p = "pfun"
 	}
 	h := crc32.New(crc32.IEEETable)
 	h.Write(u32Bytes(c.code))
 	hash := base64.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzzz0123456789").EncodeToString(h.Sum(nil)[:3])
 
-	x := fmt.Sprintf("<%s_%s_%da%dc%dk", p, hash, c.argsCount, len(c.preArgs), len(c.consts))
-	if c.Isset(CLS_YIELDABLE) {
+	x := fmt.Sprintf("<%s_%s_%da%dc%dk", p, hash, c.argsCount, len(c.partialArgs), len(c.consts))
+	if c.Isset(ClsYieldable) {
 		x += "_y"
 	}
-	if c.Isset(CLS_HASRECEIVER) {
+	if c.Isset(ClsHasReceiver) {
 		x += "_rcv"
 	}
-	if c.Isset(CLS_RECOVERALL) {
+	if c.Isset(ClsRecoverable) {
 		x += "_safe"
 	}
-	if c.Isset(CLS_PSEUDO_FOREACH) {
-		x += "_psf"
+	if c.Isset(_ClsPseudoForeach) {
+		x += "_pf"
 	}
 	return x + ">"
 }

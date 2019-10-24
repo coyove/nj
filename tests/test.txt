@@ -8,7 +8,7 @@ var fib2 = fun(a, b) {
    }
 }
 
-var fib3 = dup (fib2)
+var fib3 = (fib2)()
  
 for i = 0,33 fib2(0,1)
 
@@ -43,7 +43,7 @@ assert 1 /2+ 2.2 * 5 * (a + 1) == 33.5
 assert 1 /2+ 2.2 * (a + 1) * 5 == 33.5
 
 var l = {1,2,3}, l2= {"1","2","3"}
-l[len(l)] = l2
+l[len l-1+1] = l2
 assert l == {1,2,3, {"1","2","3"}}
 assert (l << l2) == {1,2,3, {"1","2","3"}, "1", "2", "3"}
 
@@ -104,12 +104,16 @@ var m = {
     "key2": {1,2,3}
 }
 
-assert m == dup m
+assert m == m()
 var m2 = {}
 m2.key1 = "value1"
 m2.key2 = {}
 for i=1,4 { m2.key2[len(m2.key2)] = i }
 assert m2 == m
+
+var m3 = m()
+m.key2[0] = 0
+assert m3.key2[0] == 1 and m.key2[0] == 0
 
 //a = 0i0
 //var b = 0iffffffffffffffff
@@ -130,12 +134,12 @@ assert a == 0
 
 var counter = {
     "tick" : 0,
-    "add": fun( step, this) {
+    "add": fun(this, step) {
         this.tick = this.tick + step
     },
 }
 
-var c = dup counter
+var c = counter()
 c.add()(2)
 c.add(1)
 assert c.tick == 3
@@ -239,3 +243,15 @@ switch (fun = b++)() {
 }
 
 assert b == 3
+
+fun multi_return(a, b) {
+    yield a + 1
+    yield b + 1
+    return a + b 
+}
+
+var mr_a = multi_return(1, 2)
+var mr_b = multi_return()
+var mr_ab = multi_return()
+
+assert mr_a == 2 and mr_b == 3 and mr_ab == 3

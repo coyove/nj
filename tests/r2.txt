@@ -26,4 +26,4 @@ assert 1 + (1 + (1 + (1 + a))) + len c == 10
 assert "sep7"
 
 var a = 10
-assert 1 + (1 + a) == dup 12
+assert 1 + (1 + a) == 12

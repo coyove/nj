@@ -441,14 +441,15 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		if _, ok := newtable.sym[argname]; ok {
 			return newpacket(), 0, fmt.Errorf("duplicated parameter: %s", argname)
 		}
-		if argname == "this" && i != len(params.C())-1 {
-			return newpacket(), 0, fmt.Errorf("%+v: 'this' must be the last parameter inside a lambda", atoms[2])
+		if argname == "this" && i != 0 {
+			return newpacket(), 0, fmt.Errorf("%+v: 'this' must be the first parameter inside a lambda", atoms[2])
 		}
 		newtable.put(argname, uint16(i))
 	}
 
-	if len(newtable.sym) > 255 {
-		return newpacket(), 0, fmt.Errorf("do you really need more than 255 arguments?")
+	ln := len(newtable.sym)
+	if ln > 255 {
+		return newpacket(), 0, fmt.Errorf("%+v: do you really need more than 255 arguments?", atoms[2])
 	}
 
 	// this is a special function, inside it any 'continue' will be converted to 'return nil'
@@ -457,17 +458,13 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		newtable.continueNode = append(newtable.continueNode, parser.NewNode(parser.Natom).SetValue(name))
 	}
 
-	newtable.vp = uint16(len(newtable.sym))
-	ln := len(newtable.sym)
-	if _, ok := newtable.sym["this"]; ok {
-		ln--
-	}
+	newtable.vp = uint16(ln)
 
 	if isVar {
 		comps := append(atoms[3].C(), nil)
 		copy(comps[2:], comps[1:])
 		comps[1] = parser.CNode("set", "arguments", parser.CNode(
-			"call", "copy", parser.CNode(parser.NNode(2), parser.NilNode(), parser.NilNode()),
+			"call", "copy", parser.CNode(parser.NNode(2), parser.ANodeS("nil"), parser.ANodeS("nil")),
 		))
 		atoms[3].SetValue(comps)
 	}
@@ -486,19 +483,19 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	cls := Closure{}
 	cls.argsCount = byte(ln)
 	if newtable.y || isSafe {
-		cls.Set(CLS_YIELDABLE)
+		cls.Set(ClsYieldable)
 	}
 	if _, ok := newtable.sym["this"]; ok {
-		cls.Set(CLS_HASRECEIVER)
+		cls.Set(ClsHasReceiver)
 	}
 	if !newtable.envescape {
-		cls.Set(CLS_NOENVESCAPE)
+		cls.Set(ClsNoEnvescape)
 	}
 	if isSafe {
-		cls.Set(CLS_RECOVERALL)
+		cls.Set(ClsRecoverable)
 	}
 	if name == anonyMapIterCallbackFlag {
-		cls.Set(CLS_PSEUDO_FOREACH)
+		cls.Set(_ClsPseudoForeach)
 	}
 
 	buf.WriteOP(OP_LAMBDA, uint16(ln), uint16(cls.options))

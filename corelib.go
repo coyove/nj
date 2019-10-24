@@ -168,9 +168,6 @@ func initCoreLibs() {
 			for i := 1; i < env.SSize(); i++ {
 				newEnv.SPush(env.SGet(i))
 			}
-			if cls.Isset(CLS_HASRECEIVER) {
-				newEnv.SPush(cls.caller)
-			}
 			go cls.Exec(newEnv)
 			return Value{}
 		})).
@@ -205,15 +202,15 @@ func initCoreLibs() {
 					cls.argsCount = byte(env.SGet(2).Num())
 				case "yieldable":
 					if !env.SGet(2).IsFalse() {
-						cls.Set(CLS_YIELDABLE)
+						cls.Set(ClsYieldable)
 					} else {
-						cls.Unset(CLS_YIELDABLE)
+						cls.Unset(ClsYieldable)
 					}
 				case "envescaped":
 					if env.SGet(2).IsFalse() {
-						cls.Set(CLS_NOENVESCAPE)
+						cls.Set(ClsNoEnvescape)
 					} else {
-						cls.Unset(CLS_NOENVESCAPE)
+						cls.Unset(ClsNoEnvescape)
 					}
 				case "source":
 					cls.source = env.SGet(2).Str()
@@ -226,9 +223,9 @@ func initCoreLibs() {
 				case "argscount":
 					return NewNumberValue(float64(cls.argsCount))
 				case "yieldable":
-					return NewBoolValue(cls.Isset(CLS_YIELDABLE))
+					return NewBoolValue(cls.Isset(ClsYieldable))
 				case "envescaped":
-					return NewBoolValue(!cls.Isset(CLS_NOENVESCAPE))
+					return NewBoolValue(!cls.Isset(ClsNoEnvescape))
 				case "source":
 					return NewStringValue(cls.source)
 				}

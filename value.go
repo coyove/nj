@@ -266,13 +266,12 @@ func (v Value) Equal(r Value) bool {
 			c0.lastenv == c1.lastenv &&
 			c0.lastp == c1.lastp &&
 			bytes.Equal(u32Bytes(c0.code), u32Bytes(c1.code)) &&
-			c0.caller.Equal(c1.caller) &&
-			len(c0.preArgs) == len(c1.preArgs)
+			len(c0.partialArgs) == len(c1.partialArgs)
 		if !e {
 			return false
 		}
-		for i, arg := range c0.preArgs {
-			if !arg.Equal(c1.preArgs[i]) {
+		for i, arg := range c0.partialArgs {
+			if !arg.Equal(c1.partialArgs[i]) {
 				return false
 			}
 		}
@@ -388,6 +387,19 @@ func (v Value) toString(lv int, json bool) string {
 	return "nil"
 }
 
+func (v Value) Dup() Value {
+	switch v.Type() {
+	case Tnil, Tnumber, Tstring, Tgeneric:
+		return v
+	case Tclosure:
+		return NewClosureValue(v.AsClosure().Dup())
+	case Tmap:
+		return NewMapValue(v.AsMap().Dup())
+	default:
+		panic("unreachable code")
+	}
+}
+
 func (v Value) panicType(expected byte) {
 	panicf("expecting %s, got %+v, %v", TMapping[expected], v.Type(), v.ptr)
 }
@@ -401,17 +413,4 @@ func (v Value) testType(expected byte) Value {
 
 func testTypes(v1, v2 Value) uint16 {
 	return uint16(v1.Type())<<8 + uint16(v2.Type())
-}
-
-//go:nosplit
-func add(p unsafe.Pointer, x uintptr) unsafe.Pointer {
-	return unsafe.Pointer(uintptr(p) + x)
-}
-
-func readUnaligned32(p unsafe.Pointer) uint32 {
-	return *(*uint32)(p)
-}
-
-func readUnaligned64(p unsafe.Pointer) uint64 {
-	return *(*uint64)(p)
 }

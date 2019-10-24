@@ -3,7 +3,6 @@ package potatolang
 import (
 	"bytes"
 	"fmt"
-	"reflect"
 	"sync/atomic"
 	"unsafe"
 )
@@ -59,20 +58,15 @@ func (e *ExecError) Error() string {
 	return msg.String()
 }
 
-func kodeaddr(code []uint32) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&code)).Data }
-
 // ExecCursor executes code under the given env from the given start cursor and returns:
 // 1. final result 2. yield cursor 3. is yield or not
 func ExecCursor(env *Env, K *Closure, cursor uint32) (_v Value, _p uint32, _y bool) {
 	var newEnv *Env
-	var flag *uintptr
 	var retStack []stacktrace
-	var code = K.code
-	var caddr = kodeaddr(code)
 
 	defer func() {
 		if r := recover(); r != nil {
-			if K.Isset(CLS_RECOVERALL) {
+			if K.Isset(ClsRecoverable) {
 				if rv, ok := r.(Value); ok {
 					_v, _p, _y = rv, 0, false
 				} else {
@@ -105,8 +99,6 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (_v Value, _p uint32, _y bo
 		r := retStack[len(retStack)-1]
 		cursor = r.cursor
 		K = r.cls
-		code = r.cls.code
-		caddr = kodeaddr(code)
 		r.env.A = v
 		if r.noenvescape {
 			newEnv = env
@@ -116,15 +108,15 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (_v Value, _p uint32, _y bo
 		retStack = retStack[:len(retStack)-1]
 	}
 
-	flag = env.Cancel
 MAIN:
 	for {
-		if flag != nil && atomic.LoadUintptr(flag) == 1 {
+		if env.Cancel != nil && atomic.LoadUintptr(env.Cancel) == 1 {
 			panicf("canceled")
 		}
 
 		//log.Println(cursor)
-		v := *(*uint32)(unsafe.Pointer(uintptr(cursor)*4 + caddr))
+		// v := *(*uint32)(unsafe.Pointer(uintptr(cursor)*4 + caddr))
+		v := K.code[cursor]
 		cursor++
 		bop, opa, opb := op(v)
 
@@ -350,7 +342,17 @@ MAIN:
 				if a.Type() == Tmap {
 					v, _ = a.AsMap().getFromMap(vidx)
 					if v.Type() == Tclosure {
-						v.AsClosure().SetCaller(a)
+						if cls := v.AsClosure(); cls.Isset(ClsHasReceiver) {
+							cls = cls.Dup()
+							if cls.argsCount > 0 {
+								if len(cls.partialArgs) > 0 {
+									panicf("curry function with a receiver")
+								}
+								cls.argsCount--
+								cls.partialArgs = []Value{a}
+							}
+							v = NewClosureValue(cls)
+						}
 					}
 				} else if a.Type() == Tgeneric {
 					v = GLoad(a, int(vidx.AsNumber()))
@@ -402,7 +404,7 @@ MAIN:
 			}
 		case OP_PUSH:
 			if newEnv == nil {
-				newEnv = NewEnv(nil, flag)
+				newEnv = NewEnv(nil, env.Cancel)
 			}
 			newEnv.SPush(env.Get(opa, K))
 		case OP_RET:
@@ -414,10 +416,14 @@ MAIN:
 		case OP_YIELD:
 			return env.Get(opa, K), cursor, true
 		case OP_LAMBDA:
-			env.A = NewClosureValue(crReadClosure(code, &cursor, env, opa, opb))
+			env.A = NewClosureValue(crReadClosure(K.code, &cursor, env, opa, opb))
 		case OP_CALL:
 			v := env.Get(opa, K)
-			if v.Type() != Tclosure {
+			if x := v.Type(); x != Tclosure {
+				if x == Tmap {
+					env.A = NewMapValue(v.AsMap().Dup())
+					continue
+				}
 				v.panicType(Tclosure)
 			}
 			cls := v.AsClosure()
@@ -427,7 +433,7 @@ MAIN:
 			} else if (newEnv == nil && cls.argsCount > 0) ||
 				(newEnv != nil && newEnv.SSize() < int(cls.argsCount)) {
 				if newEnv == nil || newEnv.SSize() == 0 {
-					env.A = NewClosureValue(cls)
+					env.A = NewClosureValue(cls.Dup())
 				} else {
 					curry := cls.Dup()
 					curry.AppendPreArgs(newEnv.Stack())
@@ -436,28 +442,22 @@ MAIN:
 				}
 			} else {
 				if newEnv == nil {
-					newEnv = NewEnv(env, flag)
+					newEnv = NewEnv(env, env.Cancel)
 				}
-				if len(cls.preArgs) > 0 {
-					newEnv.SInsert(0, cls.preArgs)
+				if len(cls.partialArgs) > 0 {
+					newEnv.SInsert(0, cls.partialArgs)
 				}
-				if cls.Isset(CLS_HASRECEIVER) {
-					newEnv.SPush(cls.caller)
-				}
-				if cls.Isset(CLS_YIELDABLE) || cls.native != nil || cls.Isset(CLS_RECOVERALL) {
+				if cls.Isset(ClsYieldable) || cls.native != nil || cls.Isset(ClsRecoverable) {
 					newEnv.trace = retStack
 					newEnv.parent = env
 					env.A = cls.Exec(newEnv)
 				} else {
-					if retStack == nil {
-						retStack = make([]stacktrace, 0, 1)
-					}
 					// log.Println(newEnv.stack)
 					last := stacktrace{
 						cursor:      cursor,
 						env:         env,
 						cls:         K,
-						noenvescape: cls.Isset(CLS_NOENVESCAPE),
+						noenvescape: cls.Isset(ClsNoEnvescape),
 					}
 
 					// switch to the env of cls
@@ -465,8 +465,6 @@ MAIN:
 					K = cls
 					newEnv.parent = cls.env
 					env = newEnv
-					code = cls.code
-					caddr = kodeaddr(code)
 
 					retStack = append(retStack, last)
 				}
@@ -572,7 +570,7 @@ func doCopy(env *Env, flag float64, pred Value) (_v Value, _b bool) {
 				if alloc {
 					newstr = append(newstr, cls.Exec(newEnv))
 				} else {
-					if cls.Isset(CLS_PSEUDO_FOREACH) {
+					if cls.Isset(_ClsPseudoForeach) {
 						if res := cls.Exec(newEnv); res == PhantomValue {
 							break
 						} else if cls.lastp > 0 {
@@ -598,7 +596,7 @@ func doCopy(env *Env, flag float64, pred Value) (_v Value, _b bool) {
 		if env.A.Type() != Tmap {
 			env.A.panicType(Tmap)
 		}
-		env.A = NewMapValue(env.A.AsMap().Dup(nil))
+		env.A = NewMapValue(env.A.AsMap().Dup())
 		return
 	}
 
@@ -614,12 +612,7 @@ func doCopy(env *Env, flag float64, pred Value) (_v Value, _b bool) {
 	switch env.A.Type() {
 	case Tmap:
 		if alloc {
-			env.A = NewMapValue(env.A.AsMap().Dup(func(k Value, v Value) Value {
-				newEnv.SClear()
-				newEnv.SPush(k)
-				newEnv.SPush(v)
-				return cls.Exec(newEnv)
-			}))
+			env.A = NewMapValue(env.A.AsMap().Dup())
 		} else {
 			m := env.A.AsMap()
 			for i, v := range m.l {

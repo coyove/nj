@@ -8,19 +8,19 @@ var curry = fun(f) {
     var __remain = __argscount
 
     fun appendargs(args) {
-        for i, __arg = __args {
+        foreach i, __arg = __args {
             if (__arg == _ and len(args) > 0) {
                 __args[i] = args[0]
                 args = args[1:]
             }
         }
 
-        for i, arg = args {
+        foreach i, arg = args {
             __args[len(__args)] = arg
         }
 
         __remain = __argscount - len(__args)
-        for i, __arg = __args {
+        foreach i, __arg = __args {
             if (__arg == _) {
                 __remain = __remain+1
             }

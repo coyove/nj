@@ -26,24 +26,17 @@ func NewMapSize(n int) *Map {
 }
 
 // Dup duplicates the map
-func (m *Map) Dup(duper func(Value, Value) Value) *Map {
+func (m *Map) Dup() *Map {
 	m2 := &Map{}
 	m2.l = make([]Value, len(m.l))
-	if duper == nil {
-		copy(m2.l, m.l)
-	} else {
-		for i, x := range m.l {
-			m2.l[i] = duper(NewNumberValue(float64(i)), x)
-		}
+	for i, x := range m.l {
+		m2.l[i] = x.Dup()
 	}
 
 	if m.m != nil {
-		m2.m = make(map[interface{}]Value)
+		m2.m = make(map[interface{}]Value, len(m.m))
 		for k, v := range m.m {
-			if duper != nil {
-				v = duper(NewValueFromInterface(k), v)
-			}
-			m2.m[k] = v
+			m2.m[k] = v.Dup()
 		}
 	}
 	return m2

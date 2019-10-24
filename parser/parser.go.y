@@ -48,7 +48,7 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAddressof TAssert TBreak TCase TContinue TElse TFor TFunc TIf TLen TNew TNil TNot TReturn TUse TSwitch TTypeof TVar TWhile TYield
+%token<token> TAddressof TAssert TBreak TCase TContinue TElse TFor TForeach TFunc TIf TLen TNot TReturn TUse TSwitch TTypeof TVar TWhile TYield
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
@@ -71,7 +71,7 @@ import (
 %right '~'
 %right '#'
 %left TAddAdd TMinMin
-%right TTypeof, TAddressof, TLen, TNew, TUse
+%right TTypeof, TAddressof, TLen, TUse
 
 %% 
 
@@ -130,6 +130,7 @@ _assign_stat:
                 $$ = CNode("store", $1.Cx(1), $1.Cx(2), $3)
             }
             if c := $1.S(); c != "" && $1.Type == Natom {
+                // For 'a = a +/- n', we will simplify it as 'inc a +/- n'
                 if a, b, s := $3.isSimpleAddSub(); a == c {
                     $3.Cx(2).Value = $3.Cx(2).N() * s
                     $$ = CNode("inc", $1, $3.Cx(2))
@@ -236,7 +237,7 @@ for_stat:
             }
             
         } |
-        TFor TIdent ',' TIdent '=' expr oneline_or_block {
+        TForeach TIdent ',' TIdent '=' expr oneline_or_block {
             $$ = CNode("call", "copy", CNode(
                NNode(0),
                $6,
@@ -270,7 +271,7 @@ func_stat:
             funcname := ANode($2)
             $$ = CNode(
                 "chain", 
-                CNode("set", funcname, NilNode()).setPos0($2), 
+                CNode("set", funcname, ANodeS("nil")).setPos0($2), 
                 CNode("move", funcname, 
                     CNode($1, funcname, $3, $4).setPos0($2),
                 ).setPos0($2),
@@ -281,7 +282,7 @@ jmp_stat:
         TYield expr           { $$ = CNode("yield", $2).setPos0($1) } |
         TBreak                { $$ = CNode("break").setPos0($1) } |
         TContinue             { $$ = CNode("continue").setPos0($1) } |
-        TAssert expr          { $$ = CNode("assert", $2, NilNode()).setPos0($1) } |
+        TAssert expr          { $$ = CNode("assert", $2, ANodeS("nil")).setPos0($1) } |
         TAssert expr TString  { $$ = CNode("assert", $2, SNode($3.Str)).setPos0($1) } |
         TReturn expr          { $$ = CNode("ret", $2).setPos0($1) } |
         TUse TString          { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) }
@@ -307,20 +308,17 @@ expr_assign_list:
         expr_assign_list ',' expr ':' expr    { $$ = $1.Cappend($3).Cappend($5) }
 
 expr_declare_list:
-        TIdent                                { $$ = CNode("chain", CNode("set", ANode($1), NilNode()).setPos0($1)) } |
+        TIdent                                { $$ = CNode("chain", CNode("set", ANode($1), ANodeS("nil")).setPos0($1)) } |
         TIdent '=' expr                       { $$ = CNode("chain", CNode("set", ANode($1), $3).setPos0($1)) } |
         expr_declare_list ',' TIdent '=' expr { $$ = $1.Cappend(CNode("set", ANode($3), $5).setPos0($1)) } |
-        expr_declare_list ',' TIdent          { $$ = $1.Cappend(CNode("set", ANode($3), NilNode()).setPos0($1)) }
+        expr_declare_list ',' TIdent          { $$ = $1.Cappend(CNode("set", ANode($3), ANodeS("nil")).setPos0($1)) }
 
 expr:
-        TNil                 { $$ = NilNode().SetPos($1) } |
         TNumber              { $$ = NNode($1.Str).SetPos($1) } |
         TUse TString         { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str)) } |
         TTypeof expr         { $$ = CNode("typeof", $2) } |
         TLen expr            { $$ = CNode("len", $2) } |
         TAddressof TIdent    { $$ = CNode("call", "addressof", CNode(ANode($2))) } |
-        TNew expr            { $$ = CNode("call", "copy", CNode(NNode(1), $2, NilNode())) } |
-        TNew expr TUse expr  { $$ = CNode("call", "copy", CNode(NNode(1), $2, $4)) } |
         function             { $$ = $1 } |
         map_gen              { $$ = $1 } |
         prefix_expr          { $$ = $1 } |
