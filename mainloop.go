@@ -3,6 +3,7 @@ package potatolang
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 	"sync/atomic"
 	"unsafe"
 )
@@ -60,11 +61,14 @@ func (e *ExecError) Error() string {
 	return msg.String()
 }
 
+func kodeaddr(code []uint32) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&code)).Data }
+
 // ExecCursor executes code under the given env from the given start cursor and returns:
 // 1. final result 2. yield cursor 3. is yield or not
 func ExecCursor(env *Env, K *Closure, cursor uint32) (_v Value, _p uint32, _y bool) {
 	var newEnv *Env
 	var retStack []stacktrace
+	var caddr = kodeaddr(K.code)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -102,6 +106,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (_v Value, _p uint32, _y bo
 		cursor = r.cursor
 		K = r.cls
 		r.env.A = v
+		caddr = kodeaddr(K.code)
 		if r.noenvescape {
 			newEnv = env
 			newEnv.SClear()
@@ -110,15 +115,17 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (_v Value, _p uint32, _y bo
 		retStack = retStack[:len(retStack)-1]
 	}
 
+	flag := env.Cancel
+
 MAIN:
 	for {
-		if env.Cancel != nil && atomic.LoadUintptr(env.Cancel) == 1 {
+		if flag != nil && atomic.LoadUintptr(flag) == 1 {
 			panicf("canceled")
 		}
 
 		//log.Println(cursor)
-		// v := *(*uint32)(unsafe.Pointer(uintptr(cursor)*4 + caddr))
-		v := K.code[cursor]
+		v := *(*uint32)(unsafe.Pointer(uintptr(cursor)*4 + caddr))
+		//v := K.code[cursor]
 		cursor++
 		bop, opa, opb := op(v)
 
@@ -459,6 +466,7 @@ MAIN:
 					// switch to the env of cls
 					cursor = 0
 					K = cls
+					caddr = kodeaddr(K.code)
 					newEnv.parent = cls.env
 					env = newEnv
 

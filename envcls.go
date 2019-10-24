@@ -109,10 +109,11 @@ REPEAT:
 		y, env = y-1, env.parent
 		goto REPEAT
 	}
-	if index >= len(env.stack) {
+	s := env.stack
+	if index >= len(s) {
 		return Value{}
 	}
-	return env.stack[index]
+	return s[index]
 }
 
 func (env *Env) Set(yx uint16, v Value) {
