@@ -401,8 +401,14 @@ redo:
 			err = sc.scanBlockString(buf)
 			tok.Str = buf.String()
 		case '[':
-			tok.Type = ch
-			tok.Str = string(ch)
+			if sc.Peek() == ']' {
+				tok.Type = TSquare
+				tok.Str = "[]"
+				sc.Next()
+			} else {
+				tok.Type = ch
+				tok.Str = string(ch)
+			}
 		case '=', '+', '-':
 			p := sc.Peek()
 			if p == ch {

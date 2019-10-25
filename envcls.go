@@ -92,7 +92,7 @@ func (e *Env) SetParent(parent *Env) {
 	e.parent = parent
 }
 
-func (env *Env) Get(yx uint16, cls *Closure) Value {
+func (env *Env) Get(yx uint16, consts uintptr) Value {
 	if yx == regA {
 		return env.A
 	}
@@ -100,7 +100,7 @@ func (env *Env) Get(yx uint16, cls *Closure) Value {
 	index := int(yx & 0x3ff)
 
 	if y == 7 {
-		return cls.consts[index]
+		return *(*Value)(unsafe.Pointer(consts + SizeOfValue*uintptr(index)))
 	}
 
 REPEAT:

@@ -5,7 +5,8 @@ assert "abc吱吱吱" == "abc" + "吱吱" + "吱"
 assert "abc吱吱吱" == "abc\u5431\u5431\u5431"
 
 var dupcheck = {97,98,99,32452}
-foreach i, r = ("abc组织者")[ :6] assert dupcheck[i] == r 
+var text = ("abc组织者")[:3]
+for i = 0, len(text) assert dupcheck[i] == text[i]
 
 assert itoa(1) == "1"
 assert itoa(10000000000) == "10000000000"

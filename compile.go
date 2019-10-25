@@ -41,28 +41,22 @@ func newsymtable() *symtable {
 	return t
 }
 
-func (table *symtable) incrvp() {
-	if table.vp > 1000 { //1<<10 {
-		panic("code too complex, may be there are too many variables (1000) in a single scope")
-	}
-	table.vp++
-}
-
-func (table *symtable) borrowTmp(reuseable bool) uint16 {
+func (table *symtable) borrowAddress() uint16 {
 	for tmp, ok := range table.reusableTmps {
 		if ok {
 			table.reusableTmps[tmp] = false
 			return tmp
 		}
 	}
-	table.incrvp()
-	if reuseable {
-		table.reusableTmps[table.vp-1] = false
+	if table.vp > 1000 { //1<<10 {
+		panic("code too complex, may be there are too many variables (1000) in a single scope")
 	}
+	table.reusableTmps[table.vp] = false
+	table.vp++
 	return table.vp - 1
 }
 
-func (table *symtable) returnTmp(v uint16) {
+func (table *symtable) returnAddress(v uint16) {
 	//	log.Println("$$", table.reusableTmps, v, table.vp)
 	//if v == table.vp-1 {
 	//	table.vp--
@@ -84,7 +78,7 @@ func (table *symtable) get(varname string) (uint16, bool) {
 		k, e := table.sym[varname]
 		if e {
 			if depth > 6 || (depth == 6 && k > 1000) {
-				panic("too many levels (8) to refer a variable, try simplifing your code")
+				panic("too many levels (7) to refer a variable, try simplifing your code")
 			}
 			return (depth << 10) | (uint16(k) & 0x03ff), true
 		}
@@ -124,17 +118,10 @@ func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
 }
 
 var flatOpMapping = map[string]byte{
-	"+": OP_ADD, "-": OP_SUB, "*": OP_MUL, "/": OP_DIV, "%": OP_MOD,
-	"<": OP_LESS, "<=": OP_LESS_EQ, "==": OP_EQ, "!=": OP_NEQ, "!": OP_NOT,
-	"~": OP_BIT_NOT, "&": OP_BIT_AND, "|": OP_BIT_OR, "^": OP_BIT_XOR, "<<": OP_BIT_LSH, ">>": OP_BIT_RSH, ">>>": OP_BIT_URSH,
-	"#": OP_POP, "store": OP_STORE, "load": OP_LOAD, "assert": OP_ASSERT, "slice": OP_SLICE, "typeof": OP_TYPEOF, "len": OP_LEN,
-}
-
-var flatOpMappingRev = map[byte]string{
-	OP_ADD: "+", OP_SUB: "-", OP_MUL: "*", OP_DIV: "/", OP_MOD: "%",
-	OP_LESS: "<", OP_LESS_EQ: "<=", OP_EQ: "==", OP_NEQ: "!=", OP_NOT: "!",
-	OP_BIT_NOT: "~", OP_BIT_AND: "&", OP_BIT_OR: "|", OP_BIT_XOR: "^", OP_BIT_LSH: "<<", OP_BIT_RSH: ">>", OP_BIT_URSH: ">>>",
-	OP_POP: "#", OP_STORE: "store", OP_LOAD: "load", OP_ASSERT: "assert", OP_SLICE: "slice", OP_TYPEOF: "typeof", OP_LEN: "len",
+	"+": OpAdd, "-": OpSub, "*": OpMul, "/": OpDiv, "%": OpMod,
+	"<": OpLess, "<=": OpLessEq, "==": OpEq, "!=": OpNeq, "!": OpNot,
+	"~": OpBitNot, "&": OpBitAnd, "|": OpBitOr, "^": OpBitXor, "<<": OpBitLsh, ">>": OpBitRsh, ">>>": OpBitURsh, "#": OpPop,
+	"store": OpStore, "load": OpLoad, "assert": OpAssert, "slice": OpSlice, "typeof": OpTypeof, "len": OpLen, "foreach": OpForeach,
 }
 
 func (table *symtable) writeOpcode(buf *packet, op byte, n0, n1 *parser.Node) (err error) {
@@ -142,7 +129,7 @@ func (table *symtable) writeOpcode(buf *packet, op byte, n0, n1 *parser.Node) (e
 	getAddr := func(n *parser.Node) (uint16, error) {
 		switch n.Type {
 		case parser.Ncompound:
-			code, addr, err := table.compileCompoundInto(n, true, true, 0)
+			code, addr, err := table.compileCompoundInto(n, true, 0)
 			if err != nil {
 				return 0, err
 			}
@@ -166,7 +153,7 @@ func (table *symtable) writeOpcode(buf *packet, op byte, n0, n1 *parser.Node) (e
 
 	defer func() {
 		for _, tmp := range tmp {
-			table.returnTmp(tmp)
+			table.returnAddress(tmp)
 		}
 	}()
 
@@ -190,7 +177,7 @@ func (table *symtable) writeOpcode(buf *packet, op byte, n0, n1 *parser.Node) (e
 		return err
 	}
 
-	if op == OP_SET && n0a == n1a {
+	if op == OpSet && n0a == n1a {
 		return nil
 	}
 
@@ -198,7 +185,7 @@ func (table *symtable) writeOpcode(buf *packet, op byte, n0, n1 *parser.Node) (e
 	return nil
 }
 
-func (table *symtable) compileCompoundInto(compound *parser.Node, newVar, reuseable bool, existedVar uint16) (code packet, yx uint16, err error) {
+func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, existedVar uint16) (code packet, yx uint16, err error) {
 	buf := newpacket()
 
 	var newYX uint16
@@ -209,12 +196,12 @@ func (table *symtable) compileCompoundInto(compound *parser.Node, newVar, reusea
 
 	buf.Write(code)
 	if newVar {
-		yx = table.borrowTmp(reuseable)
+		yx = table.borrowAddress()
 	} else {
 		yx = existedVar
 	}
 
-	buf.WriteOP(OP_SET, yx, newYX)
+	buf.WriteOP(OpSet, yx, newYX)
 	return buf, yx, nil
 }
 
@@ -223,14 +210,6 @@ func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint16, err 
 
 	switch n.Type {
 	case parser.Natom:
-		if n.Value.(string) == "nil" {
-			buf := newpacket()
-			yx = table.vp
-			buf.WriteOP(OP_SET, yx, 0)
-			table.incrvp()
-			return buf, yx, nil
-		}
-
 		var ok bool
 		varIndex, ok = table.get(n.Value.(string))
 		if !ok {
@@ -335,7 +314,7 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 		return nil, err
 	}
 
-	code.WriteOP(OP_EOB, 0, 0)
+	code.WriteOP(OpEOB, 0, 0)
 	consts := make([]Value, len(table.consts))
 	for i, k := range table.consts {
 		switch k := k.(type) {

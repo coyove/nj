@@ -53,6 +53,7 @@ import (
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
 %token<token> TAddEq TSubEq TMulEq TDivEq TModEq TAndEq TOrEq TXorEq TLshEq TRshEq TURshEq
+%token<token> TSquare
 
 /* Operators */
 %right 'T'
@@ -237,12 +238,8 @@ for_stat:
             }
             
         } |
-        TForeach TIdent ',' TIdent '=' expr oneline_or_block {
-            $$ = CNode("call", "copy", CNode(
-               NNode(0),
-               $6,
-               CNode("func", "<anony-map-iter-callback>", CNode($2.Str, $4.Str), $7).setPos0($1),
-            )).setPos0($1)
+        TForeach expr '=' expr {
+            $$ = CNode("foreach", $2, $4).setPos0($1)
         }
 
 if_stat:
@@ -289,6 +286,7 @@ jmp_stat:
 
 declarator:
         TIdent                                { $$ = ANode($1).setPos($1) } |
+        TIdent TSquare                        { $$ = CNode("load", ANodeS("nil"), $1.Str).setPos0($1) } |
         prefix_expr '[' expr ']'              { $$ = CNode("load", $1, $3).setPos0($3).setPos($3) } |
         prefix_expr '[' expr ':' expr ']'     { $$ = CNode("slice", $1, $3, $5).setPos0($3).setPos($3) } |
         prefix_expr '[' expr ':' ']'          { $$ = CNode("slice", $1, $3, NNode("-1")).setPos0($3).setPos($3) } |

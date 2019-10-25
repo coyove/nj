@@ -182,6 +182,10 @@ func (v Value) AsNumber() float64 {
 	return math.Float64frombits(^uint64(uintptr(v.ptr)))
 }
 
+func (v Value) AsInt32() int32 {
+	return int32(int64(math.Float64frombits(^uint64(uintptr(v.ptr)))) & 0xffffffff)
+}
+
 // AsMap cast value to map of values
 func (v Value) AsMap() *Map { return (*Map)(v.ptr) }
 

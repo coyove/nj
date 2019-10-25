@@ -21,6 +21,13 @@ func makeop(op byte, a, b uint16) uint32 {
 	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
 }
 
+func makejmpop(op byte, a uint16, dist int) uint32 {
+	// 6 + 13 + 13
+	dist = checkjmpdist(dist)
+	b := uint16(dist + 1<<12)
+	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
+}
+
 func op(x uint32) (op byte, a, b uint16) {
 	op = byte(x >> 26)
 	a = uint16(x>>13) & 0x1fff
@@ -143,13 +150,25 @@ func (p *packet) Write(buf packet) {
 	p.source = buf.source
 }
 
-func (b *packet) WriteRaw(buf []uint32) { b.data = append(b.data, buf...) }
+func (b *packet) WriteRaw(buf []uint32) {
+	b.data = append(b.data, buf...)
+}
 
-func (b *packet) Write64(v uint64) { b.data = append(b.data, uint32(v>>32), uint32(v)) }
+func (b *packet) Write64(v uint64) {
+	b.data = append(b.data, uint32(v>>32), uint32(v))
+}
 
-func (b *packet) Write32(v uint32) { b.data = append(b.data, v) }
+func (b *packet) Write32(v uint32) {
+	b.data = append(b.data, v)
+}
 
-func (b *packet) WriteOP(op byte, opa, opb uint16) { b.data = append(b.data, makeop(op, opa, opb)) }
+func (b *packet) WriteOP(op byte, opa, opb uint16) {
+	b.data = append(b.data, makeop(op, opa, opb))
+}
+
+func (b *packet) WriteJmpOP(op byte, opa uint16, d int) {
+	b.data = append(b.data, makejmpop(op, opa, d))
+}
 
 func (b *packet) WritePos(p parser.Meta) {
 	if p.Line == 0 {
@@ -243,31 +262,31 @@ func crReadBytesLen(data []uint32, length int, cursor *uint32) []byte {
 }
 
 var singleOp = map[byte]string{
-	OP_ASSERT:   "assert",
-	OP_ADD:      "add",
-	OP_SUB:      "sub",
-	OP_MUL:      "mul",
-	OP_DIV:      "div",
-	OP_MOD:      "mod",
-	OP_EQ:       "eq",
-	OP_NEQ:      "neq",
-	OP_LESS:     "less",
-	OP_LESS_EQ:  "less-eq",
-	OP_LEN:      "len",
-	OP_COPY:     "copy",
-	OP_LOAD:     "load",
-	OP_STORE:    "store",
-	OP_NOT:      "not",
-	OP_BIT_NOT:  "bit-not",
-	OP_BIT_AND:  "bit-and",
-	OP_BIT_OR:   "bit-or",
-	OP_BIT_XOR:  "bit-xor",
-	OP_BIT_LSH:  "bit-lsh",
-	OP_BIT_RSH:  "bit-rsh",
-	OP_BIT_URSH: "bit-ursh",
-	OP_TYPEOF:   "typeof",
-	OP_SLICE:    "slice",
-	OP_POP:      "pop",
+	OpAssert:  "assert",
+	OpAdd:     "add",
+	OpSub:     "sub",
+	OpMul:     "mul",
+	OpDiv:     "div",
+	OpMod:     "mod",
+	OpEq:      "eq",
+	OpNeq:     "neq",
+	OpLess:    "less",
+	OpLessEq:  "less-eq",
+	OpLen:     "len",
+	OpForeach: "copy",
+	OpLoad:    "load",
+	OpStore:   "store",
+	OpNot:     "not",
+	OpBitNot:  "bit-not",
+	OpBitAnd:  "bit-and",
+	OpBitOr:   "bit-or",
+	OpBitXor:  "bit-xor",
+	OpBitLsh:  "bit-lsh",
+	OpBitRsh:  "bit-rsh",
+	OpBitURsh: "bit-ursh",
+	OpTypeof:  "typeof",
+	OpSlice:   "slice",
+	OpPop:     "pop",
 }
 
 func (c *Closure) crPrettify(tab int) string {
@@ -323,41 +342,41 @@ MAIN:
 		}
 
 		switch bop {
-		case OP_EOB:
+		case OpEOB:
 			sb.WriteString("end\n")
 			break MAIN
-		case OP_SET:
+		case OpSet:
 			sb.WriteString(readAddr(a) + " = " + readAddr(b))
-		case OP_PUSH:
+		case OpPush:
 			sb.WriteString("push " + readAddr(a))
-		case OP_RET:
+		case OpRet:
 			sb.WriteString("ret " + readAddr(a))
-		case OP_YIELD:
+		case OpYield:
 			sb.WriteString("yield " + readAddr(a))
-		case OP_LAMBDA:
+		case OpLambda:
 			sb.WriteString("$a = closure:\n")
 			cls := crReadClosure(c.code, &cursor, nil, a, b)
 			sb.WriteString(cls.crPrettify(tab + 1))
-		case OP_CALL:
+		case OpCall:
 			sb.WriteString("call " + readAddr(a))
-		case OP_JMP:
+		case OpJmp:
 			pos := int32(b) - 1<<12
 			pos2 := uint32(int32(cursor) + pos)
 			sb.WriteString("jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
-		case OP_IF, OP_IFNOT:
+		case OpIf, OpIfNot:
 			addr := readAddr(a)
 			pos := int32(b) - 1<<12
 			pos2 := strconv.Itoa(int(int32(cursor) + pos))
-			if bop == OP_IFNOT {
+			if bop == OpIfNot {
 				sb.WriteString("if not " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
 			} else {
 				sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
 			}
-		case OP_NOP:
+		case OpNOP:
 			sb.WriteString("nop")
-		case OP_INC:
+		case OpInc:
 			sb.WriteString("inc " + readAddr(a) + " " + readAddr(uint16(b)))
-		case OP_MAKEMAP:
+		case OpMakeMap:
 			if a == 1 {
 				sb.WriteString("make-array")
 			} else {

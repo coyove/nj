@@ -4,10 +4,19 @@ import (
 	"github.com/coyove/potatolang/parser"
 )
 
+func (table *symtable) decompound(atoms []*parser.Node) (buf packet, err error) {
+	return table._decompound(atoms, true)
+}
+
+func (table *symtable) decompoundWithoutA(atoms []*parser.Node) (buf packet, err error) {
+	return table._decompound(atoms, false)
+}
+
 // decompound() will accept a list of atoms, for every compound atom inside,
 // it will decompound it into a new temp variable and replace the original one with a Naddr node of this variable.
-// for the last compound (if any) decompounded, it will not be saved into a temp variable and used directly (to save some space).
-func (table *symtable) decompound(atoms []*parser.Node, dontUseA ...bool) (buf packet, err error) {
+// for the last compound (if any) decompounded, it will not be saved into a temp variable
+// and used directly (to save some space) if useA == true.
+func (table *symtable) _decompound(atoms []*parser.Node, useA bool) (buf packet, err error) {
 	buf = newpacket()
 
 	var lastCompound struct {
@@ -24,7 +33,7 @@ func (table *symtable) decompound(atoms []*parser.Node, dontUseA ...bool) (buf p
 		var code packet
 
 		if atom.Type == parser.Ncompound {
-			if code, yx, err = table.compileCompoundInto(atom, true, true, 0); err != nil {
+			if code, yx, err = table.compileCompoundInto(atom, true, 0); err != nil {
 				return
 			}
 
@@ -36,10 +45,10 @@ func (table *symtable) decompound(atoms []*parser.Node, dontUseA ...bool) (buf p
 		}
 	}
 
-	if lastCompound.n != nil && len(dontUseA) == 0 {
+	if lastCompound.n != nil && useA {
 		_, old, opb := op(buf.data[len(buf.data)-1])
 		buf.TruncateLast(1)
-		table.returnTmp(old)
+		table.returnAddress(old)
 		atoms[lastCompound.i].SetValue(opb)
 	}
 
