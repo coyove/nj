@@ -73,9 +73,6 @@ var (
 		NilType: "nil", NumberType: "num", StringType: "str", ClosureType: "cls", PointerType: "ptr", MapType: "map",
 	}
 
-	// PhantomValue is a global readonly value to represent the true "void"
-	PhantomValue = NewMapValue(&Map{})
-
 	_zero = NewNumberValue(0)
 )
 

@@ -34,13 +34,27 @@ func initMathLib() {
 
 	var _bvalue32 = func(i uint32) Value { return NewNumberValue(float64(i)) }
 	lmath.Puts("u32", NewMapValue(NewMap().
-		Puts("add", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) + uint32(env.SGet(1).MustNumber())) })).
-		Puts("sub", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) - uint32(env.SGet(1).MustNumber())) })).
-		Puts("mul", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) * uint32(env.SGet(1).MustNumber())) })).
-		Puts("div", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) / uint32(env.SGet(1).MustNumber())) })).
-		Puts("mod", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) % uint32(env.SGet(1).MustNumber())) })).
-		Puts("lsh", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) << uint32(env.SGet(1).MustNumber())) })).
-		Puts("rsh", NewNativeValue(2, func(env *Env) Value { return _bvalue32(uint32(env.SGet(0).MustNumber()) >> uint32(env.SGet(1).MustNumber())) }))))
+		Puts("add", NewNativeValue(2, func(env *Env) Value {
+			return _bvalue32(uint32(env.SGet(0).MustNumber()) + uint32(env.SGet(1).MustNumber()))
+		})).
+		Puts("sub", NewNativeValue(2, func(env *Env) Value {
+			return _bvalue32(uint32(env.SGet(0).MustNumber()) - uint32(env.SGet(1).MustNumber()))
+		})).
+		Puts("mul", NewNativeValue(2, func(env *Env) Value {
+			return _bvalue32(uint32(env.SGet(0).MustNumber()) * uint32(env.SGet(1).MustNumber()))
+		})).
+		Puts("div", NewNativeValue(2, func(env *Env) Value {
+			return _bvalue32(uint32(env.SGet(0).MustNumber()) / uint32(env.SGet(1).MustNumber()))
+		})).
+		Puts("mod", NewNativeValue(2, func(env *Env) Value {
+			return _bvalue32(uint32(env.SGet(0).MustNumber()) % uint32(env.SGet(1).MustNumber()))
+		})).
+		Puts("lsh", NewNativeValue(2, func(env *Env) Value {
+			return _bvalue32(uint32(env.SGet(0).MustNumber()) << uint32(env.SGet(1).MustNumber()))
+		})).
+		Puts("rsh", NewNativeValue(2, func(env *Env) Value {
+			return _bvalue32(uint32(env.SGet(0).MustNumber()) >> uint32(env.SGet(1).MustNumber()))
+		}))))
 
 	lmath.Puts("sqrt", NewNativeValue(1, func(env *Env) Value {
 		return NewNumberValue(math.Sqrt(env.SGet(0).MustNumber()))

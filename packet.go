@@ -22,8 +22,10 @@ func makeop(op byte, a, b uint16) uint32 {
 }
 
 func makejmpop(op byte, a uint16, dist int) uint32 {
+	if dist < -(1<<12) || dist >= 1<<12 {
+		panic("too long jump")
+	}
 	// 6 + 13 + 13
-	dist = checkjmpdist(dist)
 	b := uint16(dist + 1<<12)
 	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
 }

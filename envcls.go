@@ -92,7 +92,7 @@ func (e *Env) SetParent(parent *Env) {
 	e.parent = parent
 }
 
-func (env *Env) Get(yx uint16, consts uintptr) Value {
+func (env *Env) Get(yx uint16, cls *Closure) Value {
 	if yx == regA {
 		return env.A
 	}
@@ -100,7 +100,7 @@ func (env *Env) Get(yx uint16, consts uintptr) Value {
 	index := int(yx & 0x3ff)
 
 	if y == 7 {
-		return *(*Value)(unsafe.Pointer(consts + SizeOfValue*uintptr(index)))
+		return cls.consts[index]
 	}
 
 REPEAT:
@@ -143,7 +143,6 @@ const (
 	ClsHasReceiver
 	ClsYieldable
 	ClsRecoverable
-	_ClsPseudoForeach
 )
 
 // MustClosure is the closure struct used in potatolang
@@ -195,7 +194,7 @@ func (c *Closure) AppendPreArgs(preArgs []Value) {
 	c.argsCount -= byte(len(preArgs))
 }
 
-func (c *Closure) PreArgs() []Value { return c.partialArgs }
+func (c *Closure) PartialArgs() []Value { return c.partialArgs }
 
 func (c *Closure) SetCode(code []uint32) { c.code = code }
 
@@ -243,9 +242,6 @@ func (c *Closure) String() string {
 	}
 	if c.Isset(ClsRecoverable) {
 		x += "_safe"
-	}
-	if c.Isset(_ClsPseudoForeach) {
-		x += "_pf"
 	}
 	return x + ">"
 }

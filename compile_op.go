@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	errUndeclaredVariable    = " %+v: undeclared variable"
-	anonyMapIterCallbackFlag = "<anony-map-iter-callback>"
+	errUndeclaredVariable = " %+v: undeclared variable"
 )
 
 var _nop = makeop(OpNOP, 0, 0)
@@ -71,22 +70,11 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 
 func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
 	isyield := atoms[0].S() == "yield"
-	ispseudo := len(table.continueNode) > 0 && table.continueNode[len(table.continueNode)-1].S() == anonyMapIterCallbackFlag
 
-	if isyield && ispseudo {
-		err = fmt.Errorf("%+v: yield can't be used inside a pseudo foreach", atoms[0])
-		return
-	}
-
-	var op byte
-	op = OpRet
+	var op byte = OpRet
 	if isyield {
 		op = OpYield
 		table.y = true
-	}
-	if ispseudo {
-		// in a pseudo foreach, 'yield' is not allowed because we use them to simulate 'return'
-		op = OpYield
 	}
 
 	buf := newpacket()
@@ -224,13 +212,6 @@ func (table *symtable) compileIncOp(atoms []*parser.Node) (code packet, yx uint1
 	return buf, regA, nil
 }
 
-func checkjmpdist(jmp int) int {
-	if jmp < -(1<<12) || jmp >= 1<<12 {
-		panic("too long jump")
-	}
-	return jmp
-}
-
 // [and a b] => $a = a if not a then return else $a = b end
 // [or a b]  => $a = a if a then do nothing else $a = b end
 func (table *symtable) compileAndOrOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
@@ -250,10 +231,9 @@ func (table *symtable) compileAndOrOp(atoms []*parser.Node) (code packet, yx uin
 	if err = table.writeOpcode(&buf, OpSet, _nodeRegA, atoms[2]); err != nil {
 		return
 	}
-	jmp := checkjmpdist(buf.Len() - c2)
 
 	_, yx, _ = op(buf.data[c2-1])
-	buf.data[c2-1] = makeop(bop, yx, uint16(jmp+1<<12))
+	buf.data[c2-1] = makejmpop(bop, yx, buf.Len()-c2)
 	buf.WritePos(atoms[0].Meta)
 	return buf, regA, nil
 }
@@ -286,16 +266,13 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint16
 		return
 	}
 	if len(falseCode.data) > 0 {
-		checkjmpdist(len(trueCode.data) + 1)
-		buf.WriteOP(OpIfNot, condyx, uint16(len(trueCode.data)+1+1<<12))
+		buf.WriteJmpOP(OpIfNot, condyx, len(trueCode.data)+1)
 		buf.WritePos(atoms[0].Meta)
 		buf.Write(trueCode)
-		checkjmpdist(len(falseCode.data))
-		buf.WriteOP(OpJmp, 0, uint16(len(falseCode.data)+1<<12))
+		buf.WriteJmpOP(OpJmp, 0, len(falseCode.data))
 		buf.Write(falseCode)
 	} else {
-		checkjmpdist(len(trueCode.data))
-		buf.WriteOP(OpIfNot, condyx, uint16(len(trueCode.data)+1<<12))
+		buf.WriteJmpOP(OpIfNot, condyx, len(trueCode.data))
 		buf.WritePos(atoms[0].Meta)
 		buf.Write(trueCode)
 	}
@@ -433,12 +410,6 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		return newpacket(), 0, fmt.Errorf("%+v: do you really need more than 255 arguments?", atoms[2])
 	}
 
-	// this is a special function, inside it any 'continue' will be converted to 'return nil'
-	// and any 'break' will be converted to 'return #nil'
-	if name == anonyMapIterCallbackFlag {
-		newtable.continueNode = append(newtable.continueNode, parser.NewNode(parser.Natom).SetValue(name))
-	}
-
 	newtable.vp = uint16(ln)
 
 	if isVar {
@@ -456,10 +427,6 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		return
 	}
 
-	if name == anonyMapIterCallbackFlag {
-		newtable.continueNode = newtable.continueNode[:len(newtable.continueNode)-1]
-	}
-
 	code.WriteOP(OpEOB, 0, 0)
 	buf := newpacket()
 	cls := Closure{}
@@ -475,9 +442,6 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	}
 	if isSafe {
 		cls.Set(ClsRecoverable)
-	}
-	if name == anonyMapIterCallbackFlag {
-		cls.Set(_ClsPseudoForeach)
 	}
 
 	buf.WriteOP(OpLambda, uint16(ln), uint16(cls.options))
@@ -523,10 +487,6 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 			return
 		}
 		cn := table.continueNode[len(table.continueNode)-1]
-		if cn.S() == anonyMapIterCallbackFlag {
-			buf.WriteOP(OpRet, 0, 0)
-			return buf, regA, nil
-		}
 		code, yx, err = table.compileChainOp(cn)
 		if err != nil {
 			return
@@ -539,12 +499,6 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 	if len(table.continueNode) == 0 {
 		err = fmt.Errorf("%+v: invalid break statement", atoms[0])
 		return
-	}
-	if table.continueNode[len(table.continueNode)-1].S() == anonyMapIterCallbackFlag {
-		buf.WriteOP(OpSet, regA, table.getnil())
-		buf.WriteOP(OpPop, 0, 0)
-		buf.WriteOP(OpRet, regA, 0) // PhantomValue
-		return buf, regA, nil
 	}
 	buf.WriteRaw(staticWhileHack[4:]) // write a 'continue' placeholder
 	return buf, regA, nil

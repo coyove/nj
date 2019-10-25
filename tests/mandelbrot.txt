@@ -98,6 +98,6 @@ std.sync.run(worker)
 wg.wait() 
  
 io.write("P4\n" + itoa(size) + " " + itoa(size) + "\n") 
-for i, row = rows {
+foreach rows = fun (i, row) {
     io.write(row) 
 }

@@ -3,6 +3,7 @@ package potatolang
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"reflect"
 	"sync/atomic"
 	"unsafe"
@@ -69,7 +70,7 @@ func konstaddr(consts []Value) uintptr { return (*reflect.SliceHeader)(unsafe.Po
 func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor uint32, yielded bool) {
 	var newEnv *Env
 	var retStack []stacktrace
-	var caddr, kaddr = kodeaddr(K.code), konstaddr(K.consts)
+	var caddr = kodeaddr(K.code)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -109,7 +110,6 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 		K = r.cls
 		r.env.A = v
 		caddr = kodeaddr(K.code)
-		kaddr = konstaddr(K.consts)
 		if r.noenvescape {
 			newEnv = env
 			newEnv.SClear()
@@ -137,13 +137,13 @@ MAIN:
 			break MAIN
 		case OpNOP:
 		case OpSet:
-			env.Set(opa, env.Get(opb, kaddr))
+			env.Set(opa, env.Get(opb, K))
 		case OpInc:
-			num := env.Get(opa, kaddr).AsNumber()
-			env.A.SetNumberValue(num + env.Get(opb, kaddr).AsNumber())
+			num := env.Get(opa, K).AsNumber()
+			env.A.SetNumberValue(num + env.Get(opb, K).AsNumber())
 			env.Set(opa, env.A)
 		case OpAdd:
-			switch va, vb := env.Get(opa, kaddr), env.Get(opb, kaddr); combineTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetNumberValue(va.AsNumber() + vb.AsNumber())
 			case _StringString:
@@ -152,88 +152,88 @@ MAIN:
 				panicf("can't apply '+' on %+v and %+v", va, vb)
 			}
 		case OpSub:
-			switch va, vb := env.Get(opa, kaddr), env.Get(opb, kaddr); combineTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
-				env.A.SetNumberValue(env.Get(opa, kaddr).AsNumber() - env.Get(opb, kaddr).AsNumber())
+				env.A.SetNumberValue(env.Get(opa, K).AsNumber() - env.Get(opb, K).AsNumber())
 			default:
 				panicf("can't apply '-' on %+v and %+v", va, vb)
 			}
 		case OpMul:
-			switch va, vb := env.Get(opa, kaddr), env.Get(opb, kaddr); combineTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
-				env.A.SetNumberValue(env.Get(opa, kaddr).AsNumber() * env.Get(opb, kaddr).AsNumber())
+				env.A.SetNumberValue(env.Get(opa, K).AsNumber() * env.Get(opb, K).AsNumber())
 			default:
 				panicf("can't apply '*' on %+v and %+v", va, vb)
 			}
 		case OpDiv:
-			switch va, vb := env.Get(opa, kaddr), env.Get(opb, kaddr); combineTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
-				env.A.SetNumberValue(env.Get(opa, kaddr).AsNumber() / env.Get(opb, kaddr).AsNumber())
+				env.A.SetNumberValue(env.Get(opa, K).AsNumber() / env.Get(opb, K).AsNumber())
 			default:
 				panicf("can't apply '/' on %+v and %+v", va, vb)
 			}
 		case OpMod:
-			switch va, vb := env.Get(opa, kaddr), env.Get(opb, kaddr); combineTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
-				env.A.SetNumberValue(float64(int64(env.Get(opa, kaddr).AsNumber()) % int64(env.Get(opb, kaddr).AsNumber())))
+				env.A.SetNumberValue(math.Remainder(va.AsNumber(), vb.AsNumber()))
 			default:
 				panicf("can't apply '%%' on %+v and %+v", va, vb)
 			}
 		case OpEq:
-			env.A.SetBoolValue(env.Get(opa, kaddr).Equal(env.Get(opb, kaddr)))
+			env.A.SetBoolValue(env.Get(opa, K).Equal(env.Get(opb, K)))
 		case OpNeq:
-			env.A.SetBoolValue(!env.Get(opa, kaddr).Equal(env.Get(opb, kaddr)))
+			env.A.SetBoolValue(!env.Get(opa, K).Equal(env.Get(opb, K)))
 		case OpLess:
-			switch va, vb := env.Get(opa, kaddr), env.Get(opb, kaddr); combineTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetBoolValue(va.AsNumber() < vb.AsNumber())
 			case _StringString:
 				env.A.SetBoolValue(va.AsString() < vb.AsString())
 			default:
-				panicf("can't apply '<' on %+v and %+v", env.Get(opa, kaddr), env.Get(opb, kaddr))
+				panicf("can't apply '<' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpLessEq:
-			switch va, vb := env.Get(opa, kaddr), env.Get(opb, kaddr); combineTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetBoolValue(va.AsNumber() <= vb.AsNumber())
 			case _StringString:
 				env.A.SetBoolValue(va.AsString() <= vb.AsString())
 			default:
-				panicf("can't apply '<=' on %+v and %+v", env.Get(opa, kaddr), env.Get(opb, kaddr))
+				panicf("can't apply '<=' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpNot:
-			env.A.SetBoolValue(env.Get(opa, kaddr).IsFalse())
+			env.A.SetBoolValue(env.Get(opa, K).IsFalse())
 		case OpBitNot:
-			if va := env.Get(opa, kaddr); va.Type() == NumberType {
-				env.A.SetNumberValue(float64(^int32(int64(va.AsNumber()) & max32)))
+			if va := env.Get(opa, K); va.Type() == NumberType {
+				env.A.SetNumberValue(float64(^va.AsInt32()))
 			} else {
-				panicf("can't apply 'bit not' on %+v", va)
+				panicf("can't apply '~' on %+v", va)
 			}
 		case OpBitAnd:
-			switch va, vb := env.Get(opa, kaddr), env.Get(opb, kaddr); combineTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
-				env.A.SetNumberValue(float64(int32(int64(va.AsNumber())&max32) & int32(int64(vb.AsNumber())&max32)))
+				env.A.SetNumberValue(float64(va.AsInt32() & vb.AsInt32()))
 			default:
-				panicf("can't apply '&' on %+v and %+v", env.Get(opa, kaddr), env.Get(opb, kaddr))
+				panicf("can't apply '&' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpBitOr:
-			switch va, vb := env.Get(opa, kaddr), env.Get(opb, kaddr); combineTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
-				env.A.SetNumberValue(float64(int32(int64(va.AsNumber())&max32) | int32(int64(vb.AsNumber())&max32)))
+				env.A.SetNumberValue(float64(va.AsInt32() | vb.AsInt32()))
 			default:
-				panicf("can't apply '|' on %+v and %+v", env.Get(opa, kaddr), env.Get(opb, kaddr))
+				panicf("can't apply '|' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpBitXor:
-			switch va, vb := env.Get(opa, kaddr), env.Get(opb, kaddr); combineTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
-				env.A.SetNumberValue(float64(int32(int64(va.AsNumber())&max32) ^ int32(int64(vb.AsNumber())&max32)))
+				env.A.SetNumberValue(float64(va.AsInt32() ^ vb.AsInt32()))
 			default:
-				panicf("can't apply '^' on %+v and %+v", env.Get(opa, kaddr), env.Get(opb, kaddr))
+				panicf("can't apply '^' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpBitLsh:
-			switch va, vb := env.Get(opa, kaddr), env.Get(opb, kaddr); combineTypes(va, vb) {
+			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
-				env.A.SetNumberValue(float64(int32(int64(va.AsNumber())&max32) << uint(vb.AsNumber())))
+				env.A.SetNumberValue(float64(va.AsInt32() << uint(vb.AsNumber())))
 			case _MapMap:
 				{
 					va, vb := va.AsMap(), vb.AsMap()
@@ -247,23 +247,23 @@ MAIN:
 				}
 				env.A = va
 			default:
-				panicf("can't apply '<<' on %+v and %+v", env.Get(opa, kaddr), env.Get(opb, kaddr))
+				panicf("can't apply '<<' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpBitRsh:
-			if combineTypes(env.Get(opa, kaddr), env.Get(opb, kaddr)) == _NumberNumber {
-				env.A.SetNumberValue(float64(int32(int64(env.Get(opa, kaddr).AsNumber())&max32) >> uint(env.Get(opb, kaddr).AsNumber())))
+			if va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) == _NumberNumber {
+				env.A.SetNumberValue(float64(va.AsInt32() >> uint(vb.AsNumber())))
 			} else {
-				panicf("can't apply '>>' on %+v and %+v", env.Get(opa, kaddr), env.Get(opb, kaddr))
+				panicf("can't apply '>>' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpBitURsh:
-			if combineTypes(env.Get(opa, kaddr), env.Get(opb, kaddr)) == _NumberNumber {
-				env.A.SetNumberValue(float64(uint32(uint64(env.Get(opa, kaddr).AsNumber())&max32) >> uint(env.Get(opb, kaddr).AsNumber())))
+			if va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) == _NumberNumber {
+				env.A.SetNumberValue(float64(uint32(uint64(va.AsNumber())&max32) >> uint(vb.AsNumber())))
 			} else {
-				panicf("can't apply '>>>' on %+v and %+v", env.Get(opa, kaddr), env.Get(opb, kaddr))
+				panicf("can't apply '>>>' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpAssert:
-			if a := env.Get(opa, kaddr); a.IsFalse() {
-				msg := env.Get(opb, kaddr)
+			if a := env.Get(opa, K); a.IsFalse() {
+				msg := env.Get(opb, K)
 				if msg.Type() == StringType {
 					panic(msg.AsString())
 				}
@@ -271,7 +271,7 @@ MAIN:
 			}
 			env.A = NewBoolValue(true)
 		case OpLen:
-			switch v := env.Get(opa, kaddr); v.Type() {
+			switch v := env.Get(opa, K); v.Type() {
 			case StringType:
 				env.A.SetNumberValue(float64(len(v.AsString())))
 			case MapType:
@@ -299,7 +299,7 @@ MAIN:
 				}
 			}
 		case OpStore:
-			vidx, v := env.Get(opa, kaddr), env.Get(opb, kaddr)
+			vidx, v := env.Get(opa, K), env.Get(opb, K)
 			switch env.A.Type() {
 			case MapType:
 				if m := env.A.AsMap(); vidx.Type() == NumberType {
@@ -336,7 +336,7 @@ MAIN:
 				}
 				(*Map)(env.A.ptr).ptr = unsafe.Pointer(&p) // unsafely cast p to string
 			case NilType:
-				switch va := env.Get(opa, kaddr); va.Type() {
+				switch va := env.Get(opa, K); va.Type() {
 				case NumberType:
 					if env.parent == nil {
 						panicf("%+v: move(address, value), nil parent", va)
@@ -353,8 +353,8 @@ MAIN:
 			env.A = v
 		case OpLoad:
 			var v Value
-			a := env.Get(opa, kaddr)
-			vidx := env.Get(opb, kaddr)
+			a := env.Get(opa, K)
+			vidx := env.Get(opb, K)
 			switch combineTypes(a, vidx) {
 			case _StringNumber:
 				v.SetNumberValue(float64(a.AsString()[int(vidx.AsNumber())]))
@@ -386,7 +386,7 @@ MAIN:
 			}
 			env.A = v
 		case OpPop:
-			a := env.Get(opa, kaddr)
+			a := env.Get(opa, K)
 			switch a.Type() {
 			case MapType:
 				m := a.AsMap()
@@ -398,10 +398,10 @@ MAIN:
 					m.l = l[:len(l)-1]
 				}
 			default:
-				env.A = PhantomValue
+				panicf("can't pop %+v", a)
 			}
 		case OpSlice:
-			start, end := int(env.Get(opa, kaddr).MustNumber()), int(env.Get(opb, kaddr).MustNumber())
+			start, end := int(env.Get(opa, K).MustNumber()), int(env.Get(opb, K).MustNumber())
 			switch x := env.A; x.Type() {
 			case StringType:
 				if end == -1 {
@@ -424,19 +424,19 @@ MAIN:
 			if newEnv == nil {
 				newEnv = NewEnv(nil, env.Cancel)
 			}
-			newEnv.SPush(env.Get(opa, kaddr))
+			newEnv.SPush(env.Get(opa, K))
 		case OpRet:
-			v := env.Get(opa, kaddr)
+			v := env.Get(opa, K)
 			if len(retStack) == 0 {
 				return v, 0, false
 			}
 			returnUpperWorld(v)
 		case OpYield:
-			return env.Get(opa, kaddr), cursor, true
+			return env.Get(opa, K), cursor, true
 		case OpLambda:
 			env.A = NewClosureValue(crReadClosure(K.code, &cursor, env, opa, opb))
 		case OpCall:
-			v := env.Get(opa, kaddr)
+			v := env.Get(opa, K)
 			if x := v.Type(); x != ClosureType {
 				if x == MapType {
 					env.A = NewMapValue(v.AsMap().Dup())
@@ -465,7 +465,7 @@ MAIN:
 				if len(cls.partialArgs) > 0 {
 					newEnv.SInsert(0, cls.partialArgs)
 				}
-				if cls.Isset(ClsYieldable) || cls.native != nil || cls.Isset(ClsRecoverable) {
+				if cls.Isset(ClsYieldable|ClsRecoverable) || cls.native != nil {
 					newEnv.trace = retStack
 					newEnv.parent = env
 					env.A = cls.Exec(newEnv)
@@ -482,7 +482,6 @@ MAIN:
 					cursor = 0
 					K = cls
 					caddr = kodeaddr(K.code)
-					kaddr = konstaddr(K.consts)
 					newEnv.parent = cls.env
 					env = newEnv
 
@@ -498,15 +497,15 @@ MAIN:
 		case OpJmp:
 			cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 		case OpIfNot:
-			if cond := env.Get(opa, kaddr); cond.IsZero() || cond.IsFalse() {
+			if cond := env.Get(opa, K); cond.IsZero() || cond.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
 		case OpIf:
-			if cond := env.Get(opa, kaddr); !cond.IsZero() || !cond.IsFalse() {
+			if cond := env.Get(opa, K); !cond.IsZero() || !cond.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
 		case OpForeach:
-			x := env.Get(opa, kaddr)
+			x := env.Get(opa, K)
 			if x.Type() == NilType {
 				ret := NewMapSize(len(env.stack))
 				copy(ret.l, env.stack)
@@ -514,7 +513,7 @@ MAIN:
 				continue
 			}
 			m := x.MustMap()
-			cls := env.Get(opb, kaddr).MustClosure()
+			cls := env.Get(opb, K).MustClosure()
 			newEnv := NewEnv(cls.Env(), env.Cancel)
 			for i := len(m.l) - 1; i >= 0; i-- {
 				newEnv.SClear()
@@ -534,7 +533,7 @@ MAIN:
 			}
 			env.A = Value{}
 		case OpTypeof:
-			env.A = NewStringValue(TMapping[env.Get(opa, kaddr).Type()])
+			env.A = NewStringValue(TMapping[env.Get(opa, K).Type()])
 		}
 	}
 
@@ -543,54 +542,4 @@ MAIN:
 		goto MAIN
 	}
 	return Value{}, 0, false
-}
-
-func doCopy(env *Env, flag float64, pred Value) (_v Value, _b bool) {
-	alloc := flag == 1
-
-	if flag == 2 {
-		ret := NewMapSize(len(env.stack))
-		copy(ret.l, env.stack)
-		env.A = NewMapValue(ret)
-		return
-	}
-
-	// now R2 should be closure
-	cls := pred.MustClosure()
-	newEnv := NewEnv(cls.Env(), env.Cancel)
-	switch env.A.Type() {
-	case MapType:
-		if alloc {
-			env.A = NewMapValue(env.A.AsMap().Dup())
-		} else {
-			m := env.A.AsMap()
-			for i, v := range m.l {
-				newEnv.SClear()
-				newEnv.SPush(NewNumberValue(float64(i)))
-				newEnv.SPush(v)
-				if res := cls.Exec(newEnv); res == PhantomValue {
-					goto BREAK_ALL
-				} else if cls.lastp > 0 {
-					_b = true
-					_v = res
-					return
-				}
-			}
-			for k, v := range m.m {
-				newEnv.SClear()
-				newEnv.SPush(NewInterfaceValue(k))
-				newEnv.SPush(v)
-				if res := cls.Exec(newEnv); res == PhantomValue {
-					goto BREAK_ALL
-				} else if cls.lastp > 0 {
-					_b = true
-					_v = res
-					return
-				}
-			}
-		BREAK_ALL:
-		}
-	}
-
-	return
 }
