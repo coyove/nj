@@ -24,7 +24,7 @@ func (table *symtable) decompound(atoms []*parser.Node, dontUseA ...bool) (buf p
 		var code packet
 
 		if atom.Type == parser.Ncompound {
-			if code, yx, err = table.compileCompoundInto(atom, true, 0, false); err != nil {
+			if code, yx, err = table.compileCompoundInto(atom, true, true, 0); err != nil {
 				return
 			}
 
@@ -37,9 +37,9 @@ func (table *symtable) decompound(atoms []*parser.Node, dontUseA ...bool) (buf p
 	}
 
 	if lastCompound.n != nil && len(dontUseA) == 0 {
-		_, _, opb := op(buf.data[len(buf.data)-1])
+		_, old, opb := op(buf.data[len(buf.data)-1])
 		buf.TruncateLast(1)
-		table.vp--
+		table.returnTmp(old)
 		atoms[lastCompound.i].SetValue(opb)
 	}
 

@@ -26,9 +26,8 @@ type symtable struct {
 
 	continueNode []*parser.Node
 
-	consts     []interface{}
-	constMap   map[interface{}]uint16
-	constStack map[interface{}]uint16
+	consts   []interface{}
+	constMap map[interface{}]uint16
 
 	reusableTmps map[uint16]bool
 }
@@ -36,23 +35,20 @@ type symtable struct {
 func newsymtable() *symtable {
 	t := &symtable{
 		sym:          make(map[string]uint16),
-		consts:       make([]interface{}, 0),
 		constMap:     make(map[interface{}]uint16),
-		constStack:   make(map[interface{}]uint16),
-		continueNode: make([]*parser.Node, 0),
 		reusableTmps: make(map[uint16]bool),
 	}
 	return t
 }
 
 func (table *symtable) incrvp() {
-	if table.vp >= 1<<10 {
-		panic("too many variables (1024) in a single scope")
+	if table.vp > 1000 { //1<<10 {
+		panic("code too complex, may be there are too many variables (1000) in a single scope")
 	}
 	table.vp++
 }
 
-func (table *symtable) borrowTmp() uint16 {
+func (table *symtable) borrowTmp(reuseable bool) uint16 {
 	for tmp, ok := range table.reusableTmps {
 		if ok {
 			table.reusableTmps[tmp] = false
@@ -60,15 +56,18 @@ func (table *symtable) borrowTmp() uint16 {
 		}
 	}
 	table.incrvp()
-	table.reusableTmps[table.vp-1] = false
+	if reuseable {
+		table.reusableTmps[table.vp-1] = false
+	}
 	return table.vp - 1
 }
 
 func (table *symtable) returnTmp(v uint16) {
-	if v == table.vp-1 {
-		table.vp--
-		return
-	}
+	//	log.Println("$$", table.reusableTmps, v, table.vp)
+	//if v == table.vp-1 {
+	//	table.vp--
+	//	return
+	//}
 	if _, existed := table.reusableTmps[v]; existed {
 		table.reusableTmps[v] = true
 	}
@@ -84,7 +83,7 @@ func (table *symtable) get(varname string) (uint16, bool) {
 	for table != nil {
 		k, e := table.sym[varname]
 		if e {
-			if depth > 6 || (depth == 6 && k == 0x03ff) {
+			if depth > 6 || (depth == 6 && k > 1000) {
 				panic("too many levels (8) to refer a variable, try simplifing your code")
 			}
 			return (depth << 10) | (uint16(k) & 0x03ff), true
@@ -106,11 +105,6 @@ func (table *symtable) getnil() uint16 {
 }
 
 func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
-	addr, ok := table.constStack[v]
-	if ok {
-		return addr
-	}
-
 	kaddr := func() uint16 {
 		if i, ok := table.constMap[v]; ok {
 			return i
@@ -126,10 +120,7 @@ func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
 		return idx
 	}()
 
-	addr = 0x7<<10 | kaddr
-
-	table.constStack[v] = addr
-	return addr
+	return 0x7<<10 | kaddr
 }
 
 var flatOpMapping = map[string]byte{
@@ -147,14 +138,16 @@ var flatOpMappingRev = map[byte]string{
 }
 
 func (table *symtable) writeOpcode(buf *packet, op byte, n0, n1 *parser.Node) (err error) {
+	tmp := []uint16{}
 	getAddr := func(n *parser.Node) (uint16, error) {
 		switch n.Type {
 		case parser.Ncompound:
-			code, addr, err := table.compileCompoundInto(n, true, 0, false)
+			code, addr, err := table.compileCompoundInto(n, true, true, 0)
 			if err != nil {
 				return 0, err
 			}
 			buf.Write(code)
+			tmp = append(tmp, addr)
 			return addr, nil
 		case parser.Natom:
 			addr, ok := table.get(n.Value.(string))
@@ -170,6 +163,12 @@ func (table *symtable) writeOpcode(buf *packet, op byte, n0, n1 *parser.Node) (e
 			panic(fmt.Errorf("unknown type: %d", n.Type))
 		}
 	}
+
+	defer func() {
+		for _, tmp := range tmp {
+			table.returnTmp(tmp)
+		}
+	}()
 
 	if n0 == nil {
 		buf.WriteOP(op, 0, 0)
@@ -199,7 +198,7 @@ func (table *symtable) writeOpcode(buf *packet, op byte, n0, n1 *parser.Node) (e
 	return nil
 }
 
-func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, existedVar uint16, tmp bool) (code packet, yx uint16, err error) {
+func (table *symtable) compileCompoundInto(compound *parser.Node, newVar, reuseable bool, existedVar uint16) (code packet, yx uint16, err error) {
 	buf := newpacket()
 
 	var newYX uint16
@@ -210,12 +209,7 @@ func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, e
 
 	buf.Write(code)
 	if newVar {
-		if tmp {
-			yx = table.borrowTmp()
-		} else {
-			yx = table.vp
-			table.incrvp()
-		}
+		yx = table.borrowTmp(reuseable)
 	} else {
 		yx = existedVar
 	}
@@ -313,6 +307,8 @@ func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint1
 		}
 		buf.Write(code)
 	}
+
+	//log.Println(table.vp)
 
 	return buf, yx, err
 }

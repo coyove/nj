@@ -30,7 +30,7 @@ func runFile(t *testing.T, path string) {
 	}
 
 	if !strings.Contains(path, "import.txt") {
-		log.Println(b.PrettyString())
+		t.Log(b.PrettyString())
 	}
 
 	i := b.Exec(nil)
@@ -242,6 +242,7 @@ func TestReusingTmps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Log(cls.PrettyString())
 	ExecCursor(cls.lastenv, cls, 0)
 	// all core libs + add + d + sum + 2 tmps
 	if cls.lastenv.SSize() != len(CoreLibs)+1+1+1+2 {

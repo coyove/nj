@@ -153,6 +153,7 @@ func (b *packet) WriteOP(op byte, opa, opb uint16) { b.data = append(b.data, mak
 
 func (b *packet) WritePos(p parser.Meta) {
 	if p.Line == 0 {
+		// TODO: debug code, used to detect a null meta struct
 		buf := make([]byte, 4096)
 		n := runtime.Stack(buf, false)
 		log.Println(string(buf[:n]))

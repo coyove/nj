@@ -1,3 +1,10 @@
-
-assert len(nil)
+var sep = {1,2,3}
+var primeRK = 1
+var pow = 1, sq = primeRK 
+var i = len(sep) while i > 0 , i = i >> 1  {
+    if (i&1 != 0) { 
+        pow = math.u32.mul(pow, sq)                
+    }
+    sq = math.u32.mul(sq, sq)
+}   
 

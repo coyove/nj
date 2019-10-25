@@ -55,7 +55,7 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 		buf.WriteOP(OP_SET, newYX, table.loadK(&buf, aSrc.Value))
 		noNeedToRecordPos = true
 	case parser.Ncompound:
-		code, newYX, err = table.compileCompoundInto(aSrc, atoms[0].Value.(string) == "set", varIndex, false)
+		code, newYX, err = table.compileCompoundInto(aSrc, atoms[0].Value.(string) == "set", true, varIndex)
 		if err != nil {
 			return
 		}
@@ -137,7 +137,9 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 	var n0, n1 *parser.Node
 
 	if bop == OP_LEN || bop == OP_LOAD || bop == OP_POP {
-		buf = newpacket()
+		if buf, err = table.decompound(atoms[1:]); err != nil {
+			return
+		}
 
 		if len(atoms) >= 2 {
 			n0 = atoms[1]
@@ -158,11 +160,9 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 	}
 
 	if bop == OP_COPY {
-		buf, err = table.decompound(atoms[1:], true)
-		if err != nil {
+		if buf, err = table.decompound(atoms[1:], true); err != nil {
 			return
 		}
-
 		if err = table.writeOpcode(&buf, OP_SET, _nodeRegA, atoms[2]); err != nil {
 			return
 		}
@@ -171,8 +171,7 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 	}
 
 	if bop == OP_STORE || bop == OP_SLICE {
-		buf, err = table.decompound(atoms[1:], true)
-		if err != nil {
+		if buf, err = table.decompound(atoms[1:], true); err != nil {
 			return
 		}
 
@@ -180,9 +179,7 @@ func (table *symtable) writeOpcode3(atoms []*parser.Node, bop byte) (buf packet,
 			return
 		}
 
-		n0 = atoms[2]
-		n1 = atoms[3]
-		err = table.writeOpcode(&buf, bop, n0, n1)
+		err = table.writeOpcode(&buf, bop, atoms[2], atoms[3])
 		return buf, regA, err
 	}
 
@@ -359,7 +356,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		atom := atoms[i]
 
 		if atom.Type == parser.Ncompound {
-			code, yx, err = table.compileCompoundInto(atom, true, 0, true)
+			code, yx, err = table.compileCompoundInto(atom, true, true, 0)
 			if err != nil {
 				return
 			}
@@ -390,15 +387,16 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 			return
 		}
 	case parser.Ncompound:
-		code, yx, err = table.compileCompoundInto(callee, true, 0, false)
+		code, yx, err = table.compileCompoundInto(callee, true, true, 0)
 		if err != nil {
 			return
 		}
 		varIndex = yx
 		if len(replacedAtoms) == 0 {
-			_, _, varIndex = op(code.data[len(code.data)-1])
+			var old uint16
+			_, old, varIndex = op(code.data[len(code.data)-1])
 			code.data = code.data[:len(code.data)-1]
-			table.vp--
+			table.returnTmp(old)
 		}
 		buf.Write(code)
 	case parser.Naddr:
@@ -418,7 +416,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		}
 	}
 
-	buf.WriteOP(OP_CALL, varIndex, regA)
+	buf.WriteOP(OP_CALL, varIndex, 0)
 	buf.WritePos(nodes[0].Meta)
 	return buf, regA, nil
 }
