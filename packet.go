@@ -16,12 +16,12 @@ import (
 	"github.com/coyove/potatolang/parser"
 )
 
-func makeop(op byte, a, b uint16) uint32 {
+func makeop(op _Opcode, a, b uint16) uint32 {
 	// 6 + 13 + 13
 	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
 }
 
-func makejmpop(op byte, a uint16, dist int) uint32 {
+func makejmpop(op _Opcode, a uint16, dist int) uint32 {
 	if dist < -(1<<12) || dist >= 1<<12 {
 		panic("too long jump")
 	}
@@ -30,8 +30,8 @@ func makejmpop(op byte, a uint16, dist int) uint32 {
 	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
 }
 
-func op(x uint32) (op byte, a, b uint16) {
-	op = byte(x >> 26)
+func op(x uint32) (op _Opcode, a, b uint16) {
+	op = _Opcode(x >> 26)
 	a = uint16(x>>13) & 0x1fff
 	b = uint16(x) & 0x1fff
 	return
@@ -164,11 +164,11 @@ func (b *packet) Write32(v uint32) {
 	b.data = append(b.data, v)
 }
 
-func (b *packet) WriteOP(op byte, opa, opb uint16) {
+func (b *packet) WriteOP(op _Opcode, opa, opb uint16) {
 	b.data = append(b.data, makeop(op, opa, opb))
 }
 
-func (b *packet) WriteJmpOP(op byte, opa uint16, d int) {
+func (b *packet) WriteJmpOP(op _Opcode, opa uint16, d int) {
 	b.data = append(b.data, makejmpop(op, opa, d))
 }
 
@@ -263,7 +263,7 @@ func crReadBytesLen(data []uint32, length int, cursor *uint32) []byte {
 	return u32Bytes(buf)[:length]
 }
 
-var singleOp = map[byte]string{
+var singleOp = map[_Opcode]string{
 	OpAssert:  "assert",
 	OpAdd:     "add",
 	OpSub:     "sub",

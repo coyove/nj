@@ -32,7 +32,17 @@ func (table *symtable) _decompound(atoms []*parser.Node, useA bool) (buf packet,
 		var yx uint16
 		var code packet
 
-		if atom.Type == parser.Ncompound {
+		switch atom.Type {
+		//case parser.Natom:
+		//	yx, ok := table.get(atom.Value.(string))
+		//	if !ok {
+		//		err = fmt.Errorf(errUndeclaredVariable, atom)
+		//		return
+		//	}
+		//	atoms[i] = parser.NewNode(parser.Naddr).SetValue(yx)
+		//case parser.Nnumber, parser.Nstring:
+		//	atoms[i] = parser.NewNode(parser.Naddr).SetValue(table.loadK(&buf, atom.Value))
+		case parser.Ncompound:
 			if code, yx, err = table.compileCompoundInto(atom, true, 0); err != nil {
 				return
 			}

@@ -57,10 +57,8 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 }
 
 func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	isyield := atoms[0].S() == "yield"
-
-	var op byte = OpRet
-	if isyield {
+	op := OpRet
+	if atoms[0].S() == "yield" {
 		op = OpYield
 		table.y = true
 	}
@@ -102,7 +100,7 @@ func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx 
 }
 
 // writeOpcode3 accepts 3 arguments at most, 2 arguments will be encoded into opcode itself, the 3rd one will be in regA
-func (table *symtable) writeOpcode3(bop byte, atoms []*parser.Node) (buf packet, yx uint16, err error) {
+func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf packet, yx uint16, err error) {
 	// first atom: the op name, tail atoms: the args
 	if len(atoms) > 4 {
 		panic("shouldn't happen: too many arguments")
@@ -213,7 +211,7 @@ func (table *symtable) compileIncOp(atoms []*parser.Node) (code packet, yx uint1
 // [and a b] => $a = a if not a then return else $a = b end
 // [or a b]  => $a = a if a then do nothing else $a = b end
 func (table *symtable) compileAndOrOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	bop := byte(OpIfNot)
+	bop := OpIfNot
 	if atoms[0].Value.(string) == "or" {
 		bop = OpIf
 	}
@@ -277,64 +275,23 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint16
 	return buf, regA, nil
 }
 
-// [call func-name [args ...]]
+// [call callee [args ...]]
 func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint16, err error) {
-	buf := newpacket()
-	callee := nodes[1]
-	name, _ := callee.Value.(string)
-
-	if strings.HasPrefix(name, "$") {
-		return table.compileRawOp(nodes)
-	}
-
-	atoms, replacedAtoms := nodes[2].C(), []*parser.Node{}
-	for i := 0; i < len(atoms); i++ {
-		atom := atoms[i]
-
-		if atom.Type == parser.Ncompound {
-			code, yx, err = table.compileCompoundInto(atom, true, 0)
-			if err != nil {
-				return
-			}
-			atoms[i] = parser.NewNode(parser.Naddr).SetValue(yx)
-			replacedAtoms = append(replacedAtoms, atoms[i])
-			buf.Write(code)
-		}
-	}
-
-	// note: [call [..] [..]] is different, which will be handled in more belowed code
-	if callee.Type != parser.Ncompound {
-		if len(replacedAtoms) >= 1 {
-			var tmp uint16
-			_, tmp, replacedAtoms[len(replacedAtoms)-1].Value = op(buf.data[len(buf.data)-1])
-			buf.TruncateLast(1)
-			//table.vp--
-			table.returnAddress(tmp)
-		}
+	tmp := append([]*parser.Node{nodes[1]}, nodes[2].C()...)
+	code, err = table.decompound(tmp)
+	if err != nil {
+		return
 	}
 
 	var varIndex uint16
 	var ok bool
-	switch callee.Type {
+	switch callee := tmp[0]; callee.Type {
 	case parser.Natom:
 		varIndex, ok = table.get(callee.Value.(string))
 		if !ok {
 			err = fmt.Errorf(errUndeclaredVariable, callee)
 			return
 		}
-	case parser.Ncompound:
-		code, yx, err = table.compileCompoundInto(callee, true, 0)
-		if err != nil {
-			return
-		}
-		varIndex = yx
-		if len(replacedAtoms) == 0 {
-			var old uint16
-			_, old, varIndex = op(code.data[len(code.data)-1])
-			code.data = code.data[:len(code.data)-1]
-			table.returnAddress(old)
-		}
-		buf.Write(code)
 	case parser.Naddr:
 		varIndex = callee.Value.(uint16)
 	default:
@@ -342,19 +299,19 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		return
 	}
 
-	for i := 0; i < len(atoms); i++ {
-		err = table.writeOpcode(&buf, OpPush, atoms[i], nil)
+	for i := 1; i < len(tmp); i++ {
+		err = table.writeOpcode(&code, OpPush, tmp[i], nil)
 		if err != nil {
 			return
 		}
-		if atoms[i].Type == parser.Naddr {
-			table.returnAddress(atoms[i].Value.(uint16))
+		if tmp[i].Type == parser.Naddr {
+			table.returnAddress(tmp[i].Value.(uint16))
 		}
 	}
 
-	buf.WriteOP(OpCall, varIndex, 0)
-	buf.WritePos(nodes[0].Meta)
-	return buf, regA, nil
+	code.WriteOP(OpCall, varIndex, 0)
+	code.WritePos(nodes[0].Meta)
+	return code, regA, nil
 }
 
 // [lambda name? [namelist] [chain ...]]

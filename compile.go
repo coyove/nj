@@ -91,6 +91,9 @@ func (table *symtable) get(varname string) (uint16, bool) {
 }
 
 func (table *symtable) put(varname string, addr uint16) {
+	if addr == regA {
+		panic("debug")
+	}
 	table.sym[varname] = addr
 }
 
@@ -117,7 +120,7 @@ func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
 	return 0x7<<10 | kaddr
 }
 
-var flatOpMapping = map[string]byte{
+var flatOpMapping = map[string]_Opcode{
 	"+": OpAdd, "-": OpSub, "*": OpMul, "/": OpDiv, "%": OpMod,
 	"<": OpLess, "<=": OpLessEq, "==": OpEq, "!=": OpNeq, "!": OpNot,
 	"~": OpBitNot, "&": OpBitAnd, "|": OpBitOr, "^": OpBitXor, "<<": OpBitLsh, ">>": OpBitRsh, ">>>": OpBitURsh, "#": OpPop,
@@ -125,7 +128,7 @@ var flatOpMapping = map[string]byte{
 	"addressof": 0,
 }
 
-func (table *symtable) writeOpcode(buf *packet, op byte, n0, n1 *parser.Node) (err error) {
+func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node) (err error) {
 	tmp := []uint16{}
 	getAddr := func(n *parser.Node) (uint16, error) {
 		switch n.Type {

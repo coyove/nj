@@ -1,9 +1,11 @@
 package potatolang
 
-const regA uint16 = 0x1fff
+const regA uint16 = 0x1fff // full 13 bits
+
+type _Opcode byte
 
 const (
-	OpAssert = iota
+	OpAssert _Opcode = iota
 	OpStore
 	OpLoad
 	OpAdd
