@@ -1,5 +1,5 @@
-var a = 0
-var add = use "imported.txt" 
+ a = 0
+ add = use "imported.txt" 
 add()
 assert a == 1
 

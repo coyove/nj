@@ -1,15 +1,15 @@
 // a simple example to demo the 'placeholder' concept
 
-var _ = std.unique()
+ _ = std.unique()
 
-var curry = fun(f) {
-    var __args = {}
-    var __argscount = std.opcode.closure.get(f, "argscount")
-    var __remain = __argscount
+ curry = fun(f) {
+     __args = {}
+     __argscount = std.opcode.closure.get(f, "argscount")
+     __remain = __argscount
 
     fun appendargs(args) {
         for i = 0, len( __args) {
-            var __arg = __args[i]
+             __arg = __args[i]
             if (__arg == _ and len(args) > 0) {
                 __args[i] = args[0]
                 args = args[1:]
@@ -28,7 +28,7 @@ var curry = fun(f) {
         }
     }
 
-    fun var __f() { 
+    fun var  __f() { 
         appendargs(arguments)
         
         if (__remain > 0) return __f

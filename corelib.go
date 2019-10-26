@@ -279,9 +279,6 @@ func initCoreLibs() {
 		}
 		return NewStringValue(strings.TrimRight(strconv.FormatFloat(v, 'f', 15, 64), "0."))
 	})
-	CoreLibs["delete"] = NewNativeValue(2, func(env *Env) Value {
-		return env.SGet(0).MustMap().Remove(env.Get(1, nil))
-	})
 
 	initIOLib()
 	initMathLib()

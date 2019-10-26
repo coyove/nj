@@ -302,7 +302,10 @@ MAIN:
 			vidx, v := env.Get(opa, K), env.Get(opb, K)
 			switch env.A.Type() {
 			case MapType:
-				if m := env.A.AsMap(); vidx.Type() == NumberType {
+				m := env.A.AsMap()
+				if v == Phantom {
+					m.Remove(vidx)
+				} else if vidx.Type() == NumberType {
 					idx, ln := int(vidx.AsNumber()), len(m.l)
 					if idx < ln {
 						m.l[idx] = v
@@ -397,6 +400,8 @@ MAIN:
 					env.A = l[len(l)-1]
 					m.l = l[:len(l)-1]
 				}
+			case NilType:
+				env.A = Phantom
 			default:
 				panicf("can't pop %+v", a)
 			}
@@ -533,7 +538,12 @@ MAIN:
 			}
 			env.A = Value{}
 		case OpTypeof:
-			env.A = NewStringValue(TMapping[env.Get(opa, K).Type()])
+			v := env.Get(opa, K)
+			if v == Phantom {
+				env.A = NewStringValue("#nil")
+			} else {
+				env.A = NewStringValue(TMapping[v.Type()])
+			}
 		}
 	}
 

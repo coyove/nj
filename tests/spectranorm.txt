@@ -1,5 +1,5 @@
-var n = 0 
-var nCPU = 6
+ n = 0 
+ nCPU = 6
 
 fun A(i, j) {
     return ((i+j)*(i+j+1)/2 + i + 1) 
@@ -24,9 +24,9 @@ fun A(i, j) {
 // assert  A0(1,2) == A(1,2)
 
 fun TimesVec(v, s, n, u, wg) {
-    var ul = len(u) 
+     ul = len(u) 
     for i = s  ,n {
-        var vi = 0 
+         vi = 0 
         for j = 0,ul {
             vi = vi + u[j] / A(i, j) 
         }
@@ -36,9 +36,9 @@ fun TimesVec(v, s, n, u, wg) {
 }
 
 fun TimesTranspVec(v, s, n, u, wg) {
-    var ul = len(u) 
+     ul = len(u) 
     for i = s, n  {
-        var vi = 0 
+         vi = 0 
         for j = 0, ul  {
             vi = vi + u[j] / A(j, i) 
         }
@@ -48,8 +48,8 @@ fun TimesTranspVec(v, s, n, u, wg) {
 }
 
 fun ATimesTransp(v, u) {
-    var x = std.genlist(len(u)) 
-    var wg = std.sync.waitgroup() 
+     x = std.genlist(len(u)) 
+     wg = std.sync.waitgroup() 
 
     for i = 0, nCPU {
         wg.add(1) 
@@ -65,8 +65,8 @@ fun ATimesTransp(v, u) {
 }
 
 n = 2000
-var u = {} 
-var v = {} 
+ u = {} 
+ v = {} 
  
 for idx = 0, n {
     u[idx] = 1 
@@ -78,12 +78,12 @@ for i = 0, 10 {
     ATimesTransp(u, v) 
 }
 
-var vBv = 0, vv = 0 
-foreach v = fun(i,x) {
+ vBv = 0
+ vv = 0 
+for v , fun(i,x) {
     vBv = vBv + u[i] * x 
     vv = vv + x * x 
 }
 
 io.println(math.sqrt(vBv/vv)) 
-// io.println(v)
     

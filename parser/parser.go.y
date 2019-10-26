@@ -48,7 +48,7 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAddressof TAssert TBreak TCase TContinue TElse TFor TForeach TFunc TIf TLen TNot TReturn TUse TSwitch TTypeof TVar TWhile TYield
+%token<token> TAssert TBreak TCase TContinue TElse TFor TFunc TIf TLen TNot TReturn TUse TSwitch TTypeof TVar TWhile TYield
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
@@ -70,7 +70,7 @@ import (
 %right '~'
 %right '#'
 %left TAddAdd TMinMin
-%right TTypeof, TAddressof, TLen, TUse
+%right TTypeof, TLen, TUse
 
 %% 
 
@@ -120,7 +120,6 @@ flow_stat:
         func_stat              { $$ = $1 }
 
 _assign_stat:
-        TVar expr_declare_list { $$ = $2 } |
         prefix_expr            { $$ = $1 } |
         postfix_incdec         { $$ = $1 } |
         declarator '=' expr {
@@ -238,7 +237,7 @@ for_stat:
             }
             
         } |
-        TForeach expr '=' expr {
+        TFor expr ',' expr {
             $$ = CNode("foreach", $2, $4).setPos0($1)
         }
 
@@ -316,7 +315,6 @@ expr:
         TUse TString         { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str), $1) } |
         TTypeof expr         { $$ = CNode("typeof", $2) } |
         TLen expr            { $$ = CNode("len", $2) } |
-        TAddressof TIdent    { $$ = CNode("call", "addressof", CNode(ANode($2))) } |
         function             { $$ = $1 } |
         map_gen              { $$ = $1 } |
         prefix_expr          { $$ = $1 } |
@@ -344,7 +342,8 @@ expr:
         '-' expr %prec UNARY { $$ = CNode("-", NNode(0.0), $2).setPos0($2) } |
         '~' expr %prec UNARY { $$ = CNode("~", $2).setPos0($2) } |
         TNot expr %prec UNARY { $$ = CNode("!", $2).setPos0($2) } |
-        '#' expr %prec UNARY { $$ = CNode("#", $2).setPos0($2) }
+        '#' expr %prec UNARY { $$ = CNode("#", $2).setPos0($2) } |
+        '&' TIdent %prec UNARY    { $$ = CNode("addressof", ANode($2)).setPos0($2) }
 
 string: 
         TString { $$ = SNode($1.Str).SetPos($1) } 

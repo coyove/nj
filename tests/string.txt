@@ -4,14 +4,14 @@ assert "abc" == "\x61\x62\x63"
 assert "abc吱吱吱" == "abc" + "吱吱" + "吱"
 assert "abc吱吱吱" == "abc\u5431\u5431\u5431"
 
-var dupcheck = {97,98,99,32452}
-var text = ("abc组织者")[:3]
+ dupcheck = {97,98,99,32452}
+ text = ("abc组织者")[:3]
 for i = 0, len(text) assert dupcheck[i] == text[i]
 
 assert itoa(1) == "1"
 assert itoa(10000000000) == "10000000000"
 
-var z = itoa(12.5)
+ z = itoa(12.5)
 z[2] = "0"
 assert z == "1205"
 
@@ -30,6 +30,6 @@ z[2] = "hello" + (z[2:3])
 assert z == "12hello5"
 
 z = "000"
-var z2 = z
+ z2 = z
 z[1] = "1"
 assert z2 == "000"

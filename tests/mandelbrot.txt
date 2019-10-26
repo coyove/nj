@@ -1,21 +1,21 @@
-var limit = 4.0 
-var maxIter = 50 
-var rows = 0 
-var bytesPerRow = 0 
-var initial_r = 0 
-var initial_i = 0 
-var ctr = 0 
-var renderRow =  fun(y0) {
-    var i,j,x,res,b,Zr1,Zr2,Zi1,Zi2,Tr1,Tr2,Ti1,Ti2 = 0 
-    var row = "" 
-    var xByte = 0  while (xByte < bytesPerRow) {
+ limit = 4.0 
+ maxIter = 50 
+ rows = 0 
+ bytesPerRow = 0 
+ initial_r = 0 
+ initial_i = 0 
+ ctr = 0 
+ renderRow =  fun(y0) {
+     i,j,x,res,b,Zr1,Zr2,Zi1,Zi2,Tr1,Tr2,Ti1,Ti2 = 0 
+     row = "" 
+     xByte = 0  while (xByte < bytesPerRow) {
         res = 0 
-        var Ci = initial_i[y0] 
+         Ci = initial_i[y0] 
 
         i = 0  while (i<8) {
             x = xByte<<3 
-            var Cr1 = initial_r[x+i] 
-            var Cr2 = initial_r[x+i+1] 
+             Cr1 = initial_r[x+i] 
+             Cr2 = initial_r[x+i+1] 
 
             Zr1=Cr1 
             Zi1=Ci 
@@ -58,31 +58,31 @@ var renderRow =  fun(y0) {
     return row 
 } 
 
-var size = 1600
+ size = 1600
 bytesPerRow = size >> 3 
 
 initial_r = std.genlist(size) 
 initial_i = std.genlist(size) 
 
-var inv = 2 / size 
+ inv = 2 / size 
 for xy =0, size {
-    var i = inv * xy 
+     i = inv * xy 
     initial_r[xy] = i - 1.5 
     initial_i[xy] = i - 1.0 
 }
  
 
 rows = std.genlist(size) 
-var y = -1 
-var mux = std.sync.mutex() 
-var wg = std.sync.waitgroup() 
+ y = -1 
+ mux = std.sync.mutex() 
+ wg = std.sync.waitgroup() 
 wg.add(4) 
 
-var worker =  fun() {
+ worker =  fun() {
     while (y < size) {
         mux.lock() 
         y = y + 1 
-        var y0 = y 
+         y0 = y 
         mux.unlock() 
         if (y0 < size) {
             rows[y0] = renderRow(y0) 

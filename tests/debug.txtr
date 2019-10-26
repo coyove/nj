@@ -1,7 +1,2 @@
-var x = {1, 2, 3}
-foreach x = fun (i, v) {
-io.println(v)
-delete(x, i)
-}
-
-io.println(x)
+var x = 1
+io.println(&x + 1)

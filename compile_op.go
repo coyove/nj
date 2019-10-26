@@ -18,27 +18,21 @@ var _nop = makeop(OpNOP, 0, 0)
 var _nodeRegA = parser.NewNode(parser.Naddr).SetValue(regA)
 
 func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	aDest, aSrc := atoms[1], atoms[2]
-	buf := newpacket()
-	var newYX uint16
-	var ok bool
-	var noNeedToRecordPos bool
-	var varIndex uint16
-
-	if atoms[0].Value.(string) == "set" {
-		// compound has its own logic, we won't incr stack here
-		if aSrc.Type != parser.Ncompound {
+	aDest := atoms[1].Value.(string)
+	newYX, ok := table.get(aDest)
+	if atoms[0].S() == "move" {
+		if !ok || (strings.HasPrefix(aDest, "$") && (newYX>>10 > 0)) {
+			// variable names start with "$" will be a local variable
 			newYX = table.borrowAddress()
+			table.put(aDest, newYX)
 		}
 	} else {
-		varIndex, ok = table.get(aDest.Value.(string))
-		if !ok {
-			err = fmt.Errorf(errUndeclaredVariable, aDest)
-			return
-		}
-		newYX = varIndex
+		newYX = table.borrowAddress()
+		table.put(aDest, newYX)
 	}
 
+	buf := newpacket()
+	aSrc := atoms[2]
 	switch aSrc.Type {
 	case parser.Natom:
 		valueIndex, ok := table.get(aSrc.Value.(string))
@@ -47,24 +41,18 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 			return
 		}
 		buf.WriteOP(OpSet, newYX, valueIndex)
-		noNeedToRecordPos = true
+		return buf, newYX, nil
 	case parser.Nnumber, parser.Nstring:
 		buf.WriteOP(OpSet, newYX, table.loadK(&buf, aSrc.Value))
-		noNeedToRecordPos = true
-	case parser.Ncompound:
-		code, newYX, err = table.compileCompoundInto(aSrc, atoms[0].Value.(string) == "set", varIndex)
-		if err != nil {
-			return
-		}
-		buf.Write(code)
+		return buf, newYX, nil
 	}
 
-	if atoms[0].Value.(string) == "set" {
-		table.put(aDest.Value.(string), uint16(newYX))
+	code, _, err = table.compileCompoundInto(aSrc, false, newYX)
+	if err != nil {
+		return
 	}
-	if !noNeedToRecordPos {
-		buf.WritePos(atoms[0].Meta)
-	}
+	buf.Write(code)
+	buf.WritePos(atoms[0].Meta)
 	return buf, newYX, nil
 }
 
@@ -183,8 +171,18 @@ func (table *symtable) writeOpcode3(bop byte, atoms []*parser.Node) (buf packet,
 
 func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
 	head := atoms[0].Value.(string)
-	if head == "nop" {
+	switch head {
+	case "nop":
 		return newpacket(), regA, nil
+	case "addressof":
+		varname := atoms[1].Value.(string)
+		address, ok := table.get(varname)
+		if !ok {
+			err = fmt.Errorf(errUndeclaredVariable, atoms[0])
+			return
+		}
+		code.WriteOP(OpSet, regA, table.loadK(&code, float64(address)))
+		return code, regA, nil
 	}
 	op, ok := flatOpMapping[head]
 	if !ok {
@@ -287,18 +285,6 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 
 	if strings.HasPrefix(name, "$") {
 		return table.compileRawOp(nodes)
-	}
-
-	switch name {
-	case "addressof":
-		varname := nodes[2].Cx(0).Value.(string)
-		address, ok := table.get(varname)
-		if !ok {
-			err = fmt.Errorf(errUndeclaredVariable, callee)
-			return
-		}
-		buf.WriteOP(OpSet, regA, table.loadK(&buf, float64(address)))
-		return buf, regA, nil
 	}
 
 	atoms, replacedAtoms := nodes[2].C(), []*parser.Node{}

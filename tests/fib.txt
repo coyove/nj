@@ -19,6 +19,6 @@ fun fib(n) {
 
 io.println(fib)
 
-var ans = fib(35)
+ans = fib(35)
 io.println(ans)
 return ans

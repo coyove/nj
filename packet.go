@@ -306,11 +306,13 @@ func (c *Closure) crPrettify(tab int) string {
 		if a == regA {
 			return "$a"
 		}
+		if a == 0x3ff-1 {
+			return "nil"
+		}
 		if a>>10 == 7 {
 			return fmt.Sprintf("k$%d(%v)", a&0x03ff, c.consts[a&0x3ff])
-		} else {
-			return fmt.Sprintf("$%d$%d", a>>10, a&0x03ff)
 		}
+		return fmt.Sprintf("$%d$%d", a>>10, a&0x03ff)
 	}
 
 	oldpos := c.pos

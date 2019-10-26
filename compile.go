@@ -122,6 +122,7 @@ var flatOpMapping = map[string]byte{
 	"<": OpLess, "<=": OpLessEq, "==": OpEq, "!=": OpNeq, "!": OpNot,
 	"~": OpBitNot, "&": OpBitAnd, "|": OpBitOr, "^": OpBitXor, "<<": OpBitLsh, ">>": OpBitRsh, ">>>": OpBitURsh, "#": OpPop,
 	"store": OpStore, "load": OpLoad, "assert": OpAssert, "slice": OpSlice, "typeof": OpTypeof, "len": OpLen, "foreach": OpForeach,
+	"addressof": 0,
 }
 
 func (table *symtable) writeOpcode(buf *packet, op byte, n0, n1 *parser.Node) (err error) {
@@ -343,7 +344,7 @@ func LoadFile(path string) (*Closure, error) {
 		return nil, err
 	}
 	//n.Dump(os.Stderr)
-	// panic(10)
+	//panic(10)
 	return compileNode(n)
 }
 

@@ -50,6 +50,14 @@ func (table *symtable) _decompound(atoms []*parser.Node, useA bool) (buf packet,
 		buf.TruncateLast(1)
 		table.returnAddress(old)
 		atoms[lastCompound.i].SetValue(opb)
+
+		//if len(buf.data) > 0 {
+		//	opcode, opa, opk := op(buf.data[len(buf.data)-1])
+		//	if opcode == OpSet && opa == regA && opb == regA {
+		//		buf.TruncateLast(1)
+		//		atoms[lastCompound.i].SetValue(opk)
+		//	}
+		//}
 	}
 
 	return

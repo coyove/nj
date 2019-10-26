@@ -73,6 +73,8 @@ var (
 		NilType: "nil", NumberType: "num", StringType: "str", ClosureType: "cls", PointerType: "ptr", MapType: "map",
 	}
 
+	Phantom = NewPointerValue(unsafe.Pointer(new(int)), 0)
+
 	_zero = NewNumberValue(0)
 )
 
