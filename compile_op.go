@@ -150,7 +150,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	}
 
 	switch bop {
-	case OpTypeof, OpNot, OpBitNot:
+	case OpTypeof, OpNot, OpBitNot, OpAddressOf:
 		// unary op
 		err = table.writeOpcode(&buf, bop, atoms[1], nil)
 	case OpAssert:
@@ -172,15 +172,6 @@ func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint
 	switch head {
 	case "nop":
 		return newpacket(), regA, nil
-	case "addressof":
-		varname := atoms[1].Value.(string)
-		address, ok := table.get(varname)
-		if !ok {
-			err = fmt.Errorf(errUndeclaredVariable, atoms[0])
-			return
-		}
-		code.WriteOP(OpSet, regA, table.loadK(&code, float64(address)))
-		return code, regA, nil
 	}
 	op, ok := flatOpMapping[head]
 	if !ok {

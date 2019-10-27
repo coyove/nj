@@ -339,13 +339,13 @@ func (v Value) toString(lv int, json bool) string {
 		} else {
 			buf.WriteString("{")
 			for _, v := range m.l {
-				buf.WriteString(v.toString(lv+1, json))
+				buf.WriteString(v.String())
 				buf.WriteString(",")
 			}
 			for k, v := range m.m {
 				buf.WriteString(fmt.Sprint(k))
 				buf.WriteString(":")
-				buf.WriteString(v.toString(lv+1, json))
+				buf.WriteString(v.String())
 				buf.WriteString(",")
 			}
 			if m.Size() > 0 {

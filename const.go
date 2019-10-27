@@ -1,6 +1,7 @@
 package potatolang
 
 const regA uint16 = 0x1fff // full 13 bits
+const regNil uint16 = 0x3ff - 1
 
 type _Opcode byte
 
@@ -41,6 +42,7 @@ const (
 	OpForeach
 	OpLen
 	OpTypeof
+	OpAddressOf
 	OpNOP
 	OpEOB
 )

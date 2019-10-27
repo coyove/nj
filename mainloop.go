@@ -3,6 +3,7 @@ package potatolang
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"math"
 	"reflect"
 	"sync/atomic"
@@ -341,10 +342,9 @@ MAIN:
 			case NilType:
 				switch va := env.Get(opa, K); va.Type() {
 				case NumberType:
-					if env.parent == nil {
-						panicf("%+v: move(address, value), nil parent", va)
-					}
-					env.parent.Set(uint16(va.AsNumber()), v)
+					x := math.Float64bits(va.AsNumber())
+					log.Println(x)
+					(*Env)(unsafe.Pointer(uintptr(x<<16>>16))).Set(uint16(x>>48), v)
 				case NilType:
 					// ignore
 				default:
@@ -444,7 +444,16 @@ MAIN:
 			v := env.Get(opa, K)
 			if x := v.Type(); x != ClosureType {
 				if x == MapType {
-					env.A = NewMapValue(v.AsMap().Dup())
+					if newEnv.SSize() > 0 {
+						dest := newEnv.SGet(0).MustMap()
+						n := copy(dest.l, v.AsMap().l)
+						m := NewMap()
+						m.l = dest.l[:n]
+						env.A = NewMapValue(m)
+						newEnv.SClear()
+					} else {
+						env.A = NewMapValue(v.AsMap().Dup())
+					}
 					continue
 				}
 				v.panicType(ClosureType)
@@ -502,11 +511,11 @@ MAIN:
 		case OpJmp:
 			cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 		case OpIfNot:
-			if cond := env.Get(opa, K); cond.IsZero() || cond.IsFalse() {
+			if cond := env.Get(opa, K); cond.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
 		case OpIf:
-			if cond := env.Get(opa, K); !cond.IsZero() || !cond.IsFalse() {
+			if cond := env.Get(opa, K); !cond.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
 		case OpForeach:
@@ -544,6 +553,9 @@ MAIN:
 			} else {
 				env.A = NewStringValue(TMapping[v.Type()])
 			}
+		case OpAddressOf:
+			addr := uint64(opa)<<48 | uint64(uintptr(unsafe.Pointer(env)))
+			env.A.SetNumberValue(math.Float64frombits(addr))
 		}
 	}
 

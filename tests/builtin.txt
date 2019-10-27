@@ -102,18 +102,26 @@ for a , fun (i, a) {
 }
 
 fun testmove(err, a, b) {
-if b == 0 {
-    err[] = "divided by zero"
-    return nil
-}
-return a / b
+    $add = fun( err , x) {
+        if x == 10 {
+            err[] = "2nd level"
+            return
+        }
+        return x + 1
+    }
+    if b == 0 {
+        err[] = "divided by zero"
+        return }
+    return a / ($add(err, b) or 1)
 }
 
- err =nil
- c = testmove(&err, 1, 2)
+err =nil
+c = testmove(&err, 1, 1)
 assert err == nil and c == 0.5
 c = testmove(&err, 1, 0)
 assert err == "divided by zero"
+c = testmove(&err, 1, 10)
+assert err == "2nd level"
 
 
 assert ~0 == -1

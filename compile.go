@@ -70,8 +70,13 @@ func (table *symtable) returnAddress(v uint16) {
 func (table *symtable) get(varname string) (uint16, bool) {
 	depth := uint16(0)
 
-	if varname == "nil" {
-		return table.getnil(), true
+	switch varname {
+	case "nil":
+		return regNil, true
+	case "true":
+		return table.loadK(nil, 1.0), true
+	case "false":
+		return table.loadK(nil, 0.0), true
 	}
 
 	for table != nil {
@@ -95,10 +100,6 @@ func (table *symtable) put(varname string, addr uint16) {
 		panic("debug")
 	}
 	table.sym[varname] = addr
-}
-
-func (table *symtable) getnil() uint16 {
-	return 0x3ff - 1
 }
 
 func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
@@ -125,7 +126,7 @@ var flatOpMapping = map[string]_Opcode{
 	"<": OpLess, "<=": OpLessEq, "==": OpEq, "!=": OpNeq, "!": OpNot,
 	"~": OpBitNot, "&": OpBitAnd, "|": OpBitOr, "^": OpBitXor, "<<": OpBitLsh, ">>": OpBitRsh, ">>>": OpBitURsh, "#": OpPop,
 	"store": OpStore, "load": OpLoad, "assert": OpAssert, "slice": OpSlice, "typeof": OpTypeof, "len": OpLen, "foreach": OpForeach,
-	"addressof": 0,
+	"addressof": OpAddressOf,
 }
 
 func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node) (err error) {

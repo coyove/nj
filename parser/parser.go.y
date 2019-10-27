@@ -15,7 +15,6 @@ import (
 %type<expr> ident_list
 %type<expr> expr_list
 %type<expr> expr_assign_list
-%type<expr> expr_declare_list
 %type<expr> expr
 %type<expr> postfix_incdec
 %type<expr> _postfix_incdec
@@ -48,7 +47,7 @@ import (
 }
 
 /* Reserved words */
-%token<token> TAssert TBreak TCase TContinue TElse TFor TFunc TIf TLen TNot TReturn TUse TSwitch TTypeof TVar TWhile TYield
+%token<token> TAssert TBreak TCase TContinue TElse TFor TFunc TIf TLen TNot TReturn TReturnNil TUse TSwitch TTypeof TVar TYield TYieldNil
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
@@ -172,11 +171,17 @@ postfix_incdec:
         }
 
 for_stat:
-        TWhile expr oneline_or_block {
+        TFor expr oneline_or_block {
             $$ = CNode("for", $2, CNode(), $3).setPos0($1)
         } |
-        TWhile expr ',' oneline_or_block oneline_or_block {
-            $$ = CNode("for", $2, $4, $5).setPos0($1)
+        TFor ';' expr ';' oneline_or_block oneline_or_block {
+            $$ = CNode("for", $3, $5, $6).setPos0($1)
+        } |
+        TFor expr ';' expr ';' oneline_or_block oneline_or_block {
+            $$ = CNode("chain",
+                $2,
+                CNode("for", $4, $6, $7).setPos0($1),
+            )
         } |
         TFor TIdent '=' expr ',' expr oneline_or_block {
             vname, ename := ANode($2), ANodeS($2.Str + randomName())
@@ -239,7 +244,7 @@ for_stat:
         } |
         TFor expr ',' expr {
             $$ = CNode("foreach", $2, $4).setPos0($1)
-        }
+        } 
 
 if_stat:
         TIf expr oneline_or_block %prec 'T'              { $$ = CNode("if", $2, $3, CNode()).setPos0($1) } |
@@ -276,11 +281,13 @@ func_stat:
 
 jmp_stat:
         TYield expr           { $$ = CNode("yield", $2).setPos0($1) } |
+        TYieldNil             { $$ = CNode("yield", ANodeS("nil")).setPos0($1) } |
         TBreak                { $$ = CNode("break").setPos0($1) } |
         TContinue             { $$ = CNode("continue").setPos0($1) } |
         TAssert expr          { $$ = CNode("assert", $2, ANodeS("nil")).setPos0($1) } |
         TAssert expr TString  { $$ = CNode("assert", $2, SNode($3.Str)).setPos0($1) } |
         TReturn expr          { $$ = CNode("ret", $2).setPos0($1) } |
+        TReturnNil            { $$ = CNode("ret", ANodeS("nil")).setPos0($1) } |
         TUse TString          { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str), $1) }
 
 declarator:
@@ -303,12 +310,6 @@ expr_list:
 expr_assign_list:
         expr ':' expr                         { $$ = CNode($1, $3) } |
         expr_assign_list ',' expr ':' expr    { $$ = $1.Cappend($3).Cappend($5) }
-
-expr_declare_list:
-        TIdent                                { $$ = CNode("chain", CNode("set", ANode($1), ANodeS("nil")).setPos0($1)) } |
-        TIdent '=' expr                       { $$ = CNode("chain", CNode("set", ANode($1), $3).setPos0($1)) } |
-        expr_declare_list ',' TIdent '=' expr { $$ = $1.Cappend(CNode("set", ANode($3), $5).setPos0($1)) } |
-        expr_declare_list ',' TIdent          { $$ = $1.Cappend(CNode("set", ANode($3), ANodeS("nil")).setPos0($1)) }
 
 expr:
         TNumber              { $$ = NNode($1.Str).SetPos($1) } |

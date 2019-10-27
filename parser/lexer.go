@@ -33,6 +33,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 const EOF = 0xffffffff
@@ -329,7 +330,6 @@ var reservedWords = map[string]uint32{
 	"switch":   TSwitch,
 	"typeof":   TTypeof,
 	"for":      TFor,
-	"while":    TWhile,
 	"yield":    TYield,
 }
 
@@ -357,7 +357,24 @@ redo:
 			goto finally
 		}
 		if typ, ok := reservedWords[tok.Str]; ok {
-			tok.Type = typ
+			crlf := false
+			for n := sc.Peek(); unicode.IsSpace(rune(n)) || n == '}'; n = sc.Peek() {
+				if n == '\n' || n == '}' {
+					crlf = true
+					break
+				}
+				sc.Next()
+			}
+
+			// return/yield without an arg, but with a CrLf afterward will be considered
+			// as return nil/yield nil
+			if tok.Str == "return" && crlf {
+				tok.Type = TReturnNil
+			} else if tok.Str == "yield" && crlf {
+				tok.Type = TYieldNil
+			} else {
+				tok.Type = typ
+			}
 		}
 	case isDecimal(ch):
 		tok.Type = TNumber
