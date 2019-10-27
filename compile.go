@@ -223,6 +223,8 @@ func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint16, err 
 		}
 	case parser.Naddr:
 		varIndex = n.Value.(uint16)
+	case parser.Nstring, parser.Nnumber:
+		varIndex = table.loadK(nil, n.Value)
 	default:
 		code, yx, err = table.compileCompound(n)
 		if err != nil {

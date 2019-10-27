@@ -57,27 +57,11 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 }
 
 func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	op := OpRet
 	if atoms[0].S() == "yield" {
-		op = OpYield
 		table.y = true
+		return table.writeOpcode3(OpYield, atoms)
 	}
-
-	buf := newpacket()
-	switch atom := atoms[1]; atom.Type {
-	case parser.Natom, parser.Nnumber, parser.Nstring, parser.Naddr:
-		if err = table.writeOpcode(&buf, op, atom, nil); err != nil {
-			return
-		}
-	case parser.Ncompound:
-		if code, yx, err = table.compileNode(atom); err != nil {
-			return
-		}
-		buf.Write(code)
-		buf.WriteOP(op, yx, 0)
-	}
-	buf.WritePos(atoms[0].Meta)
-	return buf, yx, nil
+	return table.writeOpcode3(OpRet, atoms)
 }
 
 func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
@@ -105,6 +89,8 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	if len(atoms) > 4 {
 		panic("shouldn't happen: too many arguments")
 	}
+
+	atoms = append([]*parser.Node{}, atoms...) // duplicate
 
 	var n0, n1 *parser.Node
 
@@ -150,7 +136,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	}
 
 	switch bop {
-	case OpTypeof, OpNot, OpBitNot, OpAddressOf:
+	case OpTypeof, OpNot, OpBitNot, OpAddressOf, OpRet, OpYield:
 		// unary op
 		err = table.writeOpcode(&buf, bop, atoms[1], nil)
 	case OpAssert:
@@ -231,18 +217,13 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint16
 	trueBranch, falseBranch := atoms[2], atoms[3]
 	buf := newpacket()
 
-	switch condition.Type {
-	case parser.Nnumber, parser.Nstring:
-		buf.WriteOP(OpSet, regA, table.loadK(&buf, condition.Value))
-		yx = regA
-	case parser.Natom, parser.Ncompound:
-		code, yx, err = table.compileNode(condition)
-		if err != nil {
-			return newpacket(), 0, err
-		}
-		buf.Write(code)
+	code, yx, err = table.compileNode(condition)
+	if err != nil {
+		return newpacket(), 0, err
 	}
+	buf.Write(code)
 	condyx := yx
+
 	var trueCode, falseCode packet
 	trueCode, yx, err = table.compileChainOp(trueBranch)
 	if err != nil {
@@ -415,11 +396,12 @@ func init() {
 // [continue | break]
 func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
 	buf := newpacket()
+	if len(table.continueNode) == 0 {
+		err = fmt.Errorf("%+v: invalid statement outside a for loop", atoms[0])
+		return
+	}
+
 	if atoms[0].Value.(string) == "continue" {
-		if len(table.continueNode) == 0 {
-			err = fmt.Errorf("%+v: invalid continue statement", atoms[0])
-			return
-		}
 		cn := table.continueNode[len(table.continueNode)-1]
 		code, yx, err = table.compileChainOp(cn)
 		if err != nil {
@@ -430,10 +412,6 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 		return buf, regA, nil
 	}
 
-	if len(table.continueNode) == 0 {
-		err = fmt.Errorf("%+v: invalid break statement", atoms[0])
-		return
-	}
 	buf.WriteRaw(staticWhileHack[4:]) // write a 'continue' placeholder
 	return buf, regA, nil
 }
@@ -442,21 +420,13 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
 	condition := atoms[1]
 	buf := newpacket()
-	var varIndex uint16
 
-	switch condition.Type {
-	case parser.Naddr:
-		varIndex = condition.Value.(uint16)
-	case parser.Nnumber, parser.Nstring:
-		varIndex = table.loadK(&buf, condition.Value)
-	case parser.Ncompound, parser.Natom:
-		code, yx, err = table.compileNode(condition)
-		if err != nil {
-			return
-		}
-		buf.Write(code)
-		varIndex = yx
+	code, yx, err = table.compileNode(condition)
+	if err != nil {
+		return
 	}
+	buf.Write(code)
+	cond := yx
 
 	table.continueNode = append(table.continueNode, atoms[2])
 	code, yx, err = table.compileChainOp(atoms[3])
@@ -471,9 +441,10 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 	table.continueNode = table.continueNode[:len(table.continueNode)-1]
 
 	code.Write(icode)
-	buf.WriteJmpOP(OpIfNot, varIndex, len(code.data)+1)
-	buf.Write(code)
-	buf.WriteJmpOP(OpJmp, 0, -buf.Len()-1)
+	buf.WriteJmpOP(OpIfNot, cond, len(code.data)+1) // +---> test cond  ---+
+	buf.Write(code)                                 // |     code ...      | (break)
+	buf.WriteJmpOP(OpJmp, 0, -buf.Len()-1)          // +---- continue      |
+	//                                                   following code <--+
 
 	code = buf
 	code2 := u32Bytes(code.data)

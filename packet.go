@@ -306,7 +306,7 @@ func (c *Closure) crPrettify(tab int) string {
 		if a == regA {
 			return "$a"
 		}
-		if a == 0x3ff-1 {
+		if a == regNil {
 			return "nil"
 		}
 		if a>>10 == 7 {
