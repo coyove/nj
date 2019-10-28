@@ -311,8 +311,8 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 
 	coreStack := NewEnv(nil, nil)
 	for n, v := range CoreLibs {
-		table.sym[n] = uint16(coreStack.SSize())
-		coreStack.SPush(v)
+		table.sym[n] = uint16(coreStack.LocalSize())
+		coreStack.LocalPush(v)
 	}
 
 	table.vp = uint16(len(table.sym))

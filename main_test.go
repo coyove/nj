@@ -246,7 +246,7 @@ func TestPosVByte(t *testing.T) {
 //	t.Log(cls.PrettyString())
 //	ExecCursor(cls.lastenv, cls, 0)
 //	// all core libs + add + d + sum + 2 tmps
-//	if cls.lastenv.SSize() != len(CoreLibs)+1+1+1+2 {
+//	if cls.lastenv.LocalSize() != len(CoreLibs)+1+1+1+2 {
 //		t.FailNow()
 //	}
 //}

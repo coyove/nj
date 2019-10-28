@@ -37,30 +37,30 @@ func (env *Env) grow(newSize int) {
 	env.stack = s[:newSize]
 }
 
-// SGet gets a value from the current stack
-func (env *Env) SGet(index int) Value {
+// LocalGet gets a value from the current stack
+func (env *Env) LocalGet(index int) Value {
 	if index >= len(env.stack) {
 		return Value{}
 	}
 	return env.stack[index]
 }
 
-// SSet sets a value in the current stack
-func (env *Env) SSet(index int, value Value) {
+// LocalSet sets a value in the current stack
+func (env *Env) LocalSet(index int, value Value) {
 	if index >= len(env.stack) {
 		env.grow(index + 1)
 	}
 	env.stack[index] = value
 }
 
-// SClear clears the current stack
-func (env *Env) SClear() {
+// LocalClear clears the current stack
+func (env *Env) LocalClear() {
 	env.stack = env.stack[:0]
 	env.A = Value{}
 }
 
-// SInsert inserts another stack into the current stack
-func (env *Env) SInsert(index int, data []Value) {
+// LocalInsert inserts another stack into the current stack
+func (env *Env) LocalInsert(index int, data []Value) {
 	if index <= len(env.stack) {
 		ln := len(env.stack)
 		env.grow(ln + len(data))
@@ -71,15 +71,15 @@ func (env *Env) SInsert(index int, data []Value) {
 	copy(env.stack[index:], data)
 }
 
-// SPush pushes a value into the current stack
-func (env *Env) SPush(v Value) {
+// LocalPush pushes a value into the current stack
+func (env *Env) LocalPush(v Value) {
 	// e.stack.Add(v)
 	ln := len(env.stack)
 	env.grow(ln + 1)
 	env.stack[ln] = v
 }
 
-func (env *Env) SSize() int {
+func (env *Env) LocalSize() int {
 	return len(env.stack)
 }
 

@@ -9,8 +9,8 @@ import (
 
 func stdPrint(f *os.File) func(env *Env) Value {
 	return func(env *Env) Value {
-		for i := 0; i < env.SSize(); i++ {
-			f.WriteString(env.SGet(i).ToPrintString())
+		for i := 0; i < env.LocalSize(); i++ {
+			f.WriteString(env.LocalGet(i).ToPrintString())
 		}
 
 		return Value{}
@@ -18,7 +18,7 @@ func stdPrint(f *os.File) func(env *Env) Value {
 }
 
 func _sprintf(env *Env) string {
-	msg := []rune(env.SGet(0).MustString())
+	msg := []rune(env.LocalGet(0).MustString())
 	buf, numbuf, formatbuf := bytes.Buffer{}, bytes.Buffer{}, bytes.Buffer{}
 	i := 0
 	for i < len(msg) {
@@ -65,10 +65,10 @@ func _sprintf(env *Env) string {
 		num, _ := strconv.Atoi(numbuf.String())
 
 		if formatbuf.Len() == 0 {
-			buf.WriteString(env.SGet(num).ToPrintString())
+			buf.WriteString(env.LocalGet(num).ToPrintString())
 		} else {
 			format := formatbuf.Bytes()
-			i := env.SGet(num).AsInterface()
+			i := env.LocalGet(num).AsInterface()
 
 			// TODO: handle cases like: %d %
 			switch format[len(format)-1] {
@@ -97,8 +97,8 @@ func stdSprintf(env *Env) Value {
 
 func stdPrintln(f *os.File) func(env *Env) Value {
 	return func(env *Env) Value {
-		for i := 0; i < env.SSize(); i++ {
-			f.WriteString(env.SGet(i).ToPrintString() + " ")
+		for i := 0; i < env.LocalSize(); i++ {
+			f.WriteString(env.LocalGet(i).ToPrintString() + " ")
 		}
 		f.WriteString("\n")
 		return Value{}
@@ -107,10 +107,10 @@ func stdPrintln(f *os.File) func(env *Env) Value {
 
 func stdWrite(f *os.File) func(env *Env) Value {
 	return func(env *Env) Value {
-		for i := 0; i < env.SSize(); i++ {
-			switch a := env.SGet(i); a.Type() {
+		for i := 0; i < env.LocalSize(); i++ {
+			switch a := env.LocalGet(i); a.Type() {
 			case StringType:
-				f.WriteString(env.SGet(i).AsString())
+				f.WriteString(env.LocalGet(i).AsString())
 			case MapType:
 				buf := make([]byte, 1)
 				for _, b := range a.AsMap().l {

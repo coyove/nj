@@ -11,13 +11,13 @@ func TestSprintf(t *testing.T) {
 
 	sprintf := func(a string, args ...interface{}) string {
 		env := NewEnv(nil, nil)
-		env.SPush(NewStringValue(a))
+		env.LocalPush(NewStringValue(a))
 		for _, arg := range args {
 			switch arg.(type) {
 			case string:
-				env.SPush(NewStringValue(arg.(string)))
+				env.LocalPush(NewStringValue(arg.(string)))
 			case float64:
-				env.SPush(NewNumberValue(arg.(float64)))
+				env.LocalPush(NewNumberValue(arg.(float64)))
 			}
 		}
 		return _sprintf(env)

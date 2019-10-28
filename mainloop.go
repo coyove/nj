@@ -3,7 +3,6 @@ package potatolang
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"math"
 	"reflect"
 	"sync/atomic"
@@ -111,7 +110,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 		caddr = kodeaddr(K.code)
 		if r.cls.Isset(ClsNoEnvescape) {
 			newEnv = env
-			newEnv.SClear()
+			newEnv.LocalClear()
 		}
 		env = r.env
 		retStack = retStack[:len(retStack)-1]
@@ -283,17 +282,17 @@ MAIN:
 				env.A = NewMapValue(NewMap())
 			} else {
 				if opa == 1 {
-					size := newEnv.SSize()
+					size := newEnv.LocalSize()
 					m := NewMapSize(size)
 					copy(m.l, newEnv.stack)
-					newEnv.SClear()
+					newEnv.LocalClear()
 					env.A = NewMapValue(m)
 				} else {
-					size, m := newEnv.SSize(), NewMap()
+					size, m := newEnv.LocalSize(), NewMap()
 					for i := 0; i < size; i += 2 {
-						m.Put(newEnv.SGet(i), newEnv.SGet(i+1))
+						m.Put(newEnv.LocalGet(i), newEnv.LocalGet(i+1))
 					}
-					newEnv.SClear()
+					newEnv.LocalClear()
 					env.A = NewMapValue(m)
 				}
 			}
@@ -341,7 +340,6 @@ MAIN:
 				switch va := env.Get(opa, K); va.Type() {
 				case NumberType:
 					x := math.Float64bits(va.AsNumber())
-					log.Println(x)
 					(*Env)(unsafe.Pointer(uintptr(x<<16>>16))).Set(uint16(x>>48), v)
 				case NilType:
 					// ignore
@@ -427,7 +425,7 @@ MAIN:
 			if newEnv == nil {
 				newEnv = NewEnv(nil, env.Cancel)
 			}
-			newEnv.SPush(env.Get(opa, K))
+			newEnv.LocalPush(env.Get(opa, K))
 		case OpRet:
 			v := env.Get(opa, K)
 			if len(retStack) == 0 {
@@ -442,13 +440,13 @@ MAIN:
 			v := env.Get(opa, K)
 			if x := v.Type(); x != ClosureType {
 				if x == MapType {
-					if newEnv.SSize() > 0 {
-						dest := newEnv.SGet(0).MustMap()
+					if newEnv.LocalSize() > 0 {
+						dest := newEnv.LocalGet(0).MustMap()
 						n := copy(dest.l, v.AsMap().l)
 						m := NewMap()
 						m.l = dest.l[:n]
 						env.A = NewMapValue(m)
-						newEnv.SClear()
+						newEnv.LocalClear()
 					} else {
 						env.A = NewMapValue(v.AsMap().Dup())
 					}
@@ -461,21 +459,21 @@ MAIN:
 				env.A = cls.Exec(nil)
 				newEnv = nil
 			} else if (newEnv == nil && cls.argsCount > 0) ||
-				(newEnv != nil && newEnv.SSize() < int(cls.argsCount)) {
-				if newEnv == nil || newEnv.SSize() == 0 {
+				(newEnv != nil && newEnv.LocalSize() < int(cls.argsCount)) {
+				if newEnv == nil || newEnv.LocalSize() == 0 {
 					env.A = NewClosureValue(cls.Dup())
 				} else {
 					curry := cls.Dup()
 					curry.AppendPreArgs(newEnv.Stack())
 					env.A = NewClosureValue(curry)
-					newEnv.SClear()
+					newEnv.LocalClear()
 				}
 			} else {
 				if newEnv == nil {
 					newEnv = NewEnv(env, env.Cancel)
 				}
 				if len(cls.partialArgs) > 0 {
-					newEnv.SInsert(0, cls.partialArgs)
+					newEnv.LocalInsert(0, cls.partialArgs)
 				}
 				if cls.Isset(ClsYieldable|ClsRecoverable) || cls.native != nil {
 					newEnv.parent = env
@@ -500,7 +498,7 @@ MAIN:
 				if cls.native == nil {
 					newEnv = nil
 				} else {
-					newEnv.SClear()
+					newEnv.LocalClear()
 				}
 			}
 
@@ -526,17 +524,17 @@ MAIN:
 			cls := env.Get(opb, K).MustClosure()
 			newEnv := NewEnv(cls.Env(), env.Cancel)
 			for i := len(m.l) - 1; i >= 0; i-- {
-				newEnv.SClear()
-				newEnv.SPush(NewNumberValue(float64(i)))
-				newEnv.SPush(m.l[i])
+				newEnv.LocalClear()
+				newEnv.LocalPush(NewNumberValue(float64(i)))
+				newEnv.LocalPush(m.l[i])
 				if res := cls.Exec(newEnv); res.IsZero() {
 					continue MAIN
 				}
 			}
 			for k, v := range m.m {
-				newEnv.SClear()
-				newEnv.SPush(NewInterfaceValue(k))
-				newEnv.SPush(v)
+				newEnv.LocalClear()
+				newEnv.LocalPush(NewInterfaceValue(k))
+				newEnv.LocalPush(v)
 				if res := cls.Exec(newEnv); res.IsZero() {
 					continue MAIN
 				}

@@ -73,18 +73,18 @@ func initCoreLibs() {
 		return NewPointerValue(unsafe.Pointer(a), GTagUnique)
 	}))
 	lcore.Puts("genlist", NewNativeValue(1, func(env *Env) Value {
-		return NewMapValue(NewMapSize(int(env.SGet(0).MustNumber())))
+		return NewMapValue(NewMapSize(int(env.LocalGet(0).MustNumber())))
 	}))
 	lcore.Puts("apply", NewNativeValue(2, func(env *Env) Value {
-		x, y := env.SGet(0), env.SGet(1)
+		x, y := env.LocalGet(0), env.LocalGet(1)
 		newEnv := NewEnv(x.MustClosure().env, env.parent.Cancel)
 		for _, v := range y.MustMap().l {
-			newEnv.SPush(v)
+			newEnv.LocalPush(v)
 		}
 		return x.MustClosure().Exec(newEnv)
 	}))
 	lcore.Puts("storeinto", NewNativeValue(3, func(env *Env) Value {
-		e, x, y := env.SGet(0), env.SGet(1), env.SGet(2)
+		e, x, y := env.LocalGet(0), env.LocalGet(1), env.LocalGet(2)
 		ep, et := e.MustPointer()
 		if et != GTagEnv {
 			panicf("invalid generic tag: %d", et)
@@ -101,7 +101,7 @@ func initCoreLibs() {
 		//return NewStringValue(e.Error())
 	}))
 	lcore.Puts("eval", NewNativeValue(1, func(env *Env) Value {
-		x := env.SGet(0).MustString()
+		x := env.LocalGet(0).MustString()
 		cls, err := LoadString(x)
 		if err != nil {
 			return NewStringValue(err.Error())
@@ -109,10 +109,10 @@ func initCoreLibs() {
 		return NewClosureValue(cls)
 	}))
 	lcore.Puts("copy", NewNativeValue(5, func(env *Env) Value {
-		dstPos, srcPos := int(env.SGet(1).MustNumber()), int(env.SGet(3).MustNumber())
-		length := int(env.SGet(4).MustNumber())
+		dstPos, srcPos := int(env.LocalGet(1).MustNumber()), int(env.LocalGet(3).MustNumber())
+		length := int(env.LocalGet(4).MustNumber())
 
-		switch dst, src := env.SGet(0), env.SGet(2); dst.Type() {
+		switch dst, src := env.LocalGet(0), env.LocalGet(2); dst.Type() {
 		case MapType:
 			return NewNumberValue(float64(copy(dst.MustMap().l[dstPos:], src.MustMap().l[srcPos:srcPos+length])))
 		default:
@@ -121,7 +121,7 @@ func initCoreLibs() {
 		}
 	}))
 	lcore.Puts("char", NewNativeValue(1, func(env *Env) Value {
-		switch c := env.SGet(0); c.Type() {
+		switch c := env.LocalGet(0); c.Type() {
 		case NumberType:
 			return NewStringValue(char(c.AsNumber(), true))
 		default:
@@ -130,15 +130,15 @@ func initCoreLibs() {
 		}
 	}))
 	lcore.Puts("utf8char", NewNativeValue(1, func(env *Env) Value {
-		return NewStringValue(char(env.SGet(0).MustNumber(), false))
+		return NewStringValue(char(env.LocalGet(0).MustNumber(), false))
 	}))
 	lcore.Puts("index", NewNativeValue(2, func(env *Env) Value {
-		switch s := env.SGet(0); s.Type() {
+		switch s := env.LocalGet(0); s.Type() {
 		case StringType:
-			return NewNumberValue(float64(strings.Index(s.AsString(), env.SGet(1).MustString())))
+			return NewNumberValue(float64(strings.Index(s.AsString(), env.LocalGet(1).MustString())))
 		case MapType:
 			m := s.AsMap()
-			x := env.SGet(1)
+			x := env.LocalGet(1)
 			for i, a := range m.l {
 				if a.Equal(x) {
 					return NewNumberValue(float64(i))
@@ -157,13 +157,13 @@ func initCoreLibs() {
 	lcore.Puts("sprintf", NewNativeValue(0, stdSprintf))
 	lcore.Puts("sync", NewMapValue(NewMap().
 		Puts("run", NewNativeValue(1, func(env *Env) Value {
-			cls := env.SGet(0).MustClosure()
+			cls := env.LocalGet(0).MustClosure()
 			newEnv := NewEnv(cls.env, env.parent.Cancel)
-			if cls.ArgsCount() > env.SSize()-1 {
+			if cls.ArgsCount() > env.LocalSize()-1 {
 				panic("not enough arguments to start a goroutine")
 			}
-			for i := 1; i < env.SSize(); i++ {
-				newEnv.SPush(env.SGet(i))
+			for i := 1; i < env.LocalSize(); i++ {
+				newEnv.LocalPush(env.LocalGet(i))
 			}
 			go cls.Exec(newEnv)
 			return Value{}
@@ -176,7 +176,7 @@ func initCoreLibs() {
 		})).
 		Puts("waitgroup", NewNativeValue(0, func(env *Env) Value {
 			m, wg := NewMap(), &sync.WaitGroup{}
-			m.Puts("add", NewNativeValue(1, func(env *Env) Value { wg.Add(int(env.SGet(0).MustNumber())); return Value{} }))
+			m.Puts("add", NewNativeValue(1, func(env *Env) Value { wg.Add(int(env.LocalGet(0).MustNumber())); return Value{} }))
 			m.Puts("done", NewNativeValue(0, func(env *Env) Value { wg.Done(); return Value{} }))
 			m.Puts("wait", NewNativeValue(0, func(env *Env) Value { wg.Wait(); return Value{} }))
 			return NewMapValue(m)
@@ -189,34 +189,34 @@ func initCoreLibs() {
 				return NewClosureValue(cls)
 			})).
 			Puts("yieldreset", NewNativeValue(1, func(env *Env) Value {
-				env.SGet(0).MustClosure().lastenv = nil
-				return env.SGet(0)
+				env.LocalGet(0).MustClosure().lastenv = nil
+				return env.LocalGet(0)
 			})).
 			Puts("set", NewNativeValue(3, func(env *Env) Value {
-				cls := env.SGet(0).MustClosure()
-				switch name := env.SGet(1).MustString(); name {
+				cls := env.LocalGet(0).MustClosure()
+				switch name := env.LocalGet(1).MustString(); name {
 				case "argscount":
-					cls.argsCount = byte(env.SGet(2).MustNumber())
+					cls.argsCount = byte(env.LocalGet(2).MustNumber())
 				case "yieldable":
-					if !env.SGet(2).IsFalse() {
+					if !env.LocalGet(2).IsFalse() {
 						cls.Set(ClsYieldable)
 					} else {
 						cls.Unset(ClsYieldable)
 					}
 				case "envescaped":
-					if env.SGet(2).IsFalse() {
+					if env.LocalGet(2).IsFalse() {
 						cls.Set(ClsNoEnvescape)
 					} else {
 						cls.Unset(ClsNoEnvescape)
 					}
 				case "source":
-					cls.source = env.SGet(2).MustString()
+					cls.source = env.LocalGet(2).MustString()
 				}
 				return NewClosureValue(cls)
 			})).
 			Puts("get", NewNativeValue(2, func(env *Env) Value {
-				cls := env.SGet(0).MustClosure()
-				switch name := env.SGet(1).MustString(); name {
+				cls := env.LocalGet(0).MustClosure()
+				switch name := env.LocalGet(1).MustString(); name {
 				case "argscount":
 					return NewNumberValue(float64(cls.argsCount))
 				case "yieldable":
@@ -233,7 +233,7 @@ func initCoreLibs() {
 	lcore.Puts("json", NewMapValue(NewMap().
 		Puts("parse", NewNativeValue(1, func(env *Env) Value {
 			json := []byte{}
-			switch x := env.SGet(0); x.Type() {
+			switch x := env.LocalGet(0); x.Type() {
 			case StringType:
 				json = []byte(x.AsString())
 			}
@@ -262,19 +262,19 @@ func initCoreLibs() {
 			panic(json)
 		})).
 		Puts("stringify", NewNativeValue(1, func(env *Env) Value {
-			return NewStringValue(env.SGet(0).toString(0, true))
+			return NewStringValue(env.LocalGet(0).toString(0, true))
 		}))))
 
 	CoreLibs["std"] = NewMapValue(lcore)
 	CoreLibs["atoi"] = NewNativeValue(1, func(env *Env) Value {
-		v, err := parser.StringToNumber(env.SGet(0).AsString())
+		v, err := parser.StringToNumber(env.LocalGet(0).AsString())
 		if err != nil {
 			return Value{}
 		}
 		return NewNumberValue(v)
 	})
 	CoreLibs["itoa"] = NewNativeValue(1, func(env *Env) Value {
-		v := env.SGet(0).AsNumber()
+		v := env.LocalGet(0).AsNumber()
 		if float64(int64(v)) == v {
 			return NewStringValue(strconv.FormatInt(int64(v), 10))
 		}

@@ -14,15 +14,15 @@ func TestNewStack(t *testing.T) {
 	for {
 		idx := rand.Intn(1000)
 		if rand.Intn(100) == 0 {
-			st.SSet(idx, v)
+			st.LocalSet(idx, v)
 			vi = idx
 			break
 		}
 
-		st.SSet(idx, Value{})
+		st.LocalSet(idx, Value{})
 	}
 
-	if !st.SGet(vi).Equal(v) {
+	if !st.LocalGet(vi).Equal(v) {
 		t.Error(v, vi)
 	}
 }
