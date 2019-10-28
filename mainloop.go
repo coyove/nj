@@ -23,11 +23,9 @@ func panicerr(err error) {
 }
 
 type stacktrace struct {
-	cursor      uint32
-	noenvescape bool
-	returnInto  byte
-	env         *Env
-	cls         *Closure
+	cursor uint32
+	env    *Env
+	cls    *Closure
 }
 
 // ExecError represents the runtime error
@@ -111,7 +109,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 		K = r.cls
 		r.env.A = v
 		caddr = kodeaddr(K.code)
-		if r.noenvescape {
+		if r.cls.Isset(ClsNoEnvescape) {
 			newEnv = env
 			newEnv.SClear()
 		}
@@ -480,16 +478,14 @@ MAIN:
 					newEnv.SInsert(0, cls.partialArgs)
 				}
 				if cls.Isset(ClsYieldable|ClsRecoverable) || cls.native != nil {
-					newEnv.trace = retStack
 					newEnv.parent = env
 					env.A = cls.Exec(newEnv)
 				} else {
 					// log.Println(newEnv.stack)
 					last := stacktrace{
-						cursor:      cursor,
-						env:         env,
-						cls:         K,
-						noenvescape: cls.Isset(ClsNoEnvescape),
+						cls:    K,
+						cursor: cursor,
+						env:    env,
 					}
 
 					// switch to the env of cls

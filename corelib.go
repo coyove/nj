@@ -96,8 +96,9 @@ func initCoreLibs() {
 		return NewPointerValue(unsafe.Pointer(env.parent), GTagEnv)
 	}))
 	lcore.Puts("stacktrace", NewNativeValue(0, func(env *Env) Value {
-		e := ExecError{stacks: env.trace}
-		return NewStringValue(e.Error())
+		panic("not implemented")
+		//e := ExecError{stacks: env.trace}
+		//return NewStringValue(e.Error())
 	}))
 	lcore.Puts("eval", NewNativeValue(1, func(env *Env) Value {
 		x := env.SGet(0).MustString()

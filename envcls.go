@@ -13,7 +13,6 @@ import (
 // Env.A stores the result of an operation
 type Env struct {
 	parent *Env
-	trace  []stacktrace
 	stack  []Value
 	A      Value
 	Cancel *uintptr

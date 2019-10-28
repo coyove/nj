@@ -1,5 +1,5 @@
- n = 0 
- nCPU = 6
+n = 0 
+nCPU = 4
 
 fun A(i, j) {
     return ((i+j)*(i+j+1)/2 + i + 1) 
@@ -64,7 +64,7 @@ fun ATimesTransp(v, u) {
     wg.wait() 
 }
 
-n = 2000
+n = 100
  u = {} 
  v = {} 
  
