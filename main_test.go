@@ -81,7 +81,7 @@ func TestArithmeticUnfold(t *testing.T) {
 		t.Error(err)
 	}
 
-	if len(cls.consts) != 1 || cls.consts[0].AsNumber() != 2.5 {
+	if len(cls.ConstTable) != 1 || cls.ConstTable[0].AsNumber() != 2.5 {
 		t.Error("unfolding failed")
 	}
 
@@ -107,7 +107,7 @@ func TestRegisterOptimzation(t *testing.T) {
 		t.Error(err)
 	}
 
-	// At the end of the if block, the op code will be like:
+	// At the end of the if block, the op Code will be like:
 	// R0 = a, R1 = b -> Add
 	// But after the if block, there is another c = a + b, we can't re-use the registers R0 and R1
 	// because they will not contain the value we want as the if block was not executed at all.
@@ -158,19 +158,19 @@ func TestCopyCall(t *testing.T) {
 	//	if err != nil {
 	//		t.Fatal(err)
 	//	}
-	//	code := cls.code
-	//	o, a, _ := op(code[0])
-	//	if o != OP_R0K || cls.consts[a].MustNumber() != 1.0 {
+	//	Code := cls.Code
+	//	o, a, _ := op(Code[0])
+	//	if o != OP_R0K || cls.ConstTable[a].MustNumber() != 1.0 {
 	//		t.Fatal("error opcode 0")
 	//	}
 	//
-	//	o, a, _ = op(code[1])
-	//	if o != OP_R1K || cls.consts[a].MustNumber() != 1.0 {
+	//	o, a, _ = op(Code[1])
+	//	if o != OP_R1K || cls.ConstTable[a].MustNumber() != 1.0 {
 	//		t.Fatal("error opcode 1")
 	//	}
 	//
-	//	o, a, _ = op(code[2])
-	//	if o != OP_R2K || cls.consts[a].Type() != NilType {
+	//	o, a, _ = op(Code[2])
+	//	if o != OP_R2K || cls.ConstTable[a].Type() != NilType {
 	//		t.Fatal("error opcode 2")
 	//	}
 	//
@@ -178,9 +178,9 @@ func TestCopyCall(t *testing.T) {
 	//	if err != nil {
 	//		t.Fatal(err)
 	//	}
-	//	code = cls.code
-	//	o, a, _ = op(code[0])
-	//	if o != OP_R0K || cls.consts[a].MustNumber() != 0.0 {
+	//	Code = cls.Code
+	//	o, a, _ = op(Code[0])
+	//	if o != OP_R0K || cls.ConstTable[a].MustNumber() != 0.0 {
 	//		t.Fatal("error opcode 0 3")
 	//	}
 

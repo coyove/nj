@@ -10,7 +10,7 @@ func TestSprintf(t *testing.T) {
 	}
 
 	sprintf := func(a string, args ...interface{}) string {
-		env := NewEnv(nil, nil)
+		env := NewEnv(nil)
 		env.LocalPush(NewStringValue(a))
 		for _, arg := range args {
 			switch arg.(type) {

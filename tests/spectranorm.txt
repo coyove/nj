@@ -1,5 +1,5 @@
 n = 0 
-nCPU = 4
+nCPU = 8
 
 fun A(i, j) {
     return ((i+j)*(i+j+1)/2 + i + 1) 
@@ -48,8 +48,8 @@ fun TimesTranspVec(v, s, n, u, wg) {
 }
 
 fun ATimesTransp(v, u) {
-     x = std.genlist(len(u)) 
-     wg = std.sync.waitgroup() 
+    x = std.genlist(len(u)) 
+    wg = std.sync.waitgroup() 
 
     for i = 0, nCPU {
         wg.add(1) 
@@ -64,9 +64,9 @@ fun ATimesTransp(v, u) {
     wg.wait() 
 }
 
-n = 100
- u = {} 
- v = {} 
+n = 5500
+u = {} 
+v = {} 
  
 for idx = 0, n {
     u[idx] = 1 

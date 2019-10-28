@@ -174,7 +174,7 @@ func (b *packet) WriteJmpOP(op _Opcode, opa uint16, d int) {
 
 func (b *packet) WritePos(p parser.Meta) {
 	if p.Line == 0 {
-		// TODO: debug code, used to detect a null meta struct
+		// TODO: debug Code, used to detect a null meta struct
 		buf := make([]byte, 4096)
 		n := runtime.Stack(buf, false)
 		log.Println(string(buf[:n]))
@@ -310,26 +310,26 @@ func (c *Closure) crPrettify(tab int) string {
 			return "nil"
 		}
 		if a>>10 == 7 {
-			return fmt.Sprintf("k$%d(%v)", a&0x03ff, c.consts[a&0x3ff])
+			return fmt.Sprintf("k$%d(%v)", a&0x03ff, c.ConstTable[a&0x3ff])
 		}
 		return fmt.Sprintf("$%d$%d", a>>10, a&0x03ff)
 	}
 
-	oldpos := c.pos
+	oldpos := c.Pos
 MAIN:
 	for {
-		bop, a, b := op(crRead32(c.code, &cursor))
+		bop, a, b := op(crRead32(c.Code, &cursor))
 		sb.WriteString(spaces)
 
-		if len(c.pos) > 0 {
-			next, op, line, col := c.pos.readABC(0)
-			// log.Println(cursor, op, unsafe.Pointer(&pos))
+		if len(c.Pos) > 0 {
+			next, op, line, col := c.Pos.readABC(0)
+			// log.Println(cursor, op, unsafe.Pointer(&Pos))
 			for cursor > op {
-				c.pos = c.pos[next:]
-				if len(c.pos) == 0 {
+				c.Pos = c.Pos[next:]
+				if len(c.Pos) == 0 {
 					break
 				}
-				if next, op, line, col = c.pos.readABC(0); cursor <= op {
+				if next, op, line, col = c.Pos.readABC(0); cursor <= op {
 					break
 				}
 			}
@@ -337,7 +337,7 @@ MAIN:
 			if op == cursor {
 				x := fmt.Sprintf("%d:%d", line, col)
 				sb.WriteString(fmt.Sprintf("|%-7s %d| ", x, cursor-1))
-				c.pos = c.pos[next:]
+				c.Pos = c.Pos[next:]
 			} else {
 				sb.WriteString(fmt.Sprintf("|        %d| ", cursor-1))
 			}
@@ -359,7 +359,7 @@ MAIN:
 			sb.WriteString("yield " + readAddr(a))
 		case OpLambda:
 			sb.WriteString("$a = closure:\n")
-			cls := crReadClosure(c.code, &cursor, nil, a, b)
+			cls := crReadClosure(c.Code, &cursor, nil, a, b)
 			sb.WriteString(cls.crPrettify(tab + 1))
 		case OpCall:
 			sb.WriteString("call " + readAddr(a))
@@ -397,7 +397,7 @@ MAIN:
 		sb.WriteString("\n")
 	}
 
-	c.pos = oldpos
+	c.Pos = oldpos
 
 	sb.WriteString(spaces2 + "+ END " + c.source)
 	return sb.String()
@@ -428,7 +428,7 @@ func crReadClosure(code []uint32, cursor *uint32, env *Env, opa, opb uint16) *Cl
 	pos := crReadBytesLen(code, int(poslen), cursor)
 	clscode := crRead(code, cursor, int(codelen))
 	cls := NewClosure(clscode, consts, env, byte(argsCount))
-	cls.pos = posVByte(pos)
+	cls.Pos = posVByte(pos)
 	cls.options = options
 	cls.source = src
 	return cls

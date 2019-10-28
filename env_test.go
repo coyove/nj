@@ -6,7 +6,7 @@ import (
 )
 
 func TestNewStack(t *testing.T) {
-	st := NewEnv(nil, nil)
+	st := NewEnv(nil)
 
 	v := NewNumberValue(19930731)
 	vi := 0

@@ -249,18 +249,18 @@ func (v Value) Equal(r Value) bool {
 		return v.AsMap().Equal(r.AsMap())
 	case _ClosureClosure:
 		c0, c1 := v.AsClosure(), r.AsClosure()
-		e := c0.argsCount == c1.argsCount &&
+		e := c0.ArgsCount == c1.ArgsCount &&
 			c0.options == c1.options &&
-			c0.env == c1.env &&
+			c0.Env == c1.Env &&
 			c0.lastenv == c1.lastenv &&
 			c0.lastp == c1.lastp &&
-			bytes.Equal(u32Bytes(c0.code), u32Bytes(c1.code)) &&
-			len(c0.partialArgs) == len(c1.partialArgs)
+			bytes.Equal(u32Bytes(c0.Code), u32Bytes(c1.Code)) &&
+			len(c0.PartialArgs) == len(c1.PartialArgs)
 		if !e {
 			return false
 		}
-		for i, arg := range c0.partialArgs {
-			if !arg.Equal(c1.partialArgs[i]) {
+		for i, arg := range c0.PartialArgs {
+			if !arg.Equal(c1.PartialArgs[i]) {
 				return false
 			}
 		}
@@ -381,7 +381,7 @@ func (v Value) Dup() Value {
 	case MapType:
 		return NewMapValue(v.AsMap().Dup())
 	default:
-		panic("unreachable code")
+		panic("unreachable Code")
 	}
 }
 

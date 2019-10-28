@@ -345,7 +345,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	code.WriteOP(OpEOB, 0, 0)
 	buf := newpacket()
 	cls := Closure{}
-	cls.argsCount = byte(ln)
+	cls.ArgsCount = byte(ln)
 	if newtable.y || isSafe {
 		cls.Set(ClsYieldable)
 	}
@@ -363,20 +363,20 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	buf.Write32(uint32(len(newtable.consts)))
 	buf.WriteConsts(newtable.consts)
 
-	cls.code = code.data
+	cls.Code = code.data
 	src := name + cls.String() + "@" + code.source
 	if len(src) > 4095 {
 		src = src[:4095]
 	}
 
-	// 26bit code pos length, 26bit code data length, 12bit code source length
+	// 26bit Code Pos length, 26bit Code data length, 12bit Code source length
 	buf.Write64(uint64(uint32(len(code.pos))&0x03ffffff)<<38 +
 		uint64(uint32(len(code.data))&0x03ffffff)<<12 +
 		uint64(uint16(len(src))&0x0fff))
 	buf.WriteRaw(u32FromBytes([]byte(src)))
 	buf.WriteRaw(u32FromBytes(code.pos))
 
-	// Note buf.source will be set to code.source in buf.Write
+	// Note buf.source will be set to Code.source in buf.Write
 	// but buf.source shouldn't be changed
 	code.source = buf.source
 	buf.Write(code)
@@ -442,15 +442,15 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 
 	code.Write(icode)
 	buf.WriteJmpOP(OpIfNot, cond, len(code.data)+1) // +---> test cond  ---+
-	buf.Write(code)                                 // |     code ...      | (break)
+	buf.Write(code)                                 // |     Code ...      | (break)
 	buf.WriteJmpOP(OpJmp, 0, -buf.Len()-1)          // +---- continue      |
-	//                                                   following code <--+
+	//                                                   following Code <--+
 
 	code = buf
 	code2 := u32Bytes(code.data)
 
 	// search for special 'continue' placeholder and replace it with a OP_JMP to the
-	// beginning of the code
+	// beginning of the Code
 	flag := u32Bytes(staticWhileHack[:4])
 	for i := 0; i < len(code2); {
 		x := bytes.Index(code2[i:], flag)
@@ -464,7 +464,7 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 	}
 
 	// search for special 'break' placeholder and replace it with a OP_JMP to the
-	// end of the code
+	// end of the Code
 	flag = u32Bytes(staticWhileHack[4:])
 	for i := 0; i < len(code2); {
 		x := bytes.Index(code2[i:], flag)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"sync/atomic"
 	"unsafe"
 )
 
@@ -39,13 +38,13 @@ func (e *ExecError) Error() string {
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
 		src := "<unknown>"
-		for i := 0; i < len(r.cls.pos); {
+		for i := 0; i < len(r.cls.Pos); {
 			var op, line uint32
 			var opx uint32 = max32
 			var col uint16
-			i, op, line, col = r.cls.pos.readABC(i)
-			if i < len(r.cls.pos)-1 {
-				_, opx, _, _ = r.cls.pos.readABC(i)
+			i, op, line, col = r.cls.Pos.readABC(i)
+			if i < len(r.cls.Pos)-1 {
+				_, opx, _, _ = r.cls.Pos.readABC(i)
 			}
 			if r.cursor >= op && r.cursor < opx {
 				src = fmt.Sprintf("%s:%d:%d", r.cls.source, line, col)
@@ -64,11 +63,11 @@ func kodeaddr(code []uint32) uintptr { return (*reflect.SliceHeader)(unsafe.Poin
 
 func konstaddr(consts []Value) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&consts)).Data }
 
-// ExecCursor executes 'K' under 'env' from the given start 'cursor'
+// ExecCursor executes 'K' under 'Env' from the given start 'cursor'
 func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor uint32, yielded bool) {
 	var newEnv *Env
 	var retStack []stacktrace
-	var caddr = kodeaddr(K.code)
+	var caddr = kodeaddr(K.Code)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -107,7 +106,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 		cursor = r.cursor
 		K = r.cls
 		r.env.A = v
-		caddr = kodeaddr(K.code)
+		caddr = kodeaddr(K.Code)
 		if r.cls.Isset(ClsNoEnvescape) {
 			newEnv = env
 			newEnv.LocalClear()
@@ -116,17 +115,15 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 		retStack = retStack[:len(retStack)-1]
 	}
 
-	flag := env.Cancel
-
 MAIN:
 	for {
-		if flag != nil && atomic.LoadUintptr(flag) == 1 {
-			panicf("canceled")
-		}
+		//	if flag != nil && atomic.LoadUintptr(flag) == 1 {
+		//		panicf("canceled")
+		//	}
 
 		//log.Println(cursor)
 		v := *(*uint32)(unsafe.Pointer(uintptr(cursor)*4 + caddr))
-		//v := K.code[cursor]
+		//v := K.Code[cursor]
 		cursor++
 		bop, opa, opb := op(v)
 
@@ -369,12 +366,12 @@ MAIN:
 					if v.Type() == ClosureType {
 						if cls := v.AsClosure(); cls.Isset(ClsHasReceiver) {
 							cls = cls.Dup()
-							if cls.argsCount > 0 {
-								if len(cls.partialArgs) > 0 {
+							if cls.ArgsCount > 0 {
+								if len(cls.PartialArgs) > 0 {
 									panicf("curry function with a receiver")
 								}
-								cls.argsCount--
-								cls.partialArgs = []Value{a}
+								cls.ArgsCount--
+								cls.PartialArgs = []Value{a}
 							}
 							v = NewClosureValue(cls)
 						}
@@ -423,7 +420,7 @@ MAIN:
 			}
 		case OpPush:
 			if newEnv == nil {
-				newEnv = NewEnv(nil, env.Cancel)
+				newEnv = NewEnv(nil)
 			}
 			newEnv.LocalPush(env.Get(opa, K))
 		case OpRet:
@@ -435,7 +432,7 @@ MAIN:
 		case OpYield:
 			return env.Get(opa, K), cursor, true
 		case OpLambda:
-			env.A = NewClosureValue(crReadClosure(K.code, &cursor, env, opa, opb))
+			env.A = NewClosureValue(crReadClosure(K.Code, &cursor, env, opa, opb))
 		case OpCall:
 			v := env.Get(opa, K)
 			if x := v.Type(); x != ClosureType {
@@ -458,8 +455,8 @@ MAIN:
 			if cls.lastenv != nil {
 				env.A = cls.Exec(nil)
 				newEnv = nil
-			} else if (newEnv == nil && cls.argsCount > 0) ||
-				(newEnv != nil && newEnv.LocalSize() < int(cls.argsCount)) {
+			} else if (newEnv == nil && cls.ArgsCount > 0) ||
+				(newEnv != nil && newEnv.LocalSize() < int(cls.ArgsCount)) {
 				if newEnv == nil || newEnv.LocalSize() == 0 {
 					env.A = NewClosureValue(cls.Dup())
 				} else {
@@ -470,10 +467,10 @@ MAIN:
 				}
 			} else {
 				if newEnv == nil {
-					newEnv = NewEnv(env, env.Cancel)
+					newEnv = NewEnv(env)
 				}
-				if len(cls.partialArgs) > 0 {
-					newEnv.LocalInsert(0, cls.partialArgs)
+				if len(cls.PartialArgs) > 0 {
+					newEnv.LocalPushFront(cls.PartialArgs)
 				}
 				if cls.Isset(ClsYieldable|ClsRecoverable) || cls.native != nil {
 					newEnv.parent = env
@@ -486,11 +483,11 @@ MAIN:
 						env:    env,
 					}
 
-					// switch to the env of cls
+					// switch to the Env of cls
 					cursor = 0
 					K = cls
-					caddr = kodeaddr(K.code)
-					newEnv.parent = cls.env
+					caddr = kodeaddr(K.Code)
+					newEnv.parent = cls.Env
 					env = newEnv
 
 					retStack = append(retStack, last)
@@ -522,7 +519,7 @@ MAIN:
 			}
 			m := x.MustMap()
 			cls := env.Get(opb, K).MustClosure()
-			newEnv := NewEnv(cls.Env(), env.Cancel)
+			newEnv := NewEnv(cls.Env)
 			for i := len(m.l) - 1; i >= 0; i-- {
 				newEnv.LocalClear()
 				newEnv.LocalPush(NewNumberValue(float64(i)))

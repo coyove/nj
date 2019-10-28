@@ -15,15 +15,13 @@ type Env struct {
 	parent *Env
 	stack  []Value
 	A      Value
-	Cancel *uintptr
 }
 
 // NewEnv creates the Env for closure to run within
 // parent can be nil, which means this is a top Env
-func NewEnv(parent *Env, cancel *uintptr) *Env {
+func NewEnv(parent *Env) *Env {
 	return &Env{
 		parent: parent,
-		Cancel: cancel,
 	}
 }
 
@@ -59,16 +57,12 @@ func (env *Env) LocalClear() {
 	env.A = Value{}
 }
 
-// LocalInsert inserts another stack into the current stack
-func (env *Env) LocalInsert(index int, data []Value) {
-	if index <= len(env.stack) {
-		ln := len(env.stack)
-		env.grow(ln + len(data))
-		copy(env.stack[len(env.stack)-(ln-index):], env.stack[index:])
-	} else {
-		env.grow(index + len(data))
-	}
-	copy(env.stack[index:], data)
+// LocalPushFront inserts another stack into the current stack at front
+func (env *Env) LocalPushFront(data []Value) {
+	ln := len(env.stack)
+	env.grow(ln + len(data))
+	copy(env.stack[len(env.stack)-ln:], env.stack)
+	copy(env.stack, data)
 }
 
 // LocalPush pushes a value into the current stack
@@ -83,12 +77,12 @@ func (env *Env) LocalSize() int {
 	return len(env.stack)
 }
 
-func (e *Env) Parent() *Env {
-	return e.parent
+func (env *Env) Parent() *Env {
+	return env.parent
 }
 
-func (e *Env) SetParent(parent *Env) {
-	e.parent = parent
+func (env *Env) SetParent(parent *Env) {
+	env.parent = parent
 }
 
 func (env *Env) Get(yx uint16, cls *Closure) Value {
@@ -99,7 +93,7 @@ func (env *Env) Get(yx uint16, cls *Closure) Value {
 	index := int(yx & 0x3ff)
 
 	if y == 7 {
-		return cls.consts[index]
+		return cls.ConstTable[index]
 	}
 
 REPEAT:
@@ -146,13 +140,13 @@ const (
 
 // MustClosure is the closure struct used in potatolang
 type Closure struct {
-	code        []uint32
-	pos         posVByte
+	Code        []uint32
+	Pos         posVByte
 	source      string
-	consts      []Value
-	env         *Env
-	partialArgs []Value
-	argsCount   byte
+	ConstTable  []Value
+	Env         *Env
+	PartialArgs []Value
+	ArgsCount   byte
 	options     byte
 	lastp       uint32
 	lastenv     *Env
@@ -162,17 +156,17 @@ type Closure struct {
 // NewClosure creates a new closure
 func NewClosure(code []uint32, consts []Value, env *Env, argsCount byte) *Closure {
 	return &Closure{
-		code:      code,
-		consts:    consts,
-		env:       env,
-		argsCount: argsCount,
+		Code:       code,
+		ConstTable: consts,
+		Env:        env,
+		ArgsCount:  argsCount,
 	}
 }
 
 // NewNativeValue creates a native function in potatolang
 func NewNativeValue(argsCount int, f func(env *Env) Value) Value {
 	cls := &Closure{
-		argsCount: byte(argsCount),
+		ArgsCount: byte(argsCount),
 		native:    f,
 	}
 	cls.Set(ClsNoEnvescape)
@@ -186,53 +180,37 @@ func (c *Closure) Unset(opt byte) { c.options &= ^opt }
 func (c *Closure) Isset(opt byte) bool { return (c.options & opt) > 0 }
 
 func (c *Closure) AppendPreArgs(preArgs []Value) {
-	c.partialArgs = append(c.partialArgs, preArgs...)
-	if c.argsCount < byte(len(preArgs)) {
+	c.PartialArgs = append(c.PartialArgs, preArgs...)
+	if c.ArgsCount < byte(len(preArgs)) {
 		panic("negative args count")
 	}
-	c.argsCount -= byte(len(preArgs))
+	c.ArgsCount -= byte(len(preArgs))
 }
 
-func (c *Closure) PartialArgs() []Value { return c.partialArgs }
-
-func (c *Closure) SetCode(code []uint32) { c.code = code }
-
-func (c *Closure) Code() []uint32 { return c.code }
-
-func (c *Closure) Consts() []Value { return c.consts }
-
-func (c *Closure) BytesCode() []byte { return u32Bytes(c.code) }
-
-func (c *Closure) Pos() []byte { return []byte(c.pos) }
-
-// ArgsCount returns the minimal number of arguments closure accepts
-func (c *Closure) ArgsCount() int { return int(c.argsCount) }
-
-// Env returns the env inside closure
-func (c *Closure) Env() *Env { return c.env }
+func (c *Closure) BytesCode() []byte { return u32Bytes(c.Code) }
 
 // Dup duplicates the closure
 func (c *Closure) Dup() *Closure {
 	cls := *c
-	if len(c.partialArgs) > 0 {
-		cls.partialArgs = append([]Value{}, c.partialArgs...)
+	if len(c.PartialArgs) > 0 {
+		cls.PartialArgs = append([]Value{}, c.PartialArgs...)
 	}
 	return &cls
 }
 
 func (c *Closure) String() string {
 	if c.native != nil {
-		return fmt.Sprintf("<native_%da%dc>", c.argsCount, len(c.partialArgs))
+		return fmt.Sprintf("<native_%da%dc>", c.ArgsCount, len(c.PartialArgs))
 	}
 	p := "closure"
 	if c.Isset(ClsNoEnvescape) {
 		p = "pfun"
 	}
 	h := crc32.New(crc32.IEEETable)
-	h.Write(u32Bytes(c.code))
+	h.Write(u32Bytes(c.Code))
 	hash := base64.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzzz0123456789").EncodeToString(h.Sum(nil)[:3])
 
-	x := fmt.Sprintf("<%s_%s_%da%dc%dk", p, hash, c.argsCount, len(c.partialArgs), len(c.consts))
+	x := fmt.Sprintf("<%s_%s_%da%dc%dk", p, hash, c.ArgsCount, len(c.PartialArgs), len(c.ConstTable))
 	if c.Isset(ClsYieldable) {
 		x += "_y"
 	}
@@ -247,19 +225,18 @@ func (c *Closure) String() string {
 
 func (c *Closure) PrettyString() string {
 	if c.native != nil {
-		return "[native code]"
+		return "[native Code]"
 	}
 	return c.crPrettify(0)
 }
 
-// Exec executes the closure with the given env
+// Exec executes the closure with the given Env
 func (c *Closure) Exec(newEnv *Env) Value {
 	if c.native == nil {
-
 		if c.lastenv != nil {
 			newEnv = c.lastenv
 		} else {
-			newEnv.SetParent(c.env)
+			newEnv.SetParent(c.Env)
 		}
 
 		v, np, yield := ExecCursor(newEnv, c, c.lastp)
@@ -273,14 +250,15 @@ func (c *Closure) Exec(newEnv *Env) Value {
 		return v
 	}
 
-	// for a native closure, it doesn't have its own env,
-	// so newEnv's parent is the env where this native function was called.
+	// for a native closure, it doesn't have its own Env,
+	// so newEnv's parent is the Env where this native function was called.
 	return c.native(newEnv)
 }
 
-// MakeCancelable make the closure and all its children cancelable
-// store 1 into the returned *uintptr to cancel them
-func (c *Closure) MakeCancelable() *uintptr {
-	c.lastenv.Cancel = new(uintptr)
-	return c.lastenv.Cancel
+func (c *Closure) ImmediatePanic() {
+	const AssertNil = uint32(OpAssert)<<26 | uint32(regNil)<<13
+	for i := range c.Code {
+		// Make all opcode into (assert nil), so the execution will eventually panic
+		c.Code[i] = AssertNil
+	}
 }

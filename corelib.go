@@ -77,7 +77,7 @@ func initCoreLibs() {
 	}))
 	lcore.Puts("apply", NewNativeValue(2, func(env *Env) Value {
 		x, y := env.LocalGet(0), env.LocalGet(1)
-		newEnv := NewEnv(x.MustClosure().env, env.parent.Cancel)
+		newEnv := NewEnv(x.MustClosure().Env)
 		for _, v := range y.MustMap().l {
 			newEnv.LocalPush(v)
 		}
@@ -97,7 +97,7 @@ func initCoreLibs() {
 	}))
 	lcore.Puts("stacktrace", NewNativeValue(0, func(env *Env) Value {
 		panic("not implemented")
-		//e := ExecError{stacks: env.trace}
+		//e := ExecError{stacks: Env.trace}
 		//return NewStringValue(e.Error())
 	}))
 	lcore.Puts("eval", NewNativeValue(1, func(env *Env) Value {
@@ -158,10 +158,11 @@ func initCoreLibs() {
 	lcore.Puts("sync", NewMapValue(NewMap().
 		Puts("run", NewNativeValue(1, func(env *Env) Value {
 			cls := env.LocalGet(0).MustClosure()
-			newEnv := NewEnv(cls.env, env.parent.Cancel)
-			if cls.ArgsCount() > env.LocalSize()-1 {
+			newEnv := NewEnv(cls.Env)
+			if int(cls.ArgsCount) > env.LocalSize()-1 {
 				panic("not enough arguments to start a goroutine")
 			}
+			newEnv.LocalPushFront(cls.PartialArgs)
 			for i := 1; i < env.LocalSize(); i++ {
 				newEnv.LocalPush(env.LocalGet(i))
 			}
@@ -196,7 +197,7 @@ func initCoreLibs() {
 				cls := env.LocalGet(0).MustClosure()
 				switch name := env.LocalGet(1).MustString(); name {
 				case "argscount":
-					cls.argsCount = byte(env.LocalGet(2).MustNumber())
+					cls.ArgsCount = byte(env.LocalGet(2).MustNumber())
 				case "yieldable":
 					if !env.LocalGet(2).IsFalse() {
 						cls.Set(ClsYieldable)
@@ -218,7 +219,7 @@ func initCoreLibs() {
 				cls := env.LocalGet(0).MustClosure()
 				switch name := env.LocalGet(1).MustString(); name {
 				case "argscount":
-					return NewNumberValue(float64(cls.argsCount))
+					return NewNumberValue(float64(cls.ArgsCount))
 				case "yieldable":
 					return NewBoolValue(cls.Isset(ClsYieldable))
 				case "envescaped":

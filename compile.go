@@ -49,7 +49,7 @@ func (table *symtable) borrowAddress() uint16 {
 		}
 	}
 	if table.vp > 1000 { //1<<10 {
-		panic("code too complex, may be there are too many variables (1000) in a single scope")
+		panic("Code too complex, may be there are too many variables (1000) in a single scope")
 	}
 	table.reusableTmps[table.vp] = false
 	table.vp++
@@ -83,7 +83,7 @@ func (table *symtable) get(varname string) (uint16, bool) {
 		k, e := table.sym[varname]
 		if e {
 			if depth > 6 || (depth == 6 && k > 1000) {
-				panic("too many levels (7) to refer a variable, try simplifing your code")
+				panic("too many levels (7) to refer a variable, try simplifing your Code")
 			}
 			return (depth << 10) | (uint16(k) & 0x03ff), true
 		}
@@ -110,7 +110,7 @@ func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
 
 		table.consts = append(table.consts, v)
 		if len(table.consts) > 1<<10-1 {
-			panic("too many consts")
+			panic("too many ConstTable")
 		}
 
 		idx := uint16(len(table.consts) - 1)
@@ -309,7 +309,7 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 
 	table := newsymtable()
 
-	coreStack := NewEnv(nil, nil)
+	coreStack := NewEnv(nil)
 	for n, v := range CoreLibs {
 		table.sym[n] = uint16(coreStack.LocalSize())
 		coreStack.LocalPush(v)
@@ -332,8 +332,8 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 		}
 	}
 	cls = NewClosure(code.data, consts, nil, 0)
-	cls.lastenv = NewEnv(nil, nil)
-	cls.pos = code.pos
+	cls.lastenv = NewEnv(nil)
+	cls.Pos = code.pos
 	cls.source = "root" + cls.String() + "@" + code.source
 	cls.lastenv.stack = coreStack.stack
 	return cls, err
