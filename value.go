@@ -227,12 +227,7 @@ func (v Value) AsInterface() interface{} {
 }
 
 func (v Value) String() string {
-	switch v.Type() {
-	case StringType:
-		return strconv.Quote(v.AsString())
-	default:
-		return v.ToPrintString()
-	}
+	return v.toString(0, false)
 }
 
 // Equal tests whether value is equal to another value
@@ -273,12 +268,6 @@ func (v Value) Equal(r Value) bool {
 	return false
 }
 
-// ToPrintString returns the printable string of value
-// it won't wrap a string with double quotes, String() will
-func (v Value) ToPrintString() string {
-	return v.toString(0, false)
-}
-
 func (v Value) toString(lv int, json bool) string {
 	if lv > 32 {
 		if json {
@@ -296,7 +285,7 @@ func (v Value) toString(lv int, json bool) string {
 		return strconv.FormatFloat(x, 'f', -1, 64)
 	case StringType:
 		if json {
-			return "\"" + strconv.Quote(v.AsString()) + "\""
+			return strconv.Quote(v.AsString())
 		}
 		return v.AsString()
 	case MapType:

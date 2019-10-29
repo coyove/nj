@@ -181,7 +181,8 @@ func initCoreLibs() {
 	CoreLibs["itoa"] = NewNativeValue(1, func(env *Env) Value {
 		v := env.LocalGet(0).AsNumber()
 		if float64(int64(v)) == v {
-			return NewStringValue(strconv.FormatInt(int64(v), 10))
+			x := strconv.FormatInt(int64(v), 10)
+			return NewStringValue(x)
 		}
 		return NewStringValue(strings.TrimRight(strconv.FormatFloat(v, 'f', 15, 64), "0."))
 	})

@@ -159,6 +159,6 @@ ARG:
 	i := b.Exec(nil)
 	ok <- true
 	if _ret {
-		fmt.Println(i.ToPrintString())
+		fmt.Println(i.String())
 	}
 }

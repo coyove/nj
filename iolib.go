@@ -1,16 +1,15 @@
 package potatolang
 
 import (
-	"bytes"
 	"fmt"
 	"os"
-	"strconv"
+	"unsafe"
 )
 
 func stdPrint(f *os.File) func(env *Env) Value {
 	return func(env *Env) Value {
 		for i := 0; i < env.LocalSize(); i++ {
-			f.WriteString(env.LocalGet(i).ToPrintString())
+			f.WriteString(env.LocalGet(i).String())
 		}
 
 		return Value{}
@@ -18,70 +17,20 @@ func stdPrint(f *os.File) func(env *Env) Value {
 }
 
 func _sprintf(env *Env) string {
-	msg := []rune(env.LocalGet(0).MustString())
-	buf, numbuf, formatbuf := bytes.Buffer{}, bytes.Buffer{}, bytes.Buffer{}
-	i := 0
-	for i < len(msg) {
-		if msg[i] != '~' {
-			buf.WriteRune(msg[i])
-			i++
-			continue
-		}
-		if i+1 >= len(msg) {
-			break
-		}
-		if msg[i+1] == '~' || msg[i+1] == '%' {
-			buf.WriteRune(msg[i+1])
-			i += 2
-			continue
-		}
-		numbuf.Reset()
-		formatbuf.Reset()
-		j := i + 1
-		currentbuf := &numbuf
-		for ; j < len(msg); j++ {
-			if msg[j] >= '0' && msg[j] <= '9' {
-				currentbuf.WriteRune(msg[j])
-			} else if msg[j] == '%' {
-				if currentbuf == &formatbuf {
-					j++
-					break
-				}
-				currentbuf = &formatbuf
-				currentbuf.WriteRune(msg[j])
-			} else {
-				if currentbuf == &formatbuf {
-					currentbuf.WriteRune(msg[j])
-				} else {
-					break
-				}
-			}
-		}
-		if j == i+1 {
-			i++
-			continue
-		}
-		i = j
-		num, _ := strconv.Atoi(numbuf.String())
-
-		if formatbuf.Len() == 0 {
-			buf.WriteString(env.LocalGet(num).ToPrintString())
-		} else {
-			format := formatbuf.Bytes()
-			i := env.LocalGet(num).AsInterface()
-
-			// TODO: handle cases like: %d %
-			switch format[len(format)-1] {
-			case 'b', 'c', 'd', 'o', 'q', 'x', 'X', 'U':
-				// do not report error
-				num, _ := i.(float64)
-				i = int64(num)
-			}
-			buf.WriteString(fmt.Sprintf(string(format), i))
+	msg := []byte(env.LocalGet(0).MustString())
+	for i := range msg {
+		if msg[i] == '{' && i < len(msg)-1 && msg[i+1] == '}' {
+			msg[i] = '%'
+			msg[i+1] = 's'
 		}
 	}
 
-	return buf.String()
+	args := []interface{}{}
+	for i := 1; i < env.LocalSize(); i++ {
+		args = append(args, env.LocalGet(i))
+	}
+
+	return fmt.Sprintf(*(*string)(unsafe.Pointer(&msg)), args...)
 }
 
 func stdPrintf(f *os.File) func(env *Env) Value {
@@ -98,7 +47,7 @@ func stdSprintf(env *Env) Value {
 func stdPrintln(f *os.File) func(env *Env) Value {
 	return func(env *Env) Value {
 		for i := 0; i < env.LocalSize(); i++ {
-			f.WriteString(env.LocalGet(i).ToPrintString() + " ")
+			f.WriteString(env.LocalGet(i).String() + " ")
 		}
 		f.WriteString("\n")
 		return Value{}

@@ -17,12 +17,12 @@
 if (minDepth + 2 > n) maxDepth = minDepth + 2 
  stretchDepth = maxDepth + 1 
 
- check_l = itemCheck(bottomUpTree(stretchDepth)) 
-io.printf("stretch tree of depth ~1\t check: ~2\n", stretchDepth, check_l) 
+check_l = itemCheck(bottomUpTree(stretchDepth)) 
+io.printf("stretch tree of depth {}\t check: {}\n", stretchDepth, check_l) 
 
- longLivedTree = bottomUpTree(maxDepth) 
- wg = std.sync.waitgroup() 
- result = std.genlist(maxDepth+1) 
+longLivedTree = bottomUpTree(maxDepth) 
+wg = std.sync.waitgroup() 
+result = std.genlist(maxDepth+1) 
 
 fun worker( depth, check) {
          iterations = 1 << (maxDepth - depth + minDepth) 
@@ -31,7 +31,7 @@ fun worker( depth, check) {
         for i = 0,iterations {
             check = check + itemCheck(bottomUpTree(depth)) 
         }
-        result[depth] = std.sprintf("~1\t trees of depth ~2\t check: ~3", iterations, depth, check) 
+        result[depth] = std.sprintf("{}\t trees of depth %s\t check: {}", iterations, depth, check) 
         wg.done()
     }
 
@@ -45,4 +45,4 @@ wg.wait()
 for depth = minDepth,2,maxDepth  {
     io.println( result[depth]) 
 }
-io.printf("long lived tree of depth ~1\t check: ~2\n", maxDepth, itemCheck(longLivedTree)) 
+io.printf("long lived tree of depth {}\t check: {}\n", maxDepth, itemCheck(longLivedTree)) 
