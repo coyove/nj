@@ -136,7 +136,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	}
 
 	switch bop {
-	case OpTypeof, OpNot, OpBitNot, OpAddressOf, OpRet, OpYield:
+	case OpTypeof, OpNot, OpAddressOf, OpRet, OpYield:
 		// unary op
 		err = table.writeOpcode(&buf, bop, atoms[1], nil)
 	case OpAssert:

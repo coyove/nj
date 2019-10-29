@@ -281,13 +281,13 @@ func_stat:
 
 jmp_stat:
         TYield expr           { $$ = CNode("yield", $2).setPos0($1) } |
-        TYieldNil             { $$ = CNode("yield", ANodeS("nil")).setPos0($1) } |
+        TYieldNil             { $$ = CNode("yield", CNode("#", ANodeS("nil")).setPos0($1)).setPos0($1) } |
         TBreak                { $$ = CNode("break").setPos0($1) } |
         TContinue             { $$ = CNode("continue").setPos0($1) } |
         TAssert expr          { $$ = CNode("assert", $2, ANodeS("nil")).setPos0($1) } |
         TAssert expr TString  { $$ = CNode("assert", $2, SNode($3.Str)).setPos0($1) } |
         TReturn expr          { $$ = CNode("ret", $2).setPos0($1) } |
-        TReturnNil            { $$ = CNode("ret", ANodeS("nil")).setPos0($1) } |
+        TReturnNil            { $$ = CNode("ret", CNode("#", ANodeS("nil")).setPos0($1)).setPos0($1) } |
         TUse TString          { $$ = yylex.(*Lexer).loadFile(filepath.Join(filepath.Dir($1.Pos.Source), $2.Str), $1) }
 
 declarator:
@@ -341,7 +341,7 @@ expr:
         expr '|' expr        { $$ = CNode("|", $1,$3).setPos0($1) } |
         expr '&' expr        { $$ = CNode("&", $1,$3).setPos0($1) } |
         '-' expr %prec UNARY { $$ = CNode("-", NNode(0.0), $2).setPos0($2) } |
-        '~' expr %prec UNARY { $$ = CNode("~", $2).setPos0($2) } |
+        '~' expr %prec UNARY { $$ = CNode("^", $2, max32Node).setPos0($2) } |
         TNot expr %prec UNARY { $$ = CNode("!", $2).setPos0($2) } |
         '#' expr %prec UNARY { $$ = CNode("#", $2).setPos0($2) } |
         '&' TIdent %prec UNARY    { $$ = CNode("addressof", ANode($2)).setPos0($2) }

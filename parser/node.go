@@ -185,6 +185,7 @@ func CNode(args ...interface{}) *Node {
 }
 
 var chainNode = ANodeS("chain")
+var max32Node = NNode(0xffffffff)
 
 func ANode(tok Token) *Node {
 	n := NewNode(Natom)

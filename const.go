@@ -23,7 +23,6 @@ const (
 	OpNeq
 	OpLess
 	OpLessEq
-	OpBitNot
 	OpBitAnd
 	OpBitOr
 	OpBitXor

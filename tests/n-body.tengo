@@ -135,7 +135,7 @@ advance := func(dt) {
 }
 
 offsetMomentum() 
-fmt.println(energy()) 
+fmt.println(energy())
 
 for i := 0 ; i < 500000; i ++{
     advance(0.01) 

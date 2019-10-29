@@ -198,12 +198,6 @@ MAIN:
 			}
 		case OpNot:
 			env.A.SetBoolValue(env.Get(opa, K).IsFalse())
-		case OpBitNot:
-			if va := env.Get(opa, K); va.Type() == NumberType {
-				env.A.SetNumberValue(float64(^va.AsInt32()))
-			} else {
-				panicf("can't apply '~' on %+v", va)
-			}
 		case OpBitAnd:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:

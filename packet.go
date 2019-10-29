@@ -279,7 +279,6 @@ var singleOp = map[_Opcode]string{
 	OpLoad:    "load",
 	OpStore:   "store",
 	OpNot:     "not",
-	OpBitNot:  "bit-not",
 	OpBitAnd:  "bit-and",
 	OpBitOr:   "bit-or",
 	OpBitXor:  "bit-xor",

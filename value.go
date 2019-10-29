@@ -73,7 +73,7 @@ var (
 		NilType: "nil", NumberType: "num", StringType: "str", ClosureType: "cls", PointerType: "ptr", MapType: "map",
 	}
 
-	Phantom = NewPointerValue(unsafe.Pointer(new(int)), 0)
+	Phantom = NewPointerValue(unsafe.Pointer(new(int)), PTagPhantom)
 
 	_zero = NewNumberValue(0)
 )
@@ -168,7 +168,7 @@ func (v Value) IsFalse() bool {
 		m := (*Map)(v.ptr)
 		return len(m.l)+len(m.m) == 0
 	}
-	return false
+	return v == Phantom
 }
 
 // IsZero is a fast way to check if a numeric Value is +0

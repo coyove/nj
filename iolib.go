@@ -112,19 +112,12 @@ func stdWrite(f *os.File) func(env *Env) Value {
 			case StringType:
 				f.WriteString(env.LocalGet(i).AsString())
 			case MapType:
-				buf := make([]byte, 1)
-				for _, b := range a.AsMap().l {
-					buf[0] = byte(b.MustNumber())
-					f.Write(buf)
+				m := a.AsMap()
+				buf := make([]byte, len(m.l))
+				for i, b := range m.l {
+					buf[i] = byte(b.MustNumber())
 				}
-			case PointerType:
-				ap, at := a.AsPointer()
-				switch at {
-				case GTagByteArray, GTagByteClampedArray, GTagInt8Array:
-					f.Write(*(*[]byte)(ap))
-				default:
-					panicf("stdWrite can't write: %+v", a)
-				}
+				f.Write(buf)
 			default:
 				panicf("stdWrite can't write: %+v", a)
 			}

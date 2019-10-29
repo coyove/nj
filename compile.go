@@ -124,7 +124,7 @@ func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
 var flatOpMapping = map[string]_Opcode{
 	"+": OpAdd, "-": OpSub, "*": OpMul, "/": OpDiv, "%": OpMod,
 	"<": OpLess, "<=": OpLessEq, "==": OpEq, "!=": OpNeq, "!": OpNot,
-	"~": OpBitNot, "&": OpBitAnd, "|": OpBitOr, "^": OpBitXor, "<<": OpBitLsh, ">>": OpBitRsh, ">>>": OpBitURsh, "#": OpPop,
+	"&": OpBitAnd, "|": OpBitOr, "^": OpBitXor, "<<": OpBitLsh, ">>": OpBitRsh, ">>>": OpBitURsh, "#": OpPop,
 	"store": OpStore, "load": OpLoad, "assert": OpAssert, "slice": OpSlice, "typeof": OpTypeof, "len": OpLen, "foreach": OpForeach,
 	"addressof": OpAddressOf,
 }

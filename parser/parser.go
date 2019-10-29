@@ -1282,7 +1282,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line parser.go.y:284
 		{
-			yyVAL.expr = CNode("yield", ANodeS("nil")).setPos0(yyDollar[1].token)
+			yyVAL.expr = CNode("yield", CNode("#", ANodeS("nil")).setPos0(yyDollar[1].token)).setPos0(yyDollar[1].token)
 		}
 	case 61:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -1318,7 +1318,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line parser.go.y:290
 		{
-			yyVAL.expr = CNode("ret", ANodeS("nil")).setPos0(yyDollar[1].token)
+			yyVAL.expr = CNode("ret", CNode("#", ANodeS("nil")).setPos0(yyDollar[1].token)).setPos0(yyDollar[1].token)
 		}
 	case 67:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -1582,7 +1582,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line parser.go.y:344
 		{
-			yyVAL.expr = CNode("~", yyDollar[2].expr).setPos0(yyDollar[2].expr)
+			yyVAL.expr = CNode("^", yyDollar[2].expr, max32Node).setPos0(yyDollar[2].expr)
 		}
 	case 111:
 		yyDollar = yyS[yypt-2 : yypt+1]

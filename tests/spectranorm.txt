@@ -64,7 +64,7 @@ fun ATimesTransp(v, u) {
     wg.wait() 
 }
 
-n = 5500
+n = 5504
 u = {} 
 v = {} 
  
