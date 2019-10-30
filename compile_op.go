@@ -14,13 +14,13 @@ const (
 	errUndeclaredVariable = " %+v: undeclared variable"
 )
 
-var _nodeRegA = parser.NewNode(parser.Naddr).SetValue(regA)
+var _nodeRegA = parser.NewNode(regA)
 
 func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	aDest := atoms[1].Value.(string)
+	aDest := atoms[1].Value.(parser.Atom)
 	newYX, ok := table.get(aDest)
-	if atoms[0].S() == "move" {
-		if !ok || (strings.HasPrefix(aDest, "$") && (newYX>>10 > 0)) {
+	if atoms[0].A() == "move" {
+		if !ok || (strings.HasPrefix(string(aDest), "$") && (newYX>>10 > 0)) {
 			// variable names start with "$" will be a local variable
 			newYX = table.borrowAddress()
 			table.put(aDest, newYX)
@@ -32,9 +32,9 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 
 	buf := newpacket()
 	aSrc := atoms[2]
-	switch aSrc.Type {
+	switch aSrc.Type() {
 	case parser.Natom:
-		valueIndex, ok := table.get(aSrc.Value.(string))
+		valueIndex, ok := table.get(aSrc.Value.(parser.Atom))
 		if !ok {
 			err = fmt.Errorf(errUndeclaredVariable, aSrc)
 			return
@@ -56,7 +56,7 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 }
 
 func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	if atoms[0].S() == "yield" {
+	if atoms[0].A() == "yield" {
 		table.y = true
 		return table.writeOpcode3(OpYield, atoms)
 	}
@@ -81,7 +81,7 @@ func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx 
 		}
 	}
 
-	if atoms[0].Value.(string) == "map" {
+	if atoms[0].Value.(parser.Atom) == "map" {
 		code.WriteOP(OpMakeMap, 0, 0)
 	} else {
 		code.WriteOP(OpMakeArray, 0, 0)
@@ -161,7 +161,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 }
 
 func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	head := atoms[0].Value.(string)
+	head := atoms[0].Value.(parser.Atom)
 	switch head {
 	case "nop":
 		return newpacket(), regA, nil
@@ -182,7 +182,7 @@ func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint
 }
 
 func (table *symtable) compileIncOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	subject, ok := table.get(atoms[1].Value.(string))
+	subject, ok := table.get(atoms[1].Value.(parser.Atom))
 	buf := newpacket()
 	if !ok {
 		return newpacket(), 0, fmt.Errorf(errUndeclaredVariable, atoms[1])
@@ -196,7 +196,7 @@ func (table *symtable) compileIncOp(atoms []*parser.Node) (code packet, yx uint1
 // [or a b]  => $a = a if a then do nothing else $a = b end
 func (table *symtable) compileAndOrOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
 	bop := OpIfNot
-	if atoms[0].Value.(string) == "or" {
+	if atoms[0].Value.(parser.Atom) == "or" {
 		bop = OpIf
 	}
 
@@ -264,9 +264,9 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 
 	var varIndex uint16
 	var ok bool
-	switch callee := tmp[0]; callee.Type {
+	switch callee := tmp[0]; callee.Type() {
 	case parser.Natom:
-		varIndex, ok = table.get(callee.Value.(string))
+		varIndex, ok = table.get(callee.Value.(parser.Atom))
 		if !ok {
 			err = fmt.Errorf(errUndeclaredVariable, callee)
 			return
@@ -291,7 +291,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 	}
 
 	for i := 1; i < len(tmp); i++ {
-		if tmp[i].Type == parser.Naddr {
+		if tmp[i].Type() == parser.Naddr {
 			table.returnAddress(tmp[i].Value.(uint16))
 		}
 	}
@@ -305,7 +305,7 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
 	table.envescape = true
 	isSafe, isVar := false, false
-	for _, s := range strings.Split(atoms[0].Value.(string), ",") {
+	for _, s := range strings.Split(string(atoms[0].Value.(parser.Atom)), ",") {
 		switch s {
 		case "safe":
 			isSafe = true
@@ -314,18 +314,18 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		}
 	}
 
-	name := atoms[1].Value.(string)
+	name := atoms[1].Value.(parser.Atom)
 	newtable := newsymtable()
 	newtable.parent = table
 
 	params := atoms[2]
-	if params.Type != parser.Ncompound {
+	if params.Type() != parser.Ncompound {
 		err = fmt.Errorf("%+v: invalid arguments list", atoms[2])
 		return
 	}
 
 	for i, p := range params.C() {
-		argname := p.Value.(string)
+		argname := p.Value.(parser.Atom)
 		if _, ok := newtable.sym[argname]; ok {
 			return newpacket(), 0, fmt.Errorf("duplicated parameter: %s", argname)
 		}
@@ -345,11 +345,11 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	if isVar {
 		comps := append(atoms[3].C(), nil)
 		copy(comps[2:], comps[1:])
-		comps[1] = parser.CNode("set", "arguments", parser.CNode(
+		comps[1] = parser.CompNode("set", "arguments", parser.CompNode(
 			"foreach", parser.ANodeS("nil"), parser.ANodeS("nil"),
 		).SetPos0(atoms[0].Meta),
 		).SetPos0(atoms[0].Meta)
-		atoms[3].SetValue(comps)
+		atoms[3].Value = comps
 	}
 
 	code, yx, err = newtable.compileChainOp(atoms[3])
@@ -379,7 +379,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	buf.WriteConsts(newtable.consts)
 
 	cls.Code = code.data
-	src := name + cls.String() + "@" + code.source
+	src := string(name) + cls.String() + "@" + code.source
 	if len(src) > 4095 {
 		src = src[:4095]
 	}
@@ -416,7 +416,7 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 		return
 	}
 
-	if atoms[0].Value.(string) == "continue" {
+	if atoms[0].Value.(parser.Atom) == "continue" {
 		cn := table.continueNode[len(table.continueNode)-1]
 		code, yx, err = table.compileChainOp(cn)
 		if err != nil {

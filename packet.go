@@ -180,7 +180,7 @@ func (b *packet) WritePos(p parser.Meta) {
 		log.Println(string(buf[:n]))
 		os.Exit(1)
 	}
-	b.pos.appendABC(uint32(len(b.data)), p.Line, p.Column)
+	b.pos.appendABC(uint32(len(b.data)), p.Line, uint16(p.Column))
 	if p.Source != "" {
 		b.source = p.Source
 	}

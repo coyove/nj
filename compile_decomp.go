@@ -32,7 +32,7 @@ func (table *symtable) _decompound(atoms []*parser.Node, useA bool) (buf packet,
 		var yx uint16
 		var code packet
 
-		switch atom.Type {
+		switch atom.Type() {
 		//case parser.Natom:
 		//	yx, ok := table.get(atom.Value.(string))
 		//	if !ok {
@@ -47,7 +47,7 @@ func (table *symtable) _decompound(atoms []*parser.Node, useA bool) (buf packet,
 				return
 			}
 
-			atoms[i] = parser.NewNode(parser.Naddr).SetValue(yx)
+			atoms[i] = parser.NewNode(yx)
 			buf.Write(code)
 
 			lastCompound.n = atom
@@ -59,7 +59,7 @@ func (table *symtable) _decompound(atoms []*parser.Node, useA bool) (buf packet,
 		_, old, opb := op(buf.data[len(buf.data)-1])
 		buf.TruncateLast(1)
 		table.returnAddress(old)
-		atoms[lastCompound.i].SetValue(opb)
+		atoms[lastCompound.i].Value = opb
 
 		//if len(buf.data) > 0 {
 		//	opcode, opa, opk := op(buf.data[len(buf.data)-1])

@@ -75,7 +75,7 @@ type Scanner struct {
 
 func NewScanner(reader io.Reader, source string) *Scanner {
 	return &Scanner{
-		Pos:    Meta{source, 1, 0, 0},
+		Pos:    Meta{source, 1, 0},
 		reader: bufio.NewReaderSize(reader, 4096),
 	}
 }

@@ -16,7 +16,7 @@ import (
 type symtable struct {
 	// variable name lookup
 	parent *symtable
-	sym    map[string]uint16
+	sym    map[parser.Atom]uint16
 
 	// has yield op
 	y         bool
@@ -34,7 +34,7 @@ type symtable struct {
 
 func newsymtable() *symtable {
 	t := &symtable{
-		sym:          make(map[string]uint16),
+		sym:          make(map[parser.Atom]uint16),
 		constMap:     make(map[interface{}]uint16),
 		reusableTmps: make(map[uint16]bool),
 	}
@@ -67,7 +67,7 @@ func (table *symtable) returnAddress(v uint16) {
 	}
 }
 
-func (table *symtable) get(varname string) (uint16, bool) {
+func (table *symtable) get(varname parser.Atom) (uint16, bool) {
 	depth := uint16(0)
 
 	switch varname {
@@ -95,7 +95,7 @@ func (table *symtable) get(varname string) (uint16, bool) {
 	return 0, false
 }
 
-func (table *symtable) put(varname string, addr uint16) {
+func (table *symtable) put(varname parser.Atom, addr uint16) {
 	if addr == regA {
 		panic("debug")
 	}
@@ -121,7 +121,7 @@ func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
 	return 0x7<<10 | kaddr
 }
 
-var flatOpMapping = map[string]_Opcode{
+var flatOpMapping = map[parser.Atom]_Opcode{
 	"+": OpAdd, "-": OpSub, "*": OpMul, "/": OpDiv, "%": OpMod,
 	"<": OpLess, "<=": OpLessEq, "==": OpEq, "!=": OpNeq, "!": OpNot,
 	"&": OpBitAnd, "|": OpBitOr, "^": OpBitXor, "<<": OpBitLsh, ">>": OpBitRsh, ">>>": OpBitURsh, "#": OpPop,
@@ -132,7 +132,7 @@ var flatOpMapping = map[string]_Opcode{
 func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node) (err error) {
 	tmp := []uint16{}
 	getAddr := func(n *parser.Node) (uint16, error) {
-		switch n.Type {
+		switch n.Type() {
 		case parser.Ncompound:
 			code, addr, err := table.compileCompoundInto(n, true, 0)
 			if err != nil {
@@ -142,7 +142,7 @@ func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node)
 			tmp = append(tmp, addr)
 			return addr, nil
 		case parser.Natom:
-			addr, ok := table.get(n.Value.(string))
+			addr, ok := table.get(n.Value.(parser.Atom))
 			if !ok {
 				return 0, fmt.Errorf(errUndeclaredVariable, n)
 			}
@@ -152,7 +152,7 @@ func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node)
 		case parser.Naddr:
 			return n.Value.(uint16), nil
 		default:
-			panic(fmt.Errorf("unknown type: %d", n.Type))
+			panic(fmt.Errorf("unknown type: %d", n.Type()))
 		}
 	}
 
@@ -213,10 +213,10 @@ func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, e
 func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint16, err error) {
 	var varIndex uint16
 
-	switch n.Type {
+	switch n.Type() {
 	case parser.Natom:
 		var ok bool
-		varIndex, ok = table.get(n.Value.(string))
+		varIndex, ok = table.get(n.Value.(parser.Atom))
 		if !ok {
 			err = fmt.Errorf(errUndeclaredVariable, n)
 			return
@@ -240,14 +240,14 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 	if len(nodes) == 0 {
 		return newpacket(), regA, nil
 	}
-	name, ok := nodes[0].Value.(string)
+	name, ok := nodes[0].Value.(parser.Atom)
 	if !ok {
 		nodes[0].Dump(os.Stderr)
 		panicf("invalid op: %v", nodes)
 	}
 
 	switch name {
-	case "chain":
+	case parser.AChain:
 		code, yx, err = table.compileChainOp(compound)
 	case "set", "move":
 		code, yx, err = table.compileSetOp(nodes)
@@ -268,7 +268,7 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 	case "inc":
 		code, yx, err = table.compileIncOp(nodes)
 	default:
-		if strings.Contains(name, "func") {
+		if strings.Contains(string(name), "func") {
 			code, yx, err = table.compileLambdaOp(nodes)
 		} else {
 			if _, ok := flatOpMapping[name]; ok {
@@ -284,7 +284,7 @@ func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint1
 	buf := newpacket()
 
 	for _, a := range chain.C() {
-		if a.Type != parser.Ncompound {
+		if a.Type() != parser.Ncompound {
 			continue
 		}
 		code, yx, err = table.compileCompound(a)
@@ -311,7 +311,7 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 
 	coreStack := NewEnv(nil)
 	for n, v := range CoreLibs {
-		table.sym[n] = uint16(coreStack.LocalSize())
+		table.sym[parser.Atom(n)] = uint16(coreStack.LocalSize())
 		coreStack.LocalPush(v)
 	}
 

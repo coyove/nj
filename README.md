@@ -54,6 +54,7 @@ Basically the same, note that:
 1. Bitwise not `^` is written as: `~`, just like C.
 2. All bitwise operators are applied on int32 operands, `>>>` (unsigned rsh) is the only exception that works on uint32.
 3. Logical not `!`, and `&&`, or `||` are written as: `not`, `and`, `or`.
+3. Lua trick: `a and b or c` => `if (a) { return b } else { return c }`
 4. To delete a key from a map, assign the Phantom value to it: `m["key"] = #nil`.
 5. To pop the last value of a slice, use `#` (as you may notice, pop a nil will give you the Phantom value), e.g.:
 ```

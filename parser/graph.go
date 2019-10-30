@@ -26,8 +26,8 @@ func (lex *Lexer) loadFile(path string, pos Token) *Node {
 	}
 
 	// now the required code is loaded, for naming scope we will wrap them into a closure
-	cls := CNode("func", "<a>", CNode(), n).setPos0(pos)
-	node := CNode("call", cls, CNode()).setPos0(pos)
+	cls := CompNode("func", "<a>", CompNode(), n).setPos0(pos)
+	node := CompNode("call", cls, CompNode()).setPos0(pos)
 	lex.cache[path] = node
 	return node
 }
