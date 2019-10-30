@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 	"unsafe"
 
 	"github.com/buger/jsonparser"
@@ -54,15 +55,18 @@ func initCoreLibs() {
 		//return NewStringValue(e.Error())
 	}))
 	lcore.Puts("eval", NewNativeValue(1, func(env *Env) Value {
-		x := env.LocalGet(0).MustString()
-		cls, err := LoadString(x)
+		cls, err := LoadString(env.LocalGet(0).MustString())
 		if err != nil {
 			return NewStringValue(err.Error())
 		}
 		return NewClosureValue(cls)
 	}))
-	lcore.Puts("char", NewNativeValue(1, func(env *Env) Value {
+	lcore.Puts("unicode", NewNativeValue(1, func(env *Env) Value {
 		return NewStringValue(string(rune(env.LocalGet(0).MustNumber())))
+	}))
+	lcore.Puts("char", NewNativeValue(1, func(env *Env) Value {
+		r, _ := utf8.DecodeRuneInString(env.LocalGet(0).MustString())
+		return NewNumberValue(float64(r))
 	}))
 	lcore.Puts("index", NewNativeValue(2, func(env *Env) Value {
 		switch s := env.LocalGet(0); s.Type() {
@@ -87,6 +91,12 @@ func initCoreLibs() {
 		}
 	}))
 	lcore.Puts("sprintf", NewNativeValue(0, stdSprintf))
+	lcore.Puts("ftoa", NewNativeValue(1, func(env *Env) Value {
+		v := env.LocalGet(0).MustNumber()
+		base := byte(env.LocalGet(1).MustNumber())
+		digits := int(env.LocalGet(2).MustNumber())
+		return NewStringValue(strconv.FormatFloat(v, byte(base), digits, 64))
+	}))
 	lcore.Puts("sync", NewMapValue(NewMap().
 		Puts("run", NewNativeValue(1, func(env *Env) Value {
 			cls := env.LocalGet(0).MustClosure()
@@ -172,19 +182,22 @@ func initCoreLibs() {
 
 	CoreLibs["std"] = NewMapValue(lcore)
 	CoreLibs["atoi"] = NewNativeValue(1, func(env *Env) Value {
-		v, err := parser.StringToNumber(env.LocalGet(0).AsString())
+		v, err := parser.StringToNumber(env.LocalGet(0).MustString())
 		if err != nil {
 			return Value{}
 		}
 		return NewNumberValue(v)
 	})
 	CoreLibs["itoa"] = NewNativeValue(1, func(env *Env) Value {
-		v := env.LocalGet(0).AsNumber()
+		v := env.LocalGet(0).MustNumber()
 		if float64(int64(v)) == v {
-			x := strconv.FormatInt(int64(v), 10)
-			return NewStringValue(x)
+			base := 10
+			if env.LocalSize() >= 2 {
+				base = int(env.LocalGet(1).MustNumber())
+			}
+			return NewStringValue(strconv.FormatInt(int64(v), base))
 		}
-		return NewStringValue(strings.TrimRight(strconv.FormatFloat(v, 'f', 15, 64), "0."))
+		return NewStringValue(strconv.FormatFloat(v, 'f', -1, 64))
 	})
 
 	initIOLib()

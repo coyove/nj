@@ -114,15 +114,9 @@ m2.key2 = {}
 for i=1,4 { m2.key2[len(m2.key2)] = i }
 assert m2 == m
 
- m3 = m()
+m3 = m()
 m.key2[0] = 0
 assert m3.key2[0] == 1 and m.key2[0] == 0
-
-//a = 0i0
-// b = 0iffffffffffffffff
-//assert math.u64.eq(math.u64.xor(a, b), b)
-a = math.u64.eq(12)
-assert a(12)
 
 fun select(cond, t, f) {
     return cond and t or f
@@ -135,26 +129,26 @@ a = 1
 a = a - 1  // this will be eventually compiled into: [inc a -1]
 assert a == 0
 
- counter = {
+counter = {
     "tick" : 0,
     "add": fun(this, step) {
         this.tick = this.tick + step
     },
 }
 
- c = counter()
+c = counter()
 c.add()(2)
 c.add(1)
 assert c.tick == 3
 
- _array = {1,2,3}
+_array = {1,2,3}
 assert len(_array)==3
 
 _array = {1,2,3,}
 assert len(_array)==3
 
 
- af = 2
+af = 2
 
 if (af == 0)
     af = 1
@@ -174,7 +168,7 @@ if (af == 0)
 else
     assert 0  // shouldn't be here
 
- a = use "simple.txt" + 1
+a = use "simple.txt" + 1
 assert a == 2
 
 fun fun safeexec() {
@@ -183,13 +177,13 @@ fun fun safeexec() {
 
 safeexec()
 
- m = {1,2,{1,2,{1,2,{1,2,3}}}}
+m = {1,2,{1,2,{1,2,{1,2,3}}}}
 m[2][2][2][2] = 4
 assert m == {1,2,{1,2,{1,2,{1,2,4}}}}
 
 fun safeexec(f, args) {
-     result = "none"
-     x = (fun fun () {
+    result = "none"
+    x = (fun fun () {
         result = std.apply(f, args)
     })()
 
@@ -199,13 +193,13 @@ fun safeexec(f, args) {
     }
 }
 
- r = safeexec(fun(a, b) {
+r = safeexec(fun(a, b) {
     return a / b
 }, {1,2})
  
 assert r.result == 0.5
 
- r = safeexec(fun(a, b) {
+r = safeexec(fun(a, b) {
     return a / b
 }, {1,"2"})
   
@@ -213,15 +207,15 @@ assert r.result == "none" and not r.ok
 
 
 // version 2
- safeexec = fun var f = (std.apply(f, arguments[1:]))
+safeexec = fun var f = (std.apply(f, arguments[1:]))
 safeexec(fun = (({})[1]))
 
- a = fun a = fun b = fun c = a + b + (fun d = d * 2)(c)
+a = fun a = fun b = fun c = a + b + (fun d = d * 2)(c)
 assert a(1)(2)(3) == 9
 
 assert (fun var = arguments)(1,2,3) == {1,2,3}
 
- a = "abc"
+a = "abc"
 switch a {
     case "abc":
         assert 1
@@ -229,7 +223,7 @@ switch a {
         assert 0
 }
 
- b = 0
+b = 0
 switch a{
     case "b":
         assert 0
@@ -240,7 +234,7 @@ switch a{
 }
 assert b == 1
 
- b = 0
+b = 0
 switch (fun = b++)() {
     case else: b+=2
 }
@@ -253,20 +247,21 @@ fun multi_return(a, b) {
     return a + b 
 }
 
- mr_a = multi_return(1, 2)
- mr_b = multi_return()
- mr_ab = multi_return()
+mr_a = multi_return(1, 2)
+mr_b = multi_return()
+mr_ab2 = ({"a": multi_return})().a()
+mr_ab = multi_return()
 
-assert mr_a == 2 and mr_b == 3 and mr_ab == 3
+assert mr_a == 2 and mr_b == 3 and mr_ab == 3 and mr_ab2 == 3
 
 x = 10
 (fun() { x = 2 })()
 assert x == 2
 
-x= 10
+x = 10
 (fun() { $x = 2 * x assert $x == 20 })()
 assert x == 10
 
 a = {1, 2, 3, "a", "b" , "c"}
 n = len ({"2", "3"})(a[1:3])
- assert n == 2 and a == {1, "2", "3", "a", "b", "c"}
+assert n == 2 and a == {1, "2", "3", "a", "b", "c"}

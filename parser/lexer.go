@@ -34,6 +34,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 const EOF = 0xffffffff
@@ -408,9 +409,15 @@ redo:
 				tok.Str = string(ch)
 			}
 		case '"', '\'':
-			tok.Type = TString
 			err = sc.scanString(ch, buf)
-			tok.Str = buf.String()
+			if ch == '\'' {
+				r, _ := utf8.DecodeRune(buf.Bytes())
+				tok.Type = TNumber
+				tok.Str = strconv.Itoa(int(r))
+			} else {
+				tok.Type = TString
+				tok.Str = buf.String()
+			}
 		case '`':
 			tok.Type = TString
 			err = sc.scanBlockString(buf)
