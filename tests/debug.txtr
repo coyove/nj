@@ -1,1 +1,10 @@
-io.println(itoa(1, 0))
+a = 1
+fun foo(a) { a = 2 } // a is local, because it's the parameter of foo
+foo(2)
+io.println(a)
+
+fun bar() {
+    a = 2
+}
+bar()
+io.println(a)

@@ -186,8 +186,8 @@ for_stat:
         TFor TIdent '=' expr ',' expr oneline_or_block {
             vname, ename := ANode($2), ANodeS($2.Str + randomName())
             $$ = CNode("chain",
-                CNode("set", vname, $4).setPos0($1),
-                CNode("set", ename, $6).setPos0($1),
+                CNode("move", vname, $4).setPos0($1),
+                CNode("move", ename, $6).setPos0($1),
                 CNode("for", 
                     CNode("<", vname, ename).setPos0($1), 
                     CNode("chain", 
@@ -209,17 +209,17 @@ for_stat:
                     cond = CNode("<=", vname, ename)
                 }
                 $$ = CNode("chain",
-                    CNode("set", vname, $4).setPos0($1),
-                    CNode("set", ename, $8).setPos0($1),
+                    CNode("move", vname, $4).setPos0($1),
+                    CNode("move", ename, $8).setPos0($1),
                     CNode("for", cond, chain, $9).setPos0($1),
                 )
             } else {
                 bname := ANodeS($2.Str + randomName())
                 $$ = CNode("chain", 
-                    CNode("set", vname, $4).setPos0($1),
-                    CNode("set", bname, $4).setPos0($1),
-                    CNode("set", sname, $6).setPos0($1),
-                    CNode("set", ename, $8).setPos0($1),
+                    CNode("move", vname, $4).setPos0($1),
+                    CNode("move", bname, $4).setPos0($1),
+                    CNode("move", sname, $6).setPos0($1),
+                    CNode("move", ename, $8).setPos0($1),
                     CNode("if", CNode("<=", NNode(0.0), CNode("*", CNode("-", ename, vname).setPos0($1), sname).setPos0($1)),
                         CNode("chain",
                             CNode("for",

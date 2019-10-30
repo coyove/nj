@@ -1129,8 +1129,8 @@ yydefault:
 		{
 			vname, ename := ANode(yyDollar[2].token), ANodeS(yyDollar[2].token.Str+randomName())
 			yyVAL.expr = CNode("chain",
-				CNode("set", vname, yyDollar[4].expr).setPos0(yyDollar[1].token),
-				CNode("set", ename, yyDollar[6].expr).setPos0(yyDollar[1].token),
+				CNode("move", vname, yyDollar[4].expr).setPos0(yyDollar[1].token),
+				CNode("move", ename, yyDollar[6].expr).setPos0(yyDollar[1].token),
 				CNode("for",
 					CNode("<", vname, ename).setPos0(yyDollar[1].token),
 					CNode("chain",
@@ -1155,17 +1155,17 @@ yydefault:
 					cond = CNode("<=", vname, ename)
 				}
 				yyVAL.expr = CNode("chain",
-					CNode("set", vname, yyDollar[4].expr).setPos0(yyDollar[1].token),
-					CNode("set", ename, yyDollar[8].expr).setPos0(yyDollar[1].token),
+					CNode("move", vname, yyDollar[4].expr).setPos0(yyDollar[1].token),
+					CNode("move", ename, yyDollar[8].expr).setPos0(yyDollar[1].token),
 					CNode("for", cond, chain, yyDollar[9].expr).setPos0(yyDollar[1].token),
 				)
 			} else {
 				bname := ANodeS(yyDollar[2].token.Str + randomName())
 				yyVAL.expr = CNode("chain",
-					CNode("set", vname, yyDollar[4].expr).setPos0(yyDollar[1].token),
-					CNode("set", bname, yyDollar[4].expr).setPos0(yyDollar[1].token),
-					CNode("set", sname, yyDollar[6].expr).setPos0(yyDollar[1].token),
-					CNode("set", ename, yyDollar[8].expr).setPos0(yyDollar[1].token),
+					CNode("move", vname, yyDollar[4].expr).setPos0(yyDollar[1].token),
+					CNode("move", bname, yyDollar[4].expr).setPos0(yyDollar[1].token),
+					CNode("move", sname, yyDollar[6].expr).setPos0(yyDollar[1].token),
+					CNode("move", ename, yyDollar[8].expr).setPos0(yyDollar[1].token),
 					CNode("if", CNode("<=", NNode(0.0), CNode("*", CNode("-", ename, vname).setPos0(yyDollar[1].token), sname).setPos0(yyDollar[1].token)),
 						CNode("chain",
 							CNode("for",
