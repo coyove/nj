@@ -33,10 +33,12 @@ const (
 	OpIfNot
 	OpSet
 	OpMakeMap
+	OpMakeArray
 	OpJmp
 	OpLambda
 	OpCall
 	OpPush
+	OpPush2
 	OpRet
 	OpYield
 	OpPop

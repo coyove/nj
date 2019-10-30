@@ -108,8 +108,11 @@ func (v *Value) SetNumberValue(f float64) {
 
 // SetBoolValue turns any Value into a numeric Value with its value being 0.0 or 1.0
 func (v *Value) SetBoolValue(b bool) {
-	x := uint64(*(*byte)(unsafe.Pointer(&b)))
-	v.ptr = unsafe.Pointer(^uintptr(x))
+	x := 0.0
+	if b {
+		x = 1.0
+	}
+	v.ptr = unsafe.Pointer(^uintptr(*(*uint64)(unsafe.Pointer(&x))))
 }
 
 // NewMapValue returns a map value

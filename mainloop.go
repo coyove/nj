@@ -134,8 +134,7 @@ MAIN:
 		case OpSet:
 			env.Set(opa, env.Get(opb, K))
 		case OpInc:
-			num := env.Get(opa, K).AsNumber()
-			env.A.SetNumberValue(num + env.Get(opb, K).AsNumber())
+			env.A.SetNumberValue(env.Get(opa, K).MustNumber() + env.Get(opb, K).MustNumber())
 			env.Set(opa, env.A)
 		case OpAdd:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
@@ -149,21 +148,21 @@ MAIN:
 		case OpSub:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
-				env.A.SetNumberValue(env.Get(opa, K).AsNumber() - env.Get(opb, K).AsNumber())
+				env.A.SetNumberValue(va.AsNumber() - vb.AsNumber())
 			default:
 				panicf("can't apply '-' on %+v and %+v", va, vb)
 			}
 		case OpMul:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
-				env.A.SetNumberValue(env.Get(opa, K).AsNumber() * env.Get(opb, K).AsNumber())
+				env.A.SetNumberValue(va.AsNumber() * vb.AsNumber())
 			default:
 				panicf("can't apply '*' on %+v and %+v", va, vb)
 			}
 		case OpDiv:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
-				env.A.SetNumberValue(env.Get(opa, K).AsNumber() / env.Get(opb, K).AsNumber())
+				env.A.SetNumberValue(va.AsNumber() / vb.AsNumber())
 			default:
 				panicf("can't apply '/' on %+v and %+v", va, vb)
 			}
@@ -272,20 +271,21 @@ MAIN:
 			if newEnv == nil {
 				env.A = NewMapValue(NewMap())
 			} else {
-				if opa == 1 {
-					size := newEnv.LocalSize()
-					m := NewMapSize(size)
-					copy(m.l, newEnv.stack)
-					newEnv.LocalClear()
-					env.A = NewMapValue(m)
-				} else {
-					size, m := newEnv.LocalSize(), NewMap()
-					for i := 0; i < size; i += 2 {
-						m.Put(newEnv.LocalGet(i), newEnv.LocalGet(i+1))
-					}
-					newEnv.LocalClear()
-					env.A = NewMapValue(m)
+				size, m := newEnv.LocalSize(), NewMap()
+				for i := 0; i < size; i += 2 {
+					m.Put(newEnv.LocalGet(i), newEnv.LocalGet(i+1))
 				}
+				newEnv.LocalClear()
+				env.A = NewMapValue(m)
+			}
+		case OpMakeArray:
+			if newEnv == nil {
+				env.A = NewMapValue(NewMap())
+			} else {
+				m := NewMapSize(newEnv.LocalSize())
+				copy(m.l, newEnv.stack)
+				newEnv.LocalClear()
+				env.A = NewMapValue(m)
 			}
 		case OpStore:
 			vidx, v := env.Get(opa, K), env.Get(opb, K)
@@ -417,6 +417,12 @@ MAIN:
 				newEnv = NewEnv(nil)
 			}
 			newEnv.LocalPush(env.Get(opa, K))
+		case OpPush2:
+			if newEnv == nil {
+				newEnv = NewEnv(nil)
+			}
+			newEnv.LocalPush(env.Get(opa, K))
+			newEnv.LocalPush(env.Get(opb, K))
 		case OpRet:
 			v := env.Get(opa, K)
 			if len(retStack) == 0 {
@@ -431,7 +437,7 @@ MAIN:
 			v := env.Get(opa, K)
 			if x := v.Type(); x != ClosureType {
 				if x == MapType {
-					if newEnv.LocalSize() > 0 {
+					if newEnv != nil && newEnv.LocalSize() > 0 {
 						dest := newEnv.LocalGet(0).MustMap()
 						n := copy(dest.l, v.AsMap().l)
 						m := NewMap()
@@ -449,46 +455,45 @@ MAIN:
 			if cls.lastenv != nil {
 				env.A = cls.Exec(nil)
 				newEnv = nil
-			} else if (newEnv == nil && cls.ArgsCount > 0) ||
-				(newEnv != nil && newEnv.LocalSize() < int(cls.ArgsCount)) {
-				if newEnv == nil || newEnv.LocalSize() == 0 {
-					env.A = NewClosureValue(cls.Dup())
-				} else {
-					curry := cls.Dup()
-					curry.AppendPreArgs(newEnv.Stack())
-					env.A = NewClosureValue(curry)
-					newEnv.LocalClear()
-				}
 			} else {
 				if newEnv == nil {
 					newEnv = NewEnv(env)
 				}
-				if len(cls.PartialArgs) > 0 {
-					newEnv.LocalPushFront(cls.PartialArgs)
-				}
-				if cls.Isset(ClsYieldable|ClsRecoverable) || cls.native != nil {
-					newEnv.parent = env
-					env.A = cls.Exec(newEnv)
-				} else {
-					// log.Println(newEnv.stack)
-					last := stacktrace{
-						cls:    K,
-						cursor: cursor,
-						env:    env,
+
+				if newEnv.LocalSize() >= int(cls.ArgsCount) {
+					if len(cls.PartialArgs) > 0 {
+						newEnv.LocalPushFront(cls.PartialArgs)
 					}
+					if cls.Isset(ClsYieldable | ClsRecoverable | ClsNative) {
+						newEnv.parent = env
+						env.A = cls.Exec(newEnv)
+					} else {
+						last := stacktrace{
+							cls:    K,
+							cursor: cursor,
+							env:    env,
+						}
 
-					// switch to the Env of cls
-					cursor = 0
-					K = cls
-					caddr = kodeaddr(K.Code)
-					newEnv.parent = cls.Env
-					env = newEnv
+						// switch to the Env of cls
+						cursor = 0
+						K = cls
+						caddr = kodeaddr(K.Code)
+						newEnv.parent = cls.Env
+						env = newEnv
 
-					retStack = append(retStack, last)
-				}
-				if cls.native == nil {
-					newEnv = nil
+						retStack = append(retStack, last)
+					}
+					if cls.native == nil {
+						newEnv = nil
+					} else {
+						newEnv.LocalClear()
+					}
+				} else if newEnv.LocalSize() == 0 {
+					env.A = NewClosureValue(cls.Dup())
 				} else {
+					curry := cls.Dup()
+					curry.AppendPartialArgs(newEnv.Stack())
+					env.A = NewClosureValue(curry)
 					newEnv.LocalClear()
 				}
 			}
@@ -513,20 +518,20 @@ MAIN:
 			}
 			m := x.MustMap()
 			cls := env.Get(opb, K).MustClosure()
-			newEnv := NewEnv(cls.Env)
+			forEnv := NewEnv(cls.Env)
 			for i := len(m.l) - 1; i >= 0; i-- {
-				newEnv.LocalClear()
-				newEnv.LocalPush(NewNumberValue(float64(i)))
-				newEnv.LocalPush(m.l[i])
-				if res := cls.Exec(newEnv); res.IsZero() {
+				forEnv.LocalClear()
+				forEnv.LocalPush(NewNumberValue(float64(i)))
+				forEnv.LocalPush(m.l[i])
+				if res := cls.Exec(forEnv); res.IsZero() {
 					continue MAIN
 				}
 			}
 			for k, v := range m.m {
-				newEnv.LocalClear()
-				newEnv.LocalPush(NewInterfaceValue(k))
-				newEnv.LocalPush(v)
-				if res := cls.Exec(newEnv); res.IsZero() {
+				forEnv.LocalClear()
+				forEnv.LocalPush(NewInterfaceValue(k))
+				forEnv.LocalPush(v)
+				if res := cls.Exec(forEnv); res.IsZero() {
 					continue MAIN
 				}
 			}

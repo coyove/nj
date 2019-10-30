@@ -352,6 +352,8 @@ MAIN:
 			sb.WriteString(readAddr(a) + " = " + readAddr(b))
 		case OpPush:
 			sb.WriteString("push " + readAddr(a))
+		case OpPush2:
+			sb.WriteString("push2 " + readAddr(a) + " " + readAddr(b))
 		case OpRet:
 			sb.WriteString("ret " + readAddr(a))
 		case OpYield:
@@ -380,11 +382,9 @@ MAIN:
 		case OpInc:
 			sb.WriteString("inc " + readAddr(a) + " " + readAddr(uint16(b)))
 		case OpMakeMap:
-			if a == 1 {
-				sb.WriteString("make-array")
-			} else {
-				sb.WriteString("make-map")
-			}
+			sb.WriteString("make-map")
+		case OpMakeArray:
+			sb.WriteString("make-array")
 		default:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs + " " + readAddr(a) + " " + readAddr(b))

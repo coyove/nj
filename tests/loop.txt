@@ -186,3 +186,10 @@ a[key] = 1
 a[key2] = 2
 
 assert a == {key: 1, key2: 2}
+
+s = 0
+for i = 1, 10 {
+if i == 5 break
+s++
+}
+assert s == 4

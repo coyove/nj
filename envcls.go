@@ -74,6 +74,9 @@ func (env *Env) LocalPush(v Value) {
 }
 
 func (env *Env) LocalSize() int {
+	//if env == nil {
+	//	return 0
+	//}
 	return len(env.stack)
 }
 
@@ -136,6 +139,7 @@ const (
 	ClsHasReceiver
 	ClsYieldable
 	ClsRecoverable
+	ClsNative
 )
 
 // MustClosure is the closure struct used in potatolang
@@ -169,7 +173,7 @@ func NewNativeValue(argsCount int, f func(env *Env) Value) Value {
 		ArgsCount: byte(argsCount),
 		native:    f,
 	}
-	cls.Set(ClsNoEnvescape)
+	cls.Set(ClsNative)
 	return NewClosureValue(cls)
 }
 
@@ -179,7 +183,7 @@ func (c *Closure) Unset(opt byte) { c.options &= ^opt }
 
 func (c *Closure) Isset(opt byte) bool { return (c.options & opt) > 0 }
 
-func (c *Closure) AppendPreArgs(preArgs []Value) {
+func (c *Closure) AppendPartialArgs(preArgs []Value) {
 	c.PartialArgs = append(c.PartialArgs, preArgs...)
 	if c.ArgsCount < byte(len(preArgs)) {
 		panic("negative args count")

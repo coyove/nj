@@ -46,5 +46,5 @@ a = {
 j = std.json.stringify(a)
 // io.println(std.json.parse(j), a)
 assert std.json.parse(j) == a
-assert std.json.parse("true") == 1
-assert std.json.parse("     true") == 1
+assert std.json.parse("true") == true
+assert std.json.parse("     true") == not false

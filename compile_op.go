@@ -14,7 +14,6 @@ const (
 	errUndeclaredVariable = " %+v: undeclared variable"
 )
 
-var _nop = makeop(OpNOP, 0, 0)
 var _nodeRegA = parser.NewNode(parser.Naddr).SetValue(regA)
 
 func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
@@ -65,22 +64,30 @@ func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint1
 }
 
 func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	var buf packet
-	if buf, err = table.decompound(atoms[1].C()); err != nil {
+	if code, err = table.decompound(atoms[1].C()); err != nil {
 		return
 	}
-	for _, atom := range atoms[1].C() {
-		if err = table.writeOpcode(&buf, OpPush, atom, nil); err != nil {
-			return
+
+	args := atoms[1].C()
+	for i := 0; i < len(args); i += 2 {
+		if i+1 >= len(args) {
+			if err = table.writeOpcode(&code, OpPush, args[i], nil); err != nil {
+				return
+			}
+		} else {
+			if err = table.writeOpcode(&code, OpPush2, args[i], args[i+1]); err != nil {
+				return
+			}
 		}
 	}
+
 	if atoms[0].Value.(string) == "map" {
-		buf.WriteOP(OpMakeMap, 0, 0)
+		code.WriteOP(OpMakeMap, 0, 0)
 	} else {
-		buf.WriteOP(OpMakeMap, 1, 0)
+		code.WriteOP(OpMakeArray, 0, 0)
 	}
-	buf.WritePos(atoms[0].Meta)
-	return buf, regA, nil
+	code.WritePos(atoms[0].Meta)
+	return code, regA, nil
 }
 
 // writeOpcode3 accepts 3 arguments at most, 2 arguments will be encoded into opcode itself, the 3rd one will be in regA
@@ -271,11 +278,19 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 		return
 	}
 
-	for i := 1; i < len(tmp); i++ {
-		err = table.writeOpcode(&code, OpPush, tmp[i], nil)
-		if err != nil {
-			return
+	for i := 1; i < len(tmp); i += 2 {
+		if i+1 >= len(tmp) {
+			if err = table.writeOpcode(&code, OpPush, tmp[i], nil); err != nil {
+				return
+			}
+		} else {
+			if err = table.writeOpcode(&code, OpPush2, tmp[i], tmp[i+1]); err != nil {
+				return
+			}
 		}
+	}
+
+	for i := 1; i < len(tmp); i++ {
 		if tmp[i].Type == parser.Naddr {
 			table.returnAddress(tmp[i].Value.(uint16))
 		}
@@ -389,7 +404,7 @@ var staticWhileHack [8]uint32
 func init() {
 	rand.Seed(time.Now().Unix())
 	for i := range staticWhileHack {
-		staticWhileHack[i] = rand.Uint32()
+		staticWhileHack[i] = makeop(OpNOP, uint16(rand.Uint32()), uint16(rand.Uint32()))
 	}
 }
 
@@ -412,7 +427,7 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 		return buf, regA, nil
 	}
 
-	buf.WriteRaw(staticWhileHack[4:]) // write a 'continue' placeholder
+	buf.WriteRaw(staticWhileHack[4:]) // write a 'break' placeholder
 	return buf, regA, nil
 }
 
@@ -451,30 +466,28 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 
 	// search for special 'continue' placeholder and replace it with a OP_JMP to the
 	// beginning of the Code
-	flag := u32Bytes(staticWhileHack[:4])
+	continueflag := u32Bytes(staticWhileHack[:4])
 	for i := 0; i < len(code2); {
-		x := bytes.Index(code2[i:], flag)
+		x := bytes.Index(code2[i:], continueflag)
 		if x == -1 {
 			break
 		}
 		idx := (i + x) / 4
 		code.data[idx] = makejmpop(OpJmp, 0, -idx-1)
-		code.data[idx+1], code.data[idx+2], code.data[idx+3] = _nop, _nop, _nop
-		i = idx*4 + 4
+		i += x + 4
 	}
 
 	// search for special 'break' placeholder and replace it with a OP_JMP to the
 	// end of the Code
-	flag = u32Bytes(staticWhileHack[4:])
+	breakflag := u32Bytes(staticWhileHack[4:])
 	for i := 0; i < len(code2); {
-		x := bytes.Index(code2[i:], flag)
+		x := bytes.Index(code2[i:], breakflag)
 		if x == -1 {
 			break
 		}
 		idx := (i + x) / 4
 		code.data[idx] = makejmpop(OpJmp, 0, len(code.data)-idx-1)
-		code.data[idx+1], code.data[idx+2], code.data[idx+3] = _nop, _nop, _nop
-		i = idx*4 + 4
+		i += x + 4
 	}
 	return buf, regA, nil
 }

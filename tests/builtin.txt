@@ -106,6 +106,7 @@ fun testmove(err, a, b) {
         if x == 10 {
             err[] = "2nd level"
             return
+            (fun(){})()
         }
         return x + 1
     }
