@@ -1,13 +1,18 @@
 package potatolang
 
-// Map represents the map structure in potatolang
+import "unsafe"
+
+// MustMap represents the map structure in potatolang
 // Like lua it has a linear slice and a hash table.
 // We use a 128bit hash to identify the key,
 // and since 128bit is large enough, we will consider it impossible to collide
 // in a foreseeable period of time (though this is not a good practice).
 type Map struct {
-	l []Value
-	m map[hashv][2]Value
+	l     []Value
+	m     map[interface{}]Value
+	ptr   unsafe.Pointer
+	ptype byte
+	ptag  uint32
 }
 
 // NewMap creates a new map
@@ -21,24 +26,17 @@ func NewMapSize(n int) *Map {
 }
 
 // Dup duplicates the map
-func (m *Map) Dup(duper func(Value, Value) Value) *Map {
+func (m *Map) Dup() *Map {
 	m2 := &Map{}
 	m2.l = make([]Value, len(m.l))
-	if duper == nil {
-		copy(m2.l, m.l)
-	} else {
-		for i, x := range m.l {
-			m2.l[i] = duper(NewNumberValue(float64(i)), x)
-		}
+	for i, x := range m.l {
+		m2.l[i] = x.Dup()
 	}
 
 	if m.m != nil {
-		m2.m = make(map[hashv][2]Value)
+		m2.m = make(map[interface{}]Value, len(m.m))
 		for k, v := range m.m {
-			if duper != nil {
-				v[1] = duper(v[0], v[1])
-			}
-			m2.m[k] = v
+			m2.m[k] = v.Dup()
 		}
 	}
 	return m2
@@ -55,7 +53,7 @@ func (m *Map) Equal(m2 *Map) bool {
 		}
 	}
 	for k, v := range m.m {
-		if v2, ok := m2.m[k]; !ok || !v2[1].Equal(v[1]) {
+		if v2, ok := m2.m[k]; !ok || !v2.Equal(v) {
 			return false
 		}
 	}
@@ -64,7 +62,7 @@ func (m *Map) Equal(m2 *Map) bool {
 
 // Put puts a new entry into the map
 func (m *Map) Put(key Value, value Value) *Map {
-	if key.Type() == Tnumber {
+	if key.Type() == NumberType {
 		idx, ln := int(key.AsNumber()), len(m.l)
 		if idx < ln {
 			m.l[idx] = value
@@ -75,17 +73,17 @@ func (m *Map) Put(key Value, value Value) *Map {
 		}
 	}
 	if m.m == nil {
-		m.m = make(map[hashv][2]Value)
+		m.m = make(map[interface{}]Value)
 	}
-	m.m[key.Hash()] = [2]Value{key, value}
+	m.m[key.AsInterface()] = value
 	return m
 }
 
 func (m *Map) putIntoMap(key Value, value Value) *Map {
 	if m.m == nil {
-		m.m = make(map[hashv][2]Value)
+		m.m = make(map[interface{}]Value)
 	}
-	m.m[key.Hash()] = [2]Value{key, value}
+	m.m[key.AsInterface()] = value
 	return m
 }
 
@@ -96,26 +94,26 @@ func (m *Map) Puts(key string, value Value) *Map {
 
 // Get gets the corresponding value with the key
 func (m *Map) Get(key Value) (value Value, found bool) {
-	if key.Type() == Tnumber {
+	if key.Type() == NumberType {
 		if idx, ln := int(key.AsNumber()), len(m.l); idx < ln {
 			return m.l[idx], true
 		}
 	}
-	If m.m == nil {
+	if m.m == nil {
 		return Value{}, false
 	}
-	v, ok := m.m[key.Hash()]
-	return v[1], ok
+	v, ok := m.m[key.AsInterface()]
+	return v, ok
 }
 
 func (m *Map) getFromMap(key Value) (value Value, found bool) {
-	v, ok := m.m[key.Hash()]
-	return v[1], ok
+	v, ok := m.m[key.AsInterface()]
+	return v, ok
 }
 
 // Remove removes the key from map and return the corresponding value
 func (m *Map) Remove(key Value) Value {
-	if key.Type() == Tnumber {
+	if key.Type() == NumberType {
 		if idx, ln := int(key.AsNumber()), len(m.l); idx < ln {
 			v := m.l[idx]
 			m.l = append(m.l[:idx], m.l[idx+1:]...)
@@ -125,10 +123,10 @@ func (m *Map) Remove(key Value) Value {
 	if m.m == nil {
 		return Value{}
 	}
-	hash := key.Hash()
+	hash := key.AsInterface()
 	v := m.m[hash]
 	delete(m.m, hash)
-	return v[1]
+	return v
 }
 
 // Size returns the size of map

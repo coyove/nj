@@ -1,55 +1,55 @@
-var n = 0 
-var nCPU = 4 
+n = 0 
+nCPU = 8
 
-fun A(i, j) {
+func A(i, j) {
     return ((i+j)*(i+j+1)/2 + i + 1) 
 }
 
-fun A0(i, j) {
-    $r0(i)
-    $r1(j)
-    $add0()
-    $r1(1)
-    $add1()
-    $mul0()
-    $r1(2)
-    $div0()
-    $r1(i)
-    $add0()
-    $r1(1)
-    $add()
-    $ret($a)
-}
+// func A0(i, j) {
+//     $r0(i)
+//     $r1(j)
+//     $add0()
+//     $r1(1)
+//     $add1()
+//     $mul0()
+//     $r1(2)
+//     $div0()
+//     $r1(i)
+//     $add0()
+//     $r1(1)
+//     $add()
+//     $ret($a)
+// }
+// 
+// assert  A0(1,2) == A(1,2)
 
-assert  A0(1,2) == A(1,2)
-
-fun TimesVec(v, s, n, u, wg) {
-    var ul = len(u) 
+func TimesVec(v, s, n, u, wg) {
+     ul = len(u) 
     for i = s  ,n {
-        var vi = 0 
+         vi = 0 
         for j = 0,ul {
-            vi = vi + u[j] / A0(i, j) 
+            vi = vi + u[j] / A(i, j) 
         }
         v[i] = vi 
     }
     wg.done() 
 }
 
-fun TimesTranspVec(v, s, n, u, wg) {
-    var ul = len(u) 
+func TimesTranspVec(v, s, n, u, wg) {
+     ul = len(u) 
     for i = s, n  {
-        var vi = 0 
+         vi = 0 
         for j = 0, ul  {
-            vi = vi + u[j] / A0(j, i) 
+            vi = vi + u[j] / A(j, i) 
         }
         v[i] = vi 
     }
     wg.done() 
 }
 
-fun ATimesTransp(v, u) {
-    var x = std.genlist(len(u)) 
-    var wg = std.sync.waitgroup() 
+func ATimesTransp(v, u) {
+    x = std.genlist(len(u)) 
+    wg = std.sync.waitgroup() 
 
     for i = 0, nCPU {
         wg.add(1) 
@@ -64,9 +64,9 @@ fun ATimesTransp(v, u) {
     wg.wait() 
 }
 
-n = 550
-var u = {} 
-var v = {} 
+n = 2000
+u = {} 
+v = {} 
  
 for idx = 0, n {
     u[idx] = 1 
@@ -78,8 +78,9 @@ for i = 0, 10 {
     ATimesTransp(u, v) 
 }
 
-var vBv = 0, vv = 0 
-for i, x = v {
+ vBv = 0
+ vv = 0 
+for v , func(i,x) {
     vBv = vBv + u[i] * x 
     vv = vv + x * x 
 }

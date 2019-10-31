@@ -33,6 +33,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const EOF = 0xffffffff
@@ -73,7 +75,7 @@ type Scanner struct {
 
 func NewScanner(reader io.Reader, source string) *Scanner {
 	return &Scanner{
-		Pos:    Meta{source, 1, 0, 0},
+		Pos:    Meta{source, 1, 0},
 		reader: bufio.NewReaderSize(reader, 4096),
 	}
 }
@@ -175,7 +177,7 @@ func (sc *Scanner) scanDecimal(ch uint32, buf *bytes.Buffer) error {
 func (sc *Scanner) scanNumber(ch uint32, buf *bytes.Buffer) error {
 	if ch == '0' { // octal
 		switch sc.Peek() {
-		case 'x', 'X', 'b', 'B', 'i', 'I':
+		case 'x', 'X', 'b', 'B':
 			writeChar(buf, ch)
 			writeChar(buf, sc.Next())
 			hasvalue := false
@@ -312,9 +314,20 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 }
 
 var reservedWords = map[string]uint32{
-	"addressof": TAddressof, "and": TAnd, "or": TOr, "assert": TAssert, "break": TBreak, "case": TCase, "continue": TContinue, "else": TElse,
-	"for": TFor, "fun": TFunc, "if": TIf, "len": TLen, "dup": TNew, "nil": TNil, "not": TNot,
-	"return": TReturn, "use": TUse, "switch": TSwitch, "typeof": TTypeof, "var": TVar, "while": TWhile, "yield": TYield,
+	"assert":   TAssert,
+	"break":    TBreak,
+	"case":     TCase,
+	"continue": TContinue,
+	"else":     TElse,
+	"func":     TFunc,
+	"if":       TIf,
+	"len":      TLen,
+	"return":   TReturn,
+	"use":      TUse,
+	"switch":   TSwitch,
+	"typeof":   TTypeof,
+	"for":      TFor,
+	"yield":    TYield,
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
@@ -341,7 +354,24 @@ redo:
 			goto finally
 		}
 		if typ, ok := reservedWords[tok.Str]; ok {
-			tok.Type = typ
+			crlf := false
+			for n := sc.Peek(); unicode.IsSpace(rune(n)) || n == '}'; n = sc.Peek() {
+				if n == '\n' || n == '}' {
+					crlf = true
+					break
+				}
+				sc.Next()
+			}
+
+			// return/yield without an arg, but with a CrLf afterward will be considered
+			// as return nil/yield nil
+			if tok.Str == "return" && crlf {
+				tok.Type = TReturnNil
+			} else if tok.Str == "yield" && crlf {
+				tok.Type = TYieldNil
+			} else {
+				tok.Type = typ
+			}
 		}
 	case isDecimal(ch):
 		tok.Type = TNumber
@@ -375,16 +405,28 @@ redo:
 				tok.Str = string(ch)
 			}
 		case '"', '\'':
-			tok.Type = TString
 			err = sc.scanString(ch, buf)
-			tok.Str = buf.String()
+			if ch == '\'' {
+				r, _ := utf8.DecodeRune(buf.Bytes())
+				tok.Type = TNumber
+				tok.Str = strconv.Itoa(int(r))
+			} else {
+				tok.Type = TString
+				tok.Str = buf.String()
+			}
 		case '`':
 			tok.Type = TString
 			err = sc.scanBlockString(buf)
 			tok.Str = buf.String()
 		case '[':
-			tok.Type = ch
-			tok.Str = string(ch)
+			if sc.Peek() == ']' {
+				tok.Type = TSquare
+				tok.Str = "[]"
+				sc.Next()
+			} else {
+				tok.Type = ch
+				tok.Str = string(ch)
+			}
 		case '=', '+', '-':
 			p := sc.Peek()
 			if p == ch {
@@ -486,6 +528,19 @@ redo:
 				tok.Type = [5]uint32{TMulEq, TModEq, TAndEq, TOrEq, TXorEq}[strings.Index("*%&|^", string(ch))]
 				tok.Str = string(ch) + "="
 				sc.Next()
+			case ch:
+				if ch == '&' {
+					tok.Type = TAnd
+					tok.Str = "&&"
+					sc.Next()
+				} else if ch == '|' {
+					tok.Type = TOr
+					tok.Str = "||"
+					sc.Next()
+				} else {
+					tok.Type = ch
+					tok.Str = string(ch)
+				}
 			default:
 				tok.Type = ch
 				tok.Str = string(ch)
@@ -546,7 +601,7 @@ func parse(reader io.Reader, name string, cache map[string]*Node, loop string) (
 	}
 	defer func() {
 		if e := recover(); e != nil {
-			err, _ = e.(error)
+			err = fmt.Errorf("%v", e)
 		}
 	}()
 	yyParse(lexer)

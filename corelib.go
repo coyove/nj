@@ -1,51 +1,21 @@
 package potatolang
 
 import (
+	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 	"unsafe"
 
 	"github.com/buger/jsonparser"
+	"github.com/coyove/potatolang/parser"
 )
 
 const (
-	GTagError = iota + 1
-	GTagUnique
-	GTagPhantom
-	GTagEnv
-	GTagByteArray
-	GTagByteClampedArray
-	GTagInt8Array
-	GTagInt16Array
-	GTagUint16Array
-	GTagInt32Array
-	GTagUint32Array
-	GTagStringArray
-	GTagBoolArray
-	GTagFloat32Array
-	GTagFloat64Array
+	_ = iota
+	PTagUnique
+	PTagPhantom
 )
-
-type GTagComparator interface {
-	Equal(a, b Value) bool
-}
-
-var gtagComparators = map[uint64]GTagComparator{}
-
-func RegisterGTagcomparator(a, b uint32, comp GTagComparator) bool {
-	x := uint64(a)<<32 + uint64(b)
-	y := uint64(b)<<32 + uint64(a)
-	if _, ok := gtagComparators[x]; ok {
-		return false
-	}
-	gtagComparators[x] = comp
-	gtagComparators[y] = comp
-	return true
-}
-
-var CoreLibNames = []string{
-	"std", "io", "math",
-}
 
 var CoreLibs = map[string]Value{}
 
@@ -55,145 +25,108 @@ func AddCoreValue(name string, value Value) {
 	if name == "" {
 		return
 	}
-	if CoreLibs[name].Type() != Tnil {
+	if CoreLibs[name].Type() != NilType {
 		panicf("core value %s already exists", name)
 	}
-	CoreLibNames = append(CoreLibNames, name)
 	CoreLibs[name] = value
-}
-
-func char(v float64, ascii bool) string {
-	if ascii {
-		return string([]byte{byte(v)})
-	}
-	return string(rune(v))
 }
 
 func initCoreLibs() {
 	lcore := NewMap()
 	lcore.Puts("unique", NewNativeValue(0, func(env *Env) Value {
 		a := new(int)
-		return NewGenericValue(unsafe.Pointer(a), GTagUnique)
+		return NewPointerValue(unsafe.Pointer(a), PTagUnique)
 	}))
 	lcore.Puts("genlist", NewNativeValue(1, func(env *Env) Value {
-		return NewMapValue(NewMapSize(int(env.SGet(0).Num())))
+		return NewMapValue(NewMapSize(int(env.LocalGet(0).MustNumber())))
 	}))
 	lcore.Puts("apply", NewNativeValue(2, func(env *Env) Value {
-		x, y := env.SGet(0), env.SGet(1)
-		newEnv := NewEnv(x.Cls().env, env.parent.Cancel)
-		for _, v := range y.Map().l {
-			newEnv.SPush(v)
+		cls := env.LocalGet(0).MustClosure()
+		newEnv := NewEnv(cls.Env)
+		newEnv.stack = append([]Value{}, cls.PartialArgs...)
+		for _, v := range env.LocalGet(1).MustMap().l {
+			newEnv.LocalPush(v)
 		}
-		return x.Cls().Exec(newEnv)
+		return cls.Exec(newEnv)
 	}))
-	lcore.Puts("id", NewNativeValue(1, func(env *Env) Value {
-		return NewStringValue(env.SGet(0).hashstr())
-	}))
-	lcore.Puts("storeinto", NewNativeValue(3, func(env *Env) Value {
-		e, x, y := env.SGet(0), env.SGet(1), env.SGet(2)
-		ep, et := e.Gen()
-		if et != GTagEnv {
-			panicf("invalid generic tag: %d", et)
-		}
-		(*Env)(ep).Set(uint16(x.Num()), y)
-		return y
-	}))
-	lcore.Puts("currentenv", NewNativeValue(0, func(env *Env) Value {
-		return NewGenericValue(unsafe.Pointer(env.parent), GTagEnv)
+	lcore.Puts("safe", NewNativeValue(1, func(env *Env) Value {
+		cls := env.LocalGet(0).MustClosure()
+		cls.Set(ClsRecoverable)
+		return NewClosureValue(cls)
 	}))
 	lcore.Puts("stacktrace", NewNativeValue(0, func(env *Env) Value {
-		e := ExecError{stacks: env.trace}
-		return NewStringValue(e.Error())
+		panic("not implemented")
+		//e := ExecError{stacks: Env.trace}
+		//return NewStringValue(e.Error())
 	}))
 	lcore.Puts("eval", NewNativeValue(1, func(env *Env) Value {
-		x := env.SGet(0).Str()
-		cls, err := LoadString(x)
+		cls, err := LoadString(env.LocalGet(0).MustString())
 		if err != nil {
 			return NewStringValue(err.Error())
 		}
 		return NewClosureValue(cls)
 	}))
-	lcore.Puts("remove", NewNativeValue(2, func(env *Env) Value {
-		return env.SGet(0).Map().Remove(env.Get(1))
-	}))
-	lcore.Puts("copy", NewNativeValue(5, func(env *Env) Value {
-		dstPos, srcPos := int(env.SGet(1).Num()), int(env.SGet(3).Num())
-		length := int(env.SGet(4).Num())
-
-		switch dst, src := env.SGet(0), env.SGet(2); dst.Type() {
-		case Tmap:
-			return NewNumberValue(float64(copy(dst.Map().l[dstPos:], src.Map().l[srcPos:srcPos+length])))
-		case Tgeneric:
-			return NewNumberValue(float64(GCopy(dst, src, dstPos, srcPos, srcPos+length)))
-		default:
-			panicf("can't copy from %+v to %+v", src, dst)
-			return NewValue()
-		}
+	lcore.Puts("unicode", NewNativeValue(1, func(env *Env) Value {
+		return NewStringValue(string(rune(env.LocalGet(0).MustNumber())))
 	}))
 	lcore.Puts("char", NewNativeValue(1, func(env *Env) Value {
-		switch c := env.SGet(0); c.Type() {
-		case Tnumber:
-			return NewStringValue(char(c.AsNumber(), true))
-		case Tgeneric:
-			return NewStringValue(string(*(*[]byte)(c.GenTags(GTagByteArray, GTagByteClampedArray, GTagInt8Array))))
-		default:
-			panicf("std.char: %+v", c)
-			return NewValue()
-		}
-	}))
-	lcore.Puts("utf8char", NewNativeValue(1, func(env *Env) Value {
-		return NewStringValue(char(env.SGet(0).Num(), false))
+		r, _ := utf8.DecodeRuneInString(env.LocalGet(0).MustString())
+		return NewNumberValue(float64(r))
 	}))
 	lcore.Puts("index", NewNativeValue(2, func(env *Env) Value {
-		switch s := env.SGet(0); s.Type() {
-		case Tstring:
-			return NewNumberValue(float64(strings.Index(s.AsString(), env.SGet(1).Str())))
-		case Tmap:
+		switch s := env.LocalGet(0); s.Type() {
+		case StringType:
+			return NewNumberValue(float64(strings.Index(s.AsString(), env.LocalGet(1).MustString())))
+		case MapType:
 			m := s.AsMap()
-			x := env.SGet(1)
+			x := env.LocalGet(1)
 			for i, a := range m.l {
 				if a.Equal(x) {
 					return NewNumberValue(float64(i))
 				}
 			}
-			for _, v := range m.m {
-				if v[1].Equal(x) {
-					return v[0]
+			for k, v := range m.m {
+				if v.Equal(x) {
+					return NewInterfaceValue(k)
 				}
 			}
-			return NewValue()
+			return Value{}
 		default:
 			return NewNumberValue(-1)
 		}
 	}))
 	lcore.Puts("sprintf", NewNativeValue(0, stdSprintf))
+	lcore.Puts("ftoa", NewNativeValue(1, func(env *Env) Value {
+		v := env.LocalGet(0).MustNumber()
+		base := byte(env.LocalGet(1).MustNumber())
+		digits := int(env.LocalGet(2).MustNumber())
+		return NewStringValue(strconv.FormatFloat(v, byte(base), digits, 64))
+	}))
 	lcore.Puts("sync", NewMapValue(NewMap().
 		Puts("run", NewNativeValue(1, func(env *Env) Value {
-			cls := env.SGet(0).Cls()
-			newEnv := NewEnv(cls.env, env.parent.Cancel)
-			if cls.ArgsCount() > env.SSize()-1 {
+			cls := env.LocalGet(0).MustClosure()
+			newEnv := NewEnv(cls.Env)
+			if int(cls.ArgsCount) > env.LocalSize()-1 {
 				panic("not enough arguments to start a goroutine")
 			}
-			for i := 1; i < env.SSize(); i++ {
-				newEnv.SPush(env.SGet(i))
-			}
-			if cls.Isset(CLS_HASRECEIVER) {
-				newEnv.SPush(cls.caller)
+			newEnv.LocalPushFront(cls.PartialArgs)
+			for i := 1; i < env.LocalSize(); i++ {
+				newEnv.LocalPush(env.LocalGet(i))
 			}
 			go cls.Exec(newEnv)
-			return NewValue()
+			return Value{}
 		})).
 		Puts("mutex", NewNativeValue(0, func(env *Env) Value {
 			m, mux := NewMap(), &sync.Mutex{}
-			m.Puts("lock", NewNativeValue(0, func(env *Env) Value { mux.Lock(); return NewValue() }))
-			m.Puts("unlock", NewNativeValue(0, func(env *Env) Value { mux.Unlock(); return NewValue() }))
+			m.Puts("lock", NewNativeValue(0, func(env *Env) Value { mux.Lock(); return Value{} }))
+			m.Puts("unlock", NewNativeValue(0, func(env *Env) Value { mux.Unlock(); return Value{} }))
 			return NewMapValue(m)
 		})).
 		Puts("waitgroup", NewNativeValue(0, func(env *Env) Value {
 			m, wg := NewMap(), &sync.WaitGroup{}
-			m.Puts("add", NewNativeValue(1, func(env *Env) Value { wg.Add(int(env.SGet(0).Num())); return NewValue() }))
-			m.Puts("done", NewNativeValue(0, func(env *Env) Value { wg.Done(); return NewValue() }))
-			m.Puts("wait", NewNativeValue(0, func(env *Env) Value { wg.Wait(); return NewValue() }))
+			m.Puts("add", NewNativeValue(1, func(env *Env) Value { wg.Add(int(env.LocalGet(0).MustNumber())); return Value{} }))
+			m.Puts("done", NewNativeValue(0, func(env *Env) Value { wg.Done(); return Value{} }))
+			m.Puts("wait", NewNativeValue(0, func(env *Env) Value { wg.Wait(); return Value{} }))
 			return NewMapValue(m)
 		}))))
 
@@ -204,40 +137,18 @@ func initCoreLibs() {
 				return NewClosureValue(cls)
 			})).
 			Puts("yieldreset", NewNativeValue(1, func(env *Env) Value {
-				env.SGet(0).Cls().lastenv = nil
-				return env.SGet(0)
-			})).
-			Puts("set", NewNativeValue(3, func(env *Env) Value {
-				cls := env.SGet(0).Cls()
-				switch name := env.SGet(1).Str(); name {
-				case "argscount":
-					cls.argsCount = byte(env.SGet(2).Num())
-				case "yieldable":
-					if !env.SGet(2).IsFalse() {
-						cls.Set(CLS_YIELDABLE)
-					} else {
-						cls.Unset(CLS_YIELDABLE)
-					}
-				case "envescaped":
-					if env.SGet(2).IsFalse() {
-						cls.Set(CLS_NOENVESCAPE)
-					} else {
-						cls.Unset(CLS_NOENVESCAPE)
-					}
-				case "source":
-					cls.source = env.SGet(2).Str()
-				}
-				return NewClosureValue(cls)
+				env.LocalGet(0).MustClosure().lastenv = nil
+				return env.LocalGet(0)
 			})).
 			Puts("get", NewNativeValue(2, func(env *Env) Value {
-				cls := env.SGet(0).Cls()
-				switch name := env.SGet(1).Str(); name {
+				cls := env.LocalGet(0).MustClosure()
+				switch name := env.LocalGet(1).MustString(); name {
 				case "argscount":
-					return NewNumberValue(float64(cls.argsCount))
+					return NewNumberValue(float64(cls.ArgsCount))
 				case "yieldable":
-					return NewBoolValue(cls.Isset(CLS_YIELDABLE))
+					return NewBoolValue(cls.Isset(ClsYieldable))
 				case "envescaped":
-					return NewBoolValue(!cls.Isset(CLS_NOENVESCAPE))
+					return NewBoolValue(!cls.Isset(ClsNoEnvescape))
 				case "source":
 					return NewStringValue(cls.source)
 				}
@@ -245,59 +156,54 @@ func initCoreLibs() {
 			})))).
 		Puts("_", Value{})))
 
-	_genTyped := func(i interface{}, t uint32) Value {
-		return NewGenericValueInterface(i, t)
-	}
-	lcore.Puts("typed", NewMapValue(NewMap().
-		Puts("bytearray", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagByteArray) })).
-		Puts("int8array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagInt8Array) })).
-		Puts("uint16array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagUint16Array) })).
-		Puts("int16array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagInt16Array) })).
-		Puts("uint32array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagUint32Array) })).
-		Puts("int32array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagInt32Array) })).
-		Puts("float32array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagFloat32Array) })).
-		Puts("float64array", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagFloat64Array) })).
-		Puts("stringarray", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagStringArray) })).
-		Puts("boolarray", NewNativeValue(1, func(env *Env) Value { return _genTyped(make([]byte, int(env.SGet(0).Num())), GTagBoolArray) })).
-		Puts("_", NewValue())))
-
 	lcore.Puts("json", NewMapValue(NewMap().
 		Puts("parse", NewNativeValue(1, func(env *Env) Value {
-			json := []byte{}
-			switch x := env.SGet(0); x.Type() {
-			case Tstring:
-				json = []byte(x.AsString())
-			case Tgeneric:
-				json = *(*[]byte)(x.GenTags(GTagByteArray, GTagByteClampedArray, GTagInt8Array))
+			json := []byte(strings.TrimSpace(env.LocalGet(0).MustString()))
+			if len(json) == 0 {
+				return Value{}
 			}
-			for i := 0; i < len(json); i++ {
-				switch json[i] {
-				case '[':
-					return walkArray(json[i:])
-				case '{':
-					return walkObject(json[i:])
-				case '"':
-					str, err := jsonparser.ParseString(json[i:])
-					panicerr(err)
-					return NewStringValue(str)
-				case 't', 'f':
-					b, err := jsonparser.ParseBoolean(json[i:])
-					panicerr(err)
-					return NewBoolValue(b)
-				case ' ', '\t', '\r', '\n':
-					// continue
-				default:
-					num, err := jsonparser.ParseFloat(json[i:])
-					panicerr(err)
-					return NewNumberValue(num)
-				}
+			switch json[0] {
+			case '[':
+				return walkArray(json)
+			case '{':
+				return walkObject(json)
+			case '"':
+				str, err := jsonparser.ParseString(json)
+				panicerr(err)
+				return NewStringValue(str)
+			case 't', 'f':
+				b, err := jsonparser.ParseBoolean(json)
+				panicerr(err)
+				return NewBoolValue(b)
+			default:
+				num, err := jsonparser.ParseFloat(json)
+				panicerr(err)
+				return NewNumberValue(num)
 			}
-			panic(json)
 		})).
 		Puts("stringify", NewNativeValue(1, func(env *Env) Value {
-			return NewStringValue(env.SGet(0).toString(0, true))
+			return NewStringValue(env.LocalGet(0).toString(0, true))
 		}))))
+
 	CoreLibs["std"] = NewMapValue(lcore)
+	CoreLibs["atoi"] = NewNativeValue(1, func(env *Env) Value {
+		v, err := parser.StringToNumber(env.LocalGet(0).MustString())
+		if err != nil {
+			return Value{}
+		}
+		return NewNumberValue(v)
+	})
+	CoreLibs["itoa"] = NewNativeValue(1, func(env *Env) Value {
+		v := env.LocalGet(0).MustNumber()
+		if float64(int64(v)) == v {
+			base := 10
+			if env.LocalSize() >= 2 {
+				base = int(env.LocalGet(1).MustNumber())
+			}
+			return NewStringValue(strconv.FormatInt(int64(v), base))
+		}
+		return NewStringValue(strconv.FormatFloat(v, 'f', -1, 64))
+	})
 
 	initIOLib()
 	initMathLib()
@@ -310,7 +216,7 @@ func walkObject(buf []byte) Value {
 		case jsonparser.Unknown:
 			panic(value)
 		case jsonparser.Null:
-			m.Put(NewStringValue(string(key)), NewValue())
+			m.Put(NewStringValue(string(key)), Value{})
 		case jsonparser.Boolean:
 			b, err := jsonparser.ParseBoolean(value)
 			panicerr(err)
@@ -341,7 +247,7 @@ func walkArray(buf []byte) Value {
 		case jsonparser.Unknown:
 			panic(value)
 		case jsonparser.Null:
-			m.Put(NewNumberValue(i), NewValue())
+			m.Put(NewNumberValue(i), Value{})
 		case jsonparser.Boolean:
 			b, err := jsonparser.ParseBoolean(value)
 			panicerr(err)

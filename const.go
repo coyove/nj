@@ -1,57 +1,53 @@
 package potatolang
 
-const regA = 0x1fff
+const (
+	regA   uint16 = 0x1fff // full 13 bits
+	regNil uint16 = 0x3ff - 1
+)
+
+type (
+	_Opcode byte
+)
 
 const (
-	OP_ASSERT = iota
-	OP_STORE
-	OP_LOAD
-	OP_ADD
-	OP_SUB
-	OP_MUL
-	OP_DIV
-	OP_MOD
-	OP_NOT
-	OP_EQ
-	OP_NEQ
-	OP_LESS
-	OP_LESS_EQ
-	OP_BIT_NOT
-	OP_BIT_AND
-	OP_BIT_OR
-	OP_BIT_XOR
-	OP_BIT_LSH
-	OP_BIT_RSH
-	OP_BIT_URSH
-	OP_IF
-	OP_IFNOT
-	OP_SET
-	OP_MAKEMAP
-	OP_JMP
-	OP_LAMBDA
-	OP_CALL
-	OP_SETK
-	OP_R0
-	OP_R0K
-	OP_R1
-	OP_R1K
-	OP_R2
-	OP_R2K
-	OP_R3
-	OP_R3K
-	OP_RX
-	OP_PUSH
-	OP_PUSHK
-	OP_RET
-	OP_RETK
-	OP_YIELD
-	OP_YIELDK
-	OP_POP
-	OP_SLICE
-	OP_INC
-	OP_COPY
-	OP_LEN
-	OP_TYPEOF
-	OP_NOP
-	OP_EOB
+	OpAssert _Opcode = iota
+	OpStore
+	OpLoad
+	OpAdd
+	OpSub
+	OpMul
+	OpDiv
+	OpMod
+	OpNot
+	OpEq
+	OpNeq
+	OpLess
+	OpLessEq
+	OpBitAnd
+	OpBitOr
+	OpBitXor
+	OpBitLsh
+	OpBitRsh
+	OpBitURsh
+	OpIf
+	OpIfNot
+	OpSet
+	OpMakeMap
+	OpMakeArray
+	OpJmp
+	OpLambda
+	OpCall
+	OpPush
+	OpPush2
+	OpRet
+	OpYield
+	OpPop
+	OpSlice
+	OpInc
+	OpForeach
+	OpLen
+	OpTypeof
+	OpAddressOf
+	OpNOP
+	OpEOB
 )

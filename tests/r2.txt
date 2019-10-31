@@ -1,5 +1,5 @@
-var a = 2
-var b = (a + 1) / (a - 1)
+a = 2
+b = (a + 1) / (a - 1)
 assert b == 3
 assert "sep0"
 
@@ -12,7 +12,7 @@ assert "sep2"
 assert (a + 1) == (a + 1) / (a - 1)
 assert "sep3"
 
-assert (a + 1) == (a + 1) / (fun a = a - 1)(a)
+assert (a + 1) == (a + 1) / (func a = a - 1)(a)
 assert "sep4"
 
 assert a + (a + (a + (a + 1))) == 9
@@ -21,9 +21,9 @@ assert "sep5"
 assert 1 + (1 + (1 + (1 + a))) == 6
 assert "sep6"
 
-var c = {1,2,3,4}
+c = {1,2,3,4}
 assert 1 + (1 + (1 + (1 + a))) + len c == 10
 assert "sep7"
 
-var a = 10
-assert 1 + (1 + a) == dup 12
+ a = 10
+assert 1 + (1 + a) == 12

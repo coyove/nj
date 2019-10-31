@@ -4,24 +4,19 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"runtime"
 	"runtime/debug"
-	"strings"
 
 	"github.com/coyove/potatolang/parser"
 )
-
-type kinfo struct {
-	ty    byte
-	value interface{}
-}
 
 // symtable is responsible for recording the state of compilation
 type symtable struct {
 	// variable name lookup
 	parent *symtable
-	sym    map[string]uint16
+	sym    map[parser.Atom]uint16
 
 	// has yield op
 	y         bool
@@ -29,76 +24,66 @@ type symtable struct {
 
 	vp uint16
 
-	regs [4]struct {
-		addr  uint16
-		kaddr uint16
-		k     bool
-	}
-
 	continueNode []*parser.Node
 
-	consts         []kinfo
-	constStringMap map[string]uint16
-	constFloatMap  map[float64]uint16
+	consts   []interface{}
+	constMap map[interface{}]uint16
 
 	reusableTmps map[uint16]bool
 }
 
 func newsymtable() *symtable {
 	t := &symtable{
-		sym:            make(map[string]uint16),
-		consts:         make([]kinfo, 0),
-		constStringMap: make(map[string]uint16),
-		constFloatMap:  make(map[float64]uint16),
-		continueNode:   make([]*parser.Node, 0),
-		reusableTmps:   make(map[uint16]bool),
-	}
-	for i := range t.regs {
-		t.regs[i].addr = regA
-		t.regs[i].k = false
+		sym:          make(map[parser.Atom]uint16),
+		constMap:     make(map[interface{}]uint16),
+		reusableTmps: make(map[uint16]bool),
 	}
 	return t
 }
 
-func (table *symtable) incrvp() {
-	if table.vp >= 1<<10 {
-		panic("too many variables (1024) in a single scope")
-	}
-	table.vp++
-}
-
-func (table *symtable) borrowTmp() uint16 {
+func (table *symtable) borrowAddress() uint16 {
 	for tmp, ok := range table.reusableTmps {
 		if ok {
 			table.reusableTmps[tmp] = false
-			table.clearRegRecord(tmp)
 			return tmp
 		}
 	}
-	table.incrvp()
-	table.reusableTmps[table.vp-1] = false
+	if table.vp > 1000 { //1<<10 {
+		panic("Code too complex, may be there are too many variables (1000) in a single scope")
+	}
+	table.reusableTmps[table.vp] = false
+	table.vp++
 	return table.vp - 1
 }
 
-func (table *symtable) returnTmp(v uint16) {
-	table.clearRegRecord(v)
-	if v == table.vp-1 {
-		table.vp--
-		return
-	}
+func (table *symtable) returnAddress(v uint16) {
+	//	log.Println("$$", table.reusableTmps, v, table.vp)
+	//if v == table.vp-1 {
+	//	table.vp--
+	//	return
+	//}
 	if _, existed := table.reusableTmps[v]; existed {
 		table.reusableTmps[v] = true
 	}
 }
 
-func (table *symtable) get(varname string) (uint16, bool) {
+func (table *symtable) get(varname parser.Atom) (uint16, bool) {
 	depth := uint16(0)
+
+	switch varname {
+	case "nil":
+		return regNil, true
+	case "true":
+		return table.loadK(nil, 1.0), true
+	case "false":
+		return table.loadK(nil, 0.0), true
+	}
 
 	for table != nil {
 		k, e := table.sym[varname]
 		if e {
-			if depth > 7 || (depth == 7 && k == 0x03ff) {
-				panic("too many levels (8) to refer a variable, try simplifing your code")
+			if depth > 6 || (depth == 6 && k > 1000) {
+				panic("too many levels (7) to refer a variable, try simplifing your Code")
 			}
 			return (depth << 10) | (uint16(k) & 0x03ff), true
 		}
@@ -110,136 +95,121 @@ func (table *symtable) get(varname string) (uint16, bool) {
 	return 0, false
 }
 
-func (table *symtable) put(varname string, addr uint16) {
+func (table *symtable) put(varname parser.Atom, addr uint16) {
+	if addr == regA {
+		panic("debug")
+	}
 	table.sym[varname] = addr
 }
 
-func (table *symtable) clearRegRecord(addr uint16) {
-	for i, x := range table.regs {
-		if !x.k && x.addr == addr {
-			table.regs[i].addr = regA
-		}
-	}
-}
-
-func (table *symtable) clearAllRegRecords() {
-	for i := range table.regs {
-		table.regs[i].k = false
-		table.regs[i].addr = regA
-	}
-}
-
-func (table *symtable) addConst(v interface{}) uint16 {
-	var k kinfo
-	k.value = v
-
-	switch v.(type) {
-	case float64:
-		k.ty = Tnumber
-		if i, ok := table.constFloatMap[v.(float64)]; ok {
+func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
+	kaddr := func() uint16 {
+		if i, ok := table.constMap[v]; ok {
 			return i
 		}
-	case string:
-		k.ty = Tstring
-		if i, ok := table.constStringMap[v.(string)]; ok {
-			return i
+
+		table.consts = append(table.consts, v)
+		if len(table.consts) > 1<<10-1 {
+			panic("too many ConstTable")
 		}
-	default:
-		panic("shouldn't happen")
-	}
 
-	table.consts = append(table.consts, k)
-	if len(table.consts) > 1<<13-1 {
-		panic("too many consts")
-	}
-	idx := uint16(len(table.consts))
+		idx := uint16(len(table.consts) - 1)
+		table.constMap[v] = idx
+		return idx
+	}()
 
-	switch v.(type) {
-	case float64:
-		table.constFloatMap[v.(float64)] = idx
-	case string:
-		table.constStringMap[v.(string)] = idx
-	}
-
-	return idx
+	return 0x7<<10 | kaddr
 }
 
-var flatOpMapping = map[string]byte{
-	"+": OP_ADD, "-": OP_SUB, "*": OP_MUL, "/": OP_DIV, "%": OP_MOD,
-	"<": OP_LESS, "<=": OP_LESS_EQ, "==": OP_EQ, "!=": OP_NEQ, "!": OP_NOT,
-	"~": OP_BIT_NOT, "&": OP_BIT_AND, "|": OP_BIT_OR, "^": OP_BIT_XOR, "<<": OP_BIT_LSH, ">>": OP_BIT_RSH, ">>>": OP_BIT_URSH,
-	"#": OP_POP, "store": OP_STORE, "load": OP_LOAD, "assert": OP_ASSERT, "slice": OP_SLICE, "typeof": OP_TYPEOF, "len": OP_LEN,
+var flatOpMapping = map[parser.Atom]_Opcode{
+	parser.AAdd:     OpAdd,
+	parser.ASub:     OpSub,
+	parser.AMul:     OpMul,
+	parser.ADiv:     OpDiv,
+	parser.AMod:     OpMod,
+	parser.ALess:    OpLess,
+	parser.ALessEq:  OpLessEq,
+	parser.AEq:      OpEq,
+	parser.ANeq:     OpNeq,
+	parser.ANot:     OpNot,
+	parser.ABitAnd:  OpBitAnd,
+	parser.ABitOr:   OpBitOr,
+	parser.ABitXor:  OpBitXor,
+	parser.ABitLsh:  OpBitLsh,
+	parser.ABitRsh:  OpBitRsh,
+	parser.ABitURsh: OpBitURsh,
+	parser.APop:     OpPop,
+	parser.AStore:   OpStore,
+	parser.ALoad:    OpLoad,
+	parser.AAssert:  OpAssert,
+	parser.ASlice:   OpSlice, "typeof": OpTypeof, "len": OpLen,
+	parser.AForeach: OpForeach,
+	parser.AAddrOf:  OpAddressOf,
+	parser.AInc:     OpInc,
 }
 
-var flatOpMappingRev = map[byte]string{
-	OP_ADD: "+", OP_SUB: "-", OP_MUL: "*", OP_DIV: "/", OP_MOD: "%",
-	OP_LESS: "<", OP_LESS_EQ: "<=", OP_EQ: "==", OP_NEQ: "!=", OP_NOT: "!",
-	OP_BIT_NOT: "~", OP_BIT_AND: "&", OP_BIT_OR: "|", OP_BIT_XOR: "^", OP_BIT_LSH: "<<", OP_BIT_RSH: ">>", OP_BIT_URSH: ">>>",
-	OP_POP: "#", OP_STORE: "store", OP_LOAD: "load", OP_ASSERT: "assert", OP_SLICE: "slice", OP_TYPEOF: "typeof", OP_LEN: "len",
-}
-
-var registerOpMappings = map[byte]int{OP_R0: 0, OP_R1: 1, OP_R2: 2, OP_R3: 3}
-
-func (table *symtable) fill(buf *packet, n *parser.Node, op, opk byte) (err error) {
-	idx, isreg := registerOpMappings[op]
-	if isreg {
-		if rs := table.regs[idx]; rs.k {
-			if n.Type == parser.Nnumber || n.Type == parser.Nstring {
-				if kidx := table.addConst(n.Value); kidx == rs.kaddr {
-					// the register contains what we want already,
-					return nil
-				}
+func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node) (err error) {
+	tmp := []uint16{}
+	getAddr := func(n *parser.Node) (uint16, error) {
+		switch n.Type() {
+		case parser.Ncompound:
+			code, addr, err := table.compileCompoundInto(n, true, 0)
+			if err != nil {
+				return 0, err
 			}
-		} else {
-			var addr uint16 = regA
-			switch n.Type {
-			case parser.Natom:
-				addr, _ = table.get(n.Value.(string))
-			case parser.Naddr:
-				addr = n.Value.(uint16)
-			}
-			if addr != regA && rs.addr == addr {
-				// the register contains what we want already,
-				return
-			}
-		}
-	}
-
-	switch n.Type {
-	case parser.Natom:
-		if n.Value.(string) == "nil" {
-			buf.WriteOP(opk, 0, 0)
-			if isreg {
-				table.regs[idx].k, table.regs[idx].kaddr = true, 0
-			}
-		} else {
-			addr, ok := table.get(n.Value.(string))
+			buf.Write(code)
+			tmp = append(tmp, addr)
+			return addr, nil
+		case parser.Natom:
+			addr, ok := table.get(n.Value.(parser.Atom))
 			if !ok {
-				return fmt.Errorf(errUndeclaredVariable, n)
+				return 0, fmt.Errorf(errUndeclaredVariable, n)
 			}
-			buf.WriteOP(op, addr, 0)
-			if isreg {
-				table.regs[idx].k, table.regs[idx].addr = false, addr
-			}
+			return addr, nil
+		case parser.Nnumber, parser.Nstring:
+			return table.loadK(buf, n.Value), nil
+		case parser.Naddr:
+			return n.Value.(uint16), nil
+		default:
+			panic(fmt.Errorf("unknown type: %d", n.Type()))
 		}
-	case parser.Nnumber, parser.Nstring:
-		kidx := table.addConst(n.Value)
-		buf.WriteOP(opk, kidx, 0)
-		if isreg {
-			table.regs[idx].k, table.regs[idx].kaddr = true, kidx
-		}
-	case parser.Naddr:
-		buf.WriteOP(op, n.Value.(uint16), 0)
-		if isreg {
-			table.regs[idx].k, table.regs[idx].addr = false, n.Value.(uint16)
-		}
-	default:
-		return fmt.Errorf("unknown type: %d", n.Type)
 	}
+
+	defer func() {
+		for _, tmp := range tmp {
+			table.returnAddress(tmp)
+		}
+	}()
+
+	if n0 == nil {
+		buf.WriteOP(op, 0, 0)
+		return nil
+	}
+
+	n0a, err := getAddr(n0)
+	if err != nil {
+		return err
+	}
+
+	if n1 == nil {
+		buf.WriteOP(op, n0a, 0)
+		return nil
+	}
+
+	n1a, err := getAddr(n1)
+	if err != nil {
+		return err
+	}
+
+	if op == OpSet && n0a == n1a {
+		return nil
+	}
+
+	buf.WriteOP(op, n0a, n1a)
 	return nil
 }
 
-func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, existedVar uint16, tmp bool) (code packet, yx uint16, err error) {
+func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, existedVar uint16) (code packet, yx uint16, err error) {
 	buf := newpacket()
 
 	var newYX uint16
@@ -250,41 +220,30 @@ func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, e
 
 	buf.Write(code)
 	if newVar {
-		if tmp {
-			yx = table.borrowTmp()
-		} else {
-			yx = table.vp
-			table.incrvp()
-		}
+		yx = table.borrowAddress()
 	} else {
 		yx = existedVar
-		table.clearRegRecord(yx)
 	}
-	buf.WriteOP(OP_SET, yx, newYX)
+
+	buf.WriteOP(OpSet, yx, newYX)
 	return buf, yx, nil
 }
 
 func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint16, err error) {
 	var varIndex uint16
 
-	switch n.Type {
+	switch n.Type() {
 	case parser.Natom:
-		if n.Value.(string) == "nil" {
-			buf := newpacket()
-			yx = table.vp
-			buf.WriteOP(OP_SETK, yx, 0)
-			table.incrvp()
-			return buf, yx, nil
-		}
-
 		var ok bool
-		varIndex, ok = table.get(n.Value.(string))
+		varIndex, ok = table.get(n.Value.(parser.Atom))
 		if !ok {
 			err = fmt.Errorf(errUndeclaredVariable, n)
 			return
 		}
 	case parser.Naddr:
 		varIndex = n.Value.(uint16)
+	case parser.Nstring, parser.Nnumber:
+		varIndex = table.loadK(nil, n.Value)
 	default:
 		code, yx, err = table.compileCompound(n)
 		if err != nil {
@@ -300,42 +259,42 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 	if len(nodes) == 0 {
 		return newpacket(), regA, nil
 	}
-	name, ok := nodes[0].Value.(string)
+	name, ok := nodes[0].Value.(parser.Atom)
 	if !ok {
 		nodes[0].Dump(os.Stderr)
 		panicf("invalid op: %v", nodes)
 	}
 
 	switch name {
-	case "chain":
+	case parser.AChain:
 		code, yx, err = table.compileChainOp(compound)
-	case "set", "move":
+	case parser.ASet, parser.AMove:
 		code, yx, err = table.compileSetOp(nodes)
-	case "ret", "yield":
-		code, yx, err = table.compileRetOp(nodes)
-	case "if":
+	case parser.AReturn:
+		code, yx, err = table.writeOpcode3(OpRet, nodes)
+	case parser.AYield:
+		table.y = true
+		code, yx, err = table.writeOpcode3(OpYield, nodes)
+	case parser.AIf:
 		code, yx, err = table.compileIfOp(nodes)
-	case "for":
+	case parser.AFor:
 		code, yx, err = table.compileWhileOp(nodes)
-	case "continue", "break":
+	case parser.AContinue, parser.ABreak:
 		code, yx, err = table.compileContinueBreakOp(nodes)
-	case "call":
+	case parser.ACall:
 		code, yx, err = table.compileCallOp(nodes)
-	case "map", "array":
+	case parser.AMap, parser.AArray:
 		code, yx, err = table.compileMapArrayOp(nodes)
-	case "or", "and":
+	case parser.AOr, parser.AAnd:
 		code, yx, err = table.compileAndOrOp(nodes)
-	case "inc":
-		code, yx, err = table.compileIncOp(nodes)
+	case parser.AFunc:
+		code, yx, err = table.compileLambdaOp(nodes)
 	default:
-		if strings.Contains(name, "func") {
-			code, yx, err = table.compileLambdaOp(nodes)
-		} else {
-			if _, ok := flatOpMapping[name]; ok {
-				return table.compileFlatOp(nodes)
-			}
-			panic(name)
+		if _, ok := flatOpMapping[name]; ok {
+			return table.compileFlatOp(nodes)
 		}
+		log.Println(nodes)
+		panic(name)
 	}
 	return
 }
@@ -344,7 +303,7 @@ func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint1
 	buf := newpacket()
 
 	for _, a := range chain.C() {
-		if a.Type != parser.Ncompound {
+		if a.Type() != parser.Ncompound {
 			continue
 		}
 		code, yx, err = table.compileCompound(a)
@@ -353,6 +312,8 @@ func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint1
 		}
 		buf.Write(code)
 	}
+
+	//log.Println(table.vp)
 
 	return buf, yx, err
 }
@@ -366,8 +327,11 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 	}()
 
 	table := newsymtable()
-	for i, n := range CoreLibNames {
-		table.sym[n] = uint16(i)
+
+	coreStack := NewEnv(nil)
+	for n, v := range CoreLibs {
+		table.sym[parser.Atom(n)] = uint16(coreStack.LocalSize())
+		coreStack.LocalPush(v)
 	}
 
 	table.vp = uint16(len(table.sym))
@@ -376,23 +340,21 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 		return nil, err
 	}
 
-	code.WriteOP(OP_EOB, 0, 0)
-	consts := make([]Value, len(table.consts)+1)
+	code.WriteOP(OpEOB, 0, 0)
+	consts := make([]Value, len(table.consts))
 	for i, k := range table.consts {
-		switch k.ty {
-		case Tnumber:
-			consts[i+1] = NewNumberValue(k.value.(float64))
-		case Tstring:
-			consts[i+1] = NewStringValue(k.value.(string))
+		switch k := k.(type) {
+		case float64:
+			consts[i] = NewNumberValue(k)
+		case string:
+			consts[i] = NewStringValue(k)
 		}
 	}
 	cls = NewClosure(code.data, consts, nil, 0)
-	cls.lastenv = NewEnv(nil, nil)
-	cls.pos = code.pos
+	cls.lastenv = NewEnv(nil)
+	cls.Pos = code.pos
 	cls.source = "root" + cls.String() + "@" + code.source
-	for _, name := range CoreLibNames {
-		cls.lastenv.SPush(CoreLibs[name])
-	}
+	cls.lastenv.stack = coreStack.stack
 	return cls, err
 }
 
@@ -407,7 +369,7 @@ func LoadFile(path string) (*Closure, error) {
 		return nil, err
 	}
 	//n.Dump(os.Stderr)
-	// panic(10)
+	//panic(10)
 	return compileNode(n)
 }
 

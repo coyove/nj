@@ -2,13 +2,13 @@
 // where we use array to store data,
 // it is faster to execute, but also harder to understand
 
-var n =0 
-var pi =3.14159265358 
-var solarMass = 4 *pi*pi 
-var daysPerYear =365.24 
-var N =5 
+ n =0 
+ pi =3.14159265358 
+ solarMass = 4 *pi*pi 
+ daysPerYear =365.24 
+ N =5 
 
-var sysV = { 
+ sysV = { 
     {
         0.0,
         0.0, 
@@ -40,7 +40,7 @@ var sysV = {
         5.15138902046611451e-05 *solarMass
     }
 } 
-var sysS = {
+ sysS = {
     {  0.0, 0.0, 0.0 },
     { 4.84143144246472090e+00, -1.16032004402742839e+00, -1.03622044471123109e-01 },
     { 8.34336671824457987e+00, 4.12479856412430479e+00 , -4.03523417114321381e-01 },
@@ -48,10 +48,12 @@ var sysS = {
     { 1.53796971148509165e+01, -2.59193146099879641e+01, 1.79258772950371181e-01}
 } 
 
- fun offsetMomentum() {
-    var px=0, py=0, pz = 0 
+ func offsetMomentum() {
+     px=0
+     py=0
+     pz = 0 
     for i=0,N {
-        var m = sysV[i][3] 
+         m = sysV[i][3] 
         px = px + sysV[i][0] * m 
         py = py + sysV[i][1] * m 
         pz = pz + sysV[i][2] * m 
@@ -62,48 +64,52 @@ var sysS = {
     sysV[0][2] = -pz / solarMass 
 }
 
-var sqrt = math.sqrt 
- fun  energy() {
-    var e =0, i = 0 
+ sqrt = math.sqrt 
+ func  energy() {
+     e =0
+     i = 0 
     for i=0,N {
-        var x = sysV[i][0], y= sysV[i][1], z=sysV[i][2] 
+         x = sysV[i][0]
+         y= sysV[i][1]
+         z=sysV[i][2] 
 
         e = e + sysV[i][3] * 0.5 * (x * x + y * y + z * z) 
 
         for j=i+1,N {
-            var dx = sysS[i][0] - sysS[j][0] 
-            var dy = sysS[i][1] - sysS[j][1] 
-            var dz = sysS[i][2] - sysS[j][2] 
+             dx = sysS[i][0] - sysS[j][0] 
+             dy = sysS[i][1] - sysS[j][1] 
+             dz = sysS[i][2] - sysS[j][2] 
 
-            var distance = sqrt(dx * dx + dy * dy + dz * dz) 
+             distance = sqrt(dx * dx + dy * dy + dz * dz) 
             e = e - sysV[i][3] * sysV[j][3] / distance 
         }
     }
     return e 
 }
 
- fun advance(dt) {
+ func advance(dt) {
     for i=0, N - 1{
-        var sysVi = sysV[i],sysSi = sysS[i]  
+         sysVi = sysV[i]
+         sysSi = sysS[i]  
 
-        var _vx = sysVi[0] 
-        var _vy = sysVi[1] 
-        var _vz = sysVi[2] 
+         _vx = sysVi[0] 
+         _vy = sysVi[1] 
+         _vz = sysVi[2] 
 
         for j=i+1,N {
-            var sysSj = sysS[j] 
-            var sysVj = sysV[j] 
+             sysSj = sysS[j] 
+             sysVj = sysV[j] 
 
-            var dx = sysSi[0] - sysSj[0] 
-            var dy = sysSi[1] - sysSj[1] 
-            var dz = sysSi[2] - sysSj[2] 
+             dx = sysSi[0] - sysSj[0] 
+             dy = sysSi[1] - sysSj[1] 
+             dz = sysSi[2] - sysSj[2] 
 
-            var dSquared = dx * dx + dy * dy + dz * dz 
-            var distance = sqrt(dSquared) 
-            var mag = dt / (dSquared * distance) 
+             dSquared = dx * dx + dy * dy + dz * dz 
+             distance = sqrt(dSquared) 
+             mag = dt / (dSquared * distance) 
 
-            var mi = sysVi[3] * mag 
-            var m = -sysVj[3] * mag 
+             mi = sysVi[3] * mag 
+             m = -sysVj[3] * mag 
 
             _vx += dx * m 
             _vy += dy * m 

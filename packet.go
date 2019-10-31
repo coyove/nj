@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"math"
+	"os"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -13,13 +16,22 @@ import (
 	"github.com/coyove/potatolang/parser"
 )
 
-func makeop(op byte, a, b uint16) uint32 {
+func makeop(op _Opcode, a, b uint16) uint32 {
 	// 6 + 13 + 13
 	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
 }
 
-func op(x uint32) (op byte, a, b uint16) {
-	op = byte(x >> 26)
+func makejmpop(op _Opcode, a uint16, dist int) uint32 {
+	if dist < -(1<<12) || dist >= 1<<12 {
+		panic("too long jump")
+	}
+	// 6 + 13 + 13
+	b := uint16(dist + 1<<12)
+	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
+}
+
+func op(x uint32) (op _Opcode, a, b uint16) {
+	op = _Opcode(x >> 26)
 	a = uint16(x>>13) & 0x1fff
 	b = uint16(x) & 0x1fff
 	return
@@ -140,16 +152,35 @@ func (p *packet) Write(buf packet) {
 	p.source = buf.source
 }
 
-func (b *packet) WriteRaw(buf []uint32) { b.data = append(b.data, buf...) }
+func (b *packet) WriteRaw(buf []uint32) {
+	b.data = append(b.data, buf...)
+}
 
-func (b *packet) Write64(v uint64) { b.data = append(b.data, uint32(v>>32), uint32(v)) }
+func (b *packet) Write64(v uint64) {
+	b.data = append(b.data, uint32(v>>32), uint32(v))
+}
 
-func (b *packet) Write32(v uint32) { b.data = append(b.data, v) }
+func (b *packet) Write32(v uint32) {
+	b.data = append(b.data, v)
+}
 
-func (b *packet) WriteOP(op byte, opa, opb uint16) { b.data = append(b.data, makeop(op, opa, opb)) }
+func (b *packet) WriteOP(op _Opcode, opa, opb uint16) {
+	b.data = append(b.data, makeop(op, opa, opb))
+}
+
+func (b *packet) WriteJmpOP(op _Opcode, opa uint16, d int) {
+	b.data = append(b.data, makejmpop(op, opa, d))
+}
 
 func (b *packet) WritePos(p parser.Meta) {
-	b.pos.appendABC(uint32(len(b.data)), p.Line, p.Column)
+	if p.Line == 0 {
+		// TODO: debug Code, used to detect a null meta struct
+		buf := make([]byte, 4096)
+		n := runtime.Stack(buf, false)
+		log.Println(string(buf[:n]))
+		os.Exit(1)
+	}
+	b.pos.appendABC(uint32(len(b.data)), p.Line, uint16(p.Column))
 	if p.Source != "" {
 		b.source = p.Source
 	}
@@ -171,24 +202,25 @@ func (b *packet) TruncateLast(n int) {
 	}
 }
 
-func (b *packet) WriteConsts(consts []kinfo) {
+func (b *packet) WriteConsts(consts []interface{}) {
 	// const table struct:
 	// all values are placed sequentially
 	// for numbers other than MaxUint64, they will be written directly
 	// for MaxUint64, it will be written twice
 	// for strings, a MaxUint64 will be written first, then the string
 	for _, k := range consts {
-		if k.ty == Tnumber {
-			n := k.value.(float64)
+		switch k := k.(type) {
+		case float64:
+			n := k
 			if math.Float64bits(n) == math.MaxUint64 {
 				b.Write64(math.MaxUint64)
 				b.Write64(math.MaxUint64)
 			} else {
 				b.WriteDouble(n)
 			}
-		} else {
+		case string:
 			b.Write64(math.MaxUint64)
-			b.WriteString(k.value.(string))
+			b.WriteString(k)
 		}
 	}
 }
@@ -231,32 +263,31 @@ func crReadBytesLen(data []uint32, length int, cursor *uint32) []byte {
 	return u32Bytes(buf)[:length]
 }
 
-var singleOp = map[byte]string{
-	OP_ASSERT:   "assert",
-	OP_ADD:      "add",
-	OP_SUB:      "sub",
-	OP_MUL:      "mul",
-	OP_DIV:      "div",
-	OP_MOD:      "mod",
-	OP_EQ:       "eq",
-	OP_NEQ:      "neq",
-	OP_LESS:     "less",
-	OP_LESS_EQ:  "less-eq",
-	OP_LEN:      "len",
-	OP_COPY:     "copy",
-	OP_LOAD:     "load",
-	OP_STORE:    "store",
-	OP_NOT:      "not",
-	OP_BIT_NOT:  "bit-not",
-	OP_BIT_AND:  "bit-and",
-	OP_BIT_OR:   "bit-or",
-	OP_BIT_XOR:  "bit-xor",
-	OP_BIT_LSH:  "bit-lsh",
-	OP_BIT_RSH:  "bit-rsh",
-	OP_BIT_URSH: "bit-ursh",
-	OP_TYPEOF:   "typeof",
-	OP_SLICE:    "slice",
-	OP_POP:      "pop",
+var singleOp = map[_Opcode]string{
+	OpAssert:  "assert",
+	OpAdd:     "add",
+	OpSub:     "sub",
+	OpMul:     "mul",
+	OpDiv:     "div",
+	OpMod:     "mod",
+	OpEq:      "eq",
+	OpNeq:     "neq",
+	OpLess:    "less",
+	OpLessEq:  "less-eq",
+	OpLen:     "len",
+	OpForeach: "copy",
+	OpLoad:    "load",
+	OpStore:   "store",
+	OpNot:     "not",
+	OpBitAnd:  "bit-and",
+	OpBitOr:   "bit-or",
+	OpBitXor:  "bit-xor",
+	OpBitLsh:  "bit-lsh",
+	OpBitRsh:  "bit-rsh",
+	OpBitURsh: "bit-ursh",
+	OpTypeof:  "typeof",
+	OpSlice:   "slice",
+	OpPop:     "pop",
 }
 
 func (c *Closure) crPrettify(tab int) string {
@@ -274,27 +305,30 @@ func (c *Closure) crPrettify(tab int) string {
 		if a == regA {
 			return "$a"
 		}
+		if a == regNil {
+			return "nil"
+		}
+		if a>>10 == 7 {
+			return fmt.Sprintf("k$%d(%v)", a&0x03ff, c.ConstTable[a&0x3ff].toString(0, true))
+		}
 		return fmt.Sprintf("$%d$%d", a>>10, a&0x03ff)
 	}
-	readKAddr := func(a uint16) string {
-		return fmt.Sprintf("k$%d(%+v)", a, c.consts[a])
-	}
 
-	oldpos := c.pos
+	oldpos := c.Pos
 MAIN:
 	for {
-		bop, a, b := op(crRead32(c.code, &cursor))
+		bop, a, b := op(crRead32(c.Code, &cursor))
 		sb.WriteString(spaces)
 
-		if len(c.pos) > 0 {
-			next, op, line, col := c.pos.readABC(0)
-			// log.Println(cursor, op, unsafe.Pointer(&pos))
+		if len(c.Pos) > 0 {
+			next, op, line, col := c.Pos.readABC(0)
+			// log.Println(cursor, op, unsafe.Pointer(&Pos))
 			for cursor > op {
-				c.pos = c.pos[next:]
-				if len(c.pos) == 0 {
+				c.Pos = c.Pos[next:]
+				if len(c.Pos) == 0 {
 					break
 				}
-				if next, op, line, col = c.pos.readABC(0); cursor <= op {
+				if next, op, line, col = c.Pos.readABC(0); cursor <= op {
 					break
 				}
 			}
@@ -302,7 +336,7 @@ MAIN:
 			if op == cursor {
 				x := fmt.Sprintf("%d:%d", line, col)
 				sb.WriteString(fmt.Sprintf("|%-7s %d| ", x, cursor-1))
-				c.pos = c.pos[next:]
+				c.Pos = c.Pos[next:]
 			} else {
 				sb.WriteString(fmt.Sprintf("|        %d| ", cursor-1))
 			}
@@ -311,69 +345,49 @@ MAIN:
 		}
 
 		switch bop {
-		case OP_EOB:
+		case OpEOB:
 			sb.WriteString("end\n")
 			break MAIN
-		case OP_SET:
+		case OpSet:
 			sb.WriteString(readAddr(a) + " = " + readAddr(b))
-		case OP_SETK:
-			sb.WriteString(readAddr(a) + " = " + readKAddr(uint16(b)))
-		case OP_R0, OP_R1, OP_R2, OP_R3:
-			sb.WriteString("r" + strconv.Itoa(int(bop-OP_R0)/2) + " = " + readAddr(a))
-		case OP_R0K, OP_R1K, OP_R2K, OP_R3K:
-			sb.WriteString("r" + strconv.Itoa(int(bop-OP_R0K)/2) + " = " + readKAddr(uint16(a)))
-		case OP_PUSH:
+		case OpPush:
 			sb.WriteString("push " + readAddr(a))
-		case OP_PUSHK:
-			sb.WriteString("push " + readKAddr(uint16(a)))
-		case OP_RET:
+		case OpPush2:
+			sb.WriteString("push2 " + readAddr(a) + " " + readAddr(b))
+		case OpRet:
 			sb.WriteString("ret " + readAddr(a))
-		case OP_RETK:
-			sb.WriteString("ret " + readKAddr(uint16(a)))
-		case OP_YIELD:
+		case OpYield:
 			sb.WriteString("yield " + readAddr(a))
-		case OP_YIELDK:
-			sb.WriteString("yield " + readKAddr(uint16(a)))
-		case OP_LAMBDA:
+		case OpLambda:
 			sb.WriteString("$a = closure:\n")
-			cls := crReadClosure(c.code, &cursor, nil, a, b)
+			cls := crReadClosure(c.Code, &cursor, nil, a, b)
 			sb.WriteString(cls.crPrettify(tab + 1))
-		case OP_CALL:
+		case OpCall:
 			sb.WriteString("call " + readAddr(a))
-			if b > 0 {
-				sb.WriteString(" -> r" + strconv.Itoa(int(b)-1))
-			}
-		case OP_JMP:
+		case OpJmp:
 			pos := int32(b) - 1<<12
 			pos2 := uint32(int32(cursor) + pos)
 			sb.WriteString("jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
-		case OP_IF, OP_IFNOT:
+		case OpIf, OpIfNot:
 			addr := readAddr(a)
 			pos := int32(b) - 1<<12
 			pos2 := strconv.Itoa(int(int32(cursor) + pos))
-			if bop == OP_IFNOT {
+			if bop == OpIfNot {
 				sb.WriteString("if not " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
 			} else {
 				sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
 			}
-		case OP_RX:
-			sb.WriteString("r" + strconv.Itoa(int(a)) + " = r" + strconv.Itoa(int(b)))
-		case OP_NOP:
+		case OpNOP:
 			sb.WriteString("nop")
-		case OP_INC:
-			sb.WriteString("inc " + readAddr(a) + " " + readKAddr(uint16(b)))
-		case OP_MAKEMAP:
-			if a == 1 {
-				sb.WriteString("make-array")
-			} else {
-				sb.WriteString("make-map")
-			}
+		case OpInc:
+			sb.WriteString("inc " + readAddr(a) + " " + readAddr(uint16(b)))
+		case OpMakeMap:
+			sb.WriteString("make-map")
+		case OpMakeArray:
+			sb.WriteString("make-array")
 		default:
 			if bs, ok := singleOp[bop]; ok {
-				sb.WriteString(bs)
-				if a > 0 {
-					sb.WriteString(" -> r" + strconv.Itoa(int(a)-1))
-				}
+				sb.WriteString(bs + " " + readAddr(a) + " " + readAddr(b))
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))
 			}
@@ -382,7 +396,7 @@ MAIN:
 		sb.WriteString("\n")
 	}
 
-	c.pos = oldpos
+	c.Pos = oldpos
 
 	sb.WriteString(spaces2 + "+ END " + c.source)
 	return sb.String()
@@ -392,8 +406,8 @@ func crReadClosure(code []uint32, cursor *uint32, env *Env, opa, opb uint16) *Cl
 	argsCount := byte(opa)
 	options := byte(opb)
 	constsLen := uint16(crRead32(code, cursor))
-	consts := make([]Value, constsLen+1)
-	for i := uint16(1); i <= constsLen; i++ {
+	consts := make([]Value, constsLen)
+	for i := uint16(0); i < constsLen; i++ {
 		x := crRead64(code, cursor)
 		if x != math.MaxUint64 {
 			consts[i] = NewNumberValue(math.Float64frombits(x))
@@ -413,7 +427,7 @@ func crReadClosure(code []uint32, cursor *uint32, env *Env, opa, opb uint16) *Cl
 	pos := crReadBytesLen(code, int(poslen), cursor)
 	clscode := crRead(code, cursor, int(codelen))
 	cls := NewClosure(clscode, consts, env, byte(argsCount))
-	cls.pos = posVByte(pos)
+	cls.Pos = posVByte(pos)
 	cls.options = options
 	cls.source = src
 	return cls

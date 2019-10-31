@@ -1,34 +1,35 @@
 // a simple example to demo the 'placeholder' concept
 
-var _ = std.unique()
+ _ = std.unique()
 
-var curry = fun(f) {
-    var __args = {}
-    var __argscount = std.opcode.closure.get(f, "argscount")
-    var __remain = __argscount
+ curry = func(f) {
+     __args = {}
+     __argscount = std.opcode.closure.get(f, "argscount")
+     __remain = __argscount
 
-    fun appendargs(args) {
-        for i, __arg = __args {
-            if (__arg == _ and len(args) > 0) {
+    func appendargs(args) {
+        for i = 0, len( __args) {
+             __arg = __args[i]
+            if (__arg == _&&len(args) > 0) {
                 __args[i] = args[0]
                 args = args[1:]
             }
         }
 
-        for i, arg = args {
-            __args[len(__args)] = arg
+        for i = 0, len(args) {
+            __args[len(__args)] = args[i]
         }
 
         __remain = __argscount - len(__args)
-        for i, __arg = __args {
-            if (__arg == _) {
+        for    i  = 0, len( __args) {
+            if (__args[i] == _) {
                 __remain = __remain+1
             }
         }
     }
 
-    fun var __f() { 
-        appendargs(arguments)
+    func __f() { 
+        appendargs(copystack())
         
         if (__remain > 0) return __f
 
@@ -37,7 +38,7 @@ var curry = fun(f) {
     return __f
 }
 
-fun add(a, b, c) { return a + b + c }
+func add(a, b, c) { return a + b + c }
 
 assert curry(add)(1,2)(3) == 6
 assert curry(add)(_,2)(1)(3) == 6

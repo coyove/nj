@@ -1,6 +1,6 @@
 // Copyright (c) 2015, Emir Pasic. All rights reserved.
 
-// Use of this source code is governed by a BSD-style
+// Use of this source Code is governed by a BSD-style
 
 // license that can be found in the LICENSE file.
 
@@ -87,9 +87,9 @@ func TestMap_Put(t *testing.T) {
 	for j := 0; j < 10; j++ {
 		m.Put(NewStringValue(strconv.Itoa(j)), NewNumberValue(float64(j)))
 	}
-	m.Put(NewStringValue("0"), NewValue()) // overwrite
+	m.Put(NewStringValue("0"), Value{}) // overwrite
 
-	if v, f := m.Get(NewStringValue("0")); v.Type() != Tnil || !f {
+	if v, f := m.Get(NewStringValue("0")); v.Type() != NilType || !f {
 		t.Error(0)
 	}
 	for j := 1; j < 10; j++ {

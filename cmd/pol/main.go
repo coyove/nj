@@ -7,14 +7,14 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"runtime/pprof"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/coyove/potatolang"
 )
 
-const VERSION = "0.1.0"
+const VERSION = "0.2.0"
 
 var goroutinePerCPU = flag.Int("goroutine", 2, "goroutines per CPU")
 var output = flag.String("o", "none", "separated by comma: [none, compileonly, compiledsize, opcode, bytes, ret, timing]+")
@@ -40,6 +40,15 @@ func main() {
 		fmt.Println("\"pol\": potatolang virtual machine v" + VERSION + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")")
 		flag.Usage()
 		return
+	}
+
+	{
+		f, err := os.Create("cpuprofile")
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 
 	switch *input {
@@ -105,11 +114,11 @@ ARG:
 		}
 		if _roughsize {
 			ln := len(b.BytesCode())
-			ln += len(b.Consts()) * 16
-			ln += len(b.Pos()) * 8
+			ln += len(b.ConstTable) * 8
+			ln += len(b.Pos)
 
 			// 1.1: a factor
-			log.Printf("Compiled size: ~%.1fK with %d opcode\n", float64(ln)/1024*1.1, len(b.Code()))
+			log.Printf("Compiled size: ~%.1fK with %d opcode\n", float64(ln)/1024*1.1, len(b.Code))
 		}
 		if _timing {
 			e := float64(time.Now().Sub(start).Nanoseconds()) / 1e6
@@ -134,14 +143,12 @@ ARG:
 		return
 	}
 
-	var exit *uintptr
 	var ok = make(chan bool, 1)
 	if *timeout > 0 {
-		exit = b.MakeCancelable()
 		go func() {
 			select {
 			case <-time.After(time.Duration(*timeout) * time.Millisecond):
-				atomic.StoreUintptr(exit, 1)
+				b.ImmediatePanic()
 				log.Println("Timeout:", *timeout, "ms")
 			case <-ok:
 				// peacefully exit
@@ -152,6 +159,6 @@ ARG:
 	i := b.Exec(nil)
 	ok <- true
 	if _ret {
-		fmt.Println(i.ToPrintString())
+		fmt.Println(i.String())
 	}
 }
