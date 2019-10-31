@@ -5,13 +5,13 @@ m = {}
 for i=0,20 { m[i] = i }
 m2 = std.genlist(10)
 n = len(m[5:len(m2) + 5](m2))
-assert n == 10 and m2 == {5,6,7,8,9,10,11,12,13,14}
+assert n == 10&&m2 == {5,6,7,8,9,10,11,12,13,14}
 
 r = m2[2]
 m2[2] = #nil
-assert r == 7 and m2 == {5,6,8,9,10,11,12,13,14}
+assert r == 7&&m2 == {5,6,8,9,10,11,12,13,14}
 
-ptr_test = std.eval(`return fun ( a) {
+ptr_test = std.eval(`return func ( a) {
     a[] = 10
 }`)()
 
@@ -19,16 +19,18 @@ ptr_test(&a)
 assert a == 10
 
 
-fun fun testAssert() {
+func testAssert() {
     assert 0 "hello"
     return "world"
 }
 
- msg = testAssert()
+std.safe(testAssert)
+
+msg = testAssert()
 assert msg == "hello"
 
 
- tarr = "0123456789"
+tarr = "0123456789"
 for i = 0,10  {
     tarr[i] = 0x61 + i
 }
@@ -47,6 +49,6 @@ j = std.json.stringify(a)
 // io.println(std.json.parse(j), a)
 assert std.json.parse(j) == a
 assert std.json.parse("true") == true
-assert std.json.parse("     true") == not false
+assert std.json.parse("     true") == !false
 
 

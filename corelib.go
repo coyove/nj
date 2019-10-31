@@ -49,6 +49,11 @@ func initCoreLibs() {
 		}
 		return cls.Exec(newEnv)
 	}))
+	lcore.Puts("safe", NewNativeValue(1, func(env *Env) Value {
+		cls := env.LocalGet(0).MustClosure()
+		cls.Set(ClsRecoverable)
+		return NewClosureValue(cls)
+	}))
 	lcore.Puts("stacktrace", NewNativeValue(0, func(env *Env) Value {
 		panic("not implemented")
 		//e := ExecError{stacks: Env.trace}

@@ -109,6 +109,6 @@ for i = 0, nCPU std.sync.run(worker)
 wg.wait() 
  
 // io.write("P4\n" + itoa(size) + " " + itoa(size) + "\n") 
-// for rows ,fun (i, row) {
+// for rows ,func (i, row) {
 //     io.write(row) 
 // }

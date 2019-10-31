@@ -1,10 +1,17 @@
 a = 1
-fun foo(a) { a = 2 } // a is local, because it's the parameter of foo
+func foo(a) { a = 2 } // a is local, because it's the parameter of foo
 foo(2)
 io.println(a)
 
-fun bar() {
+func bar() {
     a = 2
 }
-bar()
-io.println(a)
+bar();
+
+(io).println(a);
+
+((func () {
+    return fun() {
+        io.println("zzz")
+    }
+})())()

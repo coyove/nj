@@ -106,10 +106,6 @@ func (n *Node) A() Atom { a, _ := n.Value.(Atom); return a }
 
 func (n *Node) N() float64 { a, _ := n.Value.(float64); return a }
 
-func ChainNode(args ...interface{}) *Node {
-	return CompNode(append([]interface{}{AChain}, args...)...)
-}
-
 func CompNode(args ...interface{}) *Node {
 	const max32 = 0xffffffff
 
@@ -211,6 +207,8 @@ func CompNode(args ...interface{}) *Node {
 				n.SetPos(x.Meta)
 			}
 			arr = append(arr, x)
+		case Token:
+			arr = append(arr, ANode(x))
 		default:
 			panic(fmt.Sprintf("CompNode: shouldn't happen: %v", x))
 		}
@@ -244,7 +242,7 @@ func StringToNumber(arg string) (float64, error) {
 	return num, nil
 }
 
-func (n *Node) setPos0(p interface{}) *Node {
+func (n *Node) pos0(p interface{}) *Node {
 	if n.Type() == Nnumber || n.Type() == Nstring {
 		return n
 	}
@@ -254,7 +252,7 @@ func (n *Node) setPos0(p interface{}) *Node {
 
 func (n *Node) setPos(p interface{}) *Node { n.SetPos(p); return n }
 
-func (n *Node) SetPos0(p interface{}) *Node { return n.setPos0(p) }
+func (n *Node) SetPos0(p interface{}) *Node { return n.pos0(p) }
 
 func (n *Node) Dump(w io.Writer) {
 	switch n.Type() {
@@ -293,14 +291,6 @@ func (n *Node) String() string {
 		return "0x" + strconv.FormatInt(int64(n.Value.(uint16)), 16)
 	}
 	panic("shouldn't happen")
-}
-
-func (n *Node) isIsolatedCopy() bool {
-	if n.Cn() < 3 || n.Cx(0).S() != "call" || n.Cx(1).S() != "copy" {
-		return false
-	}
-	// [call copy [a0, a1, a2]]
-	return n.Cx(2).Cn() == 3
 }
 
 func (n *Node) isSimpleAddSub() (a Atom, b Atom, s float64) {

@@ -1,3 +1,3 @@
-return fun() {
+return func() {
     a = a + 1
 }

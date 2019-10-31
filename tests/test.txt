@@ -1,58 +1,58 @@
-fun add(a,b) return a + b
+func add(a,b) return a + b
 
-
- fib2 = fun(a, b) {
-   for "true" {
-        c = add(a, b)
-       a = b       b = c
+fib2 = func(a, b) {
+   for true {
+       c = add(a, b)
+       a = b
+       b = c
        yield c
    }
 }
 
- fib3 = (fib2)()
+fib3 = (fib2)()
  
 for i = 0,33 fib2(0,1)
 
 assert (fib2())==9227465
 assert (fib3(0, 1)+fib3()+fib3()+fib3()) == 11
 
-fun yieldtest() {
+func yieldtest() {
     yield 1
     yield 2
     yield 3
 }
 
-assert yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 and yieldtest()==nil
-assert yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 and yieldtest()==nil
+assert yieldtest() ==1&&yieldtest()==2&&yieldtest()==3&&yieldtest()==nil
+assert yieldtest() ==1&&yieldtest()==2&&yieldtest()==3&&yieldtest()==nil
 
-fun counter() for i=2,-1,0 yield i
+func counter() for i=2,-1,0 yield i
 
-fun yieldtest() for true yield ({3, 2, 1})[counter()]
+func yieldtest() for true yield ({3, 2, 1})[counter()]
 
-assert yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 
+assert yieldtest() ==1&&yieldtest()==2&&yieldtest()==3 
 
-fun deepadd(a) {
+func deepadd(a) {
     if (a <= 0) { return 0 }
     return add(a)(deepadd(a - 1))
 }
 
- e = 100000
+e = 100000
 assert deepadd(e) == (1 + e) * (e / 2 )
 
- a = 2
+a = 2
 assert 1 + 2 *3/5 == 2.2
 assert true /2+ 2.2 * 5 * (a + 1) == 33.5
 assert 1 /2+ 2.2 * (a + 1) * 5 == 33.5
 
- l = {1,2,3}
- l2= {"1","2","3"}
+l = {1,2,3}
+l2 = {"1","2","3"}
 l[len l-1+1] = l2
 assert l == {1,2,3, {"1","2","3"}}
 assert (l << l2) == {1,2,3, {"1","2","3"}, "1", "2", "3"}
 
- mul = (fun(a) { b = 1 return fun() {b = b * a return b } })(2)
+mul = (func(a) { b = 1 return func() {b = b * a return b } })(2)
 
-assert mul() == 2 and mul() == 4 and mul() == 8
+assert mul() == 2&&mul() == 4&&mul() == 8
 if (0 == 1 ) {
     assert 0
 } else if (2 == 2) {
@@ -61,36 +61,36 @@ if (0 == 1 ) {
     assert 0
 }
 
- double = (fun a = fun b = a * b)(2)
+double = (func a = func b = a * b)(2)
 assert double(2) == 4
 
-if (1 or fun() {assert 0 }) {
+if (1||func() {assert 0 }) {
     assert 1
 }
 
-if (0 and fun() {assert 0 }) {
+if (0&&func() {assert 0 }) {
     assert 1
 }
 
-fun returncond(n) {
+func returncond(n) {
     return {
         "counter": n,
-        "test": fun(this) {
+        "test": func(this) {
             this.counter = this.counter + 1
             return this.counter % 2 == 0
         }
     }
 }
 
- cond = returncond(0)
-assert cond.test() or cond.test()
+cond = returncond(0)
+assert cond.test()||cond.test()
 cond.test()
-assert cond.test() and not cond.test()
+assert cond.test()&&!cond.test()
 
 
-fun test2() {
-    fun test1() {
-         sum = 0
+func test2() {
+    func test1() {
+        sum = 0
         for i =0, 100 {
             sum = sum + i
             if (sum > 100) { break }
@@ -102,13 +102,13 @@ fun test2() {
 
 test2()
 
- m = {
+m = {
     "key1": "value1",
     "key2": {1,2,3}
 }
 
 assert m == m()
- m2 = {}
+m2 = {}
 m2.key1 = "value1"
 m2.key2 = {}
 for i=1,4 { m2.key2[len(m2.key2)] = i }
@@ -116,22 +116,22 @@ assert m2 == m
 
 m3 = m()
 m.key2[0] = 0
-assert m3.key2[0] == 1 and m.key2[0] == 0
+assert m3.key2[0] == 1&&m.key2[0] == 0
 
-fun select(cond, t, f) {
-    return cond and t or f
+func select(cond, t, f) {
+    return cond&&t||f
 } 
 
-assert 1 and 1 or 0
-assert 0 and 0 or 1
-assert select(1, 1, 2) == 1 and select(0)(1)(2) == 2
+assert 1&&1||0
+assert 0&&0||1
+assert select(1, 1, 2) == 1&&select(0)(1)(2) == 2
 a = 1
 a = a - 1  // this will be eventually compiled into: [inc a -1]
 assert a == 0
 
 counter = {
     "tick" : 0,
-    "add": fun(this, step) {
+    "add": func(this, step) {
         this.tick = this.tick + step
     },
 }
@@ -160,7 +160,7 @@ else
 
 assert af == 3
 
- af = 1
+af = 1
 
 if (af == 0)
     if (af < 2)
@@ -171,19 +171,19 @@ else
 a = use "simple.txt" + 1
 assert a == 2
 
-fun fun safeexec() {
+func safeexec() {
     assert 0
 }
-
+std.safe(safeexec)
 safeexec()
 
 m = {1,2,{1,2,{1,2,{1,2,3}}}}
 m[2][2][2][2] = 4
 assert m == {1,2,{1,2,{1,2,{1,2,4}}}}
 
-fun safeexec(f, args) {
+func safeexec(f, args) {
     result = "none"
-    x = (fun fun () {
+    x = std.safe(func () {
         result = std.apply(f, args)
     })()
 
@@ -193,27 +193,27 @@ fun safeexec(f, args) {
     }
 }
 
-r = safeexec(fun(a, b) {
+r = safeexec(func(a, b) {
     return a / b
 }, {1,2})
  
 assert r.result == 0.5
 
-r = safeexec(fun(a, b) {
+r = safeexec(func(a, b) {
     return a / b
 }, {1,"2"})
   
-assert r.result == "none" and not r.ok
+assert r.result == "none"&&!r.ok
 
 
 // version 2
-safeexec = fun var f = (std.apply(f, arguments[1:]))
-safeexec(fun = (({})[1]))
+safeexec = func f = (std.apply(f, copystack()[1:]))
+safeexec(func = (({})[1]))
 
-a = fun a = fun b = fun c = a + b + (fun d = d * 2)(c)
+a = func a = func b = func c = a + b + (func d = d * 2)(c)
 assert a(1)(2)(3) == 9
 
-assert (fun var = arguments)(1,2,3) == {1,2,3}
+assert (func = copystack())(1,2,3) == {1,2,3}
 
 a = "abc"
 switch a {
@@ -235,13 +235,13 @@ switch a{
 assert b == 1
 
 b = 0
-switch (fun = b++)() {
+switch (func = b++)() {
     case else: b+=2
 }
 
 assert b == 3
 
-fun multi_return(a, b) {
+func multi_return(a, b) {
     yield a + 1
     yield b + 1
     return a + b 
@@ -252,16 +252,16 @@ mr_b = multi_return()
 mr_ab2 = ({"a": multi_return})().a()
 mr_ab = multi_return()
 
-assert mr_a == 2 and mr_b == 3 and mr_ab == 3 and mr_ab2 == 3
+assert mr_a == 2&&mr_b == 3&&mr_ab == 3&&mr_ab2 == 3
 
 x = 10
-(fun() { x = 2 })()
+(func() { x = 2 })()
 assert x == 2
 
 x = 10
-(fun() { $x = 2 * x assert $x == 20 })()
+(func() { $x = 2 * x assert $x == 20 })()
 assert x == 10
 
 a = {1, 2, 3, "a", "b" , "c"}
 n = len ({"2", "3"})(a[1:3])
-assert n == 2 and a == {1, "2", "3", "a", "b", "c"}
+assert n == 2&&a == {1, "2", "3", "a", "b", "c"}

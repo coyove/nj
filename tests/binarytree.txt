@@ -1,13 +1,13 @@
  n = 23
 
- fun bottomUpTree(depth) {
+ func bottomUpTree(depth) {
    if (depth <= 0) {
       return { } 
    }
    return { bottomUpTree(depth-1), bottomUpTree(depth-1) } 
 }
 
- fun itemCheck(n) {
+ func itemCheck(n) {
     if (len(n) == 0) return 1 
     return itemCheck(n[0]) + itemCheck(n[1]) + 1
 }
@@ -24,7 +24,7 @@ io.printf("stretch tree of depth {}\t check: {}\n", stretchDepth, check_l)
 //wg = std.sync.waitgroup() 
 //result = std.genlist(maxDepth+1) 
 //
-//fun worker( depth, check) {
+//func worker( depth, check) {
 //    iterations = 1 << (maxDepth - depth + minDepth) 
 //    check = 0 
 //

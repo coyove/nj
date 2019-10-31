@@ -189,7 +189,7 @@ func TestCopyCall(t *testing.T) {
 func TestOverNested(t *testing.T) {
 	_, err := LoadString(`
 a = 1
-foo = fun = fun = fun = fun = fun = (fun () {  a = 2 })
+foo = func = func = func = func = func = (func () {  a = 2 })
 foo()
 `)
 	if err != nil {
@@ -197,7 +197,7 @@ foo()
 	}
 	_, err = LoadString(`
 a = 1
-foo = fun = fun = fun = fun = fun = fun = (fun () {  a += 2 })
+foo = func = func = func = func = func = func = (func () {  a += 2 })
 foo()
 `)
 	if err == nil || !strings.Contains(err.Error(), "too many levels") {
@@ -233,7 +233,7 @@ func TestPosVByte(t *testing.T) {
 
 //func TestReusingTmps(t *testing.T) {
 //	cls, err := LoadString(`
-//	fun add (a, b, c) { return a + b + c }
+//	func add (a, b, c) { return a + b + c }
 //	var d = 1
 //	var sum = add(1 + d, 2 + d, d + 3)
 //	assert sum == 9

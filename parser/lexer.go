@@ -314,18 +314,14 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 }
 
 var reservedWords = map[string]uint32{
-	"and":      TAnd,
-	"or":       TOr,
 	"assert":   TAssert,
 	"break":    TBreak,
 	"case":     TCase,
 	"continue": TContinue,
 	"else":     TElse,
-	"var":      TVar,
-	"fun":      TFunc,
+	"func":     TFunc,
 	"if":       TIf,
 	"len":      TLen,
-	"not":      TNot,
 	"return":   TReturn,
 	"use":      TUse,
 	"switch":   TSwitch,
@@ -532,6 +528,19 @@ redo:
 				tok.Type = [5]uint32{TMulEq, TModEq, TAndEq, TOrEq, TXorEq}[strings.Index("*%&|^", string(ch))]
 				tok.Str = string(ch) + "="
 				sc.Next()
+			case ch:
+				if ch == '&' {
+					tok.Type = TAnd
+					tok.Str = "&&"
+					sc.Next()
+				} else if ch == '|' {
+					tok.Type = TOr
+					tok.Str = "||"
+					sc.Next()
+				} else {
+					tok.Type = ch
+					tok.Str = string(ch)
+				}
 			default:
 				tok.Type = ch
 				tok.Str = string(ch)

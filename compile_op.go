@@ -19,7 +19,7 @@ var _nodeRegA = parser.NewNode(regA)
 func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
 	aDest := atoms[1].Value.(parser.Atom)
 	newYX, ok := table.get(aDest)
-	if atoms[0].A() == "move" {
+	if atoms[0].A() == parser.AMove {
 		if !ok || (strings.HasPrefix(string(aDest), "$") && (newYX>>10 > 0)) {
 			// variable names start with "$" will be a local variable
 			newYX = table.borrowAddress()
@@ -55,14 +55,6 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 	return buf, newYX, nil
 }
 
-func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	if atoms[0].A() == "yield" {
-		table.y = true
-		return table.writeOpcode3(OpYield, atoms)
-	}
-	return table.writeOpcode3(OpRet, atoms)
-}
-
 func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
 	if code, err = table.decompound(atoms[1].C()); err != nil {
 		return
@@ -81,7 +73,7 @@ func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx 
 		}
 	}
 
-	if atoms[0].Value.(parser.Atom) == "map" {
+	if atoms[0].Value.(parser.Atom) == parser.AMap {
 		code.WriteOP(OpMakeMap, 0, 0)
 	} else {
 		code.WriteOP(OpMakeArray, 0, 0)
@@ -181,22 +173,11 @@ func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint
 	return
 }
 
-func (table *symtable) compileIncOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	subject, ok := table.get(atoms[1].Value.(parser.Atom))
-	buf := newpacket()
-	if !ok {
-		return newpacket(), 0, fmt.Errorf(errUndeclaredVariable, atoms[1])
-	}
-	buf.WriteOP(OpInc, subject, table.loadK(&buf, atoms[2].Value))
-	code.WritePos(atoms[1].Meta)
-	return buf, regA, nil
-}
-
 // [and a b] => $a = a if not a then return else $a = b end
 // [or a b]  => $a = a if a then do nothing else $a = b end
 func (table *symtable) compileAndOrOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
 	bop := OpIfNot
-	if atoms[0].Value.(parser.Atom) == "or" {
+	if atoms[0].Value.(parser.Atom) == parser.AOr {
 		bop = OpIf
 	}
 
@@ -256,6 +237,12 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint16
 
 // [call callee [args ...]]
 func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint16, err error) {
+	if nodes[1].A() == "copystack" {
+		code.WriteOP(OpForeach, regNil, regNil)
+		code.WritePos(nodes[0].Meta)
+		return code, regA, nil
+	}
+
 	tmp := append([]*parser.Node{nodes[1]}, nodes[2].C()...)
 	code, err = table.decompound(tmp)
 	if err != nil {
@@ -304,16 +291,6 @@ func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint
 // [lambda name? [namelist] [chain ...]]
 func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
 	table.envescape = true
-	isSafe, isVar := false, false
-	for _, s := range strings.Split(string(atoms[0].Value.(parser.Atom)), ",") {
-		switch s {
-		case "safe":
-			isSafe = true
-		case "var":
-			isVar = true
-		}
-	}
-
 	name := atoms[1].Value.(parser.Atom)
 	newtable := newsymtable()
 	newtable.parent = table
@@ -342,16 +319,6 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 
 	newtable.vp = uint16(ln)
 
-	if isVar {
-		comps := append(atoms[3].C(), nil)
-		copy(comps[2:], comps[1:])
-		comps[1] = parser.CompNode("set", "arguments", parser.CompNode(
-			"foreach", parser.ANodeS("nil"), parser.ANodeS("nil"),
-		).SetPos0(atoms[0].Meta),
-		).SetPos0(atoms[0].Meta)
-		atoms[3].Value = comps
-	}
-
 	code, yx, err = newtable.compileChainOp(atoms[3])
 	if err != nil {
 		return
@@ -361,7 +328,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	buf := newpacket()
 	cls := Closure{}
 	cls.ArgsCount = byte(ln)
-	if newtable.y || isSafe {
+	if newtable.y {
 		cls.Set(ClsYieldable)
 	}
 	if _, ok := newtable.sym["this"]; ok {
@@ -370,10 +337,6 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	if !newtable.envescape {
 		cls.Set(ClsNoEnvescape)
 	}
-	if isSafe {
-		cls.Set(ClsRecoverable)
-	}
-
 	buf.WriteOP(OpLambda, uint16(ln), uint16(cls.options))
 	buf.Write32(uint32(len(newtable.consts)))
 	buf.WriteConsts(newtable.consts)
@@ -416,7 +379,7 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 		return
 	}
 
-	if atoms[0].Value.(parser.Atom) == "continue" {
+	if atoms[0].Value.(parser.Atom) == parser.AContinue {
 		cn := table.continueNode[len(table.continueNode)-1]
 		code, yx, err = table.compileChainOp(cn)
 		if err != nil {

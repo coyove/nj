@@ -1,11 +1,11 @@
 n = 0 
 nCPU = 8
 
-fun A(i, j) {
+func A(i, j) {
     return ((i+j)*(i+j+1)/2 + i + 1) 
 }
 
-// fun A0(i, j) {
+// func A0(i, j) {
 //     $r0(i)
 //     $r1(j)
 //     $add0()
@@ -23,7 +23,7 @@ fun A(i, j) {
 // 
 // assert  A0(1,2) == A(1,2)
 
-fun TimesVec(v, s, n, u, wg) {
+func TimesVec(v, s, n, u, wg) {
      ul = len(u) 
     for i = s  ,n {
          vi = 0 
@@ -35,7 +35,7 @@ fun TimesVec(v, s, n, u, wg) {
     wg.done() 
 }
 
-fun TimesTranspVec(v, s, n, u, wg) {
+func TimesTranspVec(v, s, n, u, wg) {
      ul = len(u) 
     for i = s, n  {
          vi = 0 
@@ -47,7 +47,7 @@ fun TimesTranspVec(v, s, n, u, wg) {
     wg.done() 
 }
 
-fun ATimesTransp(v, u) {
+func ATimesTransp(v, u) {
     x = std.genlist(len(u)) 
     wg = std.sync.waitgroup() 
 
@@ -80,7 +80,7 @@ for i = 0, 10 {
 
  vBv = 0
  vv = 0 
-for v , fun(i,x) {
+for v , func(i,x) {
     vBv = vBv + u[i] * x 
     vv = vv + x * x 
 }

@@ -18,9 +18,9 @@ potatolang (pol) is a script language written in golang.
 3. To initiate an array, you write `a = {1, 2, 3}`, to initiate a map, you write `a = {"k": v}`.
 4. Since we don't have declarations, to create a variable specically inside a scope, we usually prepend it with a `$`, e.g.:
 ```
-fun foo(b) {
+func foo(b) {
     $a = 1
-    (fun() {
+    (func() {
         $a = b
         io.println("inner: ", $a)
     })()
@@ -34,13 +34,13 @@ foo(2)
 Note there are two exceptions as shown below where the variable `a` is never touched:
 ```
 a = 1
-fun foo(a) {
+func foo(a) {
     a = 2 // a is local, because it's the parameter of foo
 } 
 foo(2)
 
-fun bar() {
-    fun a() {}
+func bar() {
+    func a() {}
     a = 2 // closures are always local, so here we are overriding it with '2'
 }
 bar()
@@ -53,25 +53,21 @@ The equivalent of `undefined` in JS, written as `#nil`.
 Basically the same, note that:
 1. Bitwise not `^` is written as: `~`, just like C.
 2. All bitwise operators are applied on int32 operands, `>>>` (unsigned rsh) is the only exception that works on uint32.
-3. Logical not `!`, and `&&`, or `||` are written as: `not`, `and`, `or`.
-3. Lua trick: `a and b or c` => `if (a) { return b } else { return c }`
+3. Lua trick: `a && b || c` => `if (a) { return b } else { return c }`
 4. To delete a key from a map, assign the Phantom value to it: `m["key"] = #nil`.
 5. To pop the last value of a slice, use `#` (as you may notice, pop a nil will give you the Phantom value), e.g.:
 ```
 a = {1, 2, 3}
 b = #a
-// a == {1, 2} and b == 3
+// a == {1, 2} && b == 3
 ```
 6. `Map` can be automatically and recursively compared using `==` and `!=`.
-
-### Closure
-1. The keyword is `fun`, not `func`.
 
 ### Loop
 Basically the same, with new syntax:
 1. `for i = start, end { ... }` => ` for i := start; i < end; i++ { ... }`.
 2. `for i = start, step, end { ... }` => `for i := start; i <= end; i += step { ... }` or `for i := start; i >= end; i += step { ... }`.
-3. `for m, fun (k, v) { ... }` => `for k, v := range m { .. }`, inside the callback, `return false` will terminate the iteration.
+3. `for m, func (k, v) { ... }` => `for k, v := range m { .. }`, inside the callback, `return false` will terminate the iteration.
 
 ### String
 Strings are mutable by syntax, but behind the stage we convert it to `[]byte` anyway, e.g.:

@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"runtime"
 	"runtime/debug"
-	"strings"
 
 	"github.com/coyove/potatolang/parser"
 )
@@ -122,11 +122,30 @@ func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
 }
 
 var flatOpMapping = map[parser.Atom]_Opcode{
-	"+": OpAdd, "-": OpSub, "*": OpMul, "/": OpDiv, "%": OpMod,
-	"<": OpLess, "<=": OpLessEq, "==": OpEq, "!=": OpNeq, "!": OpNot,
-	"&": OpBitAnd, "|": OpBitOr, "^": OpBitXor, "<<": OpBitLsh, ">>": OpBitRsh, ">>>": OpBitURsh, "#": OpPop,
-	"store": OpStore, "load": OpLoad, "assert": OpAssert, "slice": OpSlice, "typeof": OpTypeof, "len": OpLen, "foreach": OpForeach,
-	"addressof": OpAddressOf,
+	parser.AAdd:     OpAdd,
+	parser.ASub:     OpSub,
+	parser.AMul:     OpMul,
+	parser.ADiv:     OpDiv,
+	parser.AMod:     OpMod,
+	parser.ALess:    OpLess,
+	parser.ALessEq:  OpLessEq,
+	parser.AEq:      OpEq,
+	parser.ANeq:     OpNeq,
+	parser.ANot:     OpNot,
+	parser.ABitAnd:  OpBitAnd,
+	parser.ABitOr:   OpBitOr,
+	parser.ABitXor:  OpBitXor,
+	parser.ABitLsh:  OpBitLsh,
+	parser.ABitRsh:  OpBitRsh,
+	parser.ABitURsh: OpBitURsh,
+	parser.APop:     OpPop,
+	parser.AStore:   OpStore,
+	parser.ALoad:    OpLoad,
+	parser.AAssert:  OpAssert,
+	parser.ASlice:   OpSlice, "typeof": OpTypeof, "len": OpLen,
+	parser.AForeach: OpForeach,
+	parser.AAddrOf:  OpAddressOf,
+	parser.AInc:     OpInc,
 }
 
 func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node) (err error) {
@@ -249,33 +268,33 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 	switch name {
 	case parser.AChain:
 		code, yx, err = table.compileChainOp(compound)
-	case "set", "move":
+	case parser.ASet, parser.AMove:
 		code, yx, err = table.compileSetOp(nodes)
-	case "ret", "yield":
-		code, yx, err = table.compileRetOp(nodes)
-	case "if":
+	case parser.AReturn:
+		code, yx, err = table.writeOpcode3(OpRet, nodes)
+	case parser.AYield:
+		table.y = true
+		code, yx, err = table.writeOpcode3(OpYield, nodes)
+	case parser.AIf:
 		code, yx, err = table.compileIfOp(nodes)
-	case "for":
+	case parser.AFor:
 		code, yx, err = table.compileWhileOp(nodes)
-	case "continue", "break":
+	case parser.AContinue, parser.ABreak:
 		code, yx, err = table.compileContinueBreakOp(nodes)
-	case "call":
+	case parser.ACall:
 		code, yx, err = table.compileCallOp(nodes)
-	case "map", "array":
+	case parser.AMap, parser.AArray:
 		code, yx, err = table.compileMapArrayOp(nodes)
-	case "or", "and":
+	case parser.AOr, parser.AAnd:
 		code, yx, err = table.compileAndOrOp(nodes)
-	case "inc":
-		code, yx, err = table.compileIncOp(nodes)
+	case parser.AFunc:
+		code, yx, err = table.compileLambdaOp(nodes)
 	default:
-		if strings.Contains(string(name), "func") {
-			code, yx, err = table.compileLambdaOp(nodes)
-		} else {
-			if _, ok := flatOpMapping[name]; ok {
-				return table.compileFlatOp(nodes)
-			}
-			panic(name)
+		if _, ok := flatOpMapping[name]; ok {
+			return table.compileFlatOp(nodes)
 		}
+		log.Println(nodes)
+		panic(name)
 	}
 	return
 }

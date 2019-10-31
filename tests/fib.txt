@@ -1,23 +1,7 @@
-fun fib(n) {
+func fib(n) {
     if (n < 2) return n
     return fib(n-2)+fib(n-1)
 }
-
-// fun fib2(n) {
-//     if (n < 2) return n
-//     $sub()
-//     $push($a)
-//     $call2(fib2)
-//     $r1(1)
-//     $sub()
-//     $push($a)
-//     $call1(fib2)
-//     $rx(0, 2)
-//     $add()
-//     $ret($a)
-// }
-
-io.println(fib)
 
 ans = fib(35)
 io.println(ans)

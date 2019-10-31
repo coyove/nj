@@ -8,8 +8,6 @@ import (
 	"unsafe"
 )
 
-const max32 = 0xffffffff
-
 func panicf(msg string, args ...interface{}) {
 	panic(fmt.Sprintf(msg, args...))
 }
@@ -40,7 +38,7 @@ func (e *ExecError) Error() string {
 		src := "<unknown>"
 		for i := 0; i < len(r.cls.Pos); {
 			var op, line uint32
-			var opx uint32 = max32
+			var opx uint32 = math.MaxUint32
 			var col uint16
 			i, op, line, col = r.cls.Pos.readABC(i)
 			if i < len(r.cls.Pos)-1 {
@@ -245,7 +243,7 @@ MAIN:
 			}
 		case OpBitURsh:
 			if va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) == _NumberNumber {
-				env.A.SetNumberValue(float64(uint32(uint64(va.AsNumber())&max32) >> uint(vb.AsNumber())))
+				env.A.SetNumberValue(float64(uint32(uint64(va.AsNumber())&math.MaxUint32) >> uint(vb.AsNumber())))
 			} else {
 				panicf("can't apply '>>>' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
