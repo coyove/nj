@@ -63,6 +63,8 @@ const (
 	ALessEq   Atom = "<="
 	APop      Atom = "#"
 	AAddrOf   Atom = "addressof"
+	ATypeOf   Atom = "typeof"
+	ALen      Atom = "len"
 )
 
 func __chain(args ...interface{}) *Node { return CompNode(append([]interface{}{AChain}, args...)...) }
@@ -98,3 +100,7 @@ func (n *Node) __continue(c *Node) *Node { return n.Cappend(c) }
 func (n *Node) __body(body *Node) *Node { return n.Cappend(body) }
 
 func __for(cond interface{}) *Node { return CompNode(AFor, cond) }
+
+func (n *Node) __params(params *Node) *Node { return n.Cappend(params) }
+
+func __func(name interface{}) *Node { return CompNode(AFunc, name) }

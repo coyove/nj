@@ -128,5 +128,9 @@ assert err == "2nd level"
 assert ~0 == -1
 assert ~~0 == 0
 
- $x = 1
+a = 4
+a |= 1
+assert a == 5
+
+$x = 1
 assert $x == 1

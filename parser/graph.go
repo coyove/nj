@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
 	"strings"
 )
 
@@ -30,4 +31,8 @@ func (lex *Lexer) loadFile(path string, pos Token) *Node {
 	node := CompNode(ACall, cls, CompNode()).pos0(pos)
 	lex.cache[path] = node
 	return node
+}
+
+func joinSourcePath(path1 string, filename2 string) string {
+	return filepath.Join(filepath.Dir(path1), filename2)
 }

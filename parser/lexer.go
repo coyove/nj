@@ -316,7 +316,6 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 var reservedWords = map[string]uint32{
 	"assert":   TAssert,
 	"break":    TBreak,
-	"case":     TCase,
 	"continue": TContinue,
 	"else":     TElse,
 	"func":     TFunc,
@@ -324,7 +323,6 @@ var reservedWords = map[string]uint32{
 	"len":      TLen,
 	"return":   TReturn,
 	"use":      TUse,
-	"switch":   TSwitch,
 	"typeof":   TTypeof,
 	"for":      TFor,
 	"yield":    TYield,
@@ -366,9 +364,9 @@ redo:
 			// return/yield without an arg, but with a CrLf afterward will be considered
 			// as return nil/yield nil
 			if tok.Str == "return" && crlf {
-				tok.Type = TReturnNil
+				tok.Type = TReturnVoid
 			} else if tok.Str == "yield" && crlf {
-				tok.Type = TYieldNil
+				tok.Type = TYieldVoid
 			} else {
 				tok.Type = typ
 			}
@@ -525,7 +523,7 @@ redo:
 		case '*', '%', '&', '|', '^':
 			switch sc.Peek() {
 			case '=':
-				tok.Type = [5]uint32{TMulEq, TModEq, TAndEq, TOrEq, TXorEq}[strings.Index("*%&|^", string(ch))]
+				tok.Type = [5]uint32{TMulEq, TModEq, TBitAndEq, TBitOrEq, TXorEq}[strings.Index("*%&|^", string(ch))]
 				tok.Str = string(ch) + "="
 				sc.Next()
 			case ch:

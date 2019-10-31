@@ -1,17 +1,16 @@
-a = 1
-func foo(a) { a = 2 } // a is local, because it's the parameter of foo
-foo(2)
-io.println(a)
-
-func bar() {
-    a = 2
-}
-bar();
-
-(io).println(a);
-
-((func () {
-    return fun() {
-        io.println("zzz")
+func returncond(n) {
+    return {
+        "counter": n,
+        "test": func(this) {
+            this.counter++
+            return this.counter % 2 == 0
+        }
     }
-})())()
+}
+
+cond = returncond(0)
+assert cond.test()||cond.test()
+cond.test()
+assert cond.test()&&!cond.test()
+
+

@@ -52,7 +52,7 @@ The equivalent of `undefined` in JS, written as `#nil`.
 ### Operators
 Basically the same, note that:
 1. Bitwise not `^` is written as: `~`, just like C.
-2. All bitwise operators are applied on int32 operands, `>>>` (unsigned rsh) is the only exception that works on uint32.
+2. All bitwise operators are applied on int32 operands except `>>>` (unsigned rsh) which works on uint32.
 3. Lua trick: `a && b || c` => `if (a) { return b } else { return c }`
 4. To delete a key from a map, assign the Phantom value to it: `m["key"] = #nil`.
 5. To pop the last value of a slice, use `#` (as you may notice, pop a nil will give you the Phantom value), e.g.:
@@ -61,12 +61,18 @@ a = {1, 2, 3}
 b = #a
 // a == {1, 2} && b == 3
 ```
-6. `Map` can be automatically and recursively compared using `==` and `!=`.
+6. To append a value:
+```
+a = {1, 2, 3}
+a[len(a)] = 4
+// a == {1, 2, 3, 4}
+```
+7. `Map` can be automatically and recursively compared using `==` and `!=`.
 
 ### Loop
 Basically the same, with new syntax:
 1. `for i = start, end { ... }` => ` for i := start; i < end; i++ { ... }`.
-2. `for i = start, step, end { ... }` => `for i := start; i <= end; i += step { ... }` or `for i := start; i >= end; i += step { ... }`.
+2. `for i = start, end, step { ... }` => `for i := start; i <= end; i += step { ... }` or `for i := start; i >= end; i += step { ... }`.
 3. `for m, func (k, v) { ... }` => `for k, v := range m { .. }`, inside the callback, `return false` will terminate the iteration.
 
 ### String

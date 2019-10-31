@@ -25,7 +25,7 @@ func yieldtest() {
 assert yieldtest() ==1&&yieldtest()==2&&yieldtest()==3&&yieldtest()==nil
 assert yieldtest() ==1&&yieldtest()==2&&yieldtest()==3&&yieldtest()==nil
 
-func counter() for i=2,-1,0 yield i
+func counter() for i=2,0,-1 yield i
 
 func yieldtest() for true yield ({3, 2, 1})[counter()]
 
@@ -76,7 +76,7 @@ func returncond(n) {
     return {
         "counter": n,
         "test": func(this) {
-            this.counter = this.counter + 1
+            this.counter++
             return this.counter % 2 == 0
         }
     }
@@ -214,32 +214,6 @@ a = func a = func b = func c = a + b + (func d = d * 2)(c)
 assert a(1)(2)(3) == 9
 
 assert (func = copystack())(1,2,3) == {1,2,3}
-
-a = "abc"
-switch a {
-    case "abc":
-        assert 1
-    case "a":
-        assert 0
-}
-
-b = 0
-switch a{
-    case "b":
-        assert 0
-    case "a":
-        assert 0
-    case else:
-    b++
-}
-assert b == 1
-
-b = 0
-switch (func = b++)() {
-    case else: b+=2
-}
-
-assert b == 3
 
 func multi_return(a, b) {
     yield a + 1
