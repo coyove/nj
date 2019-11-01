@@ -60,8 +60,8 @@ func stdWrite(f *os.File) func(env *Env) Value {
 			switch a := env.LocalGet(i); a.Type() {
 			case StringType:
 				f.WriteString(env.LocalGet(i).AsString())
-			case MapType:
-				m := a.AsMap()
+			case SliceType:
+				m := a.AsSlice()
 				buf := make([]byte, len(m.l))
 				for i, b := range m.l {
 					buf[i] = byte(b.MustNumber())
@@ -76,15 +76,15 @@ func stdWrite(f *os.File) func(env *Env) Value {
 }
 
 func initIOLib() {
-	lio := NewMap()
-	lio.Puts("println", NewNativeValue(0, stdPrintln(os.Stdout)))
-	lio.Puts("print", NewNativeValue(0, stdPrint(os.Stdout)))
-	lio.Puts("printf", NewNativeValue(1, stdPrintf(os.Stdout)))
-	lio.Puts("write", NewNativeValue(0, stdWrite(os.Stdout)))
-	lio.Puts("err", NewMapValue(NewMap().
-		Puts("println", NewNativeValue(0, stdPrintln(os.Stderr))).
-		Puts("print", NewNativeValue(0, stdPrint(os.Stderr))).
-		Puts("write", NewNativeValue(0, stdWrite(os.Stderr)))))
+	lio := NewStruct()
+	lio.Put("println", NewNativeValue(0, stdPrintln(os.Stdout)))
+	lio.Put("print", NewNativeValue(0, stdPrint(os.Stdout)))
+	lio.Put("printf", NewNativeValue(1, stdPrintf(os.Stdout)))
+	lio.Put("write", NewNativeValue(0, stdWrite(os.Stdout)))
+	lio.Put("err", NewStructValue(NewStruct().
+		Put("println", NewNativeValue(0, stdPrintln(os.Stderr))).
+		Put("print", NewNativeValue(0, stdPrint(os.Stderr))).
+		Put("write", NewNativeValue(0, stdWrite(os.Stderr)))))
 
-	CoreLibs["io"] = NewMapValue(lio)
+	CoreLibs["io"] = NewStructValue(lio)
 }

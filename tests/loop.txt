@@ -15,46 +15,33 @@ for "true" {
 
 assert idx == 5 
 
- m = {} 
- a = idx++ 
+m = std.genlist(8) 
+a = idx++ 
 assert a == 6 
 
 for i=0,8 {
-    l = {} 
+    l = std.genlist(8)
     for j=0,8,2 {
         if (j < 2) {continue }
         if (j > 4) {break }
         l[j/2+i ] = j 
     }
     if (i < 2) {continue }
-    if (i > 6) {break }
+    if (i > 4) {break }
     m[i] = l 
 }
 
- m2 = {
-    2:{
-        2+1:2,
-        2+2:5
-    },
-    3:{
-        3+1:2,
-        3+2:4
-    },
-    4:{
-        4+1:2,
-        4+2:4
-    },
-    5:{
-        5+1:2,
-        5+2:4
-    },
-    6:{
-        6+1:2,
-        6+2:4
-    }
+m2 = {
+    nil,
+    nil,
+    {nil, nil, nil,  2 ,  4 , nil, nil, nil},
+    {nil, nil, nil, nil,  2 ,  4 , nil, nil},
+    {nil, nil, nil, nil, nil,  2 ,  4 , nil},
+    nil,
+    nil,
+    nil,
 } 
 
-m2[2][4]-- 
 assert (m==m2) 
 
  a = 0
@@ -116,9 +103,9 @@ for {1,2,3} , func(a,b)  {
 
 assert m == {3, 2} 
 
- m = {} 
- s = {1,2,3,4,5,6,7,8,9,10} 
- s2 = {}
+m = {} 
+s = {1,2,3,4,5,6,7,8,9,10} 
+s2 = std.genlist(10)
 for s  , func (i ,v) { s2[i] = itoa(11 - v) }
 for s  , func (i ,v) { s[i] = (11 - v) }
 
@@ -178,14 +165,6 @@ results = {}
 for  i = start,end,step results[len(results)] = i
 assert results == {10, 11}
 
-
-a = {}
-key = {1}
-key2 = {2}
-a[key] = 1 
-a[key2] = 2
-
-assert a == {key: 1, key2: 2}
 
 s = 0
 for i = 1, 10 {

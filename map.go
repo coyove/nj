@@ -1,49 +1,68 @@
 package potatolang
 
-import "unsafe"
+import (
+	"unsafe"
 
-// MustMap represents the map structure in potatolang
-// Like lua it has a linear slice and a hash table.
-// We use a 128bit hash to identify the key,
-// and since 128bit is large enough, we will consider it impossible to collide
-// in a foreseeable period of time (though this is not a good practice).
-type Map struct {
+	"github.com/coyove/potatolang/parser"
+)
+
+type baseSlice struct {
 	l     []Value
-	m     map[interface{}]Value
-	ptr   unsafe.Pointer
 	ptype byte
 	ptag  uint32
 }
 
-// NewMap creates a new map
-func NewMap() *Map {
-	return &Map{l: make([]Value, 0)}
+type baseStruct struct {
+	l     IntMap
+	ptype byte
+	ptag  uint32
 }
 
-// NewMapSize creates a new map with pre-allocated slice
-func NewMapSize(n int) *Map {
-	return &Map{l: make([]Value, n)}
+type baseString struct {
+	s        string
+	padding1 int
+	ptype    byte
+	ptag     uint32
+}
+
+type baseClosure struct {
+	cls      *Closure
+	padding1 int
+	padding2 int
+	ptype    byte
+	ptag     uint32
+}
+
+type basePointer struct {
+	ptr      unsafe.Pointer
+	padding1 int
+	padding2 int
+	ptype    byte
+	ptag     uint32
+}
+
+// NewSlice creates a new map
+func NewSlice() *baseSlice {
+	return &baseSlice{l: make([]Value, 0)}
+}
+
+// NewSliceSize creates a new map with pre-allocated slice
+func NewSliceSize(n int) *baseSlice {
+	return &baseSlice{l: make([]Value, n)}
 }
 
 // Dup duplicates the map
-func (m *Map) Dup() *Map {
-	m2 := &Map{}
+func (m *baseSlice) Dup() *baseSlice {
+	m2 := &baseSlice{}
 	m2.l = make([]Value, len(m.l))
 	for i, x := range m.l {
 		m2.l[i] = x.Dup()
-	}
-
-	if m.m != nil {
-		m2.m = make(map[interface{}]Value, len(m.m))
-		for k, v := range m.m {
-			m2.m[k] = v.Dup()
-		}
 	}
 	return m2
 }
 
 // Equal compares two maps
-func (m *Map) Equal(m2 *Map) bool {
+func (m *baseSlice) Equal(m2 *baseSlice) bool {
 	if len(m2.l) != len(m.l) {
 		return false
 	}
@@ -52,8 +71,63 @@ func (m *Map) Equal(m2 *Map) bool {
 			return false
 		}
 	}
-	for k, v := range m.m {
-		if v2, ok := m2.m[k]; !ok || !v2.Equal(v) {
+	return true
+}
+
+// Put puts a new entry into the map
+func (m *baseSlice) Put(idx int, value Value) *baseSlice {
+	ln := len(m.l)
+	if idx < ln {
+		m.l[idx] = value
+	} else if idx == ln {
+		m.l = append(m.l, value)
+	} else {
+		panic("index out of range")
+	}
+	return m
+}
+
+// Get gets the corresponding value with the key
+func (m *baseSlice) Get(idx int) Value {
+	return m.l[idx]
+}
+
+// Remove removes the key from map and return the corresponding value
+func (m *baseSlice) Remove(idx int) Value {
+	if idx < len(m.l) {
+		v := m.l[idx]
+		m.l = append(m.l[:idx], m.l[idx+1:]...)
+		return v
+	}
+	return Value{}
+}
+
+// Size returns the size of map
+func (m *baseSlice) Size() int {
+	return len(m.l)
+}
+
+func NewStruct() *baseStruct {
+	return &baseStruct{}
+}
+
+// Dup duplicates the map
+func (m *baseStruct) Dup() *baseStruct {
+	m2 := &baseStruct{}
+	m2.l = make(IntMap, len(m.l))
+	for i, x := range m.l {
+		m2.l[i] = x.Dup()
+	}
+	return m2
+}
+
+// Equal compares two maps
+func (m *baseStruct) Equal(m2 *baseStruct) bool {
+	if len(m2.l) != len(m.l) {
+		return false
+	}
+	for i, x := range m.l {
+		if !x.Equal(m2.l[i]) {
 			return false
 		}
 	}
@@ -61,75 +135,17 @@ func (m *Map) Equal(m2 *Map) bool {
 }
 
 // Put puts a new entry into the map
-func (m *Map) Put(key Value, value Value) *Map {
-	if key.Type() == NumberType {
-		idx, ln := int(key.AsNumber()), len(m.l)
-		if idx < ln {
-			m.l[idx] = value
-			return m
-		} else if idx == ln {
-			m.l = append(m.l, value)
-			return m
-		}
-	}
-	if m.m == nil {
-		m.m = make(map[interface{}]Value)
-	}
-	m.m[key.AsInterface()] = value
+func (m *baseStruct) Put(key string, value Value) *baseStruct {
+	m.l.Add(NewNumberValue(parser.HashString(key)), value)
 	return m
-}
-
-func (m *Map) putIntoMap(key Value, value Value) *Map {
-	if m.m == nil {
-		m.m = make(map[interface{}]Value)
-	}
-	m.m[key.AsInterface()] = value
-	return m
-}
-
-// Puts puts a new entry with a string key into the map
-func (m *Map) Puts(key string, value Value) *Map {
-	return m.Put(NewStringValue(key), value)
 }
 
 // Get gets the corresponding value with the key
-func (m *Map) Get(key Value) (value Value, found bool) {
-	if key.Type() == NumberType {
-		if idx, ln := int(key.AsNumber()), len(m.l); idx < ln {
-			return m.l[idx], true
-		}
-	}
-	if m.m == nil {
-		return Value{}, false
-	}
-	v, ok := m.m[key.AsInterface()]
-	return v, ok
-}
-
-func (m *Map) getFromMap(key Value) (value Value, found bool) {
-	v, ok := m.m[key.AsInterface()]
-	return v, ok
-}
-
-// Remove removes the key from map and return the corresponding value
-func (m *Map) Remove(key Value) Value {
-	if key.Type() == NumberType {
-		if idx, ln := int(key.AsNumber()), len(m.l); idx < ln {
-			v := m.l[idx]
-			m.l = append(m.l[:idx], m.l[idx+1:]...)
-			return v
-		}
-	}
-	if m.m == nil {
-		return Value{}
-	}
-	hash := key.AsInterface()
-	v := m.m[hash]
-	delete(m.m, hash)
-	return v
+func (m *baseStruct) Get(key Value) (Value, bool) {
+	return m.l.Get(key)
 }
 
 // Size returns the size of map
-func (m *Map) Size() int {
-	return len(m.l) + len(m.m)
+func (m *baseStruct) Size() int {
+	return len(m.l)
 }

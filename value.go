@@ -18,8 +18,11 @@ const (
 	// StringType represents string type
 	StringType = 2
 
-	// MapType represents map type
-	MapType = 4
+	//
+	StructType = 3
+
+	// SliceType represents map type
+	SliceType = 4
 
 	// ClosureType represents closure type
 	ClosureType = 6
@@ -32,11 +35,13 @@ const (
 	_NilNil         = NilType<<8 | NilType
 	_NumberNumber   = NumberType<<8 | NumberType
 	_StringString   = StringType<<8 | StringType
-	_MapMap         = MapType<<8 | MapType
+	_SliceSlice     = SliceType<<8 | SliceType
+	_StructStruct   = StructType<<8 | StructType
 	_ClosureClosure = ClosureType<<8 | ClosureType
 	_PointerPointer = PointerType<<8 | PointerType
 	_StringNumber   = StringType<<8 | NumberType
-	_MapNumber      = MapType<<8 | NumberType
+	_SliceNumber    = SliceType<<8 | NumberType
+	_StructNumber   = StructType<<8 | NumberType
 )
 
 // Value is the basic value used by VM
@@ -60,17 +65,14 @@ func (v Value) Type() byte {
 		return NilType
 	}
 
-	m := (*Map)(unsafe.Pointer(x))
-	if m.ptr != nil {
-		return m.ptype
-	}
-	return MapType
+	m := (*baseSlice)(unsafe.Pointer(x))
+	return m.ptype
 }
 
 var (
 	// TMapping maps type to its string representation
 	TMapping = map[byte]string{
-		NilType: "nil", NumberType: "num", StringType: "str", ClosureType: "cls", PointerType: "ptr", MapType: "map",
+		NilType: "nil", NumberType: "num", StringType: "str", ClosureType: "cls", PointerType: "ptr", SliceType: "map",
 	}
 
 	Phantom = NewPointerValue(unsafe.Pointer(new(int)), PTagPhantom)
@@ -116,25 +118,31 @@ func (v *Value) SetBoolValue(b bool) {
 }
 
 // NewMapValue returns a map value
-func NewMapValue(m *Map) Value {
+func NewMapValue(m *baseSlice) Value {
+	m.ptype = SliceType
+	return Value{ptr: unsafe.Pointer(m)}
+}
+
+func NewStructValue(m *baseStruct) Value {
+	m.ptype = StructType
 	return Value{ptr: unsafe.Pointer(m)}
 }
 
 // NewClosureValue returns a closure value
 func NewClosureValue(c *Closure) Value {
-	m := &Map{ptype: ClosureType, ptr: unsafe.Pointer(c)}
+	m := &baseClosure{ptype: ClosureType, cls: c}
 	return Value{unsafe.Pointer(m)}
 }
 
 // NewPointerValue returns a generic value
 func NewPointerValue(g unsafe.Pointer, tag uint32) Value {
-	m := &Map{ptype: PointerType, ptr: g, ptag: tag}
+	m := &basePointer{ptype: PointerType, ptr: g, ptag: tag}
 	return Value{unsafe.Pointer(m)}
 }
 
 // NewStringValue returns a string value
 func NewStringValue(s string) Value {
-	m := &Map{ptype: StringType, ptr: unsafe.Pointer(&s)}
+	m := &baseString{ptype: StringType, s: s}
 	return Value{unsafe.Pointer(m)}
 }
 
@@ -144,7 +152,7 @@ func NewInterfaceValue(i interface{}) Value {
 		return NewNumberValue(v)
 	case string:
 		return NewStringValue(v)
-	case *Map:
+	case *baseSlice:
 		return NewMapValue(v)
 	case *Closure:
 		return NewClosureValue(v)
@@ -154,7 +162,7 @@ func NewInterfaceValue(i interface{}) Value {
 
 // AsString cast value to string
 func (v Value) AsString() string {
-	return *(*string)((*Map)(v.ptr).ptr)
+	return (*baseString)(v.ptr).s
 }
 
 // IsFalse tests whether value contains a "false" value
@@ -165,11 +173,11 @@ func (v Value) IsFalse() bool {
 	case NilType:
 		return true
 	case StringType:
-		m := (*Map)(v.ptr)
-		return len(*(*string)(m.ptr)) == 0
-	case MapType:
-		m := (*Map)(v.ptr)
-		return len(m.l)+len(m.m) == 0
+		m := (*baseString)(v.ptr)
+		return len(m.s) == 0
+	case SliceType:
+		m := (*baseSlice)(v.ptr)
+		return len(m.l) == 0
 	}
 	return v == Phantom
 }
@@ -188,17 +196,27 @@ func (v Value) AsInt32() int32 {
 	return int32(int64(math.Float64frombits(^uint64(uintptr(v.ptr)))) & 0xffffffff)
 }
 
-// AsMap cast value to map of values
-func (v Value) AsMap() *Map { return (*Map)(v.ptr) }
+// AsSlice cast value to map of values
+func (v Value) AsSlice() *baseSlice {
+	return (*baseSlice)(v.ptr)
+}
+
+func (v Value) AsStruct() *baseStruct {
+	return (*baseStruct)(v.ptr)
+}
 
 // AsClosure cast value to closure
-func (v Value) AsClosure() *Closure { return (*Closure)((*Map)(v.ptr).ptr) }
+func (v Value) AsClosure() *Closure {
+	return (*baseClosure)(v.ptr).cls
+}
 
 // AsPointer cast value to unsafe.Pointer
-func (v Value) AsPointer() (unsafe.Pointer, uint32) { return (*Map)(v.ptr).ptr, (*Map)(v.ptr).ptag }
+func (v Value) AsPointer() (unsafe.Pointer, uint32) {
+	return (*basePointer)(v.ptr).ptr, (*basePointer)(v.ptr).ptag
+}
 
 // MustMap safely cast value to map of values
-func (v Value) MustMap() *Map { v.testType(MapType); return (*Map)(v.ptr) }
+func (v Value) MustMap() *baseSlice { v.testType(SliceType); return (*baseSlice)(v.ptr) }
 
 // MustClosure safely cast value to closure
 func (v Value) MustClosure() *Closure { v.testType(ClosureType); return v.AsClosure() }
@@ -221,8 +239,8 @@ func (v Value) AsInterface() interface{} {
 		return v.AsNumber()
 	case StringType:
 		return v.AsString()
-	case MapType:
-		return v.AsMap()
+	case SliceType:
+		return v.AsSlice()
 	case ClosureType:
 		return v.AsClosure()
 	}
@@ -243,8 +261,10 @@ func (v Value) Equal(r Value) bool {
 		return v == r
 	case _StringString:
 		return r.AsString() == v.AsString()
-	case _MapMap:
-		return v.AsMap().Equal(r.AsMap())
+	case _SliceSlice:
+		return v.AsSlice().Equal(r.AsSlice())
+	case _StructStruct:
+		return v.AsStruct().Equal(r.AsStruct())
 	case _ClosureClosure:
 		c0, c1 := v.AsClosure(), r.AsClosure()
 		e := c0.ArgsCount == c1.ArgsCount &&
@@ -291,52 +311,21 @@ func (v Value) toString(lv int, json bool) string {
 			return strconv.Quote(v.AsString())
 		}
 		return v.AsString()
-	case MapType:
-		m, buf := v.AsMap(), &bytes.Buffer{}
+	case SliceType:
+		m, buf := v.AsSlice(), &bytes.Buffer{}
 		if json {
-			if len(m.m) == 0 {
-				// treat it as an array
-				buf.WriteString("[")
-				for _, v := range m.l {
-					buf.WriteString(v.toString(lv+1, json))
-					buf.WriteString(",")
-				}
-				if len(m.l) > 0 {
-					buf.Truncate(buf.Len() - 1)
-				}
-				buf.WriteString("]")
-			} else {
-				// treat it as an object
-				buf.WriteString("{")
-				for i, v := range m.l {
-					buf.WriteString("\"" + strconv.Itoa(i) + "\":")
-					buf.WriteString(v.toString(lv+1, json))
-					buf.WriteString(",")
-				}
-				for k, v := range m.m {
-					ks, ok := k.(string)
-					if !ok {
-						panicf("non-string key is not allowed")
-					}
-					buf.WriteString(ks)
-					buf.WriteString(":")
-					buf.WriteString(v.toString(lv+1, json))
-					buf.WriteString(",")
-				}
-				if m.Size() > 0 {
-					buf.Truncate(buf.Len() - 1)
-				}
-				buf.WriteString("}")
+			buf.WriteString("[")
+			for _, v := range m.l {
+				buf.WriteString(v.toString(lv+1, json))
+				buf.WriteString(",")
 			}
+			if len(m.l) > 0 {
+				buf.Truncate(buf.Len() - 1)
+			}
+			buf.WriteString("]")
 		} else {
 			buf.WriteString("{")
 			for _, v := range m.l {
-				buf.WriteString(v.String())
-				buf.WriteString(",")
-			}
-			for k, v := range m.m {
-				buf.WriteString(fmt.Sprint(k))
-				buf.WriteString(":")
 				buf.WriteString(v.String())
 				buf.WriteString(",")
 			}
@@ -346,6 +335,11 @@ func (v Value) toString(lv int, json bool) string {
 			buf.WriteString("}")
 		}
 		return buf.String()
+	case StructType:
+		if json {
+			return "{}"
+		}
+		return "<struct>"
 	case ClosureType:
 		if json {
 			return "\"" + v.AsClosure().String() + "\""
@@ -370,8 +364,8 @@ func (v Value) Dup() Value {
 		return v
 	case ClosureType:
 		return NewClosureValue(v.AsClosure().Dup())
-	case MapType:
-		return NewMapValue(v.AsMap().Dup())
+	case SliceType:
+		return NewMapValue(v.AsSlice().Dup())
 	default:
 		panic("unreachable Code")
 	}

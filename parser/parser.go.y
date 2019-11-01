@@ -146,13 +146,13 @@ postfix_incdec:
             $$ = __store($1, $3, CompNode(AAdd, __load($1, $3).pos0($1), $5).pos0($1))
         } |
         prefix_expr '.' TIdent   _postfix_incdec  {
-            $$ = __store($1, NewNode($3.Str), CompNode(AAdd, __load($1, NewNode($3.Str)).pos0($1), $4).pos0($1)) 
+            $$ = __store($1, __hash($3.Str), CompNode(AAdd, __load($1, __hash($3.Str)).pos0($1), $4).pos0($1)) 
         } |
         prefix_expr '[' expr ']' _postfix_assign expr %prec ASSIGN {
             $$ = __store($1, $3, CompNode($5, __load($1, $3).pos0($1), $6).pos0($1))
         } |
         prefix_expr '.' TIdent _postfix_assign expr %prec ASSIGN {
-            $$ = __store($1, NewNode($3.Str), CompNode($4, __load($1, NewNode($3.Str)).pos0($1), $5).pos0($1))
+            $$ = __store($1, __hash($3.Str), CompNode($4, __load($1, __hash($3.Str)).pos0($1), $5).pos0($1))
         }
 
 for_stat:
@@ -290,7 +290,7 @@ declarator:
         TIdent                            { $$ = ANode($1).setPos($1) } |
         TIdent TSquare                    { $$ = __load(nilNode, $1).pos0($1) } |
         prefix_expr '[' expr ']'          { $$ = __load($1, $3).pos0($3).setPos($3) } |
-        prefix_expr '.' TIdent            { $$ = __load($1, NewNode($3.Str)).pos0($3).setPos($3) } |
+        prefix_expr '.' TIdent            { $$ = __load($1, __hash($3.Str)).pos0($3).setPos($3) } |
         prefix_expr '[' expr ':' expr ']' { $$ = CompNode(ASlice, $1, $3, $5).pos0($3).setPos($3) } |
         prefix_expr '[' expr ':' ']'      { $$ = CompNode(ASlice, $1, $3, moneNode).pos0($3).setPos($3) } |
         prefix_expr '[' ':' expr ']'      { $$ = CompNode(ASlice, $1, zeroNode, $4).pos0($4).setPos($4) }
@@ -345,11 +345,11 @@ expr_list:
         expr_list ',' expr                { $$ = $1.Cappend($3) }
 
 expr_assign_list:
-        expr ':' expr                     { $$ = CompNode($1, $3) } |
-        expr_assign_list ',' expr ':' expr{ $$ = $1.Cappend($3).Cappend($5) }
+        TIdent ':' expr                     { $$ = CompNode(__hash($1.Str), $3) } |
+        expr_assign_list ',' TIdent ':' expr{ $$ = $1.Cappend(__hash($3.Str), $5) }
 
 map_gen:
-        '{' '}'                           { $$ = CompNode(AMap, emptyNode).pos0($1) } |
+        '{' '}'                           { $$ = CompNode(AArray, emptyNode).pos0($1) } |
         '{' expr_assign_list     '}'      { $$ = CompNode(AMap, $2).pos0($2) } |
         '{' expr_assign_list ',' '}'      { $$ = CompNode(AMap, $2).pos0($2) } |
         '{' expr_list            '}'      { $$ = CompNode(AArray, $2).pos0($2) } |

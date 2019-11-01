@@ -1,6 +1,8 @@
 package parser
 
-import "unsafe"
+import (
+	"unsafe"
+)
 
 type Atom string
 
@@ -104,3 +106,14 @@ func __for(cond interface{}) *Node { return CompNode(AFor, cond) }
 func (n *Node) __params(params *Node) *Node { return n.Cappend(params) }
 
 func __func(name interface{}) *Node { return CompNode(AFunc, name) }
+
+func __hash(str string) *Node { return NewNumberNode(HashString(str)) }
+
+func HashString(str string) float64 {
+	var hash uint32 = 2166136261
+	for _, c := range str {
+		hash *= 16777619
+		hash ^= uint32(c)
+	}
+	return float64(hash)
+}

@@ -74,8 +74,8 @@ if (0&&func() {assert 0 }) {
 
 func returncond(n) {
     return {
-        "counter": n,
-        "test": func(this) {
+        counter: n,
+        test: func(this) {
             this.counter++
             return this.counter % 2 == 0
         }
@@ -103,16 +103,11 @@ func test2() {
 test2()
 
 m = {
-    "key1": "value1",
-    "key2": {1,2,3}
+    key1: "value1",
+    key2: {1,2,3}
 }
 
 assert m == m()
-m2 = {}
-m2.key1 = "value1"
-m2.key2 = {}
-for i=1,4 { m2.key2[len(m2.key2)] = i }
-assert m2 == m
 
 m3 = m()
 m.key2[0] = 0
@@ -130,8 +125,8 @@ a = a - 1  // this will be eventually compiled into: [inc a -1]
 assert a == 0
 
 counter = {
-    "tick" : 0,
-    "add": func(this, step) {
+    tick : 0,
+    add: func(this, step) {
         this.tick = this.tick + step
     },
 }
@@ -188,8 +183,8 @@ func safeexec(f, args) {
     })()
 
     return {
-        "result": result,
-        "ok": x == nil,
+        result: result,
+        ok: x == nil,
     }
 }
 
@@ -205,11 +200,6 @@ r = safeexec(func(a, b) {
   
 assert r.result == "none"&&!r.ok
 
-
-// version 2
-safeexec = func f = (std.apply(f, copystack()[1:]))
-safeexec(func = (({})[1]))
-
 a = func a = func b = func c = a + b + (func d = d * 2)(c)
 assert a(1)(2)(3) == 9
 
@@ -223,7 +213,7 @@ func multi_return(a, b) {
 
 mr_a = multi_return(1, 2)
 mr_b = multi_return()
-mr_ab2 = ({"a": multi_return})().a()
+mr_ab2 = ({a: multi_return})().a()
 mr_ab = multi_return()
 
 assert mr_a == 2&&mr_b == 3&&mr_ab == 3&&mr_ab2 == 3

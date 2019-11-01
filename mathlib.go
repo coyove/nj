@@ -8,18 +8,18 @@ import (
 
 func initMathLib() {
 	r := rand.New()
-	lmath := NewMap()
+	lmath := NewStruct()
 
-	lmath.Puts("sqrt", NewNativeValue(1, func(env *Env) Value {
+	lmath.Put("sqrt", NewNativeValue(1, func(env *Env) Value {
 		return NewNumberValue(math.Sqrt(env.LocalGet(0).MustNumber()))
 	}))
-	lmath.Puts("rand", NewMapValue(NewMap().
-		Puts("intn", NewNativeValue(1, func(env *Env) Value {
+	lmath.Put("rand", NewStructValue(NewStruct().
+		Put("intn", NewNativeValue(1, func(env *Env) Value {
 			return NewNumberValue(float64(r.Intn(int(env.LocalGet(0).MustNumber()))))
 		})).
-		Puts("bytes", NewNativeValue(1, func(env *Env) Value {
+		Put("bytes", NewNativeValue(1, func(env *Env) Value {
 			return NewStringValue(string(r.Fetch(int(env.LocalGet(0).MustNumber()))))
 		}))))
 
-	CoreLibs["math"] = NewMapValue(lmath)
+	CoreLibs["math"] = NewStructValue(lmath)
 }

@@ -3,8 +3,10 @@ package bench
 import (
 	"bytes"
 	"math/rand"
+	"sort"
 	"strconv"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -79,110 +81,193 @@ func BenchmarkStringReplace(b *testing.B) {
 	}
 }
 
-type IntMap struct {
-	values []uintptr
-}
+type IntMap []uint64
 
-func (m *IntMap) Get(k uintptr) (v uintptr) {
-	offset := len(m.values) / 2
-	i, j := 0, offset
+func (m IntMap) Get(k uint64) (v uint64, ok bool) {
+	offset := len(m) / 2
+	j := offset
 
-	for i < j {
+	if j > 0 && m[0] == k {
+		return m[offset], true
+	}
+
+	if j > 1 && m[1] == k {
+		return m[1+offset], true
+	}
+	//	return 0, false
+
+	for i := 2; i < j; {
 		h := int(uint(i+j) >> 1) // avoid overflow when computing h
 
-		k2 := m.values[h]
-		if k2 == k {
-			return m.values[h+offset]
+		k2 := &m[h]
+		if *k2 == k {
+			return *(*uint64)(unsafe.Pointer(uintptr(unsafe.Pointer(k2)) + uintptr(offset)*unsafe.Sizeof(uint64(0)))), true
+			// return m.values[h+offset], true
 		}
-		// i ≤ h < j
-		if k2 < k {
-			i = h + 1 // preserves f(i-1) == false
+
+		if *k2 < k {
+			i = h + 1
 		} else {
-			j = h // preserves f(j) == true
+			j = h
 		}
 	}
 
-	return 0
+	return 0, false
 }
 
-func (m *IntMap) Set(k uintptr, v uintptr) {
-	offset := len(m.values) / 2
+func (m *IntMap) Add(k uint64, v uint64) {
+	offset := len(*m) / 2
 	i, j := 0, offset
 
 	for i < j {
 		h := int(uint(i+j) >> 1) // avoid overflow when computing h
 		// i ≤ h < j
-		if m.values[h] == k {
-			m.values[h+offset] = v
+		if (*m)[h] == k {
+			(*m)[h+offset] = v
 			return
 		}
 
-		if m.values[h] < k {
+		if (*m)[h] < k {
 			i = h + 1 // preserves f(i-1) == false
 		} else {
 			j = h // preserves f(j) == true
 		}
 	}
 
-	m.values = append(m.values, 0, 0)
-	copy(m.values[i+offset+2:], m.values[i+offset:])
-	m.values[i+offset+1] = v
-	copy(m.values[i+1:], m.values[i:i+offset])
-	m.values[i] = k
+	*m = append(*m, 0, 0)
+	copy((*m)[i+offset+2:], (*m)[i+offset:])
+	(*m)[i+offset+1] = v
+	copy((*m)[i+1:], (*m)[i:i+offset])
+	(*m)[i] = k
 }
 
-var N = 100
+type kvSwapper []uint64
+
+func (s kvSwapper) Len() int {
+	return len(s) / 2
+}
+
+func (s kvSwapper) Less(i, j int) bool {
+	return (s)[i] < (s)[j]
+}
+
+func (s kvSwapper) Swap(i, j int) {
+	(s)[i], (s)[j] = (s)[j], (s)[i]
+	i, j = i+len(s)/2, j+len(s)/2
+	(s)[i], (s)[j] = (s)[j], (s)[i]
+}
+
+func (m *IntMap) BatchSet(kv []uint64) {
+	*m = kv
+	sort.Sort(kvSwapper(*m))
+}
+
+var N = 16
+
+func TestMapBatch(t *testing.T) {
+	rand.Seed(time.Now().Unix())
+
+	m := IntMap{}
+	m2 := map[uint64]bool{}
+
+	args := make([]uint64, N*2)
+	for i := 0; i < N; i++ {
+		x := uint64(rand.Int())
+		m2[x] = true
+		args[i] = x
+		args[i+N] = x
+	}
+
+	m.BatchSet(args)
+
+	for k := range m2 {
+		if v, _ := m.Get(k); v != k {
+			t.Fatal(m)
+		}
+	}
+}
+
+func TestMapAdd(t *testing.T) {
+	m := IntMap{}
+	m2 := map[uint64]bool{}
+	for i := 0; i < N; i++ {
+		x := uint64(rand.Int())
+		m.Add(x, x)
+		m2[x] = true
+	}
+
+	for k := range m2 {
+		if v, _ := m.Get(k); v != k {
+			t.Fatal(m)
+		}
+	}
+}
 
 func BenchmarkNativeMapIndex(b *testing.B) {
 	b.StopTimer()
-	m := map[uintptr]uintptr{}
+	m := map[uint64]uint64{}
 	for i := 0; i < N; i++ {
-		x := uintptr(rand.Int())
+		x := uint64(rand.Int())
 		m[x] = x
 	}
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		if m[uintptr(i)] == 999 {
+		if m[uint64(i)] == 999 {
 			b.Fatal(m)
 		}
 	}
-}
-
-func TestMapIndex(t *testing.T) {
-	m := IntMap{}
-	m2 := map[uintptr]bool{}
-	for i := 0; i < N; i++ {
-		x := uintptr(rand.Int())
-		m.Set(x, x)
-		m2[x] = true
-	}
-
-	for k := range m2 {
-		if m.Get(k) != k {
-			t.Fatal(m)
-		}
-	}
-
-	//b.Log(m)
 }
 
 func BenchmarkMapIndex(b *testing.B) {
 	b.StopTimer()
 	m := IntMap{}
 	for i := 0; i < N; i++ {
-		x := uintptr(rand.Int())
-		m.Set(x, x)
+		x := uint64(rand.Int())
+		m.Add(x, x)
 	}
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		if m.Get(uintptr(i)) == 999 {
+		if v, _ := m.Get(uint64(i)); v == 999 {
 			b.Fatal(m)
 		}
 	}
 
 	//b.Log(m)
+}
+
+func BenchmarkNativeMapAdd(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		m := map[uint64]uint64{}
+		for i := 0; i < N; i++ {
+			x := uint64(rand.Int())
+			m[x] = x
+		}
+	}
+}
+
+func BenchmarkMapAdd(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		m := IntMap{}
+		for i := 0; i < N; i++ {
+			x := uint64(rand.Int())
+			m.Add(x, x)
+		}
+	}
+}
+
+func BenchmarkMapBatch(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		m := IntMap{}
+		kv := make([]uint64, N*2)
+		for i := 0; i < N; i++ {
+			x := uint64(rand.Int())
+			kv[i] = x
+			kv[i+N] = x
+		}
+		m.BatchSet(kv)
+	}
 }
 
 //func BenchmarkArrayIndex(b *testing.B) {

@@ -1,16 +1,13 @@
-func returncond(n) {
-    return {
-        "counter": n,
-        "test": func(this) {
-            this.counter++
-            return this.counter % 2 == 0
-        }
+m = {
+    c: 123, 
+    a: "a",
+    incr: func (this) {
+        this.c = this.c + 1 
+        return this 
     }
-}
+} 
 
-cond = returncond(0)
-assert cond.test()||cond.test()
-cond.test()
-assert cond.test()&&!cond.test()
+mp = m 
+m2 = (m) ()
 
-
+m.incr()

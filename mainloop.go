@@ -220,16 +220,10 @@ MAIN:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); combineTypes(va, vb) {
 			case _NumberNumber:
 				env.A.SetNumberValue(float64(va.AsInt32() << uint(vb.AsNumber())))
-			case _MapMap:
+			case _SliceSlice:
 				{
-					va, vb := va.AsMap(), vb.AsMap()
+					va, vb := va.AsSlice(), vb.AsSlice()
 					va.l = append(va.l, vb.l...)
-					if va.m == nil && vb.m != nil {
-						va.m = make(map[interface{}]Value, len(vb.m))
-						for k, v := range vb.m {
-							va.m[k] = v
-						}
-					}
 				}
 				env.A = va
 			default:
@@ -260,27 +254,27 @@ MAIN:
 			switch v := env.Get(opa, K); v.Type() {
 			case StringType:
 				env.A.SetNumberValue(float64(len(v.AsString())))
-			case MapType:
-				env.A.SetNumberValue(float64(v.AsMap().Size()))
+			case SliceType:
+				env.A.SetNumberValue(float64(v.AsSlice().Size()))
 			default:
 				panicf("can't evaluate the length of %+v", v)
 			}
 		case OpMakeMap:
 			if newEnv == nil {
-				env.A = NewMapValue(NewMap())
+				env.A = NewStructValue(NewStruct())
 			} else {
-				size, m := newEnv.LocalSize(), NewMap()
-				for i := 0; i < size; i += 2 {
-					m.Put(newEnv.LocalGet(i), newEnv.LocalGet(i+1))
+				m := NewStruct()
+				for i := 0; i < newEnv.LocalSize(); i += 2 {
+					m.l.Add(newEnv.stack[i], newEnv.stack[i+1])
 				}
 				newEnv.LocalClear()
-				env.A = NewMapValue(m)
+				env.A = NewStructValue(m)
 			}
 		case OpMakeArray:
 			if newEnv == nil {
-				env.A = NewMapValue(NewMap())
+				env.A = NewMapValue(NewSlice())
 			} else {
-				m := NewMapSize(newEnv.LocalSize())
+				m := NewSliceSize(newEnv.LocalSize())
 				copy(m.l, newEnv.stack)
 				newEnv.LocalClear()
 				env.A = NewMapValue(m)
@@ -288,22 +282,12 @@ MAIN:
 		case OpStore:
 			vidx, v := env.Get(opa, K), env.Get(opb, K)
 			switch env.A.Type() {
-			case MapType:
-				m := env.A.AsMap()
-				if v == Phantom {
-					m.Remove(vidx)
-				} else if vidx.Type() == NumberType {
-					idx, ln := int(vidx.AsNumber()), len(m.l)
-					if idx < ln {
-						m.l[idx] = v
-					} else if idx == ln {
-						m.l = append(m.l, v)
-					} else {
-						m.putIntoMap(vidx, v)
-					}
-				} else {
-					m.putIntoMap(vidx, v)
-				}
+			case SliceType:
+				m := env.A.AsSlice()
+				m.Put(int(vidx.AsNumber()), v)
+			case StructType:
+				m := env.A.AsStruct()
+				m.l.Add(vidx, v)
 			case StringType:
 				var p []byte
 				switch combineTypes(vidx, v) {
@@ -324,7 +308,7 @@ MAIN:
 				default:
 					panicf("can't modify string %+v[%+v] to %+v", env.A, vidx, v)
 				}
-				(*Map)(env.A.ptr).ptr = unsafe.Pointer(&p) // unsafely cast p to string
+				(*baseString)(env.A.ptr).s = *(*string)(unsafe.Pointer(&p)) // unsafely cast p to string
 			case NilType:
 				switch va := env.Get(opa, K); va.Type() {
 				case NumberType:
@@ -346,38 +330,32 @@ MAIN:
 			switch combineTypes(a, vidx) {
 			case _StringNumber:
 				v.SetNumberValue(float64(a.AsString()[int(vidx.AsNumber())]))
-			case _MapNumber:
-				if m, idx := a.AsMap(), int(vidx.AsNumber()); idx < len(m.l) {
-					v = m.l[idx]
-					break
-				}
-				fallthrough
-			default:
-				if a.Type() == MapType {
-					v, _ = a.AsMap().getFromMap(vidx)
-					if v.Type() == ClosureType {
-						if cls := v.AsClosure(); cls.Isset(ClsHasReceiver) {
-							cls = cls.Dup()
-							if cls.ArgsCount > 0 {
-								if len(cls.PartialArgs) > 0 {
-									panicf("curry function with a receiver")
-								}
-								cls.ArgsCount--
-								cls.PartialArgs = []Value{a}
+			case _SliceNumber:
+				v = a.AsSlice().Get(int(vidx.AsNumber()))
+			case _StructNumber:
+				v, _ = a.AsStruct().Get(vidx)
+				if v.Type() == ClosureType {
+					if cls := v.AsClosure(); cls.Isset(ClsHasReceiver) {
+						cls = cls.Dup()
+						if cls.ArgsCount > 0 {
+							if len(cls.PartialArgs) > 0 {
+								panicf("curry function with a receiver")
 							}
-							v = NewClosureValue(cls)
+							cls.ArgsCount--
+							cls.PartialArgs = []Value{a}
 						}
+						v = NewClosureValue(cls)
 					}
-				} else {
-					panicf("can't load %+v[%+v]", a, vidx)
 				}
+			default:
+				panicf("can't load %+v[%+v]", a, vidx)
 			}
 			env.A = v
 		case OpPop:
 			a := env.Get(opa, K)
 			switch a.Type() {
-			case MapType:
-				m := a.AsMap()
+			case SliceType:
+				m := a.AsSlice()
 				l := m.l
 				if len(l) == 0 {
 					env.A = Value{}
@@ -399,12 +377,12 @@ MAIN:
 				} else {
 					env.A = NewStringValue(x.AsString()[start:end])
 				}
-			case MapType:
-				m := NewMap()
+			case SliceType:
+				m := NewSlice()
 				if end == -1 {
-					m.l = x.AsMap().l[start:]
+					m.l = x.AsSlice().l[start:]
 				} else {
-					m.l = x.AsMap().l[start:end]
+					m.l = x.AsSlice().l[start:end]
 				}
 				env.A = NewMapValue(m)
 			default:
@@ -434,17 +412,22 @@ MAIN:
 		case OpCall:
 			v := env.Get(opa, K)
 			if x := v.Type(); x != ClosureType {
-				if x == MapType {
+				switch x {
+				case SliceType:
 					if newEnv != nil && newEnv.LocalSize() > 0 {
 						dest := newEnv.LocalGet(0).MustMap()
-						n := copy(dest.l, v.AsMap().l)
-						m := NewMap()
+						n := copy(dest.l, v.AsSlice().l)
+						m := NewSlice()
 						m.l = dest.l[:n]
 						env.A = NewMapValue(m)
-						newEnv.LocalClear()
 					} else {
-						env.A = NewMapValue(v.AsMap().Dup())
+						env.A = NewMapValue(v.AsSlice().Dup())
 					}
+					newEnv.LocalClear()
+					continue
+				case StructType:
+					env.A = NewStructValue(v.AsStruct().Dup())
+					newEnv.LocalClear()
 					continue
 				}
 				v.panicType(ClosureType)
@@ -509,7 +492,7 @@ MAIN:
 		case OpForeach:
 			x := env.Get(opa, K)
 			if x.Type() == NilType {
-				ret := NewMapSize(len(env.stack))
+				ret := NewSliceSize(len(env.stack))
 				copy(ret.l, env.stack)
 				env.A = NewMapValue(ret)
 				continue
@@ -521,14 +504,6 @@ MAIN:
 				forEnv.LocalClear()
 				forEnv.LocalPush(NewNumberValue(float64(i)))
 				forEnv.LocalPush(m.l[i])
-				if res := cls.Exec(forEnv); res.IsZero() {
-					continue MAIN
-				}
-			}
-			for k, v := range m.m {
-				forEnv.LocalClear()
-				forEnv.LocalPush(NewInterfaceValue(k))
-				forEnv.LocalPush(v)
 				if res := cls.Exec(forEnv); res.IsZero() {
 					continue MAIN
 				}
