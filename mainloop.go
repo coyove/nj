@@ -256,6 +256,8 @@ MAIN:
 				env.A.SetNumberValue(float64(len(v.AsString())))
 			case SliceType:
 				env.A.SetNumberValue(float64(v.AsSlice().Size()))
+			case StructType:
+				env.A.SetNumberValue(float64(len(v.AsStruct().l) / 2))
 			default:
 				panicf("can't evaluate the length of %+v", v)
 			}
@@ -265,7 +267,7 @@ MAIN:
 			} else {
 				m := NewStruct()
 				for i := 0; i < newEnv.LocalSize(); i += 2 {
-					m.l.Add(newEnv.stack[i], newEnv.stack[i+1])
+					m.l.Add(true, newEnv.stack[i], newEnv.stack[i+1])
 				}
 				newEnv.LocalClear()
 				env.A = NewStructValue(m)
@@ -287,7 +289,9 @@ MAIN:
 				m.Put(int(vidx.AsNumber()), v)
 			case StructType:
 				m := env.A.AsStruct()
-				m.l.Add(vidx, v)
+				if !m.l.Add(false, vidx, v) {
+					panicf("attribute %v not found", vidx)
+				}
 			case StringType:
 				var p []byte
 				switch combineTypes(vidx, v) {

@@ -4,12 +4,12 @@
    if (depth <= 0) {
       return { } 
    }
-   return { bottomUpTree(depth-1), bottomUpTree(depth-1) } 
+   return { left: bottomUpTree(depth-1), right: bottomUpTree(depth-1) } 
 }
 
  func itemCheck(n) {
     if (len(n) == 0) return 1 
-    return itemCheck(n[0]) + itemCheck(n[1]) + 1
+    return itemCheck(n.left) + itemCheck(n.right) + 1
 }
 
  minDepth = 4 

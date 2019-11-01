@@ -92,7 +92,18 @@ func (n *Node) SetPos(p interface{}) *Node {
 
 func (n *Node) C() []*Node { return n.Value.([]*Node) }
 
-func (n *Node) Cappend(na ...*Node) *Node { n.Value = append(n.C(), na...); return n }
+func (n *Node) Cappend(na ...*Node) *Node {
+	n.Value = append(n.C(), na...)
+	if n.Meta.Source == "" {
+		for _, na := range na {
+			if na.Meta.Source != "" {
+				n.Meta = na.Meta
+				break
+			}
+		}
+	}
+	return n
+}
 
 func (n *Node) Cx(i int) *Node { return n.Value.([]*Node)[i] }
 
@@ -273,10 +284,13 @@ func (n *Node) Dump(w io.Writer) {
 }
 
 func (n *Node) String() string {
-	pos := fmt.Sprintf("@%s:%d:%d", n.Source, n.Line, n.Column)
+	pos := ""
+	if n.Source != "" {
+		fmt.Sprintf("@%s:%d:%d", n.Source, n.Line, n.Column)
+	}
 	switch n.Type() {
 	case Nnumber:
-		return strconv.FormatFloat(n.Value.(float64), 'f', 9, 64) + pos
+		return strconv.FormatFloat(n.Value.(float64), 'f', -1, 64) + pos
 	case Nstring:
 		return strconv.Quote(n.Value.(string)) + pos
 	case Natom:
@@ -288,7 +302,7 @@ func (n *Node) String() string {
 		}
 		return "[" + strings.Join(buf, " ") + "]" + pos
 	case Naddr:
-		return "0x" + strconv.FormatInt(int64(n.Value.(uint16)), 16)
+		return "0x" + strconv.FormatInt(int64(n.Value.(uint16)), 16) + pos
 	}
 	panic("shouldn't happen")
 }

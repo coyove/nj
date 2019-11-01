@@ -1,13 +1,8 @@
-m = {
-    c: 123, 
-    a: "a",
-    incr: func (this) {
-        this.c = this.c + 1 
-        return this 
-    }
-} 
-
-mp = m 
-m2 = (m) ()
-
-m.incr()
+a = struct {
+    err: "zzz",
+    err2: "zzz",
+}
+a = {
+    err: 1,
+}
+io.println(a.__fields)

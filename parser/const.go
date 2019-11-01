@@ -1,7 +1,10 @@
 package parser
 
 import (
+	"log"
 	"unsafe"
+
+	"github.com/coyove/common/lru"
 )
 
 type Atom string
@@ -16,8 +19,8 @@ var (
 	chainNode = NewNode(AChain)
 	nilNode   = NewNode(ANil)
 	zeroNode  = NewNumberNode(0)
-	oneNode   = NewNumberNode(1)
 	moneNode  = NewNumberNode(-1)
+	oneNode   = NewNumberNode(1)
 	max32Node = NewNumberNode(0xffffffff)
 	emptyNode = CompNode()
 )
@@ -109,11 +112,17 @@ func __func(name interface{}) *Node { return CompNode(AFunc, name) }
 
 func __hash(str string) *Node { return NewNumberNode(HashString(str)) }
 
+var hashDedupCache = lru.NewCache(1024)
+
 func HashString(str string) float64 {
 	var hash uint32 = 2166136261
 	for _, c := range str {
 		hash *= 16777619
 		hash ^= uint32(c)
 	}
+	if t, ok := hashDedupCache.Get(hash); ok && t.(string) != str {
+		log.Println(t, "and", str, "share an identical FNV32 hash:", hash)
+	}
+	hashDedupCache.Add(hash, str)
 	return float64(hash)
 }

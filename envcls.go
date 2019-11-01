@@ -142,21 +142,6 @@ const (
 	ClsNative
 )
 
-// MustClosure is the closure struct used in potatolang
-type Closure struct {
-	Code        []uint32
-	Pos         posVByte
-	source      string
-	ConstTable  []Value
-	Env         *Env
-	PartialArgs []Value
-	ArgsCount   byte
-	options     byte
-	lastp       uint32
-	lastenv     *Env
-	native      func(env *Env) Value
-}
-
 // NewClosure creates a new closure
 func NewClosure(code []uint32, consts []Value, env *Env, argsCount byte) *Closure {
 	return &Closure{

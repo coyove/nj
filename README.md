@@ -6,16 +6,22 @@ potatolang (pol) is a script language written in golang.
 1. Nil (nil)
 2. Number (float64)
 3. String (string + []byte)
-4. Map (map + slice)
+4. Slice ([]Value)
 5. Pointer (unsafe.Pointer)
 6. Closure (func)
-7. Phantom (special void value)
+7. Struct
 8. No real `bool` type, we have `true == 1` and `false == 0`
 
 ### Variable
 1. No need to declare them, just write `a = 1` directly.
 2. But you can only refer defined variables, e.g. `a = b` is illegal, should be `b = 1 a = b`.
-3. To initiate an array, you write `a = {1, 2, 3}`, to initiate a map, you write `a = {"k": v}`.
+3. To initiate an array, you write `a = {1, 2, 3}`, to initiate a struct, you write `a = {k: 1}`. A struct's fields are immutable:
+```
+a = { k : 1 }
+a.k++
+assert a.k == 2 // ok
+a.k2 = 2        // panic
+```
 4. Since we don't have declarations, to create a variable specically inside a scope, we usually prepend it with a `$`, e.g.:
 ```
 func foo(b) {
@@ -54,12 +60,11 @@ Basically the same, note that:
 1. Bitwise not `^` is written as: `~`, just like C.
 2. All bitwise operators are applied on int32 operands except `>>>` (unsigned rsh) which works on uint32.
 3. Lua trick: `a && b || c` => `if (a) { return b } else { return c }`
-4. To delete a key from a map, assign the Phantom value to it: `m["key"] = #nil`.
-5. To pop the last value of a slice, use `#` (as you may notice, pop a nil will give you the Phantom value), e.g.:
+4. To delete a value inside a slice: 
 ```
-a = {1, 2, 3}
-b = #a
-// a == {1, 2} && b == 3
+a = {1, 2, 3} 
+a = a[:1] << a[2:]
+a == {1, 3}
 ```
 6. To append a value:
 ```

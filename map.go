@@ -7,38 +7,45 @@ import (
 )
 
 type baseSlice struct {
-	l     []Value
 	ptype byte
 	ptag  uint32
+	l     []Value
 }
 
 type baseStruct struct {
-	l     IntMap
 	ptype byte
 	ptag  uint32
+	l     IntMap
 }
 
 type baseString struct {
-	s        string
-	padding1 int
-	ptype    byte
-	ptag     uint32
+	ptype   byte
+	ptag    uint32
+	s       string
+	padding int // pad to 32 bytes
 }
 
-type baseClosure struct {
-	cls      *Closure
-	padding1 int
-	padding2 int
-	ptype    byte
-	ptag     uint32
+type Closure struct {
+	ptype       byte
+	ptag        uint32
+	Code        []uint32
+	Pos         posVByte
+	source      string
+	ConstTable  []Value
+	Env         *Env
+	PartialArgs []Value
+	ArgsCount   byte
+	options     byte
+	lastp       uint32
+	lastenv     *Env
+	native      func(env *Env) Value
 }
 
 type basePointer struct {
-	ptr      unsafe.Pointer
-	padding1 int
-	padding2 int
-	ptype    byte
-	ptag     uint32
+	ptype   byte
+	ptag    uint32
+	ptr     unsafe.Pointer
+	padding [2]int // pad to 32 bytes
 }
 
 // NewSlice creates a new map
@@ -116,7 +123,11 @@ func (m *baseStruct) Dup() *baseStruct {
 	m2 := &baseStruct{}
 	m2.l = make(IntMap, len(m.l))
 	for i, x := range m.l {
-		m2.l[i] = x.Dup()
+		if x == NewNumberValue(parser.FieldsField) {
+			m2.l[i] = x
+		} else {
+			m2.l[i] = x.Dup()
+		}
 	}
 	return m2
 }
@@ -136,7 +147,7 @@ func (m *baseStruct) Equal(m2 *baseStruct) bool {
 
 // Put puts a new entry into the map
 func (m *baseStruct) Put(key string, value Value) *baseStruct {
-	m.l.Add(NewNumberValue(parser.HashString(key)), value)
+	m.l.Add(true, NewNumberValue(parser.HashString(key)), value)
 	return m
 }
 

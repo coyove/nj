@@ -32,7 +32,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TLen TReturn TReturnVoid TUse TTypeof TYield TYieldVoid
+%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TLen TReturn TReturnVoid TUse TTypeof TYield TYieldVoid TStruct
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
@@ -345,14 +345,33 @@ expr_list:
         expr_list ',' expr                { $$ = $1.Cappend($3) }
 
 expr_assign_list:
-        TIdent ':' expr                     { $$ = CompNode(__hash($1.Str), $3) } |
-        expr_assign_list ',' TIdent ':' expr{ $$ = $1.Cappend(__hash($3.Str), $5) }
+        TIdent ':' expr                     { $$ = CompNode(NewNode($1.Str), __hash($1.Str), $3) } |
+        expr_assign_list ',' TIdent ':' expr{ $$ = $1.Cappend(NewNode($3.Str), __hash($3.Str), $5) }
 
 map_gen:
         '{' '}'                           { $$ = CompNode(AArray, emptyNode).pos0($1) } |
-        '{' expr_assign_list     '}'      { $$ = CompNode(AMap, $2).pos0($2) } |
-        '{' expr_assign_list ',' '}'      { $$ = CompNode(AMap, $2).pos0($2) } |
+        '{' expr_assign_list     '}'      { $$ = patchStruct(false, $2).pos0($2) } |
+        '{' expr_assign_list ',' '}'      { $$ = patchStruct(false, $2).pos0($2) } |
+        TStruct'{'expr_assign_list     '}'{ $$ = patchStruct(true, $3).pos0($2) } |
+        TStruct'{'expr_assign_list ',' '}'{ $$ = patchStruct(true, $3).pos0($2) } |
         '{' expr_list            '}'      { $$ = CompNode(AArray, $2).pos0($2) } |
         '{' expr_list ','        '}'      { $$ = CompNode(AArray, $2).pos0($2) }
 
 %%
+
+var FieldsField = HashString("__fields")
+
+func patchStruct(named bool, c *Node) *Node {
+    x := c.C()
+    names, args := CompNode(), CompNode()
+    for i := 0; i < len(x); i += 3 {
+        args.Cappend(x[i + 1], x[i + 2])
+        names.Cappend(x[i])
+    }
+    if !named {
+        return CompNode(AMap, args)
+    }
+
+    args.Cappend(NewNumberNode(FieldsField), CompNode(AArray, names).pos0(args))
+    return CompNode(AMap, args)
+}

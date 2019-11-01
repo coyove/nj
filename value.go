@@ -130,8 +130,8 @@ func NewStructValue(m *baseStruct) Value {
 
 // NewClosureValue returns a closure value
 func NewClosureValue(c *Closure) Value {
-	m := &baseClosure{ptype: ClosureType, cls: c}
-	return Value{unsafe.Pointer(m)}
+	c.ptype = ClosureType
+	return Value{unsafe.Pointer(c)}
 }
 
 // NewPointerValue returns a generic value
@@ -207,7 +207,7 @@ func (v Value) AsStruct() *baseStruct {
 
 // AsClosure cast value to closure
 func (v Value) AsClosure() *Closure {
-	return (*baseClosure)(v.ptr).cls
+	return (*Closure)(v.ptr)
 }
 
 // AsPointer cast value to unsafe.Pointer

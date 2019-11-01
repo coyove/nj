@@ -39,7 +39,7 @@ func (m IntMap) Get(k Value) (v Value, ok bool) {
 	return Value{}, false
 }
 
-func (m *IntMap) Add(k Value, v Value) {
+func (m *IntMap) Add(create bool, k, v Value) bool {
 	offset := len(*m) / 2
 	i, j := 0, offset
 
@@ -48,7 +48,7 @@ func (m *IntMap) Add(k Value, v Value) {
 		// i ≤ h < j
 		if (*m)[h] == k {
 			(*m)[h+offset] = v
-			return
+			return true
 		}
 
 		if (*m)[h].AsNumber() < k.AsNumber() {
@@ -57,12 +57,17 @@ func (m *IntMap) Add(k Value, v Value) {
 			j = h // preserves f(j) == true
 		}
 	}
+	if !create {
+		return false
+	}
 
 	*m = append(*m, Value{}, Value{})
 	copy((*m)[i+offset+2:], (*m)[i+offset:])
 	(*m)[i+offset+1] = v
 	copy((*m)[i+1:], (*m)[i:i+offset])
 	(*m)[i] = k
+
+	return false
 }
 
 type kvSwapper []Value

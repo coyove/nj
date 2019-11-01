@@ -326,6 +326,7 @@ var reservedWords = map[string]uint32{
 	"typeof":   TTypeof,
 	"for":      TFor,
 	"yield":    TYield,
+	"struct":   TStruct,
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
