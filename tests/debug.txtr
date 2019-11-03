@@ -1,5 +1,1 @@
-z = "000"
-z2 = z()
-z[1] = '1'
-io.println(z2)
-assert z2 == "000"
+assert (1 == "000")

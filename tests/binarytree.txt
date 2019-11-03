@@ -1,6 +1,6 @@
- n = 23
+n = 23
 
- func bottomUpTree(depth) {
+func bottomUpTree(depth) {
    if (depth <= 0) {
       return { } 
    }

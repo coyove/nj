@@ -104,6 +104,9 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 		caddr = kodeaddr(K.Code)
 		if r.cls.Isset(ClsNoEnvescape) {
 			if stackEnv != nil {
+				for i := range stackEnv.stack {
+					stackEnv.stack[i] = Value{}
+				}
 				recycledStacks = append(recycledStacks, stackEnv)
 			}
 			stackEnv = env
@@ -246,15 +249,6 @@ MAIN:
 			} else {
 				panicf("can't apply '>>>' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
-		case OpAssert:
-			if a := env.Get(opa, K); a.IsFalse() {
-				msg := env.Get(opb, K)
-				if msg.Type() == StringType {
-					panic(msg)
-				}
-				panicf("assertion failed: %+v", a)
-			}
-			env.A = NewBoolValue(true)
 		case OpLen:
 			switch v := env.Get(opa, K); v.Type() {
 			case StringType:
@@ -456,26 +450,10 @@ MAIN:
 			if cond := env.Get(opa, K); !cond.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
-		case OpForeach:
-			x := env.Get(opa, K)
-			if x.Type() == NilType {
-				ret := NewSliceSize(len(env.stack))
-				copy(ret.l, env.stack)
-				env.A = NewSliceValue(ret)
-				continue
-			}
-			m := x.MustSlice()
-			cls := env.Get(opb, K).MustClosure()
-			forEnv := NewEnv(cls.Env)
-			for i := len(m.l) - 1; i >= 0; i-- {
-				forEnv.LocalClear()
-				forEnv.LocalPush(NewNumberValue(float64(i)))
-				forEnv.LocalPush(m.l[i])
-				if res := cls.Exec(forEnv); res.IsZero() {
-					continue MAIN
-				}
-			}
-			env.A = Value{}
+		case OpCopyStack:
+			ret := NewSliceSize(len(env.stack))
+			copy(ret.l, env.stack)
+			env.A = NewSliceValue(ret)
 		case OpTypeof:
 			env.A = NewStringValue(typeMappings[env.Get(opa, K).Type()])
 		case OpAddressOf:

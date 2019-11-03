@@ -140,11 +140,10 @@ var flatOpMapping = map[parser.Atom]_Opcode{
 	parser.ABitURsh: OpBitURsh,
 	parser.AStore:   OpStore,
 	parser.ALoad:    OpLoad,
-	parser.AAssert:  OpAssert,
 	parser.ASlice:   OpSlice,
 	parser.ATypeOf:  OpTypeof,
 	parser.ALen:     OpLen,
-	parser.AForeach: OpForeach,
+	parser.AForeach: OpCopyStack,
 	parser.AAddrOf:  OpAddressOf,
 	parser.AInc:     OpInc,
 }

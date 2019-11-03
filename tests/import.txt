@@ -1,10 +1,10 @@
  a = 0
  add = use "imported.txt" 
 add()
-assert a == 1
+assert( a == 1)
 
 use "imported2.txt"
-assert a == 1
+assert( a == 1)
 
 use "test.txt"
 use "std.txt"

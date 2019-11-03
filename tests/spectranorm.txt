@@ -21,7 +21,7 @@ func A(i, j) {
 //     $ret($a)
 // }
 // 
-// assert  A0(1,2) == A(1,2)
+// assert(  A0(1,2) == A(1,2))
 
 func TimesVec(v, s, n, u, wg) {
      ul = len(u) 

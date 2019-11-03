@@ -196,14 +196,23 @@ func initCoreLibs() {
 	})
 	CoreLibs["itoa"] = NewNativeValue(1, func(env *Env) Value {
 		v := env.LocalGet(0).MustNumber()
-		if float64(int64(v)) == v {
-			base := 10
-			if env.LocalSize() >= 2 {
-				base = int(env.LocalGet(1).MustNumber())
-			}
+		base := 0
+		if env.LocalSize() >= 2 {
+			base = int(env.LocalGet(1).MustNumber())
+		}
+		if base > 1 && base <= 36 {
 			return NewStringValueString(strconv.FormatInt(int64(v), base))
 		}
 		return NewStringValueString(strconv.FormatFloat(v, 'f', -1, 64))
+	})
+	CoreLibs["assert"] = NewNativeValue(1, func(env *Env) Value {
+		if v := env.LocalGet(0); !v.IsFalse() {
+			return v
+		}
+		if env.LocalSize() > 1 {
+			panic(env.LocalGet(1))
+		}
+		panic("assertion failed")
 	})
 
 	initIOLib()

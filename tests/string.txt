@@ -1,19 +1,19 @@
-assert "abc" == "abc"
-assert "abc" == "\97\98\99"
-assert "abc" == "\x61\x62\x63"
-assert "abc吱吱吱" == "abc" + "吱吱" + "吱"
-assert "abc吱吱吱" == "abc\u5431\u5431\u5431"
+assert( "abc" == "abc")
+assert( "abc" == "\97\98\99")
+assert( "abc" == "\x61\x62\x63")
+assert( "abc吱吱吱" == "abc" + "吱吱" + "吱")
+assert( "abc吱吱吱" == "abc\u5431\u5431\u5431")
 
 dupcheck = {97,98,99,32452}
 text = ("abc组织者")[:3]
-for i = 0, len(text) assert dupcheck[i] == text[i]
+for i = 0, len(text) assert( dupcheck[i] == text[i])
 
-assert itoa(1) == "1"
-assert itoa(10000000000) == "10000000000"
-assert std.ftoa(1, 'f', -1)[0] == '1'
-assert std.unicode(std.ftoa(1, 'f', -1)[0]) == "1"
-assert std.unicode('我') == "我"
+assert( itoa(1) == "1")
+assert( itoa(10000000000) == "10000000000")
+assert( std.ftoa(1, 'f', -1)[0] == '1')
+assert( std.unicode(std.ftoa(1, 'f', -1)[0]) == "1")
+assert( std.unicode('我') == "我")
 
 z = itoa(12.5)
 z = z[:2] + "0" + z[3:]
-assert z == "1205"
+assert( z == "1205")

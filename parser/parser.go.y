@@ -168,6 +168,20 @@ for_stat:
                 __for($4).__continue($6).__body($7).pos0($1),
             )
         } |
+        TFor TIdent '=' expr oneline_or_block {
+            forVar, forEnd := ANode($2), ANodeS($2.Str + "_end")
+            $$ = __chain(
+                __move(forVar, NewNumberNode(0)).pos0($1),
+                __move(forEnd, CompNode(ALen, $4).pos0($1)).pos0($1),
+                __for(
+                    CompNode(ALess, forVar, forEnd).pos0($1),
+                ).
+                __continue(
+                    __chain(__inc(forVar, oneNode).pos0($1)),
+                ).
+                __body($5).pos0($1),
+            )
+        } |
         TFor TIdent '=' expr ',' expr oneline_or_block {
             forVar, forEnd := ANode($2), ANodeS($2.Str + "_end")
             $$ = __chain(
@@ -238,9 +252,6 @@ for_stat:
                 )
             }
             
-        } |
-        TFor expr ',' expr {
-            $$ = CompNode(AForeach, $2, $4).pos0($1)
         } 
 
 if_stat:
@@ -280,8 +291,6 @@ jmp_stat:
         TYieldVoid                        { $$ = CompNode(AYield, nilNode).pos0($1) } |
         TBreak                            { $$ = CompNode(ABreak).pos0($1) } |
         TContinue                         { $$ = CompNode(AContinue).pos0($1) } |
-        TAssert expr                      { $$ = CompNode(AAssert, $2, nilNode).pos0($1) } |
-        TAssert expr TString              { $$ = CompNode(AAssert, $2, NewNode($3.Str)).pos0($1) } |
         TReturn expr                      { $$ = __return($2).pos0($1) } |
         TReturnVoid                       { $$ = __return(nilNode).pos0($1) } |
         TUse TString                      { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) }
@@ -328,7 +337,7 @@ expr:
         expr TURsh expr                   { $$ = CompNode(ABitURsh, $1,$3).pos0($1) } |
         expr '|' expr                     { $$ = CompNode(ABitOr, $1,$3).pos0($1) } |
         expr '&' expr                     { $$ = CompNode(ABitAnd, $1,$3).pos0($1) } |
-        '~' expr %prec UNARY              { $$ = CompNode(ABitXor, $2, max32Node).pos0($2) } |
+        '^' expr %prec UNARY              { $$ = CompNode(ABitXor, $2, max32Node).pos0($2) } |
         '-' expr %prec UNARY              { $$ = CompNode(ASub, zeroNode, $2).pos0($2) } |
         '!' expr %prec UNARY              { $$ = CompNode(ANot, $2).pos0($2) } |
         '&' TIdent %prec UNARY            { $$ = CompNode(AAddrOf, ANode($2)).pos0($2) }

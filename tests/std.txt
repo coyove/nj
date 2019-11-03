@@ -1,33 +1,33 @@
 a = "hello world"
-assert a[6:]  == "world"
+assert( a[6:]  == "world")
 
 m = {}
 for i=0,20 { m[i] = i }
 m2 = std.genlist(10)
 n = len(m[5:len(m2) + 5](m2))
-assert n == 10&&m2 == {5,6,7,8,9,10,11,12,13,14}
+assert( n == 10&&m2 == {5,6,7,8,9,10,11,12,13,14})
 
 r = m2[2]
 m2 = m2[:2] << m2[3:]
-assert r == 7&&m2 == {5,6,8,9,10,11,12,13,14}
+assert( r == 7&&m2 == {5,6,8,9,10,11,12,13,14})
 
 ptr_test = std.eval(`return func ( a) {
     a[] = 10
 }`)()
 
 ptr_test(&a)
-assert a == 10
+assert( a == 10)
 
 
-func testAssert() {
-    assert 0 "hello"
+func testassert() {
+    assert( 0,"hello")
     return "world"
 }
 
-std.safe(testAssert)
+std.safe(testassert)
 
-msg = testAssert()
-assert msg == "hello"
+msg = testassert()
+assert( msg == "hello")
 
 a = {
     a: {hello: nil, n3: {
@@ -36,8 +36,6 @@ a = {
 }
 
 j = `{"a": { "hello": null, "n3": { "n0" : [1,2,3]}}}`
-assert std.json.parse(j) == a
-assert std.json.parse("true") == true
-assert std.json.parse("     true") == !false
-
-
+assert(std.json.parse(j) == a)
+assert(std.json.parse("true") == true)
+assert(std.json.parse("     true") == !false)

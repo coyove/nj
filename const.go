@@ -10,7 +10,7 @@ type (
 )
 
 const (
-	OpAssert _Opcode = iota
+	_ _Opcode = iota
 	OpStore
 	OpLoad
 	OpAdd
@@ -43,7 +43,7 @@ const (
 	OpYield
 	OpSlice
 	OpInc
-	OpForeach
+	OpCopyStack
 	OpLen
 	OpTypeof
 	OpAddressOf

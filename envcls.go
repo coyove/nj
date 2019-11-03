@@ -243,10 +243,9 @@ func (c *Closure) Exec(newEnv *Env) Value {
 	return c.native(newEnv)
 }
 
-func (c *Closure) ImmediatePanic() {
-	const AssertNil = uint32(OpAssert)<<26 | uint32(regNil)<<13
+func (c *Closure) ImmediateStop() {
+	const Stop = uint32(OpEOB) << 26
 	for i := range c.Code {
-		// Make all opcode into (assert nil), so the execution will eventually panic
-		c.Code[i] = AssertNil
+		c.Code[i] = Stop
 	}
 }

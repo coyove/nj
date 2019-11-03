@@ -13,8 +13,8 @@ fib3 = (fib2)()
  
 for i = 0,33 fib2(0,1)
 
-assert (fib2())==9227465
-assert (fib3(0, 1)+fib3()+fib3()+fib3()) == 11
+assert( (fib2())==9227465)
+assert( (fib3(0, 1)+fib3()+fib3()+fib3()) == 11)
 
 func yieldtest() {
     yield 1
@@ -22,14 +22,14 @@ func yieldtest() {
     yield 3
 }
 
-assert yieldtest() ==1&&yieldtest()==2&&yieldtest()==3&&yieldtest()==nil
-assert yieldtest() ==1&&yieldtest()==2&&yieldtest()==3&&yieldtest()==nil
+assert( yieldtest() ==1&&yieldtest()==2&&yieldtest()==3&&yieldtest()==nil)
+assert( yieldtest() ==1&&yieldtest()==2&&yieldtest()==3&&yieldtest()==nil)
 
 func counter() for i=2,0,-1 yield i
 
 func yieldtest() for true yield ({3, 2, 1})[counter()]
 
-assert yieldtest() ==1&&yieldtest()==2&&yieldtest()==3 
+assert( yieldtest() ==1&&yieldtest()==2&&yieldtest()==3 )
 
 func deepadd(a) {
     if (a <= 0) { return 0 }
@@ -37,39 +37,39 @@ func deepadd(a) {
 }
 
 e = 100000
-assert deepadd(e) == (1 + e) * (e / 2 )
+assert( deepadd(e) == (1 + e) * (e / 2 ))
 
 a = 2
-assert 1 + 2 *3/5 == 2.2
-assert true /2+ 2.2 * 5 * (a + 1) == 33.5
-assert 1 /2+ 2.2 * (a + 1) * 5 == 33.5
+assert( 1 + 2 *3/5 == 2.2)
+assert( true /2+ 2.2 * 5 * (a + 1) == 33.5)
+assert( 1 /2+ 2.2 * (a + 1) * 5 == 33.5)
 
 l = {1,2,3}
 l2 = {"1","2","3"}
 l[len l-1+1] = l2
-assert l == {1,2,3, {"1","2","3"}}
-assert (l << l2) == {1,2,3, {"1","2","3"}, "1", "2", "3"}
+assert( l == {1,2,3, {"1","2","3"}})
+assert( (l << l2) == {1,2,3, {"1","2","3"}, "1", "2", "3"})
 
 mul = (func(a) { b = 1 return func() {b = b * a return b } })(2)
 
-assert mul() == 2&&mul() == 4&&mul() == 8
+assert( mul() == 2&&mul() == 4&&mul() == 8)
 if (0 == 1 ) {
-    assert 0
+    assert( 0)
 } else if (2 == 2) {
-    assert 1
+    assert( 1)
 } else {
-    assert 0
+    assert( 0)
 }
 
 double = (func a = func b = a * b)(2)
-assert double(2) == 4
+assert( double(2) == 4)
 
-if (1||func() {assert 0 }) {
-    assert 1
+if (1||func() {assert(0) }) {
+    assert( 1)
 }
 
-if (0&&func() {assert 0 }) {
-    assert 1
+if (0&&func() {assert(0) }) {
+    assert( 1)
 }
 
 func test2() {
@@ -79,7 +79,7 @@ func test2() {
             sum = sum + i
             if (sum > 100) { break }
         }
-        assert sum == 105
+        assert( sum == 105)
     }
     test1()
 }
@@ -91,28 +91,28 @@ m = {
     key2: {1,2,3}
 }
 
-assert m == m()
+assert( m == m())
 
 m3 = m()
 m.key2[0] = 0
-assert m3.key2[0] == 1&&m.key2[0] == 0
+assert( m3.key2[0] == 1&&m.key2[0] == 0)
 
 func select(cond, t, f) {
     return cond&&t||f
 } 
 
-assert 1&&1||0
-assert 0&&0||1
-assert select(1, 1, 2) == 1&&select(0)(1)(2) == 2
+assert( 1&&1||0)
+assert( 0&&0||1)
+assert( select(1, 1, 2) == 1&&select(0)(1)(2) == 2)
 a = 1
 a = a - 1  // this will be eventually compiled into: [inc a -1]
-assert a == 0
+assert( a == 0)
 
 _array = {1,2,3}
-assert len(_array)==3
+assert( len(_array)==3)
 
 _array = {1,2,3,}
-assert len(_array)==3
+assert( len(_array)==3)
 
 
 af = 2
@@ -125,28 +125,28 @@ else
     else    
         af = 3
 
-assert af == 3
+assert( af == 3)
 
 af = 1
 
 if (af == 0)
     if (af < 2)
-        assert 1
+        assert( 1)
 else
-    assert 0  // shouldn't be here
+    assert( 0)  // shouldn't be here
 
 a = use "simple.txt" + 1
-assert a == 2
+assert( a == 2)
 
 func safeexec() {
-    assert 0
+    assert( 0)
 }
 std.safe(safeexec)
 safeexec()
 
 m = {1,2,{1,2,{1,2,{1,2,3}}}}
 m[2][2][2][2] = 4
-assert m == {1,2,{1,2,{1,2,{1,2,4}}}}
+assert( m == {1,2,{1,2,{1,2,{1,2,4}}}})
 
 func safeexec(f, args) {
     result = "none"
@@ -164,18 +164,18 @@ r = safeexec(func(a, b) {
     return a / b
 }, {1,2})
  
-assert r.result == 0.5
+assert( r.result == 0.5)
 
 r = safeexec(func(a, b) {
     return a / b
 }, {1,"2"})
   
-assert r.result == "none"&&!r.ok
+assert( r.result == "none"&&!r.ok)
 
 a = func a = func b = func c = a + b + (func d = d * 2)(c)
-assert a(1)(2)(3) == 9
+assert( a(1)(2)(3) == 9)
 
-assert (func = copystack())(1,2,3) == {1,2,3}
+assert( (func = copystack())(1,2,3) == {1,2,3})
 
 func multi_return(a, b) {
     yield a + 1
@@ -188,16 +188,16 @@ mr_b = multi_return()
 mr_ab2 = ({a: multi_return})().a()
 mr_ab = multi_return()
 
-assert mr_a == 2&&mr_b == 3&&mr_ab == 3&&mr_ab2 == 3
+assert( mr_a == 2&&mr_b == 3&&mr_ab == 3&&mr_ab2 == 3)
 
 x = 10
 (func() { x = 2 })()
-assert x == 2
+assert( x == 2)
 
 x = 10
-(func() { $x = 2 * x assert $x == 20 })()
-assert x == 10
+(func() { $x = 2 * x assert( $x == 20) })()
+assert( x == 10)
 
 a = {1, 2, 3, "a", "b" , "c"}
 n = len ({"2", "3"})(a[1:3])
-assert n == 2&&a == {1, "2", "3", "a", "b", "c"}
+assert( n == 2&&a == {1, "2", "3", "a", "b", "c"})

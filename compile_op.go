@@ -113,12 +113,6 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	case OpTypeof, OpNot, OpAddressOf, OpRet, OpYield, OpLen:
 		// unary op
 		err = table.writeOpcode(&buf, bop, atoms[1], nil)
-	case OpAssert:
-		if len(atoms) == 3 {
-			err = table.writeOpcode(&buf, bop, atoms[1], atoms[2])
-		} else {
-			err = table.writeOpcode(&buf, bop, atoms[1], nil)
-		}
 	default:
 		// binary op
 		err = table.writeOpcode(&buf, bop, atoms[1], atoms[2])
@@ -213,7 +207,7 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint16
 // [call callee [args ...]]
 func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint16, err error) {
 	if nodes[1].A() == "copystack" {
-		code.WriteOP(OpForeach, regNil, regNil)
+		code.WriteOP(OpCopyStack, 0, 0)
 		code.WritePos(nodes[0].Meta)
 		return code, regA, nil
 	}
