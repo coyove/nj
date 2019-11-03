@@ -1,0 +1,60 @@
+A := func (i, j) {
+    return ((i+j)*(i+j+1)/2 + i + 1) 
+}
+
+TimesVec := func(v, s, n, u) {
+    ul := len(u) 
+    for i := s; i < n; i++ {
+        vi := 0 
+        for j := 0; j < ul; j++ {
+            vi = vi + u[j] / A(i, j) 
+        }
+        v[i] = vi 
+    }
+}
+
+TimesTranspVec := func(v, s, n, u) {
+    ul := len(u) 
+    for i := s; i < n; i++ {
+        vi := 0 
+        for j := 0; j < ul; j++ {
+            vi = vi + u[j] / A(j, i) 
+        }
+        v[i] = vi 
+    }
+}
+
+n := 2000
+xx := []
+for idx := 0; idx < n; idx++ {
+    xx = append(xx, 0.0)
+}
+
+ATimesTransp := func(v, u) {
+    x := copy(xx) 
+    TimesVec(x, 0, len(v), u)
+    TimesTranspVec(v, 0, len(v), x)
+}
+
+u := [] 
+v := [] 
+ 
+for idx := 0; idx < n; idx++ {
+    u = append(u, 1.0)
+    v = append(v, 0.0) 
+}
+
+for i := 0; i < 10; i++ {
+    ATimesTransp(v, u) 
+    ATimesTransp(u, v) 
+}
+ 
+vBv := 0
+vv := 0 
+for i := 0 ; i < len(v); i++ {
+    vBv = vBv + u[i] * v[i]
+    vv = vv + v[i] * v[i]
+}
+
+import("fmt").println(import("math").sqrt(vBv/vv)) 
+    

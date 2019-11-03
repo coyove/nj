@@ -1,5 +1,7 @@
 potatolang (pol) is a script language written in golang. Currently it only runs on 64bit platforms.
 
+For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master/tests/bench/perf.md).
+
 ## Quick starter guide for gophers
 
 ### Basic Type

@@ -78,11 +78,11 @@ for i = 0, 10 {
     ATimesTransp(u, v) 
 }
 
- vBv = 0
- vv = 0 
-for v , func(i,x) {
-    vBv = vBv + u[i] * x 
-    vv = vv + x * x 
+vBv = 0
+vv = 0 
+for i = v {
+    vBv = vBv + u[i] * v[i]
+    vv = vv + v[i] * v[i]
 }
 
 io.println(math.sqrt(vBv/vv)) 
