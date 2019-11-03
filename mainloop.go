@@ -12,12 +12,6 @@ func panicf(msg string, args ...interface{}) {
 	panic(fmt.Sprintf(msg, args...))
 }
 
-func panicerr(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
 type stacktrace struct {
 	cursor uint32
 	env    *Env
@@ -63,8 +57,9 @@ func konstaddr(consts []Value) uintptr { return (*reflect.SliceHeader)(unsafe.Po
 
 // ExecCursor executes 'K' under 'Env' from the given start 'cursor'
 func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor uint32, yielded bool) {
-	var newEnv *Env
+	var stackEnv *Env
 	var retStack []stacktrace
+	var recycledStacks []*Env
 	var caddr = kodeaddr(K.Code)
 
 	defer func() {
@@ -74,7 +69,9 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 				if rv, ok := r.(Value); ok {
 					result = rv
 				} else {
-					result = NewStringValue(fmt.Sprintf("%v", r))
+					p := bytes.Buffer{}
+					fmt.Fprint(&p, r)
+					result = NewStringValue(p.Bytes())
 				}
 				return
 			}
@@ -106,9 +103,13 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 		r.env.A = v
 		caddr = kodeaddr(K.Code)
 		if r.cls.Isset(ClsNoEnvescape) {
-			newEnv = env
-			newEnv.LocalClear()
+			if stackEnv != nil {
+				recycledStacks = append(recycledStacks, stackEnv)
+			}
+			stackEnv = env
+			stackEnv.LocalClear()
 		}
+		// log.Println(unsafe.Pointer(&stackEnv.stack))
 		env = r.env
 		retStack = retStack[:len(retStack)-1]
 	}
@@ -139,7 +140,10 @@ MAIN:
 			case _NumberNumber:
 				env.A.SetNumberValue(va.AsNumber() + vb.AsNumber())
 			case _StringString:
-				env.A = NewStringValue(va.AsString() + vb.AsString())
+				vab, vbb := va.AsString(), vb.AsString()
+				x := make([]byte, len(vab)+len(vbb))
+				copy(x[copy(x, vab):], vbb)
+				env.A = NewStringValue(x)
 			default:
 				panicf("can't apply '+' on %+v and %+v", va, vb)
 			}
@@ -180,7 +184,7 @@ MAIN:
 			case _NumberNumber:
 				env.A.SetBoolValue(va.AsNumber() < vb.AsNumber())
 			case _StringString:
-				env.A.SetBoolValue(va.AsString() < vb.AsString())
+				env.A.SetBoolValue(bytes.Compare(va.AsString(), vb.AsString()) == -1)
 			default:
 				panicf("can't apply '<' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
@@ -189,7 +193,7 @@ MAIN:
 			case _NumberNumber:
 				env.A.SetBoolValue(va.AsNumber() <= vb.AsNumber())
 			case _StringString:
-				env.A.SetBoolValue(va.AsString() <= vb.AsString())
+				env.A.SetBoolValue(bytes.Compare(va.AsString(), vb.AsString()) <= 0)
 			default:
 				panicf("can't apply '<=' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
@@ -221,11 +225,12 @@ MAIN:
 			case _NumberNumber:
 				env.A.SetNumberValue(float64(va.AsInt32() << uint(vb.AsNumber())))
 			case _SliceSlice:
-				{
-					va, vb := va.AsSlice(), vb.AsSlice()
-					va.l = append(va.l, vb.l...)
-				}
+				vas := va.AsSlice()
+				vas.l = append(vas.l, vb.AsSlice().l...)
 				env.A = va
+			case _StringString:
+				va = NewStringValue(append(va.AsString(), vb.AsString()...))
+				env.Set(opa, va)
 			default:
 				panicf("can't apply '<<' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
@@ -245,7 +250,7 @@ MAIN:
 			if a := env.Get(opa, K); a.IsFalse() {
 				msg := env.Get(opb, K)
 				if msg.Type() == StringType {
-					panic(msg.AsString())
+					panic(msg)
 				}
 				panicf("assertion failed: %+v", a)
 			}
@@ -261,116 +266,61 @@ MAIN:
 			default:
 				panicf("can't evaluate the length of %+v", v)
 			}
-		case OpMakeMap:
-			if newEnv == nil {
+		case OpMakeStruct:
+			if stackEnv == nil {
 				env.A = NewStructValue(NewStruct())
 			} else {
 				m := NewStruct()
-				for i := 0; i < newEnv.LocalSize(); i += 2 {
-					m.l.Add(true, newEnv.stack[i], newEnv.stack[i+1])
+				for i := 0; i < stackEnv.LocalSize(); i += 2 {
+					m.l.Add(true, stackEnv.stack[i], stackEnv.stack[i+1])
 				}
-				newEnv.LocalClear()
+				stackEnv.LocalClear()
 				env.A = NewStructValue(m)
 			}
-		case OpMakeArray:
-			if newEnv == nil {
-				env.A = NewMapValue(NewSlice())
+		case OpMakeSlice:
+			if stackEnv == nil {
+				env.A = NewSliceValue(NewSlice())
 			} else {
-				m := NewSliceSize(newEnv.LocalSize())
-				copy(m.l, newEnv.stack)
-				newEnv.LocalClear()
-				env.A = NewMapValue(m)
+				m := NewSliceSize(stackEnv.LocalSize())
+				copy(m.l, stackEnv.stack)
+				stackEnv.LocalClear()
+				env.A = NewSliceValue(m)
 			}
 		case OpStore:
-			vidx, v := env.Get(opa, K), env.Get(opb, K)
+			idx, v := env.Get(opa, K), env.Get(opb, K)
 			switch env.A.Type() {
 			case SliceType:
-				m := env.A.AsSlice()
-				m.Put(int(vidx.AsNumber()), v)
+				env.A.AsSlice().Put(int(idx.MustNumber()), v)
 			case StructType:
-				m := env.A.AsStruct()
-				if !m.l.Add(false, vidx, v) {
-					panicf("attribute %v not found", vidx)
+				if !env.A.AsStruct().l.Add(false, idx, v) {
+					panicf("attribute %v not found", idx)
 				}
-			case StringType:
-				var p []byte
-				switch combineTypes(vidx, v) {
-				case _NumberNumber:
-					p = []byte(env.A.AsString())
-					p[int(vidx.AsNumber())] = byte(v.AsNumber())
-				case NumberType<<8 | StringType:
-					idx, as, vs := int(vidx.AsNumber()), env.A.AsString(), v.AsString()
-					if len(vs) == 1 {
-						p = []byte(as)
-						p[idx] = vs[0]
-					} else {
-						p = make([]byte, len(as)+len(vs)-1)
-						copy(p, as[:idx])
-						copy(p[idx:], vs)
-						copy(p[idx+len(vs):], as[idx+1:])
-					}
-				default:
-					panicf("can't modify string %+v[%+v] to %+v", env.A, vidx, v)
-				}
-				(*baseString)(env.A.ptr).s = *(*string)(unsafe.Pointer(&p)) // unsafely cast p to string
 			case NilType:
-				switch va := env.Get(opa, K); va.Type() {
+				switch idx.Type() {
 				case NumberType:
-					x := math.Float64bits(va.AsNumber())
+					x := math.Float64bits(idx.AsNumber())
 					(*Env)(unsafe.Pointer(uintptr(x<<16>>16))).Set(uint16(x>>48), v)
 				case NilType:
 					// ignore
 				default:
-					panicf("%+v: move(address, value), not an address", va)
+					panicf("%+v: move(address, value), not an address", idx)
 				}
 			default:
-				panicf("can't modify %+v[%+v] to %+v", env.A, vidx, v)
+				panicf("can't modify %+v[%+v] to %+v", env.A, idx, v)
 			}
 			env.A = v
 		case OpLoad:
-			var v Value
 			a := env.Get(opa, K)
-			vidx := env.Get(opb, K)
-			switch combineTypes(a, vidx) {
+			idx := env.Get(opb, K)
+			switch combineTypes(a, idx) {
 			case _StringNumber:
-				v.SetNumberValue(float64(a.AsString()[int(vidx.AsNumber())]))
+				env.A.SetNumberValue(float64(a.AsString()[int(idx.AsNumber())]))
 			case _SliceNumber:
-				v = a.AsSlice().Get(int(vidx.AsNumber()))
+				env.A = a.AsSlice().Get(int(idx.AsNumber()))
 			case _StructNumber:
-				v, _ = a.AsStruct().Get(vidx)
-				if v.Type() == ClosureType {
-					if cls := v.AsClosure(); cls.Isset(ClsHasReceiver) {
-						cls = cls.Dup()
-						if cls.ArgsCount > 0 {
-							if len(cls.PartialArgs) > 0 {
-								panicf("curry function with a receiver")
-							}
-							cls.ArgsCount--
-							cls.PartialArgs = []Value{a}
-						}
-						v = NewClosureValue(cls)
-					}
-				}
+				env.A, _ = a.AsStruct().Get(idx)
 			default:
-				panicf("can't load %+v[%+v]", a, vidx)
-			}
-			env.A = v
-		case OpPop:
-			a := env.Get(opa, K)
-			switch a.Type() {
-			case SliceType:
-				m := a.AsSlice()
-				l := m.l
-				if len(l) == 0 {
-					env.A = Value{}
-				} else {
-					env.A = l[len(l)-1]
-					m.l = l[:len(l)-1]
-				}
-			case NilType:
-				env.A = Phantom
-			default:
-				panicf("can't pop %+v", a)
+				panicf("can't load %+v[%+v]", a, idx)
 			}
 		case OpSlice:
 			start, end := int(env.Get(opa, K).MustNumber()), int(env.Get(opb, K).MustNumber())
@@ -388,21 +338,21 @@ MAIN:
 				} else {
 					m.l = x.AsSlice().l[start:end]
 				}
-				env.A = NewMapValue(m)
+				env.A = NewSliceValue(m)
 			default:
 				panicf("can't slice %+v", x)
 			}
 		case OpPush:
-			if newEnv == nil {
-				newEnv = NewEnv(nil)
+			if stackEnv == nil {
+				stackEnv = NewEnv(nil)
 			}
-			newEnv.LocalPush(env.Get(opa, K))
+			stackEnv.LocalPush(env.Get(opa, K))
 		case OpPush2:
-			if newEnv == nil {
-				newEnv = NewEnv(nil)
+			if stackEnv == nil {
+				stackEnv = NewEnv(nil)
 			}
-			newEnv.LocalPush(env.Get(opa, K))
-			newEnv.LocalPush(env.Get(opb, K))
+			stackEnv.LocalPush(env.Get(opa, K))
+			stackEnv.LocalPush(env.Get(opb, K))
 		case OpRet:
 			v := env.Get(opa, K)
 			if len(retStack) == 0 {
@@ -417,41 +367,49 @@ MAIN:
 			v := env.Get(opa, K)
 			if x := v.Type(); x != ClosureType {
 				switch x {
+				case StringType:
+					if stackEnv != nil && stackEnv.LocalSize() > 0 {
+						dest := stackEnv.LocalGet(0).MustString()
+						env.A = NewStringValue(dest[:copy(dest, v.AsString())])
+					} else {
+						env.A = NewStringValue(append([]byte{}, v.AsString()...))
+					}
 				case SliceType:
-					if newEnv != nil && newEnv.LocalSize() > 0 {
-						dest := newEnv.LocalGet(0).MustMap()
+					if stackEnv != nil && stackEnv.LocalSize() > 0 {
+						dest := stackEnv.LocalGet(0).MustSlice()
 						n := copy(dest.l, v.AsSlice().l)
 						m := NewSlice()
 						m.l = dest.l[:n]
-						env.A = NewMapValue(m)
+						env.A = NewSliceValue(m)
 					} else {
-						env.A = NewMapValue(v.AsSlice().Dup())
+						env.A = NewSliceValue(v.AsSlice().Dup())
 					}
-					newEnv.LocalClear()
-					continue
 				case StructType:
 					env.A = NewStructValue(v.AsStruct().Dup())
-					newEnv.LocalClear()
-					continue
+				default:
+					v.testType(ClosureType)
 				}
-				v.panicType(ClosureType)
+				if stackEnv != nil {
+					stackEnv.LocalClear()
+				}
+				continue
 			}
 			cls := v.AsClosure()
 			if cls.lastenv != nil {
 				env.A = cls.Exec(nil)
-				newEnv = nil
+				stackEnv = nil
 			} else {
-				if newEnv == nil {
-					newEnv = NewEnv(env)
+				if stackEnv == nil {
+					stackEnv = NewEnv(env)
 				}
 
-				if newEnv.LocalSize() >= int(cls.ArgsCount) {
+				if stackEnv.LocalSize() >= int(cls.ArgsCount) {
 					if len(cls.PartialArgs) > 0 {
-						newEnv.LocalPushFront(cls.PartialArgs)
+						stackEnv.LocalPushFront(cls.PartialArgs)
 					}
 					if cls.Isset(ClsYieldable | ClsRecoverable | ClsNative) {
-						newEnv.parent = env
-						env.A = cls.Exec(newEnv)
+						stackEnv.parent = env
+						env.A = cls.Exec(stackEnv)
 					} else {
 						last := stacktrace{
 							cls:    K,
@@ -463,23 +421,28 @@ MAIN:
 						cursor = 0
 						K = cls
 						caddr = kodeaddr(K.Code)
-						newEnv.parent = cls.Env
-						env = newEnv
+						stackEnv.parent = cls.Env
+						env = stackEnv
 
 						retStack = append(retStack, last)
 					}
 					if cls.native == nil {
-						newEnv = nil
+						if len(recycledStacks) == 0 {
+							stackEnv = nil
+						} else {
+							stackEnv = recycledStacks[len(recycledStacks)-1]
+							recycledStacks = recycledStacks[:len(recycledStacks)-1]
+						}
 					} else {
-						newEnv.LocalClear()
+						stackEnv.LocalClear()
 					}
-				} else if newEnv.LocalSize() == 0 {
+				} else if stackEnv.LocalSize() == 0 {
 					env.A = NewClosureValue(cls.Dup())
 				} else {
 					curry := cls.Dup()
-					curry.AppendPartialArgs(newEnv.Stack())
+					curry.AppendPartialArgs(stackEnv.Stack())
 					env.A = NewClosureValue(curry)
-					newEnv.LocalClear()
+					stackEnv.LocalClear()
 				}
 			}
 
@@ -498,10 +461,10 @@ MAIN:
 			if x.Type() == NilType {
 				ret := NewSliceSize(len(env.stack))
 				copy(ret.l, env.stack)
-				env.A = NewMapValue(ret)
+				env.A = NewSliceValue(ret)
 				continue
 			}
-			m := x.MustMap()
+			m := x.MustSlice()
 			cls := env.Get(opb, K).MustClosure()
 			forEnv := NewEnv(cls.Env)
 			for i := len(m.l) - 1; i >= 0; i-- {
@@ -514,12 +477,7 @@ MAIN:
 			}
 			env.A = Value{}
 		case OpTypeof:
-			v := env.Get(opa, K)
-			if v == Phantom {
-				env.A = NewStringValue("#nil")
-			} else {
-				env.A = NewStringValue(TMapping[v.Type()])
-			}
+			env.A = NewStringValue(typeMappings[env.Get(opa, K).Type()])
 		case OpAddressOf:
 			addr := uint64(opa)<<48 | uint64(uintptr(unsafe.Pointer(env)))
 			env.A.SetNumberValue(math.Float64frombits(addr))

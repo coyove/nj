@@ -20,6 +20,9 @@ type Env struct {
 // NewEnv creates the Env for closure to run within
 // parent can be nil, which means this is a top Env
 func NewEnv(parent *Env) *Env {
+	//b := make([]byte, 4096)
+	//n := runtime.Stack(b, false)
+	//log.Println(string(b[:n]))
 	return &Env{
 		parent: parent,
 	}
@@ -136,7 +139,6 @@ func (env *Env) Stack() []Value {
 
 const (
 	ClsNoEnvescape = 1 << iota
-	ClsHasReceiver
 	ClsYieldable
 	ClsRecoverable
 	ClsNative
@@ -202,9 +204,6 @@ func (c *Closure) String() string {
 	x := fmt.Sprintf("<%s_%s_%da%dc%dk", p, hash, c.ArgsCount, len(c.PartialArgs), len(c.ConstTable))
 	if c.Isset(ClsYieldable) {
 		x += "_y"
-	}
-	if c.Isset(ClsHasReceiver) {
-		x += "_rcv"
 	}
 	if c.Isset(ClsRecoverable) {
 		x += "_safe"

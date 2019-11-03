@@ -86,7 +86,8 @@ for ;i < 10;
 assert a == {1,2,4,8,16,"a",64,128,256,512} 
 
 for 1 {
-     last = #a 
+    last = a[len a - 1]
+    a  = a[:len a - 1]
     if (last == "a") break 
 }
 

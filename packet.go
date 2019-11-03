@@ -287,7 +287,6 @@ var singleOp = map[_Opcode]string{
 	OpBitURsh: "bit-ursh",
 	OpTypeof:  "typeof",
 	OpSlice:   "slice",
-	OpPop:     "pop",
 }
 
 func (c *Closure) crPrettify(tab int) string {
@@ -381,10 +380,10 @@ MAIN:
 			sb.WriteString("nop")
 		case OpInc:
 			sb.WriteString("inc " + readAddr(a) + " " + readAddr(uint16(b)))
-		case OpMakeMap:
-			sb.WriteString("make-map")
-		case OpMakeArray:
-			sb.WriteString("make-array")
+		case OpMakeStruct:
+			sb.WriteString("make-struct")
+		case OpMakeSlice:
+			sb.WriteString("make-slice")
 		default:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs + " " + readAddr(a) + " " + readAddr(b))
@@ -418,7 +417,7 @@ func crReadClosure(code []uint32, cursor *uint32, env *Env, opa, opb uint16) *Cl
 			consts[i] = NewNumberValue(math.Float64frombits(x))
 			continue
 		}
-		consts[i] = NewStringValue(crReadStringLen(code, int(x), cursor))
+		consts[i] = NewStringValue(crReadBytesLen(code, int(x), cursor))
 	}
 
 	xlen := crRead64(code, cursor)

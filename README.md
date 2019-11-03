@@ -5,7 +5,7 @@ potatolang (pol) is a script language written in golang.
 ### Basic Type
 1. Nil (nil)
 2. Number (float64)
-3. String (string + []byte)
+3. String (immutable []byte)
 4. Slice ([]Value)
 5. Pointer (unsafe.Pointer)
 6. Closure (func)
@@ -78,16 +78,5 @@ a[len(a)] = 4
 Basically the same, with new syntax:
 1. `for i = start, end { ... }` => ` for i := start; i < end; i++ { ... }`.
 2. `for i = start, end, step { ... }` => `for i := start; i <= end; i += step { ... }` or `for i := start; i >= end; i += step { ... }`.
-3. `for m, func (k, v) { ... }` => `for k, v := range m { .. }`, inside the callback, `return false` will terminate the iteration.
 
-### String
-Strings are mutable by syntax, but behind the stage we convert it to `[]byte` anyway, e.g.:
-```
-a = "hello"
-a[0] = 'H'
-// a == "Hello"
-a[4] = "o world"
-// a == "Hello world"
-a[5] = ""
-// a == "Helloworld"
 ```

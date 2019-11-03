@@ -29,16 +29,6 @@ std.safe(testAssert)
 msg = testAssert()
 assert msg == "hello"
 
-
-tarr = "0123456789"
-for i = 0,10  {
-    tarr[i] = 0x61 + i
-}
-
-assert (tarr) == "abcdefghij"
-tarr[5]++
-assert (tarr) == "abcdegghij"
-
 a = {
     a: {hello: nil, n3: {
         n0: {1,2,3},

@@ -72,22 +72,6 @@ if (0&&func() {assert 0 }) {
     assert 1
 }
 
-func returncond(n) {
-    return {
-        counter: n,
-        test: func(this) {
-            this.counter++
-            return this.counter % 2 == 0
-        }
-    }
-}
-
-cond = returncond(0)
-assert cond.test()||cond.test()
-cond.test()
-assert cond.test()&&!cond.test()
-
-
 func test2() {
     func test1() {
         sum = 0
@@ -123,18 +107,6 @@ assert select(1, 1, 2) == 1&&select(0)(1)(2) == 2
 a = 1
 a = a - 1  // this will be eventually compiled into: [inc a -1]
 assert a == 0
-
-counter = {
-    tick : 0,
-    add: func(this, step) {
-        this.tick = this.tick + step
-    },
-}
-
-c = counter()
-c.add()(2)
-c.add(1)
-assert c.tick == 3
 
 _array = {1,2,3}
 assert len(_array)==3

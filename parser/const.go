@@ -66,7 +66,6 @@ const (
 	ANot      Atom = "!"
 	ALess     Atom = "<"
 	ALessEq   Atom = "<="
-	APop      Atom = "#"
 	AAddrOf   Atom = "addressof"
 	ATypeOf   Atom = "typeof"
 	ALen      Atom = "len"

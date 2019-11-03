@@ -74,9 +74,9 @@ func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx 
 	}
 
 	if atoms[0].Value.(parser.Atom) == parser.AMap {
-		code.WriteOP(OpMakeMap, 0, 0)
+		code.WriteOP(OpMakeStruct, 0, 0)
 	} else {
-		code.WriteOP(OpMakeArray, 0, 0)
+		code.WriteOP(OpMakeSlice, 0, 0)
 	}
 	code.WritePos(atoms[0].Meta)
 	return code, regA, nil
@@ -90,31 +90,6 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	}
 
 	atoms = append([]*parser.Node{}, atoms...) // duplicate
-
-	var n0, n1 *parser.Node
-
-	if bop == OpLen || bop == OpLoad || bop == OpPop {
-		if buf, err = table.decompound(atoms[1:]); err != nil {
-			return
-		}
-
-		if len(atoms) >= 2 {
-			n0 = atoms[1]
-		}
-
-		if len(atoms) == 3 {
-			n1 = atoms[2]
-		}
-
-		err = table.writeOpcode(&buf, bop, n0, n1)
-		for _, a := range atoms {
-			if a.Source != "" {
-				buf.WritePos(a.Meta)
-				break
-			}
-		}
-		return buf, regA, err
-	}
 
 	if bop == OpStore || bop == OpSlice {
 		if buf, err = table.decompoundWithoutA(atoms[1:]); err != nil {
@@ -135,7 +110,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	}
 
 	switch bop {
-	case OpTypeof, OpNot, OpAddressOf, OpRet, OpYield:
+	case OpTypeof, OpNot, OpAddressOf, OpRet, OpYield, OpLen:
 		// unary op
 		err = table.writeOpcode(&buf, bop, atoms[1], nil)
 	case OpAssert:
@@ -306,9 +281,6 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 		if _, ok := newtable.sym[argname]; ok {
 			return newpacket(), 0, fmt.Errorf("duplicated parameter: %s", argname)
 		}
-		if argname == "this" && i != 0 {
-			return newpacket(), 0, fmt.Errorf("%+v: 'this' must be the first parameter inside a lambda", atoms[2])
-		}
 		newtable.put(argname, uint16(i))
 	}
 
@@ -330,9 +302,6 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	cls.ArgsCount = byte(ln)
 	if newtable.y {
 		cls.Set(ClsYieldable)
-	}
-	if _, ok := newtable.sym["this"]; ok {
-		cls.Set(ClsHasReceiver)
 	}
 	if !newtable.envescape {
 		cls.Set(ClsNoEnvescape)

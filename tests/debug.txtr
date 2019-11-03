@@ -1,8 +1,5 @@
-a = struct {
-    err: "zzz",
-    err2: "zzz",
-}
-a = {
-    err: 1,
-}
-io.println(a.__fields)
+z = "000"
+z2 = z()
+z[1] = '1'
+io.println(z2)
+assert z2 == "000"

@@ -277,13 +277,13 @@ func_params_list:
 
 jmp_stat:
         TYield expr                       { $$ = CompNode(AYield, $2).pos0($1) } |
-        TYieldVoid                        { $$ = CompNode(AYield, CompNode(APop, nilNode).pos0($1)).pos0($1) } |
+        TYieldVoid                        { $$ = CompNode(AYield, nilNode).pos0($1) } |
         TBreak                            { $$ = CompNode(ABreak).pos0($1) } |
         TContinue                         { $$ = CompNode(AContinue).pos0($1) } |
         TAssert expr                      { $$ = CompNode(AAssert, $2, nilNode).pos0($1) } |
         TAssert expr TString              { $$ = CompNode(AAssert, $2, NewNode($3.Str)).pos0($1) } |
         TReturn expr                      { $$ = __return($2).pos0($1) } |
-        TReturnVoid                       { $$ = __return(CompNode(APop, nilNode).pos0($1)).pos0($1) } |
+        TReturnVoid                       { $$ = __return(nilNode).pos0($1) } |
         TUse TString                      { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) }
 
 declarator:
@@ -331,7 +331,6 @@ expr:
         '~' expr %prec UNARY              { $$ = CompNode(ABitXor, $2, max32Node).pos0($2) } |
         '-' expr %prec UNARY              { $$ = CompNode(ASub, zeroNode, $2).pos0($2) } |
         '!' expr %prec UNARY              { $$ = CompNode(ANot, $2).pos0($2) } |
-        '#' expr %prec UNARY              { $$ = CompNode(APop, $2).pos0($2) } |
         '&' TIdent %prec UNARY            { $$ = CompNode(AAddrOf, ANode($2)).pos0($2) }
 
 prefix_expr:

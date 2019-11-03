@@ -1,8 +1,8 @@
 package potatolang
 
 import (
+	"bytes"
 	"strconv"
-	"strings"
 	"sync"
 	"unicode/utf8"
 	"unsafe"
@@ -31,6 +31,12 @@ func AddCoreValue(name string, value Value) {
 	CoreLibs[name] = value
 }
 
+func panicerr(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
 func initCoreLibs() {
 	lcore := NewStruct()
 	lcore.Put("unique", NewNativeValue(0, func(env *Env) Value {
@@ -38,13 +44,13 @@ func initCoreLibs() {
 		return NewPointerValue(unsafe.Pointer(a), PTagUnique)
 	}))
 	lcore.Put("genlist", NewNativeValue(1, func(env *Env) Value {
-		return NewMapValue(NewSliceSize(int(env.LocalGet(0).MustNumber())))
+		return NewSliceValue(NewSliceSize(int(env.LocalGet(0).MustNumber())))
 	}))
 	lcore.Put("apply", NewNativeValue(2, func(env *Env) Value {
 		cls := env.LocalGet(0).MustClosure()
 		newEnv := NewEnv(cls.Env)
 		newEnv.stack = append([]Value{}, cls.PartialArgs...)
-		for _, v := range env.LocalGet(1).MustMap().l {
+		for _, v := range env.LocalGet(1).MustSlice().l {
 			newEnv.LocalPush(v)
 		}
 		return cls.Exec(newEnv)
@@ -57,26 +63,26 @@ func initCoreLibs() {
 	lcore.Put("stacktrace", NewNativeValue(0, func(env *Env) Value {
 		panic("not implemented")
 		//e := ExecError{stacks: Env.trace}
-		//return NewStringValue(e.Error())
+		//return NewStringValueString(e.Error())
 	}))
 	lcore.Put("eval", NewNativeValue(1, func(env *Env) Value {
-		cls, err := LoadString(env.LocalGet(0).MustString())
+		cls, err := LoadString(string(env.LocalGet(0).MustString()))
 		if err != nil {
-			return NewStringValue(err.Error())
+			return NewStringValueString(err.Error())
 		}
 		return NewClosureValue(cls)
 	}))
 	lcore.Put("unicode", NewNativeValue(1, func(env *Env) Value {
-		return NewStringValue(string(rune(env.LocalGet(0).MustNumber())))
+		return NewStringValueString(string(rune(env.LocalGet(0).MustNumber())))
 	}))
 	lcore.Put("char", NewNativeValue(1, func(env *Env) Value {
-		r, _ := utf8.DecodeRuneInString(env.LocalGet(0).MustString())
+		r, _ := utf8.DecodeRune(env.LocalGet(0).MustString())
 		return NewNumberValue(float64(r))
 	}))
 	lcore.Put("index", NewNativeValue(2, func(env *Env) Value {
 		switch s := env.LocalGet(0); s.Type() {
 		case StringType:
-			return NewNumberValue(float64(strings.Index(s.AsString(), env.LocalGet(1).MustString())))
+			return NewNumberValue(float64(bytes.Index(s.AsString(), env.LocalGet(1).MustString())))
 		case SliceType:
 			m := s.AsSlice()
 			x := env.LocalGet(1)
@@ -95,7 +101,7 @@ func initCoreLibs() {
 		v := env.LocalGet(0).MustNumber()
 		base := byte(env.LocalGet(1).MustNumber())
 		digits := int(env.LocalGet(2).MustNumber())
-		return NewStringValue(strconv.FormatFloat(v, byte(base), digits, 64))
+		return NewStringValueString(strconv.FormatFloat(v, byte(base), digits, 64))
 	}))
 	lcore.Put("sync", NewStructValue(NewStruct().
 		Put("run", NewNativeValue(1, func(env *Env) Value {
@@ -137,7 +143,7 @@ func initCoreLibs() {
 			})).
 			Put("get", NewNativeValue(2, func(env *Env) Value {
 				cls := env.LocalGet(0).MustClosure()
-				switch name := env.LocalGet(1).MustString(); name {
+				switch name := env.LocalGet(1).MustString(); string(name) {
 				case "argscount":
 					return NewNumberValue(float64(cls.ArgsCount))
 				case "yieldable":
@@ -145,7 +151,7 @@ func initCoreLibs() {
 				case "envescaped":
 					return NewBoolValue(!cls.Isset(ClsNoEnvescape))
 				case "source":
-					return NewStringValue(cls.source)
+					return NewStringValueString(cls.source)
 				}
 				return NewClosureValue(cls)
 			})))).
@@ -153,7 +159,7 @@ func initCoreLibs() {
 
 	lcore.Put("json", NewStructValue(NewStruct().
 		Put("parse", NewNativeValue(1, func(env *Env) Value {
-			json := []byte(strings.TrimSpace(env.LocalGet(0).MustString()))
+			json := bytes.TrimSpace(env.LocalGet(0).MustString())
 			if len(json) == 0 {
 				return Value{}
 			}
@@ -165,7 +171,7 @@ func initCoreLibs() {
 			case '"':
 				str, err := jsonparser.ParseString(json)
 				panicerr(err)
-				return NewStringValue(str)
+				return NewStringValueString(str)
 			case 't', 'f':
 				b, err := jsonparser.ParseBoolean(json)
 				panicerr(err)
@@ -177,12 +183,12 @@ func initCoreLibs() {
 			}
 		})).
 		Put("stringify", NewNativeValue(1, func(env *Env) Value {
-			return NewStringValue(env.LocalGet(0).toString(0, true))
+			return NewStringValueString(env.LocalGet(0).toString(0, true))
 		}))))
 
 	CoreLibs["std"] = NewStructValue(lcore)
 	CoreLibs["atoi"] = NewNativeValue(1, func(env *Env) Value {
-		v, err := parser.StringToNumber(env.LocalGet(0).MustString())
+		v, err := parser.StringToNumber(string(env.LocalGet(0).MustString()))
 		if err != nil {
 			return Value{}
 		}
@@ -195,9 +201,9 @@ func initCoreLibs() {
 			if env.LocalSize() >= 2 {
 				base = int(env.LocalGet(1).MustNumber())
 			}
-			return NewStringValue(strconv.FormatInt(int64(v), base))
+			return NewStringValueString(strconv.FormatInt(int64(v), base))
 		}
-		return NewStringValue(strconv.FormatFloat(v, 'f', -1, 64))
+		return NewStringValueString(strconv.FormatFloat(v, 'f', -1, 64))
 	})
 
 	initIOLib()
@@ -223,7 +229,7 @@ func walkObject(buf []byte) Value {
 		case jsonparser.String:
 			str, err := jsonparser.ParseString(value)
 			panicerr(err)
-			m.Put(string(key), NewStringValue(str))
+			m.Put(string(key), NewStringValueString(str))
 		case jsonparser.Array:
 			m.Put(string(key), walkArray(value))
 		case jsonparser.Object:
@@ -254,7 +260,7 @@ func walkArray(buf []byte) Value {
 		case jsonparser.String:
 			str, err := jsonparser.ParseString(value)
 			panicerr(err)
-			m.Put(i, NewStringValue(str))
+			m.Put(i, NewStringValueString(str))
 		case jsonparser.Array:
 			m.Put(i, walkArray(value))
 		case jsonparser.Object:
@@ -262,5 +268,5 @@ func walkArray(buf []byte) Value {
 		}
 		i++
 	})
-	return NewMapValue(m)
+	return NewSliceValue(m)
 }

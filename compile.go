@@ -138,7 +138,6 @@ var flatOpMapping = map[parser.Atom]_Opcode{
 	parser.ABitLsh:  OpBitLsh,
 	parser.ABitRsh:  OpBitRsh,
 	parser.ABitURsh: OpBitURsh,
-	parser.APop:     OpPop,
 	parser.AStore:   OpStore,
 	parser.ALoad:    OpLoad,
 	parser.AAssert:  OpAssert,
@@ -349,7 +348,7 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 		case float64:
 			consts[i] = NewNumberValue(k)
 		case string:
-			consts[i] = NewStringValue(k)
+			consts[i] = NewStringValueString(k)
 		}
 	}
 	cls = NewClosure(code.data, consts, nil, 0)

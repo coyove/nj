@@ -20,7 +20,7 @@ func TestFalsyValue(t *testing.T) {
 	assert(!NewNumberValue(1 / math.Inf(-1)).IsZero())
 	assert(!NewNumberValue(math.NaN()).IsFalse())
 
-	s := NewStringValue("")
+	s := NewStringValueString("")
 	assert(s.IsFalse())
 	s.SetBoolValue(true)
 	assert(!s.IsFalse())
@@ -29,7 +29,7 @@ func TestFalsyValue(t *testing.T) {
 }
 
 func BenchmarkSmallStringEquality(b *testing.B) {
-	a, a0 := NewStringValue("true"), NewStringValue("true")
+	a, a0 := NewStringValueString("true"), NewStringValueString("true")
 	for i := 0; i < b.N; i++ {
 		a.Equal(a0)
 	}

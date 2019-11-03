@@ -6,28 +6,28 @@ import (
 	"github.com/coyove/potatolang/parser"
 )
 
-type baseSlice struct {
+type base struct {
 	ptype byte
 	ptag  uint32
-	l     []Value
+}
+
+type baseSlice struct {
+	base
+	l []Value
 }
 
 type baseStruct struct {
-	ptype byte
-	ptag  uint32
-	l     IntMap
+	base
+	l IntMap
 }
 
 type baseString struct {
-	ptype   byte
-	ptag    uint32
-	s       string
-	padding int // pad to 32 bytes
+	base
+	s []byte
 }
 
 type Closure struct {
-	ptype       byte
-	ptag        uint32
+	base
 	Code        []uint32
 	Pos         posVByte
 	source      string
@@ -42,10 +42,8 @@ type Closure struct {
 }
 
 type basePointer struct {
-	ptype   byte
-	ptag    uint32
-	ptr     unsafe.Pointer
-	padding [2]int // pad to 32 bytes
+	base
+	ptr unsafe.Pointer
 }
 
 // NewSlice creates a new map
@@ -120,15 +118,18 @@ func NewStruct() *baseStruct {
 
 // Dup duplicates the map
 func (m *baseStruct) Dup() *baseStruct {
-	m2 := &baseStruct{}
-	m2.l = make(IntMap, len(m.l))
-	for i, x := range m.l {
-		if x == NewNumberValue(parser.FieldsField) {
-			m2.l[i] = x
+	m2 := &baseStruct{l: make(IntMap, len(m.l))}
+	offset := len(m.l) / 2
+	copy(m2.l, m.l[:offset])
+
+	for i := 0; i < offset; i++ {
+		if m2.l[i] == NewNumberValue(parser.FieldsField) {
+			m2.l[i+offset] = m.l[i+offset]
 		} else {
-			m2.l[i] = x.Dup()
+			m2.l[i+offset] = m.l[i+offset].Dup()
 		}
 	}
+
 	return m2
 }
 

@@ -17,7 +17,7 @@ func stdPrint(f *os.File) func(env *Env) Value {
 }
 
 func _sprintf(env *Env) string {
-	msg := []byte(env.LocalGet(0).MustString())
+	msg := env.LocalGet(0).MustString()
 	for i := range msg {
 		if msg[i] == '{' && i < len(msg)-1 && msg[i+1] == '}' {
 			msg[i] = '%'
@@ -41,7 +41,7 @@ func stdPrintf(f *os.File) func(env *Env) Value {
 }
 
 func stdSprintf(env *Env) Value {
-	return NewStringValue(_sprintf(env))
+	return NewStringValueString(_sprintf(env))
 }
 
 func stdPrintln(f *os.File) func(env *Env) Value {
@@ -59,7 +59,7 @@ func stdWrite(f *os.File) func(env *Env) Value {
 		for i := 0; i < env.LocalSize(); i++ {
 			switch a := env.LocalGet(i); a.Type() {
 			case StringType:
-				f.WriteString(env.LocalGet(i).AsString())
+				f.Write(env.LocalGet(i).AsString())
 			case SliceType:
 				m := a.AsSlice()
 				buf := make([]byte, len(m.l))

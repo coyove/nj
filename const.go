@@ -32,8 +32,8 @@ const (
 	OpIf
 	OpIfNot
 	OpSet
-	OpMakeMap
-	OpMakeArray
+	OpMakeStruct
+	OpMakeSlice
 	OpJmp
 	OpLambda
 	OpCall
@@ -41,7 +41,6 @@ const (
 	OpPush2
 	OpRet
 	OpYield
-	OpPop
 	OpSlice
 	OpInc
 	OpForeach

@@ -4,7 +4,7 @@ assert dz == 1
 func sum() {
     x = copystack()
     s = 0 
-    if typeof x[0] == "str" { 
+    if typeof x[0] == "string" { 
         s = "" 
     }
 
@@ -16,28 +16,6 @@ assert sum(1, -1) == 0
 assert sum(1, 2, 3) == 6  
 assert sum("1", "2") == "21" 
 
-m = {
-    c: 123, 
-    a: "a",
-    incr: func (this) {
-        this.c = this.c + 1 
-        return this 
-    }
-} 
-
-mp = m 
-m2 = (m) ()
-
-m.incr() 
-assert m.c == 124 
-mp.incr() 
-assert m.c == 125 
-
-m2.incr().incr() 
-
-assert m.c == 125 
-assert m2.c == 125 
-
 a = {1,2,3} 
 for a , func(i,v) { a[i] = v + 1}
 assert a == {2,3,4} 
@@ -48,8 +26,8 @@ assert a == "hello world"
 // assert "" & a == "Hello world" 
 
 a={}
-assert typeof a + "a" == "mapa" 
-assert typeof (a << {"a"}) == "map" 
+assert typeof a + "a" == "slicea" 
+assert typeof (a << {"a"}) == "slice" 
 
 // a = for(a, func(i,b) { if (i == 5) { error(true) end return b end) 
 // assert "" & a == "Hello" 
