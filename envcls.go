@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"hash/crc32"
+	"unsafe"
 )
 
 // Env is the environment for a closure in potatolang to run within.
@@ -94,34 +95,26 @@ func (env *Env) SetParent(parent *Env) {
 func envGet(env *Env, yx uint16, K *Closure) Value
 
 func (env *Env) Get(yx uint16, cls *Closure) (zzz Value) {
-	return envGet(env, yx, cls)
-	// 	a := envGet(env, yx, cls)
-	// 	defer func() {
-	// 		if yx>>10 < 7 {
-	// 			log.Println(fmt.Sprintf("%x", yx), a, zzz)
-	// 		}
-	// 	}()
-	//
-	// 	if yx == regA {
-	// 		return env.A
-	// 	}
-	// 	y := yx >> 10
-	// 	index := int(yx & 0x3ff)
-	//
-	// 	if y == 7 {
-	// 		return cls.ConstTable[index]
-	// 	}
-	//
-	// REPEAT:
-	// 	if y > 0 && env != nil {
-	// 		y, env = y-1, env.parent
-	// 		goto REPEAT
-	// 	}
-	// 	if s := env.stack; index < len(s) {
-	// 		return *(*Value)(unsafe.Pointer(uintptr(unsafe.Pointer(&s[0])) + SizeOfValue*uintptr(index)))
-	// 		// return s[index]
-	// 	}
-	// 	return Value{}
+	if yx == regA {
+		return env.A
+	}
+	y := yx >> 10
+	index := int(yx & 0x3ff)
+
+	if y == 7 {
+		return cls.ConstTable[index]
+	}
+
+REPEAT:
+	if y > 0 && env != nil {
+		y, env = y-1, env.parent
+		goto REPEAT
+	}
+	if s := env.stack; index < len(s) {
+		return *(*Value)(unsafe.Pointer(uintptr(unsafe.Pointer(&s[0])) + SizeOfValue*uintptr(index)))
+		// return s[index]
+	}
+	return Value{}
 }
 
 func (env *Env) Set(yx uint16, v Value) {
