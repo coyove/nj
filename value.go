@@ -10,38 +10,35 @@ import (
 
 const (
 	// NilType represents nil type
-	NilType = 0
+	NilType = 1
 
 	// NumberType represents number type
-	NumberType = 1
+	NumberType = 3
 
 	// StringType represents string type
-	StringType = 2
+	StringType = 7
 
 	//
-	StructType = 3
+	StructType = 15
 
 	// SliceType represents map type
-	SliceType = 4
+	SliceType = 31
 
 	// ClosureType represents closure type
-	ClosureType = 6
+	ClosureType = 63
 
 	// PointerType represents generic type
-	PointerType = 7
+	PointerType = 127
 )
 
 const (
-	_NilNil         = NilType<<8 | NilType
-	_NumberNumber   = NumberType<<8 | NumberType
-	_StringString   = StringType<<8 | StringType
-	_SliceSlice     = SliceType<<8 | SliceType
-	_StructStruct   = StructType<<8 | StructType
-	_ClosureClosure = ClosureType<<8 | ClosureType
-	_PointerPointer = PointerType<<8 | PointerType
-	_StringNumber   = StringType<<8 | NumberType
-	_SliceNumber    = SliceType<<8 | NumberType
-	_StructNumber   = StructType<<8 | NumberType
+	_NilNil         = NilType * 2
+	_NumberNumber   = NumberType * 2
+	_StringString   = StringType * 2
+	_SliceSlice     = SliceType * 2
+	_StructStruct   = StructType * 2
+	_ClosureClosure = ClosureType * 2
+	_PointerPointer = PointerType * 2
 )
 
 // Value is the basic value used by VM
@@ -67,7 +64,6 @@ func (v Value) Type() byte {
 }
 
 var (
-	// TypeMappings maps type to its string representation
 	typeMappings = map[byte][]byte{
 		NilType:     []byte("nil"),
 		NumberType:  []byte("number"),
@@ -278,7 +274,7 @@ func (v Value) String() string {
 
 // Equal tests whether value is equal to another value
 func (v Value) Equal(r Value) bool {
-	switch combineTypes(v, r) {
+	switch v.Type() + r.Type() {
 	case _NilNil:
 		return true
 	case _NumberNumber:
@@ -372,8 +368,4 @@ func (v Value) testType(expected byte) Value {
 		panicf("expecting %q, got %+v", typeMappings[expected], v)
 	}
 	return v
-}
-
-func combineTypes(v1, v2 Value) uint16 {
-	return uint16(v1.Type())<<8 + uint16(v2.Type())
 }

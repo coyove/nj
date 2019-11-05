@@ -11,12 +11,14 @@ type (
 
 const (
 	_ _Opcode = iota
+	OpSet
 	OpStore
 	OpLoad
 	OpAdd
 	OpSub
 	OpMul
 	OpDiv
+	OpInc
 	OpMod
 	OpNot
 	OpEq
@@ -31,20 +33,18 @@ const (
 	OpBitURsh
 	OpIf
 	OpIfNot
-	OpSet
+	OpJmp
 	OpMakeStruct
 	OpMakeSlice
-	OpJmp
 	OpLambda
-	OpCall
 	OpPush
 	OpPush2
+	OpCall
 	OpRet
 	OpYield
 	OpSlice
-	OpInc
-	OpCopyStack
 	OpLen
+	OpCopyStack
 	OpTypeof
 	OpAddressOf
 	OpNOP

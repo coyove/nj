@@ -270,11 +270,24 @@ func BenchmarkMapBatch(b *testing.B) {
 	}
 }
 
-//func BenchmarkArrayIndex(b *testing.B) {
-//	m := make([]uint32, 4)
-//	for i := 0; i < b.N; i++ {
-//		if m[uint32(i%4)] == 1 {
-//			b.Fatal(m)
-//		}
-//	}
-//}
+func BenchmarkAdd(b *testing.B) {
+	x, y, z := byte(rand.Int()), byte(rand.Int()), byte(rand.Int())
+	for i := 0; i < b.N; i++ {
+		for k := 0; k < 100; k++ {
+			if a := y + x; a == z {
+				b.Fatal(x, y)
+			}
+		}
+	}
+}
+
+func BenchmarkXorAdd(b *testing.B) {
+	x, y, z := byte(rand.Int()), byte(rand.Int()), byte(rand.Int())
+	for i := 0; i < b.N; i++ {
+		for k := 0; k < 100; k++ {
+			if a := x<<4 | y; a == z {
+				b.Fatal(x, y)
+			}
+		}
+	}
+}
