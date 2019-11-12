@@ -32,12 +32,12 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TLen TReturn TReturnVoid TUse TTypeof TYield TYieldVoid TStruct
+%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TLen TReturn TReturnVoid TImport TTypeof TYield TYieldVoid TStruct
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
 %token<token> TAddEq TSubEq TMulEq TDivEq TModEq TBitAndEq TBitOrEq TXorEq TLshEq TRshEq TURshEq
-%token<token> TSquare
+%token<token> TSquare TDotDotDot
 
 /* Operators */
 %right 'T'
@@ -45,6 +45,7 @@ package parser
 
 %left ASSIGN
 %right FUNC
+%left TDotDotDot
 %left TOr
 %left TAnd
 %left '>' '<' TGte TLte TEqeq TNeq
@@ -54,7 +55,7 @@ package parser
 %right '~'
 %right '#'
 %left TAddAdd TMinMin
-%right TTypeof, TLen, TUse
+%right TTypeof, TLen, TImport
 
 %% 
 
@@ -293,7 +294,7 @@ jmp_stat:
         TContinue                         { $$ = CompNode(AContinue).pos0($1) } |
         TReturn expr                      { $$ = __return($2).pos0($1) } |
         TReturnVoid                       { $$ = __return(nilNode).pos0($1) } |
-        TUse TString                      { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) }
+        TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) }
 
 declarator:
         TIdent                            { $$ = ANode($1).setPos($1) } |
@@ -306,11 +307,13 @@ declarator:
 
 ident_list:
         TIdent                            { $$ = CompNode($1.Str) } | 
-        ident_list ',' TIdent             { $$ = $1.Cappend(ANode($3)) }
+        TIdent TDotDotDot                 { $$ = CompNode($1.Str + "...") } | 
+        ident_list ',' TIdent             { $$ = $1.Cappend(ANode($3)) } |
+        ident_list ',' TIdent TDotDotDot  { $$ = $1.Cappend(ANodeS($3.Str + "...").SetPos($3)) }
 
 expr:
         TNumber                           { $$ = NewNumberNode($1.Str).SetPos($1) } |
-        TUse TString                      { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) } |
+        TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) } |
         TTypeof expr                      { $$ = CompNode(ATypeOf, $2) } |
         TLen expr                         { $$ = CompNode(ALen, $2) } |
         function                          { $$ = $1 } |
@@ -337,6 +340,7 @@ expr:
         expr TURsh expr                   { $$ = CompNode(ABitURsh, $1,$3).pos0($1) } |
         expr '|' expr                     { $$ = CompNode(ABitOr, $1,$3).pos0($1) } |
         expr '&' expr                     { $$ = CompNode(ABitAnd, $1,$3).pos0($1) } |
+        expr TDotDotDot                   { $$ = CompNode(ADDD, $1).pos0($1) } |
         '^' expr %prec UNARY              { $$ = CompNode(ABitXor, $2, max32Node).pos0($2) } |
         '-' expr %prec UNARY              { $$ = CompNode(ASub, zeroNode, $2).pos0($2) } |
         '!' expr %prec UNARY              { $$ = CompNode(ANot, $2).pos0($2) } |
@@ -345,7 +349,7 @@ expr:
 prefix_expr:
         declarator                        { $$ = $1 } |
         prefix_expr '(' ')'               { $$ = __call($1, emptyNode).pos0($1) } |
-        prefix_expr '(' expr_list ')'     { $$ = __call($1, $3).pos0($1) } |
+        prefix_expr '(' expr_list ')'     { $$ = patchVarargCall($1, $3) } |
         '(' expr ')'                      { $$ = $2 } // shift/reduce conflict
 
 expr_list:
@@ -353,8 +357,8 @@ expr_list:
         expr_list ',' expr                { $$ = $1.Cappend($3) }
 
 expr_assign_list:
-        TIdent ':' expr                     { $$ = CompNode(NewNode($1.Str), __hash($1.Str), $3) } |
-        expr_assign_list ',' TIdent ':' expr{ $$ = $1.Cappend(NewNode($3.Str), __hash($3.Str), $5) }
+        TIdent ':' expr                   { $$ = CompNode(NewNode($1.Str), __hash($1.Str), $3) } |
+        expr_assign_list ',' TIdent':'expr{ $$ = $1.Cappend(NewNode($3.Str), __hash($3.Str), $5) }
 
 map_gen:
         '{' '}'                           { $$ = CompNode(AArray, emptyNode).pos0($1) } |
@@ -379,7 +383,39 @@ func patchStruct(named bool, c *Node) *Node {
     if !named {
         return CompNode(AMap, args)
     }
-
     args.Cappend(NewNumberNode(FieldsField), CompNode(AArray, names).pos0(args))
     return CompNode(AMap, args)
+}
+
+func patchVarargCall(callee interface{}, args *Node) *Node {
+    ddd := false
+    for _, a := range args.C() {
+        if a.Type() == Ncompound && a.Cx(0).A() == ADDD {
+            ddd = true
+            break
+        }
+    }
+    if !ddd {
+        return __call(callee, args).pos0(callee)
+    }
+
+    if args.Cn() == 1 {
+        return __chain(
+            CompNode(ADDD, args.Cx(0).Cx(1)).pos0(callee),
+            __call(callee, emptyNode).pos0(callee),
+        )
+    }
+
+    varname := "...vararg"
+    res := __chain(__set(varname, CompNode(AArray, emptyNode).pos0(callee)).pos0(callee))
+    for _, a := range args.C() {
+        if a.Type() == Ncompound && a.Cx(0).A() == ADDD {
+            res.Cappend(__move(varname, CompNode(ABitLsh, varname, a.Cx(1)).pos0(callee)).pos0(callee))
+        } else {
+            res.Cappend(__store(varname, CompNode(ALen, varname).pos0(callee), a).pos0(callee))
+        }
+    }
+    res.Cappend(CompNode(ADDD, varname).pos0(callee))
+    res.Cappend(__call(callee, emptyNode).pos0(callee))
+    return res
 }

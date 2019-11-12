@@ -173,28 +173,17 @@ func (c *Closure) Unset(opt byte) { c.options &= ^opt }
 
 func (c *Closure) Isset(opt byte) bool { return (c.options & opt) > 0 }
 
-func (c *Closure) AppendPartialArgs(preArgs []Value) {
-	c.PartialArgs = append(c.PartialArgs, preArgs...)
-	if c.ArgsCount < byte(len(preArgs)) {
-		panic("negative args count")
-	}
-	c.ArgsCount -= byte(len(preArgs))
-}
-
 func (c *Closure) BytesCode() []byte { return u32Bytes(c.Code) }
 
 // Dup duplicates the closure
 func (c *Closure) Dup() *Closure {
 	cls := *c
-	if len(c.PartialArgs) > 0 {
-		cls.PartialArgs = append([]Value{}, c.PartialArgs...)
-	}
 	return &cls
 }
 
 func (c *Closure) String() string {
 	if c.native != nil {
-		return fmt.Sprintf("<native_%da%dc>", c.ArgsCount, len(c.PartialArgs))
+		return fmt.Sprintf("<native%d>", c.ArgsCount)
 	}
 	p := "closure"
 	if c.Isset(ClsNoEnvescape) {
@@ -204,7 +193,7 @@ func (c *Closure) String() string {
 	h.Write(u32Bytes(c.Code))
 	hash := base64.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzzz0123456789").EncodeToString(h.Sum(nil)[:3])
 
-	x := fmt.Sprintf("<%s_%s_%da%dc%dk", p, hash, c.ArgsCount, len(c.PartialArgs), len(c.ConstTable))
+	x := fmt.Sprintf("<%s_%s_%dp%dk", p, hash, c.ArgsCount, len(c.ConstTable))
 	if c.Isset(ClsYieldable) {
 		x += "_y"
 	}

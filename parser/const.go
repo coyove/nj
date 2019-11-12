@@ -69,6 +69,7 @@ const (
 	AAddrOf   Atom = "addressof"
 	ATypeOf   Atom = "typeof"
 	ALen      Atom = "len"
+	ADDD      Atom = "..."
 )
 
 func __chain(args ...interface{}) *Node { return CompNode(append([]interface{}{AChain}, args...)...) }

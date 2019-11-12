@@ -28,17 +28,16 @@ type baseString struct {
 
 type Closure struct {
 	base
-	Code        []uint32
-	Pos         posVByte
-	source      string
-	ConstTable  []Value
-	Env         *Env
-	PartialArgs []Value
-	ArgsCount   byte
-	options     byte
-	lastp       uint32
-	lastenv     *Env
-	native      func(env *Env) Value
+	Code       []uint32
+	Pos        posVByte
+	source     string
+	ConstTable []Value
+	Env        *Env
+	ArgsCount  byte
+	options    byte
+	lastp      uint32
+	lastenv    *Env
+	native     func(env *Env) Value
 }
 
 type basePointer struct {

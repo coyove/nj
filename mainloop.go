@@ -258,6 +258,10 @@ MAIN:
 				env.A.SetNumberValue(float64(v.AsSlice().Size()))
 			case StructType:
 				env.A.SetNumberValue(float64(len(v.AsStruct().l) / 2))
+			case NilType:
+				env.A.SetNumberValue(0)
+			case ClosureType:
+				env.A.SetNumberValue(float64(v.AsClosure().ArgsCount))
 			default:
 				panicf("can't evaluate the length of %+v", v)
 			}
@@ -348,6 +352,11 @@ MAIN:
 			}
 			stackEnv.LocalPush(env.Get(opa, K))
 			stackEnv.LocalPush(env.Get(opb, K))
+		case OpPushVararg:
+			if stackEnv == nil {
+				stackEnv = NewEnv(nil)
+			}
+			stackEnv.stack = append(stackEnv.stack, env.Get(opa, K).MustSlice().l...)
 		case OpRet:
 			v := env.Get(opa, K)
 			if len(retStack) == 0 {
@@ -398,45 +407,33 @@ MAIN:
 					stackEnv = NewEnv(env)
 				}
 
-				if stackEnv.LocalSize() >= int(cls.ArgsCount) {
-					if len(cls.PartialArgs) > 0 {
-						stackEnv.LocalPushFront(cls.PartialArgs)
-					}
-					if cls.Isset(ClsYieldable | ClsRecoverable | ClsNative) {
-						stackEnv.parent = env
-						env.A = cls.Exec(stackEnv)
-					} else {
-						last := stacktrace{
-							cls:    K,
-							cursor: cursor,
-							env:    env,
-						}
-
-						// switch to the Env of cls
-						cursor = 0
-						K = cls
-						caddr = kodeaddr(K.Code)
-						stackEnv.parent = cls.Env
-						env = stackEnv
-
-						retStack = append(retStack, last)
-					}
-					if cls.native == nil {
-						if len(recycledStacks) == 0 {
-							stackEnv = nil
-						} else {
-							stackEnv = recycledStacks[len(recycledStacks)-1]
-							recycledStacks = recycledStacks[:len(recycledStacks)-1]
-						}
-					} else {
-						stackEnv.LocalClear()
-					}
-				} else if stackEnv.LocalSize() == 0 {
-					env.A = NewClosureValue(cls.Dup())
+				if cls.Isset(ClsYieldable | ClsRecoverable | ClsNative) {
+					stackEnv.parent = env
+					env.A = cls.Exec(stackEnv)
 				} else {
-					curry := cls.Dup()
-					curry.AppendPartialArgs(stackEnv.Stack())
-					env.A = NewClosureValue(curry)
+					last := stacktrace{
+						cls:    K,
+						cursor: cursor,
+						env:    env,
+					}
+
+					// switch to the Env of cls
+					cursor = 0
+					K = cls
+					caddr = kodeaddr(K.Code)
+					stackEnv.parent = cls.Env
+					env = stackEnv
+
+					retStack = append(retStack, last)
+				}
+				if cls.native == nil {
+					if len(recycledStacks) == 0 {
+						stackEnv = nil
+					} else {
+						stackEnv = recycledStacks[len(recycledStacks)-1]
+						recycledStacks = recycledStacks[:len(recycledStacks)-1]
+					}
+				} else {
 					stackEnv.LocalClear()
 				}
 			}
@@ -452,8 +449,8 @@ MAIN:
 				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
 		case OpCopyStack:
-			ret := NewSliceSize(len(env.stack))
-			copy(ret.l, env.stack)
+			ret := NewSliceSize(len(env.stack) - int(opa))
+			copy(ret.l, env.stack[opa:])
 			env.A = NewSliceValue(ret)
 		case OpTypeof:
 			env.A = NewStringValue(typeMappings[env.Get(opa, K).Type()])

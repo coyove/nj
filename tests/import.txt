@@ -1,12 +1,12 @@
- a = 0
- add = use "imported.txt" 
+a = 0
+add = import "imported.txt" 
 add()
 assert( a == 1)
 
-use "imported2.txt"
+import "imported2.txt"
 assert( a == 1)
 
-use "test.txt"
-use "std.txt"
-use "string.txt"
-use "loop.txt"
+import "test.txt"
+import "std.txt"
+import "string.txt"
+import "loop.txt"

@@ -1,8 +1,7 @@
 dz =(1) 
 assert( dz == 1 )
 
-func sum() {
-    x = copystack()
+func sum(x...) {
     s = 0 
     if typeof x[0] == "string" { 
         s = "" 

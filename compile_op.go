@@ -110,7 +110,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	}
 
 	switch bop {
-	case OpTypeof, OpNot, OpAddressOf, OpRet, OpYield, OpLen:
+	case OpTypeof, OpNot, OpAddressOf, OpRet, OpYield, OpLen, OpPushVararg, OpCopyStack:
 		// unary op
 		err = table.writeOpcode(&buf, bop, atoms[1], nil)
 	default:
@@ -206,12 +206,6 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint16
 
 // [call callee [args ...]]
 func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint16, err error) {
-	if nodes[1].A() == "copystack" {
-		code.WriteOP(OpCopyStack, 0, 0)
-		code.WritePos(nodes[0].Meta)
-		return code, regA, nil
-	}
-
 	tmp := append([]*parser.Node{nodes[1]}, nodes[2].C()...)
 	code, err = table.decompound(tmp)
 	if err != nil {
@@ -266,21 +260,36 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 
 	params := atoms[2]
 	if params.Type() != parser.Ncompound {
-		err = fmt.Errorf("%+v: invalid arguments list", atoms[2])
+		err = fmt.Errorf("%+v: invalid arguments list", atoms[0])
 		return
 	}
 
 	for i, p := range params.C() {
 		argname := p.Value.(parser.Atom)
+		if strings.HasSuffix(string(argname), "...") {
+			if i != params.Cn()-1 {
+				return code, 0, fmt.Errorf("%+v: vararg must be the last parameter", atoms[0])
+			}
+			argname = argname[:len(argname)-3]
+			atoms[3] = parser.CompNode(
+				parser.AChain,
+				parser.CompNode(
+					parser.AMove,
+					argname,
+					parser.CompNode(parser.AForeach, parser.NewNode(uint16(i))).SetPos0(atoms[0]),
+				).SetPos0(atoms[0]),
+				atoms[3],
+			)
+		}
 		if _, ok := newtable.sym[argname]; ok {
-			return newpacket(), 0, fmt.Errorf("duplicated parameter: %s", argname)
+			return newpacket(), 0, fmt.Errorf("%+v: duplicated parameter: %s", atoms[0], argname)
 		}
 		newtable.put(argname, uint16(i))
 	}
 
 	ln := len(newtable.sym)
 	if ln > 255 {
-		return newpacket(), 0, fmt.Errorf("%+v: do you really need more than 255 arguments?", atoms[2])
+		return newpacket(), 0, fmt.Errorf("%+v: do you really need more than 255 arguments?", atoms[0])
 	}
 
 	newtable.vp = uint16(ln)

@@ -146,6 +146,7 @@ var flatOpMapping = map[parser.Atom]_Opcode{
 	parser.AForeach: OpCopyStack,
 	parser.AAddrOf:  OpAddressOf,
 	parser.AInc:     OpInc,
+	parser.ADDD:     OpPushVararg,
 }
 
 func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node) (err error) {

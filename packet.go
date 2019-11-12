@@ -350,6 +350,8 @@ MAIN:
 			sb.WriteString(readAddr(a) + " = " + readAddr(b))
 		case OpPush:
 			sb.WriteString("push " + readAddr(a))
+		case OpPushVararg:
+			sb.WriteString("pushvararg " + readAddr(a))
 		case OpPush2:
 			sb.WriteString("push2 " + readAddr(a) + " " + readAddr(b))
 		case OpRet:

@@ -39,6 +39,7 @@ const (
 	OpLambda
 	OpPush
 	OpPush2
+	OpPushVararg
 	OpCall
 	OpRet
 	OpYield

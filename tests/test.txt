@@ -9,7 +9,7 @@ fib2 = func(a, b) {
    }
 }
 
-fib3 = (fib2)()
+fib3 = std.dupcls(fib2)
  
 for i = 0,33 fib2(0,1)
 
@@ -33,7 +33,7 @@ assert( yieldtest() ==1&&yieldtest()==2&&yieldtest()==3 )
 
 func deepadd(a) {
     if (a <= 0) { return 0 }
-    return add(a)(deepadd(a - 1))
+    return add(a, deepadd(a - 1))
 }
 
 e = 100000
@@ -103,7 +103,7 @@ func select(cond, t, f) {
 
 assert( 1&&1||0)
 assert( 0&&0||1)
-assert( select(1, 1, 2) == 1&&select(0)(1)(2) == 2)
+assert( select(1, 1, 2) == 1&&select(0, 1, 2) == 2)
 a = 1
 a = a - 1  // this will be eventually compiled into: [inc a -1]
 assert( a == 0)
@@ -135,7 +135,7 @@ if (af == 0)
 else
     assert( 0)  // shouldn't be here
 
-a = use "simple.txt" + 1
+a = import "simple.txt" + 1
 assert( a == 2)
 
 func safeexec() {
@@ -175,7 +175,10 @@ assert( r.result == "none"&&!r.ok)
 a = func a = func b = func c = a + b + (func d = d * 2)(c)
 assert( a(1)(2)(3) == 9)
 
-assert( (func = copystack())(1,2,3) == {1,2,3})
+assert( (func a... = a)(1,2,3) == {1,2,3})
+assert( (func a... = a)({1,2,3}...) == {1,2,3})
+assert( (func b, a... = a)({1,2,3}...) == {2,3})
+assert( (func b, a... = a)({1,2}...,{3,4}...) == {2,3,4})
 
 func multi_return(a, b) {
     yield a + 1

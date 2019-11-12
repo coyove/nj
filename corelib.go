@@ -49,11 +49,14 @@ func initCoreLibs() {
 	lcore.Put("apply", NewNativeValue(2, func(env *Env) Value {
 		cls := env.LocalGet(0).MustClosure()
 		newEnv := NewEnv(cls.Env)
-		newEnv.stack = append([]Value{}, cls.PartialArgs...)
 		for _, v := range env.LocalGet(1).MustSlice().l {
 			newEnv.LocalPush(v)
 		}
 		return cls.Exec(newEnv)
+	}))
+	lcore.Put("dupcls", NewNativeValue(1, func(env *Env) Value {
+		cls := env.LocalGet(0).MustClosure()
+		return NewClosureValue(cls.Dup())
 	}))
 	lcore.Put("safe", NewNativeValue(1, func(env *Env) Value {
 		cls := env.LocalGet(0).MustClosure()
@@ -110,7 +113,6 @@ func initCoreLibs() {
 			if int(cls.ArgsCount) > env.LocalSize()-1 {
 				panic("not enough arguments to start a goroutine")
 			}
-			newEnv.LocalPushFront(cls.PartialArgs)
 			for i := 1; i < env.LocalSize(); i++ {
 				newEnv.LocalPush(env.LocalGet(i))
 			}

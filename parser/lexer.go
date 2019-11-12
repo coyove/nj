@@ -321,7 +321,7 @@ var reservedWords = map[string]uint32{
 	"if":       TIf,
 	"len":      TLen,
 	"return":   TReturn,
-	"use":      TUse,
+	"import":   TImport,
 	"typeof":   TTypeof,
 	"for":      TFor,
 	"yield":    TYield,
@@ -507,16 +507,24 @@ redo:
 				tok.Str = string(ch)
 			}
 		case '.':
-			ch2 := sc.Peek()
-			switch {
+			switch ch2 := sc.Peek(); {
 			case isDecimal(ch2):
 				tok.Type = TNumber
 				err = sc.scanNumber(ch, buf)
 				tok.Str = buf.String()
+			case ch2 == '.':
+				sc.Next()
+				if sc.Peek() != '.' {
+					err = sc.Error(buf.String(), "invalid ...")
+					goto finally
+				}
+				sc.Next()
+				tok.Type = TDotDotDot
+				tok.Str = "..."
 			default:
 				tok.Type = '.'
+				tok.Str = buf.String()
 			}
-			tok.Str = buf.String()
 		case '(', ')', '{', '}', ']', ';', ':', ',', '~', '#':
 			tok.Type = ch
 			tok.Str = string(ch)

@@ -4,7 +4,7 @@
 
  curry = func(f) {
      __args = {}
-     __argscount = std.opcode.closure.get(f, "argscount")
+     __argscount = len(f)
      __remain = __argscount
 
     func appendargs(args) {
@@ -28,8 +28,8 @@
         }
     }
 
-    func __f() { 
-        appendargs(copystack())
+    func __f(args...) { 
+        appendargs(args)
         
         if (__remain > 0) return __f
 

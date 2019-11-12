@@ -1,6 +1,6 @@
- count = 1 
- idx = 0 
- flag = 0 
+count = 1 
+idx = 0 
+flag = 0 
 
 for "true" {
     idx = idx+1 

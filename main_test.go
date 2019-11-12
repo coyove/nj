@@ -135,18 +135,18 @@ func TestImportLoop(t *testing.T) {
 	defer os.RemoveAll("tmp")
 
 	ioutil.WriteFile("tmp/1.txt", []byte(`
-		use "2.txt" 
-		use "src/3.txt"`), 0777)
-	ioutil.WriteFile("tmp/2.txt", []byte(`use "src/3.txt"`), 0777)
-	ioutil.WriteFile("tmp/src/3.txt", []byte(`a = use "1.txt"`), 0777)
-	ioutil.WriteFile("tmp/src/1.txt", []byte(`use "../1.txt"`), 0777)
+		import "2.txt" 
+		import "src/3.txt"`), 0777)
+	ioutil.WriteFile("tmp/2.txt", []byte(`import "src/3.txt"`), 0777)
+	ioutil.WriteFile("tmp/src/3.txt", []byte(`a = import "1.txt"`), 0777)
+	ioutil.WriteFile("tmp/src/1.txt", []byte(`import  "../1.txt"`), 0777)
 
 	_, err := LoadFile("tmp/1.txt")
 	if !strings.Contains(err.Error(), "importing each other") {
 		t.Error("something wrong")
 	}
 
-	ioutil.WriteFile("tmp/1.txt", []byte(`use "1.txt"`), 0777)
+	ioutil.WriteFile("tmp/1.txt", []byte(`import "1.txt"`), 0777)
 	_, err = LoadFile("tmp/1.txt")
 	if !strings.Contains(err.Error(), "importing each other") {
 		t.Error("something wrong")
