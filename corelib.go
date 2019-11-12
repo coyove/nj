@@ -216,6 +216,11 @@ func initCoreLibs() {
 		}
 		panic("assertion failed")
 	})
+	CoreLibs["append"] = NewNativeValue(1, func(env *Env) Value {
+		s := NewSlice()
+		s.l = append(env.LocalGet(0).MustSlice().l, env.stack[1:]...)
+		return NewSliceValue(s)
+	})
 
 	initIOLib()
 	initMathLib()

@@ -274,12 +274,13 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 			atoms[3] = parser.CompNode(
 				parser.AChain,
 				parser.CompNode(
-					parser.AMove,
+					parser.ASet,
 					argname,
 					parser.CompNode(parser.AForeach, parser.NewNode(uint16(i))).SetPos0(atoms[0]),
 				).SetPos0(atoms[0]),
 				atoms[3],
 			)
+			break
 		}
 		if _, ok := newtable.sym[argname]; ok {
 			return newpacket(), 0, fmt.Errorf("%+v: duplicated parameter: %s", atoms[0], argname)
