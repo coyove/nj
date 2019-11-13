@@ -17,17 +17,26 @@ const (
 var _nodeRegA = parser.NewNode(regA)
 
 func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
-	aDest := atoms[1].Value.(parser.Atom)
-	newYX, ok := table.get(aDest)
-	if atoms[0].A() == parser.AMove {
-		if !ok || (strings.HasPrefix(string(aDest), "$") && (newYX>>10 > 0)) {
-			// variable names start with "$" will be a local variable
+	calcDest := func() uint16 {
+		aDest := atoms[1].Value.(parser.Atom)
+		newYX, ok := table.get(aDest)
+		if strings.HasPrefix(string(aDest), "$") {
+			aDest = aDest[1:]
+			if len(aDest) == 0 {
+				aDest = "$"
+			}
+			newYX = table.borrowAddress()
+			table.put(aDest, newYX)
+		} else if atoms[0].A() == parser.AMove {
+			if !ok {
+				newYX = table.borrowAddress()
+				table.put(aDest, newYX)
+			}
+		} else {
 			newYX = table.borrowAddress()
 			table.put(aDest, newYX)
 		}
-	} else {
-		newYX = table.borrowAddress()
-		table.put(aDest, newYX)
+		return newYX
 	}
 
 	buf := newpacket()
@@ -39,20 +48,25 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 			err = fmt.Errorf(errUndeclaredVariable, aSrc)
 			return
 		}
-		buf.WriteOP(OpSet, newYX, valueIndex)
-		return buf, newYX, nil
+		addr := calcDest()
+		buf.WriteOP(OpSet, addr, valueIndex)
+		return buf, addr, nil
 	case parser.Nnumber, parser.Nstring:
-		buf.WriteOP(OpSet, newYX, table.loadK(&buf, aSrc.Value))
-		return buf, newYX, nil
+		addr := calcDest()
+		buf.WriteOP(OpSet, addr, table.loadK(&buf, aSrc.Value))
+		return buf, addr, nil
 	}
 
-	code, _, err = table.compileCompoundInto(aSrc, false, newYX)
+	code, newYX, err := table.compileCompound(aSrc)
 	if err != nil {
-		return
+		return buf, 0, err
 	}
 	buf.Write(code)
+
+	addr := calcDest()
+	buf.WriteOP(OpSet, addr, newYX)
 	buf.WritePos(atoms[0].Meta)
-	return buf, newYX, nil
+	return buf, addr, nil
 }
 
 func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx uint16, err error) {
@@ -310,26 +324,25 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	if !newtable.envescape {
 		cls.Set(ClsNoEnvescape)
 	}
-	buf.WriteOP(OpLambda, uint16(ln), uint16(cls.options))
-	buf.Write32(uint32(len(newtable.consts)))
+
+	// ln: 8bit + cls.options: 8bit + len(consts): 10bit
+	opaopb := uint32(ln)<<18 | uint32(cls.options)<<10 | uint32(len(newtable.consts))
+	buf.WriteOP(OpLambda, uint16(opaopb>>13), uint16(opaopb&0x1fff))
 	buf.WriteConsts(newtable.consts)
 
 	cls.Code = code.data
 	src := string(name) + cls.String() + "@" + code.source
-	if len(src) > 4095 {
-		src = src[:4095]
-	}
+	buf.WriteString(src)
 
-	// 26bit Code Pos length, 26bit Code data length, 12bit Code source length
-	buf.Write64(uint64(uint32(len(code.pos))&0x03ffffff)<<38 +
-		uint64(uint32(len(code.data))&0x03ffffff)<<12 +
-		uint64(uint16(len(src))&0x0fff))
-	buf.WriteRaw(u32FromBytes([]byte(src)))
+	buf.Write32(uint32(len(code.pos)))
 	buf.WriteRaw(u32FromBytes(code.pos))
 
+	buf.Write32(uint32(len(code.data)))
+
 	// Note buf.source will be set to Code.source in buf.Write
-	// but buf.source shouldn't be changed
+	// but buf.source shouldn't be changed, so set code.source to buf.source
 	code.source = buf.source
+
 	buf.Write(code)
 	buf.WritePos(atoms[0].Meta)
 	return buf, regA, nil

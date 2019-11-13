@@ -286,7 +286,7 @@ func (n *Node) Dump(w io.Writer) {
 func (n *Node) String() string {
 	pos := ""
 	if n.Source != "" {
-		fmt.Sprintf("@%s:%d:%d", n.Source, n.Line, n.Column)
+		pos = "@" + n.Meta.String()
 	}
 	switch n.Type() {
 	case Nnumber:

@@ -236,9 +236,13 @@ func (v Value) MustClosure() *Closure {
 }
 
 // MustPointer safely cast value to unsafe.Pointer
-func (v Value) MustPointer() (unsafe.Pointer, uint32) {
+func (v Value) MustPointer(tag uint32) unsafe.Pointer {
 	v.testType(PointerType)
-	return v.AsPointer()
+	p, t := v.AsPointer()
+	if t != tag {
+		panicf("expecting %x, got %x", tag, t)
+	}
+	return p
 }
 
 // MustNumber safely cast value to float64

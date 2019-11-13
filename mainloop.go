@@ -64,16 +64,19 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 
 	defer func() {
 		if r := recover(); r != nil {
-			if K.Isset(ClsRecoverable) {
-				nextCursor, yielded = 0, false
-				if rv, ok := r.(Value); ok {
-					result = rv
-				} else {
-					p := bytes.Buffer{}
-					fmt.Fprint(&p, r)
-					result = NewStringValue(p.Bytes())
+			stk := append(retStack, stacktrace{cls: K})
+			for i := len(stk) - 1; i >= 0; i-- {
+				if stk[i].cls.Isset(ClsRecoverable) {
+					nextCursor, yielded = 0, false
+					if rv, ok := r.(Value); ok {
+						result = rv
+					} else {
+						p := bytes.Buffer{}
+						fmt.Fprint(&p, r)
+						result = NewStringValue(p.Bytes())
+					}
+					return
 				}
-				return
 			}
 
 			rr := stacktrace{
@@ -231,10 +234,6 @@ MAIN:
 				vas := va.AsSlice()
 				vas.l = append(vas.l, vb.AsSlice().l...)
 				env.A = va
-			case _StringString:
-				va = NewStringValue(append(va.AsString(), vb.AsString()...))
-				env.Set(opa, va)
-				env.A = va
 			default:
 				panicf("can't apply '<<' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
 			}
@@ -292,7 +291,7 @@ MAIN:
 				env.A.AsSlice().Put(int(idx.MustNumber()), v)
 			case StructType:
 				if !env.A.AsStruct().l.Add(false, idx, v) {
-					panicf("attribute %v not found", idx)
+					panicf("struct attribute %v not found", idx)
 				}
 			case NilType:
 				switch idx.Type() {
@@ -302,7 +301,7 @@ MAIN:
 				case NilType:
 					// ignore
 				default:
-					panicf("%+v: move(address, value), not an address", idx)
+					panicf("%+v: address[] = value, not an address", idx)
 				}
 			default:
 				panicf("can't modify %+v[%+v] to %+v", env.A, idx, v)
@@ -371,23 +370,8 @@ MAIN:
 			v := env.Get(opa, K)
 			if x := v.Type(); x != ClosureType {
 				switch x {
-				case StringType:
-					if stackEnv != nil && stackEnv.LocalSize() > 0 {
-						dest := stackEnv.LocalGet(0).MustString()
-						env.A = NewStringValue(dest[:copy(dest, v.AsString())])
-					} else {
-						env.A = NewStringValue(append([]byte{}, v.AsString()...))
-					}
 				case SliceType:
-					if stackEnv != nil && stackEnv.LocalSize() > 0 {
-						dest := stackEnv.LocalGet(0).MustSlice()
-						n := copy(dest.l, v.AsSlice().l)
-						m := NewSlice()
-						m.l = dest.l[:n]
-						env.A = NewSliceValue(m)
-					} else {
-						env.A = NewSliceValue(v.AsSlice().Dup())
-					}
+					env.A = NewSliceValue(v.AsSlice().Dup())
 				case StructType:
 					env.A = NewStructValue(v.AsStruct().Dup())
 				default:
@@ -398,6 +382,7 @@ MAIN:
 				}
 				continue
 			}
+
 			cls := v.AsClosure()
 			if cls.lastenv != nil {
 				env.A = cls.Exec(nil)
@@ -426,6 +411,7 @@ MAIN:
 
 					retStack = append(retStack, last)
 				}
+
 				if cls.native == nil {
 					if len(recycledStacks) == 0 {
 						stackEnv = nil

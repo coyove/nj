@@ -3,9 +3,9 @@ assert( a[6:]  == "world")
 
 m = {}
 for i=0,20 { m[i] = i }
-m2 = std.genlist(10)
-n = len(m[5:len(m2) + 5](m2))
-assert( n == 10&&m2 == {5,6,7,8,9,10,11,12,13,14})
+m2 = make(10)
+n = copy(m2, m[5:len(m2) + 5])
+assert(n == 10&&m2 == {5,6,7,8,9,10,11,12,13,14})
 
 r = m2[2]
 m2 = m2[:2] << m2[3:]
@@ -39,3 +39,12 @@ j = `{"a": { "hello": null, "n3": { "n0" : [1,2,3]}}}`
 assert(std.json.parse(j) == a)
 assert(std.json.parse("true") == true)
 assert(std.json.parse("     true") == !false)
+
+assert(atoi("1") == 1)
+assert(atoi("1a", &err) == nil && err != "")
+
+assert(chan.select("default").value == nil)
+
+ch = chan.make(1)
+chan.send(ch, "hello")
+assert(chan.select(ch, "default").value == "hello")

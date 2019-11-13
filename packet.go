@@ -192,7 +192,7 @@ func (b *packet) WriteDouble(v float64) {
 }
 
 func (b *packet) WriteString(v string) {
-	b.Write64(uint64(len(v)))
+	b.Write32(uint32(len(v)))
 	b.WriteRaw(u32FromBytes([]byte(v)))
 }
 
@@ -203,33 +203,60 @@ func (b *packet) TruncateLast(n int) {
 }
 
 func (b *packet) WriteConsts(consts []interface{}) {
-	// const table struct:
-	// all values are placed sequentially
-	// for numbers other than MaxUint64, they will be written directly
-	// for MaxUint64, it will be written twice
-	// for strings, a MaxUint64 will be written first, then the string
+	buf := bytes.Buffer{}
 	for _, k := range consts {
 		switch k := k.(type) {
 		case float64:
-			n := k
-			if math.Float64bits(n) == math.MaxUint64 {
-				b.Write64(math.MaxUint64)
-				b.Write64(math.MaxUint64)
+			if float64(int64(k)) == k {
+				buf.WriteByte(1)
+				buf.WriteString("0000000000")
+				buf.Truncate(buf.Len() - 10 + binary.PutVarint(buf.Bytes()[buf.Len()-10:], int64(k)))
 			} else {
-				b.WriteDouble(n)
+				buf.WriteByte(0)
+				binary.Write(&buf, binary.BigEndian, math.Float64bits(k))
 			}
 		case string:
-			b.Write64(math.MaxUint64)
-			b.WriteString(k)
+			buf.WriteByte(2)
+			buf.WriteString("0000000000")
+			buf.Truncate(buf.Len() - 10 + binary.PutUvarint(buf.Bytes()[buf.Len()-10:], uint64(len(k))))
+			buf.WriteString(k)
+		default:
+			panic("shouldn't happen")
 		}
 	}
+	b.Write32(uint32(buf.Len()))
+	b.WriteRaw(u32FromBytes(buf.Bytes()))
+}
+
+func crReadConsts(code []uint32, cursor *uint32, n int) []Value {
+	res := make([]Value, 0, n)
+	buf := crReadBytesLen(code, int(crRead32(code, cursor)), cursor)
+	for len(buf) > 0 {
+		switch buf[0] {
+		case 0:
+			x := math.Float64frombits(binary.BigEndian.Uint64(buf[1:]))
+			res = append(res, NewNumberValue(x))
+			buf = buf[9:]
+		case 1:
+			v, n := binary.Varint(buf[1:])
+			res = append(res, NewNumberValue(float64(v)))
+			buf = buf[1+n:]
+		case 2:
+			l, n := binary.Uvarint(buf[1:])
+			res = append(res, NewStringValue(buf[1+n:1+n+int(l)]))
+			buf = buf[1+n+int(l):]
+		default:
+			panic("shouldn't happen")
+		}
+	}
+	return res
 }
 
 func (b *packet) Len() int {
 	return len(b.data)
 }
 
-func crRead(data []uint32, cursor *uint32, len int) []uint32 {
+func crRead(data []uint32, len int, cursor *uint32) []uint32 {
 	*cursor += uint32(len)
 	return data[*cursor-uint32(len) : *cursor]
 }
@@ -259,7 +286,7 @@ func crReadStringLen(data []uint32, length int, cursor *uint32) string {
 }
 
 func crReadBytesLen(data []uint32, length int, cursor *uint32) []byte {
-	buf := crRead(data, cursor, int((length+3)/4))
+	buf := crRead(data, int((length+3)/4), cursor)
 	return u32Bytes(buf)[:length]
 }
 
@@ -274,7 +301,7 @@ var singleOp = map[_Opcode]string{
 	OpLess:      "less",
 	OpLessEq:    "less-eq",
 	OpLen:       "len",
-	OpCopyStack: "copy",
+	OpCopyStack: "copy-stack",
 	OpLoad:      "load",
 	OpStore:     "store",
 	OpNot:       "not",
@@ -296,7 +323,7 @@ func (c *Closure) crPrettify(tab int) string {
 		spaces2 = strings.Repeat("        ", tab-1) + "+-------"
 	}
 
-	sb.WriteString(spaces2 + "+ START " + c.source + "\n")
+	sb.WriteString(spaces2 + "+ START " + string(c.source) + "\n")
 
 	var cursor uint32
 	readAddr := func(a uint16) string {
@@ -398,37 +425,24 @@ MAIN:
 
 	c.Pos = oldpos
 
-	sb.WriteString(spaces2 + "+ END " + c.source)
+	sb.WriteString(spaces2 + "+ END " + string(c.source))
 	return sb.String()
 }
 
 func crReadClosure(code []uint32, cursor *uint32, env *Env, opa, opb uint16) *Closure {
-	argsCount := byte(opa)
-	options := byte(opb)
-	constsLen := uint16(crRead32(code, cursor))
-	consts := make([]Value, constsLen)
-	for i := uint16(0); i < constsLen; i++ {
-		x := crRead64(code, cursor)
-		if x != math.MaxUint64 {
-			consts[i] = NewNumberValue(math.Float64frombits(x))
-			continue
-		}
-		x = crRead64(code, cursor)
-		if x == math.MaxUint64 {
-			consts[i] = NewNumberValue(math.Float64frombits(x))
-			continue
-		}
-		consts[i] = NewStringValue(crReadBytesLen(code, int(x), cursor))
-	}
+	opaopb := uint32(opa)<<13 | uint32(opb)
+	argsCount := byte(opaopb >> 18)
+	options := byte(opaopb >> 10)
 
-	xlen := crRead64(code, cursor)
-	poslen, codelen, srclen := uint32(xlen>>38), uint32(xlen<<26>>38), uint16(xlen<<52>>52)
-	src := crReadStringLen(code, int(srclen), cursor)
-	pos := crReadBytesLen(code, int(poslen), cursor)
-	clscode := crRead(code, cursor, int(codelen))
+	consts := crReadConsts(code, cursor, int(uint16(opaopb&0x3ff)))
+	src := crReadBytesLen(code, int(crRead32(code, cursor)), cursor)
+	pos := crReadBytesLen(code, int(crRead32(code, cursor)), cursor)
+	clscode := crRead(code, int(crRead32(code, cursor)), cursor)
+
 	cls := NewClosure(clscode, consts, env, byte(argsCount))
 	cls.Pos = posVByte(pos)
 	cls.options = options
 	cls.source = src
+
 	return cls
 }

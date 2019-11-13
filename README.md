@@ -1,4 +1,4 @@
-potatolang (pol) is a script language written in golang. Currently it only runs on 64bit platforms.
+potatolang (pol) is a golang-dialect script language written in golang. Currently it only runs on 64bit platforms.
 
 For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master/tests/bench/perf.md).
 
@@ -17,29 +17,30 @@ For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master
 ### Variable
 1. No need to declare them, just write `a = 1` directly.
 2. You can only refer defined variables, e.g. `a = b` is illegal, should be `b = <something> a = b`.
-3. To initiate a slice, you write `a = {1, 2, 3}`, to initiate a struct, you write `a = {k: 1}`. A struct's fields are immutable:
+2. No way to return multiple values.
+3. To initiate a slice, you write `a = {1, 2, 3}`, to initiate a struct, you write `a = {k: 1}`. A struct's fields are immutable (more on that later):
 ```
 a = { k : 1 }
 a.k++
 assert(a.k == 2)// ok
 a.k2 = 2        // panic
 ```
-4. Since we don't have declarations, to create a variable specifically inside a scope, we usually prepend it with a `$`, e.g.:
+4. Since we don't have declarations, to create a variable specifically inside a scope, we usually prepend it with a `$` when declaring it and drop the `$` when referring it, e.g.:
 ```
 func foo(b) {
     $a = 1
     (func() {
         $a = b
-        io.println("inner: ", $a)
+        io.println("inner: ", a)
     })()
-    io.println("outer: ", $a)
+    io.println("outer: ", a)
 }
 foo(2)
 // outputs:
 //      inner: 2
 //      outer: 1
 ```
-Note there are two exceptions as shown below where the variable `a` is never touched:
+Note there are two exceptions as shown below where the topmost variable `a` is never touched:
 ```
 a = 1
 func foo(a) {
@@ -49,7 +50,7 @@ foo(2)
 
 func bar() {
     func a() {}
-    a = 2 // closures are always local, so here we are overriding it with '2'
+    a = 2 // closure is always local, so here we are overriding it with '2'
 }
 bar()
 ```
@@ -61,7 +62,7 @@ Basically the same, note that:
 3. `<<` can also be used to `append` some values, e.g. to delete a value inside a slice: 
 ```
 a = {1, 2, 3} 
-a = a[:1] << a[2:]
+a = a[:1] << a[2:] // or if you prefer the builtin function append: a = append(a[:1], a[2:]...)
 a == {1, 3}
 ```
 6. However, to append a single value, this way is more preferred:

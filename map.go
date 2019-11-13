@@ -30,7 +30,7 @@ type Closure struct {
 	base
 	Code       []uint32
 	Pos        posVByte
-	source     string
+	source     []byte
 	ConstTable []Value
 	Env        *Env
 	ArgsCount  byte

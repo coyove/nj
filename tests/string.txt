@@ -13,7 +13,3 @@ assert( itoa(10000000000) == "10000000000")
 assert( std.ftoa(1, 'f', -1)[0] == '1')
 assert( std.unicode(std.ftoa(1, 'f', -1)[0]) == "1")
 assert( std.unicode('我') == "我")
-
-z = itoa(12.5)
-z = z[:2] + "0" + z[3:]
-assert( z == "1205")

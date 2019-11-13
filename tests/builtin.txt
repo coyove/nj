@@ -87,7 +87,7 @@ func testmove(err, a, b) {
     if b == 0 {
         err[] = "divided by zero"
         return }
-    return a / ($add(err, b)||1)
+    return a / (add(err, b)||1)
 }
 
 err =nil
@@ -107,4 +107,18 @@ a |= 1
 assert( a == 5)
 
 $x = 1
-assert( $x == 1)
+assert(x == 1)
+
+func counter() {
+    $c = 0
+    return {
+        incr: func(i) { c += i },
+        value: func = c,
+    }
+}
+
+c1 = counter()
+c2 = counter()
+c1.incr(1)
+c2.incr(2)
+assert(c1.value() ==  1 && c2.value() == 2)

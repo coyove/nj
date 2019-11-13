@@ -1,18 +1,22 @@
 package potatolang
 
 import (
+	"bytes"
+	"encoding/hex"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	// _ "net/http/pprof"
 	"runtime"
 
-	"github.com/coyove/common/rand"
+	"math/rand"
 )
 
 func init() {
@@ -208,7 +212,7 @@ foo()
 func TestPosVByte(t *testing.T) {
 	p := posVByte{}
 	p2 := [][3]uint32{}
-	r := rand.New()
+	r := rand.New(rand.NewSource(time.Now().Unix()))
 
 	for i := 0; i < 1e6; i++ {
 		a, b, c := uint32(r.Uint64()), uint32(r.Uint64()), uint32(uint16(r.Uint64()))
@@ -231,29 +235,9 @@ func TestPosVByte(t *testing.T) {
 	}
 }
 
-//func TestReusingTmps(t *testing.T) {
-//	cls, err := LoadString(`
-//	func add (a, b, c) { return a + b + c }
-//	var d = 1
-//	var sum = add(1 + d, 2 + d, d + 3)
-//	assert sum == 9
-//	var sum = add(4 + d, 5 + d, 6 + d)
-//	assert sum == 18
-//`)
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	t.Log(cls.PrettyString())
-//	ExecCursor(cls.lastenv, cls, 0)
-//	// all core libs + add + d + sum + 2 tmps
-//	if cls.lastenv.LocalSize() != len(CoreLibs)+1+1+1+2 {
-//		t.FailNow()
-//	}
-//}
-
 func BenchmarkCompiling(b *testing.B) {
 	buf, _ := ioutil.ReadFile("tests/string.txt")
-	src := "(fun() {" + string(buf) + "})()"
+	src := "(func() {" + string(buf) + "})()"
 	for i := 0; i < b.N; i++ {
 		y := make([]byte, len(src)*i)
 		for x := 0; x < i; x++ {
@@ -263,5 +247,36 @@ func BenchmarkCompiling(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func BenchmarkReturnClosure(b *testing.B) {
+
+	b.StopTimer()
+	rand.Seed(time.Now().Unix())
+
+	buf := bytes.Buffer{}
+	for i := 0; i < 1000; i++ {
+		if rand.Intn(2) == 0 {
+			x := make([]byte, rand.Intn(16)+16)
+			rand.Read(x)
+			buf.WriteString(fmt.Sprintf("v%d = \"%s\"\n", i, hex.EncodeToString(x)))
+		} else {
+			buf.WriteString(fmt.Sprintf("v%d = %d\n", i, rand.Int()))
+		}
+	}
+
+	src := "(func() {" + buf.String() + "})()"
+	cls, err := LoadString(src)
+	if err != nil || cls == nil {
+		b.Fatal(cls, err)
+	}
+
+	b.StartTimer()
+
+	l := cls.lastenv
+	for i := 0; i < b.N; i++ {
+		cls.lastenv = l
+		cls.Exec(nil)
 	}
 }

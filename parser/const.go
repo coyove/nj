@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"log"
+	"fmt"
 	"unsafe"
 
 	"github.com/coyove/common/lru"
@@ -115,13 +115,14 @@ func __hash(str string) *Node { return NewNumberNode(HashString(str)) }
 var hashDedupCache = lru.NewCache(1024)
 
 func HashString(str string) float64 {
-	var hash uint32 = 2166136261
+	var hash uint64 = 2166136261
 	for _, c := range str {
 		hash *= 16777619
-		hash ^= uint32(c)
+		hash ^= uint64(c)
 	}
+	hash &= 0xffffffffffff
 	if t, ok := hashDedupCache.Get(hash); ok && t.(string) != str {
-		log.Println(t, "and", str, "share an identical FNV32 hash:", hash)
+		panic(fmt.Sprint(t, "and", str, "share an identical FNV48 hash:", hash))
 	}
 	hashDedupCache.Add(hash, str)
 	return float64(hash)

@@ -33,7 +33,7 @@
         
         if (__remain > 0) return __f
 
-        return std.apply(f, __args)
+        return f(__args...)
     }
     return __f
 }

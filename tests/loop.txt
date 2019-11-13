@@ -15,12 +15,12 @@ for "true" {
 
 assert( idx == 5 )
 
-m = std.genlist(8) 
+m = make(8) 
 a = idx++ 
 assert( a == 6 )
 
 for i=0,8 {
-    l = std.genlist(8)
+    l = make(8)
     for j=0,8,2 {
         if (j < 2) {continue }
         if (j > 4) {break }
@@ -106,7 +106,7 @@ assert( m == {1, 2} )
 
 m = {} 
 s = {1,2,3,4,5,6,7,8,9,10} 
-s2 = std.genlist(10)
+s2 = make(10)
 for i = len(s)-1,0,-1 { s2[i] = itoa(11 - s[i]) }
 for i = len(s)-1,0,-1 { s[i] = (11 - s[i]) }
 

@@ -48,18 +48,18 @@ func TimesTranspVec(v, s, n, u, wg) {
 }
 
 func ATimesTransp(v, u) {
-    x = std.genlist(len(u)) 
+    x = make(len(u)) 
     wg = std.sync.waitgroup() 
 
     for i = 0, nCPU {
         wg.add(1) 
-        std.sync.run(TimesVec, x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u, wg) 
+        go(TimesVec, x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u, wg) 
     }
     wg.wait() 
 
     for  i = 0, nCPU {
         wg.add(1) 
-        std.sync.run(TimesTranspVec, v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x, wg) 
+        go(TimesTranspVec, v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x, wg) 
     }
     wg.wait() 
 }

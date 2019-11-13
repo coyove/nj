@@ -354,7 +354,7 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 	cls = NewClosure(code.data, consts, nil, 0)
 	cls.lastenv = NewEnv(nil)
 	cls.Pos = code.pos
-	cls.source = "root" + cls.String() + "@" + code.source
+	cls.source = []byte("root" + cls.String() + "@" + code.source)
 	cls.lastenv.stack = coreStack.stack
 	return cls, err
 }

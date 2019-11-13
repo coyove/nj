@@ -32,7 +32,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TLen TReturn TReturnVoid TImport TTypeof TYield TYieldVoid TStruct
+%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TLen TReturn TReturnVoid TImport TTypeof TYield TYieldVoid TStruct 
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('

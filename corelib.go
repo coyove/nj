@@ -2,6 +2,8 @@ package potatolang
 
 import (
 	"bytes"
+	"math"
+	"reflect"
 	"strconv"
 	"sync"
 	"unicode/utf8"
@@ -15,6 +17,7 @@ const (
 	_ = iota
 	PTagUnique
 	PTagPhantom
+	PTagChan
 )
 
 var CoreLibs = map[string]Value{}
@@ -43,30 +46,10 @@ func initCoreLibs() {
 		a := new(int)
 		return NewPointerValue(unsafe.Pointer(a), PTagUnique)
 	}))
-	lcore.Put("genlist", NewNativeValue(1, func(env *Env) Value {
-		return NewSliceValue(NewSliceSize(int(env.LocalGet(0).MustNumber())))
-	}))
-	lcore.Put("apply", NewNativeValue(2, func(env *Env) Value {
-		cls := env.LocalGet(0).MustClosure()
-		newEnv := NewEnv(cls.Env)
-		for _, v := range env.LocalGet(1).MustSlice().l {
-			newEnv.LocalPush(v)
-		}
-		return cls.Exec(newEnv)
-	}))
-	lcore.Put("dupcls", NewNativeValue(1, func(env *Env) Value {
-		cls := env.LocalGet(0).MustClosure()
-		return NewClosureValue(cls.Dup())
-	}))
 	lcore.Put("safe", NewNativeValue(1, func(env *Env) Value {
 		cls := env.LocalGet(0).MustClosure()
 		cls.Set(ClsRecoverable)
 		return NewClosureValue(cls)
-	}))
-	lcore.Put("stacktrace", NewNativeValue(0, func(env *Env) Value {
-		panic("not implemented")
-		//e := ExecError{stacks: Env.trace}
-		//return NewStringValueString(e.Error())
 	}))
 	lcore.Put("eval", NewNativeValue(1, func(env *Env) Value {
 		cls, err := LoadString(string(env.LocalGet(0).MustString()))
@@ -107,18 +90,6 @@ func initCoreLibs() {
 		return NewStringValueString(strconv.FormatFloat(v, byte(base), digits, 64))
 	}))
 	lcore.Put("sync", NewStructValue(NewStruct().
-		Put("run", NewNativeValue(1, func(env *Env) Value {
-			cls := env.LocalGet(0).MustClosure()
-			newEnv := NewEnv(cls.Env)
-			if int(cls.ArgsCount) > env.LocalSize()-1 {
-				panic("not enough arguments to start a goroutine")
-			}
-			for i := 1; i < env.LocalSize(); i++ {
-				newEnv.LocalPush(env.LocalGet(i))
-			}
-			go cls.Exec(newEnv)
-			return Value{}
-		})).
 		Put("mutex", NewNativeValue(0, func(env *Env) Value {
 			m, mux := NewStruct(), &sync.Mutex{}
 			m.Put("lock", NewNativeValue(0, func(env *Env) Value { mux.Lock(); return Value{} }))
@@ -132,32 +103,6 @@ func initCoreLibs() {
 			m.Put("wait", NewNativeValue(0, func(env *Env) Value { wg.Wait(); return Value{} }))
 			return NewStructValue(m)
 		}))))
-
-	lcore.Put("opcode", NewStructValue(NewStruct().
-		Put("closure", NewStructValue(NewStruct().
-			Put("empty", NewNativeValue(0, func(env *Env) Value {
-				cls := NewClosure(make([]uint32, 0), make([]Value, 0), env.parent, 0)
-				return NewClosureValue(cls)
-			})).
-			Put("yieldreset", NewNativeValue(1, func(env *Env) Value {
-				env.LocalGet(0).MustClosure().lastenv = nil
-				return env.LocalGet(0)
-			})).
-			Put("get", NewNativeValue(2, func(env *Env) Value {
-				cls := env.LocalGet(0).MustClosure()
-				switch name := env.LocalGet(1).MustString(); string(name) {
-				case "argscount":
-					return NewNumberValue(float64(cls.ArgsCount))
-				case "yieldable":
-					return NewBoolValue(cls.Isset(ClsYieldable))
-				case "envescaped":
-					return NewBoolValue(!cls.Isset(ClsNoEnvescape))
-				case "source":
-					return NewStringValueString(cls.source)
-				}
-				return NewClosureValue(cls)
-			})))).
-		Put("_", Value{})))
 
 	lcore.Put("json", NewStructValue(NewStruct().
 		Put("parse", NewNativeValue(1, func(env *Env) Value {
@@ -192,20 +137,18 @@ func initCoreLibs() {
 	CoreLibs["atoi"] = NewNativeValue(1, func(env *Env) Value {
 		v, err := parser.StringToNumber(string(env.LocalGet(0).MustString()))
 		if err != nil {
+			StorePointerUnsafe(env.LocalGet(1), NewStringValueString(err.Error()))
 			return Value{}
 		}
 		return NewNumberValue(v)
 	})
 	CoreLibs["itoa"] = NewNativeValue(1, func(env *Env) Value {
 		v := env.LocalGet(0).MustNumber()
-		base := 0
+		base := 10
 		if env.LocalSize() >= 2 {
 			base = int(env.LocalGet(1).MustNumber())
 		}
-		if base > 1 && base <= 36 {
-			return NewStringValueString(strconv.FormatInt(int64(v), base))
-		}
-		return NewStringValueString(strconv.FormatFloat(v, 'f', -1, 64))
+		return NewStringValueString(strconv.FormatInt(int64(v), base))
 	})
 	CoreLibs["assert"] = NewNativeValue(1, func(env *Env) Value {
 		if v := env.LocalGet(0); !v.IsFalse() {
@@ -217,10 +160,101 @@ func initCoreLibs() {
 		panic("assertion failed")
 	})
 	CoreLibs["append"] = NewNativeValue(1, func(env *Env) Value {
-		s := NewSlice()
-		s.l = append(env.LocalGet(0).MustSlice().l, env.stack[1:]...)
-		return NewSliceValue(s)
+		switch v := env.LocalGet(0); v.Type() {
+		case SliceType:
+			s := NewSlice()
+			s.l = append(v.AsSlice().l, env.stack[1:]...)
+			return NewSliceValue(s)
+		case StringType:
+			x := append([]byte{}, v.AsString()...)
+			for _, a := range env.stack[1:] {
+				switch a.Type() {
+				case NumberType:
+					x = append(x, byte(a.AsNumber()))
+				case StringType:
+					x = append(x, a.AsString()...)
+				default:
+					v.testType(SliceType)
+				}
+			}
+			return NewStringValue(x)
+		default:
+			v.testType(SliceType)
+			return Value{}
+		}
 	})
+	CoreLibs["copy"] = NewNativeValue(2, func(env *Env) Value {
+		if env.LocalSize() == 2 {
+			switch v := env.LocalGet(1); v.Type() {
+			case StringType:
+				arr := env.LocalGet(0).MustSlice().l
+				str := v.AsString()
+				n := 0
+				for i := range arr {
+					if n >= len(str) {
+						break
+					}
+					arr[i] = NewNumberValue(float64(str[n]))
+					n++
+				}
+				return NewNumberValue(float64(len(arr)))
+			default:
+				return NewNumberValue(float64(copy(env.LocalGet(0).MustSlice().l, v.MustSlice().l)))
+			}
+		}
+		return env.LocalGet(0).Dup()
+	})
+	CoreLibs["go"] = NewNativeValue(1, func(env *Env) Value {
+		cls := env.LocalGet(0).MustClosure()
+		newEnv := NewEnv(cls.Env)
+		newEnv.stack = append([]Value{}, env.stack[1:]...)
+		go cls.Exec(newEnv)
+		return Value{}
+	})
+	CoreLibs["make"] = NewNativeValue(1, func(env *Env) Value {
+		return NewSliceValue(NewSliceSize(int(env.LocalGet(0).MustNumber())))
+	})
+	CoreLibs["chan"] = NewStructValue(NewStruct().
+		Put("make", NewNativeValue(1, func(env *Env) Value {
+			ch := make(chan Value, int(env.LocalGet(0).MustNumber()))
+			return NewPointerValue(unsafe.Pointer(&ch), PTagChan)
+		})).
+		Put("send", NewNativeValue(2, func(env *Env) Value {
+			p := (*chan Value)(env.LocalGet(0).MustPointer(PTagChan))
+			*p <- env.LocalGet(1)
+			return env.LocalGet(1)
+		})).
+		Put("recv", NewNativeValue(1, func(env *Env) Value {
+			p := (*chan Value)(env.LocalGet(0).MustPointer(PTagChan))
+			return <-*p
+		})).
+		Put("close", NewNativeValue(1, func(env *Env) Value {
+			close(*(*chan Value)(env.LocalGet(0).MustPointer(PTagChan)))
+			return Value{}
+		})).
+		Put("select", NewNativeValue(0, func(env *Env) Value {
+			cases := make([]reflect.SelectCase, env.LocalSize())
+			chans := make([]chan Value, len(cases))
+			for i := range chans {
+				if a := env.LocalGet(i); a.Type() == StringType && bytes.Equal(a.AsString(), []byte("default")) {
+					cases[i] = reflect.SelectCase{Dir: reflect.SelectDefault}
+				} else {
+					p := (*chan Value)(a.MustPointer(PTagChan))
+					cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(*p)}
+					chans[i] = *p
+				}
+			}
+			chosen, value, ok := reflect.Select(cases)
+			v := Value{}
+			if value.IsValid() {
+				v, _ = value.Interface().(Value)
+			}
+			return NewStructValue(NewStruct().
+				Put("ok", NewBoolValue(ok)).
+				Put("value", v).
+				Put("chan", NewPointerValue(unsafe.Pointer(&chans[chosen]), PTagChan)))
+		})))
+	CoreLibs["err"] = Value{}
 
 	initIOLib()
 	initMathLib()
@@ -285,4 +319,12 @@ func walkArray(buf []byte) Value {
 		i++
 	})
 	return NewSliceValue(m)
+}
+
+func StorePointerUnsafe(ptr Value, v Value) {
+	if ptr.IsFalse() {
+		return
+	}
+	x := math.Float64bits(ptr.MustNumber())
+	(*Env)(unsafe.Pointer(uintptr(x<<16>>16))).Set(uint16(x>>48), v)
 }
