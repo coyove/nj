@@ -76,7 +76,7 @@ for i = aa {
 }
 
 func testmove(err, a, b) {
-    $add = func( err , x) {
+    add := func( err , x) {
         if x == 10 {
             err[] = "2nd level"
             return
@@ -106,11 +106,11 @@ a = 4
 a |= 1
 assert( a == 5)
 
-$x = 1
+x := 1
 assert(x == 1)
 
 func counter() {
-    $c = 0
+    c := 0
     return {
         incr: func(i) { c += i },
         value: func = c,

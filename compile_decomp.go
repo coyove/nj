@@ -15,8 +15,8 @@ func (table *symtable) decompoundWithoutA(atoms []*parser.Node) (buf packet, err
 // decompound() will accept a list of atoms, for every compound atom inside,
 // it will decompound it into a new temp variable and replace the original one with a Naddr node of this variable.
 // for the last compound (if any) decompounded, it will not be saved into a temp variable
-// and used directly (to save some space) if useA == true.
-func (table *symtable) _decompound(atoms []*parser.Node, useA bool) (buf packet, err error) {
+// and used directly (to save some space) if useAWhenStoreSlice == true.
+func (table *symtable) _decompound(atoms []*parser.Node, useAWhenStoreSlice bool) (buf packet, err error) {
 	buf = newpacket()
 
 	var lastCompound struct {
@@ -55,11 +55,13 @@ func (table *symtable) _decompound(atoms []*parser.Node, useA bool) (buf packet,
 		}
 	}
 
-	if lastCompound.n != nil && useA {
-		_, old, opb := op(buf.data[len(buf.data)-1])
-		buf.TruncateLast(1)
-		table.returnAddress(old)
-		atoms[lastCompound.i].Value = opb
+	if lastCompound.n != nil {
+		if useAWhenStoreSlice || lastCompound.i == 1 {
+			_, old, opb := op(buf.data[len(buf.data)-1])
+			buf.TruncateLast(1)
+			table.returnAddress(old)
+			atoms[lastCompound.i].Value = opb
+		}
 
 		//if len(buf.data) > 0 {
 		//	opcode, opa, opk := op(buf.data[len(buf.data)-1])

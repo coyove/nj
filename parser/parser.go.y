@@ -37,7 +37,7 @@ package parser
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
 %token<token> TAddEq TSubEq TMulEq TDivEq TModEq TBitAndEq TBitOrEq TXorEq TLshEq TRshEq TURshEq
-%token<token> TSquare TDotDotDot
+%token<token> TSquare TDotDotDot TSet
 
 /* Operators */
 %right 'T'
@@ -118,6 +118,9 @@ assign_stat:
         } |
         postfix_incdec {
             $$ = $1
+        } |
+        declarator TSet expr {
+            $$ = __set($1, $3).pos0($1)
         } |
         declarator '=' expr {
             $$ = __move($1, $3).pos0($1)

@@ -197,7 +197,7 @@ x = 10
 assert( x == 2)
 
 x = 10
-(func() { $x = 2 * x assert( x == 20) })()
+(func() { x := 2 * x assert( x == 20) })()
 assert( x == 10)
 
 a = {1, 2, 3, "a", "b" , "c"}
@@ -209,3 +209,8 @@ assert (b == {1, "2", "3", "a", 4, 5} && a == b)
 
 c = append(a, 1, 2)
 assert(a == b && c == {1, "2", "3", "a", 4, 5, 1, 2})
+
+a = {1, 2, 3}
+idx = len(a)
+a[idx] = 4
+assert(a == {1, 2, 3, 4})

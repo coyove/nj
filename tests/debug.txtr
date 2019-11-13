@@ -1,19 +1,4 @@
-func safeexec(f, args...) {
-    result = "none"
-    x = std.safe(func () {
-        result = f(args...)
-    })()
-
-    return {
-        result: result,
-        ok: x == nil,
-    }
-}
-
-r = safeexec(func(a, b) {
-    return a / b
-}, 1, 2)
- 
-assert(r.result == 0.5)
-
-r = safeexec(func a, b = a / b, 1, "2")
+a = {1, 2, 3}
+idx = len(a)
+a[idx] = 4
+assert(a == {1, 2, 3, 4})

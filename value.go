@@ -138,6 +138,8 @@ func NewPointerValue(g unsafe.Pointer, tag uint32) Value {
 }
 
 // NewStringValue returns a string value
+// Note we use []byte to avoid some unnecessary castings from string to []byte,
+// it DOES NOT mean a StringValue is mutable
 func NewStringValue(s []byte) Value {
 	m := &baseString{base: base{ptype: StringType}, s: s}
 	return Value{unsafe.Pointer(m)}
@@ -274,6 +276,10 @@ func (v Value) AsInterface() interface{} {
 
 func (v Value) String() string {
 	return v.toString(0, false)
+}
+
+func (v Value) GoString() string {
+	return v.toString(0, true)
 }
 
 // Equal tests whether value is equal to another value

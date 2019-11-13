@@ -20,14 +20,7 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 	calcDest := func() uint16 {
 		aDest := atoms[1].Value.(parser.Atom)
 		newYX, ok := table.get(aDest)
-		if strings.HasPrefix(string(aDest), "$") {
-			aDest = aDest[1:]
-			if len(aDest) == 0 {
-				aDest = "$"
-			}
-			newYX = table.borrowAddress()
-			table.put(aDest, newYX)
-		} else if atoms[0].A() == parser.AMove {
+		if atoms[0].A() == parser.AMove {
 			if !ok {
 				newYX = table.borrowAddress()
 				table.put(aDest, newYX)
@@ -110,11 +103,12 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 			return
 		}
 
-		if err = table.writeOpcode(&buf, OpSet, _nodeRegA, atoms[1]); err != nil {
+		// (store/slice subject arg1 arg2) subject => opa, arg1 => $a, arg2 => opb
+		if err = table.writeOpcode(&buf, OpSet, _nodeRegA, atoms[2]); err != nil {
 			return
 		}
 
-		err = table.writeOpcode(&buf, bop, atoms[2], atoms[3])
+		err = table.writeOpcode(&buf, bop, atoms[1], atoms[3])
 		return buf, regA, err
 	}
 

@@ -151,35 +151,35 @@ MAIN:
 				copy(x[copy(x, vab):], vbb)
 				env.A = NewStringValue(x)
 			default:
-				panicf("can't apply '+' on %+v and %+v", va, vb)
+				panicf("can't apply '+' on %#v and %#v", va, vb)
 			}
 		case OpSub:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A.SetNumberValue(va.AsNumber() - vb.AsNumber())
 			default:
-				panicf("can't apply '-' on %+v and %+v", va, vb)
+				panicf("can't apply '-' on %#v and %#v", va, vb)
 			}
 		case OpMul:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A.SetNumberValue(va.AsNumber() * vb.AsNumber())
 			default:
-				panicf("can't apply '*' on %+v and %+v", va, vb)
+				panicf("can't apply '*' on %#v and %#v", va, vb)
 			}
 		case OpDiv:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A.SetNumberValue(va.AsNumber() / vb.AsNumber())
 			default:
-				panicf("can't apply '/' on %+v and %+v", va, vb)
+				panicf("can't apply '/' on %#v and %#v", va, vb)
 			}
 		case OpMod:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A.SetNumberValue(math.Remainder(va.AsNumber(), vb.AsNumber()))
 			default:
-				panicf("can't apply '%%' on %+v and %+v", va, vb)
+				panicf("can't apply '%%' on %#v and %#v", va, vb)
 			}
 		case OpEq:
 			env.A.SetBoolValue(env.Get(opa, K).Equal(env.Get(opb, K)))
@@ -192,7 +192,7 @@ MAIN:
 			case _StringString:
 				env.A.SetBoolValue(bytes.Compare(va.AsString(), vb.AsString()) == -1)
 			default:
-				panicf("can't apply '<' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '<' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpLessEq:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
@@ -201,7 +201,7 @@ MAIN:
 			case _StringString:
 				env.A.SetBoolValue(bytes.Compare(va.AsString(), vb.AsString()) <= 0)
 			default:
-				panicf("can't apply '<=' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '<=' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpNot:
 			env.A.SetBoolValue(env.Get(opa, K).IsFalse())
@@ -210,21 +210,21 @@ MAIN:
 			case _NumberNumber:
 				env.A.SetNumberValue(float64(va.AsInt32() & vb.AsInt32()))
 			default:
-				panicf("can't apply '&' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '&' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpBitOr:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A.SetNumberValue(float64(va.AsInt32() | vb.AsInt32()))
 			default:
-				panicf("can't apply '|' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '|' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpBitXor:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A.SetNumberValue(float64(va.AsInt32() ^ vb.AsInt32()))
 			default:
-				panicf("can't apply '^' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '^' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpBitLsh:
 			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
@@ -235,19 +235,19 @@ MAIN:
 				vas.l = append(vas.l, vb.AsSlice().l...)
 				env.A = va
 			default:
-				panicf("can't apply '<<' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '<<' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpBitRsh:
 			if va, vb := env.Get(opa, K), env.Get(opb, K); va.Type()+vb.Type() == _NumberNumber {
 				env.A.SetNumberValue(float64(va.AsInt32() >> uint(vb.AsNumber())))
 			} else {
-				panicf("can't apply '>>' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '>>' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpBitURsh:
 			if va, vb := env.Get(opa, K), env.Get(opb, K); va.Type()+vb.Type() == _NumberNumber {
 				env.A.SetNumberValue(float64(uint32(uint64(va.AsNumber())&math.MaxUint32) >> uint(vb.AsNumber())))
 			} else {
-				panicf("can't apply '>>>' on %+v and %+v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '>>>' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
 			}
 		case OpLen:
 			switch v := env.Get(opa, K); v.Type() {
@@ -262,7 +262,7 @@ MAIN:
 			case ClosureType:
 				env.A.SetNumberValue(float64(v.AsClosure().ArgsCount))
 			default:
-				panicf("can't evaluate the length of %+v", v)
+				panicf("can't evaluate the length of %#v", v)
 			}
 		case OpMakeStruct:
 			if stackEnv == nil {
@@ -285,26 +285,26 @@ MAIN:
 				env.A = NewSliceValue(m)
 			}
 		case OpStore:
-			idx, v := env.Get(opa, K), env.Get(opb, K)
-			switch env.A.Type() {
+			subject, v := env.Get(opa, K), env.Get(opb, K)
+			switch subject.Type() {
 			case SliceType:
-				env.A.AsSlice().Put(int(idx.MustNumber()), v)
+				subject.AsSlice().Put(int(env.A.MustNumber()), v)
 			case StructType:
-				if !env.A.AsStruct().l.Add(false, idx, v) {
-					panicf("struct attribute %v not found", idx)
+				if !subject.AsStruct().l.Add(false, env.A, v) {
+					panicf("struct attribute %#v not found", env.A)
 				}
 			case NilType:
-				switch idx.Type() {
+				switch env.A.Type() {
 				case NumberType:
-					x := math.Float64bits(idx.AsNumber())
+					x := math.Float64bits(env.A.AsNumber())
 					(*Env)(unsafe.Pointer(uintptr(x<<16>>16))).Set(uint16(x>>48), v)
 				case NilType:
 					// ignore
 				default:
-					panicf("%+v: address[] = value, not an address", idx)
+					panicf("%#v: address[] = value, not an address", env.A)
 				}
 			default:
-				panicf("can't modify %+v[%+v] to %+v", env.A, idx, v)
+				panicf("can't modify %#v[%#v] to %#v", subject, env.A, v)
 			}
 			env.A = v
 		case OpLoad:
@@ -318,11 +318,11 @@ MAIN:
 			case StructType<<8 | NumberType:
 				env.A, _ = a.AsStruct().Get(idx)
 			default:
-				panicf("can't load %+v[%+v]", a, idx)
+				panicf("can't load %#v[%#v]", a, idx)
 			}
 		case OpSlice:
-			start, end := int(env.Get(opa, K).MustNumber()), int(env.Get(opb, K).MustNumber())
-			switch x := env.A; x.Type() {
+			start, end := int(env.A.MustNumber()), int(env.Get(opb, K).MustNumber())
+			switch x := env.Get(opa, K); x.Type() {
 			case StringType:
 				if end == -1 {
 					env.A = NewStringValue(x.AsString()[start:])
@@ -338,7 +338,7 @@ MAIN:
 				}
 				env.A = NewSliceValue(m)
 			default:
-				panicf("can't slice %+v", x)
+				panicf("can't slice %#v", x)
 			}
 		case OpPush:
 			if stackEnv == nil {

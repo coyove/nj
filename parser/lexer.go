@@ -525,9 +525,18 @@ redo:
 				tok.Type = '.'
 				tok.Str = buf.String()
 			}
-		case '(', ')', '{', '}', ']', ';', ':', ',', '~', '#':
+		case '(', ')', '{', '}', ']', ';', ',', '~', '#':
 			tok.Type = ch
 			tok.Str = string(ch)
+		case ':':
+			if sc.Peek() == '=' {
+				tok.Type = TSet
+				tok.Str = ":="
+				sc.Next()
+			} else {
+				tok.Type = ch
+				tok.Str = ":"
+			}
 		case '*', '%', '&', '|', '^':
 			switch sc.Peek() {
 			case '=':

@@ -1,4 +1,4 @@
-potatolang (pol) is a golang-dialect script language written in golang. Currently it only runs on 64bit platforms.
+potatolang (pol) is a golang-dialect script language written in golang itself. Currently it only runs on 64bit platforms.
 
 For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master/tests/bench/perf.md).
 
@@ -11,13 +11,13 @@ For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master
 4. Slice ([]Value)
 5. Pointer (unsafe.Pointer)
 6. Closure (func)
-7. Struct (immutable map)
+7. Struct (immutable map[string]Value)
 8. No real `bool` type, we have `true == 1` and `false == 0`
 
 ### Variable
 1. No need to declare them, just write `a = 1` directly.
 2. You can only refer defined variables, e.g. `a = b` is illegal, should be `b = <something> a = b`.
-2. No way to return multiple values.
+2. NO way to return multiple values.
 3. To initiate a slice, you write `a = {1, 2, 3}`, to initiate a struct, you write `a = {k: 1}`. A struct's fields are immutable (more on that later):
 ```
 a = { k : 1 }
@@ -25,12 +25,12 @@ a.k++
 assert(a.k == 2)// ok
 a.k2 = 2        // panic
 ```
-4. Since we don't have declarations, to create a variable specifically inside a scope, we usually prepend it with a `$` when declaring it and drop the `$` when referring it, e.g.:
+4. Since we don't have declarations, to create a variable specifically inside a scope, we use `:=`:
 ```
 func foo(b) {
-    $a = 1
+    a := 1
     (func() {
-        $a = b
+        a := b
         io.println("inner: ", a)
     })()
     io.println("outer: ", a)
@@ -50,7 +50,7 @@ foo(2)
 
 func bar() {
     func a() {}
-    a = 2 // closure is always local, so here we are overriding it with '2'
+    a = 2 // closure is always local (a := func() {})
 }
 bar()
 ```
@@ -78,6 +78,7 @@ Basically the same, with some new syntax:
 1. `for i = v { ... }                => for i = 0; i < len(v); i++ { ... }`.
 2. `for i = start, end { ... }       => for i = start; i < end; i++ { ... }`.
 3. `for i = start, end, step { ... } => for i = start; i <= end; i += step { ... }`.
+4. `for true { ... }`, unlike golang, don't forget `true`.
 
 ### Struct
 1. `Struct` are like `map` in golang, but once you initized it in code you can't add any more keys into it nor iterate it. So its behaviors are more like a `struct`.
