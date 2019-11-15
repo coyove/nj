@@ -163,7 +163,15 @@ assign_stat:
                 x($1, "...a")
                 x($3, "...b")
             }
-        } 
+        } |
+        declarator ',' declarator '=' expr ',' expr {
+            $$ = __chain(
+                __set("(1)a", $5).pos0($5),
+                __set("(1)b", $7).pos0($7),
+                __move($1, "(1)a").pos0($1),
+                __move($3, "(1)b").pos0($3),
+            )
+        }
 
 postfix_incdec:
         TIdent _postfix_incdec {

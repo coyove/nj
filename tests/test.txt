@@ -22,8 +22,12 @@ func yieldtest() {
     yield 3
 }
 
-assert( yieldtest() ==1&&yieldtest()==2&&yieldtest()==3&&yieldtest()==nil)
-assert( yieldtest() ==1&&yieldtest()==2&&yieldtest()==3&&yieldtest()==nil)
+a, b = "str", {1, 2}
+a, b = b[1], a[2]
+assert(a == 2 && b == 'r')
+
+assert(yieldtest() ==1&&yieldtest()==2&&yieldtest()==3&&yieldtest()==nil)
+assert(yieldtest() ==1&&yieldtest()==2&&yieldtest()==3&&yieldtest()==nil)
 
 func counter() for i=2,0,-1 yield i
 
@@ -35,6 +39,9 @@ func deepadd(a) {
     if (a <= 0) { return 0 }
     return add(a, deepadd(a - 1))
 }
+
+a, b = b, a + 1
+assert(a == 'r' && b == 3)
 
 e = 100000
 assert( deepadd(e) == (1 + e) * (e / 2 ))

@@ -4,28 +4,39 @@ For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master
 
 ## Quick starter guide for gophers
 
-### Basic Type
-1. Nil (nil)
-2. Number (float64)
-3. String (immutable []byte)
-4. Slice ([]Value)
-5. Pointer (unsafe.Pointer)
-6. Closure (func)
-7. Struct (immutable map[string]Value)
-8. No real `bool` type, we have `true == 1` and `false == 0`
+|Basic concept |Golang equivalent|
+|--------|------|
+|Type `Nil`     | nil |
+|Type `Number`  | float64 |
+|Type `String`  | immutable []byte |
+|Type `Slice`   | []Value |
+|Type `Pointer` | unsafe.Pointer |
+|Type `Closure` | func |
+|Type `Struct`  | immutable map[string]Value |
+|NOT SUPPORTED | mutable map[Value]Value |
+| `true == 1` and `false == 0` | bool |
+|No need to declare first, just define `a = 1` | `a := 1` |
+|Refer defined variables: `b = 1; a = b` | `b := 1; a := b`|
+|`for i = v {}               ` |`for i = 0; i < len(v); i++ {}`|
+|`for i = start, end {}      ` |`for i = start; i < end; i++ {}`|
+|`for i = start, end, step {}` |`for i = start; i <= end; i += step {}`|
+|Basically identical | Other for-loop syntax|
+|`for true {}`  (true is required)| `for {}` |
+|`a = {...}`| `a := []Value{...}` |
+|`a = { k: ... }` | `a := struct{ k Value }{...}` |
+|`a, b = b, a` | `a, b = b, a` |
+|NOT SUPPORTED (n > 2) | `a1, ..., an = b1, ..., bn` |
+|`a, b = (func(){return 1, 2})()` | `a, b = (func(){return 1, 2})()` |
+|NOT SUPPORTED (n > 2) | `a1, ..., an = (func(){return b1, ..., bn})()` |
+|`foo = func a = a + 1` | `foo := func(a) { return a + 1 }` |
+|`addr := &var; addr[] = 1` | `addr := &var; *addr = 1` |
+|`a && b ⎮⎮ c` | `if (a) { return b } else { return c }`|
+|`a = a << {1}; a = a << {2,3}`| `a = append(a, 1, 2, 3)`|
+|`a = append(a, {1, 2}...)`| `a = append(a, []Value{1, 2}...)`|
+|`a[len(a)] = 1`|`a = append(a, 1)`|
 
-### Variable
-1. No need to declare them, just write `a = 1` directly.
-2. You can only refer defined variables, e.g. `a = b` is illegal, should be `b = <something> a = b`.
-2. NO way to return 3 values or more (0, 1 or 2 are fine).
-3. To initiate a slice, you write `a = {1, 2, 3}`, to initiate a struct, you write `a = {k: 1}`. A struct's fields are immutable (more on that later):
-```
-a = { k : 1 }
-a.k++
-assert(a.k == 2)// ok
-a.k2 = 2        // panic
-```
-4. Since we don't have declarations, to create a variable specifically inside a scope, we use `:=`:
+### Variable Scope
+Since we don't have declarations, to create a variable specifically inside a scope, we use `:=`:
 ```
 func foo(b) {
     a := 1
@@ -50,7 +61,7 @@ foo(2)
 
 func bar() {
     func a() {}
-    a = 2 // closure is always local (a := func() {})
+    a = 2 // closure is always local: a := func() {})
 }
 bar()
 ```
@@ -58,27 +69,7 @@ bar()
 ### Operators
 Basically the same, note that:
 1. All bitwise operators are applied on int32 operands except `>>>` (unsigned rsh) which works on uint32.
-2. Lua trick: `a && b || c` => `if (a) { return b } else { return c }`
-3. `<<` can also be used to `append` some values, e.g. to delete a value inside a slice: 
-```
-a = {1, 2, 3} 
-a = a[:1] << a[2:] // or if you prefer the builtin function append: a = append(a[:1], a[2:]...)
-a == {1, 3}
-```
-6. However, to append a single value, this way is more preferred:
-```
-a = {1, 2, 3}
-a[len(a)] = 4 // a == {1, 2, 3, 4}
-a[10] = 10    // index out of range
-```
 7. `Slice` and `Struct` can be automatically and recursively compared using `==` and `!=`.
-
-### Loop
-Basically the same, with some new syntax:
-1. `for i = v { ... }                => for i = 0; i < len(v); i++ { ... }`.
-2. `for i = start, end { ... }       => for i = start; i < end; i++ { ... }`.
-3. `for i = start, end, step { ... } => for i = start; i <= end; i += step { ... }`.
-4. `for true { ... }`, unlike golang, don't forget `true`.
 
 ### Struct
 1. `Struct` are like `map` in golang, but once you initized it in code you can't add any more keys into it nor iterate it. So its behaviors are more like a `struct`.

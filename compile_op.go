@@ -36,13 +36,17 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 	aSrc := atoms[2]
 	switch aSrc.Type() {
 	case parser.Natom:
-		valueIndex, ok := table.get(aSrc.Value.(parser.Atom))
+		srcName := aSrc.Value.(parser.Atom)
+		valueIndex, ok := table.get(srcName)
 		if !ok {
 			err = fmt.Errorf(errUndeclaredVariable, aSrc)
 			return
 		}
 		addr := calcDest()
 		buf.WriteOP(OpSet, addr, valueIndex)
+		if strings.HasPrefix(string(srcName), "(1)") {
+			table.returnAddress(valueIndex)
+		}
 		return buf, addr, nil
 	case parser.Nnumber, parser.Nstring:
 		addr := calcDest()
