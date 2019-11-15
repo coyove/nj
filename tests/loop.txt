@@ -132,7 +132,7 @@ for  i = 9,0,-1  {
     m[len(m)] = a 
 }
 
-assert( m == std.eval(`
+assert( m == std.Eval(`
     return {
         {1},
         {1,2,"1"},

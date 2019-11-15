@@ -11,7 +11,7 @@ import (
 type Env struct {
 	parent *Env
 	stack  []Value
-	A      Value
+	A, B   Value
 }
 
 // NewEnv creates the Env for closure to run within

@@ -56,7 +56,7 @@ func kodeaddr(code []uint32) uintptr { return (*reflect.SliceHeader)(unsafe.Poin
 func konstaddr(consts []Value) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&consts)).Data }
 
 // ExecCursor executes 'K' under 'Env' from the given start 'cursor'
-func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor uint32, yielded bool) {
+func ExecCursor(env *Env, K *Closure, cursor uint32) (result, resultB Value, nextCursor uint32, yielded bool) {
 	var stackEnv *Env
 	var retStack []stacktrace
 	var recycledStacks []*Env
@@ -70,6 +70,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 					nextCursor, yielded = 0, false
 					if rv, ok := r.(Value); ok {
 						result = rv
+						resultB = env.B
 					} else {
 						p := bytes.Buffer{}
 						fmt.Fprint(&p, r)
@@ -104,6 +105,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 		cursor = r.cursor
 		K = r.cls
 		r.env.A = v
+		r.env.B = env.B
 		caddr = kodeaddr(K.Code)
 		if r.cls.Is(ClsNoEnvescape) {
 			if stackEnv != nil {
@@ -138,6 +140,11 @@ MAIN:
 		case OpNOP:
 		case OpSet:
 			env.Set(opa, env.Get(opb, K))
+		case OpSetFromAB:
+			env.Set(opa, env.A)
+			env.Set(opb, env.B)
+		case OpSetB:
+			env.B = env.Get(opa, K)
 		case OpInc:
 			env.A.SetNumberValue(env.Get(opa, K).MustNumber() + env.Get(opb, K).MustNumber())
 			env.Set(opa, env.A)
@@ -359,11 +366,11 @@ MAIN:
 		case OpRet:
 			v := env.Get(opa, K)
 			if len(retStack) == 0 {
-				return v, 0, false
+				return v, env.B, 0, false
 			}
 			returnUpperWorld(v)
 		case OpYield:
-			return env.Get(opa, K), cursor, true
+			return env.Get(opa, K), env.B, cursor, true
 		case OpLambda:
 			env.A = NewClosureValue(crReadClosure(K.Code, &cursor, env, opa, opb))
 		case OpCall:
@@ -385,7 +392,7 @@ MAIN:
 
 			cls := v.AsClosure()
 			if cls.lastenv != nil {
-				env.A = cls.Exec(nil)
+				env.A, env.B = cls.Exec(nil)
 				stackEnv = nil
 			} else {
 				if stackEnv == nil {
@@ -394,7 +401,7 @@ MAIN:
 
 				if cls.Is(ClsYieldable | ClsRecoverable | ClsNative) {
 					stackEnv.parent = env
-					env.A = cls.Exec(stackEnv)
+					env.A, env.B = cls.Exec(stackEnv)
 				} else {
 					last := stacktrace{
 						cls:    K,
@@ -450,5 +457,5 @@ MAIN:
 		returnUpperWorld(Value{})
 		goto MAIN
 	}
-	return Value{}, 0, false
+	return Value{}, Value{}, 0, false
 }

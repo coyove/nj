@@ -1,6 +1,6 @@
 // a simple example to demo the 'placeholder' concept
 
- _ = std.unique()
+ _ = std.Unique()
 
  curry = func(f) {
      __args = {}

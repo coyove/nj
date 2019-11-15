@@ -71,21 +71,18 @@ func main() {
 		}
 	}
 
-	var _opcode, _timing, _bytes, _ret, _compileonly, _roughsize bool
+	var _opcode, _timing, _ret, _compileonly, _roughsize bool
 
 ARG:
 	for _, a := range strings.Split(*output, ",") {
 		switch a {
 		case "n", "no", "none":
-			_opcode, _ret, _bytes, _timing, _compileonly, _roughsize =
-				false, false, false, false, false, false
+			_opcode, _ret, _timing, _compileonly, _roughsize = false, false, false, false, false
 			break ARG
 		case "o", "opcode", "op":
 			_opcode = true
 		case "r", "ret", "return":
 			_ret = true
-		case "b", "byte", "bytes":
-			_bytes = true
 		case "t", "time", "timing":
 			_timing = true
 		case "co", "compile", "compileonly":
@@ -109,11 +106,8 @@ ARG:
 		if _opcode {
 			log.Println(b.PrettyString())
 		}
-		if _bytes {
-			os.Stderr.Write(b.BytesCode())
-		}
 		if _roughsize {
-			ln := len(b.BytesCode())
+			ln := len(b.Code)
 			ln += len(b.ConstTable) * 8
 			ln += len(b.Pos)
 
@@ -156,9 +150,9 @@ ARG:
 		}()
 	}
 
-	i := b.Exec(nil)
+	i, i2 := b.Exec(nil)
 	ok <- true
 	if _ret {
-		fmt.Println(i.String())
+		fmt.Println(i.String(), i2.String())
 	}
 }

@@ -12,6 +12,8 @@ type (
 const (
 	_ _Opcode = iota
 	OpSet
+	OpSetFromAB
+	OpSetB
 	OpStore
 	OpLoad
 	OpAdd

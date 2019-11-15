@@ -85,5 +85,5 @@ for i = v {
     vv = vv + v[i] * v[i]
 }
 
-fmt.Println(math.sqrt(vBv/vv)) 
+fmt.Println(math.Sqrt(vBv/vv)) 
     

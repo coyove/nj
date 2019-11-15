@@ -1,0 +1,23 @@
+func foo(v) {
+    return std.PopBack(v)
+}
+
+b = {}
+a, b[0] = (func a = foo(a))({"1",2})
+assert(a == 2 && b[0] == {"1"})
+
+func bar(n) {
+    for i = 0 ,n {
+        yield i, i + 1
+    }
+}
+
+a = {}
+for true {
+    x, y = bar(5)
+    if !y {
+        break
+    }
+    a = append(a, x, y)
+}
+assert(a == {0, 1, 1, 2, 2, 3, 3, 4, 4, 5})

@@ -95,7 +95,7 @@ func (c *Closure) PrettyString() string {
 }
 
 // Exec executes the closure with the given Env
-func (c *Closure) Exec(newEnv *Env) Value {
+func (c *Closure) Exec(newEnv *Env) (Value, Value) {
 	if c.native == nil {
 		if c.lastenv != nil {
 			newEnv = c.lastenv
@@ -103,7 +103,7 @@ func (c *Closure) Exec(newEnv *Env) Value {
 			newEnv.SetParent(c.Env)
 		}
 
-		v, np, yield := ExecCursor(newEnv, c, c.lastp)
+		v, vb, np, yield := ExecCursor(newEnv, c, c.lastp)
 		if yield {
 			c.lastp = np
 			c.lastenv = newEnv
@@ -111,12 +111,12 @@ func (c *Closure) Exec(newEnv *Env) Value {
 			c.lastp = 0
 			c.lastenv = nil
 		}
-		return v
+		return v, vb
 	}
 
 	// for a native closure, it doesn't have its own Env,
 	// so newEnv's parent is the Env where this native function was called.
-	return c.native(newEnv)
+	return c.native(newEnv), newEnv.B
 }
 
 func (c *Closure) ImmediateStop() {

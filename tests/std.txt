@@ -11,7 +11,7 @@ r = m2[2]
 m2 = m2[:2] << m2[3:]
 assert( r == 7&&m2 == {5,6,8,9,10,11,12,13,14})
 
-ptr_test = std.eval(`return func ( a) {
+ptr_test = std.Eval(`return func ( a) {
     a[] = 10
 }`)()
 
@@ -24,7 +24,7 @@ func testassert() {
     return "world"
 }
 
-std.safe(testassert)
+std.Safe(testassert)
 
 msg = testassert()
 assert( msg == "hello")
@@ -43,13 +43,13 @@ assert(json.Unmarshal("     true") == !false)
 assert(atoi("1") == 1)
 assert(atoi("1a", &err) == nil && err != "")
 
-assert(chan.select("default").value == nil)
+assert(chan.Select("default") == nil)
 
-ch = chan.make(1)
-chan.send(ch, "hello")
-assert(chan.select(ch, "default").value == "hello")
+ch = chan.Make(1)
+chan.Send(ch, "hello")
+assert(chan.Select(ch, "default") == "hello")
 
 v1 = ""
 v2 = 0
-fmt.Println(fmt.Sscanf("hello world 123", "%s world %f", &v1, &v2).err)
+fmt.Println(fmt.Sscanf("hello world 123", "%s world %f", &v1, &v2))
 assert(v1 == "hello" && v2 == 123)

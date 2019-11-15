@@ -127,7 +127,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 			table.put(atoms[1].A(), yx)
 		}
 		buf.WriteOP(bop, yx, 0)
-	case OpTypeof, OpNot, OpRet, OpYield, OpLen, OpPushVararg, OpCopyStack:
+	case OpTypeof, OpNot, OpRet, OpYield, OpLen, OpPushVararg, OpCopyStack, OpSetB:
 		// unary op
 		err = table.writeOpcode(&buf, bop, atoms[1], nil)
 	default:

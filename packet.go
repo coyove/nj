@@ -375,6 +375,10 @@ MAIN:
 			break MAIN
 		case OpSet:
 			sb.WriteString(readAddr(a) + " = " + readAddr(b))
+		case OpSetFromAB:
+			sb.WriteString(readAddr(a) + " = $a, " + readAddr(b) + " = $b")
+		case OpSetB:
+			sb.WriteString("$b = " + readAddr(a))
 		case OpPush:
 			sb.WriteString("push " + readAddr(a))
 		case OpPushVararg:

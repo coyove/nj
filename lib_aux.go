@@ -28,11 +28,10 @@ func fmtPrint(flag byte) func(env *Env) Value {
 			n, err = fmt.Print(args...)
 		}
 
-		ret := NewStruct().Put("n", NewNumberValue(float64(n)))
 		if err != nil {
-			ret.Put("err", NewStringValueString(err.Error()))
+			env.B = NewStringValueString(err.Error())
 		}
-		return NewStructValue(ret)
+		return NewNumberValue(float64(n))
 	}
 }
 
@@ -71,11 +70,11 @@ func fmtFprint(flag byte) func(env *Env) Value {
 		default:
 			n, err = fmt.Fprint(args[0].(io.Writer), args[1:]...)
 		}
-		ret := NewStruct().Put("n", NewNumberValue(float64(n)))
+
 		if err != nil {
-			ret.Put("err", NewStringValueString(err.Error()))
+			env.B = NewStringValueString(err.Error())
 		}
-		return NewStructValue(ret)
+		return NewNumberValue(float64(n))
 	}
 }
 
@@ -125,10 +124,7 @@ func fmtScan(flag string) func(env *Env) Value {
 			n, err = fmt.Fscanf(env.LocalGet(0).AsInterface().(io.Reader), string(env.LocalGet(1).MustString()), receivers[1:]...)
 		}
 
-		ret := NewStruct().Put("n", NewNumberValue(float64(n)))
-		if err != nil {
-			ret.Put("err", NewStringValueString(err.Error()))
-		} else {
+		if err == nil {
 			for i := start; i < len(receivers); i++ {
 				switch v := receivers[i].(type) {
 				case *float64:
@@ -139,7 +135,10 @@ func fmtScan(flag string) func(env *Env) Value {
 			}
 		}
 
-		return NewStructValue(ret)
+		if err != nil {
+			env.B = NewStringValueString(err.Error())
+		}
+		return NewNumberValue(float64(n))
 	}
 }
 
@@ -164,11 +163,10 @@ func fmtWrite(env *Env) Value {
 		}
 	}
 
-	ret := NewStruct().Put("n", NewNumberValue(float64(n)))
 	if err != nil {
-		ret.Put("err", NewStringValueString(err.Error()))
+		env.B = NewStringValueString(err.Error())
 	}
-	return NewStructValue(ret)
+	return NewNumberValue(float64(n))
 }
 
 func walkObject(buf []byte) Value {
@@ -282,6 +280,10 @@ func strconvParseFloat(env *Env) Value {
 	return NewNumberValue(v)
 }
 
+func stringsIndex(env *Env) Value {
+	return NewNumberValue(float64(bytes.Index(env.LocalGet(0).MustString(), env.LocalGet(1).MustString())))
+}
+
 func initLibAux() {
 	lfmt := NewStruct()
 	lfmt.Put("Println", NewNativeValue(0, fmtPrint('l')))
@@ -321,4 +323,8 @@ func initLibAux() {
 	lstrconv.Put("ParseFloat", NewNativeValue(1, strconvParseFloat))
 	lstrconv.Put("FormatInt", NewNativeValue(2, strconvFormatInt))
 	CoreLibs["strconv"] = NewStructValue(lstrconv)
+
+	lstrings := NewStruct()
+	lstrings.Put("Index", NewNativeValue(2, stringsIndex))
+	CoreLibs["strings"] = NewStructValue(lstrconv)
 }

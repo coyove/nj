@@ -42,45 +42,50 @@ func panicerr(err error) {
 
 func initCoreLibs() {
 	lcore := NewStruct()
-	lcore.Put("unique", NewNativeValue(0, func(env *Env) Value {
+	lcore.Put("Unique", NewNativeValue(0, func(env *Env) Value {
 		a := new(int)
 		return NewPointerValue(unsafe.Pointer(a), PTagUnique)
 	}))
-	lcore.Put("safe", NewNativeValue(1, func(env *Env) Value {
+	lcore.Put("Safe", NewNativeValue(1, func(env *Env) Value {
 		cls := env.LocalGet(0).MustClosure()
 		cls.Set(ClsRecoverable)
 		return NewClosureValue(cls)
 	}))
-	lcore.Put("eval", NewNativeValue(1, func(env *Env) Value {
+	lcore.Put("Eval", NewNativeValue(1, func(env *Env) Value {
+		env.B = Value{}
 		cls, err := LoadString(string(env.LocalGet(0).MustString()))
 		if err != nil {
-			return NewStringValueString(err.Error())
+			env.B = NewStringValueString(err.Error())
+			return Value{}
 		}
 		return NewClosureValue(cls)
 	}))
-	lcore.Put("unicode", NewNativeValue(1, func(env *Env) Value {
+	lcore.Put("Unicode", NewNativeValue(1, func(env *Env) Value {
 		return NewStringValueString(string(rune(env.LocalGet(0).MustNumber())))
 	}))
-	lcore.Put("char", NewNativeValue(1, func(env *Env) Value {
+	lcore.Put("Char", NewNativeValue(1, func(env *Env) Value {
 		r, _ := utf8.DecodeRune(env.LocalGet(0).MustString())
 		return NewNumberValue(float64(r))
 	}))
-	lcore.Put("index", NewNativeValue(2, func(env *Env) Value {
-		switch s := env.LocalGet(0); s.Type() {
-		case StringType:
-			return NewNumberValue(float64(bytes.Index(s.AsString(), env.LocalGet(1).MustString())))
-		case SliceType:
-			m := s.AsSlice()
-			x := env.LocalGet(1)
-			for i, a := range m.l {
-				if a.Equal(x) {
-					return NewNumberValue(float64(i))
-				}
+	lcore.Put("Index", NewNativeValue(2, func(env *Env) Value {
+		x := env.LocalGet(1)
+		for i, a := range env.LocalGet(0).MustSlice().l {
+			if a.Equal(x) {
+				return NewNumberValue(float64(i))
 			}
-			return Value{}
-		default:
-			return NewNumberValue(-1)
 		}
+		return NewNumberValue(-1)
+	}))
+	lcore.Put("PopBack", NewNativeValue(2, func(env *Env) Value {
+		s := env.LocalGet(0).MustSlice()
+		if len(s.l) == 0 {
+			env.B = Value{}
+			return Value{}
+		}
+		res := s.l[len(s.l)-1]
+		s.l = s.l[:len(s.l)-1]
+		env.B = NewSliceValue(s)
+		return res
 	}))
 	lcore.Put("sync", NewStructValue(NewStruct().
 		Put("mutex", NewNativeValue(0, func(env *Env) Value {
@@ -99,9 +104,10 @@ func initCoreLibs() {
 
 	CoreLibs["std"] = NewStructValue(lcore)
 	CoreLibs["atoi"] = NewNativeValue(1, func(env *Env) Value {
+		env.B = Value{}
 		v, err := parser.StringToNumber(string(env.LocalGet(0).MustString()))
 		if err != nil {
-			StorePointerUnsafe(env.LocalGet(1), NewStringValueString(err.Error()))
+			env.B = NewStringValueString(err.Error())
 			return Value{}
 		}
 		return NewNumberValue(v)
@@ -179,24 +185,24 @@ func initCoreLibs() {
 		return NewSliceValue(NewSliceSize(int(env.LocalGet(0).MustNumber())))
 	})
 	CoreLibs["chan"] = NewStructValue(NewStruct().
-		Put("make", NewNativeValue(1, func(env *Env) Value {
+		Put("Make", NewNativeValue(1, func(env *Env) Value {
 			ch := make(chan Value, int(env.LocalGet(0).MustNumber()))
 			return NewPointerValue(unsafe.Pointer(&ch), PTagChan)
 		})).
-		Put("send", NewNativeValue(2, func(env *Env) Value {
+		Put("Send", NewNativeValue(2, func(env *Env) Value {
 			p := (*chan Value)(env.LocalGet(0).MustPointer(PTagChan))
 			*p <- env.LocalGet(1)
 			return env.LocalGet(1)
 		})).
-		Put("recv", NewNativeValue(1, func(env *Env) Value {
+		Put("Recv", NewNativeValue(1, func(env *Env) Value {
 			p := (*chan Value)(env.LocalGet(0).MustPointer(PTagChan))
 			return <-*p
 		})).
-		Put("close", NewNativeValue(1, func(env *Env) Value {
+		Put("Close", NewNativeValue(1, func(env *Env) Value {
 			close(*(*chan Value)(env.LocalGet(0).MustPointer(PTagChan)))
 			return Value{}
 		})).
-		Put("select", NewNativeValue(0, func(env *Env) Value {
+		Put("Select", NewNativeValue(0, func(env *Env) Value {
 			cases := make([]reflect.SelectCase, env.LocalSize())
 			chans := make([]chan Value, len(cases))
 			for i := range chans {
@@ -208,15 +214,15 @@ func initCoreLibs() {
 					chans[i] = *p
 				}
 			}
-			chosen, value, ok := reflect.Select(cases)
-			v := Value{}
+			chosen, value, _ := reflect.Select(cases)
+			v, ch := Value{}, NewPointerValue(unsafe.Pointer(&chans[chosen]), PTagChan)
 			if value.IsValid() {
 				v, _ = value.Interface().(Value)
+			} else {
+				ch = Value{}
 			}
-			return NewStructValue(NewStruct().
-				Put("ok", NewBoolValue(ok)).
-				Put("value", v).
-				Put("chan", NewPointerValue(unsafe.Pointer(&chans[chosen]), PTagChan)))
+			env.B = ch
+			return v
 		})))
 
 	initLibAux()

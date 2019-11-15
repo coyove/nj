@@ -141,7 +141,7 @@ assert( a == 2)
 func safeexec() {
     assert( 0)
 }
-std.safe(safeexec)
+std.Safe(safeexec)
 safeexec()
 
 m = {1,2,{1,2,{1,2,{1,2,3}}}}
@@ -149,26 +149,23 @@ m[2][2][2][2] = 4
 assert( m == {1,2,{1,2,{1,2,{1,2,4}}}})
 
 func safeexec(f, args...) {
-    result = "none"
-    x = std.safe(func () {
+    result = nil
+    x = std.Safe(func () {
         result = f(args...)
     })()
 
-    return {
-        result: result,
-        ok: x == nil,
-    }
+    return result, x == nil
 }
 
-r = safeexec(func(a, b) {
+r, ok = safeexec(func(a, b) {
     return a / b
 }, 1, 2)
  
-assert(r.result == 0.5)
+assert(r== 0.5)
 
-r = safeexec(func a, b = a / b, 1, "2")
+r, ok = safeexec(func a, b = a / b, 1, "2")
   
-assert(r.result == "none" && !r.ok)
+assert(r== nil && !ok)
 
 a = func a = func b = func c = a + b + (func d = d * 2)(c)
 assert( a(1)(2)(3) == 9)

@@ -17,7 +17,7 @@ For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master
 ### Variable
 1. No need to declare them, just write `a = 1` directly.
 2. You can only refer defined variables, e.g. `a = b` is illegal, should be `b = <something> a = b`.
-2. NO way to return multiple values.
+2. NO way to return 3 values or more (0, 1 or 2 are fine).
 3. To initiate a slice, you write `a = {1, 2, 3}`, to initiate a struct, you write `a = {k: 1}`. A struct's fields are immutable (more on that later):
 ```
 a = { k : 1 }

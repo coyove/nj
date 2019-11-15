@@ -137,7 +137,33 @@ assign_stat:
                     $$ = __inc($1, $3.Cx(1)).pos0($1)
                 }
             }
-        }
+        } |
+        declarator ',' declarator '=' expr {
+            if $1.Type() == Natom && $3.Type() == Natom {
+                $$ = __chain(
+                    $5,
+                    __move($1, nilNode).pos0($1),
+                    __move($3, nilNode).pos0($3),
+                    CompNode(ASetFromAB, $1, $3),
+                )
+            } else {
+                $$ = __chain(
+                    $5,
+                    __set("...a", nilNode).pos0($1),
+                    __set("...b", nilNode).pos0($3),
+                    CompNode(ASetFromAB, "...a", "...b"),
+                )
+                x := func(n *Node, src string) {
+                    if n.Cn() > 0 && n.Cx(0).A() == ALoad {
+                        $$.Cappend(__store(n.Cx(1), n.Cx(2), src).pos0(n))
+                    } else {
+                        $$.Cappend(__move(n, src).pos0(n))
+                    }
+                }
+                x($1, "...a")
+                x($3, "...b")
+            }
+        } 
 
 postfix_incdec:
         TIdent _postfix_incdec {
@@ -292,10 +318,12 @@ func_params_list:
 
 jmp_stat:
         TYield expr                       { $$ = CompNode(AYield, $2).pos0($1) } |
+        TYield expr ',' expr              { $$ = __chain(CompNode(ASetB, $4).pos0($1), CompNode(AYield, $2).pos0($1)) } |
         TYieldVoid                        { $$ = CompNode(AYield, nilNode).pos0($1) } |
         TBreak                            { $$ = CompNode(ABreak).pos0($1) } |
         TContinue                         { $$ = CompNode(AContinue).pos0($1) } |
         TReturn expr                      { $$ = __return($2).pos0($1) } |
+        TReturn expr ',' expr             { $$ = __chain(CompNode(ASetB, $4).pos0($1), __return($2).pos0($1)) } |
         TReturnVoid                       { $$ = __return(nilNode).pos0($1) } |
         TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) }
 
