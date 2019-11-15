@@ -149,9 +149,9 @@ assign_stat:
             } else {
                 $$ = __chain(
                     $5,
-                    __set("...a", nilNode).pos0($1),
-                    __set("...b", nilNode).pos0($3),
-                    CompNode(ASetFromAB, "...a", "...b"),
+                    __set("(1)a", nilNode).pos0($1),
+                    __set("(1)b", nilNode).pos0($3),
+                    CompNode(ASetFromAB, "(1)a", "(1)b"),
                 )
                 x := func(n *Node, src string) {
                     if n.Cn() > 0 && n.Cx(0).A() == ALoad {
@@ -160,8 +160,8 @@ assign_stat:
                         $$.Cappend(__move(n, src).pos0(n))
                     }
                 }
-                x($1, "...a")
-                x($3, "...b")
+                x($1, "(1)a")
+                x($3, "(1)b")
             }
         } |
         declarator ',' declarator '=' expr ',' expr {

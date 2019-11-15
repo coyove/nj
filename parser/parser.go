@@ -1060,9 +1060,9 @@ yydefault:
 			} else {
 				yyVAL.expr = __chain(
 					yyDollar[5].expr,
-					__set("...a", nilNode).pos0(yyDollar[1].expr),
-					__set("...b", nilNode).pos0(yyDollar[3].expr),
-					CompNode(ASetFromAB, "...a", "...b"),
+					__set("(1)a", nilNode).pos0(yyDollar[1].expr),
+					__set("(1)b", nilNode).pos0(yyDollar[3].expr),
+					CompNode(ASetFromAB, "(1)a", "(1)b"),
 				)
 				x := func(n *Node, src string) {
 					if n.Cn() > 0 && n.Cx(0).A() == ALoad {
@@ -1071,8 +1071,8 @@ yydefault:
 						yyVAL.expr.Cappend(__move(n, src).pos0(n))
 					}
 				}
-				x(yyDollar[1].expr, "...a")
-				x(yyDollar[3].expr, "...b")
+				x(yyDollar[1].expr, "(1)a")
+				x(yyDollar[3].expr, "(1)b")
 			}
 		}
 	case 35:

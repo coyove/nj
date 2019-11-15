@@ -117,15 +117,20 @@ func __hash(str string) *Node { return NewNumberNode(HashString(str)) }
 var hashDedupCache = lru.NewCache(1024)
 
 func HashString(str string) float64 {
+	hash := HashStringPure(str)
+	if t, ok := hashDedupCache.Get(hash); ok && t.(string) != str {
+		panic(fmt.Sprint(t, "and", str, "share an identical FNV48 hash:", hash))
+	}
+	hashDedupCache.Add(hash, str)
+	return float64(hash)
+}
+
+func HashStringPure(str string) uint64 {
 	var hash uint64 = 2166136261
 	for _, c := range str {
 		hash *= 16777619
 		hash ^= uint64(c)
 	}
 	hash &= 0xffffffffffff
-	if t, ok := hashDedupCache.Get(hash); ok && t.(string) != str {
-		panic(fmt.Sprint(t, "and", str, "share an identical FNV48 hash:", hash))
-	}
-	hashDedupCache.Add(hash, str)
-	return float64(hash)
+	return hash
 }

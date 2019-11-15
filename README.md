@@ -13,7 +13,7 @@ For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master
 |Type `Pointer` | unsafe.Pointer |
 |Type `Closure` | func |
 |Type `Struct`  | immutable map[string]Value |
-|NOT SUPPORTED | mutable map[Value]Value |
+|`m = map.New()`| mutable map[Value]Value |
 | `true == 1` and `false == 0` | bool |
 |No need to declare first, just define `a = 1` | `a := 1` |
 |Refer defined variables: `b = 1; a = b` | `b := 1; a := b`|
@@ -73,7 +73,7 @@ Basically the same, note that:
 
 ### Struct
 1. `Struct` are like `map` in golang, but once you initized it in code you can't add any more keys into it nor iterate it. So its behaviors are more like a `struct`.
-2. To record the keys of a `Struct`, you can use `Named Struct`:
+2. To record the keys of a `Struct`, you can use `Named Struct` whose keys are stored in an extra field `__fields`:
 ```
 a = {
     k: nil,

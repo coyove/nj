@@ -17,6 +17,7 @@ const (
 	PTagUnique
 	PTagPhantom
 	PTagChan
+	PTagMap
 	PTagInterface
 )
 
@@ -101,7 +102,6 @@ func initCoreLibs() {
 			m.Put("wait", NewNativeValue(0, func(env *Env) Value { wg.Wait(); return Value{} }))
 			return NewStructValue(m)
 		}))))
-
 	CoreLibs["std"] = NewStructValue(lcore)
 	CoreLibs["atoi"] = NewNativeValue(1, func(env *Env) Value {
 		env.B = Value{}
@@ -223,6 +223,59 @@ func initCoreLibs() {
 			}
 			env.B = ch
 			return v
+		})))
+
+	CoreLibs["map"] = NewStructValue(NewStruct().
+		Put("New", NewNativeValue(0, func(env *Env) Value {
+			n := 0
+			if env.LocalSize() > 0 {
+				n = int(env.LocalGet(0).MustNumber())
+			}
+			m := make(map[string]Value, n)
+			return NewStructValue(NewStruct().
+				Put("Get", NewNativeValue(1, func(env *Env) Value {
+					buf := env.LocalGet(0).MustString()
+					v, ok := m[*(*string)(unsafe.Pointer(&buf))]
+					env.B = NewBoolValue(ok)
+					return v
+				})).
+				Put("Put", NewNativeValue(2, func(env *Env) Value {
+					buf := env.LocalGet(0).MustString()
+					v := env.LocalGet(1)
+					m[*(*string)(unsafe.Pointer(&buf))] = v
+					return v
+				})).
+				Put("Len", NewNativeValue(1, func(env *Env) Value {
+					return NewNumberValue(float64(len(m)))
+				})).
+				Put("Delete", NewNativeValue(1, func(env *Env) Value {
+					buf := env.LocalGet(0).MustString()
+					v, ok := m[*(*string)(unsafe.Pointer(&buf))]
+					env.B = NewBoolValue(ok)
+					delete(m, *(*string)(unsafe.Pointer(&buf)))
+					return v
+				})).
+				Put("Range", NewNativeValue(1, func(env *Env) Value {
+					cls := env.LocalGet(0).MustClosure()
+					newEnv := NewEnv(env)
+					for k, v := range m {
+						newEnv.LocalClear()
+						newEnv.LocalPush(NewStringValueString(k))
+						newEnv.LocalPush(v)
+						ok, _ := cls.Exec(newEnv)
+						if ok.IsZero() {
+							break
+						}
+					}
+					return Value{}
+				})))
+		})).
+		Put("waitgroup", NewNativeValue(0, func(env *Env) Value {
+			m, wg := NewStruct(), &sync.WaitGroup{}
+			m.Put("add", NewNativeValue(1, func(env *Env) Value { wg.Add(int(env.LocalGet(0).MustNumber())); return Value{} }))
+			m.Put("done", NewNativeValue(0, func(env *Env) Value { wg.Done(); return Value{} }))
+			m.Put("wait", NewNativeValue(0, func(env *Env) Value { wg.Wait(); return Value{} }))
+			return NewStructValue(m)
 		})))
 
 	initLibAux()

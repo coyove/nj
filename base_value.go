@@ -134,13 +134,13 @@ func (m *Struct) Equal(m2 *Struct) bool {
 
 // Put puts a new entry into the map
 func (m *Struct) Put(key string, value Value) *Struct {
-	m.l.Add(true, NewNumberValue(parser.HashString(key)), value)
+	m.l.Add(true, NewNumberValue(float64(parser.HashStringPure(key))), value)
 	return m
 }
 
 // hashGet gets the corresponding value with the key
 func (m *Struct) Get(key string) (Value, bool) {
-	return m.hashGet(NewNumberValue(parser.HashString(key)))
+	return m.hashGet(NewNumberValue(float64(parser.HashStringPure(key))))
 }
 
 func (m *Struct) hashGet(key Value) (Value, bool) {
