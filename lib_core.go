@@ -9,7 +9,6 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	"github.com/buger/jsonparser"
 	"github.com/coyove/potatolang/parser"
 )
 
@@ -18,6 +17,7 @@ const (
 	PTagUnique
 	PTagPhantom
 	PTagChan
+	PTagInterface
 )
 
 var CoreLibs = map[string]Value{}
@@ -82,13 +82,6 @@ func initCoreLibs() {
 			return NewNumberValue(-1)
 		}
 	}))
-	lcore.Put("sprintf", NewNativeValue(0, stdSprintf))
-	lcore.Put("ftoa", NewNativeValue(1, func(env *Env) Value {
-		v := env.LocalGet(0).MustNumber()
-		base := byte(env.LocalGet(1).MustNumber())
-		digits := int(env.LocalGet(2).MustNumber())
-		return NewStringValueString(strconv.FormatFloat(v, byte(base), digits, 64))
-	}))
 	lcore.Put("sync", NewStructValue(NewStruct().
 		Put("mutex", NewNativeValue(0, func(env *Env) Value {
 			m, mux := NewStruct(), &sync.Mutex{}
@@ -102,35 +95,6 @@ func initCoreLibs() {
 			m.Put("done", NewNativeValue(0, func(env *Env) Value { wg.Done(); return Value{} }))
 			m.Put("wait", NewNativeValue(0, func(env *Env) Value { wg.Wait(); return Value{} }))
 			return NewStructValue(m)
-		}))))
-
-	lcore.Put("json", NewStructValue(NewStruct().
-		Put("parse", NewNativeValue(1, func(env *Env) Value {
-			json := bytes.TrimSpace(env.LocalGet(0).MustString())
-			if len(json) == 0 {
-				return Value{}
-			}
-			switch json[0] {
-			case '[':
-				return walkArray(json)
-			case '{':
-				return walkObject(json)
-			case '"':
-				str, err := jsonparser.ParseString(json)
-				panicerr(err)
-				return NewStringValueString(str)
-			case 't', 'f':
-				b, err := jsonparser.ParseBoolean(json)
-				panicerr(err)
-				return NewBoolValue(b)
-			default:
-				num, err := jsonparser.ParseFloat(json)
-				panicerr(err)
-				return NewNumberValue(num)
-			}
-		})).
-		Put("stringify", NewNativeValue(1, func(env *Env) Value {
-			return NewStringValueString(env.LocalGet(0).toString(0, true))
 		}))))
 
 	CoreLibs["std"] = NewStructValue(lcore)
@@ -254,71 +218,9 @@ func initCoreLibs() {
 				Put("value", v).
 				Put("chan", NewPointerValue(unsafe.Pointer(&chans[chosen]), PTagChan)))
 		})))
-	CoreLibs["err"] = Value{}
 
-	initIOLib()
-	initMathLib()
-}
-
-func walkObject(buf []byte) Value {
-	m := NewStruct()
-	jsonparser.ObjectEach(buf, func(key, value []byte, dataType jsonparser.ValueType, offset int) error {
-		switch dataType {
-		case jsonparser.Unknown:
-			panic(value)
-		case jsonparser.Null:
-			m.Put(string(key), Value{})
-		case jsonparser.Boolean:
-			b, err := jsonparser.ParseBoolean(value)
-			panicerr(err)
-			m.Put(string(key), NewBoolValue(b))
-		case jsonparser.Number:
-			num, err := jsonparser.ParseFloat(value)
-			panicerr(err)
-			m.Put(string(key), NewNumberValue(num))
-		case jsonparser.String:
-			str, err := jsonparser.ParseString(value)
-			panicerr(err)
-			m.Put(string(key), NewStringValueString(str))
-		case jsonparser.Array:
-			m.Put(string(key), walkArray(value))
-		case jsonparser.Object:
-			m.Put(string(key), walkObject(value))
-		}
-		return nil
-	})
-	return NewStructValue(m)
-}
-
-func walkArray(buf []byte) Value {
-	m := NewSlice()
-	i := 0
-	jsonparser.ArrayEach(buf, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
-		switch dataType {
-		case jsonparser.Unknown:
-			panic(value)
-		case jsonparser.Null:
-			m.Put(i, Value{})
-		case jsonparser.Boolean:
-			b, err := jsonparser.ParseBoolean(value)
-			panicerr(err)
-			m.Put(i, NewBoolValue(b))
-		case jsonparser.Number:
-			num, err := jsonparser.ParseFloat(value)
-			panicerr(err)
-			m.Put(i, NewNumberValue(num))
-		case jsonparser.String:
-			str, err := jsonparser.ParseString(value)
-			panicerr(err)
-			m.Put(i, NewStringValueString(str))
-		case jsonparser.Array:
-			m.Put(i, walkArray(value))
-		case jsonparser.Object:
-			m.Put(i, walkObject(value))
-		}
-		i++
-	})
-	return NewSliceValue(m)
+	initLibAux()
+	initLibMath()
 }
 
 func StorePointerUnsafe(ptr Value, v Value) {
@@ -327,4 +229,12 @@ func StorePointerUnsafe(ptr Value, v Value) {
 	}
 	x := math.Float64bits(ptr.MustNumber())
 	(*Env)(unsafe.Pointer(uintptr(x<<16>>16))).Set(uint16(x>>48), v)
+}
+
+func LoadPointerUnsafe(ptr Value) Value {
+	if ptr.IsFalse() {
+		return Value{}
+	}
+	x := math.Float64bits(ptr.MustNumber())
+	return (*Env)(unsafe.Pointer(uintptr(x<<16>>16))).Get(uint16(x>>48), nil)
 }

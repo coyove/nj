@@ -89,7 +89,7 @@ for i = 0,nCPU go(worker)
 
 wg.wait() 
  
-io.write("P4\n" + itoa(size) + " " + itoa(size) + "\n") 
+fmt.Write(os.Stdout, "P4\n" + itoa(size) + " " + itoa(size) + "\n") 
 for i = rows {
-    io.write(rows[i]) 
+    fmt.Write(os.Stdout, rows[i]) 
 }

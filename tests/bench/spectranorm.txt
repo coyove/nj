@@ -85,5 +85,5 @@ for i = v {
     vv = vv + v[i] * v[i]
 }
 
-io.println(math.sqrt(vBv/vv)) 
+fmt.Println(math.sqrt(vBv/vv)) 
     

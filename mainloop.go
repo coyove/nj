@@ -66,7 +66,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 		if r := recover(); r != nil {
 			stk := append(retStack, stacktrace{cls: K})
 			for i := len(stk) - 1; i >= 0; i-- {
-				if stk[i].cls.Isset(ClsRecoverable) {
+				if stk[i].cls.Is(ClsRecoverable) {
 					nextCursor, yielded = 0, false
 					if rv, ok := r.(Value); ok {
 						result = rv
@@ -105,7 +105,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, nextCursor u
 		K = r.cls
 		r.env.A = v
 		caddr = kodeaddr(K.Code)
-		if r.cls.Isset(ClsNoEnvescape) {
+		if r.cls.Is(ClsNoEnvescape) {
 			if stackEnv != nil {
 				for i := range stackEnv.stack {
 					stackEnv.stack[i] = Value{}
@@ -260,7 +260,7 @@ MAIN:
 			case NilType:
 				env.A.SetNumberValue(0)
 			case ClosureType:
-				env.A.SetNumberValue(float64(v.AsClosure().ArgsCount))
+				env.A.SetNumberValue(float64(v.AsClosure().ParamsCount))
 			default:
 				panicf("can't evaluate the length of %#v", v)
 			}
@@ -316,7 +316,7 @@ MAIN:
 			case SliceType<<8 | NumberType:
 				env.A = a.AsSlice().Get(int(idx.AsNumber()))
 			case StructType<<8 | NumberType:
-				env.A, _ = a.AsStruct().Get(idx)
+				env.A, _ = a.AsStruct().hashGet(idx)
 			default:
 				panicf("can't load %#v[%#v]", a, idx)
 			}
@@ -392,7 +392,7 @@ MAIN:
 					stackEnv = NewEnv(env)
 				}
 
-				if cls.Isset(ClsYieldable | ClsRecoverable | ClsNative) {
+				if cls.Is(ClsYieldable | ClsRecoverable | ClsNative) {
 					stackEnv.parent = env
 					env.A = cls.Exec(stackEnv)
 				} else {

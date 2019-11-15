@@ -93,7 +93,7 @@ func main() {
 	pool = 1
 	runtime.GOMAXPROCS(pool)
 
-	// Get input, if any...
+	// hashGet input, if any...
 	size := defaultSize
 	flag.Parse()
 	if flag.NArg() > 0 {

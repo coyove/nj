@@ -36,9 +36,9 @@ a = {
 }
 
 j = `{"a": { "hello": null, "n3": { "n0" : [1,2,3]}}}`
-assert(std.json.parse(j) == a)
-assert(std.json.parse("true") == true)
-assert(std.json.parse("     true") == !false)
+assert(json.Unmarshal(j) == a)
+assert(json.Unmarshal("true") == true)
+assert(json.Unmarshal("     true") == !false)
 
 assert(atoi("1") == 1)
 assert(atoi("1a", &err) == nil && err != "")
@@ -48,3 +48,8 @@ assert(chan.select("default").value == nil)
 ch = chan.make(1)
 chan.send(ch, "hello")
 assert(chan.select(ch, "default").value == "hello")
+
+v1 = ""
+v2 = 0
+fmt.Println(fmt.Sscanf("hello world 123", "%s world %f", &v1, &v2).err)
+assert(v1 == "hello" && v2 == 123)

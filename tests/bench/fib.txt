@@ -4,5 +4,5 @@ func fib(n) {
 }
 
 ans = fib(35)
-io.println(ans)
+fmt.Println(ans)
 return ans

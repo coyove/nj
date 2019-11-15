@@ -10,6 +10,6 @@ for i = 0, len(text) assert( dupcheck[i] == text[i])
 
 assert( itoa(1) == "1")
 assert( itoa(10000000000) == "10000000000")
-assert( std.ftoa(1, 'f', -1)[0] == '1')
-assert( std.unicode(std.ftoa(1, 'f', -1)[0]) == "1")
+assert( strconv.FormatFloat(1, 'f', -1)[0] == '1')
+assert( std.unicode(strconv.FormatFloat(1, 'f', -1)[0]) == "1")
 assert( std.unicode('我') == "我")

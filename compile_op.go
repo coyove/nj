@@ -118,7 +118,16 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	}
 
 	switch bop {
-	case OpTypeof, OpNot, OpAddressOf, OpRet, OpYield, OpLen, OpPushVararg, OpCopyStack:
+	case OpAddressOf:
+		yx, ok := table.get(atoms[1].A())
+		if !ok {
+			// For &, atoms[1] is always an identifier, if it is not defined, define it
+			yx = table.borrowAddress()
+			buf.WriteOP(OpSet, yx, regNil)
+			table.put(atoms[1].A(), yx)
+		}
+		buf.WriteOP(bop, yx, 0)
+	case OpTypeof, OpNot, OpRet, OpYield, OpLen, OpPushVararg, OpCopyStack:
 		// unary op
 		err = table.writeOpcode(&buf, bop, atoms[1], nil)
 	default:
@@ -311,7 +320,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	code.WriteOP(OpEOB, 0, 0)
 	buf := newpacket()
 	cls := Closure{}
-	cls.ArgsCount = byte(ln)
+	cls.ParamsCount = byte(ln)
 	if newtable.y {
 		cls.Set(ClsYieldable)
 	}

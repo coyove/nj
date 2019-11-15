@@ -60,7 +60,7 @@ func (v Value) Type() byte {
 	if x == 0 {
 		return NilType
 	}
-	return (*base)(unsafe.Pointer(x)).ptype
+	return (*Base)(unsafe.Pointer(x)).ptype
 }
 
 var (
@@ -115,12 +115,12 @@ func (v *Value) SetBoolValue(b bool) {
 }
 
 // NewSliceValue returns a map value
-func NewSliceValue(m *baseSlice) Value {
+func NewSliceValue(m *Slice) Value {
 	m.ptype = SliceType
 	return Value{ptr: unsafe.Pointer(m)}
 }
 
-func NewStructValue(m *baseStruct) Value {
+func NewStructValue(m *Struct) Value {
 	m.ptype = StructType
 	return Value{ptr: unsafe.Pointer(m)}
 }
@@ -133,7 +133,7 @@ func NewClosureValue(c *Closure) Value {
 
 // NewPointerValue returns a generic value
 func NewPointerValue(g unsafe.Pointer, tag uint32) Value {
-	m := &basePointer{base: base{ptype: PointerType, ptag: tag}, ptr: g}
+	m := &Pointer{Base: Base{ptype: PointerType, ptag: tag}, ptr: g}
 	return Value{unsafe.Pointer(m)}
 }
 
@@ -141,7 +141,7 @@ func NewPointerValue(g unsafe.Pointer, tag uint32) Value {
 // Note we use []byte to avoid some unnecessary castings from string to []byte,
 // it DOES NOT mean a StringValue is mutable
 func NewStringValue(s []byte) Value {
-	m := &baseString{base: base{ptype: StringType}, s: s}
+	m := &String{Base: Base{ptype: StringType}, s: s}
 	return Value{unsafe.Pointer(m)}
 }
 
@@ -157,17 +157,18 @@ func NewInterfaceValue(i interface{}) Value {
 		return NewStringValueString(v)
 	case []byte:
 		return NewStringValue(v)
-	case *baseSlice:
+	case *Slice:
 		return NewSliceValue(v)
 	case *Closure:
 		return NewClosureValue(v)
 	}
-	return Value{}
+	m := &Pointer{Base: Base{ptype: PointerType, ptag: PTagInterface}, ptr: unsafe.Pointer(&i)}
+	return Value{unsafe.Pointer(m)}
 }
 
 // AsString cast value to string
 func (v Value) AsString() []byte {
-	return (*baseString)(v.ptr).s
+	return (*String)(v.ptr).s
 }
 
 // IsFalse tests whether value contains a "false" value
@@ -178,10 +179,10 @@ func (v Value) IsFalse() bool {
 	case NilType:
 		return true
 	case StringType:
-		m := (*baseString)(v.ptr)
+		m := (*String)(v.ptr)
 		return len(m.s) == 0
 	case SliceType:
-		m := (*baseSlice)(v.ptr)
+		m := (*Slice)(v.ptr)
 		return len(m.l) == 0
 	}
 	return false
@@ -202,12 +203,12 @@ func (v Value) AsInt32() int32 {
 }
 
 // AsSlice cast value to map of values
-func (v Value) AsSlice() *baseSlice {
-	return (*baseSlice)(v.ptr)
+func (v Value) AsSlice() *Slice {
+	return (*Slice)(v.ptr)
 }
 
-func (v Value) AsStruct() *baseStruct {
-	return (*baseStruct)(v.ptr)
+func (v Value) AsStruct() *Struct {
+	return (*Struct)(v.ptr)
 }
 
 // AsClosure cast value to closure
@@ -217,18 +218,18 @@ func (v Value) AsClosure() *Closure {
 
 // AsPointer cast value to unsafe.Pointer
 func (v Value) AsPointer() (unsafe.Pointer, uint32) {
-	return (*basePointer)(v.ptr).ptr, (*basePointer)(v.ptr).ptag
+	return (*Pointer)(v.ptr).ptr, (*Pointer)(v.ptr).ptag
 }
 
 // MustSlice safely cast value to map of values
-func (v Value) MustSlice() *baseSlice {
+func (v Value) MustSlice() *Slice {
 	v.testType(SliceType)
-	return (*baseSlice)(v.ptr)
+	return (*Slice)(v.ptr)
 }
 
-func (v Value) MustStruct() *baseStruct {
+func (v Value) MustStruct() *Struct {
 	v.testType(StructType)
-	return (*baseStruct)(v.ptr)
+	return (*Struct)(v.ptr)
 }
 
 // MustClosure safely cast value to closure
@@ -270,6 +271,11 @@ func (v Value) AsInterface() interface{} {
 		return v.AsSlice()
 	case ClosureType:
 		return v.AsClosure()
+	case PointerType:
+		ptr, ptag := v.AsPointer()
+		if ptag == PTagInterface {
+			return *(*interface{})(ptr)
+		}
 	}
 	return nil
 }

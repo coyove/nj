@@ -6,11 +6,11 @@ import (
 	"github.com/coyove/common/rand"
 )
 
-func initMathLib() {
+func initLibMath() {
 	r := rand.New()
 	lmath := NewStruct()
 
-	lmath.Put("sqrt", NewNativeValue(1, func(env *Env) Value {
+	lmath.Put("Sqrt", NewNativeValue(1, func(env *Env) Value {
 		return NewNumberValue(math.Sqrt(env.LocalGet(0).MustNumber()))
 	}))
 	lmath.Put("rand", NewStructValue(NewStruct().

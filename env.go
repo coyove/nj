@@ -1,9 +1,6 @@
 package potatolang
 
 import (
-	"encoding/base64"
-	"fmt"
-	"hash/crc32"
 	"unsafe"
 )
 
@@ -138,106 +135,4 @@ func (env *Env) Set(yx uint16, v Value) {
 // Stack returns the current stack
 func (env *Env) Stack() []Value {
 	return env.stack
-}
-
-const (
-	ClsNoEnvescape = 1 << iota
-	ClsYieldable
-	ClsRecoverable
-	ClsNative
-)
-
-// NewClosure creates a new closure
-func NewClosure(code []uint32, consts []Value, env *Env, argsCount byte) *Closure {
-	return &Closure{
-		Code:       code,
-		ConstTable: consts,
-		Env:        env,
-		ArgsCount:  argsCount,
-	}
-}
-
-// NewNativeValue creates a native function in potatolang
-func NewNativeValue(argsCount int, f func(env *Env) Value) Value {
-	cls := &Closure{
-		ArgsCount: byte(argsCount),
-		native:    f,
-	}
-	cls.Set(ClsNative)
-	return NewClosureValue(cls)
-}
-
-func (c *Closure) Set(opt byte) { c.options |= opt }
-
-func (c *Closure) Unset(opt byte) { c.options &= ^opt }
-
-func (c *Closure) Isset(opt byte) bool { return (c.options & opt) > 0 }
-
-func (c *Closure) BytesCode() []byte { return u32Bytes(c.Code) }
-
-// Dup duplicates the closure
-func (c *Closure) Dup() *Closure {
-	cls := *c
-	return &cls
-}
-
-func (c *Closure) String() string {
-	if c.native != nil {
-		return fmt.Sprintf("<native%d>", c.ArgsCount)
-	}
-	p := "closure"
-	if c.Isset(ClsNoEnvescape) {
-		p = "pfun"
-	}
-	h := crc32.New(crc32.IEEETable)
-	h.Write(u32Bytes(c.Code))
-	hash := base64.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzzz0123456789").EncodeToString(h.Sum(nil)[:3])
-
-	x := fmt.Sprintf("<%s_%s_%dp%dk", p, hash, c.ArgsCount, len(c.ConstTable))
-	if c.Isset(ClsYieldable) {
-		x += "_y"
-	}
-	if c.Isset(ClsRecoverable) {
-		x += "_safe"
-	}
-	return x + ">"
-}
-
-func (c *Closure) PrettyString() string {
-	if c.native != nil {
-		return "[native Code]"
-	}
-	return c.crPrettify(0)
-}
-
-// Exec executes the closure with the given Env
-func (c *Closure) Exec(newEnv *Env) Value {
-	if c.native == nil {
-		if c.lastenv != nil {
-			newEnv = c.lastenv
-		} else {
-			newEnv.SetParent(c.Env)
-		}
-
-		v, np, yield := ExecCursor(newEnv, c, c.lastp)
-		if yield {
-			c.lastp = np
-			c.lastenv = newEnv
-		} else {
-			c.lastp = 0
-			c.lastenv = nil
-		}
-		return v
-	}
-
-	// for a native closure, it doesn't have its own Env,
-	// so newEnv's parent is the Env where this native function was called.
-	return c.native(newEnv)
-}
-
-func (c *Closure) ImmediateStop() {
-	const Stop = uint32(OpEOB) << 26
-	for i := range c.Code {
-		c.Code[i] = Stop
-	}
 }
