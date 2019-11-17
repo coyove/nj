@@ -7,7 +7,7 @@ a, b[0] = (func a = foo(a))({"1",2})
 assert(a == 2 && b[0] == {"1"})
 
 func bar(n) {
-    for i = 0 ,n {
+    for i = range 0 ,n - 1 {
         yield i, i + 1
     }
 }

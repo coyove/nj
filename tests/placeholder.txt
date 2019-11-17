@@ -8,7 +8,7 @@
      __remain = __argscount
 
     func appendargs(args) {
-        for i = 0, len( __args) {
+        for i = range 0, len( __args) - 1 {
              __arg = __args[i]
             if (__arg == _&&len(args) > 0) {
                 __args[i] = args[0]
@@ -16,12 +16,12 @@
             }
         }
 
-        for i = 0, len(args) {
+        for i = range 0, len(args) - 1 {
             __args[len(__args)] = args[i]
         }
 
         __remain = __argscount - len(__args)
-        for    i  = 0, len( __args) {
+        for i = range 0, len( __args) - 1 {
             if (__args[i] == _) {
                 __remain = __remain+1
             }

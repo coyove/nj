@@ -13,16 +13,19 @@ For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master
 |Type `Pointer` | unsafe.Pointer |
 |Type `Closure` | func |
 |Type `Struct`  | immutable map[string]Value |
-|`m = map.New()`| mutable map[Value]Value |
+|`m = map.New(n)`| mutable map[string]Value |
+|`ch = chan.Make(n)`| chan Value |
+|`chan.Send(ch, v)`| ch <- v |
+|`v = chan.Recv(ch)`| v := <-ch |
+|`v, ch = chan.Select(ch1, ch2, ... "default")`| select {...} |
 | `true == 1` and `false == 0` | bool |
-|`for i = v {}               ` |`for i = 0; i < len(v); i++ {}`|
-|`for i = start, end {}      ` |`for i = start; i < end; i++ {}`|
-|`for i = start, end, step {}` |`for i = start; i <= end; i += step {}`|
-|Basically identical | Other for-loop syntax|
+| `go(foo, arg1, arg2 ...)` | go foo(arg1, arg2, ...) |
+|`for i = range start, end {}      ` |`for i = start; i <= end; i++ {}`|
+|`for i = range start, end, step {}` |`for i = start; i <= end; i += step {}`|
 |`for true {}`  (true is required)| `for {}` |
 |`a = {...}`| `a := []Value{...}` |
 |`a = { k: ... }` | `a := struct{ k Value }{...}` |
-|`a, b = (func(){return 1, 2})()` | `a, b = (func(){return 1, 2})()` |
+|`a1, a2 = (func(){return b1, b2})()` | `a1, a2 = (func(){return b1, b2})()` |
 |NOT SUPPORTED (n > 2) | `a1, ..., an = (func(){return b1, ..., bn})()` |
 |`foo = func a = a + 1` | `foo := func(a) { return a + 1 }` |
 |`addr := &var; addr[] = 1` | `addr := &var; *addr = 1` |
@@ -31,35 +34,17 @@ For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master
 |`a = append(a, {1, 2}...)`| `a = append(a, []Value{1, 2}...)`|
 |`a[len(a)] = 1`|`a = append(a, 1)`|
 
-### Variable Scope
-Since we don't have declarations, to create a variable specifically inside a scope, we use `:=`:
+### Scope
+Unlike golang, you can only create a new variable scope in a closure, which means the following code will yield `2`:
 ```
-func foo(b) {
+if true {
     a := 1
-    (func() {
-        a := b
-        io.println("inner: ", a)
-    })()
-    io.println("outer: ", a)
+    go(func() {
+        time.Sleep(time.Second)
+        fmt.Println(a)
+    })
 }
-foo(2)
-// outputs:
-//      inner: 2
-//      outer: 1
-```
-Note there are two exceptions as shown below where the topmost variable `a` is never touched:
-```
-a = 1
-func foo(a) {
-    a = 2 // a is local, because it's the parameter of foo
-} 
-foo(2)
-
-func bar() {
-    func a() {}
-    a = 2 // closure is always local: a := func() {})
-}
-bar()
+a = 2
 ```
 
 ### Operators

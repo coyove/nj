@@ -314,6 +314,7 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 }
 
 var reservedWords = map[string]uint32{
+	"range":    TRange,
 	"break":    TBreak,
 	"continue": TContinue,
 	"else":     TElse,

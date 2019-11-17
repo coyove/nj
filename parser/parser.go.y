@@ -16,6 +16,7 @@ import "strconv"
 %type<expr> postfix_incdec
 %type<expr> _postfix_incdec
 %type<atom> _postfix_assign
+%type<expr> _set_move
 %type<expr> prefix_expr
 %type<expr> assign_stat
 %type<expr> for_stat
@@ -35,7 +36,7 @@ import "strconv"
 }
 
 /* Reserved words */
-%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TLen TReturn TReturnVoid TImport TTypeof TYield TYieldVoid TStruct 
+%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TLen TReturn TReturnVoid TImport TTypeof TYield TYieldVoid TStruct TRange
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
@@ -98,6 +99,10 @@ flow_stat:
         if_stat        { $$ = $1 } |
         func_stat      { $$ = $1 }
 
+_set_move:
+        '='            { $$ = NewNode(AMove) } |
+        TSet           { $$ = NewNode(ASet) }
+
 _postfix_incdec:
         TAddAdd        { $$ = oneNode } |
         TSubSub        { $$ = moneNode }
@@ -129,15 +134,11 @@ assign_stat:
 
             $$ = __chain()
             if len(nodes) == 2 && $2.Cn() == 1 { // a, b = c()
-                y := __move
-                if op.A() == ASet {
-                    y = __set
-                }
                 if nodes[0].Type() == Natom && nodes[1].Type() == Natom {
                     $$ = __chain(
                         $2.Cx(0),
-                        y(nodes[0], nilNode).pos0($1),
-                        y(nodes[1], nilNode).pos0($1),
+                        opSetMove(op)(nodes[0], nilNode).pos0($1),
+                        opSetMove(op)(nodes[1], nilNode).pos0($1),
                         CompNode(ASetFromAB, nodes[0], nodes[1]),
                     )
                 } else {
@@ -151,7 +152,7 @@ assign_stat:
                         if n.Cn() > 0 && n.Cx(0).A() == ALoad {
                             $$.Cappend(__store(n.Cx(1), n.Cx(2), src).pos0(n))
                         } else {
-                            $$.Cappend(y(n, src).pos0(n))
+                            $$.Cappend(opSetMove(op)(n, src).pos0(n))
                         }
                     }
                     x(nodes[0], "(2)a")
@@ -216,58 +217,71 @@ for_stat:
                 __for($4).__continue($6).__body($7).pos0($1),
             )
         } |
-        TFor TIdent '=' expr oneline_or_block {
-            forVar, forEnd := ANode($2), ANodeS($2.Str + "_end")
+        TFor TIdent _set_move TRange expr oneline_or_block {
+            forVar, forEnd := ANode($2), ANodeS("..." + $2.Str)
             $$ = __chain(
-                __move(forVar, NewNumberNode(0)).pos0($1),
-                __move(forEnd, CompNode(ALen, $4).pos0($1)).pos0($1),
+                opSetMove($3)(forVar, NewNumberNode(0)).pos0($1),
+                __set(forEnd, CompNode(ALen, $5).pos0($1)).pos0($1),
+                __for(CompNode(ALess, forVar, forEnd).pos0($1)).
+                    __continue(__chain(__inc(forVar, oneNode).pos0($1))).
+                    __body($6).pos0($1),
+            )
+        } |
+        TFor TIdent ',' TIdent _set_move TRange expr oneline_or_block {
+            forVar, forEnd := ANode($2), ANodeS("..." + $2.Str)
+            $$ = __chain(
+                opSetMove($5)($4, nilNode).pos0($1),
+                opSetMove($5)(forVar, NewNumberNode(0)).pos0($1),
+                __set(forEnd, CompNode(ALen, $7).pos0($1)).pos0($1),
                 __for(
                     CompNode(ALess, forVar, forEnd).pos0($1),
                 ).
                 __continue(
                     __chain(__inc(forVar, oneNode).pos0($1)),
                 ).
-                __body($5).pos0($1),
+                __body(
+                    __chain(__move($4, __load($7, forVar)).pos0($1), $8),
+                ).pos0($1),
             )
         } |
-        TFor TIdent '=' expr ',' expr oneline_or_block {
-            forVar, forEnd := ANode($2), ANodeS($2.Str + "_end")
+        TFor TIdent _set_move TRange expr ',' expr oneline_or_block {
+            forVar, forEnd := ANode($2), ANodeS("..." + $2.Str)
             $$ = __chain(
-                __move(forVar, $4).pos0($1),
-                __move(forEnd, $6).pos0($1),
+                opSetMove($3)(forVar, $5).pos0($1),
+                __set(forEnd, $7).pos0($1),
                 __for(
-                    CompNode(ALess, forVar, forEnd).pos0($1),
+                    CompNode(ALessEq, forVar, forEnd).pos0($1),
                 ).
                 __continue(
                     __chain(__inc(forVar, oneNode).pos0($1)),
                 ).
-                __body($7).pos0($1),
+                __body($8).pos0($1),
             )
         } |
-        TFor TIdent '=' expr ',' expr ',' expr oneline_or_block {
-            forVar, forEnd := ANode($2), ANodeS($2.Str + "_end") 
-            if $8.Type() == Nnumber { // easy case
+        TFor TIdent _set_move TRange expr ',' expr ',' expr oneline_or_block {
+            forVar, forEnd := ANode($2), ANodeS("..." + $2.Str)
+            if $9.Type() == Nnumber { // easy case
                 var cond *Node
-                if $8.N() < 0 {
+                if $9.N() < 0 {
                     cond = __lessEq(forEnd, forVar)
                 } else {
                     cond = __lessEq(forVar, forEnd)
                 }
                 $$ = __chain(
-                    __move(forVar, $4).pos0($1),
-                    __move(forEnd, $6).pos0($1),
+                    opSetMove($3)(forVar, $5).pos0($1),
+                    __set(forEnd, $7).pos0($1),
                     __for(cond).
-                    __continue(__chain(__inc(forVar, $8).pos0($1))).
-                    __body($9).pos0($1),
+                    __continue(__chain(__inc(forVar, $9).pos0($1))).
+                    __body($10).pos0($1),
                 )
             } else {
-                forStep := ANodeS($2.Str + "_step")
-                forBegin := ANodeS($2.Str + "_begin")
+                forStep := ANodeS("...step" + $2.Str)
+                forBegin := ANodeS("...begin" + $2.Str)
                 $$ = __chain(
-                    __move(forVar, $4).pos0($1),
-                    __move(forBegin, $4).pos0($1),
-                    __move(forEnd, $6).pos0($1),
-                    __move(forStep, $8).pos0($1),
+                    opSetMove($3)(forVar, $5).pos0($1),
+                    __set(forBegin, $5).pos0($1),
+                    __set(forEnd, $7).pos0($1),
+                    __set(forStep, $9).pos0($1),
                     __if(
                         __lessEq(
                             zeroNode,
@@ -291,7 +305,7 @@ for_stat:
                             __continue(
                                 __chain(__inc(forVar, forStep).pos0($1)),
                             ).
-                            __body($9).pos0($1),
+                            __body($10).pos0($1),
                         ),
                     ).
                     __else(
@@ -471,4 +485,11 @@ func patchVarargCall(callee interface{}, args *Node) *Node {
     res.Cappend(CompNode(ADDD, varname).pos0(callee))
     res.Cappend(__call(callee, emptyNode).pos0(callee))
     return res
+}
+
+func opSetMove(op *Node) func(dest, src interface{}) *Node {
+    if op.A() == ASet {
+        return __set
+    }
+    return __move
 }

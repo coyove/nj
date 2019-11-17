@@ -25,9 +25,9 @@ func A(i, j) {
 
 func TimesVec(v, s, n, u, wg) {
      ul = len(u) 
-    for i = s  ,n {
-         vi = 0 
-        for j = 0,ul {
+    for i = range s ,n - 1 {
+        vi = 0 
+        for j = range 0,ul - 1 {
             vi = vi + u[j] / A(i, j) 
         }
         v[i] = vi 
@@ -37,9 +37,9 @@ func TimesVec(v, s, n, u, wg) {
 
 func TimesTranspVec(v, s, n, u, wg) {
      ul = len(u) 
-    for i = s, n  {
-         vi = 0 
-        for j = 0, ul  {
+    for i = range s, n - 1  {
+        vi = 0 
+        for j =  range 0, ul - 1  {
             vi = vi + u[j] / A(j, i) 
         }
         v[i] = vi 
@@ -51,13 +51,13 @@ func ATimesTransp(v, u) {
     x = make(len(u)) 
     wg = std.sync.waitgroup() 
 
-    for i = 0, nCPU {
+    for i = range 0, nCPU - 1 {
         wg.add(1) 
         go(TimesVec, x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u, wg) 
     }
     wg.wait() 
 
-    for  i = 0, nCPU {
+    for i = range 0, nCPU - 1 {
         wg.add(1) 
         go(TimesTranspVec, v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x, wg) 
     }
@@ -68,19 +68,19 @@ n = 2000
 u = {} 
 v = {} 
  
-for idx = 0, n {
+for idx = range 0, n - 1 {
     u[idx] = 1 
     v[idx] = 0 
 }
 
-for i = 0, 10 {
+for i = range 0, 9 {
     ATimesTransp(v, u) 
     ATimesTransp(u, v) 
 }
 
 vBv = 0
 vv = 0 
-for i = v {
+for i = range v {
     vBv = vBv + u[i] * v[i]
     vv = vv + v[i] * v[i]
 }
