@@ -46,6 +46,7 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 		buf.WriteOP(OpSet, addr, valueIndex)
 		if strings.HasPrefix(string(srcName), "(1)") {
 			table.returnAddress(valueIndex)
+			table.del(srcName)
 		}
 		return buf, addr, nil
 	case parser.Nnumber, parser.Nstring:

@@ -161,37 +161,24 @@ func TestImportLoop(t *testing.T) {
 	}
 }
 
-func TestCopyCall(t *testing.T) {
-	//	cls, err := LoadString("var a = dup 1")
-	//	if err != nil {
-	//		t.Fatal(err)
-	//	}
-	//	Code := cls.Code
-	//	o, a, _ := op(Code[0])
-	//	if o != OP_R0K || cls.ConstTable[a].MustNumber() != 1.0 {
-	//		t.Fatal("error opcode 0")
-	//	}
-	//
-	//	o, a, _ = op(Code[1])
-	//	if o != OP_R1K || cls.ConstTable[a].MustNumber() != 1.0 {
-	//		t.Fatal("error opcode 1")
-	//	}
-	//
-	//	o, a, _ = op(Code[2])
-	//	if o != OP_R2K || cls.ConstTable[a].Type() != NilType {
-	//		t.Fatal("error opcode 2")
-	//	}
-	//
-	//	cls, err = LoadString("(dup 1)")
-	//	if err != nil {
-	//		t.Fatal(err)
-	//	}
-	//	Code = cls.Code
-	//	o, a, _ = op(Code[0])
-	//	if o != OP_R0K || cls.ConstTable[a].MustNumber() != 0.0 {
-	//		t.Fatal("error opcode 0 3")
-	//	}
+func TestInc(t *testing.T) {
+	cls, err := LoadString("a = 1; a = -1 + a; a = 2 - a")
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	t.Log(cls.PrettyString())
+
+	code := cls.Code
+	o, _, s := op(code[1])
+	if o != OpInc || cls.ConstTable[s&0x3ff].MustNumber() != -1.0 {
+		t.Fatal("error opcode 0")
+	}
+
+	o, _, s = op(code[2])
+	if o != OpSub {
+		t.Fatal("error opcode 1")
+	}
 }
 
 func TestOverNested(t *testing.T) {

@@ -127,14 +127,10 @@ assign_stat:
             if $1.Cn() > 0 && $1.Cx(0).A() == ALoad {
                 $$ = __store($1.Cx(1), $1.Cx(2), $3).pos0($1)
             }
-            if c := $1.A(); c != "" && $1.Type() == Natom {
-                // For 'a = a +/- n', we will simplify it as 'inc a +/- n'
-                if a, b, s := $3.isSimpleAddSub(); a == c {
-                    $3.Cx(2).Value = $3.Cx(2).N() * s
-                    $$ = __inc($1, $3.Cx(2)).pos0($1)
-                } else if b == c {
-                    $3.Cx(1).Value = $3.Cx(1).N() * s
-                    $$ = __inc($1, $3.Cx(1)).pos0($1)
+            if c := $1.A(); c != "" {
+                if a, s := $3.isSimpleAddSub(); a == c {
+                    // For 'a = a +/- n', we will simplify it as 'inc a +/- n'
+                    $$ = __inc($1, NewNumberNode(s)).pos0($1)
                 }
             }
         } |

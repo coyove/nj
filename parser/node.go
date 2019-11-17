@@ -307,27 +307,25 @@ func (n *Node) String() string {
 	panic("shouldn't happen")
 }
 
-func (n *Node) isSimpleAddSub() (a Atom, b Atom, s float64) {
+func (n *Node) isSimpleAddSub() (a Atom, v float64) {
 	if n.Type() != Ncompound || n.Cn() < 3 {
 		return
 	}
-	s = 1
-	if c := n.Cx(0).S(); c != "+" && c != "-" {
-		return
-	} else if c == "-" {
-		s = -1
+
+	// a = a + v
+	if n.Cx(1).Type() == Natom && n.Cx(0).A() == "+" && n.Cx(2).Type() == Nnumber {
+		a, v = n.Cx(1).A(), n.Cx(2).Value.(float64)
 	}
-	if c := n.Cx(1).A(); n.Cx(1).Type() == Natom {
-		a = c
-		if n.Cx(2).Type() != Nnumber {
-			a = ""
-		}
+
+	// a = v + a
+	if n.Cx(2).Type() == Natom && n.Cx(0).A() == "+" && n.Cx(1).Type() == Nnumber {
+		a, v = n.Cx(2).A(), n.Cx(1).Value.(float64)
 	}
-	if c := n.Cx(2).A(); n.Cx(2).Type() == Natom {
-		b = c
-		if n.Cx(1).Type() != Nnumber {
-			b = ""
-		}
+
+	// a = a - v
+	if n.Cx(1).Type() == Natom && n.Cx(0).A() == "-" && n.Cx(2).Type() == Nnumber {
+		a, v = n.Cx(1).A(), -n.Cx(2).Value.(float64)
 	}
+
 	return
 }

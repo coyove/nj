@@ -102,6 +102,10 @@ func (table *symtable) put(varname parser.Atom, addr uint16) {
 	table.sym[varname] = addr
 }
 
+func (table *symtable) del(varname parser.Atom) {
+	delete(table.sym, varname)
+}
+
 func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
 	kaddr := func() uint16 {
 		if i, ok := table.constMap[v]; ok {
