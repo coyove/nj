@@ -172,3 +172,13 @@ if i == 5 break
 s++
 }
 assert( s == 4)
+
+k := ""
+for k, v = range {
+    k1: 1,
+    k2: 2,
+} {
+    assert(atoi(k[1:]) == v)
+}
+
+assert(k == "k1" || k == "k2")

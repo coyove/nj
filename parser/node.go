@@ -16,7 +16,7 @@ type Meta struct {
 
 func (pos *Meta) String() string {
 	if pos.Source == "" {
-		return fmt.Sprintf("0:%d:%d", pos.Line, pos.Column)
+		return ""
 	}
 	return fmt.Sprintf("%s:%d:%d", pos.Source, pos.Line, pos.Column)
 }
@@ -316,21 +316,27 @@ func (n *Node) isSimpleAddSub() (a Atom, v float64) {
 	if n.Type() != Ncompound || n.Cn() < 3 {
 		return
 	}
-
 	// a = a + v
 	if n.Cx(1).Type() == Natom && n.Cx(0).A() == "+" && n.Cx(2).Type() == Nnumber {
 		a, v = n.Cx(1).A(), n.Cx(2).Value.(float64)
 	}
-
 	// a = v + a
 	if n.Cx(2).Type() == Natom && n.Cx(0).A() == "+" && n.Cx(1).Type() == Nnumber {
 		a, v = n.Cx(2).A(), n.Cx(1).Value.(float64)
 	}
-
 	// a = a - v
 	if n.Cx(1).Type() == Natom && n.Cx(0).A() == "-" && n.Cx(2).Type() == Nnumber {
 		a, v = n.Cx(1).A(), -n.Cx(2).Value.(float64)
 	}
-
 	return
+}
+
+func (n *Node) moveLoadStore(sm func(interface{}, interface{}) *Node, v *Node) *Node {
+	if n.Cn() == 3 && n.Cx(0).A() == ALoad {
+		return __store(n.Cx(1), n.Cx(2), v)
+	}
+	if n.Type() != Natom {
+		panic(fmt.Sprintf("%#v: invalid assignment"))
+	}
+	return sm(n, v)
 }

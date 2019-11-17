@@ -172,6 +172,7 @@ var flatOpMapping = map[parser.Atom]_Opcode{
 	parser.ADDD:       OpPushVararg,
 	parser.ASetB:      OpSetB,
 	parser.ASetFromAB: OpSetFromAB,
+	parser.AStructKey: OpStructKey,
 }
 
 func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node) (err error) {
@@ -309,7 +310,7 @@ func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx u
 		code, yx, err = table.compileContinueBreakOp(nodes)
 	case parser.ACall:
 		code, yx, err = table.compileCallOp(nodes)
-	case parser.AMap, parser.AArray:
+	case parser.AStruct, parser.AArray, parser.AStructNil:
 		code, yx, err = table.compileMapArrayOp(nodes)
 	case parser.AOr, parser.AAnd:
 		code, yx, err = table.compileAndOrOp(nodes)

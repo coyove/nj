@@ -312,6 +312,7 @@ var singleOp = map[_Opcode]string{
 	OpBitRsh:    "bit-rsh",
 	OpBitURsh:   "bit-ursh",
 	OpTypeof:    "typeof",
+	OpStructKey: "struct-key",
 	OpSlice:     "slice",
 }
 

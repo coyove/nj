@@ -2,9 +2,8 @@ package parser
 
 import (
 	"fmt"
+	"sync"
 	"unsafe"
-
-	"github.com/coyove/common/lru"
 )
 
 type Atom string
@@ -48,7 +47,8 @@ const (
 	AReturn    Atom = "ret"
 	AYield     Atom = "yield"
 	ASlice     Atom = "slice"
-	AMap       Atom = "map"
+	AStruct    Atom = "struct"
+	AStructNil Atom = "structnil"
 	AArray     Atom = "array"
 	AAdd       Atom = "+"
 	ASub       Atom = "-"
@@ -70,6 +70,7 @@ const (
 	ALessEq    Atom = "<="
 	AAddrOf    Atom = "addressof"
 	ATypeOf    Atom = "typeof"
+	AStructKey Atom = "structkey"
 	ALen       Atom = "len"
 	ADDD       Atom = "..."
 )
@@ -78,7 +79,12 @@ func __chain(args ...interface{}) *Node { return CompNode(append([]interface{}{A
 
 func __move(dest, src interface{}) *Node { return CompNode(AMove, dest, src) }
 
-func __set(dest, src interface{}) *Node { return CompNode(ASet, dest, src) }
+func __set(dest, src interface{}) *Node {
+	if n, _ := dest.(*Node); n != nil && n.Type() != Natom {
+		panic(&Error{Pos: n.Meta, Message: "invalid assignments", Token: n.String()})
+	}
+	return CompNode(ASet, dest, src)
+}
 
 func __lessEq(lhs, rhs interface{}) *Node { return CompNode(ALessEq, lhs, rhs) }
 
@@ -114,23 +120,33 @@ func __func(name interface{}) *Node { return CompNode(AFunc, name) }
 
 func __hash(str string) *Node { return NewNumberNode(HashString(str)) }
 
-var hashDedupCache = lru.NewCache(1024)
-
-func HashString(str string) float64 {
-	hash := HashStringPure(str)
-	if t, ok := hashDedupCache.Get(hash); ok && t.(string) != str {
-		panic(fmt.Sprint(t, "and", str, "share an identical FNV48 hash:", hash))
-	}
-	hashDedupCache.Add(hash, str)
-	return float64(hash)
+var hashMap = struct {
+	sync.RWMutex
+	rev map[uint64]string
+}{
+	rev: map[uint64]string{},
 }
 
-func HashStringPure(str string) uint64 {
+func HashString(str string) float64 {
 	var hash uint64 = 2166136261
 	for _, c := range str {
 		hash *= 16777619
 		hash ^= uint64(c)
 	}
 	hash &= 0xffffffffffff
-	return hash
+
+	hashMap.Lock()
+	if t, ok := hashMap.rev[hash]; ok && t != str {
+		panic(fmt.Sprint(t, "and", str, "share an identical FNV48 hash:", hash))
+	}
+	hashMap.rev[hash] = str
+	hashMap.Unlock()
+	return float64(hash)
+}
+
+func FindStringHash(h float64) string {
+	hashMap.RLock()
+	v := hashMap.rev[uint64(h)]
+	hashMap.RUnlock()
+	return v
 }

@@ -48,6 +48,7 @@ const (
 	OpSlice
 	OpLen
 	OpCopyStack
+	OpStructKey
 	OpTypeof
 	OpAddressOf
 	OpNOP

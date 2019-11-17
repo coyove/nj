@@ -69,21 +69,32 @@ func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx 
 	}
 
 	args := atoms[1].C()
-	for i := 0; i < len(args); i += 2 {
-		if i+1 >= len(args) {
-			if err = table.writeOpcode(&code, OpPush, args[i], nil); err != nil {
-				return
+	switch atoms[0].Value.(parser.Atom) {
+	case parser.AStruct, parser.AArray:
+		for i := 0; i < len(args); i += 2 {
+			if i+1 >= len(args) {
+				if err = table.writeOpcode(&code, OpPush, args[i], nil); err != nil {
+					return
+				}
+			} else {
+				if err = table.writeOpcode(&code, OpPush2, args[i], args[i+1]); err != nil {
+					return
+				}
 			}
-		} else {
-			if err = table.writeOpcode(&code, OpPush2, args[i], args[i+1]); err != nil {
+		}
+	case parser.AStructNil:
+		for i := range args {
+			h := parser.HashString(string(args[i].A()))
+			if err = table.writeOpcode(&code, OpPush2, parser.NewNode(h), parser.NewNode(regNil)); err != nil {
 				return
 			}
 		}
 	}
 
-	if atoms[0].Value.(parser.Atom) == parser.AMap {
+	switch atoms[0].Value.(parser.Atom) {
+	case parser.AStruct, parser.AStructNil:
 		code.WriteOP(OpMakeStruct, 0, 0)
-	} else {
+	case parser.AArray:
 		code.WriteOP(OpMakeSlice, 0, 0)
 	}
 	code.WritePos(atoms[0].Meta)

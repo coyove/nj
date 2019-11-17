@@ -314,6 +314,7 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 }
 
 var reservedWords = map[string]uint32{
+	"struct":   TStruct,
 	"range":    TRange,
 	"break":    TBreak,
 	"continue": TContinue,
@@ -326,7 +327,6 @@ var reservedWords = map[string]uint32{
 	"typeof":   TTypeof,
 	"for":      TFor,
 	"yield":    TYield,
-	"struct":   TStruct,
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {

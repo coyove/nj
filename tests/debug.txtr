@@ -1,8 +1,8 @@
-a, b := 0, 0
-// func foo(v) {
-//     return std.pop_back(v)
-// }
-// 
-// b = {}
-// a, b[0] = (func a = foo(a))({1,2})
-// return a, b
+testStruct := {
+    k: 10,
+    v: "a",
+}
+
+for i, v := range testStruct {
+    fmt.Println(i,  v)
+}

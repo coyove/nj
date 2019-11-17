@@ -1,7 +1,6 @@
 package potatolang
 
 import (
-	"bytes"
 	"math"
 	"reflect"
 	"strconv"
@@ -184,7 +183,10 @@ func initCoreLibs() {
 	CoreLibs["make"] = NewNativeValue(1, func(env *Env) Value {
 		return NewSliceValue(NewSliceSize(int(env.LocalGet(0).MustNumber())))
 	})
+
+	chanDefault := NewPointerValue(unsafe.Pointer(new(int)), PTagUnique)
 	CoreLibs["chan"] = NewStructValue(NewStruct().
+		Put("Default", chanDefault).
 		Put("Make", NewNativeValue(1, func(env *Env) Value {
 			ch := make(chan Value, int(env.LocalGet(0).MustNumber()))
 			return NewPointerValue(unsafe.Pointer(&ch), PTagChan)
@@ -206,7 +208,7 @@ func initCoreLibs() {
 			cases := make([]reflect.SelectCase, env.LocalSize())
 			chans := make([]chan Value, len(cases))
 			for i := range chans {
-				if a := env.LocalGet(i); a.Type() == StringType && bytes.Equal(a.AsString(), []byte("default")) {
+				if a := env.LocalGet(i); a == chanDefault {
 					cases[i] = reflect.SelectCase{Dir: reflect.SelectDefault}
 				} else {
 					p := (*chan Value)(a.MustPointer(PTagChan))
@@ -226,7 +228,7 @@ func initCoreLibs() {
 		})))
 
 	CoreLibs["map"] = NewStructValue(NewStruct().
-		Put("New", NewNativeValue(0, func(env *Env) Value {
+		Put("Make", NewNativeValue(0, func(env *Env) Value {
 			n := 0
 			if env.LocalSize() > 0 {
 				n = int(env.LocalGet(0).MustNumber())

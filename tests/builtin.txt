@@ -120,3 +120,9 @@ c2 = counter()
 c1.incr(1)
 c2.incr(2)
 assert(c1.value() ==  1 && c2.value() == 2)
+
+bp := struct { k, v }
+v1, v2 := bp(), bp()
+v1.v = 1
+v2.v = "1"
+assert(atoi(v2.v) == v1.v)

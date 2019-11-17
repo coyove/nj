@@ -43,18 +43,19 @@ assert(json.Unmarshal("     true") == !false)
 assert(atoi("1") == 1)
 assert(atoi("1a", &err) == nil && err != "")
 
-assert(chan.Select("default") == nil)
+assert(chan.Select(chan.Default) == nil)
 
 ch = chan.Make(1)
-chan.Send(ch, "hello")
-assert(chan.Select(ch, "default") == "hello")
+chan.Send(ch,"hello")
+x := chan.Select(ch, chan.Default)
+assert(x == "hello")
 
 v1 = ""
 v2 = 0
 fmt.Println(fmt.Sscanf("hello world 123", "%s world %f", &v1, &v2))
 assert(v1 == "hello" && v2 == 123)
 
-m = map.New()
+m = map.Make()
 m.Put("key1", 1)
 m.Put("key3", 3)
 m.Range(func (k, v) {

@@ -6,6 +6,8 @@ import (
 	"math"
 	"reflect"
 	"unsafe"
+
+	"github.com/coyove/potatolang/parser"
 )
 
 func panicf(msg string, args ...interface{}) {
@@ -450,6 +452,16 @@ MAIN:
 		case OpAddressOf:
 			addr := uint64(opa)<<48 | uint64(uintptr(unsafe.Pointer(env)))
 			env.A.SetNumberValue(math.Float64frombits(addr))
+		case OpStructKey:
+			switch a := env.Get(opa, K); a.Type() {
+			case SliceType:
+				env.A = env.Get(opb, K)
+			case StructType:
+				v := a.AsStruct().l[int(env.Get(opb, K).MustNumber())]
+				env.A = NewStringValueString(parser.FindStringHash(v.AsNumber()))
+			default:
+				env.A = a
+			}
 		}
 	}
 

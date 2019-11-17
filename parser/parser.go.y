@@ -36,7 +36,7 @@ import "strconv"
 }
 
 /* Reserved words */
-%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TLen TReturn TReturnVoid TImport TTypeof TYield TYieldVoid TStruct TRange
+%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TLen TReturn TReturnVoid TImport TTypeof TYield TYieldVoid TRange TStruct
 
 /* Literals */
 %token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
@@ -46,7 +46,6 @@ import "strconv"
 /* Operators */
 %right 'T'
 %right TElse
-
 %left ASSIGN
 %right FUNC
 %left TDotDotDot
@@ -123,7 +122,7 @@ _postfix_assign:
 assign_stat:
         prefix_expr {
             $$ = $1
-        } |
+        } | 
         postfix_incdec {
             $$ = $1
         } |
@@ -147,27 +146,20 @@ assign_stat:
                         __set("(2)a", nilNode).pos0($1),
                         __set("(2)b", nilNode).pos0($1),
                         CompNode(ASetFromAB, "(2)a", "(2)b"),
+                        nodes[0].moveLoadStore(__move, ANodeS("(2)a")).pos0(nodes[0]),
+                        nodes[1].moveLoadStore(__move, ANodeS("(2)b")).pos0(nodes[1]),
                     )
-                    x := func(n *Node, src string) {
-                        if n.Cn() > 0 && n.Cx(0).A() == ALoad {
-                            $$.Cappend(__store(n.Cx(1), n.Cx(2), src).pos0(n))
-                        } else {
-                            $$.Cappend(opSetMove(op)(n, src).pos0(n))
-                        }
-                    }
-                    x(nodes[0], "(2)a")
-                    x(nodes[1], "(2)b")
                 }
+            } else if len(nodes) != $2.Cn() {
+                panic(&Error{Pos: $2.Meta, Message: "unmatched assignments", Token: string(op.A())})
             } else if op.A() == ASet { // a0, ..., an := b0, ..., bn
                 for i, v := range nodes {
                     $$ = $$.Cappend(__set(v, $2.Cx(i)).pos0($1))
                 }
             } else if head := nodes[0]; len(nodes) == 1 { // a0 = b0
-                $$ = __move(head, $2.Cx(0)).pos0($1)
-                if head.Cn() > 0 && head.Cx(0).A() == ALoad {
-                    $$ = __store(head.Cx(1), head.Cx(2), $2.Cx(0)).pos0($1)
-                }
-                if a, s := $2.Cx(0).isSimpleAddSub(); a != "" && a == head.A() { // Note that a := a + v is different
+                $$ = head.moveLoadStore(__move, $2.Cx(0)).pos0($1)
+                if a, s := $2.Cx(0).isSimpleAddSub(); a != "" && a == head.A() {
+                    // Note that a := a + v is different
                     $$ = __inc(head, NewNumberNode(s)).pos0($1)
                 }
             } else { // a0, ..., an = b0, ..., bn
@@ -175,11 +167,7 @@ assign_stat:
                     $$.Cappend(__set("(1)" + strconv.Itoa(i), $2.Cx(i)).pos0($1))
                 }
                 for i, v := range nodes {
-                    if v.Cn() > 0 && v.Cx(0).A() == ALoad {
-                        $$.Cappend(__store(v.Cx(1), v.Cx(2), "(1)" + strconv.Itoa(i)).pos0($1))
-                    } else {
-                        $$.Cappend(__move(v, "(1)" + strconv.Itoa(i)).pos0($1))
-                    }
+                    $$.Cappend(v.moveLoadStore(__move, ANodeS("(1)" + strconv.Itoa(i))).pos0($1))
                 }
             }
         } 
@@ -228,19 +216,26 @@ for_stat:
             )
         } |
         TFor TIdent ',' TIdent _set_move TRange expr oneline_or_block {
-            forVar, forEnd := ANode($2), ANodeS("..." + $2.Str)
+            forEnd, forSub := ANodeS("..." + $2.Str), ANodeS("...s" + $2.Str)
+            forKey, forIKey, forVal := ANode($2), ANodeS("...i" + $2.Str), ANode($4)
             $$ = __chain(
-                opSetMove($5)($4, nilNode).pos0($1),
-                opSetMove($5)(forVar, NewNumberNode(0)).pos0($1),
-                __set(forEnd, CompNode(ALen, $7).pos0($1)).pos0($1),
+                opSetMove($5)(forVal, nilNode).pos0($1),
+                opSetMove($5)(forKey, zeroNode).pos0($1),
+                opSetMove($5)(forIKey, zeroNode).pos0($1),
+                opSetMove($5)(forSub, $7).pos0($1),
+                __set(forEnd, CompNode(ALen, forSub).pos0($1)).pos0($1),
                 __for(
-                    CompNode(ALess, forVar, forEnd).pos0($1),
+                    CompNode(ALess, forIKey, forEnd).pos0($1),
                 ).
                 __continue(
-                    __chain(__inc(forVar, oneNode).pos0($1)),
+                    __chain(__inc(forIKey, oneNode).pos0($1)),
                 ).
                 __body(
-                    __chain(__move($4, __load($7, forVar)).pos0($1), $8),
+                    __chain(
+                        __move(forKey, CompNode(AStructKey, forSub, forIKey).pos0($1)).pos0($1),
+                        __move(forVal, __load(forSub, forIKey)).pos0($1),
+                        $8,
+                    ),
                 ).pos0($1),
             )
         } |
@@ -369,8 +364,7 @@ declarator:
         prefix_expr '[' ':' expr ']'      { $$ = CompNode(ASlice, $1, zeroNode, $4).pos0($4).setPos($4) }
 
 declarator_list_assign:
-        declarator TSet                       { $$ = CompNode($1, ASet) } |
-        declarator '='                        { $$ = CompNode($1, AMove) } |
+        declarator _set_move                  { $$ = CompNode($1, $2) } |
         declarator ',' declarator_list_assign { $$ = $3.Cprepend($1) }
 
 ident_list:
@@ -424,36 +418,19 @@ expr_list:
         expr_list ',' expr                { $$ = $1.Cappend($3) }
 
 expr_assign_list:
-        TIdent ':' expr                   { $$ = CompNode(NewNode($1.Str), __hash($1.Str), $3) } |
-        expr_assign_list ',' TIdent':'expr{ $$ = $1.Cappend(NewNode($3.Str), __hash($3.Str), $5) }
+        TIdent ':' expr                   { $$ = CompNode(__hash($1.Str), $3) } |
+        expr_assign_list ',' TIdent':'expr{ $$ = $1.Cappend(__hash($3.Str), $5) }
 
 struct_slice_gen:
         '{' '}'                           { $$ = CompNode(AArray, emptyNode).pos0($1) } |
-        '{' expr_assign_list     '}'      { $$ = patchStruct(false, $2).pos0($2) } |
-        '{' expr_assign_list ',' '}'      { $$ = patchStruct(false, $2).pos0($2) } |
-        TStruct'{'expr_assign_list     '}'{ $$ = patchStruct(true, $3).pos0($2) } |
-        TStruct'{'expr_assign_list ',' '}'{ $$ = patchStruct(true, $3).pos0($2) } |
+        TStruct '{' ident_list '}'        { $$ = CompNode(AStructNil, $3).pos0($1) } |
+        TStruct '{' ident_list ',' '}'    { $$ = CompNode(AStructNil, $3).pos0($1) } |
+        '{' expr_assign_list     '}'      { $$ = CompNode(AStruct, $2).pos0($2) } |
+        '{' expr_assign_list ',' '}'      { $$ = CompNode(AStruct, $2).pos0($2) } |
         '{' expr_list            '}'      { $$ = CompNode(AArray, $2).pos0($2) } |
         '{' expr_list ','        '}'      { $$ = CompNode(AArray, $2).pos0($2) }
 
 %%
-
-var FieldsField = HashString("__fields")
-
-func patchStruct(named bool, c *Node) *Node {
-    x := c.C()
-    names, args := CompNode(), CompNode()
-    for i := 0; i < len(x); i += 3 {
-        args.Cappend(x[i + 1], x[i + 2])
-        names.Cappend(x[i])
-    }
-    if !named {
-        return CompNode(AMap, args)
-    }
-    args.Cappend(NewNumberNode(FieldsField), CompNode(AArray, names).pos0(args))
-    return CompNode(AMap, args)
-}
-
 func patchVarargCall(callee interface{}, args *Node) *Node {
     ddd := false
     for _, a := range args.C() {
