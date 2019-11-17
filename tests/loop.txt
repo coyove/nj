@@ -1,6 +1,4 @@
-count = 1 
-idx = 0 
-flag = 0 
+count, idx, flag := 1 , 0, 0
 
 for "true" {
     idx = idx+1 
@@ -16,7 +14,8 @@ for "true" {
 assert( idx == 5 )
 
 m = make(8) 
-a = idx++ 
+idx++ 
+a = idx
 assert( a == 6 )
 
 for i=0,8 {

@@ -1,11 +1,14 @@
 %{
 package parser
 
+import "strconv"
+
 %}
 %type<expr> stats
 %type<expr> block
 %type<expr> stat
 %type<expr> declarator
+%type<expr> declarator_list_assign
 %type<expr> ident_list
 %type<expr> expr_list
 %type<expr> expr_assign_list
@@ -23,7 +26,7 @@ package parser
 %type<expr> flow_stat
 %type<expr> function
 %type<expr> func_params_list
-%type<expr> map_gen
+%type<expr> struct_slice_gen
 
 %union {
   token Token
@@ -119,55 +122,66 @@ assign_stat:
         postfix_incdec {
             $$ = $1
         } |
-        declarator TSet expr {
-            $$ = __set($1, $3).pos0($1)
-        } |
-        declarator '=' expr {
-            $$ = __move($1, $3).pos0($1)
-            if $1.Cn() > 0 && $1.Cx(0).A() == ALoad {
-                $$ = __store($1.Cx(1), $1.Cx(2), $3).pos0($1)
-            }
-            if c := $1.A(); c != "" {
-                if a, s := $3.isSimpleAddSub(); a == c {
-                    // For 'a = a +/- n', we will simplify it as 'inc a +/- n'
-                    $$ = __inc($1, NewNumberNode(s)).pos0($1)
+        declarator_list_assign expr_list {
+            nodes := $1.C()
+            op := nodes[len(nodes) - 1]
+            nodes = nodes[:len(nodes) - 1]
+
+            $$ = __chain()
+            if len(nodes) == 2 && $2.Cn() == 1 { // a, b = c()
+                y := __move
+                if op.A() == ASet {
+                    y = __set
                 }
-            }
-        } |
-        declarator ',' declarator '=' expr {
-            if $1.Type() == Natom && $3.Type() == Natom {
-                $$ = __chain(
-                    $5,
-                    __move($1, nilNode).pos0($1),
-                    __move($3, nilNode).pos0($3),
-                    CompNode(ASetFromAB, $1, $3),
-                )
-            } else {
-                $$ = __chain(
-                    $5,
-                    __set("(1)a", nilNode).pos0($1),
-                    __set("(1)b", nilNode).pos0($3),
-                    CompNode(ASetFromAB, "(1)a", "(1)b"),
-                )
-                x := func(n *Node, src string) {
-                    if n.Cn() > 0 && n.Cx(0).A() == ALoad {
-                        $$.Cappend(__store(n.Cx(1), n.Cx(2), src).pos0(n))
+                if nodes[0].Type() == Natom && nodes[1].Type() == Natom {
+                    $$ = __chain(
+                        $2.Cx(0),
+                        y(nodes[0], nilNode).pos0($1),
+                        y(nodes[1], nilNode).pos0($1),
+                        CompNode(ASetFromAB, nodes[0], nodes[1]),
+                    )
+                } else {
+                    $$ = __chain(
+                        $2.Cx(0),
+                        __set("(2)a", nilNode).pos0($1),
+                        __set("(2)b", nilNode).pos0($1),
+                        CompNode(ASetFromAB, "(2)a", "(2)b"),
+                    )
+                    x := func(n *Node, src string) {
+                        if n.Cn() > 0 && n.Cx(0).A() == ALoad {
+                            $$.Cappend(__store(n.Cx(1), n.Cx(2), src).pos0(n))
+                        } else {
+                            $$.Cappend(y(n, src).pos0(n))
+                        }
+                    }
+                    x(nodes[0], "(2)a")
+                    x(nodes[1], "(2)b")
+                }
+            } else if op.A() == ASet { // a0, ..., an := b0, ..., bn
+                for i, v := range nodes {
+                    $$ = $$.Cappend(__set(v, $2.Cx(i)).pos0($1))
+                }
+            } else if head := nodes[0]; len(nodes) == 1 { // a0 = b0
+                $$ = __move(head, $2.Cx(0)).pos0($1)
+                if head.Cn() > 0 && head.Cx(0).A() == ALoad {
+                    $$ = __store(head.Cx(1), head.Cx(2), $2.Cx(0)).pos0($1)
+                }
+                if a, s := $2.Cx(0).isSimpleAddSub(); a != "" && a == head.A() { // Note that a := a + v is different
+                    $$ = __inc(head, NewNumberNode(s)).pos0($1)
+                }
+            } else { // a0, ..., an = b0, ..., bn
+                for i := range nodes {
+                    $$.Cappend(__set("(1)" + strconv.Itoa(i), $2.Cx(i)).pos0($1))
+                }
+                for i, v := range nodes {
+                    if v.Cn() > 0 && v.Cx(0).A() == ALoad {
+                        $$.Cappend(__store(v.Cx(1), v.Cx(2), "(1)" + strconv.Itoa(i)).pos0($1))
                     } else {
-                        $$.Cappend(__move(n, src).pos0(n))
+                        $$.Cappend(__move(v, "(1)" + strconv.Itoa(i)).pos0($1))
                     }
                 }
-                x($1, "(1)a")
-                x($3, "(1)b")
             }
-        } |
-        declarator ',' declarator '=' expr ',' expr {
-            $$ = __chain(
-                __set("(1)a", $5).pos0($5),
-                __set("(1)b", $7).pos0($7),
-                __move($1, "(1)a").pos0($1),
-                __move($3, "(1)b").pos0($3),
-            )
-        }
+        } 
 
 postfix_incdec:
         TIdent _postfix_incdec {
@@ -340,6 +354,11 @@ declarator:
         prefix_expr '[' expr ':' ']'      { $$ = CompNode(ASlice, $1, $3, moneNode).pos0($3).setPos($3) } |
         prefix_expr '[' ':' expr ']'      { $$ = CompNode(ASlice, $1, zeroNode, $4).pos0($4).setPos($4) }
 
+declarator_list_assign:
+        declarator TSet                       { $$ = CompNode($1, ASet) } |
+        declarator '='                        { $$ = CompNode($1, AMove) } |
+        declarator ',' declarator_list_assign { $$ = $3.Cprepend($1) }
+
 ident_list:
         TIdent                            { $$ = CompNode($1.Str) } | 
         TIdent TDotDotDot                 { $$ = CompNode($1.Str + "...") } | 
@@ -352,9 +371,8 @@ expr:
         TTypeof expr                      { $$ = CompNode(ATypeOf, $2) } |
         TLen expr                         { $$ = CompNode(ALen, $2) } |
         function                          { $$ = $1 } |
-        map_gen                           { $$ = $1 } |
+        struct_slice_gen                  { $$ = $1 } |
         prefix_expr                       { $$ = $1 } |
-        postfix_incdec                    { $$ = $1 } |
         TString                           { $$ = NewNode($1.Str).SetPos($1) }  |
         expr TOr expr                     { $$ = CompNode(AOr, $1,$3).pos0($1) } |
         expr TAnd expr                    { $$ = CompNode(AAnd, $1,$3).pos0($1) } |
@@ -395,7 +413,7 @@ expr_assign_list:
         TIdent ':' expr                   { $$ = CompNode(NewNode($1.Str), __hash($1.Str), $3) } |
         expr_assign_list ',' TIdent':'expr{ $$ = $1.Cappend(NewNode($3.Str), __hash($3.Str), $5) }
 
-map_gen:
+struct_slice_gen:
         '{' '}'                           { $$ = CompNode(AArray, emptyNode).pos0($1) } |
         '{' expr_assign_list     '}'      { $$ = patchStruct(false, $2).pos0($2) } |
         '{' expr_assign_list ',' '}'      { $$ = patchStruct(false, $2).pos0($2) } |

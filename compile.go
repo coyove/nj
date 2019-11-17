@@ -5,18 +5,26 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"runtime"
 	"runtime/debug"
+	"strconv"
+	"strings"
 
 	"github.com/coyove/potatolang/parser"
 )
+
+type symbol struct {
+	addr  uint16
+	usage int
+}
 
 // symtable is responsible for recording the state of compilation
 type symtable struct {
 	// variable name lookup
 	parent *symtable
-	sym    map[parser.Atom]uint16
+	sym    map[parser.Atom]*symbol
 
 	// has yield op
 	y         bool
@@ -34,7 +42,7 @@ type symtable struct {
 
 func newsymtable() *symtable {
 	t := &symtable{
-		sym:          make(map[parser.Atom]uint16),
+		sym:          make(map[parser.Atom]*symbol),
 		constMap:     make(map[interface{}]uint16),
 		reusableTmps: make(map[uint16]bool),
 	}
@@ -82,10 +90,18 @@ func (table *symtable) get(varname parser.Atom) (uint16, bool) {
 	for table != nil {
 		k, e := table.sym[varname]
 		if e {
-			if depth > 6 || (depth == 6 && k > 1000) {
-				panic("too many levels (7) to refer a variable, try simplifing your Code")
+			if depth > 6 || (depth == 6 && k.addr > 1000) {
+				panic("too many levels (7) to refer a variable, try simplifing your code")
 			}
-			return (depth << 10) | (uint16(k) & 0x03ff), true
+
+			addr := (depth << 10) | (uint16(k.addr) & 0x03ff)
+
+			if k.usage--; k.usage == 0 {
+				table.returnAddress(k.addr)
+				delete(table.sym, varname)
+			}
+
+			return addr, true
 		}
 
 		depth++
@@ -99,11 +115,14 @@ func (table *symtable) put(varname parser.Atom, addr uint16) {
 	if addr == regA {
 		panic("debug")
 	}
-	table.sym[varname] = addr
-}
-
-func (table *symtable) del(varname parser.Atom) {
-	delete(table.sym, varname)
+	c := math.MaxInt64
+	if strings.HasPrefix(string(varname), "(") {
+		c, _ = strconv.Atoi(string(varname[1:strings.Index(string(varname), ")")]))
+	}
+	table.sym[varname] = &symbol{
+		addr:  addr,
+		usage: c,
+	}
 }
 
 func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
@@ -337,7 +356,7 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 
 	coreStack := NewEnv(nil)
 	for n, v := range CoreLibs {
-		table.sym[parser.Atom(n)] = uint16(coreStack.LocalSize())
+		table.put(parser.Atom(n), uint16(coreStack.LocalSize()))
 		coreStack.LocalPush(v)
 	}
 
@@ -375,8 +394,7 @@ func LoadFile(path string) (*Closure, error) {
 	if err != nil {
 		return nil, err
 	}
-	//n.Dump(os.Stderr)
-	//panic(10)
+	// n.Dump(os.Stderr)
 	return compileNode(n)
 }
 

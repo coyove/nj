@@ -12,9 +12,13 @@ func bar(n) {
     }
 }
 
+a, b, c, d := 1, 2, 3, 4
+a, b, c, d = a + b, b + c, c + d, d + a
+assert(a == 3 && b == 5 && c == 7 && d == 5)
+
 a = {}
 for true {
-    x, y = bar(5)
+    x, y := bar(5)
     if !y {
         break
     }

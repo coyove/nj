@@ -1,7 +1,8 @@
-func foo(v) {
-    return std.pop_back(v)
-}
-
-b = {}
-a, b[0] = (func a = foo(a))({1,2})
-return a, b
+a, b := 0, 0
+// func foo(v) {
+//     return std.pop_back(v)
+// }
+// 
+// b = {}
+// a, b[0] = (func a = foo(a))({1,2})
+// return a, b

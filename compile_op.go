@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	errUndeclaredVariable = " %+v: undeclared variable"
+	errUndeclaredVariable = "%#v: undeclared variable"
 )
 
 var _nodeRegA = parser.NewNode(regA)
@@ -44,10 +44,6 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 		}
 		addr := calcDest()
 		buf.WriteOP(OpSet, addr, valueIndex)
-		if strings.HasPrefix(string(srcName), "(1)") {
-			table.returnAddress(valueIndex)
-			table.del(srcName)
-		}
 		return buf, addr, nil
 	case parser.Nnumber, parser.Nstring:
 		addr := calcDest()

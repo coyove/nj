@@ -105,6 +105,11 @@ func (n *Node) Cappend(na ...*Node) *Node {
 	return n
 }
 
+func (n *Node) Cprepend(n2 *Node) *Node {
+	n.Value = append([]*Node{n2}, n.C()...)
+	return n
+}
+
 func (n *Node) Cx(i int) *Node { return n.Value.([]*Node)[i] }
 
 func (n *Node) Cn() int { a, _ := n.Value.([]*Node); return len(a) }

@@ -15,8 +15,6 @@ For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master
 |Type `Struct`  | immutable map[string]Value |
 |`m = map.New()`| mutable map[Value]Value |
 | `true == 1` and `false == 0` | bool |
-|No need to declare first, just define `a = 1` | `a := 1` |
-|Refer defined variables: `b = 1; a = b` | `b := 1; a := b`|
 |`for i = v {}               ` |`for i = 0; i < len(v); i++ {}`|
 |`for i = start, end {}      ` |`for i = start; i < end; i++ {}`|
 |`for i = start, end, step {}` |`for i = start; i <= end; i += step {}`|
@@ -24,8 +22,6 @@ For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master
 |`for true {}`  (true is required)| `for {}` |
 |`a = {...}`| `a := []Value{...}` |
 |`a = { k: ... }` | `a := struct{ k Value }{...}` |
-|`a, b = b, a` | `a, b = b, a` |
-|NOT SUPPORTED (n > 2) | `a1, ..., an = b1, ..., bn` |
 |`a, b = (func(){return 1, 2})()` | `a, b = (func(){return 1, 2})()` |
 |NOT SUPPORTED (n > 2) | `a1, ..., an = (func(){return b1, ..., bn})()` |
 |`foo = func a = a + 1` | `foo := func(a) { return a + 1 }` |
