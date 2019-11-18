@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
+	"github.com/coyove/potatolang/hash50"
 	"github.com/coyove/potatolang/parser"
 )
 
@@ -227,58 +228,71 @@ func initCoreLibs() {
 			return v
 		})))
 
-	CoreLibs["map"] = NewStructValue(NewStruct().
-		Put("Make", NewNativeValue(0, func(env *Env) Value {
-			n := 0
-			if env.LocalSize() > 0 {
-				n = int(env.LocalGet(0).MustNumber())
+	CoreLibs["map"] = NewNativeValue(0, func(env *Env) Value {
+		var m map[string]Value
+		if env.LocalSize() == 1 {
+			switch a := env.LocalGet(0); a.Type() {
+			case NumberType:
+				m = make(map[string]Value, int(a.AsNumber()))
+			case StructType:
+				s := a.AsStruct().l
+				m = make(map[string]Value, len(s)/2)
+				for i, v := range s[:len(s)/2] {
+					m[string(hash50.FindStringHash(v.AsNumber()))] = s[i+len(s)/2]
+				}
+			default:
+				a.testType(NumberType)
 			}
-			m := make(map[string]Value, n)
-			return NewStructValue(NewStruct().
-				Put("Get", NewNativeValue(1, func(env *Env) Value {
-					buf := env.LocalGet(0).MustString()
-					v, ok := m[*(*string)(unsafe.Pointer(&buf))]
-					env.B = NewBoolValue(ok)
-					return v
-				})).
-				Put("Put", NewNativeValue(2, func(env *Env) Value {
-					buf := env.LocalGet(0).MustString()
-					v := env.LocalGet(1)
-					m[*(*string)(unsafe.Pointer(&buf))] = v
-					return v
-				})).
-				Put("Len", NewNativeValue(1, func(env *Env) Value {
-					return NewNumberValue(float64(len(m)))
-				})).
-				Put("Delete", NewNativeValue(1, func(env *Env) Value {
-					buf := env.LocalGet(0).MustString()
-					v, ok := m[*(*string)(unsafe.Pointer(&buf))]
-					env.B = NewBoolValue(ok)
-					delete(m, *(*string)(unsafe.Pointer(&buf)))
-					return v
-				})).
-				Put("Range", NewNativeValue(1, func(env *Env) Value {
-					cls := env.LocalGet(0).MustClosure()
-					newEnv := NewEnv(env)
-					for k, v := range m {
-						newEnv.LocalClear()
-						newEnv.LocalPush(NewStringValueString(k))
-						newEnv.LocalPush(v)
-						ok, _ := cls.Exec(newEnv)
-						if ok.IsZero() {
-							break
-						}
+			// 	} else if env.LocalSize() == 2 {
+			// 		a, b := env.LocalGet(0), env.LocalGet(1)
+			// 		if a.Type()+b.Type() == SliceType*2 {
+
+			// 		} else if a.Type() == SliceType && b.Type() == ClosureType {
+
+			// 		} else {
+			// 			a.testType(NumberType)
+			// 		}
+		} else {
+			m = make(map[string]Value)
+		}
+		return NewStructValue(NewStruct().
+			Put("Get", NewNativeValue(1, func(env *Env) Value {
+				buf := env.LocalGet(0).MustString()
+				v, ok := m[*(*string)(unsafe.Pointer(&buf))]
+				env.B = NewBoolValue(ok)
+				return v
+			})).
+			Put("Put", NewNativeValue(2, func(env *Env) Value {
+				buf := env.LocalGet(0).MustString()
+				v := env.LocalGet(1)
+				m[*(*string)(unsafe.Pointer(&buf))] = v
+				return v
+			})).
+			Put("Len", NewNativeValue(1, func(env *Env) Value {
+				return NewNumberValue(float64(len(m)))
+			})).
+			Put("Delete", NewNativeValue(1, func(env *Env) Value {
+				buf := env.LocalGet(0).MustString()
+				v, ok := m[*(*string)(unsafe.Pointer(&buf))]
+				env.B = NewBoolValue(ok)
+				delete(m, *(*string)(unsafe.Pointer(&buf)))
+				return v
+			})).
+			Put("Range", NewNativeValue(1, func(env *Env) Value {
+				cls := env.LocalGet(0).MustClosure()
+				newEnv := NewEnv(env)
+				for k, v := range m {
+					newEnv.LocalClear()
+					newEnv.LocalPush(NewStringValueString(k))
+					newEnv.LocalPush(v)
+					ok, _ := cls.Exec(newEnv)
+					if ok.IsZero() {
+						break
 					}
-					return Value{}
-				})))
-		})).
-		Put("waitgroup", NewNativeValue(0, func(env *Env) Value {
-			m, wg := NewStruct(), &sync.WaitGroup{}
-			m.Put("add", NewNativeValue(1, func(env *Env) Value { wg.Add(int(env.LocalGet(0).MustNumber())); return Value{} }))
-			m.Put("done", NewNativeValue(0, func(env *Env) Value { wg.Done(); return Value{} }))
-			m.Put("wait", NewNativeValue(0, func(env *Env) Value { wg.Wait(); return Value{} }))
-			return NewStructValue(m)
-		})))
+				}
+				return Value{}
+			})))
+	})
 
 	initLibAux()
 	initLibMath()

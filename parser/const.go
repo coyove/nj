@@ -1,9 +1,9 @@
 package parser
 
 import (
-	"fmt"
-	"sync"
 	"unsafe"
+
+	"github.com/coyove/potatolang/hash50"
 )
 
 type Atom string
@@ -118,35 +118,4 @@ func (n *Node) __params(params *Node) *Node { return n.Cappend(params) }
 
 func __func(name interface{}) *Node { return CompNode(AFunc, name) }
 
-func __hash(str string) *Node { return NewNumberNode(HashString(str)) }
-
-var hashMap = struct {
-	sync.RWMutex
-	rev map[uint64]string
-}{
-	rev: map[uint64]string{},
-}
-
-func HashString(str string) float64 {
-	var hash uint64 = 2166136261
-	for _, c := range str {
-		hash *= 16777619
-		hash ^= uint64(c)
-	}
-	hash &= 0xffffffffffff
-
-	hashMap.Lock()
-	if t, ok := hashMap.rev[hash]; ok && t != str {
-		panic(fmt.Sprint(t, "and", str, "share an identical FNV48 hash:", hash))
-	}
-	hashMap.rev[hash] = str
-	hashMap.Unlock()
-	return float64(hash)
-}
-
-func FindStringHash(h float64) string {
-	hashMap.RLock()
-	v := hashMap.rev[uint64(h)]
-	hashMap.RUnlock()
-	return v
-}
+func __hash(str string) *Node { return NewNumberNode(hash50.HashString(str)) }

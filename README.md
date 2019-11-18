@@ -6,6 +6,7 @@ For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master
 
 |Basic concept |Golang equivalent|
 |--------|------|
+|NO UNICODE VAR NAME| 你好 := 1 |
 |Type `Nil`     | nil |
 |Type `Number`  | float64 |
 |Type `String`  | immutable []byte |
@@ -13,11 +14,11 @@ For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master
 |Type `Pointer` | unsafe.Pointer |
 |Type `Closure` | func |
 |Type `Struct`  | immutable map[string]Value |
-|`m = map.Make(n)`| mutable map[string]Value |
+|`m = map(n)`| mutable map[string]Value |
 |`ch = chan.Make(n)`| chan Value |
 |`chan.Send(ch, v)`| ch <- v |
 |`v = chan.Recv(ch)`| v := <-ch |
-|`v, ch = chan.Select(ch1, ch2, ... "default")`| select {...} |
+|`v, ch = chan.Select(ch1, ch2, ..., chan.Default)`| select {...} |
 |`true == 1` and `false == 0` | bool |
 |`go(foo, arg1, arg2 ...)` | go foo(arg1, arg2, ...) |
 |`for i = range start, end {}      ` |`for i = start; i <= end; i++ {}`|
@@ -33,9 +34,10 @@ For benchmarks, refer to [here](https://github.com/coyove/potatolang/blob/master
 |`a = a << {1}; a = a << {2,3}`| `a = append(a, 1, 2, 3)`|
 |`a = append(a, {1, 2}...)`| `a = append(a, []Value{1, 2}...)`|
 |`a[len(a)] = 1`|`a = append(a, 1)`|
+|`a = append(a, {1, 2}..., {3, 4}...)`|`a = append(a, []Value{1, 2, 3, 4}...)`|
 
 ### Scope
-Unlike golang, you can only create a new variable scope in a closure, which means the following code will output `2`:
+Unlike golang, you can only create new variable scopes in `Closure`, which means the following code will output `2`:
 ```
 if true {
     a := 1

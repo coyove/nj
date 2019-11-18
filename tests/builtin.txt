@@ -126,3 +126,4 @@ v1, v2 := bp(), bp()
 v1.v = 1
 v2.v = "1"
 assert(atoi(v2.v) == v1.v)
+assert(map(v2).Get("v") == "1")

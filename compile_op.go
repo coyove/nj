@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coyove/potatolang/hash50"
 	"github.com/coyove/potatolang/parser"
 )
 
@@ -84,7 +85,7 @@ func (table *symtable) compileMapArrayOp(atoms []*parser.Node) (code packet, yx 
 		}
 	case parser.AStructNil:
 		for i := range args {
-			h := parser.HashString(string(args[i].A()))
+			h := hash50.HashString(string(args[i].A()))
 			if err = table.writeOpcode(&code, OpPush2, parser.NewNode(h), parser.NewNode(regNil)); err != nil {
 				return
 			}

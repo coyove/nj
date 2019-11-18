@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/coyove/potatolang/parser"
+	"github.com/coyove/potatolang/hash50"
 )
 
 func panicf(msg string, args ...interface{}) {
@@ -458,7 +458,7 @@ MAIN:
 				env.A = env.Get(opb, K)
 			case StructType:
 				v := a.AsStruct().l[int(env.Get(opb, K).MustNumber())]
-				env.A = NewStringValueString(parser.FindStringHash(v.AsNumber()))
+				env.A = NewStringValue(hash50.FindStringHash(v.AsNumber()))
 			default:
 				env.A = a
 			}
