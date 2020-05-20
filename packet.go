@@ -243,7 +243,7 @@ func crReadConsts(code []uint32, cursor *uint32, n int) []Value {
 			buf = buf[1+n:]
 		case 2:
 			l, n := binary.Uvarint(buf[1:])
-			res = append(res, NewStringValue(buf[1+n:1+n+int(l)]))
+			res = append(res, NewStringValueBytesUnsafe(buf[1+n:1+n+int(l)]))
 			buf = buf[1+n+int(l):]
 		default:
 			panic("shouldn't happen")

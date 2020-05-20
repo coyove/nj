@@ -53,7 +53,7 @@ const SizeOfValue = unsafe.Sizeof(Value{})
 // Type returns the type of value
 func (v Value) Type() byte {
 	if v.p == nil {
-		if v.v != 0 {
+		if v.v > 2 {
 			return NumberType
 		}
 		return NilType
@@ -62,14 +62,14 @@ func (v Value) Type() byte {
 }
 
 var (
-	typeMappings = map[byte][]byte{
-		NilType:     []byte("nil"),
-		NumberType:  []byte("number"),
-		StringType:  []byte("string"),
-		ClosureType: []byte("closure"),
-		PointerType: []byte("pointer"),
-		SliceType:   []byte("slice"),
-		StructType:  []byte("struct"),
+	typeMappings = map[byte]string{
+		NilType:     ("nil"),
+		NumberType:  ("number"),
+		StringType:  ("string"),
+		ClosureType: ("closure"),
+		PointerType: ("pointer"),
+		SliceType:   ("slice"),
+		StructType:  ("struct"),
 	}
 
 	_zero = NewNumberValue(0)
@@ -94,21 +94,6 @@ func NewBoolValue(b bool) Value {
 	return Value{v: ^(*(*uint64)(unsafe.Pointer(&x)))}
 }
 
-// SetNumberValue turns any Value into a numeric Value
-func (v *Value) SetNumberValue(f float64) {
-	x := *(*uint64)(unsafe.Pointer(&f))
-	v.v = ^x
-}
-
-// SetBoolValue turns any Value into a numeric Value with its value being 0.0 or 1.0
-func (v *Value) SetBoolValue(b bool) {
-	x := 0.0
-	if b {
-		x = 1.0
-	}
-	v.v = ^(*(*uint64)(unsafe.Pointer(&x)))
-}
-
 // NewSliceValue returns a map value
 func NewSliceValue(m *Slice) Value {
 	return Value{v: SliceType, p: unsafe.Pointer(m)}
@@ -125,20 +110,18 @@ func NewClosureValue(c *Closure) Value {
 
 // NewPointerValue returns a generic value
 func NewPointerValue(i interface{}) Value {
-	m := &Pointer{i: i}
-	return Value{v: PointerType, p: unsafe.Pointer(m)}
+	return Value{v: PointerType, p: unsafe.Pointer(&i)}
 }
 
 // NewStringValue returns a string value
 // Note we use []byte to avoid some unnecessary castings from string to []byte,
 // it DOES NOT mean a StringValue is mutable
-func NewStringValue(s []byte) Value {
-	m := &String{s: s}
-	return Value{v: StringType, p: unsafe.Pointer(m)}
+func NewStringValue(s string) Value {
+	return Value{v: StringType, p: unsafe.Pointer(&s)}
 }
 
-func NewStringValueString(s string) Value {
-	return NewStringValue([]byte(s))
+func NewStringValueBytesUnsafe(s []byte) Value {
+	return Value{v: StringType, p: unsafe.Pointer(&s)}
 }
 
 func NewInterfaceValue(i interface{}) Value {
@@ -146,21 +129,18 @@ func NewInterfaceValue(i interface{}) Value {
 	case float64:
 		return NewNumberValue(v)
 	case string:
-		return NewStringValueString(v)
-	case []byte:
 		return NewStringValue(v)
 	case *Slice:
 		return NewSliceValue(v)
 	case *Closure:
 		return NewClosureValue(v)
 	}
-	m := &Pointer{i: i}
-	return Value{v: PointerType, p: unsafe.Pointer(m)}
+	return Value{v: PointerType, p: unsafe.Pointer(&i)}
 }
 
 // AsString cast value to string
-func (v Value) AsString() []byte {
-	return (*String)(v.p).s
+func (v Value) AsString() string {
+	return *(*string)(v.p)
 }
 
 // IsFalse tests whether value contains a "false" value
@@ -171,8 +151,8 @@ func (v Value) IsFalse() bool {
 	case NilType:
 		return true
 	case StringType:
-		m := (*String)(v.p)
-		return len(m.s) == 0
+		m := (*string)(v.p)
+		return len(*m) == 0
 	case SliceType:
 		m := (*Slice)(v.p)
 		return len(m.l) == 0
@@ -183,6 +163,10 @@ func (v Value) IsFalse() bool {
 // IsZero is a fast way to check if a numeric Value is +0
 func (v Value) IsZero() bool {
 	return v == _zero
+}
+
+func (v Value) IsNil() bool {
+	return v == Value{}
 }
 
 // AsNumber cast value to float64
@@ -210,7 +194,7 @@ func (v Value) AsClosure() *Closure {
 
 // AsPointer cast value to unsafe.Pointer
 func (v Value) AsPointer() interface{} {
-	return (*Pointer)(v.p).i
+	return *(*interface{})(v.p)
 }
 
 // MustSlice safely cast value to map of values
@@ -237,7 +221,7 @@ func (v Value) MustNumber() float64 {
 }
 
 // MustString safely cast value to string
-func (v Value) MustString() []byte {
+func (v Value) MustString() string {
 	v.testType(StringType)
 	return v.AsString()
 }
@@ -275,7 +259,7 @@ func (v Value) Equal(r Value) bool {
 	case _NumberNumber:
 		return v == r
 	case _StringString:
-		return bytes.Equal(r.AsString(), v.AsString())
+		return r.AsString() == v.AsString()
 	case _SliceSlice:
 		return v.AsSlice().Equal(r.AsSlice())
 	case _StructStruct:
@@ -340,10 +324,8 @@ func (v Value) toString(lv int, json bool) string {
 
 func (v Value) Dup() Value {
 	switch v.Type() {
-	case NilType, NumberType, PointerType:
+	case NilType, NumberType, PointerType, StringType:
 		return v
-	case StringType:
-		return NewStringValue(append([]byte{}, v.AsString()...))
 	case ClosureType:
 		return NewClosureValue(v.AsClosure().Dup())
 	case SliceType:

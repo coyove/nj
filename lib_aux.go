@@ -1,11 +1,11 @@
 package potatolang
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/buger/jsonparser"
 )
@@ -29,7 +29,7 @@ func fmtPrint(flag byte) func(env *Env) Value {
 		}
 
 		if err != nil {
-			env.B = NewStringValueString(err.Error())
+			env.B = NewStringValue(err.Error())
 		}
 		return NewNumberValue(float64(n))
 	}
@@ -50,7 +50,7 @@ func fmtSprint(flag byte) func(env *Env) Value {
 		default:
 			n = fmt.Sprint(args...)
 		}
-		return NewStringValueString(n)
+		return NewStringValue(n)
 	}
 }
 
@@ -72,7 +72,7 @@ func fmtFprint(flag byte) func(env *Env) Value {
 		}
 
 		if err != nil {
-			env.B = NewStringValueString(err.Error())
+			env.B = NewStringValue(err.Error())
 		}
 		return NewNumberValue(float64(n))
 	}
@@ -130,13 +130,13 @@ func fmtScan(flag string) func(env *Env) Value {
 				case *float64:
 					StorePointerUnsafe(env.LocalGet(i), NewNumberValue(*v))
 				case *string:
-					StorePointerUnsafe(env.LocalGet(i), NewStringValueString(*v))
+					StorePointerUnsafe(env.LocalGet(i), NewStringValue(*v))
 				}
 			}
 		}
 
 		if err != nil {
-			env.B = NewStringValueString(err.Error())
+			env.B = NewStringValue(err.Error())
 		}
 		return NewNumberValue(float64(n))
 	}
@@ -150,7 +150,7 @@ func fmtWrite(env *Env) Value {
 	for i := 1; i < env.LocalSize(); i++ {
 		switch a := env.LocalGet(i); a.Type() {
 		case StringType:
-			n, err = f.Write(env.LocalGet(i).AsString())
+			n, err = f.Write([]byte(env.LocalGet(i).AsString()))
 		case SliceType:
 			m := a.AsSlice()
 			buf := make([]byte, len(m.l))
@@ -164,7 +164,7 @@ func fmtWrite(env *Env) Value {
 	}
 
 	if err != nil {
-		env.B = NewStringValueString(err.Error())
+		env.B = NewStringValue(err.Error())
 	}
 	return NewNumberValue(float64(n))
 }
@@ -188,7 +188,7 @@ func walkObject(buf []byte) Value {
 		case jsonparser.String:
 			str, err := jsonparser.ParseString(value)
 			panicerr(err)
-			m.Put(string(key), NewStringValueString(str))
+			m.Put(string(key), NewStringValue(str))
 		case jsonparser.Array:
 			m.Put(string(key), walkArray(value))
 		case jsonparser.Object:
@@ -219,7 +219,7 @@ func walkArray(buf []byte) Value {
 		case jsonparser.String:
 			str, err := jsonparser.ParseString(value)
 			panicerr(err)
-			m.Put(i, NewStringValueString(str))
+			m.Put(i, NewStringValue(str))
 		case jsonparser.Array:
 			m.Put(i, walkArray(value))
 		case jsonparser.Object:
@@ -231,7 +231,7 @@ func walkArray(buf []byte) Value {
 }
 
 func jsonUnmarshal(env *Env) Value {
-	json := bytes.TrimSpace(env.LocalGet(0).MustString())
+	json := []byte(strings.TrimSpace(env.LocalGet(0).MustString()))
 	if len(json) == 0 {
 		return Value{}
 	}
@@ -243,19 +243,19 @@ func jsonUnmarshal(env *Env) Value {
 	case '"':
 		str, err := jsonparser.ParseString(json)
 		if err != nil {
-			StorePointerUnsafe(env.LocalGet(1), NewStringValueString(err.Error()))
+			StorePointerUnsafe(env.LocalGet(1), NewStringValue(err.Error()))
 		}
-		return NewStringValueString(str)
+		return NewStringValue(str)
 	case 't', 'f':
 		b, err := jsonparser.ParseBoolean(json)
 		if err != nil {
-			StorePointerUnsafe(env.LocalGet(1), NewStringValueString(err.Error()))
+			StorePointerUnsafe(env.LocalGet(1), NewStringValue(err.Error()))
 		}
 		return NewBoolValue(b)
 	default:
 		num, err := jsonparser.ParseFloat(json)
 		if err != nil {
-			StorePointerUnsafe(env.LocalGet(1), NewStringValueString(err.Error()))
+			StorePointerUnsafe(env.LocalGet(1), NewStringValue(err.Error()))
 		}
 		return NewNumberValue(num)
 	}
@@ -265,23 +265,23 @@ func strconvFormatFloat(env *Env) Value {
 	v := env.LocalGet(0).MustNumber()
 	base := byte(env.LocalGet(1).MustNumber())
 	digits := int(env.LocalGet(2).MustNumber())
-	return NewStringValueString(strconv.FormatFloat(v, byte(base), digits, 64))
+	return NewStringValue(strconv.FormatFloat(v, byte(base), digits, 64))
 }
 
 func strconvFormatInt(env *Env) Value {
-	return NewStringValueString(strconv.FormatInt(int64(env.LocalGet(0).MustNumber()), int(env.LocalGet(1).MustNumber())))
+	return NewStringValue(strconv.FormatInt(int64(env.LocalGet(0).MustNumber()), int(env.LocalGet(1).MustNumber())))
 }
 
 func strconvParseFloat(env *Env) Value {
 	v, err := strconv.ParseFloat(string(env.LocalGet(0).MustString()), 64)
 	if err != nil {
-		StorePointerUnsafe(env.LocalGet(1), NewStringValueString(err.Error()))
+		StorePointerUnsafe(env.LocalGet(1), NewStringValue(err.Error()))
 	}
 	return NewNumberValue(v)
 }
 
 func stringsIndex(env *Env) Value {
-	return NewNumberValue(float64(bytes.Index(env.LocalGet(0).MustString(), env.LocalGet(1).MustString())))
+	return NewNumberValue(float64(strings.Index(env.LocalGet(0).MustString(), env.LocalGet(1).MustString())))
 }
 
 func initLibAux() {
@@ -315,7 +315,7 @@ func initLibAux() {
 
 	ljson := NewStruct()
 	ljson.Put("Unmarshal", NewNativeValue(1, jsonUnmarshal))
-	ljson.Put("Marshal", NewNativeValue(1, func(env *Env) Value { return NewStringValueString(env.LocalGet(0).toString(0, true)) }))
+	ljson.Put("Marshal", NewNativeValue(1, func(env *Env) Value { return NewStringValue(env.LocalGet(0).toString(0, true)) }))
 	CoreLibs["json"] = NewStructValue(ljson)
 
 	lstrconv := NewStruct()

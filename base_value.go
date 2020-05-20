@@ -15,14 +15,6 @@ type Struct struct {
 	l treeMap
 }
 
-type String struct {
-	s []byte
-}
-
-type Pointer struct {
-	i interface{}
-}
-
 // NewSlice creates a new map
 func NewSlice() *Slice {
 	return &Slice{l: make([]Value, 0)}

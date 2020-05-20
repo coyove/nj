@@ -18,7 +18,7 @@ func initLibMath() {
 			return NewNumberValue(float64(r.Intn(int(env.LocalGet(0).MustNumber()))))
 		})).
 		Put("bytes", NewNativeValue(1, func(env *Env) Value {
-			return NewStringValue(r.Fetch(int(env.LocalGet(0).MustNumber())))
+			return NewStringValue(string(r.Fetch(int(env.LocalGet(0).MustNumber()))))
 		}))))
 
 	CoreLibs["math"] = NewStructValue(lmath)

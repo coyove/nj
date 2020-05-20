@@ -87,7 +87,7 @@ func Hash(strbuf []byte) float64 {
 	return float64(hash)
 }
 
-func FindStringHash(h float64) []byte {
+func FindStringHash(h float64) string {
 	x := uint64(h)
 	if x>>49 == 0 {
 		i, buf := 0, [8]byte{}
@@ -98,11 +98,11 @@ func FindStringHash(h float64) []byte {
 			}
 			buf[i] = revLookup[v-1]
 		}
-		return buf[:i]
+		return string(buf[:i])
 	}
 
 	hashMap.RLock()
 	v := hashMap.rev[x]
 	hashMap.RUnlock()
-	return v
+	return string(v)
 }
