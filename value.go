@@ -165,6 +165,10 @@ func (v Value) IsZero() bool {
 	return v == _zero
 }
 
+func (v Value) IsNil() bool {
+	return v == Value{}
+}
+
 // AsNumber cast value to float64
 func (v Value) AsNumber() float64 {
 	return math.Float64frombits(^v.v)
