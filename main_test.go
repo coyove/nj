@@ -34,7 +34,7 @@ func runFile(t *testing.T, path string) {
 	}
 
 	if !strings.Contains(path, "import.txt") {
-		t.Log(b.PrettyString())
+		//t.Log(b.PrettyString())
 	}
 
 	i, i2 := b.Exec(nil)

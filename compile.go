@@ -374,7 +374,7 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 		case float64:
 			consts[i] = NewNumberValue(k)
 		case string:
-			consts[i] = NewStringValueString(k)
+			consts[i] = NewStringValue(k)
 		}
 	}
 	cls = NewClosure(code.data, consts, nil, 0)

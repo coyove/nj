@@ -2,7 +2,6 @@ package potatolang
 
 import (
 	"math"
-	"reflect"
 	"strconv"
 	"sync"
 	"unicode/utf8"
@@ -10,15 +9,6 @@ import (
 
 	"github.com/coyove/potatolang/hash50"
 	"github.com/coyove/potatolang/parser"
-)
-
-const (
-	_ = iota
-	PTagUnique
-	PTagPhantom
-	PTagChan
-	PTagMap
-	PTagInterface
 )
 
 var CoreLibs = map[string]Value{}
@@ -45,7 +35,7 @@ func initCoreLibs() {
 	lcore := NewStruct()
 	lcore.Put("Unique", NewNativeValue(0, func(env *Env) Value {
 		a := new(int)
-		return NewPointerValue(unsafe.Pointer(a), PTagUnique)
+		return NewPointerValue(a)
 	}))
 	lcore.Put("Safe", NewNativeValue(1, func(env *Env) Value {
 		cls := env.LocalGet(0).MustClosure()
@@ -56,16 +46,16 @@ func initCoreLibs() {
 		env.B = Value{}
 		cls, err := LoadString(string(env.LocalGet(0).MustString()))
 		if err != nil {
-			env.B = NewStringValueString(err.Error())
+			env.B = NewStringValue(err.Error())
 			return Value{}
 		}
 		return NewClosureValue(cls)
 	}))
 	lcore.Put("Unicode", NewNativeValue(1, func(env *Env) Value {
-		return NewStringValueString(string(rune(env.LocalGet(0).MustNumber())))
+		return NewStringValue(string(rune(env.LocalGet(0).MustNumber())))
 	}))
 	lcore.Put("Char", NewNativeValue(1, func(env *Env) Value {
-		r, _ := utf8.DecodeRune(env.LocalGet(0).MustString())
+		r, _ := utf8.DecodeRuneInString(env.LocalGet(0).MustString())
 		return NewNumberValue(float64(r))
 	}))
 	lcore.Put("Index", NewNativeValue(2, func(env *Env) Value {
@@ -107,7 +97,7 @@ func initCoreLibs() {
 		env.B = Value{}
 		v, err := parser.StringToNumber(string(env.LocalGet(0).MustString()))
 		if err != nil {
-			env.B = NewStringValueString(err.Error())
+			env.B = NewStringValue(err.Error())
 			return Value{}
 		}
 		return NewNumberValue(v)
@@ -118,7 +108,7 @@ func initCoreLibs() {
 		if env.LocalSize() >= 2 {
 			base = int(env.LocalGet(1).MustNumber())
 		}
-		return NewStringValueString(strconv.FormatInt(int64(v), base))
+		return NewStringValue(strconv.FormatInt(int64(v), base))
 	})
 	CoreLibs["assert"] = NewNativeValue(1, func(env *Env) Value {
 		if v := env.LocalGet(0); !v.IsFalse() {
@@ -147,7 +137,7 @@ func initCoreLibs() {
 					v.testType(SliceType)
 				}
 			}
-			return NewStringValue(x)
+			return NewStringValue(string(x))
 		default:
 			v.testType(SliceType)
 			return Value{}
@@ -185,48 +175,48 @@ func initCoreLibs() {
 		return NewSliceValue(NewSliceSize(int(env.LocalGet(0).MustNumber())))
 	})
 
-	chanDefault := NewPointerValue(unsafe.Pointer(new(int)), PTagUnique)
-	CoreLibs["chan"] = NewStructValue(NewStruct().
-		Put("Default", chanDefault).
-		Put("Make", NewNativeValue(1, func(env *Env) Value {
-			ch := make(chan Value, int(env.LocalGet(0).MustNumber()))
-			return NewPointerValue(unsafe.Pointer(&ch), PTagChan)
-		})).
-		Put("Send", NewNativeValue(2, func(env *Env) Value {
-			p := (*chan Value)(env.LocalGet(0).MustPointer(PTagChan))
-			*p <- env.LocalGet(1)
-			return env.LocalGet(1)
-		})).
-		Put("Recv", NewNativeValue(1, func(env *Env) Value {
-			p := (*chan Value)(env.LocalGet(0).MustPointer(PTagChan))
-			return <-*p
-		})).
-		Put("Close", NewNativeValue(1, func(env *Env) Value {
-			close(*(*chan Value)(env.LocalGet(0).MustPointer(PTagChan)))
-			return Value{}
-		})).
-		Put("Select", NewNativeValue(0, func(env *Env) Value {
-			cases := make([]reflect.SelectCase, env.LocalSize())
-			chans := make([]chan Value, len(cases))
-			for i := range chans {
-				if a := env.LocalGet(i); a == chanDefault {
-					cases[i] = reflect.SelectCase{Dir: reflect.SelectDefault}
-				} else {
-					p := (*chan Value)(a.MustPointer(PTagChan))
-					cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(*p)}
-					chans[i] = *p
-				}
-			}
-			chosen, value, _ := reflect.Select(cases)
-			v, ch := Value{}, NewPointerValue(unsafe.Pointer(&chans[chosen]), PTagChan)
-			if value.IsValid() {
-				v, _ = value.Interface().(Value)
-			} else {
-				ch = Value{}
-			}
-			env.B = ch
-			return v
-		})))
+	// chanDefault := NewPointerValue(new(int))
+	//CoreLibs["chan"] = NewStructValue(NewStruct().
+	//	Put("Default", chanDefault).
+	//	Put("Make", NewNativeValue(1, func(env *Env) Value {
+	//		ch := make(chan Value, int(env.LocalGet(0).MustNumber()))
+	//		return NewPointerValue(ch)
+	//	})).
+	// Put("Send", NewNativeValue(2, func(env *Env) Value {
+	// 	p := env.LocalGet(0).AsPointer().(*chan Value)
+	// 	*p <- env.LocalGet(1)
+	// 	return env.LocalGet(1)
+	// })).
+	// Put("Recv", NewNativeValue(1, func(env *Env) Value {
+	// 	p := (*chan Value)(env.LocalGet(0).MustPointer(PTagChan))
+	// 	return <-*p
+	// })).
+	// Put("Close", NewNativeValue(1, func(env *Env) Value {
+	// 	close(*(*chan Value)(env.LocalGet(0).MustPointer(PTagChan)))
+	// 	return Value{}
+	// })).
+	// Put("Select", NewNativeValue(0, func(env *Env) Value {
+	// 	cases := make([]reflect.SelectCase, env.LocalSize())
+	// 	chans := make([]chan Value, len(cases))
+	// 	for i := range chans {
+	// 		if a := env.LocalGet(i); a == chanDefault {
+	// 			cases[i] = reflect.SelectCase{Dir: reflect.SelectDefault}
+	// 		} else {
+	// 			p := (*chan Value)(a.MustPointer(PTagChan))
+	// 			cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(*p)}
+	// 			chans[i] = *p
+	// 		}
+	// 	}
+	// 	chosen, value, _ := reflect.Select(cases)
+	// 	v, ch := Value{}, NewPointerValue(unsafe.Pointer(&chans[chosen]), PTagChan)
+	// 	if value.IsValid() {
+	// 		v, _ = value.Interface().(Value)
+	// 	} else {
+	// 		ch = Value{}
+	// 	}
+	// 	env.B = ch
+	// 	return v
+	// })))
 
 	CoreLibs["map"] = NewNativeValue(0, func(env *Env) Value {
 		var m map[string]Value
@@ -283,7 +273,7 @@ func initCoreLibs() {
 				newEnv := NewEnv(env)
 				for k, v := range m {
 					newEnv.LocalClear()
-					newEnv.LocalPush(NewStringValueString(k))
+					newEnv.LocalPush(NewStringValue(k))
 					newEnv.LocalPush(v)
 					ok, _ := cls.Exec(newEnv)
 					if ok.IsZero() {

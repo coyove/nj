@@ -12,7 +12,6 @@ const (
 )
 
 type Closure struct {
-	Base
 	Code        []uint32
 	Pos         posVByte
 	source      []byte
