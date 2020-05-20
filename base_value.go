@@ -7,29 +7,20 @@ import (
 	"github.com/coyove/potatolang/hash50"
 )
 
-type Base struct {
-	ptype byte
-	ptag  uint32
-}
-
 type Slice struct {
-	Base
 	l []Value
 }
 
 type Struct struct {
-	Base
 	l treeMap
 }
 
 type String struct {
-	Base
 	s []byte
 }
 
 type Pointer struct {
-	Base
-	ptr unsafe.Pointer
+	i interface{}
 }
 
 // NewSlice creates a new map
