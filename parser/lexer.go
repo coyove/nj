@@ -34,7 +34,6 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 )
 
 const EOF = 0xffffffff
@@ -42,7 +41,7 @@ const whitespace1 = 1<<'\t' | 1<<' '
 const whitespace2 = 1<<'\t' | 1<<'\n' | 1<<'\r' | 1<<' '
 
 type Error struct {
-	Pos     Meta
+	Pos     Position
 	Message string
 	Token   string
 }
@@ -69,13 +68,13 @@ func isDigit(ch uint32) bool {
 }
 
 type Scanner struct {
-	Pos    Meta
+	Pos    Position
 	reader *bufio.Reader
 }
 
 func NewScanner(reader io.Reader, source string) *Scanner {
 	return &Scanner{
-		Pos:    Meta{source, 1, 0},
+		Pos:    Position{source, 1, 0},
 		reader: bufio.NewReaderSize(reader, 4096),
 	}
 }
@@ -134,14 +133,12 @@ func (sc *Scanner) skipWhiteSpace(whitespace int64) uint32 {
 	return ch
 }
 
-func (sc *Scanner) skipComments(ch uint32) error {
-	for {
+func (sc *Scanner) skipComments() {
+	for ch := sc.Next(); ; ch = sc.Next() {
 		if ch == '\n' || ch == '\r' || ch < 0 || ch == EOF {
-			break
+			return
 		}
-		ch = sc.Next()
 	}
-	return nil
 }
 
 func (sc *Scanner) skipBlockComments() error {
@@ -150,8 +147,7 @@ func (sc *Scanner) skipBlockComments() error {
 		if a == EOF {
 			return sc.Error("", "unterminated block comments")
 		}
-		b := sc.Peek()
-		if a == '*' && b == '/' {
+		if a == ']' && sc.Peek() == ']' {
 			sc.Next()
 			return nil
 		}
@@ -314,19 +310,29 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 }
 
 var reservedWords = map[string]uint32{
-	"struct":   TStruct,
-	"range":    TRange,
+	"and":      TAnd,
+	"or":       TOr,
+	"local":    TLocal,
 	"break":    TBreak,
 	"continue": TContinue,
 	"else":     TElse,
-	"func":     TFunc,
+	"function": TFunc,
 	"if":       TIf,
+	"elseif":   TElseIf,
+	"then":     TThen,
+	"end":      TEnd,
+	"not":      TNot,
 	"len":      TLen,
 	"return":   TReturn,
 	"import":   TImport,
 	"typeof":   TTypeof,
 	"for":      TFor,
+	"while":    TWhile,
+	"repeat":   TRepeat,
+	"until":    TUntil,
+	"do":       TDo,
 	"yield":    TYield,
+	"in":       TIn,
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
@@ -380,24 +386,24 @@ redo:
 		switch ch {
 		case EOF:
 			tok.Type = EOF
-		case '/':
+		case '-':
 			switch sc.Peek() {
-			case '/':
-				err = sc.skipComments(sc.Next())
-				if err != nil {
-					goto finally
-				}
-				goto redo
-			case '*':
+			case '-':
 				sc.Next()
-				err = sc.skipBlockComments()
-				if err != nil {
-					goto finally
+				if sc.Peek() == '[' {
+					sc.Next()
+					if sc.Peek() == '[' { // --[[ block comment ]]
+						sc.Next()
+						if err = sc.skipBlockComments(); err != nil {
+							goto finally
+						}
+					}
 				}
+				sc.skipComments()
 				goto redo
 			case '=':
-				tok.Type = TDivEq
-				tok.Str = "/="
+				tok.Type = TSubEq
+				tok.Str = "-="
 				sc.Next()
 			default:
 				tok.Type = ch
@@ -405,14 +411,8 @@ redo:
 			}
 		case '"', '\'':
 			err = sc.scanString(ch, buf)
-			if ch == '\'' {
-				r, _ := utf8.DecodeRune(buf.Bytes())
-				tok.Type = TNumber
-				tok.Str = strconv.Itoa(int(r))
-			} else {
-				tok.Type = TString
-				tok.Str = buf.String()
-			}
+			tok.Type = TString
+			tok.Str = buf.String()
 		case '`':
 			tok.Type = TString
 			err = sc.scanBlockString(buf)
@@ -426,36 +426,19 @@ redo:
 				tok.Type = ch
 				tok.Str = string(ch)
 			}
-		case '=', '+', '-':
-			p := sc.Peek()
-			if p == ch {
-				switch ch {
-				case '=':
-					tok.Type = TEqeq
-				case '+':
-					tok.Type = TAddAdd
-				case '-':
-					tok.Type = TSubSub
-				}
-				tok.Str = string(ch) + string(ch)
-				sc.Next()
-			} else if p == '=' && (ch == '+' || ch == '-') {
-				if ch == '+' {
-					tok.Str = "+="
-					tok.Type = TAddEq
-				} else {
-					tok.Str = "-="
-					tok.Type = TSubEq
-				}
+		case '=':
+			if p := sc.Peek(); p == '=' {
+				tok.Type = TEqeq
+				tok.Str = "=="
 				sc.Next()
 			} else {
 				tok.Type = ch
 				tok.Str = string(ch)
 			}
-		case '!':
+		case '!', '~':
 			if sc.Peek() == '=' {
 				tok.Type = TNeq
-				tok.Str = "!="
+				tok.Str = "~="
 				sc.Next()
 			} else {
 				tok.Type = ch
@@ -516,17 +499,18 @@ redo:
 			case ch2 == '.':
 				sc.Next()
 				if sc.Peek() != '.' {
-					err = sc.Error(buf.String(), "invalid ...")
-					goto finally
+					tok.Type = TDotDot
+					tok.Str = ".."
+				} else {
+					sc.Next()
+					tok.Type = TDotDotDot
+					tok.Str = "..."
 				}
-				sc.Next()
-				tok.Type = TDotDotDot
-				tok.Str = "..."
 			default:
 				tok.Type = '.'
 				tok.Str = buf.String()
 			}
-		case '(', ')', '{', '}', ']', ';', ',', '~', '#':
+		case '(', ')', '{', '}', ']', ';', ',', '#':
 			tok.Type = ch
 			tok.Str = string(ch)
 		case ':':
@@ -538,25 +522,12 @@ redo:
 				tok.Type = ch
 				tok.Str = ":"
 			}
-		case '*', '%', '&', '|', '^':
+		case '+', '*', '/', '%', '&', '|', '^':
 			switch sc.Peek() {
 			case '=':
-				tok.Type = [5]uint32{TMulEq, TModEq, TBitAndEq, TBitOrEq, TXorEq}[strings.Index("*%&|^", string(ch))]
+				tok.Type = [...]uint32{TAddEq, TMulEq, TDivEq, TModEq, TBitAndEq, TBitOrEq, TXorEq}[strings.Index("+*/%&|^", string(ch))]
 				tok.Str = string(ch) + "="
 				sc.Next()
-			case ch:
-				if ch == '&' {
-					tok.Type = TAnd
-					tok.Str = "&&"
-					sc.Next()
-				} else if ch == '|' {
-					tok.Type = TOr
-					tok.Str = "||"
-					sc.Next()
-				} else {
-					tok.Type = ch
-					tok.Str = string(ch)
-				}
 			default:
 				tok.Type = ch
 				tok.Str = string(ch)

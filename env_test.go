@@ -8,7 +8,7 @@ import (
 func TestNewStack(t *testing.T) {
 	st := NewEnv(nil)
 
-	v := NewNumberValue(19930731)
+	v := Num(19930731)
 	vi := 0
 
 	for {

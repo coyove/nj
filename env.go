@@ -4,13 +4,14 @@ import (
 	"unsafe"
 )
 
-// Env is the environment for a closure in potatolang to run within.
-// Env.stack contains arguments used to execute the closure,
-// then the local variables will sequentially take the following spaces.
-// Env.A stores the result of an operation
+// Env is the environment for a closure to run within.
+// stack contains arguments used to execute the closure (variadic arguments are inside Vararg)
+// then the local variables will take the following spaces sequentially.
+// A and B store the results of the execution
 type Env struct {
 	parent *Env
 	stack  []Value
+	Vararg []Value
 	A, B   Value
 }
 
@@ -20,9 +21,7 @@ func NewEnv(parent *Env) *Env {
 	//b := make([]byte, 4096)
 	//n := runtime.Stack(b, false)
 	//log.Println(string(b[:n]))
-	return &Env{
-		parent: parent,
-	}
+	return &Env{parent: parent}
 }
 
 func (env *Env) grow(newSize int) {
@@ -54,15 +53,7 @@ func (env *Env) LocalSet(index int, value Value) {
 // LocalClear clears the current stack
 func (env *Env) LocalClear() {
 	env.stack = env.stack[:0]
-	env.A = Value{}
-}
-
-// LocalPushFront inserts another stack into the current stack at front
-func (env *Env) LocalPushFront(data []Value) {
-	ln := len(env.stack)
-	env.grow(ln + len(data))
-	copy(env.stack[len(env.stack)-ln:], env.stack)
-	copy(env.stack, data)
+	env.A, env.B = Value{}, Value{}
 }
 
 // LocalPush pushes a value into the current stack
@@ -88,8 +79,8 @@ func (env *Env) SetParent(parent *Env) {
 	env.parent = parent
 }
 
-//go:noescape
-func envGet(env *Env, yx uint16, K *Closure) Value
+// go:noescape
+// func envGet(env *Env, yx uint16, K *Closure) Value
 
 func (env *Env) Get(yx uint16, cls *Closure) (zzz Value) {
 	if yx == regA {
@@ -135,4 +126,12 @@ func (env *Env) Set(yx uint16, v Value) {
 // Stack returns the current stack
 func (env *Env) Stack() []Value {
 	return env.stack
+}
+
+func (env *Env) In(i int, expectedType byte) Value {
+	v := env.LocalGet(i)
+	if v.Type() != expectedType {
+		panicf("argument #%d: expect %q, got %+v", i, typeMappings[expectedType], v)
+	}
+	return v
 }

@@ -4,17 +4,18 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 )
 
-type Meta struct {
+type Position struct {
 	Source string
 	Line   uint32
 	Column uint32
 }
 
-func (pos *Meta) String() string {
+func (pos *Position) String() string {
 	if pos.Source == "" {
 		return ""
 	}
@@ -24,7 +25,7 @@ func (pos *Meta) String() string {
 type Token struct {
 	Type uint32
 	Str  string
-	Pos  Meta
+	Pos  Position
 }
 
 func (self *Token) String() string {
@@ -32,7 +33,7 @@ func (self *Token) String() string {
 }
 
 type Node struct {
-	Meta
+	Position
 	Value interface{}
 }
 
@@ -74,19 +75,23 @@ func (n *Node) Type() uintptr {
 	return interfaceType(n.Value)
 }
 
+func (n *Node) TypeName() string {
+	return reflect.TypeOf(n.Value).String()
+}
+
 func (n *Node) SetPos(p interface{}) *Node {
-	var m Meta
+	var m Position
 	switch x := p.(type) {
 	case *Node:
-		m = x.Meta
+		m = x.Position
 	case Token:
 		m = x.Pos
-	case Meta:
+	case Position:
 		m = x
 	default:
 		panic(fmt.Sprintf("SetPos: shouldn't happen: %v", p))
 	}
-	n.Meta = m
+	n.Position = m
 	return n
 }
 
@@ -94,10 +99,10 @@ func (n *Node) C() []*Node { return n.Value.([]*Node) }
 
 func (n *Node) Cappend(na ...*Node) *Node {
 	n.Value = append(n.C(), na...)
-	if n.Meta.Source == "" {
+	if n.Position.Source == "" {
 		for _, na := range na {
-			if na.Meta.Source != "" {
-				n.Meta = na.Meta
+			if na.Position.Source != "" {
+				n.Position = na.Position
 				break
 			}
 		}
@@ -220,7 +225,7 @@ func CompNode(args ...interface{}) *Node {
 			}
 		case *Node:
 			if n.Source == "" {
-				n.SetPos(x.Meta)
+				n.SetPos(x.Position)
 			}
 			arr = append(arr, x)
 		case Token:
@@ -278,7 +283,7 @@ func (n *Node) Dump(w io.Writer) {
 		io.WriteString(w, strconv.Quote(n.Value.(string)))
 	case Natom:
 		io.WriteString(w, string(n.Value.(Atom)))
-	case Ncompound:
+	case Ncomplex:
 		io.WriteString(w, "[")
 		for _, a := range n.C() {
 			a.Dump(w)
@@ -291,7 +296,7 @@ func (n *Node) Dump(w io.Writer) {
 func (n *Node) String() string {
 	pos := ""
 	if n.Source != "" {
-		pos = "@" + n.Meta.String()
+		pos = "@" + n.Position.String()
 	}
 	switch n.Type() {
 	case Nnumber:
@@ -300,7 +305,7 @@ func (n *Node) String() string {
 		return strconv.Quote(n.Value.(string)) + pos
 	case Natom:
 		return string(n.Value.(Atom)) + pos
-	case Ncompound:
+	case Ncomplex:
 		buf := make([]string, n.Cn())
 		for i, a := range n.C() {
 			buf[i] = a.String()
@@ -313,7 +318,7 @@ func (n *Node) String() string {
 }
 
 func (n *Node) isSimpleAddSub() (a Atom, v float64) {
-	if n.Type() != Ncompound || n.Cn() < 3 {
+	if n.Type() != Ncomplex || n.Cn() < 3 {
 		return
 	}
 	// a = a + v

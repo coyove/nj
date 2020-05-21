@@ -9,6 +9,7 @@ const (
 	ClsYieldable
 	ClsRecoverable
 	ClsNative
+	ClsVararg
 )
 
 type Closure struct {
@@ -21,7 +22,7 @@ type Closure struct {
 	options     byte
 	lastp       uint32
 	lastenv     *Env
-	native      func(env *Env) Value
+	native      func(env *Env)
 }
 
 // NewClosure creates a new closure
@@ -35,13 +36,16 @@ func NewClosure(code []uint32, consts []Value, env *Env, paramsCount byte) *Clos
 }
 
 // NewNativeValue creates a native function in potatolang
-func NewNativeValue(paramsCount int, f func(env *Env) Value) Value {
+func NewNativeValue(paramsCount int, vararg bool, f func(env *Env)) Value {
 	cls := &Closure{
 		ParamsCount: byte(paramsCount),
 		native:      f,
 	}
 	cls.Set(ClsNative)
-	return NewClosureValue(cls)
+	if vararg {
+		cls.Set(ClsVararg)
+	}
+	return Fun(cls)
 }
 
 func (c *Closure) Set(opt byte) {
@@ -113,9 +117,40 @@ func (c *Closure) Exec(newEnv *Env) (Value, Value) {
 		return v, vb
 	}
 
-	// for a native closure, it doesn't have its own Env,
-	// so newEnv's parent is the Env where this native function was called.
-	return c.native(newEnv), newEnv.B
+	// For a native function, it doesn't have its own Env,
+	// so newEnv's parent is the Env where this function was called.
+
+	// Check vararg
+	if c.Is(ClsVararg) {
+		if len(newEnv.stack) > int(c.ParamsCount) {
+			v := newEnv.stack[c.ParamsCount]
+			if v.Type() == UPK {
+				if len(newEnv.stack) != int(c.ParamsCount)+1 {
+					panicf("unpacked values should be the last arguments")
+				}
+				newEnv.Vararg = v.asUnpacked()
+			} else {
+				newEnv.Vararg = newEnv.stack[c.ParamsCount:]
+				newEnv.stack = newEnv.stack[:c.ParamsCount]
+			}
+		}
+	}
+
+	c.native(newEnv)
+	return newEnv.A, newEnv.B
+}
+
+func (c *Closure) Call(a ...Value) (Value, Value) {
+	if len(a) != int(c.ParamsCount) {
+		if !(c.Is(ClsVararg) && len(a) > int(c.ParamsCount)) {
+			panicf("expect at least %d arguments (got %d)", c.ParamsCount, len(a))
+		}
+	}
+	newEnv := NewEnv(c.Env)
+	for i := range a {
+		newEnv.LocalPush(a[i])
+	}
+	return c.Exec(newEnv)
 }
 
 func (c *Closure) ImmediateStop() {

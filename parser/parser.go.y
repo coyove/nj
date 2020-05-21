@@ -2,32 +2,32 @@
 package parser
 
 import "strconv"
+import "math/rand"
 
 %}
 %type<expr> stats
-%type<expr> block
 %type<expr> stat
 %type<expr> declarator
 %type<expr> declarator_list_assign
+%type<expr> _declarator_list_assign
 %type<expr> ident_list
 %type<expr> expr_list
+%type<expr> expr_list_paren
 %type<expr> expr_assign_list
 %type<expr> expr
 %type<expr> postfix_incdec
-%type<expr> _postfix_incdec
 %type<atom> _postfix_assign
-%type<expr> _set_move
 %type<expr> prefix_expr
 %type<expr> assign_stat
 %type<expr> for_stat
 %type<expr> if_stat
-%type<expr> oneline_or_block
+%type<expr> elseif_stat
 %type<expr> jmp_stat
 %type<expr> func_stat
 %type<expr> flow_stat
 %type<expr> function
 %type<expr> func_params_list
-%type<expr> struct_slice_gen
+%type<expr> table_gen
 
 %union {
   token Token
@@ -36,12 +36,12 @@ import "strconv"
 }
 
 /* Reserved words */
-%token<token> TAssert TBreak TContinue TElse TFor TFunc TIf TLen TReturn TReturnVoid TImport TTypeof TYield TYieldVoid TRange TStruct
+%token<token> TDo TIn TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TIf TLen TReturn TReturnVoid TImport TYield TYieldVoid TRepeat TUntil TNot
 
 /* Literals */
-%token<token> TAddAdd TSubSub TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
+%token<token> TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
 %token<token> TAddEq TSubEq TMulEq TDivEq TModEq TBitAndEq TBitOrEq TXorEq TLshEq TRshEq TURshEq
-%token<token> TSquare TDotDotDot TSet
+%token<token> TSquare TDotDotDot TDotDot TSet
 
 /* Operators */
 %right 'T'
@@ -52,12 +52,10 @@ import "strconv"
 %left TOr
 %left TAnd
 %left '>' '<' TGte TLte TEqeq TNeq
-%left '+' '-' '|' '^'
+%left '+' '-' '|' '^' TDotDot
 %left '*' '/' '%' TLsh TRsh TURsh '&'
 %right UNARY /* not # -(unary) */
-%right '~'
 %right '#'
-%left TAddAdd TMinMin
 %right TTypeof, TLen, TImport
 
 %% 
@@ -76,35 +74,17 @@ stats:
             }
         }
 
-block: 
-        '{' stats '}'  { $$ = $2 }
-
 stat:
         jmp_stat       { $$ = $1 } |
         flow_stat      { $$ = $1 } |
         assign_stat    { $$ = $1 } |
-        block          { $$ = $1 } |
+        TDo stats TEnd { $$ = __do($2) } |
         ';'            { $$ = emptyNode }
-
-oneline_or_block:
-        assign_stat    { $$ = __chain($1) } |
-        jmp_stat       { $$ = __chain($1) } |
-        for_stat       { $$ = __chain($1) } |
-        if_stat        { $$ = __chain($1) } |
-        block          { $$ = $1 }
 
 flow_stat:
         for_stat       { $$ = $1 } |
         if_stat        { $$ = $1 } |
         func_stat      { $$ = $1 }
-
-_set_move:
-        '='            { $$ = NewNode(AMove) } |
-        TSet           { $$ = NewNode(ASet) }
-
-_postfix_incdec:
-        TAddAdd        { $$ = oneNode } |
-        TSubSub        { $$ = moneNode }
 
 _postfix_assign:
         TAddEq         { $$ = AAdd } |
@@ -131,28 +111,25 @@ assign_stat:
             op := nodes[len(nodes) - 1]
             nodes = nodes[:len(nodes) - 1]
 
-            $$ = __chain()
-            if len(nodes) == 2 && $2.Cn() == 1 { // a, b = c()
+            if len(nodes) == 2 && $2.Cn() == 1 { // local? a, b = c()
+                bb := CompNode(AGetB)
                 if nodes[0].Type() == Natom && nodes[1].Type() == Natom {
                     $$ = __chain(
-                        $2.Cx(0),
-                        opSetMove(op)(nodes[0], nilNode).pos0($1),
-                        opSetMove(op)(nodes[1], nilNode).pos0($1),
-                        CompNode(ASetFromAB, nodes[0], nodes[1]),
+                        opSetMove(op)(nodes[0], $2.Cx(0)).pos0($1),
+                        opSetMove(op)(nodes[1], bb).pos0($1),
                     )
                 } else {
-                    $$ = __chain(
-                        $2.Cx(0),
-                        __set("(2)a", nilNode).pos0($1),
-                        __set("(2)b", nilNode).pos0($1),
-                        CompNode(ASetFromAB, "(2)a", "(2)b"),
-                        nodes[0].moveLoadStore(__move, ANodeS("(2)a")).pos0(nodes[0]),
-                        nodes[1].moveLoadStore(__move, ANodeS("(2)b")).pos0(nodes[1]),
+                    $$ = __do(
+                        __set("(1)a", $2.Cx(0)).pos0($1),
+                        __set("(1)b", bb).pos0($1),
+                        nodes[0].moveLoadStore(__move, ANodeS("(1)a")).pos0(nodes[0]),
+                        nodes[1].moveLoadStore(__move, ANodeS("(1)b")).pos0(nodes[1]),
                     )
                 }
             } else if len(nodes) != $2.Cn() {
-                panic(&Error{Pos: $2.Meta, Message: "unmatched assignments", Token: string(op.A())})
-            } else if op.A() == ASet { // a0, ..., an := b0, ..., bn
+                panic(&Error{Pos: $2.Position, Message: "unmatched assignments", Token: string(op.A())})
+            } else if op.A() == ASet { // local a0, ..., an = b0, ..., bn
+                $$ = __chain()
                 for i, v := range nodes {
                     $$ = $$.Cappend(__set(v, $2.Cx(i)).pos0($1))
                 }
@@ -163,148 +140,129 @@ assign_stat:
                     $$ = __inc(head, NewNumberNode(s)).pos0($1)
                 }
             } else { // a0, ..., an = b0, ..., bn
+                $$ = __chain()
+                names := []*Node{}
                 for i := range nodes {
-                    $$.Cappend(__set("(1)" + strconv.Itoa(i), $2.Cx(i)).pos0($1))
+                    names = append(names, ANodeS("(1)a" + strconv.Itoa(i)))
+                    $$.Cappend(__set(names[i], $2.Cx(i)).pos0($1))
                 }
                 for i, v := range nodes {
-                    $$.Cappend(v.moveLoadStore(__move, ANodeS("(1)" + strconv.Itoa(i))).pos0($1))
+                    $$.Cappend(v.moveLoadStore(__move, names[i]).pos0($1))
                 }
             }
         } 
 
 postfix_incdec:
-        TIdent _postfix_incdec {
-            $$ = __inc(ANode($1), $2).pos0($1)
-        } |
         TIdent _postfix_assign expr %prec ASSIGN  {
             $$ = __move(ANode($1), CompNode($2, ANode($1).setPos($1), $3)).pos0($1)
-        } |
-        prefix_expr '[' expr ']' _postfix_incdec  {
-            $$ = __store($1, $3, CompNode(AAdd, __load($1, $3).pos0($1), $5).pos0($1))
-        } |
-        prefix_expr '.' TIdent   _postfix_incdec  {
-            $$ = __store($1, __hash($3.Str), CompNode(AAdd, __load($1, __hash($3.Str)).pos0($1), $4).pos0($1)) 
         } |
         prefix_expr '[' expr ']' _postfix_assign expr %prec ASSIGN {
             $$ = __store($1, $3, CompNode($5, __load($1, $3).pos0($1), $6).pos0($1))
         } |
         prefix_expr '.' TIdent _postfix_assign expr %prec ASSIGN {
-            $$ = __store($1, __hash($3.Str), CompNode($4, __load($1, __hash($3.Str)).pos0($1), $5).pos0($1))
+            $$ = __store($1, NewNode($3.Str), CompNode($4, __load($1, NewNode($3.Str)).pos0($1), $5).pos0($1))
         }
 
 for_stat:
-        TFor expr oneline_or_block {
-            $$ = __for($2).__continue(emptyNode).__body($3).pos0($1)
+        TWhile expr TDo stats TEnd {
+            $$ = __for(
+                __chain(
+                    __if($2).__then($4).__else(breakNode).pos0($1),
+                ).pos0($1),
+            ).pos0($1)
         } |
-        TFor ';' expr ';' oneline_or_block oneline_or_block {
-            $$ = __for($3).__continue($5).__body($6).pos0($1)
+        TRepeat stats TUntil expr {
+            $$ = __for(
+                __chain(
+                    $2,
+                    __if($4).__then(breakNode).__else(emptyNode).pos0($1),
+                ).pos0($1),
+            ).pos0($1)
         } |
-        TFor expr ';' expr ';' oneline_or_block oneline_or_block {
+        TFor TIdent TIn expr TDo stats TEnd {
+            iter := randomVarname()
             $$ = __chain(
-                $2,
-                __for($4).__continue($6).__body($7).pos0($1),
-            )
-        } |
-        TFor TIdent _set_move TRange expr oneline_or_block {
-            forVar, forEnd := ANode($2), ANodeS("..." + $2.Str)
-            $$ = __chain(
-                opSetMove($3)(forVar, NewNumberNode(0)).pos0($1),
-                __set(forEnd, CompNode(ALen, $5).pos0($1)).pos0($1),
-                __for(CompNode(ALess, forVar, forEnd).pos0($1)).
-                    __continue(__chain(__inc(forVar, oneNode).pos0($1))).
-                    __body($6).pos0($1),
-            )
-        } |
-        TFor TIdent ',' TIdent _set_move TRange expr oneline_or_block {
-            forEnd, forSub := ANodeS("..." + $2.Str), ANodeS("...s" + $2.Str)
-            forKey, forIKey, forVal := ANode($2), ANodeS("...i" + $2.Str), ANode($4)
-            $$ = __chain(
-                opSetMove($5)(forVal, nilNode).pos0($1),
-                opSetMove($5)(forKey, zeroNode).pos0($1),
-                opSetMove($5)(forIKey, zeroNode).pos0($1),
-                opSetMove($5)(forSub, $7).pos0($1),
-                __set(forEnd, CompNode(ALen, forSub).pos0($1)).pos0($1),
+                __set(iter, $4).pos0($1),
                 __for(
-                    CompNode(ALess, forIKey, forEnd).pos0($1),
-                ).
-                __continue(
-                    __chain(__inc(forIKey, oneNode).pos0($1)),
-                ).
-                __body(
                     __chain(
-                        __move(forKey, CompNode(AStructKey, forSub, forIKey).pos0($1)).pos0($1),
-                        __move(forVal, __load(forSub, forIKey)).pos0($1),
-                        $8,
+                        __set($2, __call(iter, emptyNode).pos0($1)).pos0($1),
+                        __if($2).__then($6).__else(breakNode).pos0($1),
                     ),
                 ).pos0($1),
             )
         } |
-        TFor TIdent _set_move TRange expr ',' expr oneline_or_block {
-            forVar, forEnd := ANode($2), ANodeS("..." + $2.Str)
+        TFor TIdent ',' TIdent TIn expr TDo stats TEnd {
+            iter := randomVarname()
             $$ = __chain(
-                opSetMove($3)(forVar, $5).pos0($1),
-                __set(forEnd, $7).pos0($1),
+                __set(iter, $6).pos0($1),
                 __for(
-                    CompNode(ALessEq, forVar, forEnd).pos0($1),
-                ).
-                __continue(
-                    __chain(__inc(forVar, oneNode).pos0($1)),
-                ).
-                __body($8).pos0($1),
+                    __chain(
+                        __set($2, __call(iter, emptyNode).pos0($1)).pos0($1),
+                        __set($4, CompNode(AGetB).pos0($1)).pos0($1),
+                        __if($2).__then($8).__else(breakNode).pos0($1),
+                    ),
+                ).pos0($1),
             )
         } |
-        TFor TIdent _set_move TRange expr ',' expr ',' expr oneline_or_block {
-            forVar, forEnd := ANode($2), ANodeS("..." + $2.Str)
-            if $9.Type() == Nnumber { // easy case
+        TFor TIdent '=' expr ',' expr TDo stats TEnd {
+            forVar, forEnd := ANode($2), randomVarname()
+            $$ = __do(
+                    __set(forVar, $4).pos0($1),
+                    __set(forEnd, $6).pos0($1),
+                    __for(
+                        __chain(
+                            __if(__lessEq(forVar, forEnd)).
+                            __then(
+                                __chain(
+                                    $8,
+                                    __inc(forVar, oneNode),
+                                ),
+                            ).
+                            __else(breakNode).pos0($1),
+                        ),
+                    ).pos0($1),
+                )
+        } |
+        TFor TIdent '=' expr ',' expr ',' expr TDo stats TEnd {
+            forVar, forEnd := ANode($2), randomVarname()
+            if $8.Type() == Nnumber { // step is a static number, easy case
                 var cond *Node
-                if $9.N() < 0 {
+                if $8.N() < 0 {
                     cond = __lessEq(forEnd, forVar)
                 } else {
                     cond = __lessEq(forVar, forEnd)
                 }
-                $$ = __chain(
-                    opSetMove($3)(forVar, $5).pos0($1),
-                    __set(forEnd, $7).pos0($1),
-                    __for(cond).
-                    __continue(__chain(__inc(forVar, $9).pos0($1))).
-                    __body($10).pos0($1),
-                )
-            } else {
-                forStep := ANodeS("...step" + $2.Str)
-                forBegin := ANodeS("...begin" + $2.Str)
-                $$ = __chain(
-                    opSetMove($3)(forVar, $5).pos0($1),
-                    __set(forBegin, $5).pos0($1),
-                    __set(forEnd, $7).pos0($1),
-                    __set(forStep, $9).pos0($1),
-                    __if(
-                        __lessEq(
-                            zeroNode,
-                            __mul(
-                                __sub(forEnd, forVar).pos0($1),
-                                forStep,
-                            ).pos0($1),
-                        ).pos0($1),
-                    ).
-                    __then(
+                $$ = __do(
+                    __set(forVar, $4).pos0($1),
+                    __set(forEnd, $6).pos0($1),
+                    __for(
                         __chain(
-                            __for(
-                                __lessEq(
-                                    __mul(
-                                        __sub(forVar, forBegin).pos0($1), 
-                                        __sub(forVar, forEnd).pos0($1),
-                                    ),
-                                    zeroNode,
-                                ).pos0($1), // (forVar - forBegin) * (forVar - forEnd) <= 0
+                            __if(cond).
+                            __then(
+                                __chain($10, __inc(forVar, $8)),
                             ).
-                            __continue(
-                                __chain(__inc(forVar, forStep).pos0($1)),
-                            ).
-                            __body($10).pos0($1),
+                            __else(breakNode).pos0($1),
                         ),
-                    ).
-                    __else(
-                        emptyNode,
+                    ).pos0($1),
+                )
+            } else { 
+                forStep := randomVarname()
+                $$ = __do(
+                    __set(forVar, $4).pos0($1),
+                    __set(forEnd, $6).pos0($1),
+                    __set(forStep, $8).pos0($1),
+                    __for(
+                        __chain(
+                            __if(__less(zeroNode, forStep)).
+                            __then( // +step
+                                __if(__less(forEnd, forVar)).__then(breakNode).__else(emptyNode).pos0($1),
+                            ).
+                            __else( // -step
+                                __if(__less(forVar, forEnd)).__then(breakNode).__else(emptyNode).pos0($1),
+                            ).pos0($1),
+                            $10,
+                            __inc(forVar, forStep),
+                        ),
                     ).pos0($1),
                 )
             }
@@ -312,35 +270,48 @@ for_stat:
         } 
 
 if_stat:
-        TIf expr oneline_or_block %prec 'T' {
-            $$ = __if($2).__then($3).__else(emptyNode).pos0($1)
+        TIf expr TThen stats elseif_stat TEnd %prec 'T' {
+            $$ = __if($2).__then($4).__else($5).pos0($1)
+        }
+
+elseif_stat:
+        {
+            $$ = CompNode()
         } |
-        TIf expr oneline_or_block TElse oneline_or_block {
-            $$ = __if($2).__then($3).__else($5).pos0($1)
+        TElse stats {
+            $$ = $2
+        } |
+        TElseIf expr TThen stats elseif_stat {
+            $$ = __if($2).__then($4).__else($5).pos0($1)
         }
 
 func_stat:
-        TFunc TIdent func_params_list oneline_or_block {
+        TFunc TIdent func_params_list stats TEnd {
             funcname := ANode($2)
             $$ = __chain(
                 __set(funcname, nilNode).pos0($2), 
-                __move(funcname, __func(funcname).__params($3).__body($4).pos0($2)).pos0($2),
+                __move(funcname, __func($3).__body($4).pos0($2)).pos0($2),
             )
+        } |
+        TFunc TIdent '.' TIdent func_params_list stats TEnd {
+            $$ = __store(
+                ANode($2), NewNode($4.Str), __func($5).__body($6).pos0($2),
+            ).pos0($2) 
+        } |
+        TFunc TIdent ':' TIdent func_params_list stats TEnd {
+            paramlist := $5.Cprepend(ANodeS("self"))
+            $$ = __store(
+                ANode($2), NewNode($4.Str), __func(paramlist).__body($6).pos0($2),
+            ).pos0($2) 
         }
 
 function:
-        TFunc func_params_list block %prec FUNC {
-            $$ = __func("<a>").__params($2).__body($3).pos0($1).SetPos($1) 
-        } |
-        TFunc ident_list '=' expr %prec FUNC {
-            $$ = __func("<a>").__params($2).__body(__chain(__return($4).pos0($1))).pos0($1).SetPos($1)
-        } |
-        TFunc '=' expr %prec FUNC {
-            $$ = __func("<a>").__params(emptyNode).__body(__chain(__return($3).pos0($1))).pos0($1).SetPos($1)
+        TFunc func_params_list stats TEnd %prec FUNC {
+            $$ = __func($2).__body($3).pos0($1).SetPos($1) 
         }
 
 func_params_list:
-        '(' ')'                           { $$ = emptyNode } |
+        '(' ')'                           { $$ = CompNode() } |
         '(' ident_list ')'                { $$ = $2 }
 
 jmp_stat:
@@ -358,28 +329,28 @@ declarator:
         TIdent                            { $$ = ANode($1).setPos($1) } |
         TIdent TSquare                    { $$ = __load(nilNode, $1).pos0($1) } |
         prefix_expr '[' expr ']'          { $$ = __load($1, $3).pos0($3).setPos($3) } |
-        prefix_expr '.' TIdent            { $$ = __load($1, __hash($3.Str)).pos0($3).setPos($3) } |
-        prefix_expr '[' expr ':' expr ']' { $$ = CompNode(ASlice, $1, $3, $5).pos0($3).setPos($3) } |
-        prefix_expr '[' expr ':' ']'      { $$ = CompNode(ASlice, $1, $3, moneNode).pos0($3).setPos($3) } |
-        prefix_expr '[' ':' expr ']'      { $$ = CompNode(ASlice, $1, zeroNode, $4).pos0($4).setPos($4) }
+        prefix_expr '.' TIdent            { $$ = __load($1, NewNode($3.Str)).pos0($3).setPos($3) }
 
 declarator_list_assign:
-        declarator _set_move                  { $$ = CompNode($1, $2) } |
+        TLocal _declarator_list_assign    { a := $2.Value.([]*Node); a[len(a)-1] = NewNode(ASet); $$ = $2 } |
+        _declarator_list_assign           { $$ = $1 }
+
+_declarator_list_assign:
+        declarator '='                    { $$ = CompNode($1, NewNode(AMove)) } |
         declarator ',' declarator_list_assign { $$ = $3.Cprepend($1) }
 
 ident_list:
         TIdent                            { $$ = CompNode($1.Str) } | 
-        TIdent TDotDotDot                 { $$ = CompNode($1.Str + "...") } | 
+        TDotDotDot                        { $$ = CompNode("...") } | 
         ident_list ',' TIdent             { $$ = $1.Cappend(ANode($3)) } |
-        ident_list ',' TIdent TDotDotDot  { $$ = $1.Cappend(ANodeS($3.Str + "...").SetPos($3)) }
+        ident_list ',' TDotDotDot         { $$ = $1.Cappend(ANodeS("...").SetPos($3)) }
 
 expr:
         TNumber                           { $$ = NewNumberNode($1.Str).SetPos($1) } |
         TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) } |
-        TTypeof expr                      { $$ = CompNode(ATypeOf, $2) } |
-        TLen expr                         { $$ = CompNode(ALen, $2) } |
+        '#' expr                          { $$ = CompNode(ALen, $2) } |
         function                          { $$ = $1 } |
-        struct_slice_gen                  { $$ = $1 } |
+        table_gen                  { $$ = $1 } |
         prefix_expr                       { $$ = $1 } |
         TString                           { $$ = NewNode($1.Str).SetPos($1) }  |
         expr TOr expr                     { $$ = CompNode(AOr, $1,$3).pos0($1) } |
@@ -391,6 +362,7 @@ expr:
         expr TEqeq expr                   { $$ = CompNode(AEq, $1,$3).pos0($1) } |
         expr TNeq expr                    { $$ = CompNode(ANeq, $1,$3).pos0($1) } |
         expr '+' expr                     { $$ = CompNode(AAdd, $1,$3).pos0($1) } |
+        expr TDotDot expr                 { $$ = CompNode(AConcat, $1,$3).pos0($1) } |
         expr '-' expr                     { $$ = CompNode(ASub, $1,$3).pos0($1) } |
         expr '*' expr                     { $$ = CompNode(AMul, $1,$3).pos0($1) } |
         expr '/' expr                     { $$ = CompNode(ADiv, $1,$3).pos0($1) } |
@@ -401,72 +373,54 @@ expr:
         expr TURsh expr                   { $$ = CompNode(ABitURsh, $1,$3).pos0($1) } |
         expr '|' expr                     { $$ = CompNode(ABitOr, $1,$3).pos0($1) } |
         expr '&' expr                     { $$ = CompNode(ABitAnd, $1,$3).pos0($1) } |
-        expr TDotDotDot                   { $$ = CompNode(ADDD, $1).pos0($1) } |
         '^' expr %prec UNARY              { $$ = CompNode(ABitXor, $2, max32Node).pos0($2) } |
         '-' expr %prec UNARY              { $$ = CompNode(ASub, zeroNode, $2).pos0($2) } |
-        '!' expr %prec UNARY              { $$ = CompNode(ANot, $2).pos0($2) } |
+        TNot expr %prec UNARY             { $$ = CompNode(ANot, $2).pos0($2) } |
         '&' TIdent %prec UNARY            { $$ = CompNode(AAddrOf, ANode($2)).pos0($2) }
 
 prefix_expr:
         declarator                        { $$ = $1 } |
-        prefix_expr '(' ')'               { $$ = __call($1, emptyNode).pos0($1) } |
-        prefix_expr '(' expr_list ')'     { $$ = patchVarargCall($1, $3) } |
+        prefix_expr TString               { $$ = __call($1, CompNode(NewNode($2.Str))).pos0($1) } |
+        TIdent ':' TIdent expr_list_paren { $$ = __call(__load($1, NewNode($3.Str)).pos0($1), $4.Cprepend(ANode($1))).pos0($1) } |
+        prefix_expr expr_list_paren       { $$ = __call($1, $2).pos0($1) } |
         '(' expr ')'                      { $$ = $2 } // shift/reduce conflict
 
 expr_list:
         expr                              { $$ = CompNode($1) } |
         expr_list ',' expr                { $$ = $1.Cappend($3) }
 
-expr_assign_list:
-        TIdent ':' expr                   { $$ = CompNode(__hash($1.Str), $3) } |
-        expr_assign_list ',' TIdent':'expr{ $$ = $1.Cappend(__hash($3.Str), $5) }
+expr_list_paren:
+        '(' ')'                           { $$ = CompNode() } |
+        '{' '}'                           { $$ = CompNode() } |
+        '(' expr_list ')'                 { $$ = $2 } |
+        '{' expr_list '}'                 { $$ = $2 }
 
-struct_slice_gen:
-        '{' '}'                           { $$ = CompNode(AArray, emptyNode).pos0($1) } |
-        TStruct '{' ident_list '}'        { $$ = CompNode(AStructNil, $3).pos0($1) } |
-        TStruct '{' ident_list ',' '}'    { $$ = CompNode(AStructNil, $3).pos0($1) } |
-        '{' expr_assign_list     '}'      { $$ = CompNode(AStruct, $2).pos0($2) } |
-        '{' expr_assign_list ',' '}'      { $$ = CompNode(AStruct, $2).pos0($2) } |
-        '{' expr_list            '}'      { $$ = CompNode(AArray, $2).pos0($2) } |
-        '{' expr_list ','        '}'      { $$ = CompNode(AArray, $2).pos0($2) }
+expr_assign_list:
+        TIdent '=' expr                            { $$ = CompNode(NewNode($1.Str), $3) } |
+        '[' expr ']' '=' expr                      { $$ = CompNode($2, $5) } |
+        expr_assign_list ',' TIdent '=' expr       { $$ = $1.Cappend(NewNode($3.Str), $5) } |
+        expr_assign_list ',' '[' expr ']' '=' expr { $$ = $1.Cappend($4, $7) }
+
+table_gen:
+        '{' '}'                                    { $$ = CompNode(AArray, emptyNode).pos0($1) } |
+        '{' expr_assign_list     '}'               { $$ = CompNode(AHash, $2).pos0($1) } |
+        '{' expr_assign_list ',' '}'               { $$ = CompNode(AHash, $2).pos0($1) } |
+        '{' expr_assign_list ';' expr_list '}'     { $$ = CompNode(AHashArray, $2, $4).pos0($1) } |
+        '{' expr_assign_list ';' expr_list ',' '}' { $$ = CompNode(AHashArray, $2, $4).pos0($1) } |
+        '{' expr_list            '}'               { $$ = CompNode(AArray, $2).pos0($1) } |
+        '{' expr_list ';' expr_assign_list '}'     { $$ = CompNode(AHashArray, $4, $2).pos0($1) } |
+        '{' expr_list ';' expr_assign_list ',' '}' { $$ = CompNode(AHashArray, $4, $2).pos0($1) } |
+        '{' expr_list ','        '}'               { $$ = CompNode(AArray, $2).pos0($1) }
 
 %%
-func patchVarargCall(callee interface{}, args *Node) *Node {
-    ddd := false
-    for _, a := range args.C() {
-        if a.Type() == Ncompound && a.Cx(0).A() == ADDD {
-            ddd = true
-            break
-        }
-    }
-    if !ddd {
-        return __call(callee, args).pos0(callee)
-    }
-
-    if args.Cn() == 1 {
-        return __chain(
-            CompNode(ADDD, args.Cx(0).Cx(1)).pos0(callee),
-            __call(callee, emptyNode).pos0(callee),
-        )
-    }
-
-    varname := "...vararg"
-    res := __chain(__set(varname, CompNode(AArray, emptyNode).pos0(callee)).pos0(callee))
-    for _, a := range args.C() {
-        if a.Type() == Ncompound && a.Cx(0).A() == ADDD {
-            res.Cappend(__move(varname, CompNode(ABitLsh, varname, a.Cx(1)).pos0(callee)).pos0(callee))
-        } else {
-            res.Cappend(__store(varname, CompNode(ALen, varname).pos0(callee), a).pos0(callee))
-        }
-    }
-    res.Cappend(CompNode(ADDD, varname).pos0(callee))
-    res.Cappend(__call(callee, emptyNode).pos0(callee))
-    return res
-}
 
 func opSetMove(op *Node) func(dest, src interface{}) *Node {
     if op.A() == ASet {
         return __set
     }
     return __move
+}
+
+func randomVarname() *Node {
+    return ANodeS("v" + strconv.FormatInt(rand.Int63(), 10))
 }

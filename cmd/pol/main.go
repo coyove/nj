@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"runtime"
-	"runtime/pprof"
 	"strings"
 	"time"
 
@@ -42,14 +41,14 @@ func main() {
 		return
 	}
 
-	{
-		f, err := os.Create("cpuprofile")
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
+	// {
+	// 	f, err := os.Create("cpuprofile")
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// 	pprof.StartCPUProfile(f)
+	// 	defer pprof.StopCPUProfile()
+	// }
 
 	switch *input {
 	case "f":

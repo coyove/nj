@@ -4,11 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math"
-	"os"
 	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -23,7 +20,7 @@ func makeop(op _Opcode, a, b uint16) uint32 {
 
 func makejmpop(op _Opcode, a uint16, dist int) uint32 {
 	if dist < -(1<<12) || dist >= 1<<12 {
-		panic("too long jump")
+		panic("long jump")
 	}
 	// 6 + 13 + 13
 	b := uint16(dist + 1<<12)
@@ -156,10 +153,6 @@ func (b *packet) WriteRaw(buf []uint32) {
 	b.data = append(b.data, buf...)
 }
 
-func (b *packet) Write64(v uint64) {
-	b.data = append(b.data, uint32(v>>32), uint32(v))
-}
-
 func (b *packet) Write32(v uint32) {
 	b.data = append(b.data, v)
 }
@@ -172,23 +165,15 @@ func (b *packet) WriteJmpOP(op _Opcode, opa uint16, d int) {
 	b.data = append(b.data, makejmpop(op, opa, d))
 }
 
-func (b *packet) WritePos(p parser.Meta) {
+func (b *packet) WritePos(p parser.Position) {
 	if p.Line == 0 {
-		// TODO: debug Code, used to detect a null meta struct
-		buf := make([]byte, 4096)
-		n := runtime.Stack(buf, false)
-		log.Println(string(buf[:n]))
-		os.Exit(1)
+		// Debug Code, used to detect a null meta struct
+		panicf("null line")
 	}
 	b.pos.appendABC(uint32(len(b.data)), p.Line, uint16(p.Column))
 	if p.Source != "" {
 		b.source = p.Source
 	}
-}
-
-func (b *packet) WriteDouble(v float64) {
-	d := *(*uint64)(unsafe.Pointer(&v))
-	b.Write64(d)
 }
 
 func (b *packet) WriteString(v string) {
@@ -220,6 +205,13 @@ func (b *packet) WriteConsts(consts []interface{}) {
 			buf.WriteString("0000000000")
 			buf.Truncate(buf.Len() - 10 + binary.PutUvarint(buf.Bytes()[buf.Len()-10:], uint64(len(k))))
 			buf.WriteString(k)
+		case bool:
+			buf.WriteByte(3)
+			if k {
+				buf.WriteByte(1)
+			} else {
+				buf.WriteByte(0)
+			}
 		default:
 			panic("shouldn't happen")
 		}
@@ -231,22 +223,25 @@ func (b *packet) WriteConsts(consts []interface{}) {
 func crReadConsts(code []uint32, cursor *uint32, n int) []Value {
 	res := make([]Value, 0, n)
 	buf := crReadBytesLen(code, int(crRead32(code, cursor)), cursor)
-	for len(buf) > 0 {
+	for init := buf; len(buf) > 0; {
 		switch buf[0] {
 		case 0:
 			x := math.Float64frombits(binary.BigEndian.Uint64(buf[1:]))
-			res = append(res, NewNumberValue(x))
+			res = append(res, Num(x))
 			buf = buf[9:]
 		case 1:
 			v, n := binary.Varint(buf[1:])
-			res = append(res, NewNumberValue(float64(v)))
+			res = append(res, Num(float64(v)))
 			buf = buf[1+n:]
 		case 2:
 			l, n := binary.Uvarint(buf[1:])
-			res = append(res, NewStringValueBytesUnsafe(buf[1+n:1+n+int(l)]))
+			res = append(res, Str_unsafe(buf[1+n:1+n+int(l)]))
 			buf = buf[1+n+int(l):]
+		case 3:
+			res = append(res, Bln(buf[1] == 1))
+			buf = buf[2:]
 		default:
-			panic("shouldn't happen")
+			panicf("invalid const table entry: %v in %x", buf[0], init)
 		}
 	}
 	return res
@@ -291,29 +286,26 @@ func crReadBytesLen(data []uint32, length int, cursor *uint32) []byte {
 }
 
 var singleOp = map[_Opcode]string{
-	OpAdd:       "add",
-	OpSub:       "sub",
-	OpMul:       "mul",
-	OpDiv:       "div",
-	OpMod:       "mod",
-	OpEq:        "eq",
-	OpNeq:       "neq",
-	OpLess:      "less",
-	OpLessEq:    "less-eq",
-	OpLen:       "len",
-	OpCopyStack: "copy-stack",
-	OpLoad:      "load",
-	OpStore:     "store",
-	OpNot:       "not",
-	OpBitAnd:    "bit-and",
-	OpBitOr:     "bit-or",
-	OpBitXor:    "bit-xor",
-	OpBitLsh:    "bit-lsh",
-	OpBitRsh:    "bit-rsh",
-	OpBitURsh:   "bit-ursh",
-	OpTypeof:    "typeof",
-	OpStructKey: "struct-key",
-	OpSlice:     "slice",
+	OpAdd:         "add",
+	OpSub:         "sub",
+	OpMul:         "mul",
+	OpDiv:         "div",
+	OpMod:         "mod",
+	OpEq:          "eq",
+	OpNeq:         "neq",
+	OpLess:        "less",
+	OpLessEq:      "less-eq",
+	OpLen:         "len",
+	OpPatchVararg: "patch-vararg",
+	OpLoad:        "load",
+	OpStore:       "store",
+	OpNot:         "not",
+	OpBitAnd:      "bit-and",
+	OpBitOr:       "bit-or",
+	OpBitXor:      "bit-xor",
+	OpBitLsh:      "bit-lsh",
+	OpBitRsh:      "bit-rsh",
+	OpBitURsh:     "bit-ursh",
 }
 
 func (c *Closure) crPrettify(tab int) string {
@@ -376,14 +368,12 @@ MAIN:
 			break MAIN
 		case OpSet:
 			sb.WriteString(readAddr(a) + " = " + readAddr(b))
-		case OpSetFromAB:
-			sb.WriteString(readAddr(a) + " = $a, " + readAddr(b) + " = $b")
+		case OpGetB:
+			sb.WriteString("$a = $b")
 		case OpSetB:
 			sb.WriteString("$b = " + readAddr(a))
 		case OpPush:
 			sb.WriteString("push " + readAddr(a))
-		case OpPushVararg:
-			sb.WriteString("pushvararg " + readAddr(a))
 		case OpPush2:
 			sb.WriteString("push2 " + readAddr(a) + " " + readAddr(b))
 		case OpRet:
@@ -413,10 +403,13 @@ MAIN:
 			sb.WriteString("nop")
 		case OpInc:
 			sb.WriteString("inc " + readAddr(a) + " " + readAddr(uint16(b)))
-		case OpMakeStruct:
-			sb.WriteString("make-struct")
-		case OpMakeSlice:
-			sb.WriteString("make-slice")
+		case OpMakeHash:
+			sb.WriteString("make-hash")
+			if a == 1 {
+				sb.WriteString("-into-a")
+			}
+		case OpMakeArray:
+			sb.WriteString("make-array")
 		default:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs + " " + readAddr(a) + " " + readAddr(b))

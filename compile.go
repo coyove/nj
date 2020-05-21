@@ -23,16 +23,15 @@ type symbol struct {
 // symtable is responsible for recording the state of compilation
 type symtable struct {
 	// variable name lookup
-	parent *symtable
-	sym    map[parser.Atom]*symbol
+	parent    *symtable
+	sym       map[parser.Atom]*symbol
+	maskedSym []map[parser.Atom]*symbol
 
-	// has yield op
-	y         bool
+	y         bool // has yield op
 	envescape bool
+	inloop    bool
 
 	vp uint16
-
-	continueNode []*parser.Node
 
 	consts   []interface{}
 	constMap map[interface{}]uint16
@@ -65,6 +64,12 @@ func (table *symtable) borrowAddress() uint16 {
 }
 
 func (table *symtable) returnAddress(v uint16) {
+	if v == regNil || v == regA {
+		return
+	}
+	if v>>10 == 7 {
+		return
+	}
 	//	log.Println("$$", table.reusableTmps, v, table.vp)
 	//if v == table.vp-1 {
 	//	table.vp--
@@ -75,40 +80,70 @@ func (table *symtable) returnAddress(v uint16) {
 	}
 }
 
-func (table *symtable) get(varname parser.Atom) (uint16, bool) {
+func (table *symtable) returnAddresses(a interface{}) {
+	switch a := a.(type) {
+	case []*parser.Node:
+		for _, n := range a {
+			if n.Type() == parser.Naddr {
+				table.returnAddress(n.Value.(uint16))
+			}
+		}
+	case []uint16:
+		for _, n := range a {
+			table.returnAddress(n)
+		}
+	default:
+		panic("returnAddresses: shouldn't happen")
+	}
+}
+
+func (table *symtable) get(varname parser.Atom) uint16 {
 	depth := uint16(0)
 
 	switch varname {
 	case "nil":
-		return regNil, true
+		return regNil
 	case "true":
-		return table.loadK(nil, 1.0), true
+		return table.loadK(true)
 	case "false":
-		return table.loadK(nil, 0.0), true
+		return table.loadK(false)
+	}
+
+	calc := func(k *symbol) uint16 {
+		if depth > 6 || (depth == 6 && k.addr > 1000) {
+			panic("too many levels (7) to refer a variable, try simplifing your code")
+		}
+
+		addr := (depth << 10) | (uint16(k.addr) & 0x03ff)
+
+		if k.usage--; k.usage == 0 {
+			table.returnAddress(k.addr)
+			delete(table.sym, varname)
+		}
+
+		return addr
 	}
 
 	for table != nil {
-		k, e := table.sym[varname]
-		if e {
-			if depth > 6 || (depth == 6 && k.addr > 1000) {
-				panic("too many levels (7) to refer a variable, try simplifing your code")
+		// Firstly we will iterate the masked symbols
+		// Masked symbols are local variables inside do-blocks, like "if then .. end" and "do ... end"
+		// The rightmost map of this slice is the innermost do-block
+		for i := len(table.maskedSym) - 1; i >= 0; i-- {
+			m := table.maskedSym[i]
+			if k, ok := m[varname]; ok {
+				return calc(k)
 			}
+		}
 
-			addr := (depth << 10) | (uint16(k.addr) & 0x03ff)
-
-			if k.usage--; k.usage == 0 {
-				table.returnAddress(k.addr)
-				delete(table.sym, varname)
-			}
-
-			return addr, true
+		if k, ok := table.sym[varname]; ok {
+			return calc(k)
 		}
 
 		depth++
 		table = table.parent
 	}
 
-	return 0, false
+	return regNil
 }
 
 func (table *symtable) put(varname parser.Atom, addr uint16) {
@@ -119,13 +154,30 @@ func (table *symtable) put(varname parser.Atom, addr uint16) {
 	if strings.HasPrefix(string(varname), "(") {
 		c, _ = strconv.Atoi(string(varname[1:strings.Index(string(varname), ")")]))
 	}
-	table.sym[varname] = &symbol{
+	sym := &symbol{
 		addr:  addr,
 		usage: c,
 	}
+	if len(table.maskedSym) > 0 {
+		table.maskedSym[len(table.maskedSym)-1][varname] = sym
+	} else {
+		table.sym[varname] = sym
+	}
 }
 
-func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
+func (table *symtable) addMaskedSymTable() {
+	table.maskedSym = append(table.maskedSym, map[parser.Atom]*symbol{})
+}
+
+func (table *symtable) removeMaskedSymTable() {
+	last := table.maskedSym[len(table.maskedSym)-1]
+	for _, k := range last {
+		table.returnAddress(k.addr)
+	}
+	table.maskedSym = table.maskedSym[:len(table.maskedSym)-1]
+}
+
+func (table *symtable) loadK(v interface{}) uint16 {
 	kaddr := func() uint16 {
 		if i, ok := table.constMap[v]; ok {
 			return i
@@ -133,7 +185,7 @@ func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
 
 		table.consts = append(table.consts, v)
 		if len(table.consts) > 1<<10-1 {
-			panic("too many ConstTable")
+			panic("too many constants")
 		}
 
 		idx := uint16(len(table.consts) - 1)
@@ -145,105 +197,79 @@ func (table *symtable) loadK(buf *packet, v interface{}) uint16 {
 }
 
 var flatOpMapping = map[parser.Atom]_Opcode{
-	parser.AAdd:       OpAdd,
-	parser.ASub:       OpSub,
-	parser.AMul:       OpMul,
-	parser.ADiv:       OpDiv,
-	parser.AMod:       OpMod,
-	parser.ALess:      OpLess,
-	parser.ALessEq:    OpLessEq,
-	parser.AEq:        OpEq,
-	parser.ANeq:       OpNeq,
-	parser.ANot:       OpNot,
-	parser.ABitAnd:    OpBitAnd,
-	parser.ABitOr:     OpBitOr,
-	parser.ABitXor:    OpBitXor,
-	parser.ABitLsh:    OpBitLsh,
-	parser.ABitRsh:    OpBitRsh,
-	parser.ABitURsh:   OpBitURsh,
-	parser.AStore:     OpStore,
-	parser.ALoad:      OpLoad,
-	parser.ASlice:     OpSlice,
-	parser.ATypeOf:    OpTypeof,
-	parser.ALen:       OpLen,
-	parser.AForeach:   OpCopyStack,
-	parser.AAddrOf:    OpAddressOf,
-	parser.AInc:       OpInc,
-	parser.ADDD:       OpPushVararg,
-	parser.ASetB:      OpSetB,
-	parser.ASetFromAB: OpSetFromAB,
-	parser.AStructKey: OpStructKey,
+	parser.AAdd:         OpAdd,
+	parser.AConcat:      OpConcat,
+	parser.ASub:         OpSub,
+	parser.AMul:         OpMul,
+	parser.ADiv:         OpDiv,
+	parser.AMod:         OpMod,
+	parser.ALess:        OpLess,
+	parser.ALessEq:      OpLessEq,
+	parser.AEq:          OpEq,
+	parser.ANeq:         OpNeq,
+	parser.ANot:         OpNot,
+	parser.ABitAnd:      OpBitAnd,
+	parser.ABitOr:       OpBitOr,
+	parser.ABitXor:      OpBitXor,
+	parser.ABitLsh:      OpBitLsh,
+	parser.ABitRsh:      OpBitRsh,
+	parser.ABitURsh:     OpBitURsh,
+	parser.AStore:       OpStore,
+	parser.ALoad:        OpLoad,
+	parser.ALen:         OpLen,
+	parser.APatchVararg: OpPatchVararg,
+	parser.AAddrOf:      OpAddressOf,
+	parser.AInc:         OpInc,
+	parser.ASetB:        OpSetB,
+	parser.AGetB:        OpGetB,
 }
 
-func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node) (err error) {
-	tmp := []uint16{}
-	getAddr := func(n *parser.Node) (uint16, error) {
+func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node) {
+	var tmp []uint16
+	getAddr := func(n *parser.Node) uint16 {
 		switch n.Type() {
-		case parser.Ncompound:
-			code, addr, err := table.compileCompoundInto(n, true, 0)
-			if err != nil {
-				return 0, err
-			}
+		case parser.Ncomplex:
+			code, addr := table.compileNodeInto(n, true, 0)
 			buf.Write(code)
 			tmp = append(tmp, addr)
-			return addr, nil
+			return addr
 		case parser.Natom:
-			addr, ok := table.get(n.Value.(parser.Atom))
-			if !ok {
-				return 0, fmt.Errorf(errUndeclaredVariable, n)
-			}
-			return addr, nil
+			return table.get(n.Value.(parser.Atom))
 		case parser.Nnumber, parser.Nstring:
-			return table.loadK(buf, n.Value), nil
+			return table.loadK(n.Value)
 		case parser.Naddr:
-			return n.Value.(uint16), nil
+			return n.Value.(uint16)
 		default:
-			panic(fmt.Errorf("unknown type: %d", n.Type()))
+			panicf("writeOpcode: shouldn't happend: unknown type: %v", n.TypeName())
+			return 0
 		}
 	}
 
-	defer func() {
-		for _, tmp := range tmp {
-			table.returnAddress(tmp)
-		}
-	}()
+	defer table.returnAddresses(tmp)
 
 	if n0 == nil {
 		buf.WriteOP(op, 0, 0)
-		return nil
+		return
 	}
 
-	n0a, err := getAddr(n0)
-	if err != nil {
-		return err
-	}
-
+	n0a := getAddr(n0)
 	if n1 == nil {
 		buf.WriteOP(op, n0a, 0)
-		return nil
+		return
 	}
 
-	n1a, err := getAddr(n1)
-	if err != nil {
-		return err
-	}
-
+	n1a := getAddr(n1)
 	if op == OpSet && n0a == n1a {
-		return nil
+		return
 	}
-
 	buf.WriteOP(op, n0a, n1a)
-	return nil
 }
 
-func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, existedVar uint16) (code packet, yx uint16, err error) {
+func (table *symtable) compileNodeInto(compound *parser.Node, newVar bool, existedVar uint16) (code packet, yx uint16) {
 	buf := newpacket()
 
 	var newYX uint16
-	code, newYX, err = table.compileCompound(compound)
-	if err != nil {
-		return
-	}
+	code, newYX = table.compileNode(compound)
 
 	buf.Write(code)
 	if newVar {
@@ -253,103 +279,75 @@ func (table *symtable) compileCompoundInto(compound *parser.Node, newVar bool, e
 	}
 
 	buf.WriteOP(OpSet, yx, newYX)
-	return buf, yx, nil
+	return buf, yx
 }
 
-func (table *symtable) compileNode(n *parser.Node) (code packet, yx uint16, err error) {
-	var varIndex uint16
-
-	switch n.Type() {
-	case parser.Natom:
-		var ok bool
-		varIndex, ok = table.get(n.Value.(parser.Atom))
-		if !ok {
-			err = fmt.Errorf(errUndeclaredVariable, n)
-			return
-		}
+func (table *symtable) compileNode(node *parser.Node) (code packet, yx uint16) {
+	switch node.Type() {
 	case parser.Naddr:
-		varIndex = n.Value.(uint16)
+		return code, node.Value.(uint16)
 	case parser.Nstring, parser.Nnumber:
-		varIndex = table.loadK(nil, n.Value)
-	default:
-		code, yx, err = table.compileCompound(n)
-		if err != nil {
-			return
-		}
-		varIndex = yx
+		return code, table.loadK(node.Value)
+	case parser.Natom:
+		return code, table.get(node.A())
 	}
-	return code, varIndex, nil
-}
 
-func (table *symtable) compileCompound(compound *parser.Node) (code packet, yx uint16, err error) {
-	nodes := compound.C()
+	nodes := node.C()
 	if len(nodes) == 0 {
-		return newpacket(), regA, nil
+		return newpacket(), regA
 	}
 	name, ok := nodes[0].Value.(parser.Atom)
 	if !ok {
 		nodes[0].Dump(os.Stderr)
-		panicf("invalid op: %v", nodes)
+		panicf("compileNode: shouldn't happend: invalid op: %v", nodes)
 	}
 
 	switch name {
-	case parser.AChain:
-		code, yx, err = table.compileChainOp(compound)
+	case parser.ADoBlock, parser.AChain:
+		code, yx = table.compileChainOp(node)
 	case parser.ASet, parser.AMove:
-		code, yx, err = table.compileSetOp(nodes)
+		code, yx = table.compileSetOp(nodes)
 	case parser.AReturn:
-		code, yx, err = table.writeOpcode3(OpRet, nodes)
+		code, yx = table.writeOpcode3(OpRet, nodes)
 	case parser.AYield:
 		table.y = true
-		code, yx, err = table.writeOpcode3(OpYield, nodes)
+		code, yx = table.writeOpcode3(OpYield, nodes)
 	case parser.AIf:
-		code, yx, err = table.compileIfOp(nodes)
+		code, yx = table.compileIfOp(nodes)
 	case parser.AFor:
-		code, yx, err = table.compileWhileOp(nodes)
+		code, yx = table.compileWhileOp(nodes)
 	case parser.AContinue, parser.ABreak:
-		code, yx, err = table.compileContinueBreakOp(nodes)
+		code, yx = table.compileContinueBreakOp(nodes)
 	case parser.ACall:
-		code, yx, err = table.compileCallOp(nodes)
-	case parser.AStruct, parser.AArray, parser.AStructNil:
-		code, yx, err = table.compileMapArrayOp(nodes)
+		code, yx = table.compileCallOp(nodes)
+	case parser.AHash, parser.AHashArray, parser.AArray:
+		code, yx = table.compileHashArrayOp(nodes)
 	case parser.AOr, parser.AAnd:
-		code, yx, err = table.compileAndOrOp(nodes)
+		code, yx = table.compileAndOrOp(nodes)
 	case parser.AFunc:
-		code, yx, err = table.compileLambdaOp(nodes)
+		code, yx = table.compileLambdaOp(nodes)
 	default:
 		if _, ok := flatOpMapping[name]; ok {
 			return table.compileFlatOp(nodes)
 		}
-		log.Println(nodes)
-		panic(name)
+		panicf("compileNode: shouldn't happen: unknown symbol: %s", name)
 	}
 	return
 }
 
-func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint16, err error) {
-	buf := newpacket()
-
-	for _, a := range chain.C() {
-		if a.Type() != parser.Ncompound {
-			continue
-		}
-		code, yx, err = table.compileCompound(a)
-		if err != nil {
-			return
-		}
-		buf.Write(code)
-	}
-
-	//log.Println(table.vp)
-
-	return buf, yx, err
-}
-
-func compileNode(n *parser.Node) (cls *Closure, err error) {
+func compileNodeTopLevel(n *parser.Node) (cls *Closure, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			cls = nil
-			err = fmt.Errorf("recovered panic: %v, from: %s", r, debug.Stack())
+			if err, _ = r.(error); err == nil {
+				err = fmt.Errorf("recovered panic: %v", r)
+			}
+			if os.Getenv("PL_STACK") != "" {
+				log.Println(string(debug.Stack()))
+			}
+		}
+		if os.Getenv("PL_STACK") != "" {
+			log.Println(n)
 		}
 	}()
 
@@ -362,19 +360,17 @@ func compileNode(n *parser.Node) (cls *Closure, err error) {
 	}
 
 	table.vp = uint16(len(table.sym))
-	code, _, err := table.compileChainOp(n)
-	if err != nil {
-		return nil, err
-	}
-
+	code, _ := table.compileNode(n)
 	code.WriteOP(OpEOB, 0, 0)
 	consts := make([]Value, len(table.consts))
 	for i, k := range table.consts {
 		switch k := k.(type) {
 		case float64:
-			consts[i] = NewNumberValue(k)
+			consts[i] = Num(k)
 		case string:
-			consts[i] = NewStringValue(k)
+			consts[i] = Str(k)
+		case bool:
+			consts[i] = Bln(k)
 		}
 	}
 	cls = NewClosure(code.data, consts, nil, 0)
@@ -396,7 +392,7 @@ func LoadFile(path string) (*Closure, error) {
 		return nil, err
 	}
 	// n.Dump(os.Stderr)
-	return compileNode(n)
+	return compileNodeTopLevel(n)
 }
 
 func LoadString(code string) (*Closure, error) {
@@ -410,5 +406,5 @@ func loadStringName(code, name string) (*Closure, error) {
 		return nil, err
 	}
 	// n.Dump(os.Stderr)
-	return compileNode(n)
+	return compileNodeTopLevel(n)
 }

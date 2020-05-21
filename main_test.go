@@ -89,11 +89,11 @@ func TestArithmeticUnfold(t *testing.T) {
 		t.Error(err)
 	}
 
-	if len(cls.ConstTable) != 1 || cls.ConstTable[0].AsNumber() != 2.5 {
+	if len(cls.ConstTable) != 1 || cls.ConstTable[0].Num() != 2.5 {
 		t.Error("unfolding failed")
 	}
 
-	if v, _ := cls.Exec(nil); v.AsNumber() != 2.5 {
+	if v, _ := cls.Exec(nil); v.Num() != 2.5 {
 		t.Error("exec failed")
 	}
 }
@@ -120,7 +120,7 @@ func TestRegisterOptimzation(t *testing.T) {
 	// But after the if block, there is another c = a + b, we can't re-use the registers R0 and R1
 	// because they will not contain the value we want as the if block was not executed at all.
 
-	if n, _ := cls.Exec(nil); n.AsNumber() != 3 {
+	if n, _ := cls.Exec(nil); n.Num() != 3 {
 		t.Error("exec failed:", n, cls)
 	}
 }
@@ -133,7 +133,7 @@ func TestArithmeticNAN(t *testing.T) {
 		t.Error(err)
 	}
 
-	if v, _ := cls.Exec(nil); !math.IsNaN(v.AsNumber()) {
+	if v, _ := cls.Exec(nil); !math.IsNaN(v.Num()) {
 		t.Error("wrong answer")
 	}
 }

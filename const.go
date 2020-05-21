@@ -1,22 +1,23 @@
 package potatolang
 
+import "fmt"
+
 const (
 	regA   uint16 = 0x1fff // full 13 bits
 	regNil uint16 = 0x3ff - 1
 )
 
-type (
-	_Opcode byte
-)
+type _Opcode byte
 
 const (
 	_ _Opcode = iota
 	OpSet
-	OpSetFromAB
+	OpGetB
 	OpSetB
 	OpStore
 	OpLoad
 	OpAdd
+	OpConcat
 	OpSub
 	OpMul
 	OpDiv
@@ -36,21 +37,27 @@ const (
 	OpIf
 	OpIfNot
 	OpJmp
-	OpMakeStruct
-	OpMakeSlice
+	OpMakeHash
+	OpMakeArray
 	OpLambda
 	OpPush
 	OpPush2
-	OpPushVararg
 	OpCall
 	OpRet
 	OpYield
-	OpSlice
 	OpLen
-	OpCopyStack
-	OpStructKey
-	OpTypeof
+	OpPatchVararg
 	OpAddressOf
 	OpNOP
 	OpEOB
 )
+
+func panicerr(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+func panicf(msg string, args ...interface{}) {
+	panic(fmt.Errorf(msg, args...))
+}
