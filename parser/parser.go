@@ -1195,13 +1195,13 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line parser.go.y:290
 		{
-			yyVAL.expr = NewNode(AMove)
+			yyVAL.expr = NewNode(AMove).SetPos(yyDollar[1].token)
 		}
 	case 39:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line parser.go.y:293
 		{
-			yyVAL.expr = NewNode(ASet)
+			yyVAL.expr = NewNode(ASet).SetPos(yyDollar[1].token)
 		}
 	case 40:
 		yyDollar = yyS[yypt-5 : yypt+1]

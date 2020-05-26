@@ -53,7 +53,7 @@ func (env *Env) Set(index int, value Value) {
 // Clear clears the current stack
 func (env *Env) Clear() {
 	env.stack = env.stack[:0]
-	env.A, env.B = Value{}, Value{}
+	env.A, env.B, env.Vararg = Value{}, Value{}, nil
 }
 
 // Push pushes a value into the current stack

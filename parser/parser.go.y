@@ -288,10 +288,10 @@ elseif_stat:
 
 func:
         TFunc {
-            $$ = NewNode(AMove)
+            $$ = NewNode(AMove).SetPos($1)
         } |
         TLocal TFunc {
-            $$ = NewNode(ASet)
+            $$ = NewNode(ASet).SetPos($1)
         }
 
 func_stat:

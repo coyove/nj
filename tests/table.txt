@@ -42,7 +42,7 @@ function t.__index (t, i)
 end
 
 a.parent = {z=25, x=12, [4] = 24}
-assert(a[0] == 10 and a.z == 28 and a[4] == 27 and a.x == "10")
+assert(a[1] == 10 and a.z == 28 and a[4] == 27 and a.x == "10")
 
 collectgarbage()
 
@@ -106,7 +106,7 @@ t.__call = f
 
 do
   local x,y = a(unpack({'a', 1}))
-  assert(x==a and y[0]=='a' and y[1]==1)
+  assert(x==a and y[1]=='a' and y[2]==1)
   x,y = a()
   assert(x==a)
 end

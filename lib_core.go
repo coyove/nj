@@ -101,14 +101,14 @@ func initCoreLibs() {
 	CoreLibs["closure"] = Tab(lclosure)
 	CoreLibs["unpack"] = NewNativeValue(1, true, func(env *Env) {
 		a := env.In(0, TAB).Tab().a
-		start, end := 0, len(a)
+		start, end := 1, len(a)
 		if len(env.Vararg) > 0 {
 			start = int(env.Vararg[0].Expect(NUM).Num())
 		}
 		if len(env.Vararg) > 1 {
 			end = int(env.Vararg[1].Expect(NUM).Num())
 		}
-		env.A = newUnpackedValue(a[start:end])
+		env.A = newUnpackedValue(a[start-1 : end])
 	})
 	CoreLibs["setmetatable"] = NewNativeValue(2, false, func(env *Env) {
 		t := env.In(0, TAB).Tab()
@@ -167,7 +167,7 @@ func initCoreLibs() {
 				if t.a[idx].IsNil() {
 					goto AGAIN
 				}
-				env.A, env.B = Num(float64(idx)), t.a[idx]
+				env.A, env.B = Num(float64(idx)+1), t.a[idx]
 			}
 		})
 	})

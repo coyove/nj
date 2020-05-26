@@ -36,17 +36,14 @@ func (t *Table) Put(k, v Value, raw bool) {
 	if k.Type() == NUM {
 		idx := k.Num()
 		if float64(int(idx)) == idx {
-			if idx >= 0 && int(idx) < len(t.a) {
-				t.a[int(idx)] = v
+			if idx >= 1 && int(idx) <= len(t.a) {
+				t.a[int(idx)-1] = v
 				if v.IsNil() {
-					if int(idx) == len(t.a)-1 {
-						t.a = t.a[:len(t.a)-1]
-					}
 					t.Compact()
 				}
 				return
 			}
-			if int(idx) == len(t.a) {
+			if int(idx) == len(t.a)+1 {
 				if !raw && t.mt != nil && !t.mt.__newindex().IsNil() {
 					t.newindex(k, v)
 					return
@@ -99,8 +96,8 @@ func (t *Table) Get(k Value, raw bool) (v Value) {
 	if k.Type() == NUM {
 		idx := k.Num()
 		if float64(int(idx)) == idx {
-			if idx >= 0 && int(idx) < len(t.a) {
-				return t.a[int(idx)]
+			if idx >= 1 && int(idx) <= len(t.a) {
+				return t.a[int(idx)-1]
 			}
 		}
 	}
@@ -113,7 +110,7 @@ func (t *Table) Get(k Value, raw bool) (v Value) {
 		case TAB:
 			return ni.Tab().Get(k, false)
 		default:
-			panicf("invalid __newindex")
+			panicf("invalid __index")
 		}
 	}
 	return t.m[key]
@@ -227,15 +224,15 @@ func (iter *TableMapIterator) Key() Value {
 func (t *Table) String() string {
 	p := bytes.NewBufferString("{")
 	for i := range t.a {
-		p.WriteString(fmt.Sprintf("[%d]=%v,", i, t.a[i].toString(0, true)))
+		p.WriteString(fmt.Sprintf("[%d]=%v,", i+1, t.a[i].toString(0, true)))
 	}
 	for k, v := range t.m {
 		if k.g.v == STR {
-			p.WriteString(fmt.Sprintf("%v=%v,", k.str, v))
+			p.WriteString(fmt.Sprintf("[%q]=%v,", k.str, v))
 		} else if k.g.Type() == NUM {
 			p.WriteString(fmt.Sprintf("[%v]=%v,", k.g, v.toString(0, true)))
 		} else {
-			p.WriteString(fmt.Sprintf("%v=%v,", k.g, v))
+			p.WriteString(fmt.Sprintf("[%v]=%v,", k.g, v))
 		}
 	}
 	if p.Bytes()[p.Len()-1] == ',' {
