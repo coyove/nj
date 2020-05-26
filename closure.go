@@ -13,33 +13,33 @@ const (
 )
 
 type Closure struct {
-	Code        []uint32
-	Pos         posVByte
-	source      []byte
-	ConstTable  []Value
-	Env         *Env
-	ParamsCount byte
-	options     byte
-	lastp       uint32
-	lastenv     *Env
-	native      func(env *Env)
+	Code       []uint32
+	Pos        posVByte
+	source     []byte
+	ConstTable []Value
+	Env        *Env
+	NumParam   byte
+	options    byte
+	lastp      uint32
+	lastenv    *Env
+	native     func(env *Env)
 }
 
 // NewClosure creates a new closure
 func NewClosure(code []uint32, consts []Value, env *Env, paramsCount byte) *Closure {
 	return &Closure{
-		Code:        code,
-		ConstTable:  consts,
-		Env:         env,
-		ParamsCount: paramsCount,
+		Code:       code,
+		ConstTable: consts,
+		Env:        env,
+		NumParam:   paramsCount,
 	}
 }
 
 // NewNativeValue creates a native function in potatolang
 func NewNativeValue(paramsCount int, vararg bool, f func(env *Env)) Value {
 	cls := &Closure{
-		ParamsCount: byte(paramsCount),
-		native:      f,
+		NumParam: byte(paramsCount),
+		native:   f,
 	}
 	cls.Set(ClsNative)
 	if vararg {
@@ -68,7 +68,7 @@ func (c *Closure) Dup() *Closure {
 
 func (c *Closure) String() string {
 	if c.native != nil {
-		return fmt.Sprintf("<native%d>", c.ParamsCount)
+		return fmt.Sprintf("<native%d>", c.NumParam)
 	}
 	p := "closure"
 	if c.Is(ClsNoEnvescape) {
@@ -80,7 +80,7 @@ func (c *Closure) String() string {
 		hash = hash*31 + v
 	}
 
-	x := fmt.Sprintf("<%s%d_%x_%dk", p, c.ParamsCount, hash/65536, len(c.ConstTable))
+	x := fmt.Sprintf("<%s%d_%x_%dk", p, c.NumParam, hash/65536, len(c.ConstTable))
 	if c.Is(ClsYieldable) {
 		x += "_y"
 	}
@@ -122,16 +122,16 @@ func (c *Closure) Exec(newEnv *Env) (Value, Value) {
 
 	// Check vararg
 	if c.Is(ClsVararg) {
-		if len(newEnv.stack) > int(c.ParamsCount) {
-			v := newEnv.stack[c.ParamsCount]
+		if len(newEnv.stack) > int(c.NumParam) {
+			v := newEnv.stack[c.NumParam]
 			if v.Type() == UPK {
-				if len(newEnv.stack) != int(c.ParamsCount)+1 {
+				if len(newEnv.stack) != int(c.NumParam)+1 {
 					panicf("unpacked values should be the last arguments")
 				}
 				newEnv.Vararg = v.asUnpacked()
 			} else {
-				newEnv.Vararg = newEnv.stack[c.ParamsCount:]
-				newEnv.stack = newEnv.stack[:c.ParamsCount]
+				newEnv.Vararg = newEnv.stack[c.NumParam:]
+				newEnv.stack = newEnv.stack[:c.NumParam]
 			}
 		}
 	}
@@ -141,14 +141,14 @@ func (c *Closure) Exec(newEnv *Env) (Value, Value) {
 }
 
 func (c *Closure) Call(a ...Value) (Value, Value) {
-	if len(a) != int(c.ParamsCount) {
-		if !(c.Is(ClsVararg) && len(a) > int(c.ParamsCount)) {
-			panicf("expect at least %d arguments (got %d)", c.ParamsCount, len(a))
+	if len(a) != int(c.NumParam) {
+		if !(c.Is(ClsVararg) && len(a) > int(c.NumParam)) {
+			panicf("expect at least %d arguments (got %d)", c.NumParam, len(a))
 		}
 	}
 	newEnv := NewEnv(c.Env)
 	for i := range a {
-		newEnv.LocalPush(a[i])
+		newEnv.Push(a[i])
 	}
 	return c.Exec(newEnv)
 }

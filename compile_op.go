@@ -155,7 +155,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	buf = table.collapse(atoms[1:], true)
 
 	switch bop {
-	case OpGetB:
+	case OpGetB, OpPatchVararg:
 		buf.WriteOP(bop, 0, 0)
 	case OpAddressOf:
 		yx := table.get(atoms[1].A())
@@ -166,7 +166,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 			table.put(atoms[1].A(), yx)
 		}
 		buf.WriteOP(bop, yx, 0)
-	case OpNot, OpRet, OpYield, OpLen, OpPatchVararg, OpSetB:
+	case OpNot, OpRet, OpYield, OpLen, OpSetB:
 		// unary op
 		table.writeOpcode(&buf, bop, atoms[1], nil)
 	default:
@@ -287,7 +287,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 				parser.CompNode(
 					parser.ASet,
 					parser.Atom("arg"),
-					parser.CompNode(parser.APatchVararg, parser.NewNode(uint16(i))).SetPos0(atoms[0]),
+					parser.CompNode(parser.APatchVararg).SetPos0(atoms[0]),
 				).SetPos0(atoms[0]),
 				atoms[3],
 			)
@@ -312,7 +312,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	code.WriteOP(OpEOB, 0, 0)
 	buf := newpacket()
 	cls := Closure{}
-	cls.ParamsCount = byte(ln)
+	cls.NumParam = byte(ln)
 	if newtable.y {
 		cls.Set(ClsYieldable)
 	}
@@ -358,8 +358,8 @@ func init() {
 // [continue | break]
 func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet, yx uint16) {
 	buf := newpacket()
-	if !table.inloop {
-		panicf("%#v: invalid statement outside a for loop", atoms[0])
+	if table.inloop == 0 {
+		panicf("%#v: invalid statement outside loop", atoms[0])
 	}
 
 	if atoms[0].Value.(parser.Atom) == parser.AContinue {
@@ -374,11 +374,11 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uint16) {
 	buf := newpacket()
 
-	table.inloop = true
+	table.inloop++
 	table.addMaskedSymTable()
 	code, yx = table.compileNode(atoms[1])
 	table.removeMaskedSymTable()
-	table.inloop = false
+	table.inloop--
 
 	buf.Write(code)
 	buf.WriteJmpOP(OpJmp, 0, -code.Len()-1)

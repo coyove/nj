@@ -28,31 +28,30 @@ func fmtPrint(flag byte) func(env *Env) {
 	}
 }
 
-//
-// func fmtSprint(flag byte) func(env *Env) Value {
-// 	return func(env *Env) Value {
-// 		args := make([]interface{}, env.LocalSize())
-// 		for i := range args {
-// 			args[i] = env.LocalGet(i).AsInterface()
-// 		}
-// 		var n string
-// 		switch flag {
-// 		case 'l':
-// 			n = fmt.Sprintln(args...)
-// 		case 'f':
-// 			n = fmt.Sprintf(args[0].(string), args[1:]...)
-// 		default:
-// 			n = fmt.Sprint(args...)
-// 		}
-// 		return Str(n)
-// 	}
-// }
-//
+func fmtSprint(flag byte) func(env *Env) {
+	return func(env *Env) {
+		args := make([]interface{}, len(env.Vararg))
+		for i := range args {
+			args[i] = env.Vararg[i].Any()
+		}
+		var n string
+		switch flag {
+		case 'l':
+			n = fmt.Sprintln(args...)
+		case 'f':
+			n = fmt.Sprintf(env.Get(0).Expect(STR).Str(), args...)
+		default:
+			n = fmt.Sprint(args...)
+		}
+		env.A = Str(n)
+	}
+}
+
 // func fmtFprint(flag byte) func(env *Env) Value {
 // 	return func(env *Env) Value {
-// 		args := make([]interface{}, env.LocalSize())
+// 		args := make([]interface{}, env.Size())
 // 		for i := range args {
-// 			args[i] = env.LocalGet(i).AsInterface()
+// 			args[i] = env.Get(i).AsInterface()
 // 		}
 // 		var n int
 // 		var err error
@@ -82,9 +81,9 @@ func fmtPrint(flag byte) func(env *Env) {
 // 			start = 2
 // 		}
 //
-// 		receivers := make([]interface{}, env.LocalSize())
+// 		receivers := make([]interface{}, env.Size())
 // 		for i := start; i < len(receivers); i++ {
-// 			switch LoadPointerUnsafe(env.LocalGet(i)).Type() {
+// 			switch LoadPointerUnsafe(env.Get(i)).Type() {
 // 			case STR:
 // 				receivers[i] = new(string)
 // 			case NUM:
@@ -101,30 +100,30 @@ func fmtPrint(flag byte) func(env *Env) {
 // 		case "scanln":
 // 			n, err = fmt.Scanln(receivers...)
 // 		case "scanf":
-// 			n, err = fmt.Scanf(string(env.LocalGet(0).MustString()), receivers[1:]...)
+// 			n, err = fmt.Scanf(string(env.Get(0).MustString()), receivers[1:]...)
 // 		case "scan":
 // 			n, err = fmt.Scan(receivers...)
 // 		case "sscanln":
-// 			n, err = fmt.Sscanln(string(env.LocalGet(0).MustString()), receivers[1:]...)
+// 			n, err = fmt.Sscanln(string(env.Get(0).MustString()), receivers[1:]...)
 // 		case "sscanf":
-// 			n, err = fmt.Sscanf(string(env.LocalGet(0).MustString()), string(env.LocalGet(1).MustString()), receivers[2:]...)
+// 			n, err = fmt.Sscanf(string(env.Get(0).MustString()), string(env.Get(1).MustString()), receivers[2:]...)
 // 		case "sscan":
-// 			n, err = fmt.Sscan(string(env.LocalGet(0).MustString()), receivers[1:]...)
+// 			n, err = fmt.Sscan(string(env.Get(0).MustString()), receivers[1:]...)
 // 		case "fscan":
-// 			n, err = fmt.Fscan(env.LocalGet(0).AsInterface().(io.Reader), receivers[1:]...)
+// 			n, err = fmt.Fscan(env.Get(0).AsInterface().(io.Reader), receivers[1:]...)
 // 		case "fscanln":
-// 			n, err = fmt.Fscanln(env.LocalGet(0).AsInterface().(io.Reader), receivers[1:]...)
+// 			n, err = fmt.Fscanln(env.Get(0).AsInterface().(io.Reader), receivers[1:]...)
 // 		case "fscanf":
-// 			n, err = fmt.Fscanf(env.LocalGet(0).AsInterface().(io.Reader), string(env.LocalGet(1).MustString()), receivers[1:]...)
+// 			n, err = fmt.Fscanf(env.Get(0).AsInterface().(io.Reader), string(env.Get(1).MustString()), receivers[1:]...)
 // 		}
 //
 // 		if err == nil {
 // 			for i := start; i < len(receivers); i++ {
 // 				switch v := receivers[i].(type) {
 // 				case *float64:
-// 					StorePointerUnsafe(env.LocalGet(i), Num(*v))
+// 					StorePointerUnsafe(env.Get(i), Num(*v))
 // 				case *string:
-// 					StorePointerUnsafe(env.LocalGet(i), Str(*v))
+// 					StorePointerUnsafe(env.Get(i), Str(*v))
 // 				}
 // 			}
 // 		}
@@ -139,12 +138,12 @@ func fmtPrint(flag byte) func(env *Env) {
 // func fmtWrite(env *Env) Value {
 // 	var n int
 // 	var err error
-// 	f := env.LocalGet(0).AsInterface().(io.Writer)
+// 	f := env.Get(0).AsInterface().(io.Writer)
 //
-// 	for i := 1; i < env.LocalSize(); i++ {
-// 		switch a := env.LocalGet(i); a.Type() {
+// 	for i := 1; i < env.Size(); i++ {
+// 		switch a := env.Get(i); a.Type() {
 // 		case STR:
-// 			n, err = f.Write([]byte(env.LocalGet(i).Str()))
+// 			n, err = f.Write([]byte(env.Get(i).Str()))
 // 		default:
 // 			panicf("stdWrite can't write: %+v", a)
 // 		}
@@ -218,7 +217,7 @@ func fmtPrint(flag byte) func(env *Env) {
 // }
 //
 // func jsonUnmarshal(env *Env) Value {
-// 	json := []byte(strings.TrimSpace(env.LocalGet(0).MustString()))
+// 	json := []byte(strings.TrimSpace(env.Get(0).MustString()))
 // 	if len(json) == 0 {
 // 		return Value{}
 // 	}
@@ -230,49 +229,48 @@ func fmtPrint(flag byte) func(env *Env) {
 // 	case '"':
 // 		str, err := jsonparser.ParseString(json)
 // 		if err != nil {
-// 			StorePointerUnsafe(env.LocalGet(1), Str(err.Error()))
+// 			StorePointerUnsafe(env.Get(1), Str(err.Error()))
 // 		}
 // 		return Str(str)
 // 	case 't', 'f':
 // 		b, err := jsonparser.ParseBoolean(json)
 // 		if err != nil {
-// 			StorePointerUnsafe(env.LocalGet(1), Str(err.Error()))
+// 			StorePointerUnsafe(env.Get(1), Str(err.Error()))
 // 		}
 // 		return Bln(b)
 // 	default:
 // 		num, err := jsonparser.ParseFloat(json)
 // 		if err != nil {
-// 			StorePointerUnsafe(env.LocalGet(1), Str(err.Error()))
+// 			StorePointerUnsafe(env.Get(1), Str(err.Error()))
 // 		}
 // 		return Num(num)
 // 	}
 // }
 //
 // func strconvFormatFloat(env *Env) Value {
-// 	v := env.LocalGet(0).MustNumber()
-// 	base := byte(env.LocalGet(1).MustNumber())
-// 	digits := int(env.LocalGet(2).MustNumber())
+// 	v := env.Get(0).MustNumber()
+// 	base := byte(env.Get(1).MustNumber())
+// 	digits := int(env.Get(2).MustNumber())
 // 	return Str(strconv.FormatFloat(v, byte(base), digits, 64))
 // }
 //
 // func strconvFormatInt(env *Env) Value {
-// 	return Str(strconv.FormatInt(int64(env.LocalGet(0).MustNumber()), int(env.LocalGet(1).MustNumber())))
+// 	return Str(strconv.FormatInt(int64(env.Get(0).MustNumber()), int(env.Get(1).MustNumber())))
 // }
 //
 // func strconvParseFloat(env *Env) Value {
-// 	v, err := strconv.ParseFloat(string(env.LocalGet(0).MustString()), 64)
+// 	v, err := strconv.ParseFloat(string(env.Get(0).MustString()), 64)
 // 	if err != nil {
-// 		StorePointerUnsafe(env.LocalGet(1), Str(err.Error()))
+// 		StorePointerUnsafe(env.Get(1), Str(err.Error()))
 // 	}
 // 	return Num(v)
 // }
 //
 // func stringsIndex(env *Env) Value {
-// 	return Num(float64(strings.Index(env.LocalGet(0).MustString(), env.LocalGet(1).MustString())))
+// 	return Num(float64(strings.Index(env.Get(0).MustString(), env.Get(1).MustString())))
 // }
 
 func initLibAux() {
-	// 	lfmt.Put("Print", NewNativeValue(0, fmtPrint(0)))
 	// 	lfmt.Put("Printf", NewNativeValue(1, fmtPrint('f')))
 	// 	lfmt.Put("Sprintln", NewNativeValue(0, fmtSprint('l')))
 	// 	lfmt.Put("Sprint", NewNativeValue(0, fmtSprint(0)))
@@ -300,7 +298,7 @@ func initLibAux() {
 	//
 	// 	ljson := NewStruct()
 	// 	ljson.Put("Unmarshal", NewNativeValue(1, jsonUnmarshal))
-	// 	ljson.Put("Marshal", NewNativeValue(1, func(env *Env) Value { return Str(env.LocalGet(0).toString(0, true)) }))
+	// 	ljson.Put("Marshal", NewNativeValue(1, func(env *Env) Value { return Str(env.Get(0).toString(0, true)) }))
 	// 	CoreLibs["json"] = NewStructValue(ljson)
 	//
 	// 	lstrconv := NewStruct()
@@ -309,7 +307,7 @@ func initLibAux() {
 	// 	lstrconv.Put("FormatInt", NewNativeValue(2, strconvFormatInt))
 	// 	CoreLibs["strconv"] = NewStructValue(lstrconv)
 	//
-	// 	lstrings := NewStruct()
-	// 	lstrings.Put("Index", NewNativeValue(2, stringsIndex))
-	// 	CoreLibs["strings"] = NewStructValue(lstrconv)
+	lstring := &Table{}
+	lstring.Puts("format", NewNativeValue(1, true, fmtSprint('f')), false)
+	CoreLibs["string"] = Tab(lstring)
 }

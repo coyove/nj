@@ -34,37 +34,37 @@ func (env *Env) grow(newSize int) {
 	env.stack = s[:newSize]
 }
 
-// LocalGet gets a value from the current stack
-func (env *Env) LocalGet(index int) Value {
+// Get gets a value from the current stack
+func (env *Env) Get(index int) Value {
 	if index >= len(env.stack) {
 		return Value{}
 	}
 	return env.stack[index]
 }
 
-// LocalSet sets a value in the current stack
-func (env *Env) LocalSet(index int, value Value) {
+// Set sets a value in the current stack
+func (env *Env) Set(index int, value Value) {
 	if index >= len(env.stack) {
 		env.grow(index + 1)
 	}
 	env.stack[index] = value
 }
 
-// LocalClear clears the current stack
-func (env *Env) LocalClear() {
+// Clear clears the current stack
+func (env *Env) Clear() {
 	env.stack = env.stack[:0]
 	env.A, env.B = Value{}, Value{}
 }
 
-// LocalPush pushes a value into the current stack
-func (env *Env) LocalPush(v Value) {
+// Push pushes a value into the current stack
+func (env *Env) Push(v Value) {
 	// e.stack.Add(v)
 	ln := len(env.stack)
 	env.grow(ln + 1)
 	env.stack[ln] = v
 }
 
-func (env *Env) LocalSize() int {
+func (env *Env) Size() int {
 	//if env == nil {
 	//	return 0
 	//}
@@ -82,7 +82,7 @@ func (env *Env) SetParent(parent *Env) {
 // go:noescape
 // func envGet(env *Env, yx uint16, K *Closure) Value
 
-func (env *Env) Get(yx uint16, cls *Closure) (zzz Value) {
+func (env *Env) _get(yx uint16, cls *Closure) (zzz Value) {
 	if yx == regA {
 		return env.A
 	}
@@ -105,7 +105,7 @@ REPEAT:
 	return Value{}
 }
 
-func (env *Env) Set(yx uint16, v Value) {
+func (env *Env) _set(yx uint16, v Value) {
 	if yx == regA {
 		env.A = v
 	} else {
@@ -129,7 +129,7 @@ func (env *Env) Stack() []Value {
 }
 
 func (env *Env) In(i int, expectedType byte) Value {
-	v := env.LocalGet(i)
+	v := env.Get(i)
 	if v.Type() != expectedType {
 		panicf("argument #%d: expect %q, got %+v", i, typeMappings[expectedType], v)
 	}

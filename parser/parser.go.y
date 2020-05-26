@@ -23,8 +23,9 @@ import "math/rand"
 %type<expr> if_stat
 %type<expr> elseif_stat
 %type<expr> jmp_stat
-%type<expr> func_stat
 %type<expr> flow_stat
+%type<expr> func
+%type<expr> func_stat
 %type<expr> function
 %type<expr> func_params_list
 %type<expr> table_gen
@@ -218,7 +219,7 @@ for_stat:
                                     __inc(forVar, oneNode),
                                 ),
                             ).
-                            __else(breakNode).pos0($1),
+                            __else(CompNode(ABreak).pos0($1)).pos0($1),
                         ),
                     ).pos0($1),
                 )
@@ -285,20 +286,28 @@ elseif_stat:
             $$ = __if($2).__then($4).__else($5).pos0($1)
         }
 
+func:
+        TFunc {
+            $$ = NewNode(AMove)
+        } |
+        TLocal TFunc {
+            $$ = NewNode(ASet)
+        }
+
 func_stat:
-        TFunc TIdent func_params_list stats TEnd {
+        func TIdent func_params_list stats TEnd {
             funcname := ANode($2)
             $$ = __chain(
-                __set(funcname, nilNode).pos0($2), 
+                opSetMove($1)(funcname, nilNode).pos0($2), 
                 __move(funcname, __func($3).__body($4).pos0($2)).pos0($2),
             )
         } |
-        TFunc TIdent '.' TIdent func_params_list stats TEnd {
+        func TIdent '.' TIdent func_params_list stats TEnd {
             $$ = __store(
                 ANode($2), NewNode($4.Str), __func($5).__body($6).pos0($2),
             ).pos0($2) 
         } |
-        TFunc TIdent ':' TIdent func_params_list stats TEnd {
+        func TIdent ':' TIdent func_params_list stats TEnd {
             paramlist := $5.Cprepend(ANodeS("self"))
             $$ = __store(
                 ANode($2), NewNode($4.Str), __func(paramlist).__body($6).pos0($2),
@@ -306,7 +315,7 @@ func_stat:
         }
 
 function:
-        TFunc func_params_list stats TEnd %prec FUNC {
+        func func_params_list stats TEnd %prec FUNC {
             $$ = __func($2).__body($3).pos0($1).SetPos($1) 
         }
 

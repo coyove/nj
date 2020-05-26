@@ -40,4 +40,4 @@ for i=1,N do
   vBv = vBv + ui*vi
   vv = vv + vi*vi
 end
-io.write(string.format("%0.9f\n", math.sqrt(vBv / vv)))
+print(string.format("%0.9f\n", math.sqrt(vBv / vv)))

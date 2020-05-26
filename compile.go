@@ -29,7 +29,7 @@ type symtable struct {
 
 	y         bool // has yield op
 	envescape bool
-	inloop    bool
+	inloop    int
 
 	vp uint16
 
@@ -355,8 +355,8 @@ func compileNodeTopLevel(n *parser.Node) (cls *Closure, err error) {
 
 	coreStack := NewEnv(nil)
 	for n, v := range CoreLibs {
-		table.put(parser.Atom(n), uint16(coreStack.LocalSize()))
-		coreStack.LocalPush(v)
+		table.put(parser.Atom(n), uint16(coreStack.Size()))
+		coreStack.Push(v)
 	}
 
 	table.vp = uint16(len(table.sym))

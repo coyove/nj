@@ -111,7 +111,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result, resultB Value, nex
 				recycledStacks = append(recycledStacks, stackEnv)
 			}
 			stackEnv = env
-			stackEnv.LocalClear()
+			stackEnv.Clear()
 		}
 		// log.Println(unsafe.Pointer(&stackEnv.stack))
 		env = r.env
@@ -133,16 +133,16 @@ MAIN:
 			break MAIN
 		case OpNOP:
 		case OpSet:
-			env.Set(opa, env.Get(opb, K))
+			env._set(opa, env._get(opb, K))
 		case OpGetB:
 			env.A = env.B
 		case OpSetB:
-			env.B = env.Get(opa, K)
+			env.B = env._get(opa, K)
 		case OpInc:
-			env.A = Num(env.Get(opa, K).Expect(NUM).Num() + env.Get(opb, K).Expect(NUM).Num())
-			env.Set(opa, env.A)
+			env.A = Num(env._get(opa, K).Expect(NUM).Num() + env._get(opb, K).Expect(NUM).Num())
+			env._set(opa, env.A)
 		case OpConcat:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case _StringString:
 				env.A = Str(va.Str() + vb.Str())
 			default:
@@ -153,7 +153,7 @@ MAIN:
 				}
 			}
 		case OpAdd:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A = Num(va.Num() + vb.Num())
 			default:
@@ -164,7 +164,7 @@ MAIN:
 				}
 			}
 		case OpSub:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A = Num(va.Num() - vb.Num())
 			default:
@@ -175,7 +175,7 @@ MAIN:
 				}
 			}
 		case OpMul:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A = Num(va.Num() * vb.Num())
 			default:
@@ -186,7 +186,7 @@ MAIN:
 				}
 			}
 		case OpDiv:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A = Num(va.Num() / vb.Num())
 			default:
@@ -197,7 +197,7 @@ MAIN:
 				}
 			}
 		case OpMod:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A = Num(math.Remainder(va.Num(), vb.Num()))
 			default:
@@ -208,11 +208,11 @@ MAIN:
 				}
 			}
 		case OpEq:
-			env.A = Bln(env.Get(opa, K).Equal(env.Get(opb, K)))
+			env.A = Bln(env._get(opa, K).Equal(env._get(opb, K)))
 		case OpNeq:
-			env.A = Bln(!env.Get(opa, K).Equal(env.Get(opb, K)))
+			env.A = Bln(!env._get(opa, K).Equal(env._get(opb, K)))
 		case OpLess:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A = Bln(va.Num() < vb.Num())
 			case _StringString:
@@ -227,7 +227,7 @@ MAIN:
 				panicf("can't apply '<' on %#v and %#v", va, vb)
 			}
 		case OpLessEq:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A = Bln(va.Num() <= vb.Num())
 			case _StringString:
@@ -242,55 +242,55 @@ MAIN:
 				panicf("can't apply '<=' on %#v and %#v", va, vb)
 			}
 		case OpNot:
-			env.A = Bln(env.Get(opa, K).IsFalse())
+			env.A = Bln(env._get(opa, K).IsFalse())
 		case OpBitAnd:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A = Num(float64(va.Int() & vb.Int()))
 			default:
-				panicf("can't apply '&' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '&' on %#v and %#v", env._get(opa, K), env._get(opb, K))
 			}
 		case OpBitOr:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A = Num(float64(va.Int() | vb.Int()))
 			default:
-				panicf("can't apply '|' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '|' on %#v and %#v", env._get(opa, K), env._get(opb, K))
 			}
 		case OpBitXor:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A = Num(float64(va.Int() ^ vb.Int()))
 			default:
-				panicf("can't apply '^' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '^' on %#v and %#v", env._get(opa, K), env._get(opb, K))
 			}
 		case OpBitLsh:
-			switch va, vb := env.Get(opa, K), env.Get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case _NumberNumber:
 				env.A = Num(float64(va.Int() << uint(vb.Num())))
 			default:
-				panicf("can't apply '<<' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '<<' on %#v and %#v", env._get(opa, K), env._get(opb, K))
 			}
 		case OpBitRsh:
-			if va, vb := env.Get(opa, K), env.Get(opb, K); va.Type()+vb.Type() == _NumberNumber {
+			if va, vb := env._get(opa, K), env._get(opb, K); va.Type()+vb.Type() == _NumberNumber {
 				env.A = Num(float64(va.Int() >> uint(vb.Num())))
 			} else {
-				panicf("can't apply '>>' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '>>' on %#v and %#v", env._get(opa, K), env._get(opb, K))
 			}
 		case OpBitURsh:
-			if va, vb := env.Get(opa, K), env.Get(opb, K); va.Type()+vb.Type() == _NumberNumber {
+			if va, vb := env._get(opa, K), env._get(opb, K); va.Type()+vb.Type() == _NumberNumber {
 				env.A = Num(float64(uint32(uint64(va.Num())&math.MaxUint32) >> uint(vb.Num())))
 			} else {
-				panicf("can't apply '>>>' on %#v and %#v", env.Get(opa, K), env.Get(opb, K))
+				panicf("can't apply '>>>' on %#v and %#v", env._get(opa, K), env._get(opb, K))
 			}
 		case OpLen:
-			switch v := env.Get(opa, K); v.Type() {
+			switch v := env._get(opa, K); v.Type() {
 			case STR:
 				env.A = Num(float64(len(v.Str())))
 			case TAB:
 				env.A = Num(float64(v.Tab().Len()))
 			case FUN:
-				env.A = Num(float64(v.Fun().ParamsCount))
+				env.A = Num(float64(v.Fun().NumParam))
 			default:
 				panicf("can't evaluate the length of %#v", v)
 			}
@@ -304,10 +304,10 @@ MAIN:
 				} else {
 					m = &Table{}
 				}
-				for i := 0; i < stackEnv.LocalSize(); i += 2 {
+				for i := 0; i < stackEnv.Size(); i += 2 {
 					m.Put(stackEnv.stack[i], stackEnv.stack[i+1], true)
 				}
-				stackEnv.LocalClear()
+				stackEnv.Clear()
 				env.A = Tab(m)
 			}
 		case OpMakeArray:
@@ -322,11 +322,11 @@ MAIN:
 						m.a = append(m.a, v)
 					}
 				}
-				stackEnv.LocalClear()
+				stackEnv.Clear()
 				env.A = Tab(m)
 			}
 		case OpStore:
-			subject, v := env.Get(opa, K), env.Get(opb, K)
+			subject, v := env._get(opa, K), env._get(opb, K)
 			switch subject.Type() {
 			case TAB:
 				subject.Tab().Put(env.A, v, false)
@@ -334,7 +334,7 @@ MAIN:
 				switch env.A.Type() {
 				case NUM:
 					x := math.Float64bits(env.A.Num())
-					(*Env)(unsafe.Pointer(uintptr(x<<16>>16))).Set(uint16(x>>48), v)
+					(*Env)(unsafe.Pointer(uintptr(x<<16>>16)))._set(uint16(x>>48), v)
 				case NIL:
 					// ignore
 				default:
@@ -345,8 +345,8 @@ MAIN:
 			}
 			env.A = v
 		case OpLoad:
-			a := env.Get(opa, K)
-			idx := env.Get(opb, K)
+			a := env._get(opa, K)
+			idx := env._get(opb, K)
 			switch a.Type() {
 			case TAB:
 				env.A = a.Tab().Get(idx, false)
@@ -357,26 +357,26 @@ MAIN:
 			if stackEnv == nil {
 				stackEnv = NewEnv(nil)
 			}
-			stackEnv.LocalPush(env.Get(opa, K))
+			stackEnv.Push(env._get(opa, K))
 		case OpPush2:
 			if stackEnv == nil {
 				stackEnv = NewEnv(nil)
 			}
-			stackEnv.LocalPush(env.Get(opa, K))
-			stackEnv.LocalPush(env.Get(opb, K))
+			stackEnv.Push(env._get(opa, K))
+			stackEnv.Push(env._get(opb, K))
 		case OpRet:
-			v := env.Get(opa, K)
+			v := env._get(opa, K)
 			if len(retStack) == 0 {
 				return v, env.B, 0, false
 			}
 			returnUpperWorld(v)
 		case OpYield:
-			return env.Get(opa, K), env.B, cursor, true
+			return env._get(opa, K), env.B, cursor, true
 		case OpLambda:
 			env.A = Fun(crReadClosure(K.Code, &cursor, env, opa, opb))
 		case OpCall:
 			var cls *Closure
-			switch a := env.Get(opa, K); a.Type() {
+			switch a := env._get(opa, K); a.Type() {
 			case FUN:
 				cls = a.Fun()
 			case TAB:
@@ -399,9 +399,9 @@ MAIN:
 					stackEnv = NewEnv(env)
 				}
 
-				if stackEnv.LocalSize() != int(cls.ParamsCount) {
-					if !(cls.Is(ClsVararg) && stackEnv.LocalSize() > int(cls.ParamsCount)) {
-						panicf("expect at least %d arguments (got %d)", cls.ParamsCount, stackEnv.LocalSize())
+				if stackEnv.Size() != int(cls.NumParam) {
+					if !(cls.Is(ClsVararg) && stackEnv.Size() > int(cls.NumParam)) {
+						panicf("expect %d arguments (got %d)", cls.NumParam, stackEnv.Size())
 					}
 				}
 
@@ -433,33 +433,32 @@ MAIN:
 						recycledStacks = recycledStacks[:len(recycledStacks)-1]
 					}
 				} else {
-					stackEnv.LocalClear()
+					stackEnv.Clear()
 				}
 			}
 
 		case OpJmp:
 			cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 		case OpIfNot:
-			if cond := env.Get(opa, K); cond.IsFalse() {
+			if cond := env._get(opa, K); cond.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
 		case OpIf:
-			if cond := env.Get(opa, K); !cond.IsFalse() {
+			if cond := env._get(opa, K); !cond.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
 		case OpPatchVararg:
-			ret := &Table{} // a: make([]Value, len(env.stack)-int(opa))}
-			for i := 0; i < int(opa); i++ {
-				v := env.stack[i]
+			ret := &Table{}
+			for i, v := range env.stack {
 				if v.Type() == UPK {
-					panicf("hint: misuse of unpack, cannot call f(unpack({a, ...})) on f(a, ...)")
-				}
-			}
-			for i := int(opa); i < len(env.stack); i++ {
-				v := env.stack[i]
-				if v.Type() == UPK {
+					if i != len(env.stack)-1 {
+						panicf("misuse of unpack(...): it should be the last argument")
+					}
 					ret.a = v.asUnpacked()
-				} else {
+					env.stack = env.stack[:len(env.stack)-1]
+					break
+				}
+				if i >= int(K.NumParam) {
 					ret.a = append(ret.a, v)
 				}
 			}
