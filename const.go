@@ -28,12 +28,7 @@ const (
 	OpNeq
 	OpLess
 	OpLessEq
-	OpBitAnd
-	OpBitOr
-	OpBitXor
-	OpBitLsh
-	OpBitRsh
-	OpBitURsh
+	OpPow
 	OpIf
 	OpIfNot
 	OpJmp

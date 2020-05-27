@@ -17,7 +17,7 @@ copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+FITNESS FOR Sym PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
@@ -31,6 +31,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"unicode"
@@ -324,7 +325,7 @@ var reservedWords = map[string]uint32{
 	"not":      TNot,
 	"len":      TLen,
 	"return":   TReturn,
-	"import":   TImport,
+	"require":  TImport,
 	"typeof":   TTypeof,
 	"for":      TFor,
 	"while":    TWhile,
@@ -449,15 +450,6 @@ redo:
 				tok.Type = TLte
 				tok.Str = "<="
 				sc.Next()
-			} else if sc.Peek() == '<' {
-				tok.Type = TLsh
-				tok.Str = "<<"
-				sc.Next()
-				if sc.Peek() == '=' {
-					tok.Type = TLshEq
-					tok.Str = "<<="
-					sc.Next()
-				}
 			} else {
 				tok.Type = ch
 				tok.Str = string(ch)
@@ -467,25 +459,6 @@ redo:
 				tok.Type = TGte
 				tok.Str = ">="
 				sc.Next()
-			} else if sc.Peek() == '>' {
-				tok.Type = TRsh
-				tok.Str = ">>"
-				sc.Next()
-				switch sc.Peek() {
-				case '>':
-					tok.Type = TURsh
-					tok.Str = ">>>"
-					sc.Next()
-					if sc.Peek() == '=' {
-						tok.Type = TURshEq
-						tok.Str = ">>>="
-						sc.Next()
-					}
-				case '=':
-					tok.Type = TRshEq
-					tok.Str = ">>="
-					sc.Next()
-				}
 			} else {
 				tok.Type = ch
 				tok.Str = string(ch)
@@ -522,10 +495,10 @@ redo:
 				tok.Type = ch
 				tok.Str = ":"
 			}
-		case '+', '*', '/', '%', '&', '|', '^':
+		case '+', '*', '/', '%':
 			switch sc.Peek() {
 			case '=':
-				tok.Type = [...]uint32{TAddEq, TMulEq, TDivEq, TModEq, TBitAndEq, TBitOrEq, TXorEq}[strings.Index("+*/%&|^", string(ch))]
+				tok.Type = [...]uint32{TAddEq, TMulEq, TDivEq, TModEq}[strings.Index("+*/%", string(ch))]
 				tok.Str = string(ch) + "="
 				sc.Next()
 			default:
@@ -587,6 +560,9 @@ func parse(reader io.Reader, name string, cache map[string]*Node, loop string) (
 		cache:   cache,
 	}
 	defer func() {
+		if os.Getenv("PL_STACK") != "" {
+			return
+		}
 		if e := recover(); e != nil {
 			err = fmt.Errorf("%v", e)
 		}

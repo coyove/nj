@@ -143,69 +143,45 @@ MAIN:
 			env._set(opa, env.A)
 		case OpConcat:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _StringString:
+			case StrStr:
 				env.A = Str(va.Str() + vb.Str())
 			default:
-				if va.Type() == TAB {
-					env.A, _ = va.Tab().__must("__concat").Call(va, vb)
-				} else {
-					panicf("can't apply '..' on %#v and %#v", va, vb)
-				}
+				env.A, env.B = va.DummyTable().mm("__concat").ExpectMsg(FUN, "operator ..").Fun().Call(va, vb)
 			}
 		case OpAdd:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumberNumber:
+			case NumNum:
 				env.A = Num(va.Num() + vb.Num())
 			default:
-				if va.Type() == TAB {
-					env.A, _ = va.Tab().__must("__add").Call(va, vb)
-				} else {
-					panicf("can't apply '+' on %#v and %#v", va, vb)
-				}
+				env.A, env.B = va.DummyTable().mm("__add").ExpectMsg(FUN, "operator +").Fun().Call(va, vb)
 			}
 		case OpSub:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumberNumber:
+			case NumNum:
 				env.A = Num(va.Num() - vb.Num())
 			default:
-				if va.Type() == TAB {
-					env.A, _ = va.Tab().__must("__sub").Call(va, vb)
-				} else {
-					panicf("can't apply '-' on %#v and %#v", va, vb)
-				}
+				env.A, env.B = va.DummyTable().mm("__sub").ExpectMsg(FUN, "operator -").Fun().Call(va, vb)
 			}
 		case OpMul:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumberNumber:
+			case NumNum:
 				env.A = Num(va.Num() * vb.Num())
 			default:
-				if va.Type() == TAB {
-					env.A, _ = va.Tab().__must("__mul").Call(va, vb)
-				} else {
-					panicf("can't apply '*' on %#v and %#v", va, vb)
-				}
+				env.A, env.B = va.DummyTable().mm("__mul").ExpectMsg(FUN, "operator *").Fun().Call(va, vb)
 			}
 		case OpDiv:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumberNumber:
+			case NumNum:
 				env.A = Num(va.Num() / vb.Num())
 			default:
-				if va.Type() == TAB {
-					env.A, _ = va.Tab().__must("__div").Call(va, vb)
-				} else {
-					panicf("can't apply '/' on %#v and %#v", va, vb)
-				}
+				env.A, env.B = va.DummyTable().mm("__div").ExpectMsg(FUN, "operator /").Fun().Call(va, vb)
 			}
 		case OpMod:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumberNumber:
+			case NumNum:
 				env.A = Num(math.Remainder(va.Num(), vb.Num()))
 			default:
-				if va.Type() == TAB {
-					env.A, _ = va.Tab().__must("__mod").Call(va, vb)
-				} else {
-					panicf("can't apply '%%' on %#v and %#v", va, vb)
-				}
+				env.A, env.B = va.DummyTable().mm("__mod").ExpectMsg(FUN, "operator %").Fun().Call(va, vb)
 			}
 		case OpEq:
 			env.A = Bln(env._get(opa, K).Equal(env._get(opb, K)))
@@ -213,86 +189,51 @@ MAIN:
 			env.A = Bln(!env._get(opa, K).Equal(env._get(opb, K)))
 		case OpLess:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumberNumber:
+			case NumNum:
 				env.A = Bln(va.Num() < vb.Num())
-			case _StringString:
+			case StrStr:
 				env.A = Bln(va.Str() < vb.Str())
-			case _TableTable:
-				if alt, blt := va.Tab().__must("__lt"), vb.Tab().__must("__lt"); alt != blt {
-					panicf("%#v and %#v have different __lt methods", va, vb)
-				} else {
-					env.A, _ = alt.Call(va, vb)
-				}
 			default:
-				panicf("can't apply '<' on %#v and %#v", va, vb)
+				env.A, env.B = va.DummyTable().mm("__lt").ExpectMsg(FUN, "operator <").Fun().Call(va, vb)
 			}
 		case OpLessEq:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumberNumber:
+			case NumNum:
 				env.A = Bln(va.Num() <= vb.Num())
-			case _StringString:
+			case StrStr:
 				env.A = Bln(va.Str() <= vb.Str())
-			case _TableTable:
-				if alt, blt := va.Tab().__must("__le"), vb.Tab().__must("__le"); alt != blt {
-					panicf("%#v and %#v have different __le methods", va, vb)
-				} else {
-					env.A, _ = alt.Call(va, vb)
-				}
 			default:
-				panicf("can't apply '<=' on %#v and %#v", va, vb)
+				env.A, env.B = va.DummyTable().mm("__le").ExpectMsg(FUN, "operator <=").Fun().Call(va, vb)
 			}
 		case OpNot:
 			env.A = Bln(env._get(opa, K).IsFalse())
-		case OpBitAnd:
+		case OpPow:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumberNumber:
-				env.A = Num(float64(va.Int() & vb.Int()))
+			case NumNum:
+				a, b := va.Num(), vb.Num()
+				if a == 2 && b > 0 && float64(int(b)) == b {
+					env.A = Num(float64(uint(2) << uint(b-1)))
+				} else {
+					env.A = Num(math.Pow(a, b))
+				}
 			default:
-				panicf("can't apply '&' on %#v and %#v", env._get(opa, K), env._get(opb, K))
-			}
-		case OpBitOr:
-			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumberNumber:
-				env.A = Num(float64(va.Int() | vb.Int()))
-			default:
-				panicf("can't apply '|' on %#v and %#v", env._get(opa, K), env._get(opb, K))
-			}
-		case OpBitXor:
-			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumberNumber:
-				env.A = Num(float64(va.Int() ^ vb.Int()))
-			default:
-				panicf("can't apply '^' on %#v and %#v", env._get(opa, K), env._get(opb, K))
-			}
-		case OpBitLsh:
-			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumberNumber:
-				env.A = Num(float64(va.Int() << uint(vb.Num())))
-			default:
-				panicf("can't apply '<<' on %#v and %#v", env._get(opa, K), env._get(opb, K))
-			}
-		case OpBitRsh:
-			if va, vb := env._get(opa, K), env._get(opb, K); va.Type()+vb.Type() == _NumberNumber {
-				env.A = Num(float64(va.Int() >> uint(vb.Num())))
-			} else {
-				panicf("can't apply '>>' on %#v and %#v", env._get(opa, K), env._get(opb, K))
-			}
-		case OpBitURsh:
-			if va, vb := env._get(opa, K), env._get(opb, K); va.Type()+vb.Type() == _NumberNumber {
-				env.A = Num(float64(uint32(uint64(va.Num())&math.MaxUint32) >> uint(vb.Num())))
-			} else {
-				panicf("can't apply '>>>' on %#v and %#v", env._get(opa, K), env._get(opb, K))
+				env.A, env.B = va.DummyTable().mm("__pow").ExpectMsg(FUN, "operator ^").Fun().Call(va, vb)
 			}
 		case OpLen:
 			switch v := env._get(opa, K); v.Type() {
 			case STR:
 				env.A = Num(float64(len(v.Str())))
 			case TAB:
-				env.A = Num(float64(v.Tab().Len()))
+				t := v.Tab()
+				if t.mm("__len").Type() == FUN {
+					env.A, env.B = t.mm("__len").Fun().Call(v)
+				} else {
+					env.A = Num(float64(t.Len()))
+				}
 			case FUN:
 				env.A = Num(float64(v.Fun().NumParam))
 			default:
-				panicf("can't evaluate the length of %#v", v)
+				env.A, env.B = v.DummyTable().mm("__len").ExpectMsg(FUN, "operator #").Fun().Call(v)
 			}
 		case OpMakeHash:
 			if stackEnv == nil {
@@ -341,17 +282,15 @@ MAIN:
 					panicf("%#v: address[] = value, not an address", env.A)
 				}
 			default:
-				panicf("can't modify %#v[%#v] to %#v", subject, env.A, v)
+				env.A, env.B = subject.DummyTable().mm("__newindex").ExpectMsg(FUN, "store").Fun().Call(subject, env.A, v)
 			}
 			env.A = v
 		case OpLoad:
-			a := env._get(opa, K)
-			idx := env._get(opb, K)
-			switch a.Type() {
+			switch a, idx := env._get(opa, K), env._get(opb, K); a.Type() {
 			case TAB:
 				env.A = a.Tab().Get(idx, false)
 			default:
-				panicf("can't load %#v[%#v]", a, idx)
+				env.A, env.B = a.DummyTable().mm("__index").ExpectMsg(FUN, "load").Fun().Call(a, idx)
 			}
 		case OpPush:
 			if stackEnv == nil {
@@ -379,17 +318,9 @@ MAIN:
 			switch a := env._get(opa, K); a.Type() {
 			case FUN:
 				cls = a.Fun()
-			case TAB:
-				if t := a.Tab(); t.mt != nil {
-					if call := t.mt.Gets("__call", false); call.Type() == FUN {
-						cls = call.Fun()
-						stackEnv.stack = append([]Value{a}, stackEnv.stack...)
-						break
-					}
-				}
-				fallthrough
 			default:
-				panicf("try to call: %#v", a)
+				cls = a.DummyTable().mm("__call").ExpectMsg(FUN, "invoke").Fun()
+				stackEnv.stack = append([]Value{a}, stackEnv.stack...)
 			}
 			if cls.lastenv != nil {
 				env.A, env.B = cls.Exec(nil)

@@ -5,19 +5,7 @@ import (
 	"strconv"
 )
 
-var CoreLibs = map[string]Value{}
-
-// AddCoreValue adds a value to the core libraries
-// duplicated name will result in panicking
-func AddCoreValue(name string, value Value) {
-	if name == "" {
-		return
-	}
-	if CoreLibs[name].Type() != NIL {
-		panicf("core value %s already exists", name)
-	}
-	CoreLibs[name] = value
-}
+var G = &Table{}
 
 func initCoreLibs() {
 	lclosure := &Table{}
@@ -25,6 +13,7 @@ func initCoreLibs() {
 		cls := env.In(0, FUN).Fun().Dup()
 		env.A = Fun(cls)
 	}), false)
+	G.Puts("closure", Tab(lclosure), false)
 	// 	lcore.Put("Safe", NewNativeValue(1, func(env *Env) Value {
 	// 		cls := env.Get(0).MustClosure()
 	// 		cls._set(ClsRecoverable)
@@ -80,26 +69,36 @@ func initCoreLibs() {
 	// 			m.Put("wait", NewNativeValue(0, func(env *Env) Value { wg.Wait(); return Value{} }))
 	// 			return NewStructValue(m)
 	// 		}))))
-	// 	CoreLibs["std"] = NewStructValue(lcore)
-	CoreLibs["type"] = NewNativeValue(1, false, func(env *Env) {
+	// 	G["std"] = NewStructValue(lcore)
+	ltable := &Table{}
+	ltable.Puts("insert", NewNativeValue(2, true, func(env *Env) {
+		t := env.In(0, TAB).Tab()
+		if len(env.Vararg) > 0 {
+			t.Insert(env.In(1, NUM), env.Vararg[0])
+			env.A = env.Vararg[0]
+		} else {
+			t.Insert(Num(float64(t.Len())), env.Vararg[0])
+		}
+	}), false)
+	G.Puts("table", Tab(ltable), false)
+	G.Puts("type", NewNativeValue(1, false, func(env *Env) {
 		env.A = Str(typeMappings[env.Get(0).Type()])
-	})
-	CoreLibs["rawset"] = NewNativeValue(3, false, func(env *Env) {
+	}), false)
+	G.Puts("rawset", NewNativeValue(3, false, func(env *Env) {
 		env.In(0, TAB).Tab().Put(env.Get(1), env.Get(2), true)
-	})
-	CoreLibs["rawget"] = NewNativeValue(2, false, func(env *Env) {
+	}), false)
+	G.Puts("rawget", NewNativeValue(2, false, func(env *Env) {
 		env.A = env.In(0, TAB).Tab().Get(env.Get(1), true)
-	})
-	CoreLibs["pcall"] = NewNativeValue(1, true, func(env *Env) {
+	}), false)
+	G.Puts("pcall", NewNativeValue(1, true, func(env *Env) {
 		defer func() {
 			if r := recover(); r != nil {
 				env.A, env.B = Value{}, Value{}
 			}
 		}()
 		env.A, env.B = env.In(0, FUN).Fun().Call(env.Vararg...)
-	})
-	CoreLibs["closure"] = Tab(lclosure)
-	CoreLibs["unpack"] = NewNativeValue(1, true, func(env *Env) {
+	}), false)
+	G.Puts("unpack", NewNativeValue(1, true, func(env *Env) {
 		a := env.In(0, TAB).Tab().a
 		start, end := 1, len(a)
 		if len(env.Vararg) > 0 {
@@ -109,10 +108,10 @@ func initCoreLibs() {
 			end = int(env.Vararg[1].Expect(NUM).Num())
 		}
 		env.A = newUnpackedValue(a[start-1 : end])
-	})
-	CoreLibs["setmetatable"] = NewNativeValue(2, false, func(env *Env) {
-		t := env.In(0, TAB).Tab()
-		if t.mt != nil && !t.mt.Gets("__metatable", false).IsNil() {
+	}), false)
+	G.Puts("setmetatable", NewNativeValue(2, false, func(env *Env) {
+		t := env.Get(0).DummyTable()
+		if !t.mm("__metatable").IsNil() {
 			panicf("cannot change protected metatable")
 		}
 		if env.Get(1).IsNil() {
@@ -121,41 +120,47 @@ func initCoreLibs() {
 			t.mt = env.In(1, TAB).Tab()
 		}
 		env.A = env.Get(0)
-	})
-	CoreLibs["getmetatable"] = NewNativeValue(0, true, func(env *Env) {
+	}), false)
+	G.Puts("getmetatable", NewNativeValue(0, true, func(env *Env) {
 		if len(env.Vararg) == 0 {
 			env.A = Value{}
 			return
 		}
-		if t := env.Vararg[0]; t.Type() == TAB {
-			if t := t.Tab().mt; t != nil {
-				if _mt := t.Gets("__metatable", false); !_mt.IsNil() {
-					env.A = _mt
-				} else {
-					env.A = Tab(t)
-				}
-			}
+		t := env.Vararg[0].DummyTable()
+		if mt := t.mm("__metatable"); !mt.IsNil() {
+			env.A = mt
 		} else {
-			env.A = Value{}
+			env.A = Tab(t.mt)
 		}
-	})
-	CoreLibs["assert"] = NewNativeValue(1, false, func(env *Env) {
+	}), false)
+	G.Puts("assert", NewNativeValue(1, false, func(env *Env) {
 		if v := env.Get(0); !v.IsFalse() {
 			return
 		}
 		panic("assertion failed")
-	})
-	CoreLibs["pairs"] = NewNativeValue(1, false, func(env *Env) {
-		iter := env.In(0, TAB).Tab().Iter()
+	}), false)
+	G.Puts("pairs", NewNativeValue(1, false, func(env *Env) {
+		t := env.In(0, TAB).Tab()
+		iter := t.Iter()
+		idx := -1
 		env.A = NewNativeValue(0, false, func(env *Env) {
-			if !iter.Next() {
-				env.A = Value{}
+		AGAIN:
+			idx++
+			if idx >= len(t.a) {
+				if !iter.Next() {
+					env.A, env.B = Value{}, Value{}
+				} else {
+					env.A, env.B = iter.Key(), iter.Value()
+				}
 			} else {
-				env.A, env.B = iter.Key(), iter.Value()
+				if t.a[idx].IsNil() {
+					goto AGAIN
+				}
+				env.A, env.B = Num(float64(idx)+1), t.a[idx]
 			}
 		})
-	})
-	CoreLibs["ipairs"] = NewNativeValue(1, false, func(env *Env) {
+	}), false)
+	G.Puts("ipairs", NewNativeValue(1, false, func(env *Env) {
 		t := env.In(0, TAB).Tab()
 		idx := -1
 		env.A = NewNativeValue(0, false, func(env *Env) {
@@ -170,8 +175,8 @@ func initCoreLibs() {
 				env.A, env.B = Num(float64(idx)+1), t.a[idx]
 			}
 		})
-	})
-	CoreLibs["tostring"] = NewNativeValue(1, false, func(env *Env) {
+	}), false)
+	G.Puts("tostring", NewNativeValue(1, false, func(env *Env) {
 		v := env.Get(0)
 		if v.Type() == TAB && v.Tab().mt != nil {
 			_tostring := v.Tab().mt.Gets("__tostring", false)
@@ -181,8 +186,8 @@ func initCoreLibs() {
 			}
 		}
 		env.A = Str(v.String())
-	})
-	CoreLibs["tonumber"] = NewNativeValue(1, false, func(env *Env) {
+	}), false)
+	G.Puts("tonumber", NewNativeValue(1, false, func(env *Env) {
 		v := env.Get(0)
 		switch v.Type() {
 		case NUM:
@@ -193,11 +198,11 @@ func initCoreLibs() {
 		default:
 			env.A = Value{}
 		}
-	})
-	CoreLibs["collectgarbage"] = NewNativeValue(0, false, func(env *Env) {
+	}), false)
+	G.Puts("collectgarbage", NewNativeValue(0, false, func(env *Env) {
 		runtime.GC()
-	})
-	// 	CoreLibs["copy"] = NewNativeValue(2, func(env *Env) Value {
+	}), false)
+	// 	G["copy"] = NewNativeValue(2, func(env *Env) Value {
 	// 		if env.Size() == 2 {
 	// 			switch v := env.Get(1); v.Type() {
 	// 			case STR:
@@ -218,19 +223,19 @@ func initCoreLibs() {
 	// 		}
 	// 		return env.Get(0).Dup()
 	// 	})
-	// 	CoreLibs["go"] = NewNativeValue(1, func(env *Env) Value {
+	// 	G["go"] = NewNativeValue(1, func(env *Env) Value {
 	// 		cls := env.Get(0).MustClosure()
 	// 		newEnv := NewEnv(cls.Env)
 	// 		newEnv.stack = append([]Value{}, env.stack[1:]...)
 	// 		go cls.Exec(newEnv)
 	// 		return Value{}
 	// 	})
-	// 	CoreLibs["make"] = NewNativeValue(1, func(env *Env) Value {
+	// 	G["make"] = NewNativeValue(1, func(env *Env) Value {
 	// 		return NewSliceValue(NewSliceSize(int(env.Get(0).MustNumber())))
 	// 	})
 	//
 	// 	// chanDefault := NewPointerValue(new(int))
-	// 	//CoreLibs["chan"] = NewStructValue(NewStruct().
+	// 	//G["chan"] = NewStructValue(NewStruct().
 	// 	//	Put("Default", chanDefault).
 	// 	//	Put("Make", NewNativeValue(1, func(env *Env) Value {
 	// 	//		ch := make(chan Value, int(env.Get(0).MustNumber()))
@@ -272,7 +277,7 @@ func initCoreLibs() {
 	// 	// 	return v
 	// 	// })))
 	//
-	// 	CoreLibs["map"] = NewNativeValue(0, func(env *Env) Value {
+	// 	G["map"] = NewNativeValue(0, func(env *Env) Value {
 	// 		var m map[string]Value
 	// 		if env.Size() == 1 {
 	// 			switch a := env.Get(0); a.Type() {

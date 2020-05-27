@@ -288,26 +288,26 @@ func initLibAux() {
 	// 	lfmt.Put("Fscan", NewNativeValue(1, fmtScan("fscan")))
 	// 	lfmt.Put("Fscanf", NewNativeValue(2, fmtScan("fscanf")))
 	// 	lfmt.Put("Write", NewNativeValue(0, fmtWrite))
-	CoreLibs["print"] = NewNativeValue(0, true, fmtPrint('l'))
+	G.Puts("print", NewNativeValue(0, true, fmtPrint('l')), false)
 	//
 	// 	los := NewStruct()
 	// 	los.Put("Stdout", NewInterfaceValue(os.Stdout))
 	// 	los.Put("Stdin", NewInterfaceValue(os.Stdin))
 	// 	los.Put("Stderr", NewInterfaceValue(os.Stderr))
-	// 	CoreLibs["os"] = NewStructValue(los)
+	// 	G["os"] = NewStructValue(los)
 	//
 	// 	ljson := NewStruct()
 	// 	ljson.Put("Unmarshal", NewNativeValue(1, jsonUnmarshal))
 	// 	ljson.Put("Marshal", NewNativeValue(1, func(env *Env) Value { return Str(env.Get(0).toString(0, true)) }))
-	// 	CoreLibs["json"] = NewStructValue(ljson)
+	// 	G["json"] = NewStructValue(ljson)
 	//
 	// 	lstrconv := NewStruct()
 	// 	lstrconv.Put("FormatFloat", NewNativeValue(3, strconvFormatFloat))
 	// 	lstrconv.Put("ParseFloat", NewNativeValue(1, strconvParseFloat))
 	// 	lstrconv.Put("FormatInt", NewNativeValue(2, strconvFormatInt))
-	// 	CoreLibs["strconv"] = NewStructValue(lstrconv)
+	// 	G["strconv"] = NewStructValue(lstrconv)
 	//
 	lstring := &Table{}
 	lstring.Puts("format", NewNativeValue(1, true, fmtSprint('f')), false)
-	CoreLibs["string"] = Tab(lstring)
+	G.Puts("string", Tab(lstring), false)
 }

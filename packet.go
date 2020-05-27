@@ -285,27 +285,22 @@ func crReadBytesLen(data []uint32, length int, cursor *uint32) []byte {
 	return u32Bytes(buf)[:length]
 }
 
-var singleOp = map[_Opcode]string{
-	OpAdd:         "add",
-	OpSub:         "sub",
-	OpMul:         "mul",
-	OpDiv:         "div",
-	OpMod:         "mod",
-	OpEq:          "eq",
-	OpNeq:         "neq",
-	OpLess:        "less",
-	OpLessEq:      "less-eq",
-	OpLen:         "len",
-	OpPatchVararg: "patch-vararg",
-	OpLoad:        "load",
-	OpStore:       "store",
-	OpNot:         "not",
-	OpBitAnd:      "bit-and",
-	OpBitOr:       "bit-or",
-	OpBitXor:      "bit-xor",
-	OpBitLsh:      "bit-lsh",
-	OpBitRsh:      "bit-rsh",
-	OpBitURsh:     "bit-ursh",
+var singleOp = map[_Opcode]parser.Symbol{
+	OpAdd:         parser.AAdd,
+	OpSub:         parser.ASub,
+	OpMul:         parser.AMul,
+	OpDiv:         parser.ADiv,
+	OpMod:         parser.AMod,
+	OpEq:          parser.AEq,
+	OpNeq:         parser.ANeq,
+	OpLess:        parser.ALess,
+	OpLessEq:      parser.ALessEq,
+	OpLen:         parser.ALen,
+	OpPatchVararg: parser.APatchVararg,
+	OpLoad:        parser.ALoad,
+	OpStore:       parser.AStore,
+	OpNot:         parser.ANot,
+	OpPow:         parser.APow,
 }
 
 func (c *Closure) crPrettify(tab int) string {
@@ -412,7 +407,7 @@ MAIN:
 			sb.WriteString("make-array")
 		default:
 			if bs, ok := singleOp[bop]; ok {
-				sb.WriteString(bs + " " + readAddr(a) + " " + readAddr(b))
+				sb.WriteString(string(bs) + " " + readAddr(a) + " " + readAddr(b))
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))
 			}

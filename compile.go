@@ -24,8 +24,8 @@ type symbol struct {
 type symtable struct {
 	// variable name lookup
 	parent    *symtable
-	sym       map[parser.Atom]*symbol
-	maskedSym []map[parser.Atom]*symbol
+	sym       map[parser.Symbol]*symbol
+	maskedSym []map[parser.Symbol]*symbol
 
 	y         bool // has yield op
 	envescape bool
@@ -41,7 +41,7 @@ type symtable struct {
 
 func newsymtable() *symtable {
 	t := &symtable{
-		sym:          make(map[parser.Atom]*symbol),
+		sym:          make(map[parser.Symbol]*symbol),
 		constMap:     make(map[interface{}]uint16),
 		reusableTmps: make(map[uint16]bool),
 	}
@@ -84,7 +84,7 @@ func (table *symtable) returnAddresses(a interface{}) {
 	switch a := a.(type) {
 	case []*parser.Node:
 		for _, n := range a {
-			if n.Type() == parser.Naddr {
+			if n.Type() == parser.ADR {
 				table.returnAddress(n.Value.(uint16))
 			}
 		}
@@ -97,7 +97,7 @@ func (table *symtable) returnAddresses(a interface{}) {
 	}
 }
 
-func (table *symtable) get(varname parser.Atom) uint16 {
+func (table *symtable) get(varname parser.Symbol) uint16 {
 	depth := uint16(0)
 
 	switch varname {
@@ -146,7 +146,7 @@ func (table *symtable) get(varname parser.Atom) uint16 {
 	return regNil
 }
 
-func (table *symtable) put(varname parser.Atom, addr uint16) {
+func (table *symtable) put(varname parser.Symbol, addr uint16) {
 	if addr == regA {
 		panic("debug")
 	}
@@ -166,7 +166,7 @@ func (table *symtable) put(varname parser.Atom, addr uint16) {
 }
 
 func (table *symtable) addMaskedSymTable() {
-	table.maskedSym = append(table.maskedSym, map[parser.Atom]*symbol{})
+	table.maskedSym = append(table.maskedSym, map[parser.Symbol]*symbol{})
 }
 
 func (table *symtable) removeMaskedSymTable() {
@@ -196,7 +196,7 @@ func (table *symtable) loadK(v interface{}) uint16 {
 	return 0x7<<10 | kaddr
 }
 
-var flatOpMapping = map[parser.Atom]_Opcode{
+var flatOpMapping = map[parser.Symbol]_Opcode{
 	parser.AAdd:         OpAdd,
 	parser.AConcat:      OpConcat,
 	parser.ASub:         OpSub,
@@ -208,12 +208,7 @@ var flatOpMapping = map[parser.Atom]_Opcode{
 	parser.AEq:          OpEq,
 	parser.ANeq:         OpNeq,
 	parser.ANot:         OpNot,
-	parser.ABitAnd:      OpBitAnd,
-	parser.ABitOr:       OpBitOr,
-	parser.ABitXor:      OpBitXor,
-	parser.ABitLsh:      OpBitLsh,
-	parser.ABitRsh:      OpBitRsh,
-	parser.ABitURsh:     OpBitURsh,
+	parser.APow:         OpPow,
 	parser.AStore:       OpStore,
 	parser.ALoad:        OpLoad,
 	parser.ALen:         OpLen,
@@ -228,16 +223,16 @@ func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node)
 	var tmp []uint16
 	getAddr := func(n *parser.Node) uint16 {
 		switch n.Type() {
-		case parser.Ncomplex:
+		case parser.CPL:
 			code, addr := table.compileNodeInto(n, true, 0)
 			buf.Write(code)
 			tmp = append(tmp, addr)
 			return addr
-		case parser.Natom:
-			return table.get(n.Value.(parser.Atom))
-		case parser.Nnumber, parser.Nstring:
+		case parser.SYM:
+			return table.get(n.Value.(parser.Symbol))
+		case parser.NUM, parser.STR:
 			return table.loadK(n.Value)
-		case parser.Naddr:
+		case parser.ADR:
 			return n.Value.(uint16)
 		default:
 			panicf("writeOpcode: shouldn't happend: unknown type: %v", n.TypeName())
@@ -284,26 +279,25 @@ func (table *symtable) compileNodeInto(compound *parser.Node, newVar bool, exist
 
 func (table *symtable) compileNode(node *parser.Node) (code packet, yx uint16) {
 	switch node.Type() {
-	case parser.Naddr:
+	case parser.ADR:
 		return code, node.Value.(uint16)
-	case parser.Nstring, parser.Nnumber:
+	case parser.STR, parser.NUM:
 		return code, table.loadK(node.Value)
-	case parser.Natom:
-		return code, table.get(node.A())
+	case parser.SYM:
+		return code, table.get(node.Sym())
 	}
 
-	nodes := node.C()
+	nodes := node.Cpl()
 	if len(nodes) == 0 {
 		return newpacket(), regA
 	}
-	name, ok := nodes[0].Value.(parser.Atom)
+	name, ok := nodes[0].Value.(parser.Symbol)
 	if !ok {
-		nodes[0].Dump(os.Stderr)
 		panicf("compileNode: shouldn't happend: invalid op: %v", nodes)
 	}
 
 	switch name {
-	case parser.ADoBlock, parser.AChain:
+	case parser.ADoBlock, parser.ABegin:
 		code, yx = table.compileChainOp(node)
 	case parser.ASet, parser.AMove:
 		code, yx = table.compileSetOp(nodes)
@@ -347,17 +341,20 @@ func compileNodeTopLevel(n *parser.Node) (cls *Closure, err error) {
 			}
 		}
 		if os.Getenv("PL_STACK") != "" {
-			log.Println(n)
+			n.Dump(os.Stderr, "")
 		}
 	}()
 
 	table := newsymtable()
 
 	coreStack := NewEnv(nil)
-	for n, v := range CoreLibs {
-		table.put(parser.Atom(n), uint16(coreStack.Size()))
+	G.iterStringKeys(func(k string, v Value) {
+		table.put(parser.Symbol(k), uint16(coreStack.Size()))
 		coreStack.Push(v)
-	}
+	})
+
+	table.put(parser.Symbol("_G"), uint16(coreStack.Size()))
+	coreStack.Push(Tab(G))
 
 	table.vp = uint16(len(table.sym))
 	code, _ := table.compileNode(n)

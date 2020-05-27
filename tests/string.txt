@@ -1,15 +1,14 @@
 assert( "abc" == "abc")
 assert( "abc" == "\97\98\99")
 assert( "abc" == "\x61\x62\x63")
-assert( "abc吱吱吱" == "abc" + "吱吱" + "吱")
+local abc = "abc" 
+assert( "abc吱吱吱" == abc .. "吱吱" .. "吱")
 assert( "abc吱吱吱" == "abc\u5431\u5431\u5431")
 
-dupcheck = {97,98,99,32452}
-text = ("abc组织者")[:3]
-for i = range 0, len(text) - 1 assert( dupcheck[i] == text[i])
+setmetatable(0, { __add = function (a, b)
+    return tonumber(a) + tonumber(b)
+end})
 
-assert( itoa(1) == "1")
-assert( itoa(10000000000) == "10000000000")
-assert( strconv.FormatFloat(1, 'f', -1)[0] == '1')
-assert( std.Unicode(strconv.FormatFloat(1, 'f', -1)[0]) == "1")
-assert( std.Unicode('我') == "我")
+assert(1 + "2" == 3)
+
+return {name = abc}

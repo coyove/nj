@@ -27,13 +27,13 @@ const (
 )
 
 const (
-	_NilNil         = NIL * 2
-	_NumberNumber   = NUM * 2
-	_BoolBool       = BLN * 2
-	_StringString   = STR * 2
-	_TableTable     = TAB * 2
-	_ClosureClosure = FUN * 2
-	_AnyAny         = ANY * 2
+	NilNil = NIL * 2
+	NumNum = NUM * 2
+	BlnBln = BLN * 2
+	StrStr = STR * 2
+	TabTab = TAB * 2
+	FunFun = FUN * 2
+	AnyAny = ANY * 2
 )
 
 // Value is the basic value used by VM
@@ -87,6 +87,9 @@ func Bln(b bool) Value {
 
 // Tab returns a map value
 func Tab(m *Table) Value {
+	if m == nil {
+		return Value{}
+	}
 	return Value{v: TAB, p: unsafe.Pointer(m)}
 }
 
@@ -147,9 +150,6 @@ func (v Value) IsNil() bool { return v == Value{} }
 // Num cast value to float64
 func (v Value) Num() float64 { return math.Float64frombits(^v.v) }
 
-// Int cast value to int32
-func (v Value) Int() int32 { return int32(int64(math.Float64frombits(^v.v)) & 0xffffffff) }
-
 // Bln cast value to bool
 func (v Value) Bln() bool { return v.v == 1 }
 
@@ -187,6 +187,13 @@ func (v Value) Expect(t byte) Value {
 	return v
 }
 
+func (v Value) ExpectMsg(t byte, msg string) Value {
+	if v.Type() != t {
+		panicf("%s: expect %s, got %s", msg, typeMappings[t], typeMappings[v.Type()])
+	}
+	return v
+}
+
 func (v Value) String() string { return v.toString(0, false) }
 
 func (v Value) GoString() string { return v.toString(0, true) }
@@ -194,19 +201,22 @@ func (v Value) GoString() string { return v.toString(0, true) }
 // Equal tests whether value is equal to another value
 func (v Value) Equal(r Value) bool {
 	switch v.Type() + r.Type() {
-	case _NumberNumber, _BoolBool, _NilNil:
+	case NumNum, BlnBln, NilNil:
 		return v == r
-	case _StringString:
+	case StrStr:
 		return r.Str() == v.Str()
-	case _AnyAny:
+	case AnyAny:
 		return v.Any() == r.Any()
-	case _TableTable:
-		if eq := v.Tab().Gets("__eq", false); eq.Type() == FUN {
+	case TabTab:
+		if v == r {
+			return true
+		}
+		if eq := v.Tab().mm("__eq"); eq.Type() == FUN {
 			e, _ := eq.Fun().Call(v, r)
 			return !e.IsFalse()
 		}
-		return v == r
-	case _ClosureClosure:
+		return false
+	case FunFun:
 		return v.Fun() == r.Fun()
 	}
 	return false
@@ -247,4 +257,19 @@ func (v Value) toString(lv int, json bool) string {
 		return "null"
 	}
 	return "nil"
+}
+
+func (v Value) DummyTable() *Table {
+	switch t := v.Type(); t {
+	case TAB:
+		return v.Tab()
+	case ANY:
+		i := v.Any()
+		if f, ok := i.(interface{ GetMetatable() *Table }); ok {
+			return &Table{mt: f.GetMetatable()}
+		}
+		return &Table{}
+	default:
+		return DummyTables[t]
+	}
 }

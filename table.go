@@ -6,6 +6,10 @@ import (
 	"reflect"
 )
 
+var DummyTables = map[byte]*Table{
+	STR: &Table{}, NUM: &Table{}, BLN: &Table{}, NIL: &Table{}, FUN: &Table{}, UPK: &Table{},
+}
+
 type tablekey struct {
 	g   Value
 	str string
@@ -24,12 +28,11 @@ func maketk(k Value) tablekey {
 	return tablekey{g: k}
 }
 
-func (t *Table) __index() Value {
-	return t.m[tablekey{str: "__index", g: Value{v: STR}}]
-}
-
-func (t *Table) __newindex() Value {
-	return t.m[tablekey{str: "__newindex", g: Value{v: STR}}]
+func (t *Table) mm(name string) Value {
+	if t == nil || t.mt == nil {
+		return Value{}
+	}
+	return t.mt.m[tablekey{str: name, g: Value{v: STR}}]
 }
 
 func (t *Table) Put(k, v Value, raw bool) {
@@ -44,10 +47,11 @@ func (t *Table) Put(k, v Value, raw bool) {
 				return
 			}
 			if int(idx) == len(t.a)+1 {
-				if !raw && t.mt != nil && !t.mt.__newindex().IsNil() {
+				if !raw && !t.mm("__newindex").IsNil() {
 					t.newindex(k, v)
 					return
 				}
+
 				if !v.IsNil() {
 					t.a = append(t.a, v)
 				}
@@ -61,7 +65,7 @@ func (t *Table) Put(k, v Value, raw bool) {
 		t.m = make(map[tablekey]Value)
 	}
 	key := maketk(k)
-	if !raw && t.mt != nil && !t.mt.__newindex().IsNil() && t.m[key].IsNil() {
+	if !raw && !t.mm("__newindex").IsNil() && t.m[key].IsNil() {
 		t.newindex(k, v)
 		return
 	}
@@ -73,8 +77,24 @@ func (t *Table) Put(k, v Value, raw bool) {
 
 }
 
+func (t *Table) Insert(k, v Value) {
+	if k.Type() == NUM {
+		idx := k.Num()
+		if float64(int(idx)) == idx {
+			if idx >= 1 && int(idx) <= len(t.a) {
+				t.a = append(t.a[:int(idx)-1], append([]Value{v}, t.a[int(idx)-1:]...)...)
+				if v.IsNil() {
+					t.Compact()
+				}
+				return
+			}
+		}
+	}
+	t.Put(k, v, true)
+}
+
 func (t *Table) newindex(k, v Value) {
-	switch ni := t.mt.__newindex(); ni.Type() {
+	switch ni := t.mm("__newindex"); ni.Type() {
 	case FUN:
 		ni.Fun().Call(Tab(t), k, v)
 	case TAB:
@@ -102,8 +122,8 @@ func (t *Table) Get(k Value, raw bool) (v Value) {
 		}
 	}
 	key := maketk(k)
-	if !raw && t.mt != nil && !t.mt.__index().IsNil() && t.m[key].IsNil() {
-		switch ni := t.mt.__index(); ni.Type() {
+	if !raw && !t.mm("__index").IsNil() && t.m[key].IsNil() {
+		switch ni := t.mm("__index"); ni.Type() {
 		case FUN:
 			v, _ = ni.Fun().Call(Tab(t), k)
 			return v
@@ -175,14 +195,6 @@ func (t *Table) Compact() {
 	t.a = t.a[:best.index+1]
 }
 
-func (t *Table) __must(name string) *Closure {
-	v := t.mt.Gets(name, false)
-	if v.Type() != FUN {
-		panicf("invalid %s meta method", name)
-	}
-	return v.Fun()
-}
-
 type TableMapIterator struct {
 	t     *Table
 	miter *reflect.MapIter
@@ -240,4 +252,12 @@ func (t *Table) String() string {
 	}
 	p.WriteString("}")
 	return p.String()
+}
+
+func (t *Table) iterStringKeys(cb func(k string, v Value)) {
+	for k, v := range t.m {
+		if k.g.v == STR {
+			cb(k.str, v)
+		}
+	}
 }

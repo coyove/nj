@@ -33,15 +33,15 @@ import "math/rand"
 %union {
   token Token
   expr  *Node
-  atom  Atom
+  atom  Symbol
 }
 
 /* Reserved words */
 %token<token> TDo TIn TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TIf TLen TReturn TReturnVoid TImport TYield TYieldVoid TRepeat TUntil TNot
 
 /* Literals */
-%token<token> TEqeq TNeq TLsh TRsh TURsh TLte TGte TIdent TNumber TString '{' '[' '('
-%token<token> TAddEq TSubEq TMulEq TDivEq TModEq TBitAndEq TBitOrEq TXorEq TLshEq TRshEq TURshEq
+%token<token> TEqeq TNeq TLte TGte TIdent TNumber TString '{' '[' '('
+%token<token> TAddEq TSubEq TMulEq TDivEq TModEq
 %token<token> TSquare TDotDotDot TDotDot TSet
 
 /* Operators */
@@ -53,8 +53,8 @@ import "math/rand"
 %left TOr
 %left TAnd
 %left '>' '<' TGte TLte TEqeq TNeq
-%left '+' '-' '|' '^' TDotDot
-%left '*' '/' '%' TLsh TRsh TURsh '&'
+%left '+' '-' '^' TDotDot
+%left '*' '/' '%' 
 %right UNARY /* not # -(unary) */
 %right '#'
 %right TTypeof, TLen, TImport
@@ -69,7 +69,7 @@ stats:
             }
         } |
         stats stat {
-            $$ = $1.Cappend($2)
+            $$ = $1.CplAppend($2)
             if l, ok := yylex.(*Lexer); ok {
                 l.Stmts = $$
             }
@@ -92,13 +92,7 @@ _postfix_assign:
         TSubEq         { $$ = ASub } |
         TMulEq         { $$ = AMul } |
         TDivEq         { $$ = ADiv } |
-        TModEq         { $$ = AMod } |
-        TBitAndEq      { $$ = ABitAnd } |
-        TBitOrEq       { $$ = ABitOr } |
-        TXorEq         { $$ = ABitXor } |
-        TLshEq         { $$ = ABitLsh } |
-        TRshEq         { $$ = ABitRsh } |
-        TURshEq        { $$ = ABitURsh }
+        TModEq         { $$ = AMod }
 
 assign_stat:
         prefix_expr {
@@ -108,127 +102,118 @@ assign_stat:
             $$ = $1
         } |
         declarator_list_assign expr_list {
-            nodes := $1.C()
+            nodes := $1.Cpl()
             op := nodes[len(nodes) - 1]
             nodes = nodes[:len(nodes) - 1]
 
-            if len(nodes) == 2 && $2.Cn() == 1 { // local? a, b = c()
-                bb := CompNode(AGetB)
-                if nodes[0].Type() == Natom && nodes[1].Type() == Natom {
+            if len(nodes) == 2 && len($2.Cpl()) == 1 { // local? a, b = c()
+                bb := Cpl(AGetB)
+                if nodes[0].Type() == SYM && nodes[1].Type() == SYM {
                     $$ = __chain(
-                        opSetMove(op)(nodes[0], $2.Cx(0)).pos0($1),
+                        opSetMove(op)(nodes[0], $2.CplIndex(0)).pos0($1),
                         opSetMove(op)(nodes[1], bb).pos0($1),
                     )
                 } else {
                     $$ = __do(
-                        __set("(1)a", $2.Cx(0)).pos0($1),
+                        __set("(1)a", $2.CplIndex(0)).pos0($1),
                         __set("(1)b", bb).pos0($1),
-                        nodes[0].moveLoadStore(__move, ANodeS("(1)a")).pos0(nodes[0]),
-                        nodes[1].moveLoadStore(__move, ANodeS("(1)b")).pos0(nodes[1]),
+                        nodes[0].moveLoadStore(__move, Sym("(1)a")).pos0(nodes[0]),
+                        nodes[1].moveLoadStore(__move, Sym("(1)b")).pos0(nodes[1]),
                     )
                 }
-            } else if len(nodes) != $2.Cn() {
-                panic(&Error{Pos: $2.Position, Message: "unmatched assignments", Token: string(op.A())})
-            } else if op.A() == ASet { // local a0, ..., an = b0, ..., bn
+            } else if len(nodes) != len($2.Cpl()) {
+                panic(&Error{Pos: $2.Position, Message: "unmatched assignments", Token: string(op.Sym())})
+            } else if op.Sym() == ASet { // local a0, ..., an = b0, ..., bn
                 $$ = __chain()
                 for i, v := range nodes {
-                    $$ = $$.Cappend(__set(v, $2.Cx(i)).pos0($1))
+                    $$ = $$.CplAppend(__set(v, $2.CplIndex(i)).pos0($1))
                 }
             } else if head := nodes[0]; len(nodes) == 1 { // a0 = b0
-                $$ = head.moveLoadStore(__move, $2.Cx(0)).pos0($1)
-                if a, s := $2.Cx(0).isSimpleAddSub(); a != "" && a == head.A() {
+                $$ = head.moveLoadStore(__move, $2.CplIndex(0)).pos0($1)
+                if a, s := $2.CplIndex(0).isSimpleAddSub(); a != "" && a == head.Sym() {
                     // Note that a := a + v is different
-                    $$ = __inc(head, NewNumberNode(s)).pos0($1)
+                    $$ = __inc(head, Num(s)).pos0($1)
                 }
             } else { // a0, ..., an = b0, ..., bn
                 $$ = __chain()
                 names := []*Node{}
                 for i := range nodes {
-                    names = append(names, ANodeS("(1)a" + strconv.Itoa(i)))
-                    $$.Cappend(__set(names[i], $2.Cx(i)).pos0($1))
+                    names = append(names, Sym("(1)a" + strconv.Itoa(i)))
+                    $$.CplAppend(__set(names[i], $2.CplIndex(i)).pos0($1))
                 }
                 for i, v := range nodes {
-                    $$.Cappend(v.moveLoadStore(__move, names[i]).pos0($1))
+                    $$.CplAppend(v.moveLoadStore(__move, names[i]).pos0($1))
                 }
             }
         } 
 
 postfix_incdec:
         TIdent _postfix_assign expr %prec ASSIGN  {
-            $$ = __move(ANode($1), CompNode($2, ANode($1).setPos($1), $3)).pos0($1)
+            $$ = __move(SymTok($1), Cpl($2, SymTok($1).pos0($1), $3)).pos0($1)
         } |
         prefix_expr '[' expr ']' _postfix_assign expr %prec ASSIGN {
-            $$ = __store($1, $3, CompNode($5, __load($1, $3).pos0($1), $6).pos0($1))
+            $$ = __store($1, $3, Cpl($5, __load($1, $3).pos0($1), $6).pos0($1))
         } |
         prefix_expr '.' TIdent _postfix_assign expr %prec ASSIGN {
-            $$ = __store($1, NewNode($3.Str), CompNode($4, __load($1, NewNode($3.Str)).pos0($1), $5).pos0($1))
+            $$ = __store($1, Nod($3.Str), Cpl($4, __load($1, Nod($3.Str)).pos0($1), $5).pos0($1))
         }
 
 for_stat:
         TWhile expr TDo stats TEnd {
-            $$ = __for(
-                __chain(
-                    __if($2).__then($4).__else(breakNode).pos0($1),
-                ).pos0($1),
-            ).pos0($1)
+            $$ = __loop(__if($2, $4, breakNode).pos0($1)).pos0($1)
         } |
         TRepeat stats TUntil expr {
-            $$ = __for(
+            $$ = __loop(
                 __chain(
                     $2,
-                    __if($4).__then(breakNode).__else(emptyNode).pos0($1),
+                    __if($4, breakNode, emptyNode).pos0($1),
                 ).pos0($1),
             ).pos0($1)
         } |
         TFor TIdent TIn expr TDo stats TEnd {
             iter := randomVarname()
-            $$ = __chain(
+            $$ = __do(
                 __set(iter, $4).pos0($1),
-                __for(
+                __loop(
                     __chain(
                         __set($2, __call(iter, emptyNode).pos0($1)).pos0($1),
-                        __if($2).__then($6).__else(breakNode).pos0($1),
+                        __if($2, $6, breakNode).pos0($1),
                     ),
                 ).pos0($1),
             )
         } |
         TFor TIdent ',' TIdent TIn expr TDo stats TEnd {
             iter := randomVarname()
-            $$ = __chain(
+            $$ = __do(
                 __set(iter, $6).pos0($1),
-                __for(
+                __loop(
                     __chain(
                         __set($2, __call(iter, emptyNode).pos0($1)).pos0($1),
-                        __set($4, CompNode(AGetB).pos0($1)).pos0($1),
-                        __if($2).__then($8).__else(breakNode).pos0($1),
+                        __set($4, Cpl(AGetB).pos0($1)).pos0($1),
+                        __if($2, $8, breakNode).pos0($1),
                     ),
                 ).pos0($1),
             )
         } |
         TFor TIdent '=' expr ',' expr TDo stats TEnd {
-            forVar, forEnd := ANode($2), randomVarname()
+            forVar, forEnd := SymTok($2), randomVarname()
             $$ = __do(
                     __set(forVar, $4).pos0($1),
                     __set(forEnd, $6).pos0($1),
-                    __for(
-                        __chain(
-                            __if(__lessEq(forVar, forEnd)).
-                            __then(
-                                __chain(
-                                    $8,
-                                    __inc(forVar, oneNode),
-                                ),
-                            ).
-                            __else(CompNode(ABreak).pos0($1)).pos0($1),
-                        ),
+                    __loop(
+                        __if(
+                            __lessEq(forVar, forEnd),
+                            __chain($8, __inc(forVar, oneNode)),
+                            breakNode,
+                        ).pos0($1),
                     ).pos0($1),
                 )
         } |
         TFor TIdent '=' expr ',' expr ',' expr TDo stats TEnd {
-            forVar, forEnd := ANode($2), randomVarname()
-            if $8.Type() == Nnumber { // step is a static number, easy case
+            forVar, forEnd := SymTok($2), randomVarname()
+            if $8.Type() == NUM { // step is a static number, easy case
                 var cond *Node
-                if $8.N() < 0 {
+                if $8.Num() < 0 {
                     cond = __lessEq(forEnd, forVar)
                 } else {
                     cond = __lessEq(forVar, forEnd)
@@ -236,13 +221,13 @@ for_stat:
                 $$ = __do(
                     __set(forVar, $4).pos0($1),
                     __set(forEnd, $6).pos0($1),
-                    __for(
+                    __loop(
                         __chain(
-                            __if(cond).
-                            __then(
+                            __if(
+                                cond,
                                 __chain($10, __inc(forVar, $8)),
-                            ).
-                            __else(breakNode).pos0($1),
+                                breakNode,
+                            ).pos0($1),
                         ),
                     ).pos0($1),
                 )
@@ -252,14 +237,14 @@ for_stat:
                     __set(forVar, $4).pos0($1),
                     __set(forEnd, $6).pos0($1),
                     __set(forStep, $8).pos0($1),
-                    __for(
+                    __loop(
                         __chain(
-                            __if(__less(zeroNode, forStep)).
-                            __then( // +step
-                                __if(__less(forEnd, forVar)).__then(breakNode).__else(emptyNode).pos0($1),
-                            ).
-                            __else( // -step
-                                __if(__less(forVar, forEnd)).__then(breakNode).__else(emptyNode).pos0($1),
+                            __if(
+                                __less(zeroNode, forStep).pos0($1),
+                                // +step
+                                __if(__less(forEnd, forVar), breakNode, emptyNode).pos0($1),
+                                // -step
+                                __if(__less(forVar, forEnd), breakNode, emptyNode).pos0($1),
                             ).pos0($1),
                             $10,
                             __inc(forVar, forStep),
@@ -272,164 +257,158 @@ for_stat:
 
 if_stat:
         TIf expr TThen stats elseif_stat TEnd %prec 'T' {
-            $$ = __if($2).__then($4).__else($5).pos0($1)
+            $$ = __if($2, $4, $5).pos0($1)
         }
 
 elseif_stat:
         {
-            $$ = CompNode()
+            $$ = Cpl()
         } |
         TElse stats {
             $$ = $2
         } |
         TElseIf expr TThen stats elseif_stat {
-            $$ = __if($2).__then($4).__else($5).pos0($1)
+            $$ = __if($2, $4, $5).pos0($1)
         }
 
 func:
         TFunc {
-            $$ = NewNode(AMove).SetPos($1)
+            $$ = Nod(AMove).SetPos($1)
         } |
         TLocal TFunc {
-            $$ = NewNode(ASet).SetPos($1)
+            $$ = Nod(ASet).SetPos($1)
         }
 
 func_stat:
         func TIdent func_params_list stats TEnd {
-            funcname := ANode($2)
+            funcname := SymTok($2)
             $$ = __chain(
                 opSetMove($1)(funcname, nilNode).pos0($2), 
-                __move(funcname, __func($3).__body($4).pos0($2)).pos0($2),
+                __move(funcname, __func($3, $4).pos0($2)).pos0($2),
             )
         } |
         func TIdent '.' TIdent func_params_list stats TEnd {
             $$ = __store(
-                ANode($2), NewNode($4.Str), __func($5).__body($6).pos0($2),
+                SymTok($2), Nod($4.Str), __func($5, $6).pos0($2),
             ).pos0($2) 
         } |
         func TIdent ':' TIdent func_params_list stats TEnd {
-            paramlist := $5.Cprepend(ANodeS("self"))
+            paramlist := $5.CplPrepend(Sym("self"))
             $$ = __store(
-                ANode($2), NewNode($4.Str), __func(paramlist).__body($6).pos0($2),
+                SymTok($2), Nod($4.Str), __func(paramlist, $6).pos0($2),
             ).pos0($2) 
         }
 
 function:
         func func_params_list stats TEnd %prec FUNC {
-            $$ = __func($2).__body($3).pos0($1).SetPos($1) 
+            $$ = __func($2, $3).pos0($1).SetPos($1) 
         }
 
 func_params_list:
-        '(' ')'                           { $$ = CompNode() } |
+        '(' ')'                           { $$ = Cpl() } |
         '(' ident_list ')'                { $$ = $2 }
 
 jmp_stat:
-        TYield expr                       { $$ = CompNode(AYield, $2).pos0($1) } |
-        TYield expr ',' expr              { $$ = __chain(CompNode(ASetB, $4).pos0($1), CompNode(AYield, $2).pos0($1)) } |
-        TYieldVoid                        { $$ = CompNode(AYield, nilNode).pos0($1) } |
-        TBreak                            { $$ = CompNode(ABreak).pos0($1) } |
-        TContinue                         { $$ = CompNode(AContinue).pos0($1) } |
+        TYield expr                       { $$ = Cpl(AYield, $2).pos0($1) } |
+        TYield expr ',' expr              { $$ = __chain(Cpl(ASetB, $4).pos0($1), Cpl(AYield, $2).pos0($1)) } |
+        TYieldVoid                        { $$ = Cpl(AYield, nilNode).pos0($1) } |
+        TBreak                            { $$ = Cpl(ABreak).pos0($1) } |
+        TContinue                         { $$ = Cpl(AContinue).pos0($1) } |
         TReturn expr                      { $$ = __return($2).pos0($1) } |
-        TReturn expr ',' expr             { $$ = __chain(CompNode(ASetB, $4).pos0($1), __return($2).pos0($1)) } |
+        TReturn expr ',' expr             { $$ = __chain(Cpl(ASetB, $4).pos0($1), __return($2).pos0($1)) } |
         TReturnVoid                       { $$ = __return(nilNode).pos0($1) } |
-        TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) }
+        TImport TString                   { $$ = __move(Sym(moduleNameFromPath($2.Str)), yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1)).pos0($1) }
 
 declarator:
-        TIdent                            { $$ = ANode($1).setPos($1) } |
+        TIdent                            { $$ = SymTok($1).SetPos($1) } |
         TIdent TSquare                    { $$ = __load(nilNode, $1).pos0($1) } |
-        prefix_expr '[' expr ']'          { $$ = __load($1, $3).pos0($3).setPos($3) } |
-        prefix_expr '.' TIdent            { $$ = __load($1, NewNode($3.Str)).pos0($3).setPos($3) }
+        prefix_expr '[' expr ']'          { $$ = __load($1, $3).pos0($3).SetPos($3) } |
+        prefix_expr '.' TIdent            { $$ = __load($1, Nod($3.Str)).pos0($3).SetPos($3) }
 
 declarator_list_assign:
-        TLocal _declarator_list_assign    { a := $2.Value.([]*Node); a[len(a)-1] = NewNode(ASet); $$ = $2 } |
+        TLocal _declarator_list_assign    { a := $2.Value.([]*Node); a[len(a)-1] = Nod(ASet); $$ = $2 } |
         _declarator_list_assign           { $$ = $1 }
 
 _declarator_list_assign:
-        declarator '='                    { $$ = CompNode($1, NewNode(AMove)) } |
-        declarator ',' declarator_list_assign { $$ = $3.Cprepend($1) }
+        declarator '='                    { $$ = Cpl($1, Nod(AMove)) } |
+        declarator ',' declarator_list_assign { $$ = $3.CplPrepend($1) }
 
 ident_list:
-        TIdent                            { $$ = CompNode($1.Str) } | 
-        TDotDotDot                        { $$ = CompNode("...") } | 
-        ident_list ',' TIdent             { $$ = $1.Cappend(ANode($3)) } |
-        ident_list ',' TDotDotDot         { $$ = $1.Cappend(ANodeS("...").SetPos($3)) }
+        TIdent                            { $$ = Cpl($1.Str) } | 
+        TDotDotDot                        { $$ = Cpl("...") } | 
+        ident_list ',' TIdent             { $$ = $1.CplAppend(SymTok($3)) } |
+        ident_list ',' TDotDotDot         { $$ = $1.CplAppend(Sym("...").SetPos($3)) }
 
 expr:
-        TNumber                           { $$ = NewNumberNode($1.Str).SetPos($1) } |
+        TNumber                           { $$ = Num($1.Str).SetPos($1) } |
         TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) } |
-        '#' expr                          { $$ = CompNode(ALen, $2) } |
+        '#' expr                          { $$ = Cpl(ALen, $2) } |
         function                          { $$ = $1 } |
-        table_gen                  { $$ = $1 } |
+        table_gen                         { $$ = $1 } |
         prefix_expr                       { $$ = $1 } |
-        TString                           { $$ = NewNode($1.Str).SetPos($1) }  |
-        expr TOr expr                     { $$ = CompNode(AOr, $1,$3).pos0($1) } |
-        expr TAnd expr                    { $$ = CompNode(AAnd, $1,$3).pos0($1) } |
-        expr '>' expr                     { $$ = CompNode(ALess, $3,$1).pos0($1) } |
-        expr '<' expr                     { $$ = CompNode(ALess, $1,$3).pos0($1) } |
-        expr TGte expr                    { $$ = CompNode(ALessEq, $3,$1).pos0($1) } |
-        expr TLte expr                    { $$ = CompNode(ALessEq, $1,$3).pos0($1) } |
-        expr TEqeq expr                   { $$ = CompNode(AEq, $1,$3).pos0($1) } |
-        expr TNeq expr                    { $$ = CompNode(ANeq, $1,$3).pos0($1) } |
-        expr '+' expr                     { $$ = CompNode(AAdd, $1,$3).pos0($1) } |
-        expr TDotDot expr                 { $$ = CompNode(AConcat, $1,$3).pos0($1) } |
-        expr '-' expr                     { $$ = CompNode(ASub, $1,$3).pos0($1) } |
-        expr '*' expr                     { $$ = CompNode(AMul, $1,$3).pos0($1) } |
-        expr '/' expr                     { $$ = CompNode(ADiv, $1,$3).pos0($1) } |
-        expr '%' expr                     { $$ = CompNode(AMod, $1,$3).pos0($1) } |
-        expr '^' expr                     { $$ = CompNode(ABitXor, $1,$3).pos0($1) } |
-        expr TLsh expr                    { $$ = CompNode(ABitLsh, $1,$3).pos0($1) } |
-        expr TRsh expr                    { $$ = CompNode(ABitRsh, $1,$3).pos0($1) } |
-        expr TURsh expr                   { $$ = CompNode(ABitURsh, $1,$3).pos0($1) } |
-        expr '|' expr                     { $$ = CompNode(ABitOr, $1,$3).pos0($1) } |
-        expr '&' expr                     { $$ = CompNode(ABitAnd, $1,$3).pos0($1) } |
-        '^' expr %prec UNARY              { $$ = CompNode(ABitXor, $2, max32Node).pos0($2) } |
-        '-' expr %prec UNARY              { $$ = CompNode(ASub, zeroNode, $2).pos0($2) } |
-        TNot expr %prec UNARY             { $$ = CompNode(ANot, $2).pos0($2) } |
-        '&' TIdent %prec UNARY            { $$ = CompNode(AAddrOf, ANode($2)).pos0($2) }
+        TString                           { $$ = Nod($1.Str).SetPos($1) }  |
+        expr TOr expr                     { $$ = Cpl(AOr, $1,$3).pos0($1) } |
+        expr TAnd expr                    { $$ = Cpl(AAnd, $1,$3).pos0($1) } |
+        expr '>' expr                     { $$ = Cpl(ALess, $3,$1).pos0($1) } |
+        expr '<' expr                     { $$ = Cpl(ALess, $1,$3).pos0($1) } |
+        expr TGte expr                    { $$ = Cpl(ALessEq, $3,$1).pos0($1) } |
+        expr TLte expr                    { $$ = Cpl(ALessEq, $1,$3).pos0($1) } |
+        expr TEqeq expr                   { $$ = Cpl(AEq, $1,$3).pos0($1) } |
+        expr TNeq expr                    { $$ = Cpl(ANeq, $1,$3).pos0($1) } |
+        expr '+' expr                     { $$ = Cpl(AAdd, $1,$3).pos0($1) } |
+        expr TDotDot expr                 { $$ = Cpl(AConcat, $1,$3).pos0($1) } |
+        expr '-' expr                     { $$ = Cpl(ASub, $1,$3).pos0($1) } |
+        expr '*' expr                     { $$ = Cpl(AMul, $1,$3).pos0($1) } |
+        expr '/' expr                     { $$ = Cpl(ADiv, $1,$3).pos0($1) } |
+        expr '%' expr                     { $$ = Cpl(AMod, $1,$3).pos0($1) } |
+        expr '^' expr                     { $$ = Cpl(APow, $1,$3).pos0($1) } |
+        '-' expr %prec UNARY              { $$ = Cpl(ASub, zeroNode, $2).pos0($2) } |
+        TNot expr %prec UNARY             { $$ = Cpl(ANot, $2).pos0($2) } |
+        '&' TIdent %prec UNARY            { $$ = Cpl(AAddrOf, SymTok($2)).pos0($2) }
 
 prefix_expr:
         declarator                        { $$ = $1 } |
-        prefix_expr TString               { $$ = __call($1, CompNode(NewNode($2.Str))).pos0($1) } |
-        TIdent ':' TIdent expr_list_paren { $$ = __call(__load($1, NewNode($3.Str)).pos0($1), $4.Cprepend(ANode($1))).pos0($1) } |
+        prefix_expr TString               { $$ = __call($1, Cpl(Nod($2.Str))).pos0($1) } |
+        TIdent ':' TIdent expr_list_paren { $$ = __call(__load($1, Nod($3.Str)).pos0($1), $4.CplPrepend(SymTok($1))).pos0($1) } |
         prefix_expr expr_list_paren       { $$ = __call($1, $2).pos0($1) } |
         '(' expr ')'                      { $$ = $2 } // shift/reduce conflict
 
 expr_list:
-        expr                              { $$ = CompNode($1) } |
-        expr_list ',' expr                { $$ = $1.Cappend($3) }
+        expr                              { $$ = Cpl($1) } |
+        expr_list ',' expr                { $$ = $1.CplAppend($3) }
 
 expr_list_paren:
-        '(' ')'                           { $$ = CompNode() } |
-        '{' '}'                           { $$ = CompNode() } |
+        '(' ')'                           { $$ = Cpl() } |
+        '{' '}'                           { $$ = Cpl() } |
         '(' expr_list ')'                 { $$ = $2 } |
         '{' expr_list '}'                 { $$ = $2 }
 
 expr_assign_list:
-        TIdent '=' expr                            { $$ = CompNode(NewNode($1.Str), $3) } |
-        '[' expr ']' '=' expr                      { $$ = CompNode($2, $5) } |
-        expr_assign_list ',' TIdent '=' expr       { $$ = $1.Cappend(NewNode($3.Str), $5) } |
-        expr_assign_list ',' '[' expr ']' '=' expr { $$ = $1.Cappend($4, $7) }
+        TIdent '=' expr                            { $$ = Cpl(Nod($1.Str), $3) } |
+        '[' expr ']' '=' expr                      { $$ = Cpl($2, $5) } |
+        expr_assign_list ',' TIdent '=' expr       { $$ = $1.CplAppend(Nod($3.Str), $5) } |
+        expr_assign_list ',' '[' expr ']' '=' expr { $$ = $1.CplAppend($4, $7) }
 
 table_gen:
-        '{' '}'                                    { $$ = CompNode(AArray, emptyNode).pos0($1) } |
-        '{' expr_assign_list     '}'               { $$ = CompNode(AHash, $2).pos0($1) } |
-        '{' expr_assign_list ',' '}'               { $$ = CompNode(AHash, $2).pos0($1) } |
-        '{' expr_assign_list ';' expr_list '}'     { $$ = CompNode(AHashArray, $2, $4).pos0($1) } |
-        '{' expr_assign_list ';' expr_list ',' '}' { $$ = CompNode(AHashArray, $2, $4).pos0($1) } |
-        '{' expr_list            '}'               { $$ = CompNode(AArray, $2).pos0($1) } |
-        '{' expr_list ';' expr_assign_list '}'     { $$ = CompNode(AHashArray, $4, $2).pos0($1) } |
-        '{' expr_list ';' expr_assign_list ',' '}' { $$ = CompNode(AHashArray, $4, $2).pos0($1) } |
-        '{' expr_list ','        '}'               { $$ = CompNode(AArray, $2).pos0($1) }
+        '{' '}'                                    { $$ = Cpl(AArray, emptyNode).pos0($1) } |
+        '{' expr_assign_list     '}'               { $$ = Cpl(AHash, $2).pos0($1) } |
+        '{' expr_assign_list ',' '}'               { $$ = Cpl(AHash, $2).pos0($1) } |
+        '{' expr_assign_list ';' expr_list '}'     { $$ = Cpl(AHashArray, $2, $4).pos0($1) } |
+        '{' expr_assign_list ';' expr_list ',' '}' { $$ = Cpl(AHashArray, $2, $4).pos0($1) } |
+        '{' expr_list            '}'               { $$ = Cpl(AArray, $2).pos0($1) } |
+        '{' expr_list ';' expr_assign_list '}'     { $$ = Cpl(AHashArray, $4, $2).pos0($1) } |
+        '{' expr_list ';' expr_assign_list ',' '}' { $$ = Cpl(AHashArray, $4, $2).pos0($1) } |
+        '{' expr_list ','        '}'               { $$ = Cpl(AArray, $2).pos0($1) }
 
 %%
 
 func opSetMove(op *Node) func(dest, src interface{}) *Node {
-    if op.A() == ASet {
+    if op.Sym() == ASet {
         return __set
     }
     return __move
 }
 
 func randomVarname() *Node {
-    return ANodeS("v" + strconv.FormatInt(rand.Int63(), 10))
+    return Sym("v" + strconv.FormatInt(rand.Int63(), 10))
 }

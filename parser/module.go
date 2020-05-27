@@ -14,7 +14,7 @@ func (lex *Lexer) loadFile(path string, pos Token) *Node {
 	}
 
 	if n, ok := lex.cache[path]; ok {
-		return n
+		return cloneNode(n)
 	}
 
 	code, err := ioutil.ReadFile(path)
@@ -26,13 +26,32 @@ func (lex *Lexer) loadFile(path string, pos Token) *Node {
 		lex.Error(err.Error())
 	}
 
-	// now the required code is loaded, for naming scope we will wrap them into a closure
-	cls := CompNode(AFunc, "<a>", CompNode(), n).pos0(pos)
-	node := CompNode(ACall, cls, CompNode()).pos0(pos)
+	// Now the required code is loaded, for naming scope we will wrap them into a closure
+	cls := __func(Cpl(), n).pos0(pos)
+	node := __call(cls, Cpl()).pos0(pos)
 	lex.cache[path] = node
-	return node
+	return cloneNode(node)
 }
 
 func joinSourcePath(path1 string, filename2 string) string {
 	return filepath.Join(filepath.Dir(path1), filename2)
+}
+
+func moduleNameFromPath(path string) string {
+	fn := filepath.Base(path)
+	fn = fn[:len(fn)-len(filepath.Ext(fn))]
+	return fn
+}
+
+func cloneNode(n *Node) *Node {
+	if n.Type() == CPL {
+		n2 := make([]*Node, 0, len(n.Cpl()))
+		for _, n := range n.Cpl() {
+			n2 = append(n2, cloneNode(n))
+		}
+		tmp := *n
+		tmp.Value = n2
+		return &tmp
+	}
+	return n
 }

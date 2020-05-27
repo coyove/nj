@@ -30,5 +30,5 @@ func initLibMath() {
 	//			return Str(string(r.Fetch(int(env.Get(0).MustNumber()))))
 	//		}))))
 	//
-	CoreLibs["math"] = Tab(lmath)
+	G.Puts("math", Tab(lmath), false)
 }

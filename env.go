@@ -7,7 +7,7 @@ import (
 // Env is the environment for a closure to run within.
 // stack contains arguments used to execute the closure (variadic arguments are inside Vararg)
 // then the local variables will take the following spaces sequentially.
-// A and B store the results of the execution
+// Sym and B store the results of the execution
 type Env struct {
 	parent *Env
 	stack  []Value

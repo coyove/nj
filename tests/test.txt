@@ -1,3 +1,9 @@
+local str = require "string.txt"
+assert(str.name == "abc")
+
+require "string.txt"
+assert(string.name == "abc")
+
 do
 a, i = {}, 1
 a[1 + i ] = i;
