@@ -340,6 +340,7 @@ ident_list:
         ident_list ',' TDotDotDot         { $$ = $1.CplAppend(Sym("...").SetPos($3)) }
 
 expr:
+        TDotDotDot                        { $$ = __call(Sym("unpack"), Cpl(Sym("arg"))).pos0($1) } |
         TNumber                           { $$ = Num($1.Str).SetPos($1) } |
         TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) } |
         '#' expr                          { $$ = Cpl(ALen, $2) } |
@@ -379,9 +380,8 @@ expr_list:
 
 expr_list_paren:
         '(' ')'                           { $$ = Cpl() } |
-        '{' '}'                           { $$ = Cpl() } |
         '(' expr_list ')'                 { $$ = $2 } |
-        '{' expr_list '}'                 { $$ = $2 }
+        table_gen                         { $$ = Cpl($1) }
 
 expr_assign_list:
         TIdent '=' expr                            { $$ = Cpl(Nod($1.Str), $3) } |

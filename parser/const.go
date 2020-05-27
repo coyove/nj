@@ -26,6 +26,7 @@ func interfaceType(a interface{}) uintptr {
 }
 
 const (
+	ANop         Symbol = "nop"
 	ADoBlock     Symbol = "do"
 	AConcat      Symbol = "con"
 	ANil         Symbol = "nil"

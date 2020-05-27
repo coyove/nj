@@ -2,6 +2,7 @@ package potatolang
 
 import (
 	"bytes"
+	"math"
 	"math/rand"
 	"time"
 
@@ -12,7 +13,7 @@ var _nodeRegA = parser.Nod(regA)
 
 func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint16) {
 	buf := newpacket()
-	doblock := chain.CplIndex(0).Sym() == "do"
+	doblock := chain.CplIndex(0).Sym() == parser.ADoBlock
 
 	if doblock {
 		table.addMaskedSymTable()
@@ -31,43 +32,34 @@ func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint1
 }
 
 func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint16) {
-	calcDest := func() uint16 {
-		aDest := atoms[1].Value.(parser.Symbol)
-		newYX := table.get(aDest)
-		if atoms[0].Sym() == parser.AMove {
-			if newYX == regNil {
-				newYX = table.borrowAddress()
-				table.put(aDest, newYX)
+	aDest := atoms[1].Value.(parser.Symbol)
+	newYX := table.get(aDest)
+	if atoms[0].Sym() == parser.AMove {
+		// a = b
+		if newYX == regNil {
+			t, h := table, 0
+			for t.parent != nil {
+				t, h = t.parent, h+1
+				if h > 6 {
+					panicf("global variable: too deep")
+				}
 			}
-		} else {
-			newYX = table.borrowAddress()
-			table.put(aDest, newYX)
+			yx := t.borrowAddress()
+			// Do not use t.put() because it may put the symbol into masked tables
+			// e.g.: do a = 1 end
+			t.sym[aDest] = &symbol{usage: math.MaxInt32, addr: yx}
+			newYX = uint16(h)<<10 | yx
 		}
-		return newYX
+	} else {
+		// local a = b
+		newYX = table.borrowAddress()
+		table.put(aDest, newYX)
 	}
 
-	buf := newpacket()
-	aSrc := atoms[2]
-	switch aSrc.Type() {
-	case parser.SYM:
-		srcName := aSrc.Value.(parser.Symbol)
-		valueIndex := table.get(srcName)
-		addr := calcDest()
-		buf.WriteOP(OpSet, addr, valueIndex)
-		return buf, addr
-	case parser.NUM, parser.STR:
-		addr := calcDest()
-		buf.WriteOP(OpSet, addr, table.loadK(aSrc.Value))
-		return buf, addr
-	}
-
-	code, newYX := table.compileNode(aSrc)
-	buf.Write(code)
-
-	addr := calcDest()
-	buf.WriteOP(OpSet, addr, newYX)
+	buf, fromYX := table.compileNode(atoms[2])
+	buf.WriteOP(OpSet, newYX, fromYX)
 	buf.WritePos(atoms[0].Position)
-	return buf, addr
+	return buf, newYX
 }
 
 func (table *symtable) compileHashArrayOp(atoms []*parser.Node) (code packet, yx uint16) {
@@ -181,7 +173,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint16) {
 	head := atoms[0].Value.(parser.Symbol)
 	switch head {
-	case "nop":
+	case parser.ANop:
 		return newpacket(), regA
 	}
 	op, ok := flatOpMapping[head]
@@ -234,6 +226,7 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint16
 	trueCode, _ := table.compileNode(trueBranch)
 	falseCode, _ := table.compileNode(falseBranch)
 	table.removeMaskedSymTable()
+
 	if len(falseCode.data) > 0 {
 		buf.WriteJmpOP(OpIfNot, condyx, len(trueCode.data)+1)
 		buf.WritePos(atoms[0].Position)

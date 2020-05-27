@@ -90,6 +90,16 @@ func initCoreLibs() {
 	G.Puts("rawget", NewNativeValue(2, false, func(env *Env) {
 		env.A = env.In(0, TAB).Tab().Get(env.Get(1), true)
 	}), false)
+	G.Puts("rawlen", NewNativeValue(1, false, func(env *Env) {
+		switch env.A = env.Get(0); env.A.Type() {
+		case TAB:
+			env.A = Num(float64(env.A.Tab().Len()))
+		case STR:
+			env.A = Num(float64(len(env.A.Str())))
+		default:
+			env.A = Value{}
+		}
+	}), false)
 	G.Puts("pcall", NewNativeValue(1, true, func(env *Env) {
 		defer func() {
 			if r := recover(); r != nil {

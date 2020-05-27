@@ -146,42 +146,42 @@ MAIN:
 			case StrStr:
 				env.A = Str(va.Str() + vb.Str())
 			default:
-				env.A, env.B = va.DummyTable().mm("__concat").ExpectMsg(FUN, "operator ..").Fun().Call(va, vb)
+				env.A, env.B = findmm(va, vb, "__concat").ExpectMsg(FUN, "operator ..").Fun().Call(va, vb)
 			}
 		case OpAdd:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case NumNum:
 				env.A = Num(va.Num() + vb.Num())
 			default:
-				env.A, env.B = va.DummyTable().mm("__add").ExpectMsg(FUN, "operator +").Fun().Call(va, vb)
+				env.A, env.B = findmm(va, vb, "__add").ExpectMsg(FUN, "operator +").Fun().Call(va, vb)
 			}
 		case OpSub:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case NumNum:
 				env.A = Num(va.Num() - vb.Num())
 			default:
-				env.A, env.B = va.DummyTable().mm("__sub").ExpectMsg(FUN, "operator -").Fun().Call(va, vb)
+				env.A, env.B = findmm(va, vb, "__sub").ExpectMsg(FUN, "operator -").Fun().Call(va, vb)
 			}
 		case OpMul:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case NumNum:
 				env.A = Num(va.Num() * vb.Num())
 			default:
-				env.A, env.B = va.DummyTable().mm("__mul").ExpectMsg(FUN, "operator *").Fun().Call(va, vb)
+				env.A, env.B = findmm(va, vb, "__mul").ExpectMsg(FUN, "operator *").Fun().Call(va, vb)
 			}
 		case OpDiv:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case NumNum:
 				env.A = Num(va.Num() / vb.Num())
 			default:
-				env.A, env.B = va.DummyTable().mm("__div").ExpectMsg(FUN, "operator /").Fun().Call(va, vb)
+				env.A, env.B = findmm(va, vb, "__div").ExpectMsg(FUN, "operator /").Fun().Call(va, vb)
 			}
 		case OpMod:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case NumNum:
 				env.A = Num(math.Remainder(va.Num(), vb.Num()))
 			default:
-				env.A, env.B = va.DummyTable().mm("__mod").ExpectMsg(FUN, "operator %").Fun().Call(va, vb)
+				env.A, env.B = findmm(va, vb, "__mod").ExpectMsg(FUN, "operator %").Fun().Call(va, vb)
 			}
 		case OpEq:
 			env.A = Bln(env._get(opa, K).Equal(env._get(opb, K)))
@@ -194,7 +194,7 @@ MAIN:
 			case StrStr:
 				env.A = Bln(va.Str() < vb.Str())
 			default:
-				env.A, env.B = va.DummyTable().mm("__lt").ExpectMsg(FUN, "operator <").Fun().Call(va, vb)
+				env.A, env.B = findmm(va, vb, "__lt").ExpectMsg(FUN, "operator <").Fun().Call(va, vb)
 			}
 		case OpLessEq:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
@@ -203,7 +203,7 @@ MAIN:
 			case StrStr:
 				env.A = Bln(va.Str() <= vb.Str())
 			default:
-				env.A, env.B = va.DummyTable().mm("__le").ExpectMsg(FUN, "operator <=").Fun().Call(va, vb)
+				env.A, env.B = findmm(va, vb, "__le").ExpectMsg(FUN, "operator <=").Fun().Call(va, vb)
 			}
 		case OpNot:
 			env.A = Bln(env._get(opa, K).IsFalse())
@@ -217,12 +217,16 @@ MAIN:
 					env.A = Num(math.Pow(a, b))
 				}
 			default:
-				env.A, env.B = va.DummyTable().mm("__pow").ExpectMsg(FUN, "operator ^").Fun().Call(va, vb)
+				env.A, env.B = findmm(va, vb, "__pow").ExpectMsg(FUN, "operator ^").Fun().Call(va, vb)
 			}
 		case OpLen:
 			switch v := env._get(opa, K); v.Type() {
 			case STR:
-				env.A = Num(float64(len(v.Str())))
+				if f := DummyTables[STR].mm("__len"); f.Type() == FUN {
+					env.A, env.B = f.Fun().Call(v)
+				} else {
+					env.A = Num(float64(len(v.Str())))
+				}
 			case TAB:
 				t := v.Tab()
 				if t.mm("__len").Type() == FUN {
@@ -231,7 +235,11 @@ MAIN:
 					env.A = Num(float64(t.Len()))
 				}
 			case FUN:
-				env.A = Num(float64(v.Fun().NumParam))
+				if f := DummyTables[FUN].mm("__len"); f.Type() == FUN {
+					env.A, env.B = f.Fun().Call(v)
+				} else {
+					env.A = Num(float64(v.Fun().NumParam))
+				}
 			default:
 				env.A, env.B = v.DummyTable().mm("__len").ExpectMsg(FUN, "operator #").Fun().Call(v)
 			}
@@ -405,4 +413,12 @@ MAIN:
 		goto MAIN
 	}
 	return Value{}, Value{}, 0, false
+}
+
+func findmm(a, b Value, name string) Value {
+	m := a.DummyTable().mm(name)
+	if m.IsNil() {
+		return b.DummyTable().mm(name)
+	}
+	return m
 }

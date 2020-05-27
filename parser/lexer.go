@@ -483,7 +483,7 @@ redo:
 				tok.Type = '.'
 				tok.Str = buf.String()
 			}
-		case '(', ')', '{', '}', ']', ';', ',', '#':
+		case '(', ')', '{', '}', ']', ';', ',', '#', '^':
 			tok.Type = ch
 			tok.Str = string(ch)
 		case ':':

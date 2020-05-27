@@ -5,7 +5,13 @@ require "string.txt"
 assert(string.name == "abc")
 
 do
-a, i = {}, 1
+    scope = 1
+    assert(scope == 1)
+end
+assert(scope == 1)
+
+do
+local a, i = {}, 1
 a[1 + i ] = i;
 (function () return a end)().test = 1
 assert(a[2] == 1 and a["test"] == 1)
@@ -17,7 +23,8 @@ end
 
 assert(callstr"a" == "aa")
 
-t = {[1] = 1, [1 + 1] = 2, [3] = 3}
+local iii = 3
+t = {1, 2, (1 + iii - 1); a = "a", ["" .. "b"] = "b"}
 for k, v in pairs(t) do
     assert(k == v)
 end

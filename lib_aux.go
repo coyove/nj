@@ -1,6 +1,9 @@
 package potatolang
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func fmtPrint(flag byte) func(env *Env) {
 	return func(env *Env) {
@@ -309,5 +312,8 @@ func initLibAux() {
 	//
 	lstring := &Table{}
 	lstring.Puts("format", NewNativeValue(1, true, fmtSprint('f')), false)
+	lstring.Puts("rep", NewNativeValue(2, false, func(env *Env) {
+		env.A = Str(strings.Repeat(env.In(0, STR).Str(), int(env.In(1, NUM).Num())))
+	}), false)
 	G.Puts("string", Tab(lstring), false)
 }
