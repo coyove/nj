@@ -98,8 +98,8 @@ func Fun(c *Closure) Value {
 	return Value{v: FUN, p: unsafe.Pointer(c)}
 }
 
-// NewPointerValue returns a generic value
-func NewPointerValue(i interface{}) Value {
+// Any returns a generic value
+func Any(i interface{}) Value {
 	return Value{v: ANY, p: unsafe.Pointer(&i)}
 }
 
@@ -205,19 +205,16 @@ func (v Value) Equal(r Value) bool {
 		return v == r
 	case StrStr:
 		return r.Str() == v.Str()
-	case AnyAny:
-		return v.Any() == r.Any()
 	case TabTab:
 		if v == r {
 			return true
 		}
-		if eq := v.Tab().mm("__eq"); eq.Type() == FUN {
-			e, _ := eq.Fun().Call(v, r)
-			return !e.IsFalse()
-		}
-		return false
 	case FunFun:
 		return v.Fun() == r.Fun()
+	}
+	if eq := findmm(v, r, "__eq"); eq.Type() == FUN {
+		e, _ := eq.Fun().Call(v, r)
+		return !e.IsFalse()
 	}
 	return false
 }
@@ -259,17 +256,71 @@ func (v Value) toString(lv int, json bool) string {
 	return "nil"
 }
 
-func (v Value) DummyTable() *Table {
+var (
+	nilMetatable *Table
+	blnMetatable *Table
+	strMetatable *Table
+	numMetatable *Table
+	funMetatable *Table
+	upkMetatable *Table
+)
+
+func (v Value) GetMetatable() *Table {
 	switch t := v.Type(); t {
 	case TAB:
-		return v.Tab()
+		return v.Tab().mt
 	case ANY:
 		i := v.Any()
 		if f, ok := i.(interface{ GetMetatable() *Table }); ok {
-			return &Table{mt: f.GetMetatable()}
+			return f.GetMetatable()
 		}
-		return &Table{}
+		return nil
+	case NIL:
+		return nilMetatable
+	case BLN:
+		return blnMetatable
+	case STR:
+		return strMetatable
+	case NUM:
+		return numMetatable
+	case FUN:
+		return funMetatable
+	case UPK:
+		return upkMetatable
 	default:
-		return DummyTables[t]
+		panic("corrupted value")
+	}
+}
+
+func (v Value) GetMetamethod(name string) Value {
+	if mt := v.GetMetatable(); mt != nil {
+		return mt.rawgetstr(name)
+	}
+	return Value{}
+}
+
+func (v Value) SetMetatable(mt *Table) {
+	switch t := v.Type(); t {
+	case TAB:
+		v.Tab().mt = mt
+	case ANY:
+		i := v.Any()
+		if f, ok := i.(interface{ SetMetatable(*Table) }); ok {
+			f.SetMetatable(mt)
+		}
+	case NIL:
+		nilMetatable = mt
+	case BLN:
+		blnMetatable = mt
+	case STR:
+		strMetatable = mt
+	case NUM:
+		numMetatable = mt
+	case FUN:
+		funMetatable = mt
+	case UPK:
+		upkMetatable = mt
+	default:
+		panic("corrupted value")
 	}
 }

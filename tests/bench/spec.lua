@@ -28,7 +28,7 @@ local function AtAv(x, y, t, N)
   Atv(t, y, N)
 end
 
-local N = tonumber(arg and arg[1]) or 100
+local N = tonumber(arg and arg[1]) or 5500
 local u, v, t = {}, {}, {}
 for i=1,N do u[i] = 1 end
 

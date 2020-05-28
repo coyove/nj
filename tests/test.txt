@@ -1,3 +1,10 @@
+local a = native.bytes(2)
+a[0] = 49
+a = a:append(unpack({32 , 33, 34}))
+assert(a == {49,0,32,33,34} and {49,0,32,33,34} == a)
+assert(a:tostring() == "1\x00 !\"")
+assert(a == "1\x00 !\"" and a == native.bytes(a:tostring()))
+
 local str = require "string.txt"
 assert(str.name == "abc")
 

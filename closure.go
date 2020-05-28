@@ -35,8 +35,8 @@ func NewClosure(code []uint32, consts []Value, env *Env, paramsCount byte) *Clos
 	}
 }
 
-// NewNativeValue creates a native function in potatolang
-func NewNativeValue(paramsCount int, vararg bool, f func(env *Env)) Value {
+// NativeFun creates a native function in potatolang
+func NativeFun(paramsCount int, vararg bool, f func(env *Env)) Value {
 	cls := &Closure{
 		NumParam: byte(paramsCount),
 		native:   f,

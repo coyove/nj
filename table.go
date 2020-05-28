@@ -6,10 +6,6 @@ import (
 	"reflect"
 )
 
-var DummyTables = map[byte]*Table{
-	STR: &Table{}, NUM: &Table{}, BLN: &Table{}, NIL: &Table{}, FUN: &Table{}, UPK: &Table{},
-}
-
 type tablekey struct {
 	g   Value
 	str string
@@ -28,11 +24,11 @@ func maketk(k Value) tablekey {
 	return tablekey{g: k}
 }
 
-func (t *Table) mm(name string) Value {
-	if t == nil || t.mt == nil {
+func (t *Table) rawgetstr(name string) Value {
+	if t == nil {
 		return Value{}
 	}
-	return t.mt.m[tablekey{str: name, g: Value{v: STR}}]
+	return t.m[tablekey{str: name, g: Value{v: STR}}]
 }
 
 func (t *Table) Put(k, v Value, raw bool) {
@@ -47,7 +43,7 @@ func (t *Table) Put(k, v Value, raw bool) {
 				return
 			}
 			if int(idx) == len(t.a)+1 {
-				if !raw && !t.mm("__newindex").IsNil() {
+				if !raw && !t.mt.rawgetstr("__newindex").IsNil() {
 					t.newindex(k, v)
 					return
 				}
@@ -65,7 +61,7 @@ func (t *Table) Put(k, v Value, raw bool) {
 		t.m = make(map[tablekey]Value)
 	}
 	key := maketk(k)
-	if !raw && !t.mm("__newindex").IsNil() && t.m[key].IsNil() {
+	if !raw && !t.mt.rawgetstr("__newindex").IsNil() && t.m[key].IsNil() {
 		t.newindex(k, v)
 		return
 	}
@@ -94,7 +90,7 @@ func (t *Table) Insert(k, v Value) {
 }
 
 func (t *Table) newindex(k, v Value) {
-	switch ni := t.mm("__newindex"); ni.Type() {
+	switch ni := t.mt.rawgetstr("__newindex"); ni.Type() {
 	case FUN:
 		ni.Fun().Call(Tab(t), k, v)
 	case TAB:
@@ -104,8 +100,9 @@ func (t *Table) newindex(k, v Value) {
 	}
 }
 
-func (t *Table) Puts(k string, v Value, raw bool) {
+func (t *Table) Puts(k string, v Value, raw bool) *Table {
 	t.Put(Str(k), v, raw)
+	return t
 }
 
 func (t *Table) Gets(k string, raw bool) Value {
@@ -122,8 +119,8 @@ func (t *Table) Get(k Value, raw bool) (v Value) {
 		}
 	}
 	key := maketk(k)
-	if !raw && !t.mm("__index").IsNil() && t.m[key].IsNil() {
-		switch ni := t.mm("__index"); ni.Type() {
+	if !raw && !t.mt.rawgetstr("__index").IsNil() && t.m[key].IsNil() {
+		switch ni := t.mt.rawgetstr("__index"); ni.Type() {
 		case FUN:
 			v, _ = ni.Fun().Call(Tab(t), k)
 			return v
@@ -145,9 +142,12 @@ func (t *Table) HashLen() int {
 }
 
 func (t *Table) Compact() {
+
 	for i := len(t.a) - 1; i >= 0; i-- {
 		if t.a[i].IsNil() {
 			t.a = t.a[:i]
+		} else {
+			break
 		}
 	}
 
@@ -179,6 +179,10 @@ func (t *Table) Compact() {
 		return
 	}
 
+	if t.m == nil {
+		t.m = make(map[tablekey]Value, len(t.a))
+	}
+
 	if best.ratio < 0.5 {
 		for i, v := range t.a {
 			if !v.IsNil() {
@@ -192,6 +196,7 @@ func (t *Table) Compact() {
 	for i := best.index + 1; i < len(t.a); i++ {
 		t.m[tablekey{g: Num(float64(i))}] = t.a[i]
 	}
+
 	t.a = t.a[:best.index+1]
 }
 

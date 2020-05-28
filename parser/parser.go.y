@@ -11,6 +11,7 @@ import "math/rand"
 %type<expr> declarator_list_assign
 %type<expr> _declarator_list_assign
 %type<expr> ident_list
+%type<expr> ident_dot_list
 %type<expr> expr_list
 %type<expr> expr_list_paren
 %type<expr> expr_assign_list
@@ -106,7 +107,8 @@ assign_stat:
             op := nodes[len(nodes) - 1]
             nodes = nodes[:len(nodes) - 1]
 
-            if len(nodes) == 2 && len($2.Cpl()) == 1 { // local? a, b = c()
+            if len(nodes) == 2 && len($2.Cpl()) == 1 {
+                // local? a, b = c()
                 bb := Cpl(AGetB)
                 if nodes[0].Type() == SYM && nodes[1].Type() == SYM {
                     $$ = __chain(
@@ -121,20 +123,32 @@ assign_stat:
                         nodes[1].moveLoadStore(__move, Sym("(1)b")).pos0(nodes[1]),
                     )
                 }
-            } else if len(nodes) != len($2.Cpl()) {
-                panic(&Error{Pos: $2.Position, Message: "unmatched assignments", Token: string(op.Sym())})
-            } else if op.Sym() == ASet { // local a0, ..., an = b0, ..., bn
+            } else if n, m := len(nodes) , len($2.Cpl()) ; n != m {
+                if m == 1 {
+                    // local? a1, ..., an = b1
+                    $$ = __chain()
+                    v := $2.CplIndex(0)
+                    for _, n := range nodes {
+                       $$ = $$.CplAppend(opSetMove($1)(n, v).pos0($1))
+                    }
+                } else {
+                    panic(&Error{Pos: $2.Position, Message: "unmatched assignments", Token: string(op.Sym())})
+                }
+            } else if op.Sym() == ASet {
+                // local a0, ..., an = b0, ..., bn
                 $$ = __chain()
                 for i, v := range nodes {
                     $$ = $$.CplAppend(__set(v, $2.CplIndex(i)).pos0($1))
                 }
-            } else if head := nodes[0]; len(nodes) == 1 { // a0 = b0
+            } else if head := nodes[0]; len(nodes) == 1 {
+                // a0 = b0
                 $$ = head.moveLoadStore(__move, $2.CplIndex(0)).pos0($1)
                 if a, s := $2.CplIndex(0).isSimpleAddSub(); a != "" && a == head.Sym() {
                     // Note that a := a + v is different
                     $$ = __inc(head, Num(s)).pos0($1)
                 }
-            } else { // a0, ..., an = b0, ..., bn
+            } else { 
+                // a0, ..., an = b0, ..., bn
                 $$ = __chain()
                 names := []*Node{}
                 for i := range nodes {
@@ -287,16 +301,14 @@ func_stat:
                 __move(funcname, __func($3, $4).pos0($2)).pos0($2),
             )
         } |
-        func TIdent '.' TIdent func_params_list stats TEnd {
-            $$ = __store(
-                SymTok($2), Nod($4.Str), __func($5, $6).pos0($2),
-            ).pos0($2) 
+        func ident_dot_list '.' TIdent func_params_list stats TEnd {
+            $$ = __store($2, Nod($4.Str), __func($5, $6).pos0($4)).pos0($4) 
         } |
-        func TIdent ':' TIdent func_params_list stats TEnd {
+        func ident_dot_list ':' TIdent func_params_list stats TEnd {
             paramlist := $5.CplPrepend(Sym("self"))
             $$ = __store(
-                SymTok($2), Nod($4.Str), __func(paramlist, $6).pos0($2),
-            ).pos0($2) 
+                $2, Nod($4.Str), __func(paramlist, $6).pos0($4),
+            ).pos0($4) 
         }
 
 function:
@@ -321,7 +333,6 @@ jmp_stat:
 
 declarator:
         TIdent                            { $$ = SymTok($1).SetPos($1) } |
-        TIdent TSquare                    { $$ = __load(nilNode, $1).pos0($1) } |
         prefix_expr '[' expr ']'          { $$ = __load($1, $3).pos0($3).SetPos($3) } |
         prefix_expr '.' TIdent            { $$ = __load($1, Nod($3.Str)).pos0($3).SetPos($3) }
 
@@ -338,6 +349,10 @@ ident_list:
         TDotDotDot                        { $$ = Cpl("...") } | 
         ident_list ',' TIdent             { $$ = $1.CplAppend(SymTok($3)) } |
         ident_list ',' TDotDotDot         { $$ = $1.CplAppend(Sym("...").SetPos($3)) }
+
+ident_dot_list:
+        TIdent                            { $$ = SymTok($1) } | 
+        ident_dot_list '.' TIdent         { $$ = __load($1, Nod($3.Str)).pos0($3) }
 
 expr:
         TDotDotDot                        { $$ = __call(Sym("unpack"), Cpl(Sym("arg"))).pos0($1) } |

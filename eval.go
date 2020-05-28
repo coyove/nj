@@ -222,26 +222,26 @@ MAIN:
 		case OpLen:
 			switch v := env._get(opa, K); v.Type() {
 			case STR:
-				if f := DummyTables[STR].mm("__len"); f.Type() == FUN {
+				if f := v.GetMetamethod("__len"); f.Type() == FUN {
 					env.A, env.B = f.Fun().Call(v)
 				} else {
 					env.A = Num(float64(len(v.Str())))
 				}
 			case TAB:
 				t := v.Tab()
-				if t.mm("__len").Type() == FUN {
-					env.A, env.B = t.mm("__len").Fun().Call(v)
+				if l := t.mt.rawgetstr("__len"); l.Type() == FUN {
+					env.A, env.B = l.Fun().Call(v)
 				} else {
 					env.A = Num(float64(t.Len()))
 				}
 			case FUN:
-				if f := DummyTables[FUN].mm("__len"); f.Type() == FUN {
+				if f := v.GetMetamethod("__len"); f.Type() == FUN {
 					env.A, env.B = f.Fun().Call(v)
 				} else {
 					env.A = Num(float64(v.Fun().NumParam))
 				}
 			default:
-				env.A, env.B = v.DummyTable().mm("__len").ExpectMsg(FUN, "operator #").Fun().Call(v)
+				env.A, env.B = v.GetMetamethod("__len").ExpectMsg(FUN, "operator #").Fun().Call(v)
 			}
 		case OpMakeHash:
 			if stackEnv == nil {
@@ -290,7 +290,7 @@ MAIN:
 					panicf("%#v: address[] = value, not an address", env.A)
 				}
 			default:
-				env.A, env.B = subject.DummyTable().mm("__newindex").ExpectMsg(FUN, "store").Fun().Call(subject, env.A, v)
+				env.A, env.B = subject.GetMetamethod("__newindex").ExpectMsg(FUN, "store").Fun().Call(subject, env.A, v)
 			}
 			env.A = v
 		case OpLoad:
@@ -298,7 +298,7 @@ MAIN:
 			case TAB:
 				env.A = a.Tab().Get(idx, false)
 			default:
-				env.A, env.B = a.DummyTable().mm("__index").ExpectMsg(FUN, "load").Fun().Call(a, idx)
+				env.A, env.B = a.GetMetamethod("__index").ExpectMsg(FUN, "load").Fun().Call(a, idx)
 			}
 		case OpPush:
 			if stackEnv == nil {
@@ -327,7 +327,7 @@ MAIN:
 			case FUN:
 				cls = a.Fun()
 			default:
-				cls = a.DummyTable().mm("__call").ExpectMsg(FUN, "invoke").Fun()
+				cls = a.GetMetamethod("__call").ExpectMsg(FUN, "invoke").Fun()
 				stackEnv.stack = append([]Value{a}, stackEnv.stack...)
 			}
 			if cls.lastenv != nil {
@@ -416,9 +416,9 @@ MAIN:
 }
 
 func findmm(a, b Value, name string) Value {
-	m := a.DummyTable().mm(name)
+	m := a.GetMetamethod(name)
 	if m.IsNil() {
-		return b.DummyTable().mm(name)
+		return b.GetMetamethod(name)
 	}
 	return m
 }
