@@ -361,9 +361,14 @@ redo:
 		}
 		if typ, ok := reservedWords[tok.Str]; ok {
 			crlf := false
-			for n := sc.Peek(); unicode.IsSpace(rune(n)) || n == '}'; n = sc.Peek() {
-				if n == '\n' || n == '}' {
+			for n := sc.Peek(); (unicode.IsSpace(rune(n)) || n == 'e') && n != EOF; n = sc.Peek() {
+				if n == '\n' {
 					crlf = true
+					break
+				}
+				if n == 'e' {
+					buf, _ := sc.reader.Peek(3)
+					crlf = bytes.Equal(buf, []byte("end"))
 					break
 				}
 				sc.Next()

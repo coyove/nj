@@ -1,9 +1,20 @@
+function syntax_return_void() return end
+function syntax_return_value(en) return en end
+function syntax_return_void2(en) return
+en end
+assert(syntax_return_void2(1) == nil)
+
+ex = {1, 2}
+ex[1], ex[2], ex3 = ex3, ex[1], ex[2]
+assert(ex3 == 2 and ex[1] == nil and ex[2] == 1)
+
 do
-local ms = {}
-ms[1], ms2 = (function () return 1, 2 end)()
-assert(ms[1] == 1 and ms2 == 2)
+    local ms = {}
+    ms[1], ms2 = (function () return 1, 2 end)()
+    assert(ms[1] == 1 and ms2 == 2)
 end
-assert(ms2 == 2)
+assert(ms == nil and ms2 == 2)
+
 
 local a = native.bytes(2)
 a[0] = 49

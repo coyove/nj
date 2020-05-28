@@ -142,7 +142,6 @@ func (t *Table) HashLen() int {
 }
 
 func (t *Table) Compact() {
-
 	for i := len(t.a) - 1; i >= 0; i-- {
 		if t.a[i].IsNil() {
 			t.a = t.a[:i]
@@ -150,54 +149,6 @@ func (t *Table) Compact() {
 			break
 		}
 	}
-
-	// if len(t.a) < 32 { // small array, no need to compact
-	// 	return
-	// }
-
-	holes := 0
-	best := struct {
-		ratio float64
-		index int
-	}{}
-
-	for i, v := range t.a {
-		if !v.IsNil() {
-			continue
-		}
-
-		holes++
-		ratio := float64(i-holes) / float64(i)
-
-		if ratio > best.ratio {
-			best.ratio = ratio
-			best.index = i
-		}
-	}
-
-	if holes == 0 || best.index >= len(t.a)*3/4 { // 0.75
-		return
-	}
-
-	if t.m == nil {
-		t.m = make(map[tablekey]Value, len(t.a))
-	}
-
-	if best.ratio < 0.5 {
-		for i, v := range t.a {
-			if !v.IsNil() {
-				t.m[tablekey{g: Num(float64(i))}] = v
-			}
-		}
-		t.a = nil
-		return
-	}
-
-	for i := best.index + 1; i < len(t.a); i++ {
-		t.m[tablekey{g: Num(float64(i))}] = t.a[i]
-	}
-
-	t.a = t.a[:best.index+1]
 }
 
 type TableMapIterator struct {
