@@ -65,6 +65,7 @@ const (
 	ALessEq      Symbol = "le"
 	AAddrOf      Symbol = "addr"
 	ALen         Symbol = "len"
+	ARetAddr     Symbol = "reta"
 )
 
 func __chain(args ...interface{}) *Node { return Cpl(append([]interface{}{ABegin}, args...)...) }

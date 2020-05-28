@@ -8,8 +8,7 @@ import "math/rand"
 %type<expr> stats
 %type<expr> stat
 %type<expr> declarator
-%type<expr> declarator_list_assign
-%type<expr> _declarator_list_assign
+%type<expr> declarator_list
 %type<expr> ident_list
 %type<expr> ident_dot_list
 %type<expr> expr_list
@@ -102,62 +101,69 @@ assign_stat:
         postfix_incdec {
             $$ = $1
         } |
-        declarator_list_assign expr_list {
+        TLocal ident_list {
+            $$ = __chain()
+            for _, v := range $2.Cpl() {
+                $$ = $$.CplAppend(__set(v, nilNode).pos0($1))
+            }
+        } |
+        TLocal ident_list '=' expr_list {
+            if m, n := len($2.Cpl()), len($4.Cpl()); m == 2 && n == 1 {
+                // local a, b = c()
+                $$ = __chain(
+                    __set($2.CplIndex(0), $4.CplIndex(0)).pos0($1),
+                    __set($2.CplIndex(1), Cpl(AGetB)).pos0($1),
+                )
+            } else if m != n {
+                panic(&Error{Pos: $2.Position, Message: "unmatched assignments", Token: $1.Str})
+            } else {
+                $$ = __chain()
+                for i, v := range $2.Cpl() {
+                    $$ = $$.CplAppend(__set(v, $4.CplIndex(i)).pos0($1))
+                }
+            }
+        } |
+        declarator_list '=' expr_list {
             nodes := $1.Cpl()
-            op := nodes[len(nodes) - 1]
-            nodes = nodes[:len(nodes) - 1]
-
-            if len(nodes) == 2 && len($2.Cpl()) == 1 {
-                // local? a, b = c()
+            if len(nodes) == 2 && len($3.Cpl()) == 1 {
+                // a, b = c()
                 bb := Cpl(AGetB)
                 if nodes[0].Type() == SYM && nodes[1].Type() == SYM {
                     $$ = __chain(
-                        opSetMove(op)(nodes[0], $2.CplIndex(0)).pos0($1),
-                        opSetMove(op)(nodes[1], bb).pos0($1),
+                        __move(nodes[0], $3.CplIndex(0)).pos0($1),
+                        __move(nodes[1], bb).pos0($1),
                     )
                 } else {
+                    a, b := randomVarname(), randomVarname()
                     $$ = __do(
-                        __set("(1)a", $2.CplIndex(0)).pos0($1),
-                        __set("(1)b", bb).pos0($1),
-                        nodes[0].moveLoadStore(__move, Sym("(1)a")).pos0(nodes[0]),
-                        nodes[1].moveLoadStore(__move, Sym("(1)b")).pos0(nodes[1]),
+                        __set(a, $3.CplIndex(0)).pos0($1),
+                        __set(b, bb).pos0($1),
+                        nodes[0].moveLoadStore(__move, a).pos0(nodes[0]),
+                        nodes[1].moveLoadStore(__move, b).pos0(nodes[1]),
+                        Cpl(ARetAddr, a, b).pos0($1),
                     )
                 }
-            } else if n, m := len(nodes) , len($2.Cpl()) ; n != m {
-                if m == 1 {
-                    // local? a1, ..., an = b1
-                    $$ = __chain()
-                    v := $2.CplIndex(0)
-                    for _, n := range nodes {
-                       $$ = $$.CplAppend(opSetMove($1)(n, v).pos0($1))
-                    }
-                } else {
-                    panic(&Error{Pos: $2.Position, Message: "unmatched assignments", Token: string(op.Sym())})
-                }
-            } else if op.Sym() == ASet {
-                // local a0, ..., an = b0, ..., bn
-                $$ = __chain()
-                for i, v := range nodes {
-                    $$ = $$.CplAppend(__set(v, $2.CplIndex(i)).pos0($1))
-                }
+            } else if n, m := len(nodes), len($3.Cpl()) ; n != m {
+                panic(&Error{Pos: $3.Position, Message: "unmatched assignments", Token: "move"})
             } else if head := nodes[0]; len(nodes) == 1 {
                 // a0 = b0
-                $$ = head.moveLoadStore(__move, $2.CplIndex(0)).pos0($1)
-                if a, s := $2.CplIndex(0).isSimpleAddSub(); a != "" && a == head.Sym() {
-                    // Note that a := a + v is different
+                $$ = head.moveLoadStore(__move, $3.CplIndex(0)).pos0($1)
+                if a, s := $3.CplIndex(0).isSimpleAddSub(); a != "" && a == head.Sym() {
                     $$ = __inc(head, Num(s)).pos0($1)
                 }
             } else { 
                 // a0, ..., an = b0, ..., bn
                 $$ = __chain()
-                names := []*Node{}
+                names, retaddr := []*Node{}, Cpl(ARetAddr)
                 for i := range nodes {
-                    names = append(names, Sym("(1)a" + strconv.Itoa(i)))
-                    $$.CplAppend(__set(names[i], $2.CplIndex(i)).pos0($1))
+                    names = append(names, randomVarname())
+                    retaddr.CplAppend(names[i])
+                    $$.CplAppend(__set(names[i], $3.CplIndex(i)).pos0($1))
                 }
                 for i, v := range nodes {
                     $$.CplAppend(v.moveLoadStore(__move, names[i]).pos0($1))
                 }
+                $$.CplAppend(retaddr)
             }
         } 
 
@@ -217,7 +223,7 @@ for_stat:
                     __loop(
                         __if(
                             __lessEq(forVar, forEnd),
-                            __chain($8, __inc(forVar, oneNode)),
+                            __chain($8, __inc(forVar, oneNode).pos0($1)),
                             breakNode,
                         ).pos0($1),
                     ).pos0($1),
@@ -336,13 +342,9 @@ declarator:
         prefix_expr '[' expr ']'          { $$ = __load($1, $3).pos0($3).SetPos($3) } |
         prefix_expr '.' TIdent            { $$ = __load($1, Nod($3.Str)).pos0($3).SetPos($3) }
 
-declarator_list_assign:
-        TLocal _declarator_list_assign    { a := $2.Value.([]*Node); a[len(a)-1] = Nod(ASet); $$ = $2 } |
-        _declarator_list_assign           { $$ = $1 }
-
-_declarator_list_assign:
-        declarator '='                    { $$ = Cpl($1, Nod(AMove)) } |
-        declarator ',' declarator_list_assign { $$ = $3.CplPrepend($1) }
+declarator_list:
+        declarator                        { $$ = Cpl($1) } |
+        declarator_list ',' declarator    { $$ = $1.CplAppend($3) }
 
 ident_list:
         TIdent                            { $$ = Cpl($1.Str) } | 

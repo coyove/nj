@@ -9,8 +9,6 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
-	"strconv"
-	"strings"
 
 	"github.com/coyove/potatolang/parser"
 )
@@ -19,6 +17,8 @@ type symbol struct {
 	addr  uint16
 	usage int
 }
+
+func (s *symbol) String() string { return fmt.Sprintf("symbol:%d", s.addr) }
 
 // symtable is responsible for recording the state of compilation
 type symtable struct {
@@ -115,12 +115,6 @@ func (table *symtable) get(varname parser.Symbol) uint16 {
 		}
 
 		addr := (depth << 10) | (uint16(k.addr) & 0x03ff)
-
-		if k.usage--; k.usage == 0 {
-			table.returnAddress(k.addr)
-			delete(table.sym, varname)
-		}
-
 		return addr
 	}
 
@@ -151,9 +145,6 @@ func (table *symtable) put(varname parser.Symbol, addr uint16) {
 		panic("debug")
 	}
 	c := math.MaxInt64
-	if strings.HasPrefix(string(varname), "(") {
-		c, _ = strconv.Atoi(string(varname[1:strings.Index(string(varname), ")")]))
-	}
 	sym := &symbol{
 		addr:  addr,
 		usage: c,
@@ -320,6 +311,8 @@ func (table *symtable) compileNode(node *parser.Node) (code packet, yx uint16) {
 		code, yx = table.compileAndOrOp(nodes)
 	case parser.AFunc:
 		code, yx = table.compileLambdaOp(nodes)
+	case parser.ARetAddr:
+		code, yx = table.compileRetAddrOp(nodes)
 	default:
 		if _, ok := flatOpMapping[name]; ok {
 			return table.compileFlatOp(nodes)

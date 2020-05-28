@@ -45,6 +45,7 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 				}
 			}
 			yx := t.borrowAddress()
+
 			// Do not use t.put() because it may put the symbol into masked tables
 			// e.g.: do a = 1 end
 			t.sym[aDest] = &symbol{usage: math.MaxInt32, addr: yx}
@@ -405,6 +406,20 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 		i += x + 4
 	}
 	return buf, regA
+}
+
+func (table *symtable) compileRetAddrOp(atoms []*parser.Node) (code packet, yx uint16) {
+	for i := 1; i < len(atoms); i++ {
+		s := atoms[i].Sym()
+		yx := table.get(s)
+		table.returnAddress(yx)
+		if len(table.maskedSym) > 0 {
+			delete(table.maskedSym[len(table.maskedSym)-1], s)
+		} else {
+			delete(table.sym, s)
+		}
+	}
+	return
 }
 
 // collapse will accept a list of nodes, for every expression inside,

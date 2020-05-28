@@ -1,3 +1,10 @@
+do
+local ms = {}
+ms[1], ms2 = (function () return 1, 2 end)()
+assert(ms[1] == 1 and ms2 == 2)
+end
+assert(ms2 == 2)
+
 local a = native.bytes(2)
 a[0] = 49
 a = a:append(unpack({32 , 33, 34}))
