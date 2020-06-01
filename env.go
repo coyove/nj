@@ -7,12 +7,12 @@ import (
 // Env is the environment for a closure to run within.
 // stack contains arguments used to execute the closure (variadic arguments are inside Vararg)
 // then the local variables will take the following spaces sequentially.
-// Sym and B store the results of the execution
+// A stores the results of the execution
 type Env struct {
 	parent *Env
 	stack  []Value
 	Vararg []Value
-	A, B   Value
+	A      Value
 }
 
 // NewEnv creates the Env for closure to run within
@@ -53,7 +53,7 @@ func (env *Env) Set(index int, value Value) {
 // Clear clears the current stack
 func (env *Env) Clear() {
 	env.stack = env.stack[:0]
-	env.A, env.B, env.Vararg = Value{}, Value{}, nil
+	env.A, env.Vararg = Value{}, nil
 }
 
 // Push pushes a value into the current stack

@@ -98,7 +98,7 @@ func (c *Closure) PrettyString() string {
 }
 
 // Exec executes the closure with the given Env
-func (c *Closure) Exec(newEnv *Env) (Value, Value) {
+func (c *Closure) Exec(newEnv *Env) (Value, []Value) {
 	if c.native == nil {
 		if c.lastenv != nil {
 			newEnv = c.lastenv
@@ -137,10 +137,10 @@ func (c *Closure) Exec(newEnv *Env) (Value, Value) {
 	}
 
 	c.native(newEnv)
-	return newEnv.A, newEnv.B
+	return newEnv.A, newEnv.Vararg
 }
 
-func (c *Closure) Call(a ...Value) (Value, Value) {
+func (c *Closure) Call(a ...Value) (Value, []Value) {
 	if len(a) != int(c.NumParam) {
 		if !(c.Is(ClsVararg) && len(a) > int(c.NumParam)) {
 			panicf("expect at least %d arguments (got %d)", c.NumParam, len(a))

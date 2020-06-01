@@ -1,3 +1,20 @@
+local a, b, c = (function() return 1, 2, 3 end)()
+assert(a == 1 and b == 2 and c == 3)
+
+a,b,c = (function (a, b ,c)
+    local function f(a, b) return b, a end
+    b, c = f(b, c)
+    return c, b, a
+end)(1,2,3)
+assert(a == 2 and b == 3 and c == 1)
+
+for v1, v2 in (function() 
+    yield 1, 1
+    yield 2, 2
+end) do
+    assert(v1 != nil and v1 == v2)
+end
+
 function syntax_return_void() return end
 function syntax_return_value(en) return en end
 function syntax_return_void2(en) return

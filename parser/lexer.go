@@ -326,7 +326,6 @@ var reservedWords = map[string]uint32{
 	"len":      TLen,
 	"return":   TReturn,
 	"require":  TImport,
-	"typeof":   TTypeof,
 	"for":      TFor,
 	"while":    TWhile,
 	"repeat":   TRepeat,

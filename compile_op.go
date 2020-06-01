@@ -63,6 +63,30 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 	return buf, newYX
 }
 
+func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint16) {
+	op := OpRet
+	if atoms[0].Sym() == parser.AYield {
+		table.y = true
+		op = OpYield
+	}
+	values := atoms[1].Cpl()
+	if len(values) == 0 { // return
+		code.WriteOP(op, regNil, 0)
+		return code, regA
+	}
+
+	// return a1, ..., an
+	code = table.collapse(values, true)
+
+	for i := 1; i < len(values); i++ {
+		table.writeOpcode(&code, OpPushV, values[i], nil)
+	}
+	table.writeOpcode(&code, op, values[0], nil)
+
+	table.returnAddresses(values)
+	return
+}
+
 func (table *symtable) compileHashArrayOp(atoms []*parser.Node) (code packet, yx uint16) {
 	switch atoms[0].Value.(parser.Symbol) {
 	case parser.AHash, parser.AArray:
@@ -148,7 +172,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	buf = table.collapse(atoms[1:], true)
 
 	switch bop {
-	case OpGetB, OpPatchVararg:
+	case OpPopV, OpPatchVararg:
 		buf.WriteOP(bop, 0, 0)
 	case OpAddressOf:
 		yx := table.get(atoms[1].Sym())
@@ -159,7 +183,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 			table.put(atoms[1].Sym(), yx)
 		}
 		buf.WriteOP(bop, yx, 0)
-	case OpNot, OpRet, OpYield, OpLen, OpSetB:
+	case OpNot, OpRet, OpYield, OpLen:
 		// unary op
 		table.writeOpcode(&buf, bop, atoms[1], nil)
 	default:

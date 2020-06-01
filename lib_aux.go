@@ -24,7 +24,7 @@ func fmtPrint(flag byte) func(env *Env) {
 		}
 
 		if err != nil {
-			env.B = Str(err.Error())
+			env.Vararg = []Value{Str(err.Error())}
 		} else {
 			env.A = Num(float64(n))
 		}
@@ -314,6 +314,9 @@ func initLibAux() {
 	lstring.Puts("format", NativeFun(1, true, fmtSprint('f')), false)
 	lstring.Puts("rep", NativeFun(2, false, func(env *Env) {
 		env.A = Str(strings.Repeat(env.In(0, STR).Str(), int(env.In(1, NUM).Num())))
+	}), false)
+	lstring.Puts("char", NativeFun(1, false, func(env *Env) {
+		env.A = Str(string(rune(env.In(0, NUM).Num())))
 	}), false)
 	G.Puts("string", Tab(lstring), false)
 }

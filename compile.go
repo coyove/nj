@@ -206,8 +206,7 @@ var flatOpMapping = map[parser.Symbol]_Opcode{
 	parser.APatchVararg: OpPatchVararg,
 	parser.AAddrOf:      OpAddressOf,
 	parser.AInc:         OpInc,
-	parser.ASetB:        OpSetB,
-	parser.AGetB:        OpGetB,
+	parser.APopV:        OpPopV,
 }
 
 func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node) {
@@ -292,11 +291,8 @@ func (table *symtable) compileNode(node *parser.Node) (code packet, yx uint16) {
 		code, yx = table.compileChainOp(node)
 	case parser.ASet, parser.AMove:
 		code, yx = table.compileSetOp(nodes)
-	case parser.AReturn:
-		code, yx = table.writeOpcode3(OpRet, nodes)
-	case parser.AYield:
-		table.y = true
-		code, yx = table.writeOpcode3(OpYield, nodes)
+	case parser.AReturn, parser.AYield:
+		code, yx = table.compileRetOp(nodes)
 	case parser.AIf:
 		code, yx = table.compileIfOp(nodes)
 	case parser.AFor:

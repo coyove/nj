@@ -12,6 +12,9 @@ func initLibMath() {
 	lmath.Puts("sqrt", NativeFun(1, false, func(env *Env) {
 		env.A = Num(math.Sqrt(env.Get(0).Expect(NUM).Num()))
 	}), false)
+	lmath.Puts("floor", NativeFun(1, false, func(env *Env) {
+		env.A = Num(math.Floor(env.Get(0).Expect(NUM).Num()))
+	}), false)
 	lmath.Puts("max", NativeFun(0, true, func(env *Env) {
 		if len(env.Vararg) == 0 {
 			env.A = Value{}

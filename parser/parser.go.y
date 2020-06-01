@@ -49,15 +49,14 @@ import "math/rand"
 %right TElse
 %left ASSIGN
 %right FUNC
-%left TDotDotDot
 %left TOr
 %left TAnd
 %left '>' '<' TGte TLte TEqeq TNeq
-%left '+' '-' '^' TDotDot
+%left TDotDot
+%left '+' '-' '^'
 %left '*' '/' '%' 
 %right UNARY /* not # -(unary) */
-%right '#'
-%right TTypeof, TLen, TImport
+%right TImport
 
 %% 
 
@@ -108,44 +107,24 @@ assign_stat:
             }
         } |
         TLocal ident_list '=' expr_list {
-            if m, n := len($2.Cpl()), len($4.Cpl()); m == 2 && n == 1 {
-                // local a, b = c()
-                $$ = __chain(
-                    __set($2.CplIndex(0), $4.CplIndex(0)).pos0($1),
-                    __set($2.CplIndex(1), Cpl(AGetB)).pos0($1),
-                )
-            } else if m != n {
-                panic(&Error{Pos: $2.Position, Message: "unmatched assignments", Token: $1.Str})
-            } else {
-                $$ = __chain()
-                for i, v := range $2.Cpl() {
-                    $$ = $$.CplAppend(__set(v, $4.CplIndex(i)).pos0($1))
-                }
+            m, n := len($2.Cpl()), len($4.Cpl())
+            for i := 0; i < m - n; i++ {
+                $4.CplAppend(popvNode)
+            }
+
+            $$ = __chain()
+            for i, v := range $2.Cpl() {
+                $$ = $$.CplAppend(__set(v, $4.CplIndex(i)).pos0($1))
             }
         } |
         declarator_list '=' expr_list {
             nodes := $1.Cpl()
-            if len(nodes) == 2 && len($3.Cpl()) == 1 {
-                // a, b = c()
-                bb := Cpl(AGetB)
-                if nodes[0].Type() == SYM && nodes[1].Type() == SYM {
-                    $$ = __chain(
-                        __move(nodes[0], $3.CplIndex(0)).pos0($1),
-                        __move(nodes[1], bb).pos0($1),
-                    )
-                } else {
-                    a, b := randomVarname(), randomVarname()
-                    $$ = __do(
-                        __set(a, $3.CplIndex(0)).pos0($1),
-                        __set(b, bb).pos0($1),
-                        nodes[0].moveLoadStore(__move, a).pos0(nodes[0]),
-                        nodes[1].moveLoadStore(__move, b).pos0(nodes[1]),
-                        Cpl(ARetAddr, a, b).pos0($1),
-                    )
-                }
-            } else if n, m := len(nodes), len($3.Cpl()) ; n != m {
-                panic(&Error{Pos: $3.Position, Message: "unmatched assignments", Token: "move"})
-            } else if head := nodes[0]; len(nodes) == 1 {
+            m, n := len(nodes), len($3.Cpl())
+            for i := 0; i < m - n; i++ {
+                $3.CplAppend(popvNode)
+            } 
+             
+            if head := nodes[0]; len(nodes) == 1 {
                 // a0 = b0
                 $$ = head.moveLoadStore(__move, $3.CplIndex(0)).pos0($1)
                 if a, s := $3.CplIndex(0).isSimpleAddSub(); a != "" && a == head.Sym() {
@@ -209,7 +188,7 @@ for_stat:
                 __loop(
                     __chain(
                         __set($2, __call(iter, emptyNode).pos0($1)).pos0($1),
-                        __set($4, Cpl(AGetB).pos0($1)).pos0($1),
+                        __set($4, popvNode).pos0($1),
                         __if($2, $8, breakNode).pos0($1),
                     ),
                 ).pos0($1),
@@ -327,14 +306,12 @@ func_params_list:
         '(' ident_list ')'                { $$ = $2 }
 
 jmp_stat:
-        TYield expr                       { $$ = Cpl(AYield, $2).pos0($1) } |
-        TYield expr ',' expr              { $$ = __chain(Cpl(ASetB, $4).pos0($1), Cpl(AYield, $2).pos0($1)) } |
-        TYieldVoid                        { $$ = Cpl(AYield, nilNode).pos0($1) } |
+        TYield expr_list                  { $$ = Cpl(AYield, $2).pos0($1) } |
+        TYieldVoid                        { $$ = Cpl(AYield, emptyNode).pos0($1) } |
         TBreak                            { $$ = Cpl(ABreak).pos0($1) } |
         TContinue                         { $$ = Cpl(AContinue).pos0($1) } |
-        TReturn expr                      { $$ = __return($2).pos0($1) } |
-        TReturn expr ',' expr             { $$ = __chain(Cpl(ASetB, $4).pos0($1), __return($2).pos0($1)) } |
-        TReturnVoid                       { $$ = __return(nilNode).pos0($1) } |
+        TReturn expr_list                 { $$ = Cpl(AReturn, $2).pos0($1) } |
+        TReturnVoid                       { $$ = Cpl(AReturn, emptyNode).pos0($1) } |
         TImport TString                   { $$ = __move(Sym(moduleNameFromPath($2.Str)), yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1)).pos0($1) }
 
 declarator:
@@ -360,7 +337,6 @@ expr:
         TDotDotDot                        { $$ = __call(Sym("unpack"), Cpl(Sym("arg"))).pos0($1) } |
         TNumber                           { $$ = Num($1.Str).SetPos($1) } |
         TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) } |
-        '#' expr                          { $$ = Cpl(ALen, $2) } |
         function                          { $$ = $1 } |
         table_gen                         { $$ = $1 } |
         prefix_expr                       { $$ = $1 } |
@@ -382,7 +358,8 @@ expr:
         expr '^' expr                     { $$ = Cpl(APow, $1,$3).pos0($1) } |
         '-' expr %prec UNARY              { $$ = Cpl(ASub, zeroNode, $2).pos0($2) } |
         TNot expr %prec UNARY             { $$ = Cpl(ANot, $2).pos0($2) } |
-        '&' TIdent %prec UNARY            { $$ = Cpl(AAddrOf, SymTok($2)).pos0($2) }
+        '&' TIdent %prec UNARY            { $$ = Cpl(AAddrOf, SymTok($2)).pos0($2) } |
+        '#' expr %prec UNARY              { $$ = Cpl(ALen, $2) }
 
 prefix_expr:
         declarator                        { $$ = $1 } |

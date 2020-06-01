@@ -31,6 +31,14 @@ func (t *Table) rawgetstr(name string) Value {
 	return t.m[tablekey{str: name, g: Value{v: STR}}]
 }
 
+func (t *Table) rawsetstr(name string, v Value) *Table {
+	if t.m == nil {
+		t.m = map[tablekey]Value{}
+	}
+	t.m[tablekey{str: name, g: Value{v: STR}}] = v
+	return t
+}
+
 func (t *Table) Put(k, v Value, raw bool) {
 	if k.Type() == NUM {
 		idx := k.Num()

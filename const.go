@@ -12,8 +12,6 @@ type _Opcode byte
 const (
 	_ _Opcode = iota
 	OpSet
-	OpGetB
-	OpSetB
 	OpStore
 	OpLoad
 	OpAdd
@@ -37,6 +35,8 @@ const (
 	OpLambda
 	OpPush
 	OpPush2
+	OpPushV
+	OpPopV
 	OpCall
 	OpRet
 	OpYield

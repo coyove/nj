@@ -259,7 +259,19 @@ func (v Value) toString(lv int, json bool) string {
 var (
 	nilMetatable *Table
 	blnMetatable *Table
-	strMetatable *Table
+	strMetatable = (&Table{}).rawsetstr("sub", NativeFun(2, true, func(env *Env) {
+		i, j, s := int(env.In(1, NUM).Num()), -1, env.In(0, STR).Str()
+		if len(env.Vararg) > 0 {
+			j = int(env.Vararg[0].Expect(NUM).Num())
+		}
+		if i < 0 {
+			i = len(s) + i + 1
+		}
+		if j < 0 {
+			j = len(s) + j + 1
+		}
+		env.A = Str(s[i-1 : j])
+	}))
 	numMetatable *Table
 	funMetatable *Table
 	upkMetatable *Table

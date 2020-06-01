@@ -15,6 +15,7 @@ var (
 
 	chainNode = Nod(ABegin)
 	breakNode = Cpl(Nod(ABreak))
+	popvNode  = Cpl(Nod(APopV))
 	nilNode   = Nod(ANil)
 	zeroNode  = Num(0)
 	oneNode   = Num(1)
@@ -66,6 +67,7 @@ const (
 	AAddrOf      Symbol = "addr"
 	ALen         Symbol = "len"
 	ARetAddr     Symbol = "reta"
+	APopV        Symbol = "popv"
 )
 
 func __chain(args ...interface{}) *Node { return Cpl(append([]interface{}{ABegin}, args...)...) }
@@ -90,8 +92,6 @@ func __inc(subject, step interface{}) *Node { return Cpl(AInc, subject, step) }
 func __load(subject, key interface{}) *Node { return Cpl(ALoad, subject, key) }
 
 func __call(cls, args interface{}) *Node { return Cpl(ACall, cls, args) }
-
-func __return(value interface{}) *Node { return Cpl(AReturn, value) }
 
 func __store(subject, key, value interface{}) *Node { return Cpl(AStore, subject, value, key) }
 
