@@ -44,8 +44,6 @@ const (
 	ALoad        Symbol = "load"
 	AStore       Symbol = "stor"
 	ACall        Symbol = "call"
-	ASetB        Symbol = "setb"
-	AGetB        Symbol = "getb"
 	AReturn      Symbol = "ret"
 	AYield       Symbol = "yld"
 	AHash        Symbol = "hash"

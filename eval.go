@@ -135,6 +135,13 @@ MAIN:
 		case OpSet:
 			env._set(opa, env._get(opb, K))
 		case OpPushV:
+			if opb != 0 {
+				if cap(env.Vararg) < int(opb) {
+					env.Vararg = make([]Value, 0, opb)
+				} else {
+					env.Vararg = env.Vararg[:0]
+				}
+			}
 			env.Vararg = append(env.Vararg, env._get(opa, K))
 		case OpPopV:
 			if len(env.Vararg) == 0 {

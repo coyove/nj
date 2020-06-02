@@ -259,7 +259,7 @@ t.__lt = function (a,b)
     if not b[k] then return false end
     b[k] = nil
   end
-  return rawlenhash(b) != 0
+  return rawlenhash(b) + #b != 0
 end
 
 t.__le = function (a,b)

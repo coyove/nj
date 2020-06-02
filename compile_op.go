@@ -79,7 +79,12 @@ func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint1
 	code = table.collapse(values, true)
 
 	for i := 1; i < len(values); i++ {
-		table.writeOpcode(&code, OpPushV, values[i], nil)
+		if i == 1 {
+			// First OpPushV will contain the total number of V in opb
+			table.writeOpcode(&code, OpPushV, values[i], parser.Nod(uint16(len(values)-1)))
+		} else {
+			table.writeOpcode(&code, OpPushV, values[i], nil)
+		}
 	}
 	table.writeOpcode(&code, op, values[0], nil)
 

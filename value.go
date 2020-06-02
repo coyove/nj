@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"unsafe"
 )
 
@@ -217,6 +218,26 @@ func (v Value) Equal(r Value) bool {
 		return !e.IsFalse()
 	}
 	return false
+}
+
+func (v Value) cmp(v2 Value) int {
+	if v == v2 {
+		return 0
+	}
+	if v.v > v2.v {
+		return 1
+	}
+	if v.v < v2.v {
+		return -1
+	}
+	// v.v == v2.v
+	if v.v == STR {
+		return strings.Compare(v.Str(), v2.Str())
+	}
+	if uintptr(v.p) < uintptr(v2.p) {
+		return -1
+	}
+	return 1
 }
 
 func (v Value) toString(lv int, json bool) string {

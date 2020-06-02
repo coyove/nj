@@ -367,6 +367,9 @@ MAIN:
 			sb.WriteString("$a = popv")
 		case OpPushV:
 			sb.WriteString("pushv " + readAddr(a))
+			if b != 0 {
+				sb.WriteString(" cap=" + strconv.Itoa(int(b)))
+			}
 		case OpPush:
 			sb.WriteString("push " + readAddr(a))
 		case OpPush2:

@@ -38,7 +38,7 @@ func runFile(t *testing.T, path string) {
 	}
 
 	i, i2 := b.Exec(nil)
-	t.Log(i.AsInterface(), i2.AsInterface())
+	t.Log(i, i2)
 }
 
 func TestSMain(t *testing.T) {
@@ -171,7 +171,7 @@ func TestInc(t *testing.T) {
 
 	code := cls.Code
 	o, _, s := op(code[1])
-	if o != OpInc || cls.ConstTable[s&0x3ff].MustNumber() != -1.0 {
+	if o != OpInc || cls.ConstTable[s&0x3ff].Num() != -1.0 {
 		t.Fatal("error opcode 0")
 	}
 
