@@ -16,12 +16,12 @@ func initLibMath() {
 		env.A = Num(math.Floor(env.Get(0).Expect(NUM).Num()))
 	}), false)
 	lmath.Puts("max", NativeFun(0, true, func(env *Env) {
-		if len(env.Vararg) == 0 {
+		if len(env.V) == 0 {
 			env.A = Value{}
 		} else {
-			max := env.Vararg[0].Expect(NUM).Num()
-			for i := 1; i < len(env.Vararg); i++ {
-				if x := env.Vararg[i].Expect(NUM).Num(); x > max {
+			max := env.V[0].Expect(NUM).Num()
+			for i := 1; i < len(env.V); i++ {
+				if x := env.V[i].Expect(NUM).Num(); x > max {
 					max = x
 				}
 			}
@@ -70,7 +70,7 @@ var (
 				case "append":
 					env.A = NativeFun(1, true, func(env *Env) {
 						a := env.In(0, ANY).Any().(NativeBytes)
-						for _, v := range env.Vararg {
+						for _, v := range env.V {
 							a = append(a, byte(v.ExpectMsg(NUM, "append").Num()))
 						}
 						env.A = Any(a)

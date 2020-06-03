@@ -3,9 +3,12 @@ package potatolang
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 	"unsafe"
+
+	"github.com/cespare/xxhash"
 )
 
 const (
@@ -59,15 +62,21 @@ func (v Value) Type() byte {
 	return byte(v.v)
 }
 
-var typeMappings = map[byte]string{
-	NIL: "nil", BLN: "boolean", NUM: "number", STR: "string", FUN: "function", ANY: "any", TAB: "table", UPK: "unpacked",
-}
+var (
+	typeMappings = map[byte]string{
+		NIL: "nil", BLN: "boolean", NUM: "number", STR: "string", FUN: "function", ANY: "any", TAB: "table", UPK: "unpacked",
+	}
+	emptyUPK = []Value{}
+)
 
 func init() {
 	initCoreLibs()
 }
 
 func newUnpackedValue(stack []Value) Value {
+	if stack == nil {
+		stack = emptyUPK
+	}
 	return Value{v: UPK, p: unsafe.Pointer(&stack)}
 }
 
@@ -157,7 +166,12 @@ func (v Value) Bln() bool { return v.v == 1 }
 // Tab cast value to map of values
 func (v Value) Tab() *Table { return (*Table)(v.p) }
 
-func (v Value) asUnpacked() []Value { return *(*[]Value)(v.p) }
+func (v Value) asUnpacked() []Value {
+	if v.p == unsafe.Pointer(&emptyUPK) {
+		return nil
+	}
+	return *(*[]Value)(v.p)
+}
 
 // Fun cast value to closure
 func (v Value) Fun() *Closure { return (*Closure)(v.p) }
@@ -220,6 +234,19 @@ func (v Value) Equal(r Value) bool {
 	return false
 }
 
+//go:nosplit
+func (v Value) Hash() uint64 {
+	if v.Type() == STR {
+		return xxhash.Sum64String(v.Str())
+	}
+	var b []byte
+	bh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	bh.Data = uintptr(unsafe.Pointer(&v))
+	bh.Len = int(unsafe.Sizeof(v))
+	bh.Cap = int(unsafe.Sizeof(v))
+	return xxhash.Sum64(b)
+}
+
 func (v Value) cmp(v2 Value) int {
 	if v == v2 {
 		return 0
@@ -280,10 +307,17 @@ func (v Value) toString(lv int, json bool) string {
 var (
 	nilMetatable *Table
 	blnMetatable *Table
+	strMetatable *Table
+	numMetatable *Table
+	funMetatable *Table
+	upkMetatable *Table
+)
+
+func init() {
 	strMetatable = (&Table{}).rawsetstr("sub", NativeFun(2, true, func(env *Env) {
 		i, j, s := int(env.In(1, NUM).Num()), -1, env.In(0, STR).Str()
-		if len(env.Vararg) > 0 {
-			j = int(env.Vararg[0].Expect(NUM).Num())
+		if len(env.V) > 0 {
+			j = int(env.V[0].Expect(NUM).Num())
 		}
 		if i < 0 {
 			i = len(s) + i + 1
@@ -293,10 +327,7 @@ var (
 		}
 		env.A = Str(s[i-1 : j])
 	}))
-	numMetatable *Table
-	funMetatable *Table
-	upkMetatable *Table
-)
+}
 
 func (v Value) GetMetatable() *Table {
 	switch t := v.Type(); t {

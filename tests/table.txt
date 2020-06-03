@@ -101,7 +101,7 @@ end
 
 
 setmetatable(t, nil)
-function f (t, ...) return t, {unpack(arg)} end
+function f (t, ...) return t, {...} end
 t.__call = f
 
 do
@@ -116,7 +116,7 @@ local b = setmetatable({}, t)
 setmetatable(b,t)
 
 function f(op)
-  return function (...) cap = {[0] = op; ...} ; return arg[1] end
+  return function (...) cap = {[0] = op; ...} ; return ...[1] end
 end
 t.__add = f("add")
 t.__sub = f("sub")
@@ -259,7 +259,7 @@ t.__lt = function (a,b)
     if not b[k] then return false end
     b[k] = nil
   end
-  return rawlenhash(b) + #b != 0
+  return next(b) ~= nil  or #b != 0
 end
 
 t.__le = function (a,b)
@@ -270,6 +270,7 @@ t.__le = function (a,b)
 end
 
 assert(Set{1,2,3} < Set{1,2,3,4})
+assert(Set{2,3,4} < Set{2,3,4,5})
 assert(not(Set{1,2,3,4} < Set{1,2,3,4}))
 assert((Set{1,2,3,4} <= Set{1,2,3,4}))
 assert((Set{1,2,3,4} >= Set{1,2,3,4}))
@@ -282,7 +283,7 @@ t.__eq = function (a,b)
     if not b[k] then return false end
     b[k] = nil
   end
-  return rawlenhash(b) == 0
+  return next(b) == nil
 end
 
 local s = Set{1,3,5}

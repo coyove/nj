@@ -14,16 +14,27 @@ func initCoreLibs() {
 		env.A = Fun(cls)
 	}), false)
 	G.Puts("closure", Tab(lclosure), false)
+	G.Puts("unpack", NativeFun(1, true, func(env *Env) {
+		a := env.In(0, TAB).Tab().a
+		start, end := 1, len(a)
+		if len(env.V) > 0 {
+			start = int(env.V[0].Expect(NUM).Num())
+		}
+		if len(env.V) > 1 {
+			end = int(env.V[1].Expect(NUM).Num())
+		}
+		env.A = newUnpackedValue(a[start-1 : end])
+	}), false)
 	// 	lcore.Put("Safe", NativeFun(1, func(env *Env) Value {
 	// 		cls := env.Get(0).MustClosure()
 	// 		cls._set(ClsRecoverable)
 	// 		return Fun(cls)
 	// 	}))
 	// 	lcore.Put("Eval", NativeFun(1, func(env *Env) Value {
-	// 		env.Vararg = Value{}
+	// 		env.V = Value{}
 	// 		cls, err := LoadString(string(env.Get(0).MustString()))
 	// 		if err != nil {
-	// 			env.Vararg = Str(err.Error())
+	// 			env.V = Str(err.Error())
 	// 			return Value{}
 	// 		}
 	// 		return Fun(cls)
@@ -47,12 +58,12 @@ func initCoreLibs() {
 	// 	lcore.Put("PopBack", NativeFun(2, func(env *Env) Value {
 	// 		s := env.Get(0).MustSlice()
 	// 		if len(s.l) == 0 {
-	// 			env.Vararg = Value{}
+	// 			env.V = Value{}
 	// 			return Value{}
 	// 		}
 	// 		res := s.l[len(s.l)-1]
 	// 		s.l = s.l[:len(s.l)-1]
-	// 		env.Vararg = NewSliceValue(s)
+	// 		env.V = NewSliceValue(s)
 	// 		return res
 	// 	}))
 	// 	lcore.Put("sync", NewStructValue(NewStruct().
@@ -73,13 +84,14 @@ func initCoreLibs() {
 	ltable := &Table{}
 	ltable.Puts("insert", NativeFun(2, true, func(env *Env) {
 		t := env.In(0, TAB).Tab()
-		if len(env.Vararg) > 0 {
-			t.Insert(env.In(1, NUM), env.Vararg[0])
-			env.A = env.Vararg[0]
+		if len(env.V) > 0 {
+			t.Insert(env.In(1, NUM), env.V[0])
+			env.A = env.V[0]
 		} else {
-			t.Insert(Num(float64(t.Len())), env.Vararg[0])
+			t.Insert(Num(float64(t.Len())), env.V[0])
 		}
 	}), false)
+	ltable.Puts("unpack", G.Gets("unpack", false), false)
 	G.Puts("table", Tab(ltable), false)
 	G.Puts("type", NativeFun(1, false, func(env *Env) {
 		env.A = Str(typeMappings[env.Get(0).Type()])
@@ -106,8 +118,9 @@ func initCoreLibs() {
 			env.A = Bln(false)
 		}
 	}), false)
-	G.Puts("rawlenhash", NativeFun(1, false, func(env *Env) {
-		env.A = Num(float64(len(env.In(0, TAB).Tab().m)))
+	G.Puts("next", NativeFun(1, false, func(env *Env) {
+		k, v := env.In(0, TAB).Tab().m.Next(env.Get(1))
+		env.A, env.V = k, []Value{v}
 	}), false)
 	G.Puts("rawlen", NativeFun(1, false, func(env *Env) {
 		switch env.A = env.Get(0); env.A.Type() {
@@ -122,21 +135,10 @@ func initCoreLibs() {
 	G.Puts("pcall", NativeFun(1, true, func(env *Env) {
 		defer func() {
 			if r := recover(); r != nil {
-				env.A, env.Vararg = Value{}, nil
+				env.A, env.V = Value{}, nil
 			}
 		}()
-		env.A, env.Vararg = env.In(0, FUN).Fun().Call(env.Vararg...)
-	}), false)
-	G.Puts("unpack", NativeFun(1, true, func(env *Env) {
-		a := env.In(0, TAB).Tab().a
-		start, end := 1, len(a)
-		if len(env.Vararg) > 0 {
-			start = int(env.Vararg[0].Expect(NUM).Num())
-		}
-		if len(env.Vararg) > 1 {
-			end = int(env.Vararg[1].Expect(NUM).Num())
-		}
-		env.A = newUnpackedValue(a[start-1 : end])
+		env.A, env.V = env.In(0, FUN).Fun().Call(env.V...)
 	}), false)
 	G.Puts("select", NativeFun(2, false, func(env *Env) {
 		switch a := env.Get(0); a.Type() {
@@ -176,49 +178,56 @@ func initCoreLibs() {
 	}), false)
 	G.Puts("pairs", NativeFun(1, false, func(env *Env) {
 		t := env.In(0, TAB).Tab()
-		iter := t.Iter()
-		idx := -1
+		var idx = -1
+		var lastk Value
 		env.A = NativeFun(0, false, func(env *Env) {
 		AGAIN:
 			idx++
 			if idx >= len(t.a) {
-				if !iter.Next() {
-					env.A, env.Vararg = Value{}, nil
+				k, v := t.m.Next(lastk)
+				if k.IsNil() {
+					env.A, env.V = Value{}, nil
 				} else {
-					env.A, env.Vararg = iter.Key(), []Value{iter.Value()}
+					env.A, env.V = k, []Value{v}
+					lastk = k
 				}
 			} else {
 				if t.a[idx].IsNil() {
 					goto AGAIN
 				}
-				env.A, env.Vararg = Num(float64(idx)+1), []Value{t.a[idx]}
+				env.A, env.V = Num(float64(idx)+1), []Value{t.a[idx]}
 			}
 		})
 	}), false)
 	G.Puts("ipairs", NativeFun(1, false, func(env *Env) {
-		t := env.In(0, TAB).Tab()
-		idx := -1
+		var arr []Value
+		var idx = -1
+		switch t := env.Get(0); t.Type() {
+		case TAB:
+			arr = t.Tab().a
+		case UPK:
+			arr = t.asUnpacked()
+		default:
+			t.ExpectMsg(TAB, "ipairs")
+		}
 		env.A = NativeFun(0, false, func(env *Env) {
 		AGAIN:
 			idx++
-			if idx >= len(t.a) {
-				env.A, env.Vararg = Value{}, nil
+			if idx >= len(arr) {
+				env.A, env.V = Value{}, nil
 			} else {
-				if t.a[idx].IsNil() {
+				if arr[idx].IsNil() {
 					goto AGAIN
 				}
-				env.A, env.Vararg = Num(float64(idx)+1), []Value{t.a[idx]}
+				env.A, env.V = Num(float64(idx)+1), []Value{arr[idx]}
 			}
 		})
 	}), false)
 	G.Puts("tostring", NativeFun(1, false, func(env *Env) {
 		v := env.Get(0)
-		if v.Type() == TAB && v.Tab().mt != nil {
-			_tostring := v.Tab().mt.Gets("__tostring", false)
-			if _tostring.Type() == FUN {
-				env.A, _ = _tostring.Fun().Call(v)
-				return
-			}
+		if f := v.GetMetamethod("__tostring"); f.Type() == FUN {
+			env.A, env.V = f.Fun().Call(v)
+			return
 		}
 		env.A = Str(v.String())
 	}), false)
@@ -308,7 +317,7 @@ func initCoreLibs() {
 	// 	// 	} else {
 	// 	// 		ch = Value{}
 	// 	// 	}
-	// 	// 	env.Vararg = ch
+	// 	// 	env.V = ch
 	// 	// 	return v
 	// 	// })))
 	//
@@ -343,7 +352,7 @@ func initCoreLibs() {
 	// 			Put("_get", NativeFun(1, func(env *Env) Value {
 	// 				buf := env.Get(0).MustString()
 	// 				v, ok := m[*(*string)(unsafe.Pointer(&buf))]
-	// 				env.Vararg = Bln(ok)
+	// 				env.V = Bln(ok)
 	// 				return v
 	// 			})).
 	// 			Put("Put", NativeFun(2, func(env *Env) Value {
@@ -358,7 +367,7 @@ func initCoreLibs() {
 	// 			Put("Delete", NativeFun(1, func(env *Env) Value {
 	// 				buf := env.Get(0).MustString()
 	// 				v, ok := m[*(*string)(unsafe.Pointer(&buf))]
-	// 				env.Vararg = Bln(ok)
+	// 				env.V = Bln(ok)
 	// 				delete(m, *(*string)(unsafe.Pointer(&buf)))
 	// 				return v
 	// 			})).

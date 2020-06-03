@@ -5,13 +5,14 @@ import (
 )
 
 // Env is the environment for a closure to run within.
-// stack contains arguments used to execute the closure (variadic arguments are inside Vararg)
+// stack contains arguments used to execute the closure
 // then the local variables will take the following spaces sequentially.
-// A stores the results of the execution
+// A and V stores the results of the execution (e.g: return a, b, c => env.A = a, env.V = []Value{b, c})
+// For native variadic functions, V also stores the incoming varargs.
 type Env struct {
 	parent *Env
 	stack  []Value
-	Vararg []Value
+	V      []Value
 	A      Value
 }
 
@@ -53,7 +54,7 @@ func (env *Env) Set(index int, value Value) {
 // Clear clears the current stack
 func (env *Env) Clear() {
 	env.stack = env.stack[:0]
-	env.A, env.Vararg = Value{}, nil
+	env.A, env.V = Value{}, nil
 }
 
 // Push pushes a value into the current stack

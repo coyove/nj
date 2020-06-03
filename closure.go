@@ -120,35 +120,21 @@ func (c *Closure) Exec(newEnv *Env) (Value, []Value) {
 	// For a native function, it doesn't have its own Env,
 	// so newEnv's parent is the Env where this function was called.
 
-	// Check vararg
-	if c.Is(ClsVararg) {
-		if len(newEnv.stack) > int(c.NumParam) {
-			v := newEnv.stack[c.NumParam]
-			if v.Type() == UPK {
-				if len(newEnv.stack) != int(c.NumParam)+1 {
-					panicf("unpacked values should be the last arguments")
-				}
-				newEnv.Vararg = v.asUnpacked()
-			} else {
-				newEnv.Vararg = newEnv.stack[c.NumParam:]
-				newEnv.stack = newEnv.stack[:c.NumParam]
-			}
-		}
-	}
-
 	c.native(newEnv)
-	return newEnv.A, newEnv.Vararg
+	return newEnv.A, newEnv.V
 }
 
 func (c *Closure) Call(a ...Value) (Value, []Value) {
-	if len(a) != int(c.NumParam) {
-		if !(c.Is(ClsVararg) && len(a) > int(c.NumParam)) {
-			panicf("expect at least %d arguments (got %d)", c.NumParam, len(a))
-		}
-	}
 	newEnv := NewEnv(c.Env)
 	for i := range a {
-		newEnv.Push(a[i])
+		if i >= int(c.NumParam) {
+			newEnv.V = append(newEnv.V, a[i])
+		} else {
+			newEnv.Push(a[i])
+		}
+	}
+	if !c.Is(ClsNative) && c.Is(ClsVararg) {
+		newEnv._set(uint16(c.NumParam), newUnpackedValue(newEnv.V))
 	}
 	return c.Exec(newEnv)
 }

@@ -7,9 +7,9 @@ import (
 
 func fmtPrint(flag byte) func(env *Env) {
 	return func(env *Env) {
-		args := make([]interface{}, len(env.Vararg))
+		args := make([]interface{}, len(env.V))
 		for i := range args {
-			args[i] = env.Vararg[i]
+			args[i] = env.V[i]
 		}
 		var n int
 		var err error
@@ -24,7 +24,7 @@ func fmtPrint(flag byte) func(env *Env) {
 		}
 
 		if err != nil {
-			env.Vararg = []Value{Str(err.Error())}
+			env.V = []Value{Str(err.Error())}
 		} else {
 			env.A = Num(float64(n))
 		}
@@ -33,9 +33,9 @@ func fmtPrint(flag byte) func(env *Env) {
 
 func fmtSprint(flag byte) func(env *Env) {
 	return func(env *Env) {
-		args := make([]interface{}, len(env.Vararg))
+		args := make([]interface{}, len(env.V))
 		for i := range args {
-			args[i] = env.Vararg[i].Any()
+			args[i] = env.V[i].Any()
 		}
 		var n string
 		switch flag {

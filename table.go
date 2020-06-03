@@ -3,39 +3,23 @@ package potatolang
 import (
 	"bytes"
 	"fmt"
-	"reflect"
 )
-
-type tablekey struct {
-	g   Value
-	str string
-}
 
 type Table struct {
 	a  []Value
-	m  map[tablekey]Value
+	m  Map
 	mt *Table
-}
-
-func maketk(k Value) tablekey {
-	if k.Type() == STR {
-		return tablekey{str: k.Str(), g: Value{v: STR}}
-	}
-	return tablekey{g: k}
 }
 
 func (t *Table) rawgetstr(name string) Value {
 	if t == nil {
 		return Value{}
 	}
-	return t.m[tablekey{str: name, g: Value{v: STR}}]
+	return t.m.Get(Str(name))
 }
 
 func (t *Table) rawsetstr(name string, v Value) *Table {
-	if t.m == nil {
-		t.m = map[tablekey]Value{}
-	}
-	t.m[tablekey{str: name, g: Value{v: STR}}] = v
+	t.m.Put(Str(name), v)
 	return t
 }
 
@@ -59,26 +43,17 @@ func (t *Table) Put(k, v Value, raw bool) {
 				if !v.IsNil() {
 					t.a = append(t.a, v)
 				}
-				delete(t.m, tablekey{g: k})
+				t.m.Put(k, Value{})
 				return
 			}
 		}
 	}
 
-	if t.m == nil {
-		t.m = make(map[tablekey]Value)
-	}
-	key := maketk(k)
-	if !raw && !t.mt.rawgetstr("__newindex").IsNil() && t.m[key].IsNil() {
+	if !raw && !t.mt.rawgetstr("__newindex").IsNil() && t.m.Get(k).IsNil() {
 		t.newindex(k, v)
 		return
 	}
-	if v.IsNil() {
-		delete(t.m, key)
-	} else {
-		t.m[key] = v
-	}
-
+	t.m.Put(k, v)
 }
 
 func (t *Table) Insert(k, v Value) {
@@ -126,8 +101,7 @@ func (t *Table) Get(k Value, raw bool) (v Value) {
 			}
 		}
 	}
-	key := maketk(k)
-	if !raw && !t.mt.rawgetstr("__index").IsNil() && t.m[key].IsNil() {
+	if !raw && !t.mt.rawgetstr("__index").IsNil() && t.m.Get(k).IsNil() {
 		switch ni := t.mt.rawgetstr("__index"); ni.Type() {
 		case FUN:
 			v, _ = ni.Fun().Call(Tab(t), k)
@@ -138,7 +112,7 @@ func (t *Table) Get(k Value, raw bool) (v Value) {
 			panicf("invalid __index")
 		}
 	}
-	return t.m[key]
+	return t.m.Get(k)
 }
 
 func (t *Table) Len() int {
@@ -146,7 +120,7 @@ func (t *Table) Len() int {
 }
 
 func (t *Table) HashLen() int {
-	return len(t.m)
+	return t.m.Len()
 }
 
 func (t *Table) Compact() {
@@ -159,57 +133,13 @@ func (t *Table) Compact() {
 	}
 }
 
-type TableMapIterator struct {
-	t     *Table
-	miter *reflect.MapIter
-}
-
-func (t *Table) Iter() *TableMapIterator {
-	i := &TableMapIterator{t: t}
-	if t.m != nil {
-		i.miter = reflect.ValueOf(t.m).MapRange()
-	}
-	return i
-}
-
-func (iter *TableMapIterator) Next() bool {
-	if iter.miter == nil {
-		return false
-	}
-	return iter.miter.Next()
-}
-
-func (iter *TableMapIterator) Value() Value {
-	if iter.miter == nil {
-		return Value{}
-	}
-	return iter.miter.Value().Interface().(Value)
-}
-
-func (iter *TableMapIterator) Key() Value {
-	if iter.miter == nil {
-		return Value{}
-	}
-	tk := iter.miter.Key().Interface().(tablekey)
-	if tk.g.v == STR && tk.g.p == nil {
-		return Str(tk.str)
-	}
-	return tk.g
-}
-
 func (t *Table) String() string {
 	p := bytes.NewBufferString("{")
 	for i := range t.a {
 		p.WriteString(fmt.Sprintf("[%d]=%v,", i+1, t.a[i].toString(0, true)))
 	}
-	for k, v := range t.m {
-		if k.g.v == STR {
-			p.WriteString(fmt.Sprintf("[%q]=%v,", k.str, v))
-		} else if k.g.Type() == NUM {
-			p.WriteString(fmt.Sprintf("[%v]=%v,", k.g, v.toString(0, true)))
-		} else {
-			p.WriteString(fmt.Sprintf("[%v]=%v,", k.g, v))
-		}
+	for k, v := t.m.Next(Value{}); !k.IsNil(); k, v = t.m.Next(k) {
+		p.WriteString(fmt.Sprintf("[%v]=%v,", k, v.toString(0, true)))
 	}
 	if p.Bytes()[p.Len()-1] == ',' {
 		p.Truncate(p.Len() - 1)
@@ -219,9 +149,9 @@ func (t *Table) String() string {
 }
 
 func (t *Table) iterStringKeys(cb func(k string, v Value)) {
-	for k, v := range t.m {
-		if k.g.v == STR {
-			cb(k.str, v)
+	for k, v := t.m.Next(Value{}); !k.IsNil(); k, v = t.m.Next(k) {
+		if k.Type() == STR {
+			cb(k.Str(), v)
 		}
 	}
 }

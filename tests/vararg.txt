@@ -4,20 +4,20 @@
 print(unpack({'testing vararg'}))
 
 function f(a, ...)
-  local x = {unpack(arg); n = #arg}
+  local x = {...; n = #...}
   for i = 1, x.n do assert(a[i] == x[i]) end
   return x.n
 end
 
 function c12 (...)
   -- assert(arg == _G.arg)    -- no local 'arg'
-  local x = {unpack(arg)} x.n = #x
+  local x = {...} x.n = #x
   local res = (x.n==2 and x[1] == 1 and x[2] == 2)
   if res then res = 55 end
   return res, 2
 end
 
-function vararg (...) return {n = #arg; unpack(arg)} end
+function vararg (...) return {n = #...; ...} end
 
 local call = function (f, args) return f(unpack(args, 1, args.n and args.n or #args)) end
 
@@ -45,7 +45,7 @@ assert(c12(1,2,3) == false)
 -- assert(a == nil)
 
 local t = {1, 10}
-function t:f (...) return self[arg[1]]+#arg end
+function t:f (...) return self[...[1]]+#... end
 assert(t:f(1,4) == 3 and t:f(2) == 11)
 print('+')
 

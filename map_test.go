@@ -31,7 +31,7 @@ func BenchmarkTable(b *testing.B) {
 	}
 }
 
-const benchMapSize = 1e5
+const benchMapSize = 1e3
 const benchMapSize2 = 100
 
 func TestTreeMap(t *testing.T) {
@@ -52,17 +52,24 @@ func TestTreeMap(t *testing.T) {
 		}
 	}
 
-	mid := benchMapSize / 2
-	t.Log(mid)
-	for k, _ := Next(m, Num(float64(mid))); !k.IsNil(); k, _ = Next(m, k) {
-		if k.Num() != float64(mid)-1 {
-			t.Fatal(m.GoString())
+}
+
+func TestMapNext(t *testing.T) {
+	rand.Seed(time.Now().Unix())
+	m := &Map{}
+	v := rand.Float64()
+	m.Put(Num(v), Num(v))
+
+	count := 0
+	for k, _ := m.Next(Value{}); !k.IsNil(); k, _ = m.Next(k) {
+		if k.Num() != v {
+			t.Fatal(m.Len(), k, v)
 		}
-		mid--
-		// 	fmt.Println(m.GoString())
+		count++
 	}
-	if mid != 0 {
-		t.Fatal(mid)
+
+	if count != 1 {
+		t.Fatal(count)
 	}
 
 	// fmt.Println(m.GoString())
@@ -122,19 +129,33 @@ func BenchmarkTreeMapRev(b *testing.B) {
 	rand.Seed(time.Now().Unix())
 	m := &Map{}
 	c := map[int]int{}
-	for v, i := range rand.Perm(benchMapSize) {
+	for v, i := range rand.Perm(benchMapSize * 2) {
 		c[i] = v
 		m.Put(Num(float64(i)), Num(float64(v)))
+	}
+
+	for k := range c {
+		m.Put(Num(float64(k)), Value{})
+		delete(c, k)
+		if len(c) == benchMapSize {
+			break
+		}
 	}
 
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		for k, v := Next(m, Value{}); !k.IsNil(); k, v = Next(m, k) {
+		count := 0
+		for k, v := m.Next(Value{}); !k.IsNil(); k, v = m.Next(k) {
 			v2 := c[int(k.Num())]
 			if int(v.Num()) != v2 {
 				b.Fatal(m)
 			}
+			count++
+		}
+
+		if count != len(c) {
+			b.Fatal(count)
 		}
 	}
 }
@@ -152,45 +173,46 @@ func BenchmarkMap(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for i, v := range c {
-			if i+v == 0 {
+			if i+v == -99 {
 				b.Fatal(i)
 			}
 		}
 	}
 }
 
-func BenchmarkTreeMapGetN(b *testing.B) {
-	b.StopTimer()
-
-	rand.Seed(time.Now().Unix())
-	m := &Map{}
-	keys := rand.Perm(benchMapSize2)
-	for _, k := range keys {
-		m.Put(Num(float64(k)), Num(float64(k)))
-	}
-
-	b.StartTimer()
-
-	k := Num(float64(keys[rand.Intn(len(keys))]))
-	for i := 0; i < b.N; i++ {
-		m.Get(k)
-	}
-}
-
-func BenchmarkMapGetN(b *testing.B) {
-	b.StopTimer()
-
-	rand.Seed(time.Now().Unix())
-	m := map[tablekey]Value{}
-	keys := rand.Perm(benchMapSize2)
-	for _, k := range keys {
-		m[tablekey{g: Num(float64(k))}] = Num(float64(k))
-	}
-
-	b.StartTimer()
-
-	k := tablekey{g: Num(float64(keys[rand.Intn(len(keys))]))}
-	for i := 0; i < b.N; i++ {
-		_ = m[k]
-	}
-}
+//
+// func BenchmarkTreeMapGetN(b *testing.B) {
+// 	b.StopTimer()
+//
+// 	rand.Seed(time.Now().Unix())
+// 	m := &Map{}
+// 	keys := rand.Perm(benchMapSize2)
+// 	for _, k := range keys {
+// 		m.Put(Num(float64(k)), Num(float64(k)))
+// 	}
+//
+// 	b.StartTimer()
+//
+// 	k := Num(float64(keys[rand.Intn(len(keys))]))
+// 	for i := 0; i < b.N; i++ {
+// 		m.Get(k)
+// 	}
+// }
+//
+// func BenchmarkMapGetN(b *testing.B) {
+// 	b.StopTimer()
+//
+// 	rand.Seed(time.Now().Unix())
+// 	m := map[tablekey]Value{}
+// 	keys := rand.Perm(benchMapSize2)
+// 	for _, k := range keys {
+// 		m[tablekey{g: Num(float64(k))}] = Num(float64(k))
+// 	}
+//
+// 	b.StartTimer()
+//
+// 	k := tablekey{g: Num(float64(keys[rand.Intn(len(keys))]))}
+// 	for i := 0; i < b.N; i++ {
+// 		_ = m[k]
+// 	}
+// }
