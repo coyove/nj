@@ -41,7 +41,6 @@ const (
 	OpRet
 	OpYield
 	OpLen
-	OpPatchVararg
 	OpAddressOf
 	OpNOP
 	OpEOB

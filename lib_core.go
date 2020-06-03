@@ -127,16 +127,6 @@ func initCoreLibs() {
 		}()
 		env.A, env.Vararg = env.In(0, FUN).Fun().Call(env.Vararg...)
 	}), false)
-	G.Puts("select", NativeFun(1, true, func(env *Env) {
-		switch v := env.Get(0); v.Type() {
-		case NUM:
-			env.A = Num(float64(len(env.Vararg[int(v.Num())-1:])))
-		case STR:
-			env.A = Num(float64(len(env.Vararg)))
-		default:
-			env.A = Value{}
-		}
-	}), false)
 	G.Puts("unpack", NativeFun(1, true, func(env *Env) {
 		a := env.In(0, TAB).Tab().a
 		start, end := 1, len(a)
@@ -147,6 +137,17 @@ func initCoreLibs() {
 			end = int(env.Vararg[1].Expect(NUM).Num())
 		}
 		env.A = newUnpackedValue(a[start-1 : end])
+	}), false)
+	G.Puts("select", NativeFun(2, false, func(env *Env) {
+		switch a := env.Get(0); a.Type() {
+		case STR:
+			env.A = Num(float64(len(env.In(1, UPK).asUnpacked())))
+		case NUM:
+			env.A = env.In(1, UPK).asUnpacked()[int(a.Num())-1]
+		}
+	}), false)
+	G.Puts("pack", NativeFun(3, false, func(env *Env) {
+		env.In(0, UPK).asUnpacked()[int(env.In(1, NUM).Num())-1] = env.Get(2)
 	}), false)
 	G.Puts("setmetatable", NativeFun(2, false, func(env *Env) {
 		if !env.Get(0).GetMetatable().rawgetstr("__metatable").IsNil() {

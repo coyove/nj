@@ -480,7 +480,7 @@ redo:
 					tok.Str = ".."
 				} else {
 					sc.Next()
-					tok.Type = TDotDotDot
+					tok.Type = TIdent
 					tok.Str = "..."
 				}
 			default:

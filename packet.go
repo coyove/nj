@@ -286,21 +286,20 @@ func crReadBytesLen(data []uint32, length int, cursor *uint32) []byte {
 }
 
 var singleOp = map[_Opcode]parser.Symbol{
-	OpAdd:         parser.AAdd,
-	OpSub:         parser.ASub,
-	OpMul:         parser.AMul,
-	OpDiv:         parser.ADiv,
-	OpMod:         parser.AMod,
-	OpEq:          parser.AEq,
-	OpNeq:         parser.ANeq,
-	OpLess:        parser.ALess,
-	OpLessEq:      parser.ALessEq,
-	OpLen:         parser.ALen,
-	OpPatchVararg: parser.APatchVararg,
-	OpLoad:        parser.ALoad,
-	OpStore:       parser.AStore,
-	OpNot:         parser.ANot,
-	OpPow:         parser.APow,
+	OpAdd:    parser.AAdd,
+	OpSub:    parser.ASub,
+	OpMul:    parser.AMul,
+	OpDiv:    parser.ADiv,
+	OpMod:    parser.AMod,
+	OpEq:     parser.AEq,
+	OpNeq:    parser.ANeq,
+	OpLess:   parser.ALess,
+	OpLessEq: parser.ALessEq,
+	OpLen:    parser.ALen,
+	OpLoad:   parser.ALoad,
+	OpStore:  parser.AStore,
+	OpNot:    parser.ANot,
+	OpPow:    parser.APow,
 }
 
 func (c *Closure) crPrettify(tab int) string {

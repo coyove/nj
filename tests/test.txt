@@ -86,11 +86,12 @@ end
 function vararg(a, b, ...) 
     local c = a * (b + a) + b
     assert(c == 5)
-    for i in ipairs(arg) do
-        assert(arg[i] == i + 2)
-        arg[i]+=1
+    for i =1, select("#",...) do
+        local iv = select(i, ...)
+        assert(iv == i + 2)
+        ...[i]+=1
     end
-    return {#arg, unpack(arg)}
+    return {select("#",...), ...}
 end
 
 vararg(1, 2, 3, 4, 5);

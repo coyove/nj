@@ -42,7 +42,7 @@ import "math/rand"
 /* Literals */
 %token<token> TEqeq TNeq TLte TGte TIdent TNumber TString '{' '[' '('
 %token<token> TAddEq TSubEq TMulEq TDivEq TModEq
-%token<token> TSquare TDotDotDot TDotDot TSet
+%token<token> TSquare TDotDot TSet
 
 /* Operators */
 %right 'T'
@@ -325,16 +325,13 @@ declarator_list:
 
 ident_list:
         TIdent                            { $$ = Cpl($1.Str) } | 
-        TDotDotDot                        { $$ = Cpl("...") } | 
-        ident_list ',' TIdent             { $$ = $1.CplAppend(SymTok($3)) } |
-        ident_list ',' TDotDotDot         { $$ = $1.CplAppend(Sym("...").SetPos($3)) }
+        ident_list ',' TIdent             { $$ = $1.CplAppend(SymTok($3)) }
 
 ident_dot_list:
         TIdent                            { $$ = SymTok($1) } | 
         ident_dot_list '.' TIdent         { $$ = __load($1, Nod($3.Str)).pos0($3) }
 
 expr:
-        TDotDotDot                        { $$ = __call(Sym("unpack"), Cpl(Sym("arg"))).pos0($1) } |
         TNumber                           { $$ = Num($1.Str).SetPos($1) } |
         TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) } |
         function                          { $$ = $1 } |

@@ -177,7 +177,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	buf = table.collapse(atoms[1:], true)
 
 	switch bop {
-	case OpPopV, OpPatchVararg:
+	case OpPopV:
 		buf.WriteOP(bop, 0, 0)
 	case OpAddressOf:
 		yx := table.get(atoms[1].Sym())
@@ -305,17 +305,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 			if i != len(params.Cpl())-1 {
 				panicf("%#v: vararg must be the last parameter", atoms[0])
 			}
-			atoms[3] = parser.Cpl(
-				parser.ABegin,
-				parser.Cpl(
-					parser.ASet,
-					parser.Symbol("arg"),
-					parser.Cpl(parser.APatchVararg).SetPos0(atoms[0]),
-				).SetPos0(atoms[0]),
-				atoms[3],
-			)
 			vararg = true
-			break
 		}
 		if _, ok := newtable.sym[argname]; ok {
 			panicf("%#v: duplicated parameter: %s", atoms[0], argname)
@@ -324,11 +314,14 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	}
 
 	ln := len(newtable.sym)
+	if vararg {
+		ln--
+	}
 	if ln > 255 {
 		panicf("%#v: too many parameters", atoms[0])
 	}
 
-	newtable.vp = uint16(ln)
+	newtable.vp = uint16(len(newtable.sym))
 
 	code, yx = newtable.compileNode(atoms[3])
 

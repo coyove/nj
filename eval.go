@@ -252,6 +252,8 @@ MAIN:
 				} else {
 					env.A = Num(float64(v.Fun().NumParam))
 				}
+			case UPK:
+				env.A = Num(float64(len(v.asUnpacked())))
 			default:
 				env.A, env.Vararg = v.GetMetamethod("__len").ExpectMsg(FUN, "operator #").Fun().Call(v)
 			}
@@ -291,6 +293,8 @@ MAIN:
 			switch subject.Type() {
 			case TAB:
 				subject.Tab().Put(env.A, v, false)
+			case UPK:
+				subject.asUnpacked()[int(env.A.ExpectMsg(NUM, "load").Num())-1] = v
 			case NIL:
 				switch env.A.Type() {
 				case NUM:
@@ -309,6 +313,8 @@ MAIN:
 			switch a, idx := env._get(opa, K), env._get(opb, K); a.Type() {
 			case TAB:
 				env.A = a.Tab().Get(idx, false)
+			case UPK:
+				env.A = a.asUnpacked()[int(idx.ExpectMsg(NUM, "load").Num())-1]
 			default:
 				env.A, env.Vararg = a.GetMetamethod("__index").ExpectMsg(FUN, "load").Fun().Call(a, idx)
 			}
@@ -352,11 +358,24 @@ MAIN:
 					stackEnv = NewEnv(env)
 				}
 
-				if stackEnv.Size() != int(cls.NumParam) {
-					if !(cls.Is(ClsVararg) && stackEnv.Size() > int(cls.NumParam)) {
-						panicf("expect %d arguments (got %d)", cls.NumParam, stackEnv.Size())
+				if cls.Is(ClsVararg) && stackEnv.Size() > int(cls.NumParam) {
+					var varg []Value
+					for i := int(cls.NumParam); i < stackEnv.Size(); i++ {
+						v := stackEnv.stack[i]
+						if v.Type() == UPK {
+							if i != len(stackEnv.stack)-1 {
+								panicf("misuse of unpack(...): it should be the last argument")
+							}
+							stackEnv.stack[cls.NumParam] = v
+							goto VAR_OUT
+						}
+						if i >= int(K.NumParam) {
+							varg = append(varg, v)
+						}
 					}
+					stackEnv.stack[cls.NumParam] = newUnpackedValue(varg)
 				}
+			VAR_OUT:
 
 				if cls.Is(ClsYieldable | ClsRecoverable | ClsNative) {
 					stackEnv.parent = env
@@ -400,22 +419,6 @@ MAIN:
 			if cond := env._get(opa, K); !cond.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
-		case OpPatchVararg:
-			ret := &Table{}
-			for i, v := range env.stack {
-				if v.Type() == UPK {
-					if i != len(env.stack)-1 {
-						panicf("misuse of unpack(...): it should be the last argument")
-					}
-					ret.a = v.asUnpacked()
-					env.stack = env.stack[:len(env.stack)-1]
-					break
-				}
-				if i >= int(K.NumParam) {
-					ret.a = append(ret.a, v)
-				}
-			}
-			env.A = Tab(ret)
 		case OpAddressOf:
 			addr := uint64(opa)<<48 | uint64(uintptr(unsafe.Pointer(env)))
 			env.A = Num(math.Float64frombits(addr))
