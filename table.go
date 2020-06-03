@@ -72,6 +72,12 @@ func (t *Table) Insert(k, v Value) {
 	t.Put(k, v, true)
 }
 
+func (t *Table) Remove(idx int) Value {
+	v := t.a[idx-1]
+	t.a = append(t.a[:int(idx)-1], t.a[idx-1+1:]...)
+	return v
+}
+
 func (t *Table) newindex(k, v Value) {
 	switch ni := t.mt.rawgetstr("__newindex"); ni.Type() {
 	case FUN:

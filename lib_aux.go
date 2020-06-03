@@ -2,6 +2,7 @@ package potatolang
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -158,98 +159,7 @@ func fmtSprint(flag byte) func(env *Env) {
 // 	return Num(float64(n))
 // }
 //
-// func walkObject(buf []byte) Value {
-// 	m := Table{}
-// 	jsonparser.ObjectEach(buf, func(key, value []byte, dataType jsonparser.ValueType, offset int) error {
-// 		switch dataType {
-// 		case jsonparser.Unknown:
-// 			panic(value)
-// 		case jsonparser.Null:
-// 			m.Put(string(key), Value{})
-// 		case jsonparser.Boolean:
-// 			b, err := jsonparser.ParseBoolean(value)
-// 			panicerr(err)
-// 			m.Put(string(key), Bln(b))
-// 		case jsonparser.Number:
-// 			num, err := jsonparser.ParseFloat(value)
-// 			panicerr(err)
-// 			m.Put(string(key), Num(num))
-// 		case jsonparser.String:
-// 			str, err := jsonparser.ParseString(value)
-// 			panicerr(err)
-// 			m.Put(string(key), Str(str))
-// 		case jsonparser.Array:
-// 			m.Put(string(key), walkArray(value))
-// 		case jsonparser.Object:
-// 			m.Put(string(key), walkObject(value))
-// 		}
-// 		return nil
-// 	})
-// 	return NewStructValue(m)
-// }
-//
-// func walkArray(buf []byte) Value {
-// 	m := NewSlice()
-// 	i := 0
-// 	jsonparser.ArrayEach(buf, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
-// 		switch dataType {
-// 		case jsonparser.Unknown:
-// 			panic(value)
-// 		case jsonparser.Null:
-// 			m.Put(i, Value{})
-// 		case jsonparser.Boolean:
-// 			b, err := jsonparser.ParseBoolean(value)
-// 			panicerr(err)
-// 			m.Put(i, Bln(b))
-// 		case jsonparser.Number:
-// 			num, err := jsonparser.ParseFloat(value)
-// 			panicerr(err)
-// 			m.Put(i, Num(num))
-// 		case jsonparser.String:
-// 			str, err := jsonparser.ParseString(value)
-// 			panicerr(err)
-// 			m.Put(i, Str(str))
-// 		case jsonparser.Array:
-// 			m.Put(i, walkArray(value))
-// 		case jsonparser.Object:
-// 			m.Put(i, walkObject(value))
-// 		}
-// 		i++
-// 	})
-// 	return NewSliceValue(m)
-// }
-//
-// func jsonUnmarshal(env *Env) Value {
-// 	json := []byte(strings.TrimSpace(env.Get(0).MustString()))
-// 	if len(json) == 0 {
-// 		return Value{}
-// 	}
-// 	switch json[0] {
-// 	case '[':
-// 		return walkArray(json)
-// 	case '{':
-// 		return walkObject(json)
-// 	case '"':
-// 		str, err := jsonparser.ParseString(json)
-// 		if err != nil {
-// 			StorePointerUnsafe(env.Get(1), Str(err.Error()))
-// 		}
-// 		return Str(str)
-// 	case 't', 'f':
-// 		b, err := jsonparser.ParseBoolean(json)
-// 		if err != nil {
-// 			StorePointerUnsafe(env.Get(1), Str(err.Error()))
-// 		}
-// 		return Bln(b)
-// 	default:
-// 		num, err := jsonparser.ParseFloat(json)
-// 		if err != nil {
-// 			StorePointerUnsafe(env.Get(1), Str(err.Error()))
-// 		}
-// 		return Num(num)
-// 	}
-// }
-//
+
 // func strconvFormatFloat(env *Env) Value {
 // 	v := env.Get(0).MustNumber()
 // 	base := byte(env.Get(1).MustNumber())
@@ -293,23 +203,12 @@ func initLibAux() {
 	// 	lfmt.Put("Write", NativeFun(0, fmtWrite))
 	G.Puts("print", NativeFun(0, true, fmtPrint('l')), false)
 	//
-	// 	los := NewStruct()
-	// 	los.Put("Stdout", NewInterfaceValue(os.Stdout))
-	// 	los.Put("Stdin", NewInterfaceValue(os.Stdin))
-	// 	los.Put("Stderr", NewInterfaceValue(os.Stderr))
-	// 	G["os"] = NewStructValue(los)
-	//
-	// 	ljson := NewStruct()
-	// 	ljson.Put("Unmarshal", NativeFun(1, jsonUnmarshal))
-	// 	ljson.Put("Marshal", NativeFun(1, func(env *Env) Value { return Str(env.Get(0).toString(0, true)) }))
-	// 	G["json"] = NewStructValue(ljson)
-	//
-	// 	lstrconv := NewStruct()
-	// 	lstrconv.Put("FormatFloat", NativeFun(3, strconvFormatFloat))
-	// 	lstrconv.Put("ParseFloat", NativeFun(1, strconvParseFloat))
-	// 	lstrconv.Put("FormatInt", NativeFun(2, strconvFormatInt))
-	// 	G["strconv"] = NewStructValue(lstrconv)
-	//
+	los := &Table{}
+	los.Puts("stdout", Any(os.Stdout), false)
+	los.Puts("stdin", Any(os.Stdin), false)
+	los.Puts("stderr", Any(os.Stderr), false)
+	G.Puts("os", Tab(los), false)
+
 	lstring := &Table{}
 	lstring.Puts("format", NativeFun(1, true, fmtSprint('f')), false)
 	lstring.Puts("rep", NativeFun(2, false, func(env *Env) {

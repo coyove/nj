@@ -91,6 +91,14 @@ func initCoreLibs() {
 			t.Insert(Num(float64(t.Len())), env.V[0])
 		}
 	}), false)
+	ltable.Puts("remove", NativeFun(1, true, func(env *Env) {
+		t := env.In(0, TAB).Tab()
+		n := t.Len()
+		if len(env.V) > 0 {
+			n = int(env.V[0].Expect(NUM).Num())
+		}
+		t.Remove(n)
+	}), false)
 	ltable.Puts("unpack", G.Gets("unpack", false), false)
 	G.Puts("table", Tab(ltable), false)
 	G.Puts("type", NativeFun(1, false, func(env *Env) {
@@ -135,10 +143,11 @@ func initCoreLibs() {
 	G.Puts("pcall", NativeFun(1, true, func(env *Env) {
 		defer func() {
 			if r := recover(); r != nil {
-				env.A, env.V = Value{}, nil
+				env.A, env.V = Bln(false), nil
 			}
 		}()
-		env.A, env.V = env.In(0, FUN).Fun().Call(env.V...)
+		a, v := env.In(0, FUN).Fun().Call(env.V...)
+		env.A, env.V = Bln(true), append([]Value{a}, v...)
 	}), false)
 	G.Puts("select", NativeFun(2, false, func(env *Env) {
 		switch a := env.Get(0); a.Type() {
@@ -148,8 +157,9 @@ func initCoreLibs() {
 			env.A = env.In(1, UPK).asUnpacked()[int(a.Num())-1]
 		}
 	}), false)
-	G.Puts("pack", NativeFun(3, false, func(env *Env) {
-		env.In(0, UPK).asUnpacked()[int(env.In(1, NUM).Num())-1] = env.Get(2)
+	G.Puts("pack", NativeFun(1, false, func(env *Env) {
+		t := &Table{a: env.In(0, UPK).asUnpacked()}
+		env.A = Tab(t)
 	}), false)
 	G.Puts("setmetatable", NativeFun(2, false, func(env *Env) {
 		if !env.Get(0).GetMetatable().rawgetstr("__metatable").IsNil() {
@@ -246,27 +256,6 @@ func initCoreLibs() {
 	G.Puts("collectgarbage", NativeFun(0, false, func(env *Env) {
 		runtime.GC()
 	}), false)
-	// 	G["copy"] = NativeFun(2, func(env *Env) Value {
-	// 		if env.Size() == 2 {
-	// 			switch v := env.Get(1); v.Type() {
-	// 			case STR:
-	// 				arr := env.Get(0).MustSlice().l
-	// 				str := v.Str()
-	// 				n := 0
-	// 				for i := range arr {
-	// 					if n >= len(str) {
-	// 						break
-	// 					}
-	// 					arr[i] = Num(float64(str[n]))
-	// 					n++
-	// 				}
-	// 				return Num(float64(len(arr)))
-	// 			default:
-	// 				return Num(float64(copy(env.Get(0).MustSlice().l, v.MustSlice().l)))
-	// 			}
-	// 		}
-	// 		return env.Get(0).Dup()
-	// 	})
 	// 	G["go"] = NativeFun(1, func(env *Env) Value {
 	// 		cls := env.Get(0).MustClosure()
 	// 		newEnv := NewEnv(cls.Env)
@@ -320,72 +309,6 @@ func initCoreLibs() {
 	// 	// 	env.V = ch
 	// 	// 	return v
 	// 	// })))
-	//
-	// 	G["map"] = NativeFun(0, func(env *Env) Value {
-	// 		var m map[string]Value
-	// 		if env.Size() == 1 {
-	// 			switch a := env.Get(0); a.Type() {
-	// 			case NUM:
-	// 				m = make(map[string]Value, int(a.Num()))
-	// 			case StructType:
-	// 				s := a.AsStruct().l
-	// 				m = make(map[string]Value, len(s)/2)
-	// 				for i, v := range s[:len(s)/2] {
-	// 					m[string(hash50.FindStringHash(v.Num()))] = s[i+len(s)/2]
-	// 				}
-	// 			default:
-	// 				a.testType(NUM)
-	// 			}
-	// 			// 	} else if env.Size() == 2 {
-	// 			// 		a, b := env.Get(0), env.Get(1)
-	// 			// 		if a.Type()+b.Type() == SliceType*2 {
-	//
-	// 			// 		} else if a.Type() == SliceType && b.Type() == FUN {
-	//
-	// 			// 		} else {
-	// 			// 			a.testType(NUM)
-	// 			// 		}
-	// 		} else {
-	// 			m = make(map[string]Value)
-	// 		}
-	// 		return NewStructValue(NewStruct().
-	// 			Put("_get", NativeFun(1, func(env *Env) Value {
-	// 				buf := env.Get(0).MustString()
-	// 				v, ok := m[*(*string)(unsafe.Pointer(&buf))]
-	// 				env.V = Bln(ok)
-	// 				return v
-	// 			})).
-	// 			Put("Put", NativeFun(2, func(env *Env) Value {
-	// 				buf := env.Get(0).MustString()
-	// 				v := env.Get(1)
-	// 				m[*(*string)(unsafe.Pointer(&buf))] = v
-	// 				return v
-	// 			})).
-	// 			Put("Len", NativeFun(1, func(env *Env) Value {
-	// 				return Num(float64(len(m)))
-	// 			})).
-	// 			Put("Delete", NativeFun(1, func(env *Env) Value {
-	// 				buf := env.Get(0).MustString()
-	// 				v, ok := m[*(*string)(unsafe.Pointer(&buf))]
-	// 				env.V = Bln(ok)
-	// 				delete(m, *(*string)(unsafe.Pointer(&buf)))
-	// 				return v
-	// 			})).
-	// 			Put("Range", NativeFun(1, func(env *Env) Value {
-	// 				cls := env.Get(0).MustClosure()
-	// 				newEnv := NewEnv(env)
-	// 				for k, v := range m {
-	// 					newEnv.Clear()
-	// 					newEnv.Push(Str(k))
-	// 					newEnv.Push(v)
-	// 					ok, _ := cls.Exec(newEnv)
-	// 					if ok.IsZero() {
-	// 						break
-	// 					}
-	// 				}
-	// 				return Value{}
-	// 			})))
-	// 	})
 	//
 	initLibAux()
 	initLibMath()
