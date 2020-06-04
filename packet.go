@@ -321,7 +321,7 @@ func (c *Closure) crPrettify(tab int) string {
 			return "nil"
 		}
 		if a>>10 == 7 {
-			return fmt.Sprintf("k$%d(%v)", a&0x03ff, c.ConstTable[a&0x3ff].toString(0, true))
+			return fmt.Sprintf("k$%d(%v)", a&0x03ff, c.ConstTable[a&0x3ff].toString(0))
 		}
 		return fmt.Sprintf("$%d$%d", a>>10, a&0x03ff)
 	}

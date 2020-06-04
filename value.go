@@ -108,11 +108,6 @@ func Fun(c *Closure) Value {
 	return Value{v: FUN, p: unsafe.Pointer(c)}
 }
 
-// Any returns a generic value
-func Any(i interface{}) Value {
-	return Value{v: ANY, p: unsafe.Pointer(&i)}
-}
-
 // Str returns a string value
 func Str(s string) Value {
 	if len(s) <= 16 {
@@ -127,7 +122,7 @@ func Str_unsafe(s []byte) Value {
 	return Value{v: STR, p: unsafe.Pointer(&s)}
 }
 
-func NewInterfaceValue(i interface{}) Value {
+func Any(i interface{}) Value {
 	switch v := i.(type) {
 	case bool:
 		return Bln(v)
@@ -155,7 +150,7 @@ func (v Value) Str() string {
 	return *(*string)(v.p)
 }
 
-// IsFalse tests whether value contains a "false" value
+// IsFalse tests whether value contains a falsey value
 func (v Value) IsFalse() bool {
 	switch v.Type() {
 	case BLN:
@@ -223,9 +218,7 @@ func (v Value) ExpectMsg(t byte, msg string) Value {
 	return v
 }
 
-func (v Value) String() string { return v.toString(0, false) }
-
-func (v Value) GoString() string { return v.toString(0, true) }
+func (v Value) String() string { return v.toString(0) }
 
 // Equal tests whether value is equal to another value
 func (v Value) Equal(r Value) bool {
@@ -272,7 +265,7 @@ func (v Value) cmp(v2 Value) int {
 		return -1
 	}
 	// v.v == v2.v
-	if v.Type() == STR {
+	if byte(v.v) == STR {
 		return strings.Compare(v.Str(), v2.Str())
 	}
 	if uintptr(v.p) < uintptr(v2.p) {
@@ -281,11 +274,8 @@ func (v Value) cmp(v2 Value) int {
 	return 1
 }
 
-func (v Value) toString(lv int, json bool) string {
+func (v Value) toString(lv int) string {
 	if lv > 32 {
-		if json {
-			return "\"<omit deep nesting>\""
-		}
 		return "<omit deep nesting>"
 	}
 
@@ -295,25 +285,13 @@ func (v Value) toString(lv int, json bool) string {
 	case NUM:
 		return strconv.FormatFloat(v.Num(), 'f', -1, 64)
 	case STR:
-		if json {
-			return strconv.Quote(v.Str())
-		}
 		return v.Str()
 	case TAB:
 		return v.Tab().String()
 	case FUN:
-		if json {
-			return "\"" + v.Fun().String() + "\""
-		}
 		return v.Fun().String()
 	case ANY:
-		if json {
-			return fmt.Sprintf("\"%v\"", v.Any())
-		}
-		return fmt.Sprintf("%v", v.Any())
-	}
-	if json {
-		return "null"
+		return fmt.Sprintf("#<%v>", v.Any())
 	}
 	return "nil"
 }

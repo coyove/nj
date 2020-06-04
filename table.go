@@ -70,6 +70,9 @@ newindex:
 	case FUN:
 		ni.Fun().Call(Tab(t), k, v)
 	case TAB:
+		if ni.Tab() == t {
+			panicf("invalid __newindex, recursive delegation")
+		}
 		ni.Tab().Put(k, v, false)
 	default:
 		panicf("invalid __newindex, expect table or function")
@@ -125,6 +128,9 @@ func (t *Table) Get(k Value, raw bool) (v Value) {
 			v, _ = ni.Fun().Call(Tab(t), k)
 			return v
 		case TAB:
+			if ni.Tab() == t {
+				panicf("invalid __index, recursive delegation")
+			}
 			return ni.Tab().Get(k, false)
 		case NIL:
 		default:
@@ -151,10 +157,16 @@ func (t *Table) Compact() {
 func (t *Table) String() string {
 	p := bytes.NewBufferString("{")
 	for i := range t.a {
-		p.WriteString(fmt.Sprintf("[%d]=%v,", i+1, t.a[i].toString(0, true)))
+		p.WriteString(fmt.Sprintf("%v,", t.a[i]))
+	}
+	if len(t.a) > 0 {
+		p.Truncate(p.Len() - 1)
+		if t.m.Len() > 0 {
+			p.WriteString(";")
+		}
 	}
 	for k, v := t.m.Next(Value{}); !k.IsNil(); k, v = t.m.Next(k) {
-		p.WriteString(fmt.Sprintf("[%v]=%v,", k, v.toString(0, true)))
+		p.WriteString(fmt.Sprintf("[%v]=%v,", k, v))
 	}
 	if p.Bytes()[p.Len()-1] == ',' {
 		p.Truncate(p.Len() - 1)
