@@ -5,6 +5,11 @@ import (
 	"fmt"
 )
 
+var (
+	table__newindex = Str("__newindex")
+	table__index    = Str("__index")
+)
+
 type Table struct {
 	a  []Value
 	m  Map
@@ -24,6 +29,7 @@ func (t *Table) rawsetstr(name string, v Value) *Table {
 }
 
 func (t *Table) Put(k, v Value, raw bool) {
+	var ni Value
 	if k.Type() == NUM {
 		idx := k.Num()
 		if float64(int(idx)) == idx {
@@ -35,9 +41,10 @@ func (t *Table) Put(k, v Value, raw bool) {
 				return
 			}
 			if int(idx) == len(t.a)+1 {
-				if !raw && !t.mt.rawgetstr("__newindex").IsNil() {
-					t.newindex(k, v)
-					return
+				if !raw {
+					if ni = t.mt.Get(table__newindex, true); !ni.IsNil() {
+						goto newindex
+					}
 				}
 
 				if !v.IsNil() {
@@ -49,11 +56,24 @@ func (t *Table) Put(k, v Value, raw bool) {
 		}
 	}
 
-	if !raw && !t.mt.rawgetstr("__newindex").IsNil() && t.m.Get(k).IsNil() {
-		t.newindex(k, v)
-		return
+	if !raw && t.m.Get(k).IsNil() {
+		if ni = t.mt.Get(table__newindex, true); !ni.IsNil() {
+			goto newindex
+		}
 	}
+
 	t.m.Put(k, v)
+	return
+
+newindex:
+	switch ni.Type() {
+	case FUN:
+		ni.Fun().Call(Tab(t), k, v)
+	case TAB:
+		ni.Tab().Put(k, v, false)
+	default:
+		panicf("invalid __newindex, expect table or function")
+	}
 }
 
 func (t *Table) Insert(k, v Value) {
@@ -78,17 +98,6 @@ func (t *Table) Remove(idx int) Value {
 	return v
 }
 
-func (t *Table) newindex(k, v Value) {
-	switch ni := t.mt.rawgetstr("__newindex"); ni.Type() {
-	case FUN:
-		ni.Fun().Call(Tab(t), k, v)
-	case TAB:
-		ni.Tab().Put(k, v, false)
-	default:
-		panicf("invalid __newindex")
-	}
-}
-
 func (t *Table) Puts(k string, v Value, raw bool) *Table {
 	t.Put(Str(k), v, raw)
 	return t
@@ -99,6 +108,9 @@ func (t *Table) Gets(k string, raw bool) Value {
 }
 
 func (t *Table) Get(k Value, raw bool) (v Value) {
+	if t == nil {
+		return
+	}
 	if k.Type() == NUM {
 		idx := k.Num()
 		if float64(int(idx)) == idx {
@@ -107,27 +119,24 @@ func (t *Table) Get(k Value, raw bool) (v Value) {
 			}
 		}
 	}
-	if !raw && !t.mt.rawgetstr("__index").IsNil() && t.m.Get(k).IsNil() {
-		switch ni := t.mt.rawgetstr("__index"); ni.Type() {
+	if !raw && t.m.Get(k).IsNil() {
+		switch ni := t.mt.Get(table__index, true); ni.Type() {
 		case FUN:
 			v, _ = ni.Fun().Call(Tab(t), k)
 			return v
 		case TAB:
 			return ni.Tab().Get(k, false)
+		case NIL:
 		default:
-			panicf("invalid __index")
+			panicf("invalid __index, expect table or function")
 		}
 	}
 	return t.m.Get(k)
 }
 
-func (t *Table) Len() int {
-	return len(t.a)
-}
+func (t *Table) Len() int { return len(t.a) }
 
-func (t *Table) HashLen() int {
-	return t.m.Len()
-}
+func (t *Table) HashLen() int { return t.m.Len() }
 
 func (t *Table) Compact() {
 	for i := len(t.a) - 1; i >= 0; i-- {

@@ -25,11 +25,6 @@ func initCoreLibs() {
 		}
 		env.A = newUnpackedValue(a[start-1 : end])
 	}), false)
-	// 	lcore.Put("Safe", NativeFun(1, func(env *Env) Value {
-	// 		cls := env.Get(0).MustClosure()
-	// 		cls._set(ClsRecoverable)
-	// 		return Fun(cls)
-	// 	}))
 	// 	lcore.Put("Eval", NativeFun(1, func(env *Env) Value {
 	// 		env.V = Value{}
 	// 		cls, err := LoadString(string(env.Get(0).MustString()))
@@ -54,17 +49,6 @@ func initCoreLibs() {
 	// 			}
 	// 		}
 	// 		return Num(-1)
-	// 	}))
-	// 	lcore.Put("PopBack", NativeFun(2, func(env *Env) Value {
-	// 		s := env.Get(0).MustSlice()
-	// 		if len(s.l) == 0 {
-	// 			env.V = Value{}
-	// 			return Value{}
-	// 		}
-	// 		res := s.l[len(s.l)-1]
-	// 		s.l = s.l[:len(s.l)-1]
-	// 		env.V = NewSliceValue(s)
-	// 		return res
 	// 	}))
 	// 	lcore.Put("sync", NewStructValue(NewStruct().
 	// 		Put("mutex", NativeFun(0, func(env *Env) Value {
@@ -137,7 +121,7 @@ func initCoreLibs() {
 		case STR:
 			env.A = Num(float64(len(env.A.Str())))
 		default:
-			env.A = Value{}
+			env.A.ExpectMsg(TAB, "rawlen")
 		}
 	}), false)
 	G.Puts("call", NativeFun(1, true, func(env *Env) {

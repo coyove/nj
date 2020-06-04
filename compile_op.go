@@ -179,15 +179,6 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	switch bop {
 	case OpPopV:
 		buf.WriteOP(bop, 0, 0)
-	case OpAddressOf:
-		yx := table.get(atoms[1].Sym())
-		if yx == regNil {
-			// For addressof op, atoms[1] is always an identifier, if it is not defined, define it
-			yx = table.borrowAddress()
-			buf.WriteOP(OpSet, yx, regNil)
-			table.put(atoms[1].Sym(), yx)
-		}
-		buf.WriteOP(bop, yx, 0)
 	case OpNot, OpRet, OpYield, OpLen:
 		// unary op
 		table.writeOpcode(&buf, bop, atoms[1], nil)

@@ -26,7 +26,7 @@ func (lex *Lexer) loadFile(path string) *Node {
 		lex.Error(err.Error())
 	}
 
-	// Now the required code is loaded, for naming scope we will wrap them into a closure
+	// Now the required code is loaded, we will wrap them into a closure
 	pos := Position{Line: 1, Column: 1, Source: path}
 	cls := __func(Cpl(), n).pos0(pos)
 	node := __call(cls, Cpl()).pos0(pos)

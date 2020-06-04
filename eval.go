@@ -423,9 +423,6 @@ MAIN:
 			if cond := env._get(opa, K); !cond.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
-		case OpAddressOf:
-			addr := uint64(opa)<<48 | uint64(uintptr(unsafe.Pointer(env)))
-			env.A = Num(math.Float64frombits(addr))
 		}
 	}
 

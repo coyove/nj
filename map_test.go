@@ -7,6 +7,40 @@ import (
 	"time"
 )
 
+// type str struct {
+// 	p unsafe.Pointer
+// 	a int
+// }
+//
+// func mstr(s string) str {
+// 	bs := [8]byte{}
+// 	copy(bs[:], s)
+// 	// ss := *(*[2]uintptr)(unsafe.Pointer(&s))
+// 	// return str{
+// 	// 	p: unsafe.Pointer(ss[0]),
+// 	// 	a: int(ss[1]),
+// 	// }
+// 	return str{p: unsafe.Pointer(&bs), a: len(s)}
+// }
+//
+// func (s str) String() string {
+// 	var ss string
+// 	v := (*[2]uintptr)(unsafe.Pointer(&ss))
+// 	(*v)[0] = uintptr(s.p)
+// 	(*v)[1] = uintptr(s.a)
+// 	return ss
+// }
+//
+// func TestStr(t *testing.T) {
+// 	// a := "b"
+// 	var s []str
+// 	for i := 0; i < 3; i++ {
+// 		s = append(s, mstr("a"+strconv.Itoa(i)))
+// 	}
+// 	runtime.GC()
+// 	t.Log(s)
+// }
+
 func BenchmarkSlice(b *testing.B) {
 	f := func() {
 		v := []Value{}

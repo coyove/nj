@@ -357,7 +357,6 @@ expr:
         expr '^' expr                     { $$ = Cpl(APow, $1,$3).pos0($1) } |
         '-' expr %prec UNARY              { $$ = Cpl(ASub, zeroNode, $2).pos0($2) } |
         TNot expr %prec UNARY             { $$ = Cpl(ANot, $2).pos0($2) } |
-        '&' TIdent %prec UNARY            { $$ = Cpl(AAddrOf, SymTok($2)).pos0($2) } |
         '#' expr %prec UNARY              { $$ = Cpl(ALen, $2) }
 
 prefix_expr:

@@ -16,7 +16,7 @@ type Closure struct {
 	Code       []uint32
 	Pos        posVByte
 	source     []byte
-	ConstTable []Value
+	ConstTable []Value // Only
 	Env        *Env
 	NumParam   byte
 	options    byte

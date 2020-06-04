@@ -115,6 +115,11 @@ func Any(i interface{}) Value {
 
 // Str returns a string value
 func Str(s string) Value {
+	if len(s) <= 16 {
+		b := [16]byte{}
+		copy(b[:], s)
+		return Value{v: uint64(len(s)+1)<<56 | STR, p: unsafe.Pointer(&b)}
+	}
 	return Value{v: STR, p: unsafe.Pointer(&s)}
 }
 
@@ -139,7 +144,16 @@ func NewInterfaceValue(i interface{}) Value {
 }
 
 // Str cast value to string
-func (v Value) Str() string { return *(*string)(v.p) }
+func (v Value) Str() string {
+	if l := v.v >> 56; l > 0 {
+		var ss string
+		b := (*[2]uintptr)(unsafe.Pointer(&ss))
+		(*b)[0] = uintptr(v.p)
+		(*b)[1] = uintptr(l - 1)
+		return ss
+	}
+	return *(*string)(v.p)
+}
 
 // IsFalse tests whether value contains a "false" value
 func (v Value) IsFalse() bool {
@@ -258,7 +272,7 @@ func (v Value) cmp(v2 Value) int {
 		return -1
 	}
 	// v.v == v2.v
-	if v.v == STR {
+	if v.Type() == STR {
 		return strings.Compare(v.Str(), v2.Str())
 	}
 	if uintptr(v.p) < uintptr(v2.p) {
@@ -282,9 +296,9 @@ func (v Value) toString(lv int, json bool) string {
 		return strconv.FormatFloat(v.Num(), 'f', -1, 64)
 	case STR:
 		if json {
-			return strconv.Quote(string(v.Str()))
+			return strconv.Quote(v.Str())
 		}
-		return string(v.Str())
+		return v.Str()
 	case TAB:
 		return v.Tab().String()
 	case FUN:

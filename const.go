@@ -41,7 +41,6 @@ const (
 	OpRet
 	OpYield
 	OpLen
-	OpAddressOf
 	OpNOP
 	OpEOB
 )

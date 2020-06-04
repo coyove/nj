@@ -62,7 +62,6 @@ const (
 	ANot         Symbol = "not"
 	ALess        Symbol = "lt"
 	ALessEq      Symbol = "le"
-	AAddrOf      Symbol = "addr"
 	ALen         Symbol = "len"
 	ARetAddr     Symbol = "reta"
 	APopV        Symbol = "popv"

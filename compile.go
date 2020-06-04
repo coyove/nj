@@ -213,7 +213,6 @@ var flatOpMapping = map[parser.Symbol]_Opcode{
 	parser.AStore:  OpStore,
 	parser.ALoad:   OpLoad,
 	parser.ALen:    OpLen,
-	parser.AAddrOf: OpAddressOf,
 	parser.AInc:    OpInc,
 	parser.APopV:   OpPopV,
 }
