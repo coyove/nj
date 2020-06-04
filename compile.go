@@ -20,6 +20,13 @@ type symbol struct {
 
 func (s *symbol) String() string { return fmt.Sprintf("symbol:%d", s.addr) }
 
+type gotolabel struct {
+	labelMarker [4]uint32
+	gotoMarker  [4]uint32
+	metLabel    bool
+	labelPos    int
+}
+
 // symtable is responsible for recording the state of compilation
 type symtable struct {
 	// variable name lookup
@@ -37,6 +44,8 @@ type symtable struct {
 	constMap map[interface{}]uint16
 
 	reusableTmps map[uint16]bool
+
+	gotoMarkers map[parser.Symbol]*gotolabel
 }
 
 func newsymtable() *symtable {
@@ -44,6 +53,7 @@ func newsymtable() *symtable {
 		sym:          make(map[parser.Symbol]*symbol),
 		constMap:     make(map[interface{}]uint16),
 		reusableTmps: make(map[uint16]bool),
+		gotoMarkers:  make(map[parser.Symbol]*gotolabel),
 	}
 	return t
 }
@@ -308,6 +318,8 @@ func (table *symtable) compileNode(node *parser.Node) (code packet, yx uint16) {
 		code, yx = table.compileLambdaOp(nodes)
 	case parser.ARetAddr:
 		code, yx = table.compileRetAddrOp(nodes)
+	case parser.AGoto, parser.ALabel:
+		code, yx = table.compileGotoOp(nodes)
 	default:
 		if _, ok := flatOpMapping[name]; ok {
 			return table.compileFlatOp(nodes)
@@ -347,6 +359,7 @@ func compileNodeTopLevel(n *parser.Node) (cls *Closure, err error) {
 	table.vp = uint16(len(table.sym))
 	code, _ := table.compileNode(n)
 	code.WriteOP(OpEOB, 0, 0)
+	table.patchGoto(code)
 	consts := make([]Value, len(table.consts))
 	for i, k := range table.consts {
 		switch k := k.(type) {

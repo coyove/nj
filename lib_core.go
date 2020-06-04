@@ -140,6 +140,9 @@ func initCoreLibs() {
 			env.A = Value{}
 		}
 	}), false)
+	G.Puts("call", NativeFun(1, true, func(env *Env) {
+		env.A, env.V = env.In(0, FUN).Fun().Call(env.V...)
+	}), false)
 	G.Puts("pcall", NativeFun(1, true, func(env *Env) {
 		defer func() {
 			if r := recover(); r != nil {

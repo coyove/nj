@@ -3,6 +3,14 @@
 
 print(unpack({'testing vararg'}))
 
+function foo1(a, b) return a + b end
+
+function bar1(...) 
+    return call(foo1, ...)
+end
+
+assert(bar1(1, 2)==3)
+
 function f(a, ...)
   local x = {...; n = #...}
   for i = 1, x.n do assert(a[i] == x[i]) end

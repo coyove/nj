@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func (lex *Lexer) loadFile(path string, pos Token) *Node {
+func (lex *Lexer) loadFile(path string) *Node {
 	if strings.Contains(lex.loop, path) {
 		lex.Error(fmt.Sprintf("%s and %s are importing each other", lex.scanner.Pos.Source, path))
 	}
@@ -27,6 +27,7 @@ func (lex *Lexer) loadFile(path string, pos Token) *Node {
 	}
 
 	// Now the required code is loaded, for naming scope we will wrap them into a closure
+	pos := Position{Line: 1, Column: 1, Source: path}
 	cls := __func(Cpl(), n).pos0(pos)
 	node := __call(cls, Cpl()).pos0(pos)
 	lex.cache[path] = node

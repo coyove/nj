@@ -302,8 +302,11 @@ func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
 		if ch == EOF {
 			return sc.Error(buf.String(), "unexpected end of string block")
 		}
-		if ch == '`' {
-			break
+		if ch == ']' {
+			if sc.Peek() == ']' {
+				sc.Next()
+				break
+			}
 		}
 		writeChar(buf, ch)
 	}
@@ -333,6 +336,7 @@ var reservedWords = map[string]uint32{
 	"do":       TDo,
 	"yield":    TYield,
 	"in":       TIn,
+	"goto":     TGoto,
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
@@ -418,15 +422,12 @@ redo:
 			err = sc.scanString(ch, buf)
 			tok.Type = TString
 			tok.Str = buf.String()
-		case '`':
-			tok.Type = TString
-			err = sc.scanBlockString(buf)
-			tok.Str = buf.String()
 		case '[':
-			if sc.Peek() == ']' {
-				tok.Type = TSquare
-				tok.Str = "[]"
+			if sc.Peek() == '[' {
 				sc.Next()
+				tok.Type = TString
+				err = sc.scanBlockString(buf)
+				tok.Str = buf.String()
 			} else {
 				tok.Type = ch
 				tok.Str = string(ch)
@@ -491,9 +492,9 @@ redo:
 			tok.Type = ch
 			tok.Str = string(ch)
 		case ':':
-			if sc.Peek() == '=' {
-				tok.Type = TSet
-				tok.Str = ":="
+			if sc.Peek() == ':' {
+				tok.Type = TLabel
+				tok.Str = "::"
 				sc.Next()
 			} else {
 				tok.Type = ch

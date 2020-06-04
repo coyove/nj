@@ -66,6 +66,8 @@ const (
 	ALen         Symbol = "len"
 	ARetAddr     Symbol = "reta"
 	APopV        Symbol = "popv"
+	ALabel       Symbol = "lbl"
+	AGoto        Symbol = "goto"
 )
 
 func __chain(args ...interface{}) *Node { return Cpl(append([]interface{}{ABegin}, args...)...) }

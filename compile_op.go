@@ -324,6 +324,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	newtable.vp = uint16(len(newtable.sym))
 
 	code, yx = newtable.compileNode(atoms[3])
+	code.source = atoms[0].Position.Source
 
 	code.WriteOP(OpEOB, 0, 0)
 	buf := newpacket()
@@ -353,9 +354,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 
 	buf.Write32(uint32(len(code.data)))
 
-	// Note buf.source will be set to Code.source in buf.Write
-	// but buf.source shouldn't be changed, so set code.source to buf.source
-	code.source = buf.source
+	newtable.patchGoto(code)
 
 	buf.Write(code)
 	buf.WritePos(atoms[0].Position)
@@ -367,8 +366,12 @@ var staticWhileHack [8]uint32
 func init() {
 	rand.Seed(time.Now().Unix())
 	for i := range staticWhileHack {
-		staticWhileHack[i] = makeop(OpNOP, uint16(rand.Uint32()), uint16(rand.Uint32()))
+		staticWhileHack[i] = genRandomNop()
 	}
+}
+
+func genRandomNop() uint32 {
+	return makeop(OpNOP, uint16(rand.Uint32()), uint16(rand.Uint32()))
 }
 
 // [continue | break]
@@ -428,6 +431,61 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 		i += x + 4
 	}
 	return buf, regA
+}
+
+func (table *symtable) compileGotoOp(atoms []*parser.Node) (code packet, yx uint16) {
+	label := atoms[1].Sym()
+	marker, ok := table.gotoMarkers[label]
+	if !ok {
+		// Generate 8 dummy opcodes as placeholders
+		marker = &gotolabel{
+			labelMarker: [4]uint32{genRandomNop(), genRandomNop(), genRandomNop(), genRandomNop()},
+			gotoMarker:  [4]uint32{genRandomNop(), genRandomNop(), genRandomNop(), genRandomNop()},
+		}
+		table.gotoMarkers[label] = marker
+	}
+
+	if atoms[0].Sym() == parser.AGoto { // goto label
+		code.WriteRaw(marker.gotoMarker[:])
+	} else { // :: label ::
+		marker.metLabel = true
+		code.WriteRaw(marker.labelMarker[:])
+	}
+	return
+}
+
+func (table *symtable) patchGoto(code packet) {
+	for l, m := range table.gotoMarkers {
+		if !m.metLabel {
+			delete(table.gotoMarkers, l)
+		}
+	}
+
+	if len(table.gotoMarkers) == 0 {
+		return
+	}
+
+	codeBytes := u32Bytes(code.data)
+
+	// Calculate each label's absolute position inside the code chunk
+	for label, marker := range table.gotoMarkers {
+		x := bytes.Index(codeBytes, u32Bytes(marker.labelMarker[:]))
+		table.gotoMarkers[label].labelPos = x/4 + 4
+	}
+
+	for _, marker := range table.gotoMarkers {
+		m := u32Bytes(marker.gotoMarker[:])
+		for i := 0; i < len(codeBytes); {
+			x := bytes.Index(codeBytes[i:], m[:])
+			if x == -1 {
+				break
+			}
+			gotoPos := (i + x) / 4
+			jmp := marker.labelPos - 1 - gotoPos
+			code.data[gotoPos] = makejmpop(OpJmp, 0, jmp)
+			i += x + 4
+		}
+	}
 }
 
 func (table *symtable) compileRetAddrOp(atoms []*parser.Node) (code packet, yx uint16) {

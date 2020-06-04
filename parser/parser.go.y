@@ -37,12 +37,12 @@ import "math/rand"
 }
 
 /* Reserved words */
-%token<token> TDo TIn TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TIf TLen TReturn TReturnVoid TImport TYield TYieldVoid TRepeat TUntil TNot
+%token<token> TDo TIn TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TIf TLen TReturn TReturnVoid TImport TYield TYieldVoid TRepeat TUntil TNot TLabel TGoto
 
 /* Literals */
 %token<token> TEqeq TNeq TLte TGte TIdent TNumber TString '{' '[' '('
 %token<token> TAddEq TSubEq TMulEq TDivEq TModEq
-%token<token> TSquare TDotDot TSet
+%token<token> TSquare TDotDot 
 
 /* Operators */
 %right 'T'
@@ -312,7 +312,9 @@ jmp_stat:
         TContinue                         { $$ = Cpl(AContinue).pos0($1) } |
         TReturn expr_list                 { $$ = Cpl(AReturn, $2).pos0($1) } |
         TReturnVoid                       { $$ = Cpl(AReturn, emptyNode).pos0($1) } |
-        TImport TString                   { $$ = __move(Sym(moduleNameFromPath($2.Str)), yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1)).pos0($1) }
+        TImport TString                   { $$ = __move(Sym(moduleNameFromPath($2.Str)), yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str))).pos0($1) } |
+        TGoto TIdent                      { $$ = Cpl(AGoto, $2).pos0($1) } |
+        TLabel TIdent TLabel              { $$ = Cpl(ALabel, $2) }
 
 declarator:
         TIdent                            { $$ = SymTok($1).SetPos($1) } |
@@ -333,7 +335,7 @@ ident_dot_list:
 
 expr:
         TNumber                           { $$ = Num($1.Str).SetPos($1) } |
-        TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str), $1) } |
+        TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str)) } |
         function                          { $$ = $1 } |
         table_gen                         { $$ = $1 } |
         prefix_expr                       { $$ = $1 } |
