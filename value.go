@@ -5,7 +5,6 @@ import (
 	"math"
 	"reflect"
 	"strconv"
-	"strings"
 	"unsafe"
 
 	"github.com/cespare/xxhash"
@@ -40,8 +39,9 @@ const (
 	AnyAny = ANY * 2
 )
 
-// Value is the basic value used by VM
-// Note 4 NaN values will not be valid: [0xffffffff`fffffffc, 0xffffffff`ffffffff]
+// Value is the basic value used by the intepreter
+// For numbers there are 4 NaNs which are not representable: [0xffffffff`fffffffc, 0xffffffff`ffffffff]
+// An empty Value naturally represent nil
 type Value struct {
 	v uint64
 	p unsafe.Pointer
@@ -88,14 +88,13 @@ func Num(f float64) Value {
 
 // Bln returns a boolean value
 func Bln(b bool) Value {
-	x := uint64(1)
 	if !b {
-		x = 3
+		return Value{v: 3}
 	}
-	return Value{v: x}
+	return Value{v: 1}
 }
 
-// Tab returns a map value
+// Tab returns a table value
 func Tab(m *Table) Value {
 	if m == nil {
 		return Value{}
@@ -118,7 +117,7 @@ func Str(s string) Value {
 	return Value{v: STR, p: unsafe.Pointer(&s)}
 }
 
-func Str_unsafe(s []byte) Value {
+func _StrBytes(s []byte) Value {
 	return Value{v: STR, p: unsafe.Pointer(&s)}
 }
 
@@ -150,6 +149,20 @@ func (v Value) Str() string {
 	return *(*string)(v.p)
 }
 
+func (v Value) _StrBytes() []byte {
+	var ss []byte
+	b := (*[3]uintptr)(unsafe.Pointer(&ss))
+	if l := v.v >> 56; l > 0 {
+		(*b)[0] = uintptr(v.p)
+		(*b)[1], (*b)[2] = uintptr(l-1), uintptr(l-1)
+	} else {
+		vpp := *(*[2]uintptr)(v.p)
+		(*b)[0] = vpp[0]
+		(*b)[1], (*b)[2] = vpp[1], vpp[1]
+	}
+	return ss
+}
+
 // IsFalse tests whether value contains a falsey value
 func (v Value) IsFalse() bool {
 	switch v.Type() {
@@ -160,9 +173,6 @@ func (v Value) IsFalse() bool {
 	}
 	return false
 }
-
-// IsZero is a fast way to check if a numeric Value is +0
-func (v Value) IsZero() bool { return v == Num(0) }
 
 func (v Value) IsNil() bool { return v == Value{} }
 
@@ -244,7 +254,7 @@ func (v Value) Equal(r Value) bool {
 //go:nosplit
 func (v Value) Hash() uint64 {
 	if v.Type() == STR {
-		return xxhash.Sum64String(v.Str())
+		return xxhash.Sum64(v._StrBytes())
 	}
 	var b []byte
 	bh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
@@ -252,26 +262,6 @@ func (v Value) Hash() uint64 {
 	bh.Len = int(unsafe.Sizeof(v))
 	bh.Cap = int(unsafe.Sizeof(v))
 	return xxhash.Sum64(b)
-}
-
-func (v Value) cmp(v2 Value) int {
-	if v == v2 {
-		return 0
-	}
-	if v.v > v2.v {
-		return 1
-	}
-	if v.v < v2.v {
-		return -1
-	}
-	// v.v == v2.v
-	if byte(v.v) == STR {
-		return strings.Compare(v.Str(), v2.Str())
-	}
-	if uintptr(v.p) < uintptr(v2.p) {
-		return -1
-	}
-	return 1
 }
 
 func (v Value) toString(lv int) string {
@@ -306,7 +296,7 @@ var (
 )
 
 func init() {
-	strMetatable = (&Table{}).rawsetstr("sub", NativeFun(2, true, func(env *Env) {
+	strMetatable = (&Table{}).RawPuts("sub", NativeFun(2, func(env *Env) {
 		i, j, s := int(env.In(1, NUM).Num()), -1, env.In(0, STR).Str()
 		if len(env.V) > 0 {
 			j = int(env.V[0].Expect(NUM).Num())
@@ -350,7 +340,7 @@ func (v Value) GetMetatable() *Table {
 
 func (v Value) GetMetamethod(name string) Value {
 	if mt := v.GetMetatable(); mt != nil {
-		return mt.rawgetstr(name)
+		return mt.RawGets(name)
 	}
 	return Value{}
 }

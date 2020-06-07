@@ -201,21 +201,21 @@ func initLibAux() {
 	// 	lfmt.Put("Fscan", NativeFun(1, fmtScan("fscan")))
 	// 	lfmt.Put("Fscanf", NativeFun(2, fmtScan("fscanf")))
 	// 	lfmt.Put("Write", NativeFun(0, fmtWrite))
-	G.Puts("print", NativeFun(0, true, fmtPrint('l')), false)
+	G.Puts("print", NativeFun(0, fmtPrint('l')))
 	//
 	los := &Table{}
-	los.Puts("stdout", Any(os.Stdout), false)
-	los.Puts("stdin", Any(os.Stdin), false)
-	los.Puts("stderr", Any(os.Stderr), false)
-	G.Puts("os", Tab(los), false)
+	los.Puts("stdout", Any(os.Stdout))
+	los.Puts("stdin", Any(os.Stdin))
+	los.Puts("stderr", Any(os.Stderr))
+	G.Puts("os", Tab(los))
 
 	lstring := &Table{}
-	lstring.Puts("format", NativeFun(1, true, fmtSprint('f')), false)
-	lstring.Puts("rep", NativeFun(2, false, func(env *Env) {
+	lstring.Puts("format", NativeFun(1, fmtSprint('f')))
+	lstring.Puts("rep", NativeFun(2, func(env *Env) {
 		env.A = Str(strings.Repeat(env.In(0, STR).Str(), int(env.In(1, NUM).Num())))
-	}), false)
-	lstring.Puts("char", NativeFun(1, false, func(env *Env) {
+	}))
+	lstring.Puts("char", NativeFun(1, func(env *Env) {
 		env.A = Str(string(rune(env.In(0, NUM).Num())))
-	}), false)
-	G.Puts("string", Tab(lstring), false)
+	}))
+	G.Puts("string", Tab(lstring))
 }

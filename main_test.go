@@ -210,7 +210,7 @@ func TestPosVByte(t *testing.T) {
 		if r.Intn(2) == 1 {
 			c = uint32(r.Intn(14))
 		}
-		p.appendABC(a, b, uint16(c))
+		p.append(a, b, uint16(c))
 		p2 = append(p2, [3]uint32{a, b, c})
 	}
 

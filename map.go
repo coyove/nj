@@ -6,6 +6,10 @@
 
 package potatolang
 
+import (
+	"fmt"
+)
+
 const (
 	loadFactor  = 0.85                      // must be above 50%
 	dibBitSize  = 16                        // 0xFFFF
@@ -26,6 +30,8 @@ func (e *entry) hash() int { return int(e.hdib >> dibBitSize) }
 func (e *entry) setDIB(dib int) { e.hdib = e.hdib>>dibBitSize<<dibBitSize | uint64(dib)&maxDIB }
 
 func (e *entry) setHash(hash int) { e.hdib = uint64(hash)<<dibBitSize | e.hdib&maxDIB }
+
+func (e entry) String() string { return fmt.Sprintf("%v=%v(%d)", e.k, e.v, e.dib()) }
 
 func makeHDIB(hash, dib int) uint64 { return uint64(hash)<<dibBitSize | uint64(dib)&maxDIB }
 

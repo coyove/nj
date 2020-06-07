@@ -9,13 +9,13 @@ func initLibMath() {
 	//	r := rand.New()
 	lmath := &Table{}
 	//
-	lmath.Puts("sqrt", NativeFun(1, false, func(env *Env) {
+	lmath.Puts("sqrt", NativeFun(1, func(env *Env) {
 		env.A = Num(math.Sqrt(env.Get(0).Expect(NUM).Num()))
-	}), false)
-	lmath.Puts("floor", NativeFun(1, false, func(env *Env) {
+	}))
+	lmath.Puts("floor", NativeFun(1, func(env *Env) {
 		env.A = Num(math.Floor(env.Get(0).Expect(NUM).Num()))
-	}), false)
-	lmath.Puts("max", NativeFun(0, true, func(env *Env) {
+	}))
+	lmath.Puts("max", NativeFun(0, func(env *Env) {
 		if len(env.V) == 0 {
 			env.A = Value{}
 		} else {
@@ -27,11 +27,11 @@ func initLibMath() {
 			}
 			env.A = Num(max)
 		}
-	}), false)
-	G.Puts("math", Tab(lmath), false)
+	}))
+	G.Puts("math", Tab(lmath))
 
 	lnative := &Table{}
-	lnative.Puts("bytes", NativeFun(1, false, func(env *Env) {
+	lnative.Puts("bytes", NativeFun(1, func(env *Env) {
 		switch v := env.Get(0); v.Type() {
 		case NUM:
 			env.A = Any(make(NativeBytes, int(v.Num())))
@@ -42,9 +42,9 @@ func initLibMath() {
 		default:
 			env.A = Value{}
 		}
-	}), false)
+	}))
 
-	G.Puts("native", Tab(lnative), false)
+	G.Puts("native", Tab(lnative))
 
 	//	lmath.Put("rand", NewStructValue(NewStruct().
 	//		Put("intn", NativeFun(1, func(env *Env) Value {
@@ -60,7 +60,7 @@ type NativeBytes []byte
 
 var (
 	nativeBytesMetatable = (&Table{}).
-		Puts("__index", NativeFun(2, false, func(env *Env) {
+		Puts("__index", NativeFun(2, func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			switch k := env.Get(1); k.Type() {
 			case NUM:
@@ -68,7 +68,7 @@ var (
 			case STR:
 				switch k.Str() {
 				case "append":
-					env.A = NativeFun(1, true, func(env *Env) {
+					env.A = NativeFun(1, func(env *Env) {
 						a := env.In(0, ANY).Any().(NativeBytes)
 						for _, v := range env.V {
 							a = append(a, byte(v.ExpectMsg(NUM, "append").Num()))
@@ -77,7 +77,7 @@ var (
 					})
 					return
 				case "tostring":
-					env.A = NativeFun(1, false, func(env *Env) {
+					env.A = NativeFun(1, func(env *Env) {
 						a := env.In(0, ANY).Any().(NativeBytes)
 						env.A = Str(string(a))
 					})
@@ -87,21 +87,21 @@ var (
 			default:
 				panicf("invalid index: %#v", k)
 			}
-		}), false).
-		Puts("__newindex", NativeFun(3, false, func(env *Env) {
+		})).
+		Puts("__newindex", NativeFun(3, func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			a[int(env.In(1, NUM).Num())] = byte(env.In(2, NUM).Num())
-		}), false).
-		Puts("__len", NativeFun(1, false, func(env *Env) {
+		})).
+		Puts("__len", NativeFun(1, func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			env.A = Num(float64(len(a)))
-		}), false).
-		Puts("__concat", NativeFun(2, false, func(env *Env) {
+		})).
+		Puts("__concat", NativeFun(2, func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			b := env.In(1, ANY).Any().(NativeBytes)
 			env.A = Any(NativeBytes(append(a, b...)))
-		}), false).
-		Puts("__eq", NativeFun(2, false, func(env *Env) {
+		})).
+		Puts("__eq", NativeFun(2, func(env *Env) {
 			switch l, r := env.Get(0), env.Get(1); l.Type() + r.Type() {
 			case AnyAny:
 				a, b := l.Any().(NativeBytes), r.Any().(NativeBytes)
@@ -149,7 +149,7 @@ var (
 				}
 				env.A = Bln(true)
 			}
-		}), false)
+		}))
 )
 
 func (a NativeBytes) GetMetatable() *Table   { return nativeBytesMetatable }

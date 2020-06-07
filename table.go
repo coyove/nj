@@ -16,19 +16,7 @@ type Table struct {
 	mt *Table
 }
 
-func (t *Table) rawgetstr(name string) Value {
-	if t == nil {
-		return Value{}
-	}
-	return t.m.Get(Str(name))
-}
-
-func (t *Table) rawsetstr(name string, v Value) *Table {
-	t.m.Put(Str(name), v)
-	return t
-}
-
-func (t *Table) Put(k, v Value, raw bool) {
+func (t *Table) _put(k, v Value, raw bool) {
 	var ni Value
 	if k.Type() == NUM {
 		idx := k.Num()
@@ -42,7 +30,7 @@ func (t *Table) Put(k, v Value, raw bool) {
 			}
 			if int(idx) == len(t.a)+1 {
 				if !raw {
-					if ni = t.mt.Get(table__newindex, true); !ni.IsNil() {
+					if ni = t.mt.RawGet(table__newindex); !ni.IsNil() {
 						goto newindex
 					}
 				}
@@ -57,7 +45,7 @@ func (t *Table) Put(k, v Value, raw bool) {
 	}
 
 	if !raw && t.m.Get(k).IsNil() {
-		if ni = t.mt.Get(table__newindex, true); !ni.IsNil() {
+		if ni = t.mt.RawGet(table__newindex); !ni.IsNil() {
 			goto newindex
 		}
 	}
@@ -73,7 +61,7 @@ newindex:
 		if ni.Tab() == t {
 			panicf("invalid __newindex, recursive delegation")
 		}
-		ni.Tab().Put(k, v, false)
+		ni.Tab().Put(k, v)
 	default:
 		panicf("invalid __newindex, expect table or function")
 	}
@@ -92,7 +80,7 @@ func (t *Table) Insert(k, v Value) {
 			}
 		}
 	}
-	t.Put(k, v, true)
+	t.RawPut(k, v)
 }
 
 func (t *Table) Remove(idx int) Value {
@@ -101,16 +89,23 @@ func (t *Table) Remove(idx int) Value {
 	return v
 }
 
-func (t *Table) Puts(k string, v Value, raw bool) *Table {
-	t.Put(Str(k), v, raw)
-	return t
-}
+func (t *Table) Put(k, v Value) *Table { t._put(k, v, false); return t }
 
-func (t *Table) Gets(k string, raw bool) Value {
-	return t.Get(Str(k), raw)
-}
+func (t *Table) RawPut(k, v Value) *Table { t._put(k, v, true); return t }
 
-func (t *Table) Get(k Value, raw bool) (v Value) {
+func (t *Table) Puts(k string, v Value) *Table { return t.Put(Str(k), v) }
+
+func (t *Table) RawPuts(k string, v Value) *Table { return t.RawPut(Str(k), v) }
+
+func (t *Table) Gets(k string) Value { return t.Get(Str(k)) }
+
+func (t *Table) RawGets(k string) Value { return t.RawGet(Str(k)) }
+
+func (t *Table) Get(k Value) (v Value) { return t._get(k, false) }
+
+func (t *Table) RawGet(k Value) (v Value) { return t._get(k, true) }
+
+func (t *Table) _get(k Value, raw bool) (v Value) {
 	if t == nil {
 		return
 	}
@@ -123,7 +118,7 @@ func (t *Table) Get(k Value, raw bool) (v Value) {
 		}
 	}
 	if !raw && t.m.Get(k).IsNil() {
-		switch ni := t.mt.Get(table__index, true); ni.Type() {
+		switch ni := t.mt.RawGet(table__index); ni.Type() {
 		case FUN:
 			v, _ = ni.Fun().Call(Tab(t), k)
 			return v
@@ -131,7 +126,7 @@ func (t *Table) Get(k Value, raw bool) (v Value) {
 			if ni.Tab() == t {
 				panicf("invalid __index, recursive delegation")
 			}
-			return ni.Tab().Get(k, false)
+			return ni.Tab().Get(k)
 		case NIL:
 		default:
 			panicf("invalid __index, expect table or function")

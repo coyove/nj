@@ -56,7 +56,7 @@ func u32FromBytes(p []byte) []uint32 {
 
 type posVByte []byte
 
-func (p *posVByte) appendABC(a, b uint32, c uint16) {
+func (p *posVByte) append(idx uint32, line uint32, col uint16) {
 	trunc := func(v uint32) (w byte, buf [4]byte) {
 		if v < 256 {
 			w = 0
@@ -70,14 +70,14 @@ func (p *posVByte) appendABC(a, b uint32, c uint16) {
 		binary.LittleEndian.PutUint32(buf[:], v)
 		return
 	}
-	aw, ab := trunc(a)
-	bw, bb := trunc(b)
-	x := aw<<6 + bw<<4
+	iw, ib := trunc(idx)
+	lw, lb := trunc(line)
+	x := iw<<6 + lw<<4
 	cw := 0
-	c--
-	if c < 14 {
-		x |= byte(c)
-	} else if c < 256 {
+	col--
+	if col < 14 {
+		x |= byte(col)
+	} else if col < 256 {
 		cw = 1
 		x |= 0xe
 	} else {
@@ -86,12 +86,12 @@ func (p *posVByte) appendABC(a, b uint32, c uint16) {
 	}
 
 	*p = append(*p, x)
-	*p = append(*p, ab[:aw+1]...)
-	*p = append(*p, bb[:bw+1]...)
+	*p = append(*p, ib[:iw+1]...)
+	*p = append(*p, lb[:lw+1]...)
 	if cw == 1 {
-		*p = append(*p, byte(c))
+		*p = append(*p, byte(col))
 	} else if cw == 2 {
-		*p = append(*p, byte(c), byte(c>>8))
+		*p = append(*p, byte(col), byte(col>>8))
 	}
 }
 
@@ -144,7 +144,7 @@ func (p *packet) Write(buf packet) {
 		var a, b uint32
 		var c uint16
 		i, a, b, c = buf.pos.readABC(i)
-		p.pos.appendABC(a+uint32(datalen), b, c)
+		p.pos.append(a+uint32(datalen), b, c)
 	}
 	p.source = buf.source
 }
@@ -170,7 +170,7 @@ func (b *packet) WritePos(p parser.Position) {
 		// Debug Code, used to detect a null meta struct
 		panicf("null line")
 	}
-	b.pos.appendABC(uint32(len(b.data)), p.Line, uint16(p.Column))
+	b.pos.append(uint32(len(b.data)), p.Line, uint16(p.Column))
 	if p.Source != "" {
 		b.source = p.Source
 	}
@@ -225,19 +225,19 @@ func crReadConsts(code []uint32, cursor *uint32, n int) []Value {
 	buf := crReadBytesLen(code, int(crRead32(code, cursor)), cursor)
 	for init := buf; len(buf) > 0; {
 		switch buf[0] {
-		case 0:
+		case 0: // float
 			x := math.Float64frombits(binary.BigEndian.Uint64(buf[1:]))
 			res = append(res, Num(x))
 			buf = buf[9:]
-		case 1:
+		case 1: // int
 			v, n := binary.Varint(buf[1:])
 			res = append(res, Num(float64(v)))
 			buf = buf[1+n:]
-		case 2:
+		case 2: // string
 			l, n := binary.Uvarint(buf[1:])
-			res = append(res, Str_unsafe(buf[1+n:1+n+int(l)]))
+			res = append(res, _StrBytes(buf[1+n:1+n+int(l)]))
 			buf = buf[1+n+int(l):]
-		case 3:
+		case 3: // bool
 			res = append(res, Bln(buf[1] == 1))
 			buf = buf[2:]
 		default:
@@ -259,25 +259,6 @@ func crRead(data []uint32, len int, cursor *uint32) []uint32 {
 func crRead32(data []uint32, cursor *uint32) uint32 {
 	*cursor++
 	return data[*cursor-1]
-}
-
-func crRead64(data []uint32, cursor *uint32) uint64 {
-	*cursor += 2
-	return uint64(data[*cursor-2])<<32 + uint64(data[*cursor-1])
-}
-
-func crReadDouble(data []uint32, cursor *uint32) float64 {
-	d := crRead64(data, cursor)
-	return *(*float64)(unsafe.Pointer(&d))
-}
-
-func crReadString(data []uint32, cursor *uint32) string {
-	x := crRead32(data, cursor)
-	return crReadStringLen(data, int(x), cursor)
-}
-
-func crReadStringLen(data []uint32, length int, cursor *uint32) string {
-	return string(crReadBytesLen(data, length, cursor))
 }
 
 func crReadBytesLen(data []uint32, length int, cursor *uint32) []byte {
@@ -426,18 +407,21 @@ MAIN:
 
 func crReadClosure(code []uint32, cursor *uint32, env *Env, opa, opb uint16) *Closure {
 	opaopb := uint32(opa)<<13 | uint32(opb)
-	argsCount := byte(opaopb >> 18)
+	numParam := byte(opaopb >> 18)
 	options := byte(opaopb >> 10)
 
 	consts := crReadConsts(code, cursor, int(uint16(opaopb&0x3ff)))
 	src := crReadBytesLen(code, int(crRead32(code, cursor)), cursor)
 	pos := crReadBytesLen(code, int(crRead32(code, cursor)), cursor)
-	clscode := crRead(code, int(crRead32(code, cursor)), cursor)
+	clsCode := crRead(code, int(crRead32(code, cursor)), cursor)
 
-	cls := NewClosure(clscode, consts, env, byte(argsCount))
-	cls.Pos = posVByte(pos)
-	cls.options = options
-	cls.source = src
-
-	return cls
+	return &Closure{
+		Code:       clsCode,
+		ConstTable: consts,
+		Env:        env,
+		NumParam:   numParam,
+		Pos:        pos,
+		options:    options,
+		source:     src,
+	}
 }

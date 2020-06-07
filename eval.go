@@ -60,21 +60,21 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, resultV []Va
 
 	defer func() {
 		if r := recover(); r != nil {
-			stk := append(retStack, stacktrace{cls: K})
-			for i := len(stk) - 1; i >= 0; i-- {
-				if stk[i].cls.Is(ClsRecoverable) {
-					nextCursor, yielded = 0, false
-					if rv, ok := r.(Value); ok {
-						result = rv
-						resultV = env.V
-					} else {
-						p := bytes.Buffer{}
-						fmt.Fprint(&p, r)
-						result = Str(p.String())
-					}
-					return
-				}
-			}
+			// stk := append(retStack, stacktrace{cls: K})
+			// for i := len(stk) - 1; i >= 0; i-- {
+			// 	if stk[i].cls.Is(ClsRecoverable) {
+			// 		nextCursor, yielded = 0, false
+			// 		if rv, ok := r.(Value); ok {
+			// 			result = rv
+			// 			resultV = env.V
+			// 		} else {
+			// 			p := bytes.Buffer{}
+			// 			fmt.Fprint(&p, r)
+			// 			result = Str(p.String())
+			// 		}
+			// 		return
+			// 	}
+			// }
 
 			rr := stacktrace{
 				cursor: cursor,
@@ -142,7 +142,12 @@ MAIN:
 					env.V = env.V[:0]
 				}
 			}
-			env.V = append(env.V, env._get(opa, K))
+			v := env._get(opa, K)
+			if v.Type() == UPK {
+				env.V = append(env.V, v.asUnpacked()...)
+			} else {
+				env.V = append(env.V, v)
+			}
 		case OpPopV:
 			if len(env.V) == 0 {
 				env.A = Value{}
@@ -241,7 +246,7 @@ MAIN:
 				}
 			case TAB:
 				t := v.Tab()
-				if l := t.mt.rawgetstr("__len"); l.Type() == FUN {
+				if l := t.mt.RawGets("__len"); l.Type() == FUN {
 					env.A, env.V = l.Fun().Call(v)
 				} else {
 					env.A = Num(float64(t.Len()))
@@ -268,7 +273,7 @@ MAIN:
 					m = &Table{}
 				}
 				for i := 0; i < stackEnv.Size(); i += 2 {
-					m.Put(stackEnv.stack[i], stackEnv.stack[i+1], true)
+					m.RawPut(stackEnv.stack[i], stackEnv.stack[i+1])
 				}
 				stackEnv.Clear()
 				env.A = Tab(m)
@@ -292,7 +297,7 @@ MAIN:
 			subject, v := env._get(opa, K), env._get(opb, K)
 			switch subject.Type() {
 			case TAB:
-				subject.Tab().Put(env.A, v, false)
+				subject.Tab().Put(env.A, v)
 			case UPK:
 				subject.asUnpacked()[int(env.A.ExpectMsg(NUM, "load").Num())-1] = v
 			case NIL:
@@ -312,7 +317,7 @@ MAIN:
 		case OpLoad:
 			switch a, idx := env._get(opa, K), env._get(opb, K); a.Type() {
 			case TAB:
-				env.A = a.Tab().Get(idx, false)
+				env.A = a.Tab().Get(idx)
 			case UPK:
 				env.A = a.asUnpacked()[int(idx.ExpectMsg(NUM, "load").Num())-1]
 			default:
@@ -375,13 +380,13 @@ MAIN:
 						}
 						stackEnv._set(uint16(cls.NumParam), newUnpackedValue(varg))
 						stackEnv.V = varg
-					} else {
+					} else if !cls.Is(ClsNative) {
 						stackEnv._set(uint16(cls.NumParam), newUnpackedValue(nil))
 					}
 				}
 			VAR_OUT:
 
-				if cls.Is(ClsYieldable | ClsRecoverable | ClsNative) {
+				if cls.Is(ClsYieldable | ClsNative) {
 					stackEnv.parent = env
 					env.A, env.V = cls.Exec(stackEnv)
 				} else {

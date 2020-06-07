@@ -1,3 +1,13 @@
+for i, v, n in ipairs({1, 2, 3}) do
+    assert( i == v and n == nil)
+end
+
+local n, s, ii = ipairs({1, 2, 3})
+for i, v, n in n,s,ii do
+    assert( i == v and n == nil)
+end
+
+
 assert(require "goto.txt" == "goto")
 
 assert([[ "1" ]] == ' "1" ')

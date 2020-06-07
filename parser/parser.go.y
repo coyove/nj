@@ -169,30 +169,8 @@ for_stat:
                 ).pos0($1),
             ).pos0($1)
         } |
-        TFor TIdent TIn expr TDo stats TEnd {
-            iter := randomVarname()
-            $$ = __do(
-                __set(iter, $4).pos0($1),
-                __loop(
-                    __chain(
-                        __set($2, __call(iter, emptyNode).pos0($1)).pos0($1),
-                        __if($2, $6, breakNode).pos0($1),
-                    ),
-                ).pos0($1),
-            )
-        } |
-        TFor TIdent ',' TIdent TIn expr TDo stats TEnd {
-            iter := randomVarname()
-            $$ = __do(
-                __set(iter, $6).pos0($1),
-                __loop(
-                    __chain(
-                        __set($2, __call(iter, emptyNode).pos0($1)).pos0($1),
-                        __set($4, popvNode).pos0($1),
-                        __if($2, $8, breakNode).pos0($1),
-                    ),
-                ).pos0($1),
-            )
+        TFor ident_list TIn expr_list TDo stats TEnd {
+            $$ = forLoop($1, $2.Cpl(), $4.Cpl(), $6)
         } |
         TFor TIdent '=' expr ',' expr TDo stats TEnd {
             forVar, forEnd := SymTok($2), randomVarname()
@@ -403,4 +381,32 @@ func opSetMove(op *Node) func(dest, src interface{}) *Node {
 
 func randomVarname() *Node {
     return Sym("v" + strconv.FormatInt(rand.Int63(), 10))
+}
+
+func forLoop(pos Token, rcv []*Node, exprIters []*Node, body *Node) *Node {
+    iter := randomVarname()
+    subject := randomVarname()
+    r := __do(__set(iter, exprIters[0]).pos0(pos))
+    if len(exprIters) > 1 {
+        r.CplAppend(__set(subject, exprIters[1]).pos0(pos))
+    } else {
+        r.CplAppend(__set(subject, popvNode).pos0(pos))
+    }
+    if len(exprIters) > 1 {
+        r.CplAppend(__set(rcv[0], exprIters[2]).pos0(pos))
+    } else {
+        r.CplAppend(__set(rcv[0], popvNode).pos0(pos))
+    }
+    rr := __chain()
+    for i := 1 ; i < len(rcv); i++ {
+        rr.CplAppend(__set(rcv[i], popvNode).pos0(pos))
+    }
+    r.CplAppend(__loop(
+        __chain(
+            __move(rcv[0], __call(iter, Cpl(subject, rcv[0])).pos0(pos)).pos0(pos),
+            rr, 
+            __if(rcv[0], body, breakNode).pos0(pos),
+        ),
+    ).pos0(pos))
+    return r
 }

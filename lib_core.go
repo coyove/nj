@@ -9,12 +9,12 @@ var G = &Table{}
 
 func initCoreLibs() {
 	lclosure := &Table{}
-	lclosure.Puts("copy", NativeFun(1, false, func(env *Env) {
+	lclosure.Puts("copy", NativeFun(1, func(env *Env) {
 		cls := env.In(0, FUN).Fun().Dup()
 		env.A = Fun(cls)
-	}), false)
-	G.Puts("closure", Tab(lclosure), false)
-	G.Puts("unpack", NativeFun(1, true, func(env *Env) {
+	}))
+	G.Puts("closure", Tab(lclosure))
+	G.Puts("unpack", NativeFun(1, func(env *Env) {
 		a := env.In(0, TAB).Tab().a
 		start, end := 1, len(a)
 		if len(env.V) > 0 {
@@ -24,7 +24,7 @@ func initCoreLibs() {
 			end = int(env.V[1].Expect(NUM).Num())
 		}
 		env.A = newUnpackedValue(a[start-1 : end])
-	}), false)
+	}))
 	// 	lcore.Put("Eval", NativeFun(1, func(env *Env) Value {
 	// 		env.V = Value{}
 	// 		cls, err := LoadString(string(env.Get(0).MustString()))
@@ -66,7 +66,7 @@ func initCoreLibs() {
 	// 		}))))
 	// 	G["std"] = NewStructValue(lcore)
 	ltable := &Table{}
-	ltable.Puts("insert", NativeFun(2, true, func(env *Env) {
+	ltable.Puts("insert", NativeFun(2, func(env *Env) {
 		t := env.In(0, TAB).Tab()
 		if len(env.V) > 0 {
 			t.Insert(env.In(1, NUM), env.V[0])
@@ -74,27 +74,27 @@ func initCoreLibs() {
 		} else {
 			t.Insert(Num(float64(t.Len())), env.V[0])
 		}
-	}), false)
-	ltable.Puts("remove", NativeFun(1, true, func(env *Env) {
+	}))
+	ltable.Puts("remove", NativeFun(1, func(env *Env) {
 		t := env.In(0, TAB).Tab()
 		n := t.Len()
 		if len(env.V) > 0 {
 			n = int(env.V[0].Expect(NUM).Num())
 		}
 		t.Remove(n)
-	}), false)
-	ltable.Puts("unpack", G.Gets("unpack", false), false)
-	G.Puts("table", Tab(ltable), false)
-	G.Puts("type", NativeFun(1, false, func(env *Env) {
+	}))
+	ltable.Puts("unpack", G.Gets("unpack"))
+	G.Puts("table", Tab(ltable))
+	G.Puts("type", NativeFun(1, func(env *Env) {
 		env.A = Str(typeMappings[env.Get(0).Type()])
-	}), false)
-	G.Puts("rawset", NativeFun(3, false, func(env *Env) {
-		env.In(0, TAB).Tab().Put(env.Get(1), env.Get(2), true)
-	}), false)
-	G.Puts("rawget", NativeFun(2, false, func(env *Env) {
-		env.A = env.In(0, TAB).Tab().Get(env.Get(1), true)
-	}), false)
-	G.Puts("rawequal", NativeFun(2, false, func(env *Env) {
+	}))
+	G.Puts("rawset", NativeFun(3, func(env *Env) {
+		env.In(0, TAB).Tab().RawPut(env.Get(1), env.Get(2))
+	}))
+	G.Puts("rawget", NativeFun(2, func(env *Env) {
+		env.A = env.In(0, TAB).Tab().RawGet(env.Get(1))
+	}))
+	G.Puts("rawequal", NativeFun(2, func(env *Env) {
 		switch v, r := env.Get(0), env.Get(1); v.Type() + r.Type() {
 		case NumNum, BlnBln, NilNil:
 			env.A = Bln(v == r)
@@ -109,12 +109,12 @@ func initCoreLibs() {
 		default:
 			env.A = Bln(false)
 		}
-	}), false)
-	G.Puts("next", NativeFun(1, false, func(env *Env) {
+	}))
+	G.Puts("next", NativeFun(1, func(env *Env) {
 		k, v := env.In(0, TAB).Tab().m.Next(env.Get(1))
 		env.A, env.V = k, []Value{v}
-	}), false)
-	G.Puts("rawlen", NativeFun(1, false, func(env *Env) {
+	}))
+	G.Puts("rawlen", NativeFun(1, func(env *Env) {
 		switch env.A = env.Get(0); env.A.Type() {
 		case TAB:
 			env.A = Num(float64(env.A.Tab().Len()))
@@ -123,11 +123,11 @@ func initCoreLibs() {
 		default:
 			env.A.ExpectMsg(TAB, "rawlen")
 		}
-	}), false)
-	G.Puts("call", NativeFun(1, true, func(env *Env) {
+	}))
+	G.Puts("call", NativeFun(1, func(env *Env) {
 		env.A, env.V = env.In(0, FUN).Fun().Call(env.V...)
-	}), false)
-	G.Puts("pcall", NativeFun(1, true, func(env *Env) {
+	}))
+	G.Puts("pcall", NativeFun(1, func(env *Env) {
 		defer func() {
 			if r := recover(); r != nil {
 				env.A, env.V = Bln(false), nil
@@ -135,21 +135,21 @@ func initCoreLibs() {
 		}()
 		a, v := env.In(0, FUN).Fun().Call(env.V...)
 		env.A, env.V = Bln(true), append([]Value{a}, v...)
-	}), false)
-	G.Puts("select", NativeFun(2, false, func(env *Env) {
+	}))
+	G.Puts("select", NativeFun(2, func(env *Env) {
 		switch a := env.Get(0); a.Type() {
 		case STR:
 			env.A = Num(float64(len(env.In(1, UPK).asUnpacked())))
 		case NUM:
 			env.A = env.In(1, UPK).asUnpacked()[int(a.Num())-1]
 		}
-	}), false)
-	G.Puts("pack", NativeFun(1, false, func(env *Env) {
+	}))
+	G.Puts("pack", NativeFun(1, func(env *Env) {
 		t := &Table{a: env.In(0, UPK).asUnpacked()}
 		env.A = Tab(t)
-	}), false)
-	G.Puts("setmetatable", NativeFun(2, false, func(env *Env) {
-		if !env.Get(0).GetMetatable().rawgetstr("__metatable").IsNil() {
+	}))
+	G.Puts("setmetatable", NativeFun(2, func(env *Env) {
+		if !env.Get(0).GetMetatable().RawGets("__metatable").IsNil() {
 			panicf("cannot change protected metatable")
 		}
 		if env.Get(1).IsNil() {
@@ -158,26 +158,26 @@ func initCoreLibs() {
 			env.Get(0).SetMetatable(env.In(1, TAB).Tab())
 		}
 		env.A = env.Get(0)
-	}), false)
-	G.Puts("getmetatable", NativeFun(1, false, func(env *Env) {
+	}))
+	G.Puts("getmetatable", NativeFun(1, func(env *Env) {
 		t := env.Get(0).GetMetatable()
-		if mt := t.rawgetstr("__metatable"); !mt.IsNil() {
+		if mt := t.RawGets("__metatable"); !mt.IsNil() {
 			env.A = mt
 		} else {
 			env.A = Tab(t)
 		}
-	}), false)
-	G.Puts("assert", NativeFun(1, false, func(env *Env) {
+	}))
+	G.Puts("assert", NativeFun(1, func(env *Env) {
 		if v := env.Get(0); !v.IsFalse() {
 			return
 		}
 		panic("assertion failed")
-	}), false)
-	G.Puts("pairs", NativeFun(1, false, func(env *Env) {
+	}))
+	G.Puts("pairs", NativeFun(1, func(env *Env) {
 		t := env.In(0, TAB).Tab()
 		var idx = -1
 		var lastk Value
-		env.A = NativeFun(0, false, func(env *Env) {
+		env.A = NativeFun(0, func(env *Env) {
 		AGAIN:
 			idx++
 			if idx >= len(t.a) {
@@ -195,40 +195,42 @@ func initCoreLibs() {
 				env.A, env.V = Num(float64(idx)+1), []Value{t.a[idx]}
 			}
 		})
-	}), false)
-	G.Puts("ipairs", NativeFun(1, false, func(env *Env) {
-		var arr []Value
-		var idx = -1
+	}))
+	G.Puts("ipairs", NativeFun(1, func(env *Env) {
+		var arr Value
 		switch t := env.Get(0); t.Type() {
 		case TAB:
-			arr = t.Tab().a
+			arr = t
 		case UPK:
-			arr = t.asUnpacked()
+			arr = Tab(&Table{a: t.asUnpacked()})
 		default:
 			t.ExpectMsg(TAB, "ipairs")
 		}
-		env.A = NativeFun(0, false, func(env *Env) {
+		env.A = NativeFun(2, func(env *Env) {
+			idx := int(env.In(1, NUM).Num())
+			arr := env.In(0, TAB).Tab().a
 		AGAIN:
 			idx++
-			if idx >= len(arr) {
+			if idx > len(arr) {
 				env.A, env.V = Value{}, nil
 			} else {
-				if arr[idx].IsNil() {
+				if arr[idx-1].IsNil() {
 					goto AGAIN
 				}
-				env.A, env.V = Num(float64(idx)+1), []Value{arr[idx]}
+				env.A, env.V = Num(float64(idx)), []Value{arr[idx-1]}
 			}
 		})
-	}), false)
-	G.Puts("tostring", NativeFun(1, false, func(env *Env) {
+		env.V = []Value{arr, Num(0)}
+	}))
+	G.Puts("tostring", NativeFun(1, func(env *Env) {
 		v := env.Get(0)
 		if f := v.GetMetamethod("__tostring"); f.Type() == FUN {
 			env.A, env.V = f.Fun().Call(v)
 			return
 		}
 		env.A = Str(v.String())
-	}), false)
-	G.Puts("tonumber", NativeFun(1, false, func(env *Env) {
+	}))
+	G.Puts("tonumber", NativeFun(1, func(env *Env) {
 		v := env.Get(0)
 		switch v.Type() {
 		case NUM:
@@ -239,10 +241,10 @@ func initCoreLibs() {
 		default:
 			env.A = Value{}
 		}
-	}), false)
-	G.Puts("collectgarbage", NativeFun(0, false, func(env *Env) {
+	}))
+	G.Puts("collectgarbage", NativeFun(0, func(env *Env) {
 		runtime.GC()
-	}), false)
+	}))
 	// 	G["go"] = NativeFun(1, func(env *Env) Value {
 	// 		cls := env.Get(0).MustClosure()
 	// 		newEnv := NewEnv(cls.Env)

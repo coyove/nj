@@ -7,7 +7,6 @@ import (
 const (
 	ClsNoEnvescape = 1 << iota
 	ClsYieldable
-	ClsRecoverable
 	ClsNative
 	ClsVararg
 )
@@ -16,7 +15,7 @@ type Closure struct {
 	Code       []uint32
 	Pos        posVByte
 	source     []byte
-	ConstTable []Value // Only
+	ConstTable []Value
 	Env        *Env
 	NumParam   byte
 	options    byte
@@ -25,31 +24,20 @@ type Closure struct {
 	native     func(env *Env)
 }
 
-// NewClosure creates a new closure
-func NewClosure(code []uint32, consts []Value, env *Env, paramsCount byte) *Closure {
-	return &Closure{
-		Code:       code,
-		ConstTable: consts,
-		Env:        env,
-		NumParam:   paramsCount,
-	}
-}
-
 // NativeFun creates a native function in potatolang
-func NativeFun(paramsCount int, vararg bool, f func(env *Env)) Value {
+func NativeFun(numParam byte, f func(env *Env)) Value {
 	cls := &Closure{
-		NumParam: byte(paramsCount),
+		NumParam: numParam,
 		native:   f,
-	}
-	cls.Set(ClsNative)
-	if vararg {
-		cls.Set(ClsVararg)
+		options:  ClsNative | ClsVararg,
 	}
 	return Fun(cls)
 }
 
-func (c *Closure) Set(opt byte) {
-	c.options |= opt
+func (c *Closure) setOpt(flag bool, opt byte) {
+	if flag {
+		c.options |= opt
+	}
 }
 
 func (c *Closure) Is(opt byte) bool {
@@ -68,11 +56,11 @@ func (c *Closure) Dup() *Closure {
 
 func (c *Closure) String() string {
 	if c.native != nil {
-		return fmt.Sprintf("<native%d>", c.NumParam)
+		return fmt.Sprintf("<native-%d>", c.NumParam)
 	}
 	p := "closure"
 	if c.Is(ClsNoEnvescape) {
-		p = "func"
+		p = "function"
 	}
 
 	hash := uint32(0)
@@ -80,12 +68,12 @@ func (c *Closure) String() string {
 		hash = hash*31 + v
 	}
 
-	x := fmt.Sprintf("<%s%d_%x_%dk", p, c.NumParam, hash/65536, len(c.ConstTable))
+	x := fmt.Sprintf("<%s-%d-%04x-%dk", p, c.NumParam, hash/65536, len(c.ConstTable))
 	if c.Is(ClsYieldable) {
-		x += "_y"
+		x += "-y"
 	}
-	if c.Is(ClsRecoverable) {
-		x += "_safe"
+	if c.lastp != 0 {
+		x += fmt.Sprintf("-%xy", c.lastp)
 	}
 	return x + ">"
 }
@@ -119,7 +107,6 @@ func (c *Closure) Exec(newEnv *Env) (Value, []Value) {
 
 	// For a native function, it doesn't have its own Env,
 	// so newEnv's parent is the Env where this function was called.
-
 	c.native(newEnv)
 	return newEnv.A, newEnv.V
 }

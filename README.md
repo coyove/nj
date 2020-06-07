@@ -2,6 +2,7 @@ potatolang (pol) is a Lua intepreter written in golang. It adapts most features 
 
 ## Can & Can't
 
+- `1 + "2"` and `"1" .. 2` are not permitted, you should write `1 + tonumber("2")` and `"1" .. tostring(2)`, or implement their metamethods.
 - You can `return` anywhere in the function, `continue` in a for loop, and use `yield` as a keyword:
     - `for k in (function () yield 1 end) do assert(k == 1)`
 - You can `goto` anywhere in the function so be careful about uninitialized variables.

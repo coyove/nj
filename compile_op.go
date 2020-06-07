@@ -321,15 +321,9 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	buf := newpacket()
 	cls := Closure{}
 	cls.NumParam = byte(ln)
-	if newtable.y {
-		cls.Set(ClsYieldable)
-	}
-	if !newtable.envescape {
-		cls.Set(ClsNoEnvescape)
-	}
-	if vararg {
-		cls.Set(ClsVararg)
-	}
+	cls.setOpt(newtable.y, ClsYieldable)
+	cls.setOpt(!newtable.envescape, ClsNoEnvescape)
+	cls.setOpt(vararg, ClsVararg)
 
 	// (ln: 8bit) + (cls.options: 8bit) + (len(consts): 10bit)
 	opaopb := uint32(ln)<<18 | uint32(cls.options)<<10 | uint32(len(newtable.consts))

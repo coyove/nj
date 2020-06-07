@@ -370,7 +370,7 @@ func compileNodeTopLevel(n *parser.Node) (cls *Closure, err error) {
 			consts[i] = Bln(k)
 		}
 	}
-	cls = NewClosure(code.data, consts, nil, 0)
+	cls = &Closure{Code: code.data, ConstTable: consts}
 	cls.lastenv = NewEnv(nil)
 	cls.Pos = code.pos
 	cls.source = []byte("root" + cls.String() + "@" + code.source)
