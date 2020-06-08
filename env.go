@@ -136,3 +136,7 @@ func (env *Env) In(i int, expectedType byte) Value {
 	}
 	return v
 }
+
+func (env *Env) Return(a1 Value, an ...Value) {
+	env.A, env.V = a1, an
+}

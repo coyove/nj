@@ -1,22 +1,22 @@
 package potatolang
 
 var (
-	__metatable = Str("__metatable")
-	__tostring  = Str("__tostring")
-	__newindex  = Str("__newindex")
-	__index     = Str("__index")
-	__eq        = Str("__eq")
-	__len       = Str("__len")
-	__lt        = Str("__lt")
-	__le        = Str("__le")
-	__add       = Str("__add")
-	__concat    = Str("__concat")
-	__sub       = Str("__sub")
-	__mul       = Str("__mul")
-	__div       = Str("__div")
-	__mod       = Str("__mod")
-	__pow       = Str("__pow")
-	__call      = Str("__call")
+	M__metatable = Str("__metatable")
+	M__tostring  = Str("__tostring")
+	M__newindex  = Str("__newindex")
+	M__index     = Str("__index")
+	M__eq        = Str("__eq")
+	M__len       = Str("__len")
+	M__lt        = Str("__lt")
+	M__le        = Str("__le")
+	M__add       = Str("__add")
+	M__concat    = Str("__concat")
+	M__sub       = Str("__sub")
+	M__mul       = Str("__mul")
+	M__div       = Str("__div")
+	M__mod       = Str("__mod")
+	M__pow       = Str("__pow")
+	M__call      = Str("__call")
 
 	nilMetatable *Table
 	blnMetatable *Table
@@ -27,7 +27,7 @@ var (
 )
 
 func init() {
-	strMetatable = (&Table{}).RawPuts("sub", NativeFun(2, func(env *Env) {
+	strMetatable = (&Table{}).Puts("sub", NativeFun(2, func(env *Env) {
 		i, j, s := int(env.In(1, NUM).Num()), -1, env.In(0, STR).Str()
 		if len(env.V) > 0 {
 			j = int(env.V[0].Expect(NUM).Num())

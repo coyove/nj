@@ -160,25 +160,6 @@ func fmtSprint(flag byte) func(env *Env) {
 // }
 //
 
-// func strconvFormatFloat(env *Env) Value {
-// 	v := env.Get(0).MustNumber()
-// 	base := byte(env.Get(1).MustNumber())
-// 	digits := int(env.Get(2).MustNumber())
-// 	return Str(strconv.FormatFloat(v, byte(base), digits, 64))
-// }
-//
-// func strconvFormatInt(env *Env) Value {
-// 	return Str(strconv.FormatInt(int64(env.Get(0).MustNumber()), int(env.Get(1).MustNumber())))
-// }
-//
-// func strconvParseFloat(env *Env) Value {
-// 	v, err := strconv.ParseFloat(string(env.Get(0).MustString()), 64)
-// 	if err != nil {
-// 		StorePointerUnsafe(env.Get(1), Str(err.Error()))
-// 	}
-// 	return Num(v)
-// }
-//
 // func stringsIndex(env *Env) Value {
 // 	return Num(float64(strings.Index(env.Get(0).MustString(), env.Get(1).MustString())))
 // }
@@ -211,11 +192,7 @@ func initLibAux() {
 
 	lstring := &Table{}
 	lstring.Puts("format", NativeFun(1, fmtSprint('f')))
-	lstring.Puts("rep", NativeFun(2, func(env *Env) {
-		env.A = Str(strings.Repeat(env.In(0, STR).Str(), int(env.In(1, NUM).Num())))
-	}))
-	lstring.Puts("char", NativeFun(1, func(env *Env) {
-		env.A = Str(string(rune(env.In(0, NUM).Num())))
-	}))
+	lstring.Puts("rep", NativeFun(2, func(env *Env) { env.A = Str(strings.Repeat(env.In(0, STR).Str(), int(env.In(1, NUM).Num()))) }))
+	lstring.Puts("char", NativeFun(1, func(env *Env) { env.A = Str(string(rune(env.In(0, NUM).Num()))) }))
 	G.Puts("string", Tab(lstring))
 }

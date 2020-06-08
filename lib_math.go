@@ -1,66 +1,12 @@
 package potatolang
 
-import (
-	"math"
-	"unsafe"
-)
-
-func initLibMath() {
-	//	r := rand.New()
-	lmath := &Table{}
-	//
-	lmath.Puts("sqrt", NativeFun(1, func(env *Env) {
-		env.A = Num(math.Sqrt(env.Get(0).Expect(NUM).Num()))
-	}))
-	lmath.Puts("floor", NativeFun(1, func(env *Env) {
-		env.A = Num(math.Floor(env.Get(0).Expect(NUM).Num()))
-	}))
-	lmath.Puts("max", NativeFun(0, func(env *Env) {
-		if len(env.V) == 0 {
-			env.A = Value{}
-		} else {
-			max := env.V[0].Expect(NUM).Num()
-			for i := 1; i < len(env.V); i++ {
-				if x := env.V[i].Expect(NUM).Num(); x > max {
-					max = x
-				}
-			}
-			env.A = Num(max)
-		}
-	}))
-	G.Puts("math", Tab(lmath))
-
-	lnative := &Table{}
-	lnative.Puts("bytes", NativeFun(1, func(env *Env) {
-		switch v := env.Get(0); v.Type() {
-		case NUM:
-			env.A = Any(make(NativeBytes, int(v.Num())))
-		case STR:
-			env.A = Any(NativeBytes(v.Str()))
-		case ANY:
-			env.A = Any(NativeBytes(append([]byte{}, v.Any().(NativeBytes)...)))
-		default:
-			env.A = Value{}
-		}
-	}))
-
-	G.Puts("native", Tab(lnative))
-
-	//	lmath.Put("rand", NewStructValue(NewStruct().
-	//		Put("intn", NativeFun(1, func(env *Env) Value {
-	//			return Num(float64(r.Intn(int(env.Get(0).MustNumber()))))
-	//		})).
-	//		Put("bytes", NativeFun(1, func(env *Env) Value {
-	//			return Str(string(r.Fetch(int(env.Get(0).MustNumber()))))
-	//		}))))
-	//
-}
+import "unsafe"
 
 type NativeBytes []byte
 
 var (
 	nativeBytesMetatable = (&Table{}).
-		Puts("__index", NativeFun(2, func(env *Env) {
+		Put(M__index, NativeFun(2, func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			switch k := env.Get(1); k.Type() {
 			case NUM:
@@ -88,20 +34,20 @@ var (
 				panicf("invalid index: %#v", k)
 			}
 		})).
-		Puts("__newindex", NativeFun(3, func(env *Env) {
+		Put(M__newindex, NativeFun(3, func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			a[int(env.In(1, NUM).Num())] = byte(env.In(2, NUM).Num())
 		})).
-		Puts("__len", NativeFun(1, func(env *Env) {
+		Put(M__len, NativeFun(1, func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			env.A = Num(float64(len(a)))
 		})).
-		Puts("__concat", NativeFun(2, func(env *Env) {
+		Put(M__concat, NativeFun(2, func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			b := env.In(1, ANY).Any().(NativeBytes)
 			env.A = Any(NativeBytes(append(a, b...)))
 		})).
-		Puts("__eq", NativeFun(2, func(env *Env) {
+		Put(M__eq, NativeFun(2, func(env *Env) {
 			switch l, r := env.Get(0), env.Get(1); l.Type() + r.Type() {
 			case AnyAny:
 				a, b := l.Any().(NativeBytes), r.Any().(NativeBytes)

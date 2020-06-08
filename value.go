@@ -244,7 +244,7 @@ func (v Value) Equal(r Value) bool {
 	case FunFun:
 		return v.Fun() == r.Fun()
 	}
-	if eq := findmm(v, r, __eq); eq.Type() == FUN {
+	if eq := findmm(v, r, M__eq); eq.Type() == FUN {
 		e, _ := eq.Fun().Call(v, r)
 		return !e.IsFalse()
 	}

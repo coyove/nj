@@ -1,6 +1,7 @@
 package potatolang
 
 import (
+	"math"
 	"runtime"
 	"strconv"
 )
@@ -83,7 +84,7 @@ func initCoreLibs() {
 		}
 		t.Remove(n)
 	}))
-	ltable.Puts("unpack", G.Gets("unpack"))
+	ltable.Puts("unpack", G.Get(Str("unpack")))
 	G.Puts("table", Tab(ltable))
 	G.Puts("type", NativeFun(1, func(env *Env) {
 		env.A = Str(typeMappings[env.Get(0).Type()])
@@ -112,7 +113,7 @@ func initCoreLibs() {
 	}))
 	G.Puts("next", NativeFun(1, func(env *Env) {
 		k, v := env.In(0, TAB).Tab().m.Next(env.Get(1))
-		env.A, env.V = k, []Value{v}
+		env.Return(k, v)
 	}))
 	G.Puts("rawlen", NativeFun(1, func(env *Env) {
 		switch env.A = env.Get(0); env.A.Type() {
@@ -149,7 +150,7 @@ func initCoreLibs() {
 		env.A = Tab(t)
 	}))
 	G.Puts("setmetatable", NativeFun(2, func(env *Env) {
-		if !env.Get(0).GetMetatable().RawGet(__metatable).IsNil() {
+		if !env.Get(0).GetMetatable().RawGet(M__metatable).IsNil() {
 			panicf("cannot change protected metatable")
 		}
 		if env.Get(1).IsNil() {
@@ -161,7 +162,7 @@ func initCoreLibs() {
 	}))
 	G.Puts("getmetatable", NativeFun(1, func(env *Env) {
 		t := env.Get(0).GetMetatable()
-		if mt := t.RawGet(__metatable); !mt.IsNil() {
+		if mt := t.RawGet(M__metatable); !mt.IsNil() {
 			env.A = mt
 		} else {
 			env.A = Tab(t)
@@ -224,7 +225,7 @@ func initCoreLibs() {
 	}))
 	G.Puts("tostring", NativeFun(1, func(env *Env) {
 		v := env.Get(0)
-		if f := v.GetMetamethod(__tostring); f.Type() == FUN {
+		if f := v.GetMetamethod(M__tostring); f.Type() == FUN {
 			env.A, env.V = f.Fun().Call(v)
 			return
 		}
@@ -300,5 +301,52 @@ func initCoreLibs() {
 	// 	// })))
 	//
 	initLibAux()
-	initLibMath()
+	//	r := rand.New()
+	lmath := &Table{}
+	//
+	lmath.Puts("sqrt", NativeFun(1, func(env *Env) {
+		env.A = Num(math.Sqrt(env.Get(0).Expect(NUM).Num()))
+	}))
+	lmath.Puts("floor", NativeFun(1, func(env *Env) {
+		env.A = Num(math.Floor(env.Get(0).Expect(NUM).Num()))
+	}))
+	lmath.Puts("max", NativeFun(0, func(env *Env) {
+		if len(env.V) == 0 {
+			env.A = Value{}
+		} else {
+			max := env.V[0].Expect(NUM).Num()
+			for i := 1; i < len(env.V); i++ {
+				if x := env.V[i].Expect(NUM).Num(); x > max {
+					max = x
+				}
+			}
+			env.A = Num(max)
+		}
+	}))
+	G.Puts("math", Tab(lmath))
+
+	lnative := &Table{}
+	lnative.Puts("bytes", NativeFun(1, func(env *Env) {
+		switch v := env.Get(0); v.Type() {
+		case NUM:
+			env.A = Any(make(NativeBytes, int(v.Num())))
+		case STR:
+			env.A = Any(NativeBytes(v.Str()))
+		case ANY:
+			env.A = Any(NativeBytes(append([]byte{}, v.Any().(NativeBytes)...)))
+		default:
+			env.A = Value{}
+		}
+	}))
+
+	G.Puts("native", Tab(lnative))
+
+	//	lmath.Put("rand", NewStructValue(NewStruct().
+	//		Put("intn", NativeFun(1, func(env *Env) Value {
+	//			return Num(float64(r.Intn(int(env.Get(0).MustNumber()))))
+	//		})).
+	//		Put("bytes", NativeFun(1, func(env *Env) Value {
+	//			return Str(string(r.Fetch(int(env.Get(0).MustNumber()))))
+	//		}))))
+	//
 }
