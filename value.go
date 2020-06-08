@@ -49,7 +49,7 @@ type Value struct {
 
 const SizeOfValue = unsafe.Sizeof(Value{})
 
-// Type returns the type of value
+// Type returns the type of value, its logic should align IsFalse()
 func (v Value) Type() byte {
 	if v.p == nil {
 		if v.v <= 3 {
@@ -60,6 +60,17 @@ func (v Value) Type() byte {
 		return NUM
 	}
 	return byte(v.v)
+}
+
+// IsFalse tests whether value contains a falsy value
+// Type assertion should be aligned with Type()
+func (v Value) IsFalse() bool {
+	// if v.p == nil {
+	// 	return v.v == 0 || v.v == 3
+	// }
+	// return false
+	x := uintptr(v.p) + uintptr(v.v)
+	return x == 0 || x == 3
 }
 
 var (
@@ -163,17 +174,6 @@ func (v Value) _StrBytes() []byte {
 	return ss
 }
 
-// IsFalse tests whether value contains a falsey value
-func (v Value) IsFalse() bool {
-	switch v.Type() {
-	case BLN:
-		return !v.Bln()
-	case NIL:
-		return true
-	}
-	return false
-}
-
 func (v Value) IsNil() bool { return v == Value{} }
 
 // Num cast value to float64
@@ -185,7 +185,7 @@ func (v Value) Bln() bool { return v.v == 1 }
 // Tab cast value to map of values
 func (v Value) Tab() *Table { return (*Table)(v.p) }
 
-func (v Value) asUnpacked() []Value {
+func (v Value) _Upk() []Value {
 	if v.p == unsafe.Pointer(&emptyUPK) {
 		return nil
 	}
@@ -244,7 +244,7 @@ func (v Value) Equal(r Value) bool {
 	case FunFun:
 		return v.Fun() == r.Fun()
 	}
-	if eq := findmm(v, r, "__eq"); eq.Type() == FUN {
+	if eq := findmm(v, r, __eq); eq.Type() == FUN {
 		e, _ := eq.Fun().Call(v, r)
 		return !e.IsFalse()
 	}
@@ -268,7 +268,6 @@ func (v Value) toString(lv int) string {
 	if lv > 32 {
 		return "<omit deep nesting>"
 	}
-
 	switch v.Type() {
 	case BLN:
 		return strconv.FormatBool(v.Bln())
@@ -281,92 +280,9 @@ func (v Value) toString(lv int) string {
 	case FUN:
 		return v.Fun().String()
 	case ANY:
-		return fmt.Sprintf("#<%v>", v.Any())
+		return fmt.Sprintf("<any:%v>", v.Any())
+	case UPK:
+		return fmt.Sprintf("<unpacked:%v>", v._Upk())
 	}
 	return "nil"
-}
-
-var (
-	nilMetatable *Table
-	blnMetatable *Table
-	strMetatable *Table
-	numMetatable *Table
-	funMetatable *Table
-	upkMetatable *Table
-)
-
-func init() {
-	strMetatable = (&Table{}).RawPuts("sub", NativeFun(2, func(env *Env) {
-		i, j, s := int(env.In(1, NUM).Num()), -1, env.In(0, STR).Str()
-		if len(env.V) > 0 {
-			j = int(env.V[0].Expect(NUM).Num())
-		}
-		if i < 0 {
-			i = len(s) + i + 1
-		}
-		if j < 0 {
-			j = len(s) + j + 1
-		}
-		env.A = Str(s[i-1 : j])
-	}))
-}
-
-func (v Value) GetMetatable() *Table {
-	switch t := v.Type(); t {
-	case TAB:
-		return v.Tab().mt
-	case ANY:
-		i := v.Any()
-		if f, ok := i.(interface{ GetMetatable() *Table }); ok {
-			return f.GetMetatable()
-		}
-		return nil
-	case NIL:
-		return nilMetatable
-	case BLN:
-		return blnMetatable
-	case STR:
-		return strMetatable
-	case NUM:
-		return numMetatable
-	case FUN:
-		return funMetatable
-	case UPK:
-		return upkMetatable
-	default:
-		panic("corrupted value")
-	}
-}
-
-func (v Value) GetMetamethod(name string) Value {
-	if mt := v.GetMetatable(); mt != nil {
-		return mt.RawGets(name)
-	}
-	return Value{}
-}
-
-func (v Value) SetMetatable(mt *Table) {
-	switch t := v.Type(); t {
-	case TAB:
-		v.Tab().mt = mt
-	case ANY:
-		i := v.Any()
-		if f, ok := i.(interface{ SetMetatable(*Table) }); ok {
-			f.SetMetatable(mt)
-		}
-	case NIL:
-		nilMetatable = mt
-	case BLN:
-		blnMetatable = mt
-	case STR:
-		strMetatable = mt
-	case NUM:
-		numMetatable = mt
-	case FUN:
-		funMetatable = mt
-	case UPK:
-		upkMetatable = mt
-	default:
-		panic("corrupted value")
-	}
 }

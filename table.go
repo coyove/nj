@@ -5,11 +5,6 @@ import (
 	"fmt"
 )
 
-var (
-	table__newindex = Str("__newindex")
-	table__index    = Str("__index")
-)
-
 type Table struct {
 	a  []Value
 	m  Map
@@ -30,7 +25,7 @@ func (t *Table) _put(k, v Value, raw bool) {
 			}
 			if int(idx) == len(t.a)+1 {
 				if !raw {
-					if ni = t.mt.RawGet(table__newindex); !ni.IsNil() {
+					if ni = t.mt.RawGet(__newindex); !ni.IsNil() {
 						goto newindex
 					}
 				}
@@ -45,7 +40,7 @@ func (t *Table) _put(k, v Value, raw bool) {
 	}
 
 	if !raw && t.m.Get(k).IsNil() {
-		if ni = t.mt.RawGet(table__newindex); !ni.IsNil() {
+		if ni = t.mt.RawGet(__newindex); !ni.IsNil() {
 			goto newindex
 		}
 	}
@@ -99,8 +94,6 @@ func (t *Table) RawPuts(k string, v Value) *Table { return t.RawPut(Str(k), v) }
 
 func (t *Table) Gets(k string) Value { return t.Get(Str(k)) }
 
-func (t *Table) RawGets(k string) Value { return t.RawGet(Str(k)) }
-
 func (t *Table) Get(k Value) (v Value) { return t._get(k, false) }
 
 func (t *Table) RawGet(k Value) (v Value) { return t._get(k, true) }
@@ -118,7 +111,7 @@ func (t *Table) _get(k Value, raw bool) (v Value) {
 		}
 	}
 	if !raw && t.m.Get(k).IsNil() {
-		switch ni := t.mt.RawGet(table__index); ni.Type() {
+		switch ni := t.mt.RawGet(__index); ni.Type() {
 		case FUN:
 			v, _ = ni.Fun().Call(Tab(t), k)
 			return v

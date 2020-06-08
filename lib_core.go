@@ -139,17 +139,17 @@ func initCoreLibs() {
 	G.Puts("select", NativeFun(2, func(env *Env) {
 		switch a := env.Get(0); a.Type() {
 		case STR:
-			env.A = Num(float64(len(env.In(1, UPK).asUnpacked())))
+			env.A = Num(float64(len(env.In(1, UPK)._Upk())))
 		case NUM:
-			env.A = env.In(1, UPK).asUnpacked()[int(a.Num())-1]
+			env.A = env.In(1, UPK)._Upk()[int(a.Num())-1]
 		}
 	}))
 	G.Puts("pack", NativeFun(1, func(env *Env) {
-		t := &Table{a: env.In(0, UPK).asUnpacked()}
+		t := &Table{a: env.In(0, UPK)._Upk()}
 		env.A = Tab(t)
 	}))
 	G.Puts("setmetatable", NativeFun(2, func(env *Env) {
-		if !env.Get(0).GetMetatable().RawGets("__metatable").IsNil() {
+		if !env.Get(0).GetMetatable().RawGet(__metatable).IsNil() {
 			panicf("cannot change protected metatable")
 		}
 		if env.Get(1).IsNil() {
@@ -161,7 +161,7 @@ func initCoreLibs() {
 	}))
 	G.Puts("getmetatable", NativeFun(1, func(env *Env) {
 		t := env.Get(0).GetMetatable()
-		if mt := t.RawGets("__metatable"); !mt.IsNil() {
+		if mt := t.RawGet(__metatable); !mt.IsNil() {
 			env.A = mt
 		} else {
 			env.A = Tab(t)
@@ -202,7 +202,7 @@ func initCoreLibs() {
 		case TAB:
 			arr = t
 		case UPK:
-			arr = Tab(&Table{a: t.asUnpacked()})
+			arr = Tab(&Table{a: t._Upk()})
 		default:
 			t.ExpectMsg(TAB, "ipairs")
 		}
@@ -224,7 +224,7 @@ func initCoreLibs() {
 	}))
 	G.Puts("tostring", NativeFun(1, func(env *Env) {
 		v := env.Get(0)
-		if f := v.GetMetamethod("__tostring"); f.Type() == FUN {
+		if f := v.GetMetamethod(__tostring); f.Type() == FUN {
 			env.A, env.V = f.Fun().Call(v)
 			return
 		}
