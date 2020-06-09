@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func (lex *Lexer) loadFile(path string) *Node {
+func (lex *Lexer) loadFile(path string) Node {
 	if strings.Contains(lex.loop, path) {
 		lex.Error(fmt.Sprintf("%s and %s are importing each other", lex.scanner.Pos.Source, path))
 	}
@@ -28,8 +28,8 @@ func (lex *Lexer) loadFile(path string) *Node {
 
 	// Now the required code is loaded, we will wrap them into a closure
 	pos := Position{Line: 1, Column: 1, Source: path}
-	cls := __func(Cpl(), n).pos0(pos)
-	node := __call(cls, Cpl()).pos0(pos)
+	cls := __func(Cpl(), n).SetPos(pos)
+	node := __call(cls, Cpl()).SetPos(pos)
 	lex.cache[path] = node
 	return cloneNode(node)
 }
@@ -44,15 +44,13 @@ func moduleNameFromPath(path string) string {
 	return fn
 }
 
-func cloneNode(n *Node) *Node {
+func cloneNode(n Node) Node {
 	if n.Type() == CPL {
-		n2 := make([]*Node, 0, len(n.Cpl()))
+		n2 := make([]Node, 0, len(n.Cpl()))
 		for _, n := range n.Cpl() {
 			n2 = append(n2, cloneNode(n))
 		}
-		tmp := *n
-		tmp.Value = n2
-		return &tmp
+		return Node{n2}
 	}
 	return n
 }

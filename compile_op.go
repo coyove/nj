@@ -9,11 +9,11 @@ import (
 	"github.com/coyove/potatolang/parser"
 )
 
-var _nodeRegA = parser.Nod(regA)
+var _nodeRegA = parser.Node{regA}
 
-func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint16) {
+func (table *symtable) compileChainOp(chain parser.Node) (code packet, yx uint16) {
 	buf := newpacket()
-	doblock := chain.CplIndex(0).Sym() == parser.ADoBlock
+	doblock := chain.CplIndex(0).Sym().Equals(parser.ADoBlock)
 
 	if doblock {
 		table.addMaskedSymTable()
@@ -31,10 +31,10 @@ func (table *symtable) compileChainOp(chain *parser.Node) (code packet, yx uint1
 	return buf, yx
 }
 
-func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint16) {
+func (table *symtable) compileSetOp(atoms []parser.Node) (code packet, yx uint16) {
 	aDest := atoms[1].Value.(parser.Symbol)
 	newYX := table.get(aDest)
-	if atoms[0].Sym() == parser.AMove {
+	if atoms[0].Sym().Equals(parser.AMove) {
 		// a = b
 		if newYX == regNil {
 			t, h := table, 0
@@ -48,24 +48,24 @@ func (table *symtable) compileSetOp(atoms []*parser.Node) (code packet, yx uint1
 
 			// Do not use t.put() because it may put the symbol into masked tables
 			// e.g.: do a = 1 end
-			t.sym[aDest] = &symbol{usage: math.MaxInt32, addr: yx}
+			t.sym[aDest.Text] = &symbol{usage: math.MaxInt32, addr: yx}
 			newYX = uint16(h)<<10 | yx
 		}
 	} else {
 		// local a = b
 		newYX = table.borrowAddress()
-		table.put(aDest, newYX)
+		table.put(aDest.Text, newYX)
 	}
 
 	buf, fromYX := table.compileNode(atoms[2])
 	buf.WriteOP(OpSet, newYX, fromYX)
-	buf.WritePos(atoms[0].Position)
+	buf.WritePos(atoms[0].Pos())
 	return buf, newYX
 }
 
-func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint16) {
+func (table *symtable) compileRetOp(atoms []parser.Node) (code packet, yx uint16) {
 	op := OpRet
-	if atoms[0].Sym() == parser.AYield {
+	if atoms[0].Sym().Equals(parser.AYield) {
 		table.y = true
 		op = OpYield
 	}
@@ -81,33 +81,33 @@ func (table *symtable) compileRetOp(atoms []*parser.Node) (code packet, yx uint1
 	for i := 1; i < len(values); i++ {
 		if i == 1 {
 			// First OpPushV will contain the total number of V in opb
-			table.writeOpcode(&code, OpPushV, values[i], parser.Nod(uint16(len(values)-1)))
+			table.writeOpcode(&code, OpPushV, values[i], parser.Node{uint16(len(values) - 1)})
 		} else {
-			table.writeOpcode(&code, OpPushV, values[i], nil)
+			table.writeOpcode(&code, OpPushV, values[i], parser.Node{})
 		}
 	}
-	table.writeOpcode(&code, op, values[0], nil)
+	table.writeOpcode(&code, op, values[0], parser.Node{})
 
 	table.returnAddresses(values)
 	return
 }
 
-func (table *symtable) compileHashArrayOp(atoms []*parser.Node) (code packet, yx uint16) {
-	switch atoms[0].Value.(parser.Symbol) {
-	case parser.AHash, parser.AArray:
+func (table *symtable) compileHashArrayOp(atoms []parser.Node) (code packet, yx uint16) {
+	switch atoms[0].Value.(parser.Symbol).Text {
+	case parser.AHash.Text, parser.AArray.Text:
 		code = table.collapse(atoms[1].Cpl(), true)
 
 		args := atoms[1].Cpl()
 		for i := 0; i < len(args); i += 2 {
 			if i+1 >= len(args) {
-				table.writeOpcode(&code, OpPush, args[i], nil)
+				table.writeOpcode(&code, OpPush, args[i], parser.Node{})
 			} else {
 				table.writeOpcode(&code, OpPush2, args[i], args[i+1])
 			}
 		}
 
 		table.returnAddresses(args)
-	case parser.AHashArray:
+	case parser.AHashArray.Text:
 		hashPart := table.collapse(atoms[1].Cpl(), false)
 		code.Write(hashPart)
 		arrayPart := table.collapse(atoms[2].Cpl(), false)
@@ -116,7 +116,7 @@ func (table *symtable) compileHashArrayOp(atoms []*parser.Node) (code packet, yx
 		arrayElements := atoms[2].Cpl()
 		for i := 0; i < len(arrayElements); i += 2 {
 			if i+1 >= len(arrayElements) {
-				table.writeOpcode(&code, OpPush, arrayElements[i], nil)
+				table.writeOpcode(&code, OpPush, arrayElements[i], parser.Node{})
 			} else {
 				table.writeOpcode(&code, OpPush2, arrayElements[i], arrayElements[i+1])
 			}
@@ -134,24 +134,24 @@ func (table *symtable) compileHashArrayOp(atoms []*parser.Node) (code packet, yx
 		return code, regA
 	}
 
-	switch atoms[0].Value.(parser.Symbol) {
-	case parser.AHash:
+	switch atoms[0].Value.(parser.Symbol).Text {
+	case parser.AHash.Text:
 		code.WriteOP(OpMakeHash, 0, 0)
-	case parser.AArray:
+	case parser.AArray.Text:
 		code.WriteOP(OpMakeArray, 0, 0)
 	}
-	code.WritePos(atoms[0].Position)
+	code.WritePos(atoms[0].Pos())
 	return code, regA
 }
 
 // writeOpcode3 accepts 3 arguments at most, 2 arguments will be encoded into opcode itself, the 3rd one will be in regA
-func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf packet, yx uint16) {
+func (table *symtable) writeOpcode3(bop _Opcode, atoms []parser.Node) (buf packet, yx uint16) {
 	// first atom: the op name, tail atoms: the args
 	if len(atoms) > 4 {
 		panic("shouldn't happen: too many arguments")
 	}
 
-	atoms = append([]*parser.Node{}, atoms...) // duplicate
+	atoms = append([]parser.Node{}, atoms...) // duplicate
 
 	if bop == OpStore {
 		buf = table.collapse(atoms[1:], true)
@@ -162,8 +162,8 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 		for i := 1; i <= 2; i++ { // subject and value shouldn't use regA
 			if atoms[i].Type() == parser.ADR && atoms[i].Value.(uint16) == regA {
 				addr := table.borrowAddress()
-				table.writeOpcode(&buf, OpSet, parser.Nod(addr), _nodeRegA)
-				atoms[i] = parser.Nod(addr)
+				table.writeOpcode(&buf, OpSet, parser.Node{addr}, _nodeRegA)
+				atoms[i] = parser.Node{addr}
 			}
 		}
 
@@ -181,7 +181,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 		buf.WriteOP(bop, 0, 0)
 	case OpNot, OpRet, OpYield, OpLen:
 		// unary op
-		table.writeOpcode(&buf, bop, atoms[1], nil)
+		table.writeOpcode(&buf, bop, atoms[1], parser.Node{})
 	default:
 		// binary op
 		table.writeOpcode(&buf, bop, atoms[1], atoms[2])
@@ -191,20 +191,19 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []*parser.Node) (buf pack
 	return buf, regA
 }
 
-func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint16) {
+func (table *symtable) compileFlatOp(atoms []parser.Node) (code packet, yx uint16) {
 	head := atoms[0].Value.(parser.Symbol)
-	switch head {
-	case parser.ANop:
+	if head.Equals(parser.ANop) {
 		return newpacket(), regA
 	}
-	op, ok := flatOpMapping[head]
+	op, ok := flatOpMapping[head.Text]
 	if !ok {
 		panicf("compileFlatOp: shouldn't happen: invalid op: %#v", atoms[0])
 	}
 	code, yx = table.writeOpcode3(op, atoms)
 	for _, a := range atoms {
-		if a.Position.Source != "" {
-			code.WritePos(a.Position)
+		if a.Pos().Source != "" {
+			code.WritePos(a.Pos())
 			break
 		}
 	}
@@ -213,9 +212,9 @@ func (table *symtable) compileFlatOp(atoms []*parser.Node) (code packet, yx uint
 
 // [and a b] => $a = a if not a then return else $a = b end
 // [or a b]  => $a = a if a then do nothing else $a = b end
-func (table *symtable) compileAndOrOp(atoms []*parser.Node) (code packet, yx uint16) {
+func (table *symtable) compileAndOrOp(atoms []parser.Node) (code packet, yx uint16) {
 	bop := OpIfNot
-	if atoms[0].Value.(parser.Symbol) == parser.AOr {
+	if atoms[0].Value.(parser.Symbol).Equals(parser.AOr) {
 		bop = OpIf
 	}
 
@@ -229,12 +228,12 @@ func (table *symtable) compileAndOrOp(atoms []*parser.Node) (code packet, yx uin
 
 	_, yx, _ = op(buf.data[c2-1])
 	buf.data[c2-1] = makejmpop(bop, yx, buf.Len()-c2)
-	buf.WritePos(atoms[0].Position)
+	buf.WritePos(atoms[0].Pos())
 	return buf, regA
 }
 
 // [if condition [true-chain ...] [false-chain ...]]
-func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint16) {
+func (table *symtable) compileIfOp(atoms []parser.Node) (code packet, yx uint16) {
 	condition := atoms[1]
 	trueBranch, falseBranch := atoms[2], atoms[3]
 	buf := newpacket()
@@ -250,40 +249,40 @@ func (table *symtable) compileIfOp(atoms []*parser.Node) (code packet, yx uint16
 
 	if len(falseCode.data) > 0 {
 		buf.WriteJmpOP(OpIfNot, condyx, len(trueCode.data)+1)
-		buf.WritePos(atoms[0].Position)
+		buf.WritePos(atoms[0].Pos())
 		buf.Write(trueCode)
 		buf.WriteJmpOP(OpJmp, 0, len(falseCode.data))
 		buf.Write(falseCode)
 	} else {
 		buf.WriteJmpOP(OpIfNot, condyx, len(trueCode.data))
-		buf.WritePos(atoms[0].Position)
+		buf.WritePos(atoms[0].Pos())
 		buf.Write(trueCode)
 	}
 	return buf, regA
 }
 
 // [call callee [args ...]]
-func (table *symtable) compileCallOp(nodes []*parser.Node) (code packet, yx uint16) {
-	tmp := append([]*parser.Node{nodes[1]}, nodes[2].Cpl()...)
+func (table *symtable) compileCallOp(nodes []parser.Node) (code packet, yx uint16) {
+	tmp := append([]parser.Node{nodes[1]}, nodes[2].Cpl()...)
 	code = table.collapse(tmp, true)
 
 	for i := 1; i < len(tmp); i += 2 {
 		if i+1 >= len(tmp) {
-			table.writeOpcode(&code, OpPush, tmp[i], nil)
+			table.writeOpcode(&code, OpPush, tmp[i], parser.Node{})
 		} else {
 			table.writeOpcode(&code, OpPush2, tmp[i], tmp[i+1])
 		}
 	}
 
-	table.writeOpcode(&code, OpCall, tmp[0], nil)
-	code.WritePos(nodes[0].Position)
+	table.writeOpcode(&code, OpCall, tmp[0], parser.Node{})
+	code.WritePos(nodes[0].Pos())
 
 	table.returnAddresses(tmp)
 	return code, regA
 }
 
 // [lambda name? [namelist] [chain ...]]
-func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx uint16) {
+func (table *symtable) compileLambdaOp(atoms []parser.Node) (code packet, yx uint16) {
 	table.envescape = true
 	vararg := false
 	params := atoms[2]
@@ -292,16 +291,16 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 
 	for i, p := range params.Cpl() {
 		argname := p.Value.(parser.Symbol)
-		if argname == "..." {
+		if argname.Text == "..." {
 			if i != len(params.Cpl())-1 {
 				panicf("%#v: vararg must be the last parameter", atoms[0])
 			}
 			vararg = true
 		}
-		if _, ok := newtable.sym[argname]; ok {
+		if _, ok := newtable.sym[argname.Text]; ok {
 			panicf("%#v: duplicated parameter: %s", atoms[0], argname)
 		}
-		newtable.put(argname, uint16(i))
+		newtable.put(argname.Text, uint16(i))
 	}
 
 	ln := len(newtable.sym)
@@ -315,7 +314,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	newtable.vp = uint16(len(newtable.sym))
 
 	code, yx = newtable.compileNode(atoms[3])
-	code.source = atoms[0].Position.Source
+	code.source = atoms[0].Pos().Source
 
 	code.WriteOP(OpEOB, 0, 0)
 	buf := newpacket()
@@ -331,7 +330,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	buf.WriteConsts(newtable.consts)
 
 	cls.Code = code.data
-	src := cls.String() + "@" + code.source
+	src := cls.String() + " " + code.source
 	buf.WriteString(src)
 
 	buf.Write32(uint32(len(code.pos)))
@@ -342,7 +341,7 @@ func (table *symtable) compileLambdaOp(atoms []*parser.Node) (code packet, yx ui
 	newtable.patchGoto(code)
 
 	buf.Write(code)
-	buf.WritePos(atoms[0].Position)
+	buf.WritePos(atoms[0].Pos())
 	return buf, regA
 }
 
@@ -360,13 +359,13 @@ func genRandomNop() uint32 {
 }
 
 // [continue | break]
-func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet, yx uint16) {
+func (table *symtable) compileContinueBreakOp(atoms []parser.Node) (code packet, yx uint16) {
 	buf := newpacket()
 	if table.inloop == 0 {
 		panicf("%#v: invalid statement outside loop", atoms[0])
 	}
 
-	if atoms[0].Value.(parser.Symbol) == parser.AContinue {
+	if atoms[0].Value.(parser.Symbol).Equals(parser.AContinue) {
 		buf.WriteRaw(staticWhileHack[:4]) // write a 'continue' placeholder
 	} else {
 		buf.WriteRaw(staticWhileHack[4:]) // write a 'break' placeholder
@@ -375,7 +374,7 @@ func (table *symtable) compileContinueBreakOp(atoms []*parser.Node) (code packet
 }
 
 // [loop [chain ...]]
-func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uint16) {
+func (table *symtable) compileWhileOp(atoms []parser.Node) (code packet, yx uint16) {
 	buf := newpacket()
 
 	table.inloop++
@@ -418,19 +417,19 @@ func (table *symtable) compileWhileOp(atoms []*parser.Node) (code packet, yx uin
 	return buf, regA
 }
 
-func (table *symtable) compileGotoOp(atoms []*parser.Node) (code packet, yx uint16) {
+func (table *symtable) compileGotoOp(atoms []parser.Node) (code packet, yx uint16) {
 	label := atoms[1].Sym()
-	marker, ok := table.gotoMarkers[label]
+	marker, ok := table.gotoMarkers[label.Text]
 	if !ok {
 		// Generate 8 dummy opcodes as placeholders
 		marker = &gotolabel{
 			labelMarker: [4]uint32{genRandomNop(), genRandomNop(), genRandomNop(), genRandomNop()},
 			gotoMarker:  [4]uint32{genRandomNop(), genRandomNop(), genRandomNop(), genRandomNop()},
 		}
-		table.gotoMarkers[label] = marker
+		table.gotoMarkers[label.Text] = marker
 	}
 
-	if atoms[0].Sym() == parser.AGoto { // goto label
+	if atoms[0].Sym().Equals(parser.AGoto) { // goto label
 		code.WriteRaw(marker.gotoMarker[:])
 	} else { // :: label ::
 		marker.metLabel = true
@@ -473,15 +472,15 @@ func (table *symtable) patchGoto(code packet) {
 	}
 }
 
-func (table *symtable) compileRetAddrOp(atoms []*parser.Node) (code packet, yx uint16) {
+func (table *symtable) compileRetAddrOp(atoms []parser.Node) (code packet, yx uint16) {
 	for i := 1; i < len(atoms); i++ {
 		s := atoms[i].Sym()
 		yx := table.get(s)
 		table.returnAddress(yx)
 		if len(table.maskedSym) > 0 {
-			delete(table.maskedSym[len(table.maskedSym)-1], s)
+			delete(table.maskedSym[len(table.maskedSym)-1], s.Text)
 		} else {
-			delete(table.sym, s)
+			delete(table.sym, s.Text)
 		}
 	}
 	return
@@ -490,16 +489,16 @@ func (table *symtable) compileRetAddrOp(atoms []*parser.Node) (code packet, yx u
 // collapse will accept a list of nodes, for every expression inside,
 // it will be collapsed into a temp variable and be replaced with a ADR node,
 // For the last expression, it will be collapsed but not use a temp variable unless optLast == false
-func (table *symtable) collapse(atoms []*parser.Node, optLast bool) (buf packet) {
+func (table *symtable) collapse(atoms []parser.Node, optLast bool) (buf packet) {
 	buf = newpacket()
 
 	var lastCompound struct {
-		n *parser.Node
+		n parser.Node
 		i int
 	}
 
 	for i, atom := range atoms {
-		if atom == nil {
+		if !atom.Valid() {
 			break
 		}
 
@@ -509,7 +508,7 @@ func (table *symtable) collapse(atoms []*parser.Node, optLast bool) (buf packet)
 		if atom.Type() == parser.CPL {
 			code, yx = table.compileNodeInto(atom, true, 0)
 
-			atoms[i] = parser.Nod(yx)
+			atoms[i] = parser.Node{yx}
 			buf.Write(code)
 
 			lastCompound.n = atom
@@ -517,7 +516,7 @@ func (table *symtable) collapse(atoms []*parser.Node, optLast bool) (buf packet)
 		}
 	}
 
-	if lastCompound.n != nil {
+	if lastCompound.n.Valid() {
 		if optLast {
 			_, old, opb := op(buf.data[len(buf.data)-1])
 			buf.TruncateLast(1)

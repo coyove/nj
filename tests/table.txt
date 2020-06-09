@@ -1,3 +1,4 @@
+-- assert(false)
 t = {v = -1}
 setmetatable(t, { __add = function (lhs, rhs)
     lhs.v += rhs.v

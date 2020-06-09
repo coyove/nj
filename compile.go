@@ -31,8 +31,8 @@ type gotolabel struct {
 type symtable struct {
 	// variable name lookup
 	parent    *symtable
-	sym       map[parser.Symbol]*symbol
-	maskedSym []map[parser.Symbol]*symbol
+	sym       map[string]*symbol
+	maskedSym []map[string]*symbol
 
 	y         bool // has yield op
 	envescape bool
@@ -45,15 +45,15 @@ type symtable struct {
 
 	reusableTmps map[uint16]bool
 
-	gotoMarkers map[parser.Symbol]*gotolabel
+	gotoMarkers map[string]*gotolabel
 }
 
 func newsymtable() *symtable {
 	t := &symtable{
-		sym:          make(map[parser.Symbol]*symbol),
+		sym:          make(map[string]*symbol),
 		constMap:     make(map[interface{}]uint16),
 		reusableTmps: make(map[uint16]bool),
-		gotoMarkers:  make(map[parser.Symbol]*gotolabel),
+		gotoMarkers:  make(map[string]*gotolabel),
 	}
 	return t
 }
@@ -92,7 +92,7 @@ func (table *symtable) returnAddress(v uint16) {
 
 func (table *symtable) returnAddresses(a interface{}) {
 	switch a := a.(type) {
-	case []*parser.Node:
+	case []parser.Node:
 		for _, n := range a {
 			if n.Type() == parser.ADR {
 				table.returnAddress(n.Value.(uint16))
@@ -110,7 +110,7 @@ func (table *symtable) returnAddresses(a interface{}) {
 func (table *symtable) get(varname parser.Symbol) uint16 {
 	depth := uint16(0)
 
-	switch varname {
+	switch varname.Text {
 	case "nil":
 		return regNil
 	case "true":
@@ -134,12 +134,12 @@ func (table *symtable) get(varname parser.Symbol) uint16 {
 		// The rightmost map of this slice is the innermost do-block
 		for i := len(table.maskedSym) - 1; i >= 0; i-- {
 			m := table.maskedSym[i]
-			if k, ok := m[varname]; ok {
+			if k, ok := m[varname.Text]; ok {
 				return calc(k)
 			}
 		}
 
-		if k, ok := table.sym[varname]; ok {
+		if k, ok := table.sym[varname.Text]; ok {
 			return calc(k)
 		}
 
@@ -150,7 +150,7 @@ func (table *symtable) get(varname parser.Symbol) uint16 {
 	return regNil
 }
 
-func (table *symtable) put(varname parser.Symbol, addr uint16) {
+func (table *symtable) put(varname string, addr uint16) {
 	if addr == regA {
 		panic("debug")
 	}
@@ -167,7 +167,7 @@ func (table *symtable) put(varname parser.Symbol, addr uint16) {
 }
 
 func (table *symtable) addMaskedSymTable() {
-	table.maskedSym = append(table.maskedSym, map[parser.Symbol]*symbol{})
+	table.maskedSym = append(table.maskedSym, map[string]*symbol{})
 }
 
 func (table *symtable) removeMaskedSymTable() {
@@ -197,29 +197,29 @@ func (table *symtable) loadK(v interface{}) uint16 {
 	return 0x7<<10 | kaddr
 }
 
-var flatOpMapping = map[parser.Symbol]_Opcode{
-	parser.AAdd:    OpAdd,
-	parser.AConcat: OpConcat,
-	parser.ASub:    OpSub,
-	parser.AMul:    OpMul,
-	parser.ADiv:    OpDiv,
-	parser.AMod:    OpMod,
-	parser.ALess:   OpLess,
-	parser.ALessEq: OpLessEq,
-	parser.AEq:     OpEq,
-	parser.ANeq:    OpNeq,
-	parser.ANot:    OpNot,
-	parser.APow:    OpPow,
-	parser.AStore:  OpStore,
-	parser.ALoad:   OpLoad,
-	parser.ALen:    OpLen,
-	parser.AInc:    OpInc,
-	parser.APopV:   OpPopV,
+var flatOpMapping = map[string]_Opcode{
+	parser.AAdd.Text:    OpAdd,
+	parser.AConcat.Text: OpConcat,
+	parser.ASub.Text:    OpSub,
+	parser.AMul.Text:    OpMul,
+	parser.ADiv.Text:    OpDiv,
+	parser.AMod.Text:    OpMod,
+	parser.ALess.Text:   OpLess,
+	parser.ALessEq.Text: OpLessEq,
+	parser.AEq.Text:     OpEq,
+	parser.ANeq.Text:    OpNeq,
+	parser.ANot.Text:    OpNot,
+	parser.APow.Text:    OpPow,
+	parser.AStore.Text:  OpStore,
+	parser.ALoad.Text:   OpLoad,
+	parser.ALen.Text:    OpLen,
+	parser.AInc.Text:    OpInc,
+	parser.APopV.Text:   OpPopV,
 }
 
-func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node) {
+func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 parser.Node) {
 	var tmp []uint16
-	getAddr := func(n *parser.Node) uint16 {
+	getAddr := func(n parser.Node) uint16 {
 		switch n.Type() {
 		case parser.CPL:
 			code, addr := table.compileNodeInto(n, true, 0)
@@ -240,13 +240,13 @@ func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node)
 
 	defer table.returnAddresses(tmp)
 
-	if n0 == nil {
+	if !n0.Valid() {
 		buf.WriteOP(op, 0, 0)
 		return
 	}
 
 	n0a := getAddr(n0)
-	if n1 == nil {
+	if !n1.Valid() {
 		buf.WriteOP(op, n0a, 0)
 		return
 	}
@@ -258,7 +258,7 @@ func (table *symtable) writeOpcode(buf *packet, op _Opcode, n0, n1 *parser.Node)
 	buf.WriteOP(op, n0a, n1a)
 }
 
-func (table *symtable) compileNodeInto(compound *parser.Node, newVar bool, existedVar uint16) (code packet, yx uint16) {
+func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existedVar uint16) (code packet, yx uint16) {
 	buf := newpacket()
 
 	var newYX uint16
@@ -275,7 +275,7 @@ func (table *symtable) compileNodeInto(compound *parser.Node, newVar bool, exist
 	return buf, yx
 }
 
-func (table *symtable) compileNode(node *parser.Node) (code packet, yx uint16) {
+func (table *symtable) compileNode(node parser.Node) (code packet, yx uint16) {
 	switch node.Type() {
 	case parser.ADR:
 		return code, node.Value.(uint16)
@@ -294,33 +294,33 @@ func (table *symtable) compileNode(node *parser.Node) (code packet, yx uint16) {
 		panicf("compileNode: shouldn't happend: invalid op: %v", nodes)
 	}
 
-	switch name {
-	case parser.ADoBlock, parser.ABegin:
+	switch name.Text {
+	case parser.ADoBlock.Text, parser.ABegin.Text:
 		code, yx = table.compileChainOp(node)
-	case parser.ASet, parser.AMove:
+	case parser.ASet.Text, parser.AMove.Text:
 		code, yx = table.compileSetOp(nodes)
-	case parser.AReturn, parser.AYield:
+	case parser.AReturn.Text, parser.AYield.Text:
 		code, yx = table.compileRetOp(nodes)
-	case parser.AIf:
+	case parser.AIf.Text:
 		code, yx = table.compileIfOp(nodes)
-	case parser.AFor:
+	case parser.AFor.Text:
 		code, yx = table.compileWhileOp(nodes)
-	case parser.AContinue, parser.ABreak:
+	case parser.AContinue.Text, parser.ABreak.Text:
 		code, yx = table.compileContinueBreakOp(nodes)
-	case parser.ACall:
+	case parser.ACall.Text:
 		code, yx = table.compileCallOp(nodes)
-	case parser.AHash, parser.AHashArray, parser.AArray:
+	case parser.AHash.Text, parser.AHashArray.Text, parser.AArray.Text:
 		code, yx = table.compileHashArrayOp(nodes)
-	case parser.AOr, parser.AAnd:
+	case parser.AOr.Text, parser.AAnd.Text:
 		code, yx = table.compileAndOrOp(nodes)
-	case parser.AFunc:
+	case parser.AFunc.Text:
 		code, yx = table.compileLambdaOp(nodes)
-	case parser.ARetAddr:
+	case parser.ARetAddr.Text:
 		code, yx = table.compileRetAddrOp(nodes)
-	case parser.AGoto, parser.ALabel:
+	case parser.AGoto.Text, parser.ALabel.Text:
 		code, yx = table.compileGotoOp(nodes)
 	default:
-		if _, ok := flatOpMapping[name]; ok {
+		if _, ok := flatOpMapping[name.Text]; ok {
 			return table.compileFlatOp(nodes)
 		}
 		panicf("compileNode: shouldn't happen: unknown symbol: %s", name)
@@ -328,7 +328,7 @@ func (table *symtable) compileNode(node *parser.Node) (code packet, yx uint16) {
 	return
 }
 
-func compileNodeTopLevel(n *parser.Node) (cls *Closure, err error) {
+func compileNodeTopLevel(n parser.Node) (cls *Closure, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			cls = nil
@@ -348,11 +348,11 @@ func compileNodeTopLevel(n *parser.Node) (cls *Closure, err error) {
 
 	coreStack := NewEnv(nil)
 	G.iterStringKeys(func(k string, v Value) {
-		table.put(parser.Symbol(k), uint16(coreStack.Size()))
+		table.put(k, uint16(coreStack.Size()))
 		coreStack.Push(v)
 	})
 
-	table.put(parser.Symbol("_G"), uint16(coreStack.Size()))
+	table.put("_G", uint16(coreStack.Size()))
 	coreStack.Push(Tab(G))
 
 	table.vp = uint16(len(table.sym))
@@ -373,7 +373,7 @@ func compileNodeTopLevel(n *parser.Node) (cls *Closure, err error) {
 	cls = &Closure{Code: code.data, ConstTable: consts}
 	cls.lastenv = NewEnv(nil)
 	cls.Pos = code.pos
-	cls.source = []byte("root" + cls.String() + "@" + code.source)
+	cls.source = []byte("root " + cls.String() + " " + code.source)
 	cls.lastenv.stack = coreStack.stack
 	return cls, err
 }

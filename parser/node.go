@@ -13,6 +13,7 @@ type Position struct {
 	Source string
 	Line   uint32
 	Column uint32
+	// a      []int
 }
 
 func (pos *Position) String() string {
@@ -33,27 +34,15 @@ func (self *Token) String() string {
 }
 
 type Node struct {
-	Position
 	Value interface{}
 }
 
-func Nod(v interface{}) *Node {
-	return &Node{Value: v}
-}
+func SymTok(tok Token) Node { return Node{Symbol{tok.Pos, tok.Str}} }
 
-func SymTok(tok Token) *Node {
-	n := Nod(Symbol(tok.Str))
-	n.SetPos(tok.Pos)
-	return n
-}
+func Sym(s string) Node { return Node{Symbol{Text: s}} }
 
-func Sym(s string) *Node {
-	n := Nod(Symbol(s))
-	return n
-}
-
-func Num(arg interface{}) *Node {
-	n := Nod(nil)
+func Num(arg interface{}) Node {
+	n := Node{}
 	switch x := arg.(type) {
 	case string:
 		num, err := StringToNumber(x)
@@ -71,115 +60,95 @@ func Num(arg interface{}) *Node {
 	return n
 }
 
-func (n *Node) Type() uintptr {
-	return interfaceType(n.Value)
+func (n Node) Valid() bool {
+	t := n.Type()
+	return t == SYM || t == NUM || t == STR || t == CPL || t == ADR
 }
 
-func (n *Node) TypeName() string {
-	return reflect.TypeOf(n.Value).String()
-}
+func (n Node) Type() uintptr { return interfaceType(n.Value) }
 
-func (n *Node) SetPos(p interface{}) *Node {
-	var m Position
-	switch x := p.(type) {
-	case *Node:
-		m = x.Position
-	case Token:
-		m = x.Pos
-	case Position:
-		m = x
-	default:
-		panic(fmt.Sprintf("SetPos: shouldn't happen: %v", p))
-	}
-	n.Position = m
-	return n
-}
+func (n Node) TypeName() string { return reflect.TypeOf(n.Value).String() }
 
-func (n *Node) Cpl() []*Node { a, _ := n.Value.([]*Node); return a }
+func (n Node) Cpl() []Node { a, _ := n.Value.([]Node); return a }
 
-func (n *Node) CplAppend(na ...*Node) *Node {
+func (n Node) CplAppend(na ...Node) Node {
 	n.Value = append(n.Cpl(), na...)
-	if n.Position.Source == "" {
-		for _, na := range na {
-			if na.Position.Source != "" {
-				n.Position = na.Position
-				break
-			}
-		}
-	}
 	return n
 }
 
-func (n *Node) CplPrepend(n2 *Node) *Node {
-	n.Value = append([]*Node{n2}, n.Cpl()...)
+func (n Node) CplPrepend(n2 Node) Node {
+	n.Value = append([]Node{n2}, n.Cpl()...)
 	return n
 }
 
-func (n *Node) CplIndex(i int) *Node { return n.Value.([]*Node)[i] }
+func (n Node) CplIndex(i int) Node { return n.Value.([]Node)[i] }
 
-func (n *Node) Str() string { a, _ := n.Value.(string); return a }
+func (n Node) Str() string { a, _ := n.Value.(string); return a }
 
-func (n *Node) Sym() Symbol { a, _ := n.Value.(Symbol); return a }
+func (n Node) Sym() Symbol { a, _ := n.Value.(Symbol); return a }
 
-func (n *Node) Num() float64 { a, _ := n.Value.(float64); return a }
+func (n Node) Num() float64 { a, _ := n.Value.(float64); return a }
 
-func Cpl(args ...interface{}) *Node {
+func Cpl(args ...Node) Node {
 	if len(args) == 3 {
-		op, _ := args[0].(Symbol)
-		a, _ := args[1].(*Node)
-		b, _ := args[2].(*Node)
-		if a != nil && b != nil {
-			if op == AConcat && a.Type() == STR && b.Type() == STR {
-				return Nod(a.Str() + b.Str())
-			}
-			if a.Type() == NUM && b.Type() == NUM {
-				switch v1, v2 := a.Num(), b.Num(); op {
-				case AAdd:
-					return Num(v1 + v2)
-				case ASub:
-					return Num(v1 - v2)
-				case AMul:
-					return Num(v1 * v2)
-				case ADiv:
-					return Num(v1 / v2)
-				case AMod:
-					return Num(math.Mod(v1, v2))
-				case APow:
-					return Num(math.Pow(v1, v2))
-				}
+		op, _ := args[0].Value.(Symbol)
+		a, b := args[1], args[2]
+		if op.Equals(AConcat) && a.Type() == STR && b.Type() == STR {
+			return Node{a.Str() + b.Str()}
+		}
+		if a.Type() == NUM && b.Type() == NUM {
+			switch v1, v2 := a.Num(), b.Num(); op.Text {
+			case AAdd.Text:
+				return Num(v1 + v2)
+			case ASub.Text:
+				return Num(v1 - v2)
+			case AMul.Text:
+				return Num(v1 * v2)
+			case ADiv.Text:
+				return Num(v1 / v2)
+			case AMod.Text:
+				return Num(math.Mod(v1, v2))
+			case APow.Text:
+				return Num(math.Pow(v1, v2))
 			}
 		}
 	}
+	return Node{args}
+}
 
-	arr := make([]*Node, 0, len(args))
-	n := Nod(arr)
-	for _, arg := range args {
-		switch x := arg.(type) {
-		case string:
-			if x == string(ABegin) {
-				arr = append(arr, chainNode)
-			} else {
-				arr = append(arr, Nod(Symbol(x)))
-			}
-		case Symbol:
-			if x == ABegin {
-				arr = append(arr, chainNode)
-			} else {
-				arr = append(arr, Nod(x))
-			}
-		case *Node:
-			if n.Source == "" {
-				n.SetPos(x.Position)
-			}
-			arr = append(arr, x)
-		case Token:
-			arr = append(arr, SymTok(x))
-		default:
-			panic(fmt.Sprintf("Cpl: shouldn't happen: %v", x))
+func (n Node) SetPos(pos Position) Node {
+	switch n.Type() {
+	case SYM:
+		s := n.Value.(Symbol)
+		if s.Position.Source == "" {
+			s.Position = pos
 		}
+		return Node{s}
+	case CPL:
+		c := n.Cpl()
+		if len(c) == 0 {
+			return n
+		}
+		c[0] = c[0].SetPos(pos)
+		return Node{c}
+	default:
+		return n
 	}
-	n.Value = arr
-	return n
+}
+
+func (n Node) Pos() Position {
+	switch n.Type() {
+	case SYM:
+		return n.Value.(Symbol).Position
+	case CPL:
+		c := n.Cpl()
+		if len(c) == 0 {
+			panic("Pos()")
+		}
+		return c[0].Pos()
+	default:
+		panic("Pos()")
+	}
 }
 
 func StringToNumber(arg string) (float64, error) {
@@ -190,18 +159,7 @@ func StringToNumber(arg string) (float64, error) {
 	return strconv.ParseFloat(arg, 64)
 }
 
-func (n *Node) pos0(p interface{}) *Node {
-	if n.Type() != CPL {
-		return n
-	}
-	n.CplIndex(0).SetPos(p)
-	n.SetPos(p)
-	return n
-}
-
-func (n *Node) SetPos0(p interface{}) *Node { return n.pos0(p) }
-
-func (n *Node) Dump(w io.Writer, ident string) {
+func (n Node) Dump(w io.Writer, ident string) {
 	io.WriteString(w, ident)
 	switch n.Type() {
 	case NUM:
@@ -241,14 +199,14 @@ func (n *Node) Dump(w io.Writer, ident string) {
 	}
 }
 
-func (n *Node) String() string {
+func (n Node) String() string {
 	switch n.Type() {
 	case NUM:
 		return strconv.FormatFloat(n.Value.(float64), 'f', -1, 64)
 	case STR:
 		return strconv.Quote(n.Value.(string))
 	case SYM:
-		return string(n.Value.(Symbol)) + "@" + n.Position.String()
+		return n.Value.(Symbol).String()
 	case CPL:
 		buf := make([]string, len(n.Cpl()))
 		for i, a := range n.Cpl() {
@@ -257,35 +215,36 @@ func (n *Node) String() string {
 		return "[" + strings.Join(buf, " ") + "]"
 	case ADR:
 		return "0x" + strconv.FormatInt(int64(n.Value.(uint16)), 16)
+	default:
+		return fmt.Sprintf("shouldn't happen: %v", n.Value)
 	}
-	panic("shouldn't happen")
 }
 
-func (n *Node) isSimpleAddSub() (a Symbol, v float64) {
-	if n.Type() != CPL || len(n.Cpl()) < 3 {
-		return
-	}
-	// a = a + v
-	if n.CplIndex(1).Type() == SYM && n.CplIndex(0).Sym() == "+" && n.CplIndex(2).Type() == NUM {
-		a, v = n.CplIndex(1).Sym(), n.CplIndex(2).Value.(float64)
-	}
-	// a = v + a
-	if n.CplIndex(2).Type() == SYM && n.CplIndex(0).Sym() == "+" && n.CplIndex(1).Type() == NUM {
-		a, v = n.CplIndex(2).Sym(), n.CplIndex(1).Value.(float64)
-	}
-	// a = a - v
-	if n.CplIndex(1).Type() == SYM && n.CplIndex(0).Sym() == "-" && n.CplIndex(2).Type() == NUM {
-		a, v = n.CplIndex(1).Sym(), -n.CplIndex(2).Value.(float64)
-	}
-	return
-}
+// func (n Node) isSimpleAddSub() (a Symbol, v float64, ok bool) {
+// 	if n.Type() != CPL || len(n.Cpl()) < 3 {
+// 		return
+// 	}
+// 	// a = a + v
+// 	if n.CplIndex(1).Type() == SYM && n.CplIndex(0).Sym().Equals(AAdd) && n.CplIndex(2).Type() == NUM {
+// 		a, v, ok = n.CplIndex(1).Sym(), n.CplIndex(2).Value.(float64), true
+// 	}
+// 	// a = v + a
+// 	if n.CplIndex(2).Type() == SYM && n.CplIndex(0).Sym().Equals(AAdd) && n.CplIndex(1).Type() == NUM {
+// 		a, v, ok = n.CplIndex(2).Sym(), n.CplIndex(1).Value.(float64), true
+// 	}
+// 	// a = a - v
+// 	if n.CplIndex(1).Type() == SYM && n.CplIndex(0).Sym().Equals(ASub) && n.CplIndex(2).Type() == NUM {
+// 		a, v, ok = n.CplIndex(1).Sym(), -n.CplIndex(2).Value.(float64), true
+// 	}
+// 	return
+// }
 
-func (n *Node) moveLoadStore(sm func(interface{}, interface{}) *Node, v *Node) *Node {
-	if len(n.Cpl()) == 3 && n.CplIndex(0).Sym() == ALoad {
+func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
+	if len(n.Cpl()) == 3 && n.CplIndex(0).Sym().Equals(ALoad) {
 		return __store(n.CplIndex(1), n.CplIndex(2), v)
 	}
 	if n.Type() != SYM {
-		panic(fmt.Sprintf("%#v: invalid assignment"))
+		panic(fmt.Sprintf("%v: invalid assignment", n))
 	}
 	return sm(n, v)
 }

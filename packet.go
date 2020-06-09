@@ -146,7 +146,9 @@ func (p *packet) Write(buf packet) {
 		i, a, b, c = buf.pos.readABC(i)
 		p.pos.append(a+uint32(datalen), b, c)
 	}
-	p.source = buf.source
+	if p.source == "" {
+		p.source = buf.source
+	}
 }
 
 func (b *packet) WriteRaw(buf []uint32) {
@@ -390,7 +392,7 @@ MAIN:
 			sb.WriteString("make-array")
 		default:
 			if bs, ok := singleOp[bop]; ok {
-				sb.WriteString(string(bs) + " " + readAddr(a) + " " + readAddr(b))
+				sb.WriteString(bs.Text + " " + readAddr(a) + " " + readAddr(b))
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))
 			}

@@ -1,22 +1,31 @@
 package parser
 
 import (
+	"math/rand"
+	"strconv"
 	"unsafe"
 )
 
-type Symbol string
+type Symbol struct {
+	Position
+	Text string
+}
+
+func (s Symbol) Equals(s2 Symbol) bool { return s.Text == s2.Text }
+
+func (s Symbol) SetPos(pos Position) Symbol { s.Position = pos; return s }
+
+func (s Symbol) String() string { return s.Text + "@" + s.Position.String() }
 
 var (
 	NUM = interfaceType(1.0)
 	STR = interfaceType("")
-	SYM = interfaceType(Symbol(""))
-	CPL = interfaceType([]*Node{})
+	SYM = interfaceType(Symbol{})
+	CPL = interfaceType([]Node{})
 	ADR = interfaceType(uint16(1))
 
-	chainNode = Nod(ABegin)
-	breakNode = Cpl(Nod(ABreak))
-	popvNode  = Cpl(Nod(APopV))
-	nilNode   = Nod(ANil)
+	breakNode = Cpl(Node{ABreak})
+	popvNode  = Cpl(Node{APopV})
 	zeroNode  = Num(0)
 	oneNode   = Num(1)
 	emptyNode = Cpl()
@@ -26,76 +35,103 @@ func interfaceType(a interface{}) uintptr {
 	return (*(*[2]uintptr)(unsafe.Pointer(&a)))[0]
 }
 
-const (
-	ANop         Symbol = "nop"
-	ADoBlock     Symbol = "do"
-	AConcat      Symbol = "con"
-	ANil         Symbol = "nil"
-	ASet         Symbol = "set"
-	AInc         Symbol = "inc"
-	AMove        Symbol = "mov"
-	AIf          Symbol = "if"
-	AFor         Symbol = "for"
-	APatchVararg Symbol = "pvag"
-	AFunc        Symbol = "fun"
-	ABreak       Symbol = "brk"
-	AContinue    Symbol = "cont"
-	ABegin       Symbol = "prog"
-	ALoad        Symbol = "load"
-	AStore       Symbol = "stor"
-	ACall        Symbol = "call"
-	AReturn      Symbol = "ret"
-	AYield       Symbol = "yld"
-	AHash        Symbol = "hash"
-	AHashArray   Symbol = "harr"
-	AArray       Symbol = "arr"
-	AAdd         Symbol = "add"
-	ASub         Symbol = "sub"
-	AMul         Symbol = "mul"
-	ADiv         Symbol = "div"
-	AMod         Symbol = "mod"
-	APow         Symbol = "pow"
-	AEq          Symbol = "eq"
-	ANeq         Symbol = "neq"
-	AAnd         Symbol = "and"
-	AOr          Symbol = "or"
-	ANot         Symbol = "not"
-	ALess        Symbol = "lt"
-	ALessEq      Symbol = "le"
-	ALen         Symbol = "len"
-	ARetAddr     Symbol = "reta"
-	APopV        Symbol = "popv"
-	ALabel       Symbol = "lbl"
-	AGoto        Symbol = "goto"
+var (
+	ANop         = Symbol{Text: "nop"}
+	ADoBlock     = Symbol{Text: "do"}
+	AConcat      = Symbol{Text: "con"}
+	ANil         = Symbol{Text: "nil"}
+	ASet         = Symbol{Text: "set"}
+	AInc         = Symbol{Text: "inc"}
+	AMove        = Symbol{Text: "mov"}
+	AIf          = Symbol{Text: "if"}
+	AFor         = Symbol{Text: "for"}
+	APatchVararg = Symbol{Text: "pvag"}
+	AFunc        = Symbol{Text: "fun"}
+	ABreak       = Symbol{Text: "brk"}
+	AContinue    = Symbol{Text: "cont"}
+	ABegin       = Symbol{Text: "prog"}
+	ALoad        = Symbol{Text: "load"}
+	AStore       = Symbol{Text: "stor"}
+	ACall        = Symbol{Text: "call"}
+	AReturn      = Symbol{Text: "ret"}
+	AYield       = Symbol{Text: "yld"}
+	AHash        = Symbol{Text: "hash"}
+	AHashArray   = Symbol{Text: "harr"}
+	AArray       = Symbol{Text: "arr"}
+	AAdd         = Symbol{Text: "add"}
+	ASub         = Symbol{Text: "sub"}
+	AMul         = Symbol{Text: "mul"}
+	ADiv         = Symbol{Text: "div"}
+	AMod         = Symbol{Text: "mod"}
+	APow         = Symbol{Text: "pow"}
+	AEq          = Symbol{Text: "eq"}
+	ANeq         = Symbol{Text: "neq"}
+	AAnd         = Symbol{Text: "and"}
+	AOr          = Symbol{Text: "or"}
+	ANot         = Symbol{Text: "not"}
+	ALess        = Symbol{Text: "lt"}
+	ALessEq      = Symbol{Text: "le"}
+	ALen         = Symbol{Text: "len"}
+	ARetAddr     = Symbol{Text: "reta"}
+	APopV        = Symbol{Text: "popv"}
+	ALabel       = Symbol{Text: "lbl"}
+	AGoto        = Symbol{Text: "goto"}
 )
 
-func __chain(args ...interface{}) *Node { return Cpl(append([]interface{}{ABegin}, args...)...) }
+func __chain(args ...Node) Node { return Cpl(append([]Node{Node{ABegin}}, args...)...) }
 
-func __do(args ...interface{}) *Node { return Cpl(append([]interface{}{ADoBlock}, args...)...) }
+func __do(args ...Node) Node { return Cpl(append([]Node{Node{ADoBlock}}, args...)...) }
 
-func __move(dest, src interface{}) *Node { return Cpl(AMove, dest, src) }
+func __move(dest, src Node) Node { return Cpl(Node{AMove}, dest, src) }
 
-func __set(dest, src interface{}) *Node {
-	if n, _ := dest.(*Node); n != nil && n.Type() != SYM {
-		panic(&Error{Pos: n.Position, Message: "invalid assignments", Token: n.String()})
-	}
-	return Cpl(ASet, dest, src)
+func __set(dest, src Node) Node { return Cpl(Node{ASet}, dest, src) }
+
+func __less(lhs, rhs Node) Node { return Cpl(Node{ALess}, lhs, rhs) }
+
+func __lessEq(lhs, rhs Node) Node { return Cpl(Node{ALessEq}, lhs, rhs) }
+
+func __inc(subject, step Node) Node { return Cpl(Node{AInc}, subject, step) }
+
+func __load(subject, key Node) Node { return Cpl(Node{ALoad}, subject, key) }
+
+func __call(cls, args Node) Node { return Cpl(Node{ACall}, cls, args) }
+
+func __store(subject, key, value Node) Node { return Cpl(Node{AStore}, subject, value, key) }
+
+func __if(cond, truebody, falsebody Node) Node { return Cpl(Node{AIf}, cond, truebody, falsebody) }
+
+func __loop(body Node) Node { return Cpl(Node{AFor}, body) }
+
+func __func(paramlist, body Node) Node { return Cpl(Node{AFunc}, emptyNode, paramlist, body) }
+
+func randomVarname() Node {
+	return Sym("v" + strconv.FormatInt(rand.Int63(), 10))
 }
 
-func __less(lhs, rhs interface{}) *Node { return Cpl(ALess, lhs, rhs) }
-
-func __lessEq(lhs, rhs interface{}) *Node { return Cpl(ALessEq, lhs, rhs) }
-
-func __inc(subject, step interface{}) *Node { return Cpl(AInc, subject, step) }
-
-func __load(subject, key interface{}) *Node { return Cpl(ALoad, subject, key) }
-
-func __call(cls, args interface{}) *Node { return Cpl(ACall, cls, args) }
-
-func __store(subject, key, value interface{}) *Node { return Cpl(AStore, subject, value, key) }
-
-func __if(cond, truebody, falsebody interface{}) *Node { return Cpl(AIf, cond, truebody, falsebody) }
-
-func __loop(body interface{}) *Node { return Cpl(AFor, body) }
-
-func __func(paramlist, body interface{}) *Node { return Cpl(AFunc, emptyNode, paramlist, body) }
+func forLoop(pos Position, rcv []Node, exprIters []Node, body Node) Node {
+	iter := randomVarname()
+	subject := randomVarname()
+	r := __do(__set(iter, exprIters[0]).SetPos(pos))
+	if len(exprIters) > 1 {
+		r = r.CplAppend(__set(subject, exprIters[1]).SetPos(pos))
+	} else {
+		r = r.CplAppend(__set(subject, popvNode).SetPos(pos))
+	}
+	if len(exprIters) > 1 {
+		r = r.CplAppend(__set(rcv[0], exprIters[2]).SetPos(pos))
+	} else {
+		r = r.CplAppend(__set(rcv[0], popvNode).SetPos(pos))
+	}
+	rr := __chain()
+	for i := 1; i < len(rcv); i++ {
+		rr = rr.CplAppend(__set(rcv[i], popvNode).SetPos(pos))
+	}
+	r = r.CplAppend(__loop(
+		__chain(
+			__move(rcv[0], __call(iter, Cpl(subject, rcv[0])).SetPos(pos)).SetPos(pos),
+			rr,
+			__if(rcv[0], body, breakNode).SetPos(pos),
+		),
+	).SetPos(pos))
+	return r
+}

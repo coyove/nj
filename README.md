@@ -3,20 +3,22 @@ potatolang (pol) is a Lua intepreter written in golang. It adapts most features 
 ## Can & Can't
 
 - `1 + "2"` and `"1" .. 2` are not permitted, you should write `1 + tonumber("2")` and `"1" .. tostring(2)`, or implement their metamethods.
-- You can `return` anywhere in the function, `continue` in a for loop, and use `yield` as a keyword:
+- You can `return` anywhere in the function and `continue` in a for loop.
+- You can use `yield` as a keyword:
     - `for k in (function () yield 1 end) do assert(k == 1)`
+    - Thus, there is no `thread` type in pol, because every function is a coroutine
 - You can `goto` anywhere in the function so be careful about uninitialized variables.
-- Multiple assignment is Go alike, say `f` returns 2 values:
-    - `f() -- OK, but with side effect`
-    - `a = f() -- OK, same side effect as above`
-    - `a, b = f() -- OK`
-    - `a, b, c = f(), 1 -- Invalid`
-    - `a, b, c = 1, f() -- OK by chance`
+- Multiple assignments have side effects, say `f` returns 3 numbers `1`, `2` and `3`:
+    - `a, b, c = f(); return true -- OK: a == 1 and b == 2 and c == 3, return true`
+    - `a, b = f(); return true    -- Actually returned: true and 3`
+    - `a = f(); return true        -- Actually returned: true, 2 and 3`
+    - `f(); return true        -- Actually returned: true, 2 and 3`
+    - `f(); return true, false        -- OK: return true and false`
 - You can `+=`, `-=`, `*=` and `/=`.
 - Variadic functions are completely different, `...` is actually a valid symbol name, you should treat and use them like Go. The following code won't work as expected (while they can be compiled anyway): 
     - `return ... -- Returning a single variable '...'`
     - `(function (a, ...) end)(unpack({a, b})) -- Unpack across fixed and variadic args`
-    - `(function (a, ...) end)(a, b, unpack({c})) - Unpack not filling up all variadic args`
+    - `(function (a, ...) end)(a, b, unpack({c})) -- Unpack not filling up all variadic args`
     - `{...}` will create a copy of `...`, for performance reason, you should:
         - `#...`, `...[index]` and `...[index] = value`
         - `pack(...)` will create a table using varargs directly as its underlay

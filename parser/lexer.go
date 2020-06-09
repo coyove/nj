@@ -75,7 +75,7 @@ type Scanner struct {
 
 func NewScanner(reader io.Reader, source string) *Scanner {
 	return &Scanner{
-		Pos:    Position{source, 1, 0},
+		Pos:    Position{Source: source, Line: 1, Column: 0},
 		reader: bufio.NewReaderSize(reader, 4096),
 	}
 }
@@ -526,8 +526,8 @@ finally:
 type Lexer struct {
 	scanner *Scanner
 	loop    string
-	cache   map[string]*Node
-	Stmts   *Node
+	cache   map[string]Node
+	Stmts   Node
 	Token   Token
 }
 
@@ -556,11 +556,11 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 	panic(lx.scanner.TokenError(tok, message))
 }
 
-func parse(reader io.Reader, name string, cache map[string]*Node, loop string) (chunk *Node, lexer *Lexer, err error) {
+func parse(reader io.Reader, name string, cache map[string]Node, loop string) (chunk Node, lexer *Lexer, err error) {
 	lexer = &Lexer{
 		scanner: NewScanner(reader, name),
 		loop:    loop,
-		Stmts:   nil,
+		Stmts:   Node{},
 		Token:   Token{Str: ""},
 		cache:   cache,
 	}
@@ -577,8 +577,11 @@ func parse(reader io.Reader, name string, cache map[string]*Node, loop string) (
 	return
 }
 
-func Parse(reader io.Reader, name string) (chunk *Node, err error) {
-	chunk, _, err = parse(reader, name, make(map[string]*Node), name)
+func Parse(reader io.Reader, name string) (chunk Node, err error) {
+	chunk, _, err = parse(reader, name, make(map[string]Node), name)
+	if chunk.Value == nil && err == nil {
+		err = fmt.Errorf("invalid chunk")
+	}
 	return
 }
 
