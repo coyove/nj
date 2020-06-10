@@ -30,8 +30,7 @@ const (
 	OpIf
 	OpIfNot
 	OpJmp
-	OpMakeHash
-	OpMakeArray
+	OpMakeTable
 	OpLambda
 	OpPush
 	OpPush2
@@ -41,7 +40,6 @@ const (
 	OpRet
 	OpYield
 	OpLen
-	OpNOP
 	OpEOB
 )
 

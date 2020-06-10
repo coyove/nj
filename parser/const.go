@@ -53,6 +53,7 @@ var (
 	ALoad        = Symbol{Text: "load"}
 	AStore       = Symbol{Text: "stor"}
 	ACall        = Symbol{Text: "call"}
+	ATailCall    = Symbol{Text: "tail"}
 	AReturn      = Symbol{Text: "ret"}
 	AYield       = Symbol{Text: "yld"}
 	AHash        = Symbol{Text: "hash"}

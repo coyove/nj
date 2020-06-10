@@ -26,6 +26,10 @@ type gotolabel struct {
 	labelMet   bool
 }
 
+type breaklabel struct {
+	labelPos []int
+}
+
 // symtable is responsible for recording the state of compilation
 type symtable struct {
 	code packet
@@ -37,7 +41,7 @@ type symtable struct {
 
 	y         bool // has yield op
 	envescape bool
-	inloop    []int
+	inloop    []*breaklabel
 
 	vp uint16
 
@@ -46,7 +50,8 @@ type symtable struct {
 
 	reusableTmps map[uint16]bool
 
-	gotoMarkers map[string]*gotolabel
+	forwardGoto map[int]string
+	labelPos    map[string]int
 }
 
 func newsymtable() *symtable {
@@ -54,7 +59,8 @@ func newsymtable() *symtable {
 		sym:          make(map[string]*symbol),
 		constMap:     make(map[interface{}]uint16),
 		reusableTmps: make(map[uint16]bool),
-		gotoMarkers:  make(map[string]*gotolabel),
+		forwardGoto:  make(map[int]string),
+		labelPos:     make(map[string]int),
 	}
 	return t
 }
@@ -305,7 +311,7 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileWhileOp(nodes)
 	case parser.AContinue.Text, parser.ABreak.Text:
 		yx = table.compileContinueBreakOp(nodes)
-	case parser.ACall.Text:
+	case parser.ACall.Text, parser.ATailCall.Text:
 		yx = table.compileCallOp(nodes)
 	case parser.AHash.Text, parser.AHashArray.Text, parser.AArray.Text:
 		yx = table.compileHashArrayOp(nodes)

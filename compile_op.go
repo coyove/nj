@@ -1,10 +1,7 @@
 package potatolang
 
 import (
-	"bytes"
 	"math"
-	"math/rand"
-	"time"
 
 	"github.com/coyove/potatolang/parser"
 )
@@ -67,6 +64,7 @@ func (table *symtable) compileRetOp(atoms []parser.Node) uint16 {
 		table.y = true
 		op = OpYield
 	}
+
 	values := atoms[1].Cpl()
 	if len(values) == 0 { // return
 		table.code.WriteOP(op, regNil, 0)
@@ -117,13 +115,13 @@ func (table *symtable) compileHashArrayOp(atoms []parser.Node) uint16 {
 				table.writeOpcode(OpPush2, arrayElements[i], arrayElements[i+1])
 			}
 		}
-		table.code.WriteOP(OpMakeArray, 0, 0)
+		table.code.WriteOP(OpMakeTable, 2, 0)
 
 		hashElements := atoms[1].Cpl()
 		for i := 0; i < len(hashElements); i += 2 {
 			table.writeOpcode(OpPush2, hashElements[i], hashElements[i+1])
 		}
-		table.code.WriteOP(OpMakeHash, 1, 0)
+		table.code.WriteOP(OpMakeTable, 3, 0)
 		table.code.WritePos(atoms[0].Pos())
 
 		table.returnAddresses(arrayElements)
@@ -133,9 +131,9 @@ func (table *symtable) compileHashArrayOp(atoms []parser.Node) uint16 {
 
 	switch atoms[0].Value.(parser.Symbol).Text {
 	case parser.AHash.Text:
-		table.code.WriteOP(OpMakeHash, 0, 0)
+		table.code.WriteOP(OpMakeTable, 1, 0)
 	case parser.AArray.Text:
-		table.code.WriteOP(OpMakeArray, 0, 0)
+		table.code.WriteOP(OpMakeTable, 2, 0)
 	}
 	table.code.WritePos(atoms[0].Pos())
 	return regA
@@ -190,9 +188,6 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []parser.Node) uint16 {
 
 func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
 	head := atoms[0].Value.(parser.Symbol)
-	if head.Equals(parser.ANop) {
-		return regA
-	}
 	op, ok := flatOpMapping[head.Text]
 	if !ok {
 		panicf("compileFlatOp: shouldn't happen: invalid op: %#v", atoms[0])
@@ -270,7 +265,12 @@ func (table *symtable) compileCallOp(nodes []parser.Node) uint16 {
 		}
 	}
 
-	table.writeOpcode(OpCall, tmp[0], parser.Node{})
+	var opb uint16
+	if nodes[0].Sym().Equals(parser.ATailCall) {
+		opb = 1
+	}
+
+	table.writeOpcode(OpCall, tmp[0], parser.Node{opb})
 	table.code.WritePos(nodes[0].Pos())
 
 	table.returnAddresses(tmp)
@@ -341,116 +341,57 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 	return regA
 }
 
-var staticWhileHack [8]uint32
-
-func init() {
-	rand.Seed(time.Now().Unix())
-	for i := range staticWhileHack {
-		staticWhileHack[i] = genRandomNop()
-	}
-}
-
-func genRandomNop() uint32 {
-	return makeop(OpNOP, uint16(rand.Uint32()), uint16(rand.Uint32()))
-}
-
 // [continue | break]
 func (table *symtable) compileContinueBreakOp(atoms []parser.Node) uint16 {
 	if len(table.inloop) == 0 {
-		panicf("%#v: invalid statement outside loop", atoms[0])
+		panicf("break outside loop")
 	}
-
-	if atoms[0].Value.(parser.Symbol).Equals(parser.AContinue) {
-		init := table.inloop[len(table.inloop)-1]
-		table.code.WriteJmpOP(OpJmp, 0, init-table.code.Len())
-	} else {
-		table.code.WriteRaw(staticWhileHack[4:]) // write a 'break' placeholder
-	}
+	table.inloop[len(table.inloop)-1].labelPos = append(table.inloop[len(table.inloop)-1].labelPos, table.code.Len())
+	table.code.WriteJmpOP(OpJmp, 0, 0)
 	return regA
 }
 
 // [loop [chain ...]]
 func (table *symtable) compileWhileOp(atoms []parser.Node) uint16 {
 	init := table.code.Len()
+	breaks := &breaklabel{}
 
-	table.inloop = append(table.inloop, init)
+	table.inloop = append(table.inloop, breaks)
 	table.addMaskedSymTable()
 	table.compileNode(atoms[1])
 	table.removeMaskedSymTable()
 	table.inloop = table.inloop[:len(table.inloop)-1]
 
 	table.code.WriteJmpOP(OpJmp, 0, -(table.code.Len()-init)-1)
-
-	code := table.code.data[init:]
-	code2 := u32Bytes(code)
-
-	// Search for special 'break' placeholder and replace it with a OP_JMP to the
-	// end of the Code
-	breakflag := u32Bytes(staticWhileHack[4:])
-	for i := 0; i < len(code2); {
-		x := bytes.Index(code2[i:], breakflag)
-		if x == -1 {
-			break
-		}
-		idx := (i + x) / 4
-		code[idx] = makejmpop(OpJmp, 0, len(code)-idx-1)
-		i += x + 4
+	for _, idx := range breaks.labelPos {
+		table.code.data[idx] = makejmpop(OpJmp, 0, table.code.Len()-idx-1)
 	}
 	return regA
 }
 
 func (table *symtable) compileGotoOp(atoms []parser.Node) uint16 {
 	label := atoms[1].Sym()
-	if atoms[0].Sym().Equals(parser.AGoto) { // goto label
-		marker, ok := table.gotoMarkers[label.Text]
-		if !ok {
-			marker = &gotolabel{}
-			table.gotoMarkers[label.Text] = marker
-		}
-		if !marker.labelMet {
-			marker.gotoMarker = [4]uint32{genRandomNop(), genRandomNop(), genRandomNop(), genRandomNop()}
-			table.code.WriteRaw(marker.gotoMarker[:])
+	if atoms[0].Sym().Equals(parser.ALabel) { // :: label ::
+		table.labelPos[label.Text] = table.code.Len()
+	} else { // goto label
+		if pos, ok := table.labelPos[label.Text]; ok {
+			table.code.WriteJmpOP(OpJmp, 0, pos-(table.code.Len()+1))
 		} else {
-			table.code.WriteJmpOP(OpJmp, 0, marker.labelPos-table.code.Len()-1)
-		}
-	} else { // :: label ::
-		marker, ok := table.gotoMarkers[label.Text]
-		if !ok {
-			table.gotoMarkers[label.Text] = &gotolabel{labelPos: table.code.Len(), labelMet: true}
-		} else {
-			marker.labelPos = table.code.Len()
-			marker.labelMet = true
+			table.code.WriteJmpOP(OpJmp, 0, 0)
+			table.forwardGoto[table.code.Len()-1] = label.Text
 		}
 	}
 	return regA
 }
 
 func (table *symtable) patchGoto() {
-	code := table.code
-	for l, m := range table.gotoMarkers {
-		if !m.labelMet {
-			delete(table.gotoMarkers, l)
+	code := table.code.data
+	for i, l := range table.forwardGoto {
+		pos, ok := table.labelPos[l]
+		if !ok {
+			panicf("label %s not found", l)
 		}
-	}
-
-	if len(table.gotoMarkers) == 0 {
-		return
-	}
-
-	codeBytes := u32Bytes(code.data)
-
-	for _, marker := range table.gotoMarkers {
-		m := u32Bytes(marker.gotoMarker[:])
-		for i := 0; i < len(codeBytes); {
-			x := bytes.Index(codeBytes[i:], m[:])
-			if x == -1 {
-				break
-			}
-			gotoPos := (i + x) / 4
-			jmp := marker.labelPos - 1 - gotoPos
-			code.data[gotoPos] = makejmpop(OpJmp, 0, jmp)
-			i += x + 4
-		}
+		code[i] = makejmpop(OpJmp, 0, pos-(i+1))
 	}
 }
 

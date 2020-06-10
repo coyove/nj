@@ -31,6 +31,6 @@ local function a()
 assert(false)
 end
 
-goto innerlabel -- won't do anything
+-- goto innerlabel panic
 
 return "goto"

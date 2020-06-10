@@ -131,7 +131,6 @@ MAIN:
 		switch bop {
 		case OpEOB:
 			break MAIN
-		case OpNOP:
 		case OpSet:
 			env._set(opa, env._get(opb, K))
 		case OpPushV:
@@ -257,36 +256,35 @@ MAIN:
 			default:
 				env.A, env.V = v.GetMetamethod(M__len).ExpectMsg(FUN, "operator #").Fun().Call(v)
 			}
-		case OpMakeHash:
+		case OpMakeTable:
 			if stackEnv == nil {
 				env.A = Tab(&Table{})
 			} else {
-				var m *Table
-				if opa == 1 {
-					m = env.A.Tab()
-				} else {
-					m = &Table{}
-				}
-				for i := 0; i < stackEnv.Size(); i += 2 {
-					m.RawPut(stackEnv.stack[i], stackEnv.stack[i+1])
-				}
-				stackEnv.Clear()
-				env.A = Tab(m)
-			}
-		case OpMakeArray:
-			if stackEnv == nil {
-				env.A = Tab(&Table{})
-			} else {
-				m := &Table{a: make([]Value, 0, len(stackEnv.stack))}
-				for _, v := range stackEnv.stack {
-					if v.Type() == UPK {
-						m.a = append(m.a, v._Upk()...)
+				switch opa {
+				case 1, 3:
+					var m *Table
+					if opa == 3 {
+						m = env.A.Tab()
 					} else {
-						m.a = append(m.a, v)
+						m = &Table{}
 					}
+					for i := 0; i < stackEnv.Size(); i += 2 {
+						m.RawPut(stackEnv.stack[i], stackEnv.stack[i+1])
+					}
+					stackEnv.Clear()
+					env.A = Tab(m)
+				case 2:
+					m := &Table{a: make([]Value, 0, len(stackEnv.stack))}
+					for _, v := range stackEnv.stack {
+						if v.Type() == UPK {
+							m.a = append(m.a, v._Upk()...)
+						} else {
+							m.a = append(m.a, v)
+						}
+					}
+					stackEnv.Clear()
+					env.A = Tab(m)
 				}
-				stackEnv.Clear()
-				env.A = Tab(m)
 			}
 		case OpStore:
 			subject, v := env._get(opa, K), env._get(opb, K)
@@ -342,6 +340,8 @@ MAIN:
 		case OpLambda:
 			env.A = Fun(crReadClosure(K.Code, &cursor, env, opa, opb))
 		case OpCall:
+			env.V = nil
+
 			var cls *Closure
 			switch a := env._get(opa, K); a.Type() {
 			case FUN:
@@ -398,7 +398,9 @@ MAIN:
 					stackEnv.parent = cls.Env
 					env = stackEnv
 
-					retStack = append(retStack, last)
+					if opb == 0 {
+						retStack = append(retStack, last)
+					}
 				}
 
 				if cls.native == nil {

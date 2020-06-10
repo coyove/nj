@@ -142,7 +142,11 @@ func initCoreLibs() {
 		case STR:
 			env.A = Num(float64(len(env.In(1, UPK)._Upk())))
 		case NUM:
-			env.A = env.In(1, UPK)._Upk()[int(a.Num())-1]
+			if u, idx := env.In(1, UPK)._Upk(), int(a.Num())-1; idx < len(u) {
+				env.A, env.V = u[idx], u[idx+1:]
+			} else {
+				env.A, env.V = Value{}, nil
+			}
 		}
 	}))
 	G.Puts("pack", NativeFun(1, func(env *Env) {
@@ -170,6 +174,7 @@ func initCoreLibs() {
 	}))
 	G.Puts("assert", NativeFun(1, func(env *Env) {
 		if v := env.Get(0); !v.IsFalse() {
+			env.A = v
 			return
 		}
 		panic("assertion failed")

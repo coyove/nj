@@ -318,7 +318,6 @@ var reservedWords = map[string]uint32{
 	"or":       TOr,
 	"local":    TLocal,
 	"break":    TBreak,
-	"continue": TContinue,
 	"else":     TElse,
 	"function": TFunc,
 	"if":       TIf,

@@ -78,28 +78,28 @@ a = {}
 i = 0
 while i <= lim do a[i] = i; i=i+1 end
 assert(call(math.max, a) == lim)
--- 
--- print("+")
--- 
--- 
--- -- new-style varargs
--- 
--- function oneless (a, ...) return ... end
--- 
--- function f (n, a, ...)
---   local b
---   assert(arg == _G.arg)   -- no local 'arg'
---   if n == 0 then
---     local b, c, d = ...
---     return a, b, c, d, oneless(oneless(oneless(...)))
---   else
---     n, b, a = n-1, ..., a
---     assert(b == ...)
---     return f(n, a, ...)
---   end
--- end
--- 
--- a,b,c,d,e = assert(f(10,5,4,3,2,1))
+
+print("+")
+ 
+-- new-style varargs
+
+function oneless (...) return select(2, ...) end
+ 
+function f (n, a, ...)
+  local b
+  -- assert(arg == _G.arg)   -- no local 'arg'
+  if n == 0 then
+    local b, c, d = select(1, ...)
+    return a, b, c, d, oneless(oneless(oneless(...)))
+  else
+    -- n, b, a = n-1, ..., a
+    -- assert(b == ...)
+    return f(n - 1, a, ...)
+  end
+end
+ 
+a,b,c,d,e = f(10,5,4,3,2,1)
+print(a,b,c,d,e )
 -- assert(a==5 and b==4 and c==3 and d==2 and e==1)
 -- 
 -- a,b,c,d,e = f(4)

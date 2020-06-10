@@ -33,7 +33,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TIn TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TIf TLen TReturn TReturnVoid TImport TYield TYieldVoid TRepeat TUntil TNot TLabel TGoto
+%token<token> TDo TIn TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TLen TReturn TReturnVoid TImport TYield TYieldVoid TRepeat TUntil TNot TLabel TGoto
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
@@ -286,12 +286,21 @@ jmp_stat:
         TYield expr_list                  { $$ = Cpl(Node{AYield}, $2).SetPos($1.Pos) } |
         TYieldVoid                        { $$ = Cpl(Node{AYield}, emptyNode).SetPos($1.Pos) } |
         TBreak                            { $$ = Cpl(Node{ABreak}).SetPos($1.Pos) } |
-        TContinue                         { $$ = Cpl(Node{AContinue}).SetPos($1.Pos) } |
-        TReturn expr_list                 { $$ = Cpl(Node{AReturn}, $2).SetPos($1.Pos) } |
         TReturnVoid                       { $$ = Cpl(Node{AReturn}, emptyNode).SetPos($1.Pos) } |
         TImport TString                   { $$ = __move(Sym(moduleNameFromPath($2.Str)), yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str))).SetPos($1.Pos) } |
         TGoto TIdent                      { $$ = Cpl(Node{AGoto}, SymTok($2)).SetPos($1.Pos) } |
-        TLabel TIdent TLabel              { $$ = Cpl(Node{ALabel}, SymTok($2)) }
+        TLabel TIdent TLabel              { $$ = Cpl(Node{ALabel}, SymTok($2)) } |
+        TReturn expr_list                 {
+            if len($2.Cpl()) == 1 {
+                x := $2.CplIndex(0)
+                if len(x.Cpl()) == 3 && x.CplIndex(0).Sym().Equals(ACall) {
+                    tc := x.CplIndex(0).Sym()
+                    tc.Text = ATailCall.Text
+                    x.Value.([]Node)[0] = Node{tc}
+                }
+            }
+            $$ = Cpl(Node{AReturn}, $2).SetPos($1.Pos) 
+        }
 
 declarator:
         TIdent                            { $$ = SymTok($1) } |

@@ -1,3 +1,24 @@
+function deepadd(v)
+if v == 1e6 then
+return v
+end
+    return deepadd(v + 1)
+end
+assert(deepadd(0) == 1e6)
+
+do
+    local sum = 0
+    for i = 1,10 do
+        for j=1,10,2 do
+           sum *= j
+           if j == 3 then break end
+        end
+        if i == 5 then break end
+        sum += i
+    end
+    assert(sum == 174)
+end
+
 for i, v, n in ipairs({1, 2, 3}) do
     assert( i == v and n == nil)
 end

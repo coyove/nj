@@ -365,7 +365,11 @@ MAIN:
 			cls := crReadClosure(c.Code, &cursor, nil, a, b)
 			sb.WriteString(cls.crPrettify(tab + 1))
 		case OpCall:
-			sb.WriteString("call " + readAddr(a))
+			if b == 1 {
+				sb.WriteString("tail-call " + readAddr(a))
+			} else {
+				sb.WriteString("call " + readAddr(a))
+			}
 		case OpJmp:
 			pos := int32(b) - 1<<12
 			pos2 := uint32(int32(cursor) + pos)
@@ -379,17 +383,17 @@ MAIN:
 			} else {
 				sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
 			}
-		case OpNOP:
-			sb.WriteString("nop")
 		case OpInc:
 			sb.WriteString("inc " + readAddr(a) + " " + readAddr(uint16(b)))
-		case OpMakeHash:
-			sb.WriteString("make-hash")
-			if a == 1 {
-				sb.WriteString("-into-a")
+		case OpMakeTable:
+			switch a {
+			case 1:
+				sb.WriteString("make-hash")
+			case 2:
+				sb.WriteString("make-array")
+			case 3:
+				sb.WriteString("make-hash-a")
 			}
-		case OpMakeArray:
-			sb.WriteString("make-array")
 		default:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs.Text + " " + readAddr(a) + " " + readAddr(b))
