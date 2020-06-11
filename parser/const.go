@@ -24,11 +24,13 @@ var (
 	CPL = interfaceType([]Node{})
 	ADR = interfaceType(uint16(1))
 
-	breakNode = Cpl(Node{ABreak})
-	popvNode  = Cpl(Node{APopV})
-	zeroNode  = Num(0)
-	oneNode   = Num(1)
-	emptyNode = Cpl()
+	breakNode   = Cpl(Node{ABreak})
+	popvNode    = Cpl(Node{APopV})
+	popvEndNode = Cpl(Node{APopVEnd})
+	popvAllNode = Cpl(Node{APopVAll})
+	zeroNode    = Num(0)
+	oneNode     = Num(1)
+	emptyNode   = Cpl()
 )
 
 func interfaceType(a interface{}) uintptr {
@@ -75,6 +77,8 @@ var (
 	ALen         = Symbol{Text: "len"}
 	ARetAddr     = Symbol{Text: "reta"}
 	APopV        = Symbol{Text: "popv"}
+	APopVEnd     = Symbol{Text: "pope"}
+	APopVAll     = Symbol{Text: "popa"}
 	ALabel       = Symbol{Text: "lbl"}
 	AGoto        = Symbol{Text: "goto"}
 )
@@ -95,8 +99,6 @@ func __inc(subject, step Node) Node { return Cpl(Node{AInc}, subject, step) }
 
 func __load(subject, key Node) Node { return Cpl(Node{ALoad}, subject, key) }
 
-func __call(cls, args Node) Node { return Cpl(Node{ACall}, cls, args) }
-
 func __store(subject, key, value Node) Node { return Cpl(Node{AStore}, subject, value, key) }
 
 func __if(cond, truebody, falsebody Node) Node { return Cpl(Node{AIf}, cond, truebody, falsebody) }
@@ -104,6 +106,8 @@ func __if(cond, truebody, falsebody Node) Node { return Cpl(Node{AIf}, cond, tru
 func __loop(body Node) Node { return Cpl(Node{AFor}, body) }
 
 func __func(paramlist, body Node) Node { return Cpl(Node{AFunc}, emptyNode, paramlist, body) }
+
+func __call(cls, args Node) Node { return Cpl(Node{ACall}, cls, args) }
 
 func randomVarname() Node {
 	return Sym("v" + strconv.FormatInt(rand.Int63(), 10))
@@ -118,14 +122,18 @@ func forLoop(pos Position, rcv []Node, exprIters []Node, body Node) Node {
 	} else {
 		r = r.CplAppend(__set(subject, popvNode).SetPos(pos))
 	}
-	if len(exprIters) > 1 {
+	if len(exprIters) > 2 {
 		r = r.CplAppend(__set(rcv[0], exprIters[2]).SetPos(pos))
 	} else {
-		r = r.CplAppend(__set(rcv[0], popvNode).SetPos(pos))
+		r = r.CplAppend(__set(rcv[0], popvEndNode).SetPos(pos))
 	}
 	rr := __chain()
 	for i := 1; i < len(rcv); i++ {
-		rr = rr.CplAppend(__set(rcv[i], popvNode).SetPos(pos))
+		if i == len(rcv)-1 {
+			rr = rr.CplAppend(__set(rcv[i], popvEndNode).SetPos(pos))
+		} else {
+			rr = rr.CplAppend(__set(rcv[i], popvNode).SetPos(pos))
+		}
 	}
 	r = r.CplAppend(__loop(
 		__chain(

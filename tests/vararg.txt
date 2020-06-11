@@ -1,7 +1,17 @@
 -- $Id: testes/vararg.lua $
 -- See Copyright Notice in file all.lua
 
-print(unpack({'testing vararg'}))
+call(print, unpack({'testing vararg'}))
+
+function getex(f, ...)
+    local a1, ... = call(f, ...)
+    return {a1, ...}
+end
+
+do
+    local t = (getex(function(a, b, c) return a +b, b +c end, 1, 2, 3))
+    assert(t[1] == 3 and t[2] == 5)
+end
 
 function foo1(a, b) return a + b end
 

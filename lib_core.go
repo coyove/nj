@@ -73,7 +73,7 @@ func initCoreLibs() {
 			t.Insert(env.In(1, NUM), env.V[0])
 			env.A = env.V[0]
 		} else {
-			t.Insert(Num(float64(t.Len())), env.V[0])
+			t.Insert(Num(float64(t.Len())), env.Get(1))
 		}
 	}))
 	ltable.Puts("remove", NativeFun(1, func(env *Env) {
@@ -139,6 +139,8 @@ func initCoreLibs() {
 	}))
 	G.Puts("select", NativeFun(2, func(env *Env) {
 		switch a := env.Get(0); a.Type() {
+		case NIL:
+			env.A = newUnpackedValue(append([]Value{}, env.V...))
 		case STR:
 			env.A = Num(float64(len(env.In(1, UPK)._Upk())))
 		case NUM:

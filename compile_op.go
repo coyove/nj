@@ -67,6 +67,7 @@ func (table *symtable) compileRetOp(atoms []parser.Node) uint16 {
 
 	values := atoms[1].Cpl()
 	if len(values) == 0 { // return
+		table.code.WriteOP(OpPopV, 0, 0) // clear env.V in case of side effects
 		table.code.WriteOP(op, regNil, 0)
 		return regA
 	}
@@ -172,8 +173,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []parser.Node) uint16 {
 	table.collapse(atoms[1:], true)
 
 	switch bop {
-	case OpPopV:
-		table.code.WriteOP(bop, 0, 0)
+
 	case OpNot, OpRet, OpYield, OpLen:
 		// unary op
 		table.writeOpcode(bop, atoms[1], parser.Node{})
@@ -188,6 +188,18 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []parser.Node) uint16 {
 
 func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
 	head := atoms[0].Value.(parser.Symbol)
+	switch head.Text {
+	case parser.APopVAll.Text:
+		table.code.WriteOP(OpPopV, 2, 0)
+		return regA
+	case parser.APopV.Text:
+		table.code.WriteOP(OpPopV, 1, 0)
+		return regA
+	case parser.APopVEnd.Text:
+		table.code.WriteOP(OpPopV, 0, 0)
+		return regA
+	}
+
 	op, ok := flatOpMapping[head.Text]
 	if !ok {
 		panicf("compileFlatOp: shouldn't happen: invalid op: %#v", atoms[0])

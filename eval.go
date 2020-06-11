@@ -149,10 +149,22 @@ MAIN:
 			}
 		case OpPopV:
 			if len(env.V) == 0 {
-				env.A = Value{}
+				if opa == 2 {
+					env.A = newUnpackedValue(nil)
+				} else {
+					env.A = Value{}
+				}
 			} else {
-				env.A = env.V[0]
-				env.V = env.V[1:]
+				if opa == 2 {
+					env.A = newUnpackedValue(env.V)
+					env.V = nil
+				} else {
+					env.A = env.V[0]
+					env.V = env.V[1:]
+				}
+			}
+			if opa == 0 { // this is the last OpPopV
+				env.V = nil
 			}
 		case OpInc:
 			env.A = Num(env._get(opa, K).Expect(NUM).Num() + env._get(opb, K).Expect(NUM).Num())
@@ -341,7 +353,6 @@ MAIN:
 			env.A = Fun(crReadClosure(K.Code, &cursor, env, opa, opb))
 		case OpCall:
 			env.V = nil
-
 			var cls *Closure
 			switch a := env._get(opa, K); a.Type() {
 			case FUN:

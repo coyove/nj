@@ -25,9 +25,9 @@ func fmtPrint(flag byte) func(env *Env) {
 		}
 
 		if err != nil {
-			env.V = []Value{Str(err.Error())}
+			env.Return(Value{}, Str(err.Error()))
 		} else {
-			env.A = Num(float64(n))
+			env.Return(Num(float64(n)))
 		}
 	}
 }

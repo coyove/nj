@@ -105,20 +105,32 @@ assign_stat:
         } |
         TLocal ident_list '=' expr_list {
             m, n := len($2.Cpl()), len($4.Cpl())
-            for i := 0; i < m - n; i++ {
-                $4 = $4.CplAppend(popvNode)
+            for i, count := 0, m - n; i < count; i++ {
+                if i == count - 1 {
+                    $4 = $4.CplAppend(popvEndNode)
+                } else {
+                    $4 = $4.CplAppend(popvNode)
+                }
             }
 
             $$ = __chain()
             for i, v := range $2.Cpl() {
-                $$ = $$.CplAppend(__set(v, $4.CplIndex(i)).SetPos($1.Pos))
+                if v.Sym().Text == "..." {
+                    $$ = $$.CplAppend(__set(v, popvAllNode).SetPos($1.Pos))
+                } else {
+                    $$ = $$.CplAppend(__set(v, $4.CplIndex(i)).SetPos($1.Pos))
+                }
             }
         } |
         declarator_list '=' expr_list {
             nodes := $1.Cpl()
             m, n := len(nodes), len($3.Cpl())
-            for i := 0; i < m - n; i++ {
-                $3 = $3.CplAppend(popvNode)
+            for i, count := 0, m - n; i < count; i++ {
+                if i == count - 1 {
+                    $3 = $3.CplAppend(popvEndNode)
+                } else {
+                    $3 = $3.CplAppend(popvNode)
+                }
             } 
              
             if head := nodes[0]; len(nodes) == 1 {
@@ -135,7 +147,11 @@ assign_stat:
                 for i := range nodes {
                     names = append(names, randomVarname())
                     retaddr = retaddr.CplAppend(names[i])
-                    $$ = $$.CplAppend(__set(names[i], $3.CplIndex(i)).SetPos($2.Pos))
+                    if nodes[i].Sym().Text == "..." {
+                        $$ = $$.CplAppend(__set(names[i], popvAllNode).SetPos($2.Pos))
+                    } else {
+                        $$ = $$.CplAppend(__set(names[i], $3.CplIndex(i)).SetPos($2.Pos))
+                    }
                 }
                 for i, v := range nodes {
                     $$ = $$.CplAppend(v.moveLoadStore(__move, names[i]).SetPos($2.Pos))
@@ -286,10 +302,10 @@ jmp_stat:
         TYield expr_list                  { $$ = Cpl(Node{AYield}, $2).SetPos($1.Pos) } |
         TYieldVoid                        { $$ = Cpl(Node{AYield}, emptyNode).SetPos($1.Pos) } |
         TBreak                            { $$ = Cpl(Node{ABreak}).SetPos($1.Pos) } |
-        TReturnVoid                       { $$ = Cpl(Node{AReturn}, emptyNode).SetPos($1.Pos) } |
         TImport TString                   { $$ = __move(Sym(moduleNameFromPath($2.Str)), yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str))).SetPos($1.Pos) } |
         TGoto TIdent                      { $$ = Cpl(Node{AGoto}, SymTok($2)).SetPos($1.Pos) } |
         TLabel TIdent TLabel              { $$ = Cpl(Node{ALabel}, SymTok($2)) } |
+        TReturnVoid                       { $$ = Cpl(Node{AReturn}, emptyNode).SetPos($1.Pos) } |
         TReturn expr_list                 {
             if len($2.Cpl()) == 1 {
                 x := $2.CplIndex(0)

@@ -346,7 +346,13 @@ MAIN:
 		case OpSet:
 			sb.WriteString(readAddr(a) + " = " + readAddr(b))
 		case OpPopV:
-			sb.WriteString("$a = popv")
+			switch sb.WriteString("$a = popv"); a {
+			case 0:
+				sb.WriteString("-last")
+			case 1:
+			case 2:
+				sb.WriteString("-all")
+			}
 		case OpPushV:
 			sb.WriteString("pushv " + readAddr(a))
 			if b != 0 {

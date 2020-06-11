@@ -1,3 +1,14 @@
+do
+  local function bar()
+      local function foo() return 1, 2, 3 end
+      local a, b = foo()
+      return true
+  end
+  local a, b = bar()
+  assert(a and b == nil)
+end
+
+--[[
 function deepadd(v)
 if v == 1e6 then
 return v
