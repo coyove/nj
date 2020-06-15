@@ -139,13 +139,11 @@ func initCoreLibs() {
 	}))
 	G.Puts("select", NativeFun(2, func(env *Env) {
 		switch a := env.Get(0); a.Type() {
-		case NIL:
-			env.A = newUnpackedValue(append([]Value{}, env.V...))
 		case STR:
 			env.A = Num(float64(len(env.In(1, UPK)._Upk())))
 		case NUM:
 			if u, idx := env.In(1, UPK)._Upk(), int(a.Num())-1; idx < len(u) {
-				env.A, env.V = u[idx], u[idx+1:]
+				env.A, env.V = u[idx], append([]Value{}, u[idx+1:]...)
 			} else {
 				env.A, env.V = Value{}, nil
 			}

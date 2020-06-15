@@ -8,7 +8,6 @@ do
   assert(a and b == nil)
 end
 
---[[
 function deepadd(v)
 if v == 1e6 then
 return v
@@ -186,7 +185,7 @@ end
 fib3 = closure.copy(fib2)
  
 fib_seq = { 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418, 317811, 514229, 832040, 1346269, 2178309, 3524578, 5702887, 9227465, }
-for i = 0,32 do assert(fib_seq[i +1] == fib2(0,1)) end
+for i = 0,32 do local s = fib2(0,1);  assert(fib_seq[i +1] == s) end
 
 assert( (fib2())==9227465)
 assert( (fib3(0, 1)+fib3()+fib3()+fib3()) == 11)

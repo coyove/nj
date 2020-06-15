@@ -239,6 +239,10 @@ func (n Node) String() string {
 // 	return
 // }
 
+func (n Node) isCallStat() bool {
+	return len(n.Cpl()) > 0 && n.CplIndex(0).Sym().Equals(ACall)
+}
+
 func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
 	if len(n.Cpl()) == 3 && n.CplIndex(0).Sym().Equals(ALoad) {
 		return __store(n.CplIndex(1), n.CplIndex(2), v)

@@ -346,12 +346,15 @@ MAIN:
 		case OpSet:
 			sb.WriteString(readAddr(a) + " = " + readAddr(b))
 		case OpPopV:
-			switch sb.WriteString("$a = popv"); a {
+			switch a {
 			case 0:
-				sb.WriteString("-last")
+				sb.WriteString("$a = popv-last-and-clear")
 			case 1:
+				sb.WriteString("$a = popv")
 			case 2:
-				sb.WriteString("-all")
+				sb.WriteString("$a = popv-all")
+			case 3:
+				sb.WriteString("popv-clear")
 			}
 		case OpPushV:
 			sb.WriteString("pushv " + readAddr(a))
@@ -359,9 +362,7 @@ MAIN:
 				sb.WriteString(" cap=" + strconv.Itoa(int(b)))
 			}
 		case OpPush:
-			sb.WriteString("push " + readAddr(a))
-		case OpPush2:
-			sb.WriteString("push2 " + readAddr(a) + " " + readAddr(b))
+			sb.WriteString(fmt.Sprintf("push%d %v", b, readAddr(a)))
 		case OpRet:
 			sb.WriteString("ret " + readAddr(a))
 		case OpYield:

@@ -92,7 +92,12 @@ _postfix_assign:
 
 assign_stat:
         prefix_expr {
-            $$ = $1
+            if $1.isCallStat() {
+                // Single call statement, clear env.V to avoid side effects
+                $$ = __chain($1, popvClearNode)
+            } else {
+                $$ = $1
+            }
         } | 
         postfix_incdec {
             $$ = $1
@@ -120,6 +125,11 @@ assign_stat:
                 } else {
                     $$ = $$.CplAppend(__set(v, $4.CplIndex(i)).SetPos($1.Pos))
                 }
+            }
+
+            if m == 1 && n == 1 && $4.CplIndex(0).isCallStat() {
+                // Single call statement with single assignment, clear env.V to avoid side effects
+                $$ = $$.CplAppend(popvClearNode)
             }
         } |
         declarator_list '=' expr_list {
@@ -157,6 +167,11 @@ assign_stat:
                     $$ = $$.CplAppend(v.moveLoadStore(__move, names[i]).SetPos($2.Pos))
                 }
                 $$ = $$.CplAppend(retaddr)
+            }
+
+            if m == 1 && n == 1 && $3.CplIndex(0).isCallStat() {
+                // Single call statement with single assignment, clear env.V to avoid side effects
+                $$ = __chain($$, popvClearNode)
             }
         } 
 
@@ -272,7 +287,7 @@ func_stat:
             funcname := SymTok($2)
             x := __move
             if $1.Sym().Equals(ASet) {
-                x = __move
+                x = __set
             }
             $$ = __chain(
                 x(funcname, Node{ANil}).SetPos($1.Pos()), 

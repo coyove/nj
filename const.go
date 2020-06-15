@@ -33,7 +33,6 @@ const (
 	OpMakeTable
 	OpLambda
 	OpPush
-	OpPush2
 	OpPushV
 	OpPopV
 	OpCall

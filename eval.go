@@ -108,6 +108,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, resultV []Va
 				for i := range stackEnv.stack {
 					stackEnv.stack[i] = Value{}
 				}
+				stackEnv.stack = stackEnv.stack[:0]
 				recycledStacks = append(recycledStacks, stackEnv)
 			}
 			stackEnv = env
@@ -135,11 +136,7 @@ MAIN:
 			env._set(opa, env._get(opb, K))
 		case OpPushV:
 			if opb != 0 {
-				if cap(env.V) < int(opb) {
-					env.V = make([]Value, 0, opb)
-				} else {
-					env.V = env.V[:0]
-				}
+				env.V = make([]Value, 0, opb)
 			}
 			v := env._get(opa, K)
 			if v.Type() == UPK {
@@ -148,22 +145,27 @@ MAIN:
 				env.V = append(env.V, v)
 			}
 		case OpPopV:
-			if len(env.V) == 0 {
-				if opa == 2 {
+			switch opa {
+			case 3: // popv-clear
+				env.V = nil
+			case 2: // popv-all-and-clear
+				if len(env.V) == 0 {
 					env.A = newUnpackedValue(nil)
 				} else {
+					env.A, env.V = newUnpackedValue(env.V), nil
+				}
+			case 1: // popv
+				if len(env.V) == 0 {
 					env.A = Value{}
-				}
-			} else {
-				if opa == 2 {
-					env.A = newUnpackedValue(env.V)
-					env.V = nil
 				} else {
-					env.A = env.V[0]
-					env.V = env.V[1:]
+					env.A, env.V = env.V[0], env.V[1:]
 				}
-			}
-			if opa == 0 { // this is the last OpPopV
+			case 0: // popv-last-and-clear
+				if len(env.V) == 0 {
+					env.A = Value{}
+				} else {
+					env.A, env.V = env.V[0], env.V[1:]
+				}
 				env.V = nil
 			}
 		case OpInc:
@@ -332,13 +334,13 @@ MAIN:
 			if stackEnv == nil {
 				stackEnv = NewEnv(nil)
 			}
+			// if opb == 0 {
+			// 	if len(stackEnv.stack) > 0 && opb == 0 {
+			// 		log.Println(stackEnv.stack)
+			// 	}
+			// 	stackEnv.stack = stackEnv.stack[:0]
+			// }
 			stackEnv.Push(env._get(opa, K))
-		case OpPush2:
-			if stackEnv == nil {
-				stackEnv = NewEnv(nil)
-			}
-			stackEnv.Push(env._get(opa, K))
-			stackEnv.Push(env._get(opb, K))
 		case OpRet:
 			v := env._get(opa, K)
 			if len(retStack) == 0 {
@@ -352,7 +354,6 @@ MAIN:
 		case OpLambda:
 			env.A = Fun(crReadClosure(K.Code, &cursor, env, opa, opb))
 		case OpCall:
-			env.V = nil
 			var cls *Closure
 			switch a := env._get(opa, K); a.Type() {
 			case FUN:
@@ -361,9 +362,11 @@ MAIN:
 				cls = a.GetMetamethod(M__call).ExpectMsg(FUN, "invoke").Fun()
 				stackEnv.stack = append([]Value{a}, stackEnv.stack...)
 			}
-			if cls.lastenv != nil {
+			if cls.lastenv != nil { // resume yielded coroutine
 				env.A, env.V = cls.Exec(nil)
-				stackEnv = nil
+				if stackEnv != nil {
+					stackEnv.stack = stackEnv.stack[:0]
+				}
 			} else {
 				if stackEnv == nil {
 					stackEnv = NewEnv(env)
@@ -379,13 +382,17 @@ MAIN:
 									panicf("misuse of unpack(...): it should be the last argument")
 								}
 								stackEnv._set(uint16(cls.NumParam), v)
+								// if cls.Is(ClsNative) {
 								stackEnv.V = v._Upk()
+								// }
 								goto VAR_OUT
 							}
 							varg = append(varg, v)
 						}
 						stackEnv._set(uint16(cls.NumParam), newUnpackedValue(varg))
+						// if cls.Is(ClsNative) {
 						stackEnv.V = varg
+						// }
 					} else if !cls.Is(ClsNative) {
 						stackEnv._set(uint16(cls.NumParam), newUnpackedValue(nil))
 					}
@@ -395,6 +402,12 @@ MAIN:
 				if cls.Is(ClsYieldable | ClsNative) {
 					stackEnv.parent = env
 					env.A, env.V = cls.Exec(stackEnv)
+
+					if cls.Is(ClsYieldable) {
+						stackEnv = nil
+					} else {
+						stackEnv.Clear()
+					}
 				} else {
 					last := stacktrace{
 						cls:    K,
@@ -412,17 +425,13 @@ MAIN:
 					if opb == 0 {
 						retStack = append(retStack, last)
 					}
-				}
 
-				if cls.native == nil {
 					if len(recycledStacks) == 0 {
 						stackEnv = nil
 					} else {
 						stackEnv = recycledStacks[len(recycledStacks)-1]
 						recycledStacks = recycledStacks[:len(recycledStacks)-1]
 					}
-				} else {
-					stackEnv.Clear()
 				}
 			}
 

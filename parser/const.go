@@ -24,13 +24,14 @@ var (
 	CPL = interfaceType([]Node{})
 	ADR = interfaceType(uint16(1))
 
-	breakNode   = Cpl(Node{ABreak})
-	popvNode    = Cpl(Node{APopV})
-	popvEndNode = Cpl(Node{APopVEnd})
-	popvAllNode = Cpl(Node{APopVAll})
-	zeroNode    = Num(0)
-	oneNode     = Num(1)
-	emptyNode   = Cpl()
+	breakNode     = Cpl(Node{ABreak})
+	popvNode      = Cpl(Node{APopV})
+	popvEndNode   = Cpl(Node{APopVEnd})
+	popvAllNode   = Cpl(Node{APopVAll})
+	popvClearNode = Cpl(Node{APopVClear})
+	zeroNode      = Num(0)
+	oneNode       = Num(1)
+	emptyNode     = Cpl()
 )
 
 func interfaceType(a interface{}) uintptr {
@@ -79,6 +80,7 @@ var (
 	APopV        = Symbol{Text: "popv"}
 	APopVEnd     = Symbol{Text: "pope"}
 	APopVAll     = Symbol{Text: "popa"}
+	APopVClear   = Symbol{Text: "popc"}
 	ALabel       = Symbol{Text: "lbl"}
 	AGoto        = Symbol{Text: "goto"}
 )

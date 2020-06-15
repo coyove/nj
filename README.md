@@ -8,17 +8,13 @@ potatolang (pol) is a Lua intepreter written in golang. It adapts most features 
     - `for k in (function () yield 1 end) do assert(k == 1)`
     - Thus, there is no `thread` type in pol, because every function is a coroutine
 - You can `goto` anywhere in the function so be careful about uninitialized variables.
-- Multiple assignments have side effects, say `f` returns 3 numbers `1`, `2` and `3`:
-    - `a, b, c = f(); return true -- OK: a == 1 and b == 2 and c == 3, return true`
-    - `a, b = f(); return true    -- Actually returned: true and 3`
-    - `a = f(); return true        -- Actually returned: true, 2 and 3`
-    - `f(); return true        -- Actually returned: true, 2 and 3`
-    - `f(); return true, false        -- OK: return true and false`
 - You can `+=`, `-=`, `*=` and `/=`.
 - Variadic functions are completely different, `...` is actually a valid symbol name, you should treat and use them like Go. The following code won't work as expected (while they can be compiled anyway): 
-    - `return ... -- Returning a single variable '...'`
-    - `(function (a, ...) end)(unpack({a, b})) -- Unpack across fixed and variadic args`
-    - `(function (a, ...) end)(a, b, unpack({c})) -- Unpack not filling up all variadic args`
+    - `return ... -- returning a single variable '...'`
+    - `(function (a, ...) end)(unpack({a, b})) -- unpack across fixed and variadic args`
+    - `(function (a, ...) end)(a, b, unpack({c})) -- unpack not filling up all variadic args`
+    - `print( (function() return 1, 2, 3 end)() ) -- only prints 1`
+        - You
     - `{...}` will create a copy of `...`, for performance reason, you should:
         - `#...`, `...[index]` and `...[index] = value`
         - `pack(...)` will create a table using varargs directly as its underlay

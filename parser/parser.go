@@ -132,7 +132,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line parser.go.y:397
+//line parser.go.y:412
 
 //line yacctab:1
 var yyExca = [...]int{
@@ -857,17 +857,22 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line parser.go.y:94
 		{
-			yyVAL.expr = yyDollar[1].expr
+			if yyDollar[1].expr.isCallStat() {
+				// Single call statement, clear env.V to avoid side effects
+				yyVAL.expr = __chain(yyDollar[1].expr, popvClearNode)
+			} else {
+				yyVAL.expr = yyDollar[1].expr
+			}
 		}
 	case 17:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:97
+//line parser.go.y:102
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 18:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:100
+//line parser.go.y:105
 		{
 			yyVAL.expr = __chain()
 			for _, v := range yyDollar[2].expr.Cpl() {
@@ -876,7 +881,7 @@ yydefault:
 		}
 	case 19:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line parser.go.y:106
+//line parser.go.y:111
 		{
 			m, n := len(yyDollar[2].expr.Cpl()), len(yyDollar[4].expr.Cpl())
 			for i, count := 0, m-n; i < count; i++ {
@@ -895,10 +900,15 @@ yydefault:
 					yyVAL.expr = yyVAL.expr.CplAppend(__set(v, yyDollar[4].expr.CplIndex(i)).SetPos(yyDollar[1].token.Pos))
 				}
 			}
+
+			if m == 1 && n == 1 && yyDollar[4].expr.CplIndex(0).isCallStat() {
+				// Single call statement with single assignment, clear env.V to avoid side effects
+				yyVAL.expr = yyVAL.expr.CplAppend(popvClearNode)
+			}
 		}
 	case 20:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:125
+//line parser.go.y:135
 		{
 			nodes := yyDollar[1].expr.Cpl()
 			m, n := len(nodes), len(yyDollar[3].expr.Cpl())
@@ -935,35 +945,40 @@ yydefault:
 				}
 				yyVAL.expr = yyVAL.expr.CplAppend(retaddr)
 			}
+
+			if m == 1 && n == 1 && yyDollar[3].expr.CplIndex(0).isCallStat() {
+				// Single call statement with single assignment, clear env.V to avoid side effects
+				yyVAL.expr = __chain(yyVAL.expr, popvClearNode)
+			}
 		}
 	case 21:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:164
+//line parser.go.y:179
 		{
 			yyVAL.expr = __move(SymTok(yyDollar[1].token), Cpl(yyDollar[2].expr, SymTok(yyDollar[1].token), yyDollar[3].expr)).SetPos(yyDollar[2].expr.Pos())
 		}
 	case 22:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line parser.go.y:167
+//line parser.go.y:182
 		{
 			yyVAL.expr = __store(yyDollar[1].expr, yyDollar[3].expr, Cpl(yyDollar[5].expr, __load(yyDollar[1].expr, yyDollar[3].expr), yyDollar[6].expr).SetPos(yyDollar[5].expr.Pos()))
 		}
 	case 23:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:170
+//line parser.go.y:185
 		{
 			i := Node{yyDollar[3].token.Str}
 			yyVAL.expr = __store(yyDollar[1].expr, i, Cpl(yyDollar[4].expr, __load(yyDollar[1].expr, i), yyDollar[5].expr).SetPos(yyDollar[4].expr.Pos()))
 		}
 	case 24:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:176
+//line parser.go.y:191
 		{
 			yyVAL.expr = __loop(__if(yyDollar[2].expr, yyDollar[4].expr, breakNode).SetPos(yyDollar[1].token.Pos)).SetPos(yyDollar[1].token.Pos)
 		}
 	case 25:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line parser.go.y:179
+//line parser.go.y:194
 		{
 			yyVAL.expr = __loop(
 				__chain(
@@ -974,13 +989,13 @@ yydefault:
 		}
 	case 26:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line parser.go.y:187
+//line parser.go.y:202
 		{
 			yyVAL.expr = forLoop(yyDollar[1].token.Pos, yyDollar[2].expr.Cpl(), yyDollar[4].expr.Cpl(), yyDollar[6].expr)
 		}
 	case 27:
 		yyDollar = yyS[yypt-9 : yypt+1]
-//line parser.go.y:190
+//line parser.go.y:205
 		{
 			forVar, forEnd := SymTok(yyDollar[2].token), randomVarname()
 			yyVAL.expr = __do(
@@ -997,7 +1012,7 @@ yydefault:
 		}
 	case 28:
 		yyDollar = yyS[yypt-11 : yypt+1]
-//line parser.go.y:204
+//line parser.go.y:219
 		{
 			forVar, forEnd := SymTok(yyDollar[2].token), randomVarname()
 			if yyDollar[8].expr.Type() == NUM { // step is a static number, easy case
@@ -1045,48 +1060,48 @@ yydefault:
 		}
 	case 29:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line parser.go.y:251
+//line parser.go.y:266
 		{
 			yyVAL.expr = __if(yyDollar[2].expr, yyDollar[4].expr, yyDollar[5].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 30:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line parser.go.y:256
+//line parser.go.y:271
 		{
 			yyVAL.expr = Cpl()
 		}
 	case 31:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:259
+//line parser.go.y:274
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 32:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:262
+//line parser.go.y:277
 		{
 			yyVAL.expr = __if(yyDollar[2].expr, yyDollar[4].expr, yyDollar[5].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 33:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:267
+//line parser.go.y:282
 		{
 			yyVAL.expr = Node{AMove}.SetPos(yyDollar[1].token.Pos)
 		}
 	case 34:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:268
+//line parser.go.y:283
 		{
 			yyVAL.expr = Node{ASet}.SetPos(yyDollar[1].token.Pos)
 		}
 	case 35:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:271
+//line parser.go.y:286
 		{
 			funcname := SymTok(yyDollar[2].token)
 			x := __move
 			if yyDollar[1].expr.Sym().Equals(ASet) {
-				x = __move
+				x = __set
 			}
 			yyVAL.expr = __chain(
 				x(funcname, Node{ANil}).SetPos(yyDollar[1].expr.Pos()),
@@ -1095,13 +1110,13 @@ yydefault:
 		}
 	case 36:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line parser.go.y:282
+//line parser.go.y:297
 		{
 			yyVAL.expr = __store(yyDollar[2].expr, Node{yyDollar[4].token.Str}, __func(yyDollar[5].expr, yyDollar[6].expr).SetPos(yyDollar[1].expr.Pos())).SetPos(yyDollar[1].expr.Pos())
 		}
 	case 37:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line parser.go.y:285
+//line parser.go.y:300
 		{
 			paramlist := yyDollar[5].expr.CplPrepend(Sym("self"))
 			yyVAL.expr = __store(
@@ -1110,67 +1125,67 @@ yydefault:
 		}
 	case 38:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line parser.go.y:293
+//line parser.go.y:308
 		{
 			yyVAL.expr = __func(yyDollar[2].expr, yyDollar[3].expr).SetPos(yyDollar[1].expr.Pos()).SetPos(yyDollar[1].expr.Pos())
 		}
 	case 39:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:298
+//line parser.go.y:313
 		{
 			yyVAL.expr = Cpl()
 		}
 	case 40:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:299
+//line parser.go.y:314
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 41:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:302
+//line parser.go.y:317
 		{
 			yyVAL.expr = Cpl(Node{AYield}, yyDollar[2].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 42:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:303
+//line parser.go.y:318
 		{
 			yyVAL.expr = Cpl(Node{AYield}, emptyNode).SetPos(yyDollar[1].token.Pos)
 		}
 	case 43:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:304
+//line parser.go.y:319
 		{
 			yyVAL.expr = Cpl(Node{ABreak}).SetPos(yyDollar[1].token.Pos)
 		}
 	case 44:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:305
+//line parser.go.y:320
 		{
 			yyVAL.expr = __move(Sym(moduleNameFromPath(yyDollar[2].token.Str)), yylex.(*Lexer).loadFile(joinSourcePath(yyDollar[1].token.Pos.Source, yyDollar[2].token.Str))).SetPos(yyDollar[1].token.Pos)
 		}
 	case 45:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:306
+//line parser.go.y:321
 		{
 			yyVAL.expr = Cpl(Node{AGoto}, SymTok(yyDollar[2].token)).SetPos(yyDollar[1].token.Pos)
 		}
 	case 46:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:307
+//line parser.go.y:322
 		{
 			yyVAL.expr = Cpl(Node{ALabel}, SymTok(yyDollar[2].token))
 		}
 	case 47:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:308
+//line parser.go.y:323
 		{
 			yyVAL.expr = Cpl(Node{AReturn}, emptyNode).SetPos(yyDollar[1].token.Pos)
 		}
 	case 48:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:309
+//line parser.go.y:324
 		{
 			if len(yyDollar[2].expr.Cpl()) == 1 {
 				x := yyDollar[2].expr.CplIndex(0)
@@ -1184,337 +1199,337 @@ yydefault:
 		}
 	case 49:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:322
+//line parser.go.y:337
 		{
 			yyVAL.expr = SymTok(yyDollar[1].token)
 		}
 	case 50:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line parser.go.y:323
+//line parser.go.y:338
 		{
 			yyVAL.expr = __load(yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos) /* (10)[0] is valid if number has metamethod */
 		}
 	case 51:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:324
+//line parser.go.y:339
 		{
 			yyVAL.expr = __load(yyDollar[1].expr, Node{yyDollar[3].token.Str}).SetPos(yyDollar[2].token.Pos)
 		}
 	case 52:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:327
+//line parser.go.y:342
 		{
 			yyVAL.expr = Cpl(yyDollar[1].expr)
 		}
 	case 53:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:328
+//line parser.go.y:343
 		{
 			yyVAL.expr = yyDollar[1].expr.CplAppend(yyDollar[3].expr)
 		}
 	case 54:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:331
+//line parser.go.y:346
 		{
 			yyVAL.expr = Cpl(SymTok(yyDollar[1].token))
 		}
 	case 55:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:332
+//line parser.go.y:347
 		{
 			yyVAL.expr = yyDollar[1].expr.CplAppend(SymTok(yyDollar[3].token))
 		}
 	case 56:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:335
+//line parser.go.y:350
 		{
 			yyVAL.expr = SymTok(yyDollar[1].token)
 		}
 	case 57:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:336
+//line parser.go.y:351
 		{
 			yyVAL.expr = __load(yyDollar[1].expr, Node{yyDollar[3].token.Str}).SetPos(yyDollar[1].expr.Pos())
 		}
 	case 58:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:339
+//line parser.go.y:354
 		{
 			yyVAL.expr = Num(yyDollar[1].token.Str)
 		}
 	case 59:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:340
+//line parser.go.y:355
 		{
 			yyVAL.expr = yylex.(*Lexer).loadFile(joinSourcePath(yyDollar[1].token.Pos.Source, yyDollar[2].token.Str))
 		}
 	case 60:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:341
+//line parser.go.y:356
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 61:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:342
+//line parser.go.y:357
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 62:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:343
+//line parser.go.y:358
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 63:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:344
+//line parser.go.y:359
 		{
 			yyVAL.expr = Node{yyDollar[1].token.Str}
 		}
 	case 64:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:345
+//line parser.go.y:360
 		{
 			yyVAL.expr = Cpl(Node{AOr}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 65:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:346
+//line parser.go.y:361
 		{
 			yyVAL.expr = Cpl(Node{AAnd}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 66:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:347
+//line parser.go.y:362
 		{
 			yyVAL.expr = Cpl(Node{ALess}, yyDollar[3].expr, yyDollar[1].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 67:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:348
+//line parser.go.y:363
 		{
 			yyVAL.expr = Cpl(Node{ALess}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 68:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:349
+//line parser.go.y:364
 		{
 			yyVAL.expr = Cpl(Node{ALessEq}, yyDollar[3].expr, yyDollar[1].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 69:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:350
+//line parser.go.y:365
 		{
 			yyVAL.expr = Cpl(Node{ALessEq}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 70:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:351
+//line parser.go.y:366
 		{
 			yyVAL.expr = Cpl(Node{AEq}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 71:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:352
+//line parser.go.y:367
 		{
 			yyVAL.expr = Cpl(Node{ANeq}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 72:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:353
+//line parser.go.y:368
 		{
 			yyVAL.expr = Cpl(Node{AAdd}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 73:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:354
+//line parser.go.y:369
 		{
 			yyVAL.expr = Cpl(Node{AConcat}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 74:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:355
+//line parser.go.y:370
 		{
 			yyVAL.expr = Cpl(Node{ASub}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 75:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:356
+//line parser.go.y:371
 		{
 			yyVAL.expr = Cpl(Node{AMul}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 76:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:357
+//line parser.go.y:372
 		{
 			yyVAL.expr = Cpl(Node{ADiv}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 77:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:358
+//line parser.go.y:373
 		{
 			yyVAL.expr = Cpl(Node{AMod}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 78:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:359
+//line parser.go.y:374
 		{
 			yyVAL.expr = Cpl(Node{APow}, yyDollar[1].expr, yyDollar[3].expr).SetPos(yyDollar[2].token.Pos)
 		}
 	case 79:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:360
+//line parser.go.y:375
 		{
 			yyVAL.expr = Cpl(Node{ASub}, zeroNode, yyDollar[2].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 80:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:361
+//line parser.go.y:376
 		{
 			yyVAL.expr = Cpl(Node{ANot}, yyDollar[2].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 81:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:362
+//line parser.go.y:377
 		{
 			yyVAL.expr = Cpl(Node{ALen}, yyDollar[2].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 82:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:365
+//line parser.go.y:380
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 83:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:366
+//line parser.go.y:381
 		{
 			yyVAL.expr = __call(yyDollar[1].expr, Cpl(Node{yyDollar[2].token.Str})).SetPos(yyDollar[1].expr.Pos())
 		}
 	case 84:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line parser.go.y:367
+//line parser.go.y:382
 		{
 			yyVAL.expr = __call(__load(SymTok(yyDollar[1].token), Node{yyDollar[3].token.Str}).SetPos(yyDollar[1].token.Pos), yyDollar[4].expr.CplPrepend(SymTok(yyDollar[1].token))).SetPos(yyDollar[1].token.Pos)
 		}
 	case 85:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:368
+//line parser.go.y:383
 		{
 			yyVAL.expr = __call(yyDollar[1].expr, yyDollar[2].expr).SetPos(yyDollar[1].expr.Pos())
 		}
 	case 86:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:369
+//line parser.go.y:384
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 87:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:372
+//line parser.go.y:387
 		{
 			yyVAL.expr = Cpl(yyDollar[1].expr)
 		}
 	case 88:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:373
+//line parser.go.y:388
 		{
 			yyVAL.expr = yyDollar[1].expr.CplAppend(yyDollar[3].expr)
 		}
 	case 89:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:376
+//line parser.go.y:391
 		{
 			yyVAL.expr = Cpl()
 		}
 	case 90:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:377
+//line parser.go.y:392
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 91:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:378
+//line parser.go.y:393
 		{
 			yyVAL.expr = Cpl(yyDollar[1].expr)
 		}
 	case 92:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:381
+//line parser.go.y:396
 		{
 			yyVAL.expr = Cpl(Node{yyDollar[1].token.Str}, yyDollar[3].expr)
 		}
 	case 93:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:382
+//line parser.go.y:397
 		{
 			yyVAL.expr = Cpl(yyDollar[2].expr, yyDollar[5].expr)
 		}
 	case 94:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:383
+//line parser.go.y:398
 		{
 			yyVAL.expr = yyDollar[1].expr.CplAppend(Node{yyDollar[3].token.Str}, yyDollar[5].expr)
 		}
 	case 95:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line parser.go.y:384
+//line parser.go.y:399
 		{
 			yyVAL.expr = yyDollar[1].expr.CplAppend(yyDollar[4].expr, yyDollar[7].expr)
 		}
 	case 96:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:387
+//line parser.go.y:402
 		{
 			yyVAL.expr = Cpl(Node{AArray}, emptyNode).SetPos(yyDollar[1].token.Pos)
 		}
 	case 97:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:388
+//line parser.go.y:403
 		{
 			yyVAL.expr = Cpl(Node{AHash}, yyDollar[2].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 98:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line parser.go.y:389
+//line parser.go.y:404
 		{
 			yyVAL.expr = Cpl(Node{AHash}, yyDollar[2].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 99:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:390
+//line parser.go.y:405
 		{
 			yyVAL.expr = Cpl(Node{AHashArray}, yyDollar[2].expr, yyDollar[4].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 100:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line parser.go.y:391
+//line parser.go.y:406
 		{
 			yyVAL.expr = Cpl(Node{AHashArray}, yyDollar[2].expr, yyDollar[4].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 101:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:392
+//line parser.go.y:407
 		{
 			yyVAL.expr = Cpl(Node{AArray}, yyDollar[2].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 102:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:393
+//line parser.go.y:408
 		{
 			yyVAL.expr = Cpl(Node{AHashArray}, yyDollar[4].expr, yyDollar[2].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 103:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line parser.go.y:394
+//line parser.go.y:409
 		{
 			yyVAL.expr = Cpl(Node{AHashArray}, yyDollar[4].expr, yyDollar[2].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 104:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line parser.go.y:395
+//line parser.go.y:410
 		{
 			yyVAL.expr = Cpl(Node{AArray}, yyDollar[2].expr).SetPos(yyDollar[1].token.Pos)
 		}

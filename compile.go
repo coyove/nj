@@ -205,25 +205,26 @@ func (table *symtable) loadK(v interface{}) uint16 {
 }
 
 var flatOpMapping = map[string]_Opcode{
-	parser.AAdd.Text:     OpAdd,
-	parser.AConcat.Text:  OpConcat,
-	parser.ASub.Text:     OpSub,
-	parser.AMul.Text:     OpMul,
-	parser.ADiv.Text:     OpDiv,
-	parser.AMod.Text:     OpMod,
-	parser.ALess.Text:    OpLess,
-	parser.ALessEq.Text:  OpLessEq,
-	parser.AEq.Text:      OpEq,
-	parser.ANeq.Text:     OpNeq,
-	parser.ANot.Text:     OpNot,
-	parser.APow.Text:     OpPow,
-	parser.AStore.Text:   OpStore,
-	parser.ALoad.Text:    OpLoad,
-	parser.ALen.Text:     OpLen,
-	parser.AInc.Text:     OpInc,
-	parser.APopV.Text:    OpEOB, // special
-	parser.APopVEnd.Text: OpEOB, // special
-	parser.APopVAll.Text: OpEOB, // special
+	parser.AAdd.Text:       OpAdd,
+	parser.AConcat.Text:    OpConcat,
+	parser.ASub.Text:       OpSub,
+	parser.AMul.Text:       OpMul,
+	parser.ADiv.Text:       OpDiv,
+	parser.AMod.Text:       OpMod,
+	parser.ALess.Text:      OpLess,
+	parser.ALessEq.Text:    OpLessEq,
+	parser.AEq.Text:        OpEq,
+	parser.ANeq.Text:       OpNeq,
+	parser.ANot.Text:       OpNot,
+	parser.APow.Text:       OpPow,
+	parser.AStore.Text:     OpStore,
+	parser.ALoad.Text:      OpLoad,
+	parser.ALen.Text:       OpLen,
+	parser.AInc.Text:       OpInc,
+	parser.APopV.Text:      OpEOB, // special
+	parser.APopVEnd.Text:   OpEOB, // special
+	parser.APopVAll.Text:   OpEOB, // special
+	parser.APopVClear.Text: OpEOB, // special
 }
 
 func (table *symtable) writeOpcode(op _Opcode, n0, n1 parser.Node) {

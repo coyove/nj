@@ -67,7 +67,6 @@ func (table *symtable) compileRetOp(atoms []parser.Node) uint16 {
 
 	values := atoms[1].Cpl()
 	if len(values) == 0 { // return
-		table.code.WriteOP(OpPopV, 0, 0) // clear env.V in case of side effects
 		table.code.WriteOP(op, regNil, 0)
 		return regA
 	}
@@ -95,12 +94,8 @@ func (table *symtable) compileHashArrayOp(atoms []parser.Node) uint16 {
 		table.collapse(atoms[1].Cpl(), true)
 
 		args := atoms[1].Cpl()
-		for i := 0; i < len(args); i += 2 {
-			if i+1 >= len(args) {
-				table.writeOpcode(OpPush, args[i], parser.Node{})
-			} else {
-				table.writeOpcode(OpPush2, args[i], args[i+1])
-			}
+		for i := 0; i < len(args); i++ {
+			table.writeOpcode(OpPush, args[i], parser.Node{uint16(i)})
 		}
 
 		table.returnAddresses(args)
@@ -109,18 +104,14 @@ func (table *symtable) compileHashArrayOp(atoms []parser.Node) uint16 {
 		table.collapse(atoms[2].Cpl(), false)
 
 		arrayElements := atoms[2].Cpl()
-		for i := 0; i < len(arrayElements); i += 2 {
-			if i+1 >= len(arrayElements) {
-				table.writeOpcode(OpPush, arrayElements[i], parser.Node{})
-			} else {
-				table.writeOpcode(OpPush2, arrayElements[i], arrayElements[i+1])
-			}
+		for i := 0; i < len(arrayElements); i++ {
+			table.writeOpcode(OpPush, arrayElements[i], parser.Node{uint16(i)})
 		}
 		table.code.WriteOP(OpMakeTable, 2, 0)
 
 		hashElements := atoms[1].Cpl()
-		for i := 0; i < len(hashElements); i += 2 {
-			table.writeOpcode(OpPush2, hashElements[i], hashElements[i+1])
+		for i := 0; i < len(hashElements); i++ {
+			table.writeOpcode(OpPush, hashElements[i], parser.Node{uint16(i)})
 		}
 		table.code.WriteOP(OpMakeTable, 3, 0)
 		table.code.WritePos(atoms[0].Pos())
@@ -189,6 +180,9 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []parser.Node) uint16 {
 func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
 	head := atoms[0].Value.(parser.Symbol)
 	switch head.Text {
+	case parser.APopVClear.Text:
+		table.code.WriteOP(OpPopV, 3, 0)
+		return regA
 	case parser.APopVAll.Text:
 		table.code.WriteOP(OpPopV, 2, 0)
 		return regA
@@ -269,12 +263,8 @@ func (table *symtable) compileCallOp(nodes []parser.Node) uint16 {
 	tmp := append([]parser.Node{nodes[1]}, nodes[2].Cpl()...)
 	table.collapse(tmp, true)
 
-	for i := 1; i < len(tmp); i += 2 {
-		if i+1 >= len(tmp) {
-			table.writeOpcode(OpPush, tmp[i], parser.Node{})
-		} else {
-			table.writeOpcode(OpPush2, tmp[i], tmp[i+1])
-		}
+	for i := 1; i < len(tmp); i++ {
+		table.writeOpcode(OpPush, tmp[i], parser.Node{uint16(i - 1)})
 	}
 
 	var opb uint16

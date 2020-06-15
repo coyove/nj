@@ -1,6 +1,37 @@
 -- $Id: testes/vararg.lua $
 -- See Copyright Notice in file all.lua
 
+function foo(n)
+    local function foo()
+        return 1, 2, 3
+    end
+
+    if n == 1 then
+        foo()
+        return true
+    elseif n == 2 then
+        a = foo()
+        return true
+    elseif n == 3 then
+        local a = foo()
+        return true
+    elseif n == 4 then
+        local a, b = foo()
+        return true, b
+    end
+end
+
+do
+    local a, ... = foo(1)
+    assert(a and #... == 0)
+    local a, ... = foo(2)
+    assert(a and #... == 0)
+    local a, ... = foo(3)
+    assert(a and #... == 0)
+    local a, ... = foo(4)
+    assert(a and ...[1] == 2)
+end
+
 call(print, unpack({'testing vararg'}))
 
 function getex(f, ...)
