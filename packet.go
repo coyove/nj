@@ -355,6 +355,8 @@ MAIN:
 				sb.WriteString("$a = popv-all")
 			case 3:
 				sb.WriteString("popv-clear")
+			case 4:
+				sb.WriteString("$a = popv-all-with-a")
 			}
 		case OpPushV:
 			sb.WriteString("pushv " + readAddr(a))
@@ -362,7 +364,10 @@ MAIN:
 				sb.WriteString(" cap=" + strconv.Itoa(int(b)))
 			}
 		case OpPush:
-			sb.WriteString(fmt.Sprintf("push%d %v", b, readAddr(a)))
+			sb.WriteString(fmt.Sprintf("push-%d %v", b, readAddr(a)))
+			if a == regA {
+				sb.WriteString(" $v")
+			}
 		case OpRet:
 			sb.WriteString("ret " + readAddr(a))
 		case OpYield:

@@ -17,6 +17,7 @@ var (
 	M__mod       = Str("__mod")
 	M__pow       = Str("__pow")
 	M__call      = Str("__call")
+	M__ipairs    = Str("__ipairs")
 
 	nilMetatable *Table
 	blnMetatable *Table
@@ -27,10 +28,10 @@ var (
 )
 
 func init() {
-	strMetatable = (&Table{}).Puts("sub", NativeFun(2, func(env *Env) {
+	strMetatable = (&Table{}).Puts("sub", NativeFun(func(env *Env) {
 		i, j, s := int(env.In(1, NUM).Num()), -1, env.In(0, STR).Str()
-		if len(env.V) > 0 {
-			j = int(env.V[0].Expect(NUM).Num())
+		if len(env.stack) > 2 {
+			j = int(env.Get(2).Expect(NUM).Num())
 		}
 		if i < 0 {
 			i = len(s) + i + 1
@@ -100,4 +101,12 @@ func (v Value) SetMetatable(mt *Table) {
 	default:
 		panic("corrupted value")
 	}
+}
+
+func findmm(a, b Value, name Value) Value {
+	m := a.GetMetamethod(name)
+	if m.IsNil() {
+		return b.GetMetamethod(name)
+	}
+	return m
 }

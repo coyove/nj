@@ -180,6 +180,9 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []parser.Node) uint16 {
 func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
 	head := atoms[0].Value.(parser.Symbol)
 	switch head.Text {
+	case parser.APopVAllA.Text:
+		table.code.WriteOP(OpPopV, 4, 0)
+		return regA
 	case parser.APopVClear.Text:
 		table.code.WriteOP(OpPopV, 3, 0)
 		return regA

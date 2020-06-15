@@ -37,7 +37,7 @@ func runFile(t *testing.T, path string) {
 		//t.Log(b.PrettyString())
 	}
 
-	i, i2 := b.Exec(nil)
+	i, i2 := b.exec(nil)
 	t.Log(i, i2)
 }
 
@@ -93,7 +93,7 @@ func TestArithmeticUnfold(t *testing.T) {
 		t.Error("unfolding failed")
 	}
 
-	if v, _ := cls.Exec(nil); v.Num() != 2.5 {
+	if v, _ := cls.exec(nil); v.Num() != 2.5 {
 		t.Error("exec failed")
 	}
 }
@@ -120,7 +120,7 @@ func TestRegisterOptimzation(t *testing.T) {
 	// But after the if block, there is another c = a + b, we can't re-use the registers R0 and R1
 	// because they will not contain the value we want as the if block was not executed at all.
 
-	if n, _ := cls.Exec(nil); n.Num() != 3 {
+	if n, _ := cls.exec(nil); n.Num() != 3 {
 		t.Error("exec failed:", n, cls)
 	}
 }
@@ -133,7 +133,7 @@ func TestArithmeticNAN(t *testing.T) {
 		t.Error(err)
 	}
 
-	if v, _ := cls.Exec(nil); !math.IsNaN(v.Num()) {
+	if v, _ := cls.exec(nil); !math.IsNaN(v.Num()) {
 		t.Error("wrong answer")
 	}
 }
@@ -268,6 +268,6 @@ func BenchmarkReturnClosure(b *testing.B) {
 	l := cls.lastenv
 	for i := 0; i < b.N; i++ {
 		cls.lastenv = l
-		cls.Exec(nil)
+		cls.exec(nil)
 	}
 }

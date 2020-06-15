@@ -33,8 +33,8 @@ local function curry(f)
         
         if (__remain > 0) then return __f end
 
-        local _, r = pcall(f, unpack(__args))
-        return r
+        local _, ... = pcall(f, unpack(__args))
+        return ...
     end
     return __f
 end

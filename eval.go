@@ -51,8 +51,40 @@ func kodeaddr(code []uint32) uintptr { return (*reflect.SliceHeader)(unsafe.Poin
 
 func konstaddr(consts []Value) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&consts)).Data }
 
-// ExecCursor executes 'K' under 'Env' from the given start 'cursor'
-func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, resultV []Value, nextCursor uint32, yielded bool) {
+func returnVararg(a Value, b []Value) (Value, []Value) {
+	if len(b) == 0 {
+		if a.Type() == UPK {
+			u := a._Upk()
+			if len(u) == 0 {
+				return Value{}, nil
+			}
+			return u[0], u[1:]
+		}
+		return a, nil
+	}
+
+	count, flag := a._TestUpkLen()
+	for _, b := range b {
+		c, f := b._TestUpkLen()
+		count, f = count+c, flag || f
+	}
+	if !flag { // both 'a' and 'b' are not (neither containing) unpacked values
+		return a, b
+	}
+
+	b2 := make([]Value, 0, count)
+	b2 = a._AppendTo(b2)
+	for _, v := range b {
+		b2 = v._AppendTo(b2)
+	}
+	if len(b2) == 0 {
+		return Value{}, nil
+	}
+	return b2[0], b2[1:]
+}
+
+// execCursorLoop executes 'K' under 'Env' from the given start 'cursor'
+func execCursorLoop(env *Env, K *Closure, cursor uint32) (result Value, resultV []Value, nextCursor uint32, yielded bool) {
 	var stackEnv *Env
 	var retStack []stacktrace
 	var recycledStacks []*Env
@@ -100,8 +132,7 @@ func ExecCursor(env *Env, K *Closure, cursor uint32) (result Value, resultV []Va
 		r := retStack[len(retStack)-1]
 		cursor = r.cursor
 		K = r.cls
-		r.env.A = v
-		r.env.V = env.V
+		r.env.A, r.env.V = returnVararg(v, env.V)
 		caddr = kodeaddr(K.Code)
 		if r.cls.Is(ClsNoEnvescape) {
 			if stackEnv != nil {
@@ -125,7 +156,6 @@ MAIN:
 		//		panicf("canceled")
 		//	}
 		v := *(*uint32)(unsafe.Pointer(uintptr(cursor)*4 + caddr))
-		//v := K.Code[cursor]
 		cursor++
 		bop, opa, opb := op(v)
 
@@ -138,14 +168,15 @@ MAIN:
 			if opb != 0 {
 				env.V = make([]Value, 0, opb)
 			}
-			v := env._get(opa, K)
-			if v.Type() == UPK {
-				env.V = append(env.V, v._Upk()...)
-			} else {
-				env.V = append(env.V, v)
-			}
+			env.V = append(env.V, env._get(opa, K))
 		case OpPopV:
 			switch opa {
+			case 4: // popv-all-with-a
+				if env.A.IsNil() {
+					env.A, env.V = newUnpackedValue(env.V), nil
+				} else {
+					env.A, env.V = newUnpackedValue(append([]Value{env.A}, env.V...)), nil
+				}
 			case 3: // popv-clear
 				env.V = nil
 			case 2: // popv-all-and-clear
@@ -176,42 +207,42 @@ MAIN:
 			case StrStr:
 				env.A = Str(va.Str() + vb.Str())
 			default:
-				env.A, env.V = findmm(va, vb, M__concat).ExpectMsg(FUN, "operator ..").Fun().Call(va, vb)
+				env.A, _ = findmm(va, vb, M__concat).ExpectMsg(FUN, "metamethod operator ..").Fun().Call(va, vb)
 			}
 		case OpAdd:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case NumNum:
 				env.A = Num(va.Num() + vb.Num())
 			default:
-				env.A, env.V = findmm(va, vb, M__add).ExpectMsg(FUN, "operator +").Fun().Call(va, vb)
+				env.A, _ = findmm(va, vb, M__add).ExpectMsg(FUN, "metamethod operator +").Fun().Call(va, vb)
 			}
 		case OpSub:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case NumNum:
 				env.A = Num(va.Num() - vb.Num())
 			default:
-				env.A, env.V = findmm(va, vb, M__sub).ExpectMsg(FUN, "operator -").Fun().Call(va, vb)
+				env.A, _ = findmm(va, vb, M__sub).ExpectMsg(FUN, "metamethod operator -").Fun().Call(va, vb)
 			}
 		case OpMul:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case NumNum:
 				env.A = Num(va.Num() * vb.Num())
 			default:
-				env.A, env.V = findmm(va, vb, M__mul).ExpectMsg(FUN, "operator *").Fun().Call(va, vb)
+				env.A, _ = findmm(va, vb, M__mul).ExpectMsg(FUN, "metamethod operator *").Fun().Call(va, vb)
 			}
 		case OpDiv:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case NumNum:
 				env.A = Num(va.Num() / vb.Num())
 			default:
-				env.A, env.V = findmm(va, vb, M__div).ExpectMsg(FUN, "operator /").Fun().Call(va, vb)
+				env.A, _ = findmm(va, vb, M__div).ExpectMsg(FUN, "metamethod operator /").Fun().Call(va, vb)
 			}
 		case OpMod:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case NumNum:
 				env.A = Num(math.Remainder(va.Num(), vb.Num()))
 			default:
-				env.A, env.V = findmm(va, vb, M__mod).ExpectMsg(FUN, "operator %").Fun().Call(va, vb)
+				env.A, _ = findmm(va, vb, M__mod).ExpectMsg(FUN, "metamethod operator %").Fun().Call(va, vb)
 			}
 		case OpEq:
 			env.A = Bln(env._get(opa, K).Equal(env._get(opb, K)))
@@ -224,7 +255,7 @@ MAIN:
 			case StrStr:
 				env.A = Bln(va.Str() < vb.Str())
 			default:
-				env.A, env.V = findmm(va, vb, M__lt).ExpectMsg(FUN, "operator <").Fun().Call(va, vb)
+				env.A, _ = findmm(va, vb, M__lt).ExpectMsg(FUN, "metamethod operator <").Fun().Call(va, vb)
 			}
 		case OpLessEq:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
@@ -233,7 +264,7 @@ MAIN:
 			case StrStr:
 				env.A = Bln(va.Str() <= vb.Str())
 			default:
-				env.A, env.V = findmm(va, vb, M__le).ExpectMsg(FUN, "operator <=").Fun().Call(va, vb)
+				env.A, _ = findmm(va, vb, M__le).ExpectMsg(FUN, "metamethod operator <=").Fun().Call(va, vb)
 			}
 		case OpNot:
 			env.A = Bln(env._get(opa, K).IsFalse())
@@ -242,40 +273,40 @@ MAIN:
 			case NumNum:
 				env.A = Num(math.Pow(va.Num(), vb.Num()))
 			default:
-				env.A, env.V = findmm(va, vb, M__pow).ExpectMsg(FUN, "operator ^").Fun().Call(va, vb)
+				env.A, _ = findmm(va, vb, M__pow).ExpectMsg(FUN, "metamethod operator ^").Fun().Call(va, vb)
 			}
 		case OpLen:
 			switch v := env._get(opa, K); v.Type() {
 			case STR:
 				if f := v.GetMetamethod(M__len); f.Type() == FUN {
-					env.A, env.V = f.Fun().Call(v)
+					env.A, _ = f.Fun().Call(v)
 				} else {
 					env.A = Num(float64(len(v.Str())))
 				}
 			case TAB:
 				t := v.Tab()
 				if l := t.mt.RawGet(M__len); l.Type() == FUN {
-					env.A, env.V = l.Fun().Call(v)
+					env.A, _ = l.Fun().Call(v)
 				} else {
 					env.A = Num(float64(t.Len()))
 				}
 			case FUN:
 				if f := v.GetMetamethod(M__len); f.Type() == FUN {
-					env.A, env.V = f.Fun().Call(v)
+					env.A, _ = f.Fun().Call(v)
 				} else {
 					env.A = Num(float64(v.Fun().NumParam))
 				}
 			case UPK:
 				env.A = Num(float64(len(v._Upk())))
 			default:
-				env.A, env.V = v.GetMetamethod(M__len).ExpectMsg(FUN, "operator #").Fun().Call(v)
+				env.A, _ = v.GetMetamethod(M__len).ExpectMsg(FUN, "metamethod operator #").Fun().Call(v)
 			}
 		case OpMakeTable:
 			if stackEnv == nil {
 				env.A = Tab(&Table{})
 			} else {
 				switch opa {
-				case 1, 3:
+				case 1, 3: // 1: make hash; 3: make hash part of the table stored in $a
 					var m *Table
 					if opa == 3 {
 						m = env.A.Tab()
@@ -287,15 +318,8 @@ MAIN:
 					}
 					stackEnv.Clear()
 					env.A = Tab(m)
-				case 2:
-					m := &Table{a: make([]Value, 0, len(stackEnv.stack))}
-					for _, v := range stackEnv.stack {
-						if v.Type() == UPK {
-							m.a = append(m.a, v._Upk()...)
-						} else {
-							m.a = append(m.a, v)
-						}
-					}
+				case 2: // 2: make array
+					m := &Table{a: append([]Value{}, stackEnv.stack...)}
 					stackEnv.Clear()
 					env.A = Tab(m)
 				}
@@ -306,19 +330,9 @@ MAIN:
 			case TAB:
 				subject.Tab().Put(env.A, v)
 			case UPK:
-				subject._Upk()[int(env.A.ExpectMsg(NUM, "load").Num())-1] = v
-			case NIL:
-				switch env.A.Type() {
-				case NUM:
-					x := math.Float64bits(env.A.Num())
-					(*Env)(unsafe.Pointer(uintptr(x<<16>>16)))._set(uint16(x>>48), v)
-				case NIL:
-					// ignore
-				default:
-					panicf("%#v: address[] = value, not an address", env.A)
-				}
+				subject._Upk()[int(env.A.ExpectMsg(NUM, "unpacked store").Num())-1] = v
 			default:
-				env.A, env.V = subject.GetMetamethod(M__newindex).ExpectMsg(FUN, "store").Fun().Call(subject, env.A, v)
+				env.A, _ = subject.GetMetamethod(M__newindex).ExpectMsg(FUN, "metamethod newindex").Fun().Call(subject, env.A, v)
 			}
 			env.A = v
 		case OpLoad:
@@ -326,9 +340,9 @@ MAIN:
 			case TAB:
 				env.A = a.Tab().Get(idx)
 			case UPK:
-				env.A = a._Upk()[int(idx.ExpectMsg(NUM, "load").Num())-1]
+				env.A = a._Upk()[int(idx.ExpectMsg(NUM, "unpacked load").Num())-1]
 			default:
-				env.A, env.V = a.GetMetamethod(M__index).ExpectMsg(FUN, "load").Fun().Call(a, idx)
+				env.A, _ = a.GetMetamethod(M__index).ExpectMsg(FUN, "metamethod index").Fun().Call(a, idx)
 			}
 		case OpPush:
 			if stackEnv == nil {
@@ -340,17 +354,25 @@ MAIN:
 			// 	}
 			// 	stackEnv.stack = stackEnv.stack[:0]
 			// }
-			stackEnv.Push(env._get(opa, K))
+			if v := env._get(opa, K); v.Type() == UPK {
+				stackEnv.stack = append(stackEnv.stack, v._Upk()...)
+			} else {
+				stackEnv.Push(v)
+			}
+			if opa == regA && len(env.V) > 0 {
+				stackEnv.stack = append(stackEnv.stack, env.V...)
+			}
 		case OpRet:
 			v := env._get(opa, K)
 			if len(retStack) == 0 {
+				v, env.V = returnVararg(v, env.V)
 				return v, env.V, 0, false
 			}
 			returnUpperWorld(v)
 		case OpYield:
-			v := env.V
-			env.V = nil
-			return env._get(opa, K), v, cursor, true
+			v := env._get(opa, K)
+			v, env.V = returnVararg(v, env.V)
+			return v, env.V, cursor, true
 		case OpLambda:
 			env.A = Fun(crReadClosure(K.Code, &cursor, env, opa, opb))
 		case OpCall:
@@ -359,11 +381,11 @@ MAIN:
 			case FUN:
 				cls = a.Fun()
 			default:
-				cls = a.GetMetamethod(M__call).ExpectMsg(FUN, "invoke").Fun()
+				cls = a.GetMetamethod(M__call).ExpectMsg(FUN, "metamethod call").Fun()
 				stackEnv.stack = append([]Value{a}, stackEnv.stack...)
 			}
 			if cls.lastenv != nil { // resume yielded coroutine
-				env.A, env.V = cls.Exec(nil)
+				env.A, env.V = cls.exec(nil)
 				if stackEnv != nil {
 					stackEnv.stack = stackEnv.stack[:0]
 				}
@@ -372,36 +394,17 @@ MAIN:
 					stackEnv = NewEnv(env)
 				}
 
-				if cls.Is(ClsVararg) {
+				if cls.Is(ClsVararg) && !cls.Is(ClsNative) {
+					var varg []Value
 					if stackEnv.Size() > int(cls.NumParam) {
-						var varg []Value
-						for i := int(cls.NumParam); i < stackEnv.Size(); i++ {
-							v := stackEnv.stack[i]
-							if v.Type() == UPK {
-								if i != len(stackEnv.stack)-1 {
-									panicf("misuse of unpack(...): it should be the last argument")
-								}
-								stackEnv._set(uint16(cls.NumParam), v)
-								// if cls.Is(ClsNative) {
-								stackEnv.V = v._Upk()
-								// }
-								goto VAR_OUT
-							}
-							varg = append(varg, v)
-						}
-						stackEnv._set(uint16(cls.NumParam), newUnpackedValue(varg))
-						// if cls.Is(ClsNative) {
-						stackEnv.V = varg
-						// }
-					} else if !cls.Is(ClsNative) {
-						stackEnv._set(uint16(cls.NumParam), newUnpackedValue(nil))
+						varg = append([]Value{}, stackEnv.stack[cls.NumParam:]...)
 					}
+					stackEnv._set(uint16(cls.NumParam), newUnpackedValue(varg))
 				}
-			VAR_OUT:
 
 				if cls.Is(ClsYieldable | ClsNative) {
 					stackEnv.parent = env
-					env.A, env.V = cls.Exec(stackEnv)
+					env.A, env.V = cls.exec(stackEnv)
 
 					if cls.Is(ClsYieldable) {
 						stackEnv = nil
@@ -453,12 +456,4 @@ MAIN:
 		goto MAIN
 	}
 	return Value{}, nil, 0, false
-}
-
-func findmm(a, b Value, name Value) Value {
-	m := a.GetMetamethod(name)
-	if m.IsNil() {
-		return b.GetMetamethod(name)
-	}
-	return m
 }

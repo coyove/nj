@@ -149,7 +149,7 @@ ARG:
 		}()
 	}
 
-	i, i2 := b.Exec(nil)
+	i, i2 := b.Call()
 	ok <- true
 	if _ret {
 		fmt.Println(i, i2)

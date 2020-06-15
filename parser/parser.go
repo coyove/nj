@@ -895,7 +895,7 @@ yydefault:
 			yyVAL.expr = __chain()
 			for i, v := range yyDollar[2].expr.Cpl() {
 				if v.Sym().Text == "..." {
-					yyVAL.expr = yyVAL.expr.CplAppend(__set(v, popvAllNode).SetPos(yyDollar[1].token.Pos))
+					yyVAL.expr = yyVAL.expr.CplAppend(__set(v, __popvAll(i)).SetPos(yyDollar[1].token.Pos))
 				} else {
 					yyVAL.expr = yyVAL.expr.CplAppend(__set(v, yyDollar[4].expr.CplIndex(i)).SetPos(yyDollar[1].token.Pos))
 				}
@@ -935,7 +935,7 @@ yydefault:
 					names = append(names, randomVarname())
 					retaddr = retaddr.CplAppend(names[i])
 					if nodes[i].Sym().Text == "..." {
-						yyVAL.expr = yyVAL.expr.CplAppend(__set(names[i], popvAllNode).SetPos(yyDollar[2].token.Pos))
+						yyVAL.expr = yyVAL.expr.CplAppend(__set(names[i], __popvAll(i)).SetPos(yyDollar[2].token.Pos))
 					} else {
 						yyVAL.expr = yyVAL.expr.CplAppend(__set(names[i], yyDollar[3].expr.CplIndex(i)).SetPos(yyDollar[2].token.Pos))
 					}

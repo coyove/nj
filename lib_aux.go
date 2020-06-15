@@ -8,9 +8,9 @@ import (
 
 func fmtPrint(flag byte) func(env *Env) {
 	return func(env *Env) {
-		args := make([]interface{}, len(env.V))
+		args := make([]interface{}, len(env.stack))
 		for i := range args {
-			args[i] = env.V[i]
+			args[i] = env.stack[i].Any()
 		}
 		var n int
 		var err error
@@ -34,9 +34,9 @@ func fmtPrint(flag byte) func(env *Env) {
 
 func fmtSprint(flag byte) func(env *Env) {
 	return func(env *Env) {
-		args := make([]interface{}, len(env.V))
+		args := make([]interface{}, len(env.stack))
 		for i := range args {
-			args[i] = env.V[i].Any()
+			args[i] = env.stack[i].Any()
 		}
 		var n string
 		switch flag {
@@ -182,7 +182,7 @@ func initLibAux() {
 	// 	lfmt.Put("Fscan", NativeFun(1, fmtScan("fscan")))
 	// 	lfmt.Put("Fscanf", NativeFun(2, fmtScan("fscanf")))
 	// 	lfmt.Put("Write", NativeFun(0, fmtWrite))
-	G.Puts("print", NativeFun(0, fmtPrint('l')))
+	G.Puts("print", NativeFun(fmtPrint('l')))
 	//
 	los := &Table{}
 	los.Puts("stdout", Any(os.Stdout))
@@ -191,8 +191,8 @@ func initLibAux() {
 	G.Puts("os", Tab(los))
 
 	lstring := &Table{}
-	lstring.Puts("format", NativeFun(1, fmtSprint('f')))
-	lstring.Puts("rep", NativeFun(2, func(env *Env) { env.A = Str(strings.Repeat(env.In(0, STR).Str(), int(env.In(1, NUM).Num()))) }))
-	lstring.Puts("char", NativeFun(1, func(env *Env) { env.A = Str(string(rune(env.In(0, NUM).Num()))) }))
+	lstring.Puts("format", NativeFun(fmtSprint('f')))
+	lstring.Puts("rep", NativeFun(func(env *Env) { env.A = Str(strings.Repeat(env.In(0, STR).Str(), int(env.In(1, NUM).Num()))) }))
+	lstring.Puts("char", NativeFun(func(env *Env) { env.A = Str(string(rune(env.In(0, NUM).Num()))) }))
 	G.Puts("string", Tab(lstring))
 }

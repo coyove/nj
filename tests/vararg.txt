@@ -32,10 +32,10 @@ do
     assert(a and ...[1] == 2)
 end
 
-call(print, unpack({'testing vararg'}))
+print(unpack({'testing vararg'}))
 
 function getex(f, ...)
-    local a1, ... = call(f, ...)
+    local a1, ... = f(...)
     return {a1, ...}
 end
 
@@ -46,9 +46,7 @@ end
 
 function foo1(a, b) return a + b end
 
-function bar1(...) 
-    return call(foo1, ...)
-end
+function bar1(...) return foo1( ...) end
 
 assert(bar1(1, 2)==3)
 
@@ -140,8 +138,7 @@ function f (n, a, ...)
 end
  
 a,b,c,d,e = f(10,5,4,3,2,1)
-print(a,b,c,d,e )
--- assert(a==5 and b==4 and c==3 and d==2 and e==1)
+assert(a==5 and b==4 and c==3 and d==2 and e==1)
 -- 
 -- a,b,c,d,e = f(4)
 -- assert(a==nil and b==nil and c==nil and d==nil and e==nil)

@@ -224,6 +224,7 @@ var flatOpMapping = map[string]_Opcode{
 	parser.APopV.Text:      OpEOB, // special
 	parser.APopVEnd.Text:   OpEOB, // special
 	parser.APopVAll.Text:   OpEOB, // special
+	parser.APopVAllA.Text:  OpEOB, // special
 	parser.APopVClear.Text: OpEOB, // special
 }
 

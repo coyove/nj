@@ -27,7 +27,6 @@ var (
 	breakNode     = Cpl(Node{ABreak})
 	popvNode      = Cpl(Node{APopV})
 	popvEndNode   = Cpl(Node{APopVEnd})
-	popvAllNode   = Cpl(Node{APopVAll})
 	popvClearNode = Cpl(Node{APopVClear})
 	zeroNode      = Num(0)
 	oneNode       = Num(1)
@@ -80,6 +79,7 @@ var (
 	APopV        = Symbol{Text: "popv"}
 	APopVEnd     = Symbol{Text: "pope"}
 	APopVAll     = Symbol{Text: "popa"}
+	APopVAllA    = Symbol{Text: "ppaa"}
 	APopVClear   = Symbol{Text: "popc"}
 	ALabel       = Symbol{Text: "lbl"}
 	AGoto        = Symbol{Text: "goto"}
@@ -110,6 +110,13 @@ func __loop(body Node) Node { return Cpl(Node{AFor}, body) }
 func __func(paramlist, body Node) Node { return Cpl(Node{AFunc}, emptyNode, paramlist, body) }
 
 func __call(cls, args Node) Node { return Cpl(Node{ACall}, cls, args) }
+
+func __popvAll(i int) Node {
+	if i == 0 {
+		return Cpl(Node{APopVAllA})
+	}
+	return Cpl(Node{APopVAll})
+}
 
 func randomVarname() Node {
 	return Sym("v" + strconv.FormatInt(rand.Int63(), 10))

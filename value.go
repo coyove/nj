@@ -11,21 +11,21 @@ import (
 )
 
 const (
-	// NIL represents nil type
+	// NIL: nil
 	NIL = 0
-	// BLN
+	// BLN: boolean
 	BLN = 1
-	// NUM represents number type
+	// NUM: number
 	NUM = 3
-	// STR represents string type
+	// STR: string
 	STR = 7
-	// SliceType represents map type
+	// TAB: table
 	TAB = 15
-	// FUN represents closure type
+	// FUN: function
 	FUN = 31
-	// ANY represents generic type
+	// ANY: generic type
 	ANY = 63
-	// Internal
+	// UPK: unpacked values
 	UPK = 255
 )
 
@@ -190,6 +190,20 @@ func (v Value) _Upk() []Value {
 		return nil
 	}
 	return *(*[]Value)(v.p)
+}
+
+func (v Value) _TestUpkLen() (int, bool) {
+	if v.Type() == UPK {
+		return len(v._Upk()), true
+	}
+	return 1, false
+}
+
+func (v Value) _AppendTo(arr []Value) []Value {
+	if v.Type() == UPK {
+		return append(arr, v._Upk()...)
+	}
+	return append(arr, v)
 }
 
 // Fun cast value to closure

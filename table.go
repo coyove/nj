@@ -54,11 +54,11 @@ newindex:
 		ni.Fun().Call(Tab(t), k, v)
 	case TAB:
 		if ni.Tab() == t {
-			panicf("invalid M__newindex, recursive delegation")
+			panicf("invalid __newindex, recursive delegation")
 		}
 		ni.Tab().Put(k, v)
 	default:
-		panicf("invalid M__newindex, expect table or function")
+		panicf("invalid __newindex, expect table or function")
 	}
 }
 
@@ -90,11 +90,11 @@ func (t *Table) RawPut(k, v Value) *Table { t._put(k, v, true); return t }
 
 func (t *Table) Puts(k string, v Value) *Table { return t.Put(Str(k), v) }
 
-func (t *Table) Get(k Value) (v Value) { return t._get(k, false) }
+func (t *Table) Get(k Value) (v Value) { return t._get(k, false, false) }
 
-func (t *Table) RawGet(k Value) (v Value) { return t._get(k, true) }
+func (t *Table) RawGet(k Value) (v Value) { return t._get(k, false, true) }
 
-func (t *Table) _get(k Value, raw bool) (v Value) {
+func (t *Table) _get(k Value, lookinarray bool, raw bool) (v Value) {
 	if t == nil {
 		return
 	}
@@ -106,6 +106,9 @@ func (t *Table) _get(k Value, raw bool) (v Value) {
 			}
 		}
 	}
+	if lookinarray {
+		return Value{}
+	}
 	if !raw && t.m.Get(k).IsNil() {
 		switch ni := t.mt.RawGet(M__index); ni.Type() {
 		case FUN:
@@ -113,12 +116,12 @@ func (t *Table) _get(k Value, raw bool) (v Value) {
 			return v
 		case TAB:
 			if ni.Tab() == t {
-				panicf("invalid M__index, recursive delegation")
+				panicf("invalid __index, recursive delegation")
 			}
 			return ni.Tab().Get(k)
 		case NIL:
 		default:
-			panicf("invalid M__index, expect table or function")
+			panicf("invalid __index, expect table or function")
 		}
 	}
 	return t.m.Get(k)
@@ -165,4 +168,29 @@ func (t *Table) iterStringKeys(cb func(k string, v Value)) {
 			cb(k.Str(), v)
 		}
 	}
+}
+
+func (t *Table) Next(k Value) (Value, Value) {
+	if k.IsNil() {
+		for i := 1.0; ; i++ {
+			v := t.Get(Num(i))
+			if v.IsNil() {
+				break
+			}
+			return Num(float64(i)), v
+		}
+		return t.m.Next(Value{})
+	}
+
+	if k.Type() == NUM {
+		idx := k.Num()
+		if v := t._get(Num(idx+1), true, false); !v.IsNil() {
+			return Num(idx + 1), v
+		}
+
+		if v := t._get(Num(idx), true, false); !v.IsNil() {
+			return t.m.Next(Value{})
+		}
+	}
+	return t.m.Next(k)
 }

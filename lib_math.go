@@ -6,7 +6,7 @@ type NativeBytes []byte
 
 var (
 	nativeBytesMetatable = (&Table{}).
-		Put(M__index, NativeFun(2, func(env *Env) {
+		Put(M__index, NativeFun(func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			switch k := env.Get(1); k.Type() {
 			case NUM:
@@ -14,16 +14,16 @@ var (
 			case STR:
 				switch k.Str() {
 				case "append":
-					env.A = NativeFun(1, func(env *Env) {
+					env.A = NativeFun(func(env *Env) {
 						a := env.In(0, ANY).Any().(NativeBytes)
-						for _, v := range env.V {
+						for _, v := range env.stack[1:] {
 							a = append(a, byte(v.ExpectMsg(NUM, "append").Num()))
 						}
 						env.A = Any(a)
 					})
 					return
 				case "tostring":
-					env.A = NativeFun(1, func(env *Env) {
+					env.A = NativeFun(func(env *Env) {
 						a := env.In(0, ANY).Any().(NativeBytes)
 						env.A = Str(string(a))
 					})
@@ -34,20 +34,20 @@ var (
 				panicf("invalid index: %#v", k)
 			}
 		})).
-		Put(M__newindex, NativeFun(3, func(env *Env) {
+		Put(M__newindex, NativeFun(func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			a[int(env.In(1, NUM).Num())] = byte(env.In(2, NUM).Num())
 		})).
-		Put(M__len, NativeFun(1, func(env *Env) {
+		Put(M__len, NativeFun(func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			env.A = Num(float64(len(a)))
 		})).
-		Put(M__concat, NativeFun(2, func(env *Env) {
+		Put(M__concat, NativeFun(func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			b := env.In(1, ANY).Any().(NativeBytes)
 			env.A = Any(NativeBytes(append(a, b...)))
 		})).
-		Put(M__eq, NativeFun(2, func(env *Env) {
+		Put(M__eq, NativeFun(func(env *Env) {
 			switch l, r := env.Get(0), env.Get(1); l.Type() + r.Type() {
 			case AnyAny:
 				a, b := l.Any().(NativeBytes), r.Any().(NativeBytes)

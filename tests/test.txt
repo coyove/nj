@@ -1,11 +1,30 @@
 do
-  local function bar()
-      local function foo() return 1, 2, 3 end
-      local a, b = foo()
-      return true
-  end
-  local a, b = bar()
-  assert(a and b == nil)
+    local function vararg2(...) return ..., true  end
+    local function vararg(...) return vararg2(...) end
+    local a, ... = vararg(1, 2, 3)
+    assert(a == 1 and ...[1] == 2 and ...[2] == 3 and ...[3])
+    local ... = vararg()
+    assert(#... == 1)
+
+    local function test(a0,b0,c0,d0,a, b, c, d)
+        assert(a0==a and b0==b and c0==c and d0==d)
+    end
+    test(1,2,3,true,vararg(1, 2, 3))
+    test(1,2,true,3,vararg(1,2),3)
+    test(1,1,2,true,vararg(1,2),vararg(1,2))
+
+    local function vararg(n, ...) assert(n == select("#", ...)) end
+    vararg(0)
+    vararg(1, 1)
+    vararg(1, ...)
+
+    local function bar()
+        local function foo() return 1, 2, 3 end
+        local a, b = foo()
+        return true
+    end
+    local a, b = bar()
+    assert(a and b == nil)
 end
 
 function deepadd(v)
@@ -78,7 +97,7 @@ assert(ms == nil and ms2 == 2)
 
 local a = native.bytes(2)
 a[0] = 49
-a = a:append(unpack({32 , 33, 34}))
+a = a:append(32, unpack({33, 34}))
 assert(a == {49,0,32,33,34} and {49,0,32,33,34} == a)
 assert(a:tostring() == "1\x00 !\"")
 assert(a == "1\x00 !\"" and a == native.bytes(a:tostring()))
@@ -132,25 +151,12 @@ function vararg(a, b, ...)
     for i =1, select("#",...) do
         local iv = select(i, ...)
         assert(iv == i + 2)
-        ...[i]+=1
     end
     return {select("#",...), ...}
 end
 
 vararg(1, 2, 3, 4, 5);
 result = vararg(1, 2, unpack({3, 4, 5}))
-assert(result[1] == 3 and result[4] == 6)
-
-do
-    t = {3, 4, 5}
-    vararg(1, 2, unpack(t))
-    -- Now t should be {4, 5, 6}
-    i = 1
-    repeat
-        assert(t[i] == i + 3)
-        i+=1
-    until i == 4
-end
 
 a = 0
 assert(a == 0)

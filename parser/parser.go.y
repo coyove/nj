@@ -121,7 +121,7 @@ assign_stat:
             $$ = __chain()
             for i, v := range $2.Cpl() {
                 if v.Sym().Text == "..." {
-                    $$ = $$.CplAppend(__set(v, popvAllNode).SetPos($1.Pos))
+                    $$ = $$.CplAppend(__set(v, __popvAll(i)).SetPos($1.Pos))
                 } else {
                     $$ = $$.CplAppend(__set(v, $4.CplIndex(i)).SetPos($1.Pos))
                 }
@@ -158,7 +158,7 @@ assign_stat:
                     names = append(names, randomVarname())
                     retaddr = retaddr.CplAppend(names[i])
                     if nodes[i].Sym().Text == "..." {
-                        $$ = $$.CplAppend(__set(names[i], popvAllNode).SetPos($2.Pos))
+                        $$ = $$.CplAppend(__set(names[i], __popvAll(i)).SetPos($2.Pos))
                     } else {
                         $$ = $$.CplAppend(__set(names[i], $3.CplIndex(i)).SetPos($2.Pos))
                     }

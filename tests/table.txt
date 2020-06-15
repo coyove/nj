@@ -1,4 +1,12 @@
 -- assert(false)
+
+do
+    local t = {1,nil,2,3;n=3}
+    for k, v in next,t do
+        assert((k == 1 and v ==1) or (k == 'n' and v == 3))
+    end
+end
+
 t = {v = -1}
 setmetatable(t, { __add = function (lhs, rhs)
     lhs.v += rhs.v
