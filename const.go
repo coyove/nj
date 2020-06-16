@@ -17,6 +17,7 @@ const (
 	OpAdd
 	OpConcat
 	OpSub
+	OpUnm
 	OpMul
 	OpDiv
 	OpInc

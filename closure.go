@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	ClsNoEnvescape = 1 << iota
+	ClsNoEnvEscape = 1 << iota
 	ClsYieldable
 	ClsNative
 	ClsVararg
@@ -19,8 +19,8 @@ type Closure struct {
 	Env        *Env
 	NumParam   byte
 	options    byte
-	lastp      uint32
-	lastenv    *Env
+	lastCursor uint32
+	lastEnv    *Env
 	native     func(env *Env)
 }
 
@@ -46,7 +46,7 @@ func (c *Closure) String() string {
 		return "<native>"
 	}
 	p := "closure"
-	if c.Is(ClsNoEnvescape) {
+	if c.Is(ClsNoEnvEscape) {
 		p = "func"
 	}
 	if c.Is(ClsVararg) {
@@ -62,8 +62,8 @@ func (c *Closure) String() string {
 	}
 
 	x := fmt.Sprintf("<%s-%d-%04x-%dk", p, c.NumParam, hash/65536, len(c.ConstTable))
-	if c.lastenv != nil {
-		x += fmt.Sprintf("-%xy", c.lastp)
+	if c.lastEnv != nil {
+		x += fmt.Sprintf("-%xy", c.lastCursor)
 	}
 	return x + ">"
 }
@@ -72,25 +72,25 @@ func (c *Closure) PrettyString() string {
 	if c.native != nil {
 		return "[native Code]"
 	}
-	return c.crPrettify(0)
+	return pkPrettify(c, 0)
 }
 
 // exec executes the closure with the given Env
 func (c *Closure) exec(newEnv *Env) (Value, []Value) {
 	if c.native == nil {
-		if c.lastenv != nil {
-			newEnv = c.lastenv
+		if c.lastEnv != nil {
+			newEnv = c.lastEnv
 		} else {
 			newEnv.SetParent(c.Env)
 		}
 
-		v, vb, np, yield := execCursorLoop(newEnv, c, c.lastp)
+		v, vb, np, yield := execCursorLoop(newEnv, c, c.lastCursor)
 		if yield {
-			c.lastp = np
-			c.lastenv = newEnv
+			c.lastCursor = np
+			c.lastEnv = newEnv
 		} else {
-			c.lastp = 0
-			c.lastenv = nil
+			c.lastCursor = 0
+			c.lastEnv = nil
 		}
 		return v, vb
 	}
@@ -104,7 +104,7 @@ func (c *Closure) exec(newEnv *Env) (Value, []Value) {
 func (c *Closure) Call(a ...Value) (Value, []Value) {
 	var newEnv *Env
 	var varg []Value
-	if c.lastenv == nil {
+	if c.lastEnv == nil {
 		newEnv = NewEnv(c.Env)
 		for i := range a {
 			if i >= int(c.NumParam) {
@@ -119,8 +119,8 @@ func (c *Closure) Call(a ...Value) (Value, []Value) {
 	return c.exec(newEnv)
 }
 
-// ImmediateStop will try to stop the execution, when called the closure (along with duplicates) become invalid immediately
-func (c *Closure) ImmediateStop() {
+// Terminate will try to stop the execution, when called the closure (along with duplicates) become invalid immediately
+func (c *Closure) Terminate() {
 	const Stop = uint32(OpEOB) << 26
 	for i := range c.Code {
 		c.Code[i] = Stop

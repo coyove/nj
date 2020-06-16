@@ -141,7 +141,7 @@ ARG:
 		go func() {
 			select {
 			case <-time.After(time.Duration(*timeout) * time.Millisecond):
-				b.ImmediateStop()
+				b.Terminate()
 				log.Println("Timeout:", *timeout, "ms")
 			case <-ok:
 				// peacefully exit

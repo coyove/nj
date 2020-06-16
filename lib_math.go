@@ -1,12 +1,16 @@
 package potatolang
 
-import "unsafe"
+import (
+	"strconv"
+	"unsafe"
+)
 
 type NativeBytes []byte
+type NativeInt64 int64
 
 var (
 	nativeBytesMetatable = (&Table{}).
-		Put(M__index, NativeFun(func(env *Env) {
+				Put(M__index, NativeFun(func(env *Env) {
 			a := env.In(0, ANY).Any().(NativeBytes)
 			switch k := env.Get(1); k.Type() {
 			case NUM:
@@ -96,7 +100,28 @@ var (
 				env.A = Bln(true)
 			}
 		}))
+	nativeInt64Metatable = (&Table{}).
+				Put(M__add, NativeFun(func(env *Env) { env.A = Any(NativeInt64(atoint64(env.Get(0)) + atoint64(env.Get(1)))) })).
+				Put(M__sub, NativeFun(func(env *Env) { env.A = Any(NativeInt64(atoint64(env.Get(0)) - atoint64(env.Get(1)))) })).
+				Put(M__mul, NativeFun(func(env *Env) { env.A = Any(NativeInt64(atoint64(env.Get(0)) * atoint64(env.Get(1)))) })).
+				Put(M__div, NativeFun(func(env *Env) { env.A = Any(NativeInt64(atoint64(env.Get(0)) / atoint64(env.Get(1)))) })).
+				Put(M__tostring, NativeFun(func(env *Env) { env.A = Str(strconv.FormatInt(atoint64(env.Get(0)), 10)) }))
 )
+
+func atoint64(v Value) int64 {
+	switch v.Type() {
+	case NUM:
+		return int64(v.Num())
+	case STR:
+		v, _ := strconv.ParseInt(v.Str(), 0, 64)
+		return v
+	case ANY:
+		return int64(v.Any().(NativeInt64))
+	}
+	panic("not a valid NativeInt64 object")
+}
 
 func (a NativeBytes) GetMetatable() *Table   { return nativeBytesMetatable }
 func (a NativeBytes) SetMetatable(mt *Table) { nativeBytesMetatable = mt }
+func (a NativeInt64) GetMetatable() *Table   { return nativeInt64Metatable }
+func (a NativeInt64) SetMetatable(mt *Table) { nativeInt64Metatable = mt }

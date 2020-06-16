@@ -1381,7 +1381,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line parser.go.y:375
 		{
-			yyVAL.expr = Cpl(Node{ASub}, zeroNode, yyDollar[2].expr).SetPos(yyDollar[1].token.Pos)
+			yyVAL.expr = Cpl(Node{AUnm}, yyDollar[2].expr).SetPos(yyDollar[1].token.Pos)
 		}
 	case 80:
 		yyDollar = yyS[yypt-2 : yypt+1]

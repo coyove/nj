@@ -208,6 +208,7 @@ var flatOpMapping = map[string]_Opcode{
 	parser.AAdd.Text:       OpAdd,
 	parser.AConcat.Text:    OpConcat,
 	parser.ASub.Text:       OpSub,
+	parser.AUnm.Text:       OpUnm,
 	parser.AMul.Text:       OpMul,
 	parser.ADiv.Text:       OpDiv,
 	parser.AMod.Text:       OpMod,
@@ -251,13 +252,13 @@ func (table *symtable) writeOpcode(op _Opcode, n0, n1 parser.Node) {
 	defer table.returnAddresses(tmp)
 
 	if !n0.Valid() {
-		table.code.WriteOP(op, 0, 0)
+		table.code.writeOP(op, 0, 0)
 		return
 	}
 
 	n0a := getAddr(n0)
 	if !n1.Valid() {
-		table.code.WriteOP(op, n0a, 0)
+		table.code.writeOP(op, n0a, 0)
 		return
 	}
 
@@ -265,7 +266,7 @@ func (table *symtable) writeOpcode(op _Opcode, n0, n1 parser.Node) {
 	if op == OpSet && n0a == n1a {
 		return
 	}
-	table.code.WriteOP(op, n0a, n1a)
+	table.code.writeOP(op, n0a, n1a)
 }
 
 func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existedVar uint16) uint16 {
@@ -278,7 +279,7 @@ func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existe
 		yx = existedVar
 	}
 
-	table.code.WriteOP(OpSet, yx, newYX)
+	table.code.writeOP(OpSet, yx, newYX)
 	return yx
 }
 
@@ -314,7 +315,7 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 	case parser.AFor.Text:
 		yx = table.compileWhileOp(nodes)
 	case parser.AContinue.Text, parser.ABreak.Text:
-		yx = table.compileContinueBreakOp(nodes)
+yx = table.compileBreakOp(nodes)
 	case parser.ACall.Text, parser.ATailCall.Text:
 		yx = table.compileCallOp(nodes)
 	case parser.AHash.Text, parser.AHashArray.Text, parser.AArray.Text:
@@ -365,7 +366,7 @@ func compileNodeTopLevel(n parser.Node) (cls *Closure, err error) {
 
 	table.vp = uint16(len(table.sym))
 	table.compileNode(n)
-	table.code.WriteOP(OpEOB, 0, 0)
+	table.code.writeOP(OpEOB, 0, 0)
 	table.patchGoto()
 	consts := make([]Value, len(table.consts))
 	for i, k := range table.consts {
@@ -379,10 +380,10 @@ func compileNodeTopLevel(n parser.Node) (cls *Closure, err error) {
 		}
 	}
 	cls = &Closure{Code: table.code.data, ConstTable: consts}
-	cls.lastenv = NewEnv(nil)
+	cls.lastEnv = NewEnv(nil)
 	cls.Pos = table.code.pos
 	cls.source = []byte("root " + cls.String() + " " + table.code.source)
-	cls.lastenv.stack = coreStack.stack
+	cls.lastEnv.stack = coreStack.stack
 	return cls, err
 }
 

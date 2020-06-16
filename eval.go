@@ -134,7 +134,7 @@ func execCursorLoop(env *Env, K *Closure, cursor uint32) (result Value, resultV 
 		K = r.cls
 		r.env.A, r.env.V = returnVararg(v, env.V)
 		caddr = kodeaddr(K.Code)
-		if r.cls.Is(ClsNoEnvescape) {
+		if r.cls.Is(ClsNoEnvEscape) {
 			if stackEnv != nil {
 				for i := range stackEnv.stack {
 					stackEnv.stack[i] = Value{}
@@ -222,6 +222,13 @@ MAIN:
 				env.A = Num(va.Num() - vb.Num())
 			default:
 				env.A, _ = findmm(va, vb, M__sub).ExpectMsg(FUN, "metamethod operator -").Fun().Call(va, vb)
+			}
+		case OpUnm:
+			switch va := env._get(opa, K); va.Type() {
+			case NUM:
+				env.A = Num(-va.Num())
+			default:
+				env.A, _ = va.GetMetamethod(M__unm).ExpectMsg(FUN, "metamethod operator unary -").Fun().Call(va)
 			}
 		case OpMul:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
@@ -374,7 +381,7 @@ MAIN:
 			v, env.V = returnVararg(v, env.V)
 			return v, env.V, cursor, true
 		case OpLambda:
-			env.A = Fun(crReadClosure(K.Code, &cursor, env, opa, opb))
+			env.A = Fun(pkReadClosure(K.Code, &cursor, env, opa, opb))
 		case OpCall:
 			var cls *Closure
 			switch a := env._get(opa, K); a.Type() {
@@ -384,7 +391,7 @@ MAIN:
 				cls = a.GetMetamethod(M__call).ExpectMsg(FUN, "metamethod call").Fun()
 				stackEnv.stack = append([]Value{a}, stackEnv.stack...)
 			}
-			if cls.lastenv != nil { // resume yielded coroutine
+			if cls.lastEnv != nil { // resume yielded coroutine
 				env.A, env.V = cls.exec(nil)
 				if stackEnv != nil {
 					stackEnv.stack = stackEnv.stack[:0]

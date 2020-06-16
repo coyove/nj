@@ -53,8 +53,8 @@ func (table *symtable) compileSetOp(atoms []parser.Node) uint16 {
 	}
 
 	fromYX := table.compileNode(atoms[2])
-	table.code.WriteOP(OpSet, newYX, fromYX)
-	table.code.WritePos(atoms[0].Pos())
+	table.code.writeOP(OpSet, newYX, fromYX)
+	table.code.writePos(atoms[0].Pos())
 	return newYX
 }
 
@@ -67,7 +67,7 @@ func (table *symtable) compileRetOp(atoms []parser.Node) uint16 {
 
 	values := atoms[1].Cpl()
 	if len(values) == 0 { // return
-		table.code.WriteOP(op, regNil, 0)
+		table.code.writeOP(op, regNil, 0)
 		return regA
 	}
 
@@ -107,14 +107,14 @@ func (table *symtable) compileHashArrayOp(atoms []parser.Node) uint16 {
 		for i := 0; i < len(arrayElements); i++ {
 			table.writeOpcode(OpPush, arrayElements[i], parser.Node{uint16(i)})
 		}
-		table.code.WriteOP(OpMakeTable, 2, 0)
+		table.code.writeOP(OpMakeTable, 2, 0)
 
 		hashElements := atoms[1].Cpl()
 		for i := 0; i < len(hashElements); i++ {
 			table.writeOpcode(OpPush, hashElements[i], parser.Node{uint16(i)})
 		}
-		table.code.WriteOP(OpMakeTable, 3, 0)
-		table.code.WritePos(atoms[0].Pos())
+		table.code.writeOP(OpMakeTable, 3, 0)
+		table.code.writePos(atoms[0].Pos())
 
 		table.returnAddresses(arrayElements)
 		table.returnAddresses(hashElements)
@@ -123,11 +123,11 @@ func (table *symtable) compileHashArrayOp(atoms []parser.Node) uint16 {
 
 	switch atoms[0].Value.(parser.Symbol).Text {
 	case parser.AHash.Text:
-		table.code.WriteOP(OpMakeTable, 1, 0)
+		table.code.writeOP(OpMakeTable, 1, 0)
 	case parser.AArray.Text:
-		table.code.WriteOP(OpMakeTable, 2, 0)
+		table.code.writeOP(OpMakeTable, 2, 0)
 	}
-	table.code.WritePos(atoms[0].Pos())
+	table.code.writePos(atoms[0].Pos())
 	return regA
 }
 
@@ -164,8 +164,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []parser.Node) uint16 {
 	table.collapse(atoms[1:], true)
 
 	switch bop {
-
-	case OpNot, OpRet, OpYield, OpLen:
+	case OpNot, OpUnm, OpRet, OpYield, OpLen:
 		// unary op
 		table.writeOpcode(bop, atoms[1], parser.Node{})
 	default:
@@ -181,19 +180,19 @@ func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
 	head := atoms[0].Value.(parser.Symbol)
 	switch head.Text {
 	case parser.APopVAllA.Text:
-		table.code.WriteOP(OpPopV, 4, 0)
+		table.code.writeOP(OpPopV, 4, 0)
 		return regA
 	case parser.APopVClear.Text:
-		table.code.WriteOP(OpPopV, 3, 0)
+		table.code.writeOP(OpPopV, 3, 0)
 		return regA
 	case parser.APopVAll.Text:
-		table.code.WriteOP(OpPopV, 2, 0)
+		table.code.writeOP(OpPopV, 2, 0)
 		return regA
 	case parser.APopV.Text:
-		table.code.WriteOP(OpPopV, 1, 0)
+		table.code.writeOP(OpPopV, 1, 0)
 		return regA
 	case parser.APopVEnd.Text:
-		table.code.WriteOP(OpPopV, 0, 0)
+		table.code.writeOP(OpPopV, 0, 0)
 		return regA
 	}
 
@@ -203,7 +202,7 @@ func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
 	}
 	yx := table.writeOpcode3(op, atoms)
 	if p := atoms[0].Pos(); p.Source != "" {
-		table.code.WritePos(p)
+		table.code.writePos(p)
 	}
 	return yx
 }
@@ -217,14 +216,14 @@ func (table *symtable) compileAndOrOp(atoms []parser.Node) uint16 {
 	}
 
 	table.writeOpcode(OpSet, _nodeRegA, atoms[1])
-	table.code.WriteOP(bop, regA, 0)
+	table.code.writeOP(bop, regA, 0)
 	part1 := table.code.Len()
 
 	table.writeOpcode(OpSet, _nodeRegA, atoms[2])
 	part2 := table.code.Len()
 
 	table.code.data[part1-1] = makejmpop(bop, regA, part2-part1)
-	table.code.WritePos(atoms[0].Pos())
+	table.code.writePos(atoms[0].Pos())
 	return regA
 }
 
@@ -237,14 +236,14 @@ func (table *symtable) compileIfOp(atoms []parser.Node) uint16 {
 
 	table.addMaskedSymTable()
 
-	table.code.WriteJmpOP(OpIfNot, condyx, 0)
-	table.code.WritePos(atoms[0].Pos())
+	table.code.writeJmpOP(OpIfNot, condyx, 0)
+	table.code.writePos(atoms[0].Pos())
 	init := table.code.Len()
 
 	table.compileNode(trueBranch)
 	part1 := table.code.Len()
 
-	table.code.WriteJmpOP(OpJmp, 0, 0)
+	table.code.writeJmpOP(OpJmp, 0, 0)
 
 	table.compileNode(falseBranch)
 	part2 := table.code.Len()
@@ -255,7 +254,7 @@ func (table *symtable) compileIfOp(atoms []parser.Node) uint16 {
 		table.code.data[init-1] = makejmpop(OpIfNot, condyx, part1-init+1)
 		table.code.data[part1] = makejmpop(OpJmp, 0, part2-part1-1)
 	} else {
-		table.code.TruncateLast(1) // the last op is used to skip the false branch, since we don't have one, we don't need this jmp
+		table.code.truncateLast() // the last op is used to skip the false branch, since we don't have one, we don't need this jmp
 		table.code.data[init-1] = makejmpop(OpIfNot, condyx, part1-init)
 	}
 	return regA
@@ -276,7 +275,7 @@ func (table *symtable) compileCallOp(nodes []parser.Node) uint16 {
 	}
 
 	table.writeOpcode(OpCall, tmp[0], parser.Node{opb})
-	table.code.WritePos(nodes[0].Pos())
+	table.code.writePos(nodes[0].Pos())
 
 	table.returnAddresses(tmp)
 	return regA
@@ -319,40 +318,41 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 
 	code := newtable.code
 	code.source = atoms[0].Pos().Source
-	code.WriteOP(OpEOB, 0, 0)
+	code.writeOP(OpEOB, 0, 0)
 
 	cls := Closure{}
 	cls.NumParam = byte(ln)
 	cls.setOpt(newtable.y, ClsYieldable)
-	cls.setOpt(!newtable.envescape, ClsNoEnvescape)
+	cls.setOpt(!newtable.envescape, ClsNoEnvEscape)
 	cls.setOpt(vararg, ClsVararg)
 
 	// (ln: 8bit) + (cls.options: 8bit) + (len(consts): 10bit)
 	opaopb := uint32(ln)<<18 | uint32(cls.options)<<10 | uint32(len(newtable.consts))
-	table.code.WriteOP(OpLambda, uint16(opaopb>>13), uint16(opaopb&0x1fff))
-	table.code.WriteConsts(newtable.consts)
+	table.code.writeOP(OpLambda, uint16(opaopb>>13), uint16(opaopb&0x1fff))
+	table.code.writeConstTable(newtable.consts)
 
 	cls.Code = code.data
 	src := cls.String() + " " + code.source
-	table.code.WriteString(src)
+	table.code.write32(uint32(len(src)))
+	table.code.writeBytes(u32FromBytes([]byte(src)))
 
-	table.code.Write32(uint32(len(code.pos)))
-	table.code.WriteRaw(u32FromBytes(code.pos))
+	table.code.write32(uint32(len(code.pos)))
+	table.code.writeBytes(u32FromBytes(code.pos))
 
-	table.code.Write32(uint32(len(code.data)))
+	table.code.write32(uint32(len(code.data)))
 
-	table.code.Write(code)
-	table.code.WritePos(atoms[0].Pos())
+	table.code.write(code)
+	table.code.writePos(atoms[0].Pos())
 	return regA
 }
 
-// [continue | break]
-func (table *symtable) compileContinueBreakOp(atoms []parser.Node) uint16 {
+// [break]
+func (table *symtable) compileBreakOp(atoms []parser.Node) uint16 {
 	if len(table.inloop) == 0 {
 		panicf("break outside loop")
 	}
 	table.inloop[len(table.inloop)-1].labelPos = append(table.inloop[len(table.inloop)-1].labelPos, table.code.Len())
-	table.code.WriteJmpOP(OpJmp, 0, 0)
+	table.code.writeJmpOP(OpJmp, 0, 0)
 	return regA
 }
 
@@ -367,7 +367,7 @@ func (table *symtable) compileWhileOp(atoms []parser.Node) uint16 {
 	table.removeMaskedSymTable()
 	table.inloop = table.inloop[:len(table.inloop)-1]
 
-	table.code.WriteJmpOP(OpJmp, 0, -(table.code.Len()-init)-1)
+	table.code.writeJmpOP(OpJmp, 0, -(table.code.Len()-init)-1)
 	for _, idx := range breaks.labelPos {
 		table.code.data[idx] = makejmpop(OpJmp, 0, table.code.Len()-idx-1)
 	}
@@ -380,9 +380,9 @@ func (table *symtable) compileGotoOp(atoms []parser.Node) uint16 {
 		table.labelPos[label.Text] = table.code.Len()
 	} else { // goto label
 		if pos, ok := table.labelPos[label.Text]; ok {
-			table.code.WriteJmpOP(OpJmp, 0, pos-(table.code.Len()+1))
+			table.code.writeJmpOP(OpJmp, 0, pos-(table.code.Len()+1))
 		} else {
-			table.code.WriteJmpOP(OpJmp, 0, 0)
+			table.code.writeJmpOP(OpJmp, 0, 0)
 			table.forwardGoto[table.code.Len()-1] = label.Text
 		}
 	}
@@ -440,7 +440,7 @@ func (table *symtable) collapse(atoms []parser.Node, optLast bool) {
 	if lastCompound.n.Valid() {
 		if optLast {
 			_, old, opb := op(table.code.data[len(table.code.data)-1])
-			table.code.TruncateLast(1)
+			table.code.truncateLast()
 			table.returnAddress(old)
 			atoms[lastCompound.i].Value = opb
 		}

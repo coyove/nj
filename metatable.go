@@ -12,6 +12,7 @@ var (
 	M__add       = Str("__add")
 	M__concat    = Str("__concat")
 	M__sub       = Str("__sub")
+	M__unm       = Str("__unm")
 	M__mul       = Str("__mul")
 	M__div       = Str("__div")
 	M__mod       = Str("__mod")

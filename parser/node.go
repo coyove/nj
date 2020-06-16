@@ -113,6 +113,11 @@ func Cpl(args ...Node) Node {
 			}
 		}
 	}
+	if len(args) == 2 {
+		if args[0].Sym().Equals(AUnm) && args[1].Type() == NUM {
+			return Node{-args[1].Num()}
+		}
+	}
 	return Node{args}
 }
 

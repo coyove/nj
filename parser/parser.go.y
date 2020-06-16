@@ -372,7 +372,7 @@ expr:
         expr '/' expr                     { $$ = Cpl(Node{ADiv}, $1,$3).SetPos($2.Pos) } |
         expr '%' expr                     { $$ = Cpl(Node{AMod}, $1,$3).SetPos($2.Pos) } |
         expr '^' expr                     { $$ = Cpl(Node{APow}, $1,$3).SetPos($2.Pos) } |
-        '-' expr %prec UNARY              { $$ = Cpl(Node{ASub}, zeroNode, $2).SetPos($1.Pos) } |
+        '-' expr %prec UNARY              { $$ = Cpl(Node{AUnm}, $2).SetPos($1.Pos) } |
         TNot expr %prec UNARY             { $$ = Cpl(Node{ANot}, $2).SetPos($1.Pos) } |
         '#' expr %prec UNARY              { $$ = Cpl(Node{ALen}, $2).SetPos($1.Pos) }
 

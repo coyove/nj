@@ -11,25 +11,15 @@ import (
 )
 
 const (
-	// NIL: nil
-	NIL = 0
-	// BLN: boolean
-	BLN = 1
-	// NUM: number
-	NUM = 3
-	// STR: string
-	STR = 7
-	// TAB: table
-	TAB = 15
-	// FUN: function
-	FUN = 31
-	// ANY: generic type
-	ANY = 63
-	// UPK: unpacked values
-	UPK = 255
-)
+	NIL = 0   // nil
+	BLN = 1   // boolean
+	NUM = 3   // number
+	STR = 7   // string
+	TAB = 15  // table
+	FUN = 31  // function
+	ANY = 63  // generic type
+	UPK = 255 // unpacked values
 
-const (
 	NilNil = NIL * 2
 	NumNum = NUM * 2
 	BlnBln = BLN * 2
@@ -134,6 +124,8 @@ func _StrBytes(s []byte) Value {
 
 func Any(i interface{}) Value {
 	switch v := i.(type) {
+	case nil:
+		return Value{}
 	case bool:
 		return Bln(v)
 	case float64:
@@ -242,7 +234,9 @@ func (v Value) ExpectMsg(t byte, msg string) Value {
 	return v
 }
 
-func (v Value) String() string { return v.toString(0) }
+func (v Value) String() string { return v.toString(0, false) }
+
+func (v Value) GoString() string { return v.toString(0, true) }
 
 // Equal tests whether value is equal to another value
 func (v Value) Equal(r Value) bool {
@@ -278,9 +272,15 @@ func (v Value) Hash() uint64 {
 	return xxhash.Sum64(b)
 }
 
-func (v Value) toString(lv int) string {
+func (v Value) toString(lv int, raw bool) string {
 	if lv > 32 {
 		return "<omit deep nesting>"
+	}
+	if !raw {
+		if f := v.GetMetamethod(M__tostring); f.Type() == FUN {
+			s, _ := f.Fun().Call(v)
+			return s.Str()
+		}
 	}
 	switch v.Type() {
 	case BLN:

@@ -147,7 +147,7 @@ func fmtSprint(flag byte) func(env *Env) {
 // 	for i := 1; i < env.Size(); i++ {
 // 		switch a := env.Get(i); a.Type() {
 // 		case STR:
-// 			n, err = f.Write([]byte(env.Get(i).Str()))
+// 			n, err = f.write([]byte(env.Get(i).Str()))
 // 		default:
 // 			panicf("stdWrite can't write: %+v", a)
 // 		}
@@ -181,7 +181,7 @@ func initLibAux() {
 	// 	lfmt.Put("Fscanln", NativeFun(1, fmtScan("fscanln")))
 	// 	lfmt.Put("Fscan", NativeFun(1, fmtScan("fscan")))
 	// 	lfmt.Put("Fscanf", NativeFun(2, fmtScan("fscanf")))
-	// 	lfmt.Put("Write", NativeFun(0, fmtWrite))
+	// 	lfmt.Put("write", NativeFun(0, fmtWrite))
 	G.Puts("print", NativeFun(fmtPrint('l')))
 	//
 	los := &Table{}

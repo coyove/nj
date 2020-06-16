@@ -63,6 +63,7 @@ var (
 	AArray       = Symbol{Text: "arr"}
 	AAdd         = Symbol{Text: "add"}
 	ASub         = Symbol{Text: "sub"}
+	AUnm         = Symbol{Text: "unm"}
 	AMul         = Symbol{Text: "mul"}
 	ADiv         = Symbol{Text: "div"}
 	AMod         = Symbol{Text: "mod"}

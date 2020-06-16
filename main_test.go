@@ -265,9 +265,9 @@ func BenchmarkReturnClosure(b *testing.B) {
 
 	b.StartTimer()
 
-	l := cls.lastenv
+	l := cls.lastEnv
 	for i := 0; i < b.N; i++ {
-		cls.lastenv = l
+		cls.lastEnv = l
 		cls.exec(nil)
 	}
 }

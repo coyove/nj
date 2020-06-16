@@ -1,3 +1,6 @@
+assert(true and true or false)
+assert(false and false or true)
+
 do
     local function vararg2(...) return ..., true  end
     local function vararg(...) return vararg2(...) end
