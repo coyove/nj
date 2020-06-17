@@ -1,0 +1,4 @@
+f = io.open("/tmp/test", "w+")
+f:write("hello\n")
+print(f:seek())
+print(f:close())

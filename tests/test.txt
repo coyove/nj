@@ -97,6 +97,9 @@ do
 end
 assert(ms == nil and ms2 == 2)
 
+assert(native.int64("0x7ffffffffffffffd") < native.int64("0x7fffffffffffffff"))
+assert(native.int64("0x12345678f1234567") == native.int64(0x12345678, 0xf1234567))
+assert(native.uint64("0x12345678f1234567") == native.int64(0x12345678, 0xf1234567))
 
 local a = native.bytes(2)
 a[0] = 49

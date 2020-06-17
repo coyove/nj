@@ -229,14 +229,30 @@ func initCoreLibs() {
 	G.Puts("math", Tab(lmath))
 
 	lnative := &Table{}
+	lnative.Puts("int64", NativeFun(func(env *Env) {
+		if len(env.stack) == 2 {
+			v := int64(uint32(env.In(0, NUM).Num()))<<32 | int64(uint32(env.In(1, NUM).Num()))
+			env.A = Any(Int64(v))
+		} else {
+			env.A = Any(Int64(atoint64(env.Get(0))))
+		}
+	}))
+	lnative.Puts("uint64", NativeFun(func(env *Env) {
+		if len(env.stack) == 2 {
+			v := uint64(uint32(env.In(0, NUM).Num()))<<32 | uint64(uint32(env.In(1, NUM).Num()))
+			env.A = Any(UInt64(v))
+		} else {
+			env.A = Any(UInt64(atouint64(env.Get(0))))
+		}
+	}))
 	lnative.Puts("bytes", NativeFun(func(env *Env) {
 		switch v := env.Get(0); v.Type() {
 		case NUM:
-			env.A = Any(make(NativeBytes, int(v.Num())))
+			env.A = Any(make(Bytes, int(v.Num())))
 		case STR:
-			env.A = Any(NativeBytes(v.Str()))
+			env.A = Any(Bytes(v.Str()))
 		case ANY:
-			env.A = Any(NativeBytes(append([]byte{}, v.Any().(NativeBytes)...)))
+			env.A = Any(Bytes(append([]byte{}, v.Any().(Bytes)...)))
 		default:
 			env.A = Value{}
 		}

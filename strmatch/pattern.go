@@ -1,4 +1,4 @@
-package match
+package strmatch
 
 import (
 	"fmt"

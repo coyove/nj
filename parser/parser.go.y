@@ -37,7 +37,7 @@ package parser
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
-%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.'
+%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' ':'
 %token<token> TAddEq TSubEq TMulEq TDivEq TModEq
 %token<token> TSquare TDotDot 
 
@@ -379,7 +379,7 @@ expr:
 prefix_expr:
         declarator                        { $$ = $1 } |
         prefix_expr TString               { $$ = __call($1, Cpl(Node{$2.Str})).SetPos($1.Pos()) } |
-        TIdent ':' TIdent expr_list_paren { $$ = __call(__load(SymTok($1), Node{$3.Str}).SetPos($1.Pos), $4.CplPrepend(SymTok($1))).SetPos($1.Pos) } |
+        prefix_expr ':' TIdent expr_list_paren { $$ = __call(__load($1, Node{$3.Str}).SetPos($2.Pos), $4.CplPrepend($1)).SetPos($2.Pos) } |
         prefix_expr expr_list_paren       { $$ = __call($1, $2).SetPos($1.Pos()) } |
         '(' expr ')'                      { $$ = $2 } // shift/reduce conflict
 
