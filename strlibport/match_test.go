@@ -1,4 +1,4 @@
-package strmatch
+package strlibport
 
 import (
 	"log"

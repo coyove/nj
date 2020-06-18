@@ -1,10 +1,17 @@
 package potatolang
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
+	"unsafe"
 )
 
 type File struct {
@@ -28,7 +35,7 @@ var (
 		}
 	})
 	fileReadImpl = NativeFun(func(env *Env) {
-		DefaultInput := env.In(0, ANY).Any().(File)
+		in := env.In(0, ANY).Any().(File)
 		ret := func(i int, v Value) {
 			if i == 0 {
 				env.A = v
@@ -41,7 +48,7 @@ var (
 			case NUM:
 				b := make([]byte, int(a.Num()))
 				for i := range b {
-					if n, _ := DefaultInput.Read(b[i : i+1]); n != 1 {
+					if n, _ := in.Read(b[i : i+1]); n != 1 {
 						b = b[:i]
 						break
 					}
@@ -54,13 +61,13 @@ var (
 			case STR:
 				switch s := a.Str(); {
 				case strings.HasPrefix(s, "*a"):
-					buf, _ := ioutil.ReadAll(DefaultInput)
+					buf, _ := ioutil.ReadAll(in)
 					ret(i, _StrBytes(buf))
 				case strings.HasPrefix(s, "*l"):
 					b := make([]byte, 0, 16)
 					for {
 						b = append(b, 0)
-						if n, _ := DefaultInput.Read(b[len(b)-1:]); n != 1 || b[len(b)-1] == '\n' {
+						if n, _ := in.Read(b[len(b)-1:]); n != 1 || b[len(b)-1] == '\n' {
 							b = b[:len(b)-1]
 							break
 						}
@@ -83,15 +90,15 @@ var (
 	})
 	fileSeekImpl = NativeFun(func(env *Env) {
 		var off int64 = 0
-		var when = os.SEEK_CUR
+		var when = io.SeekCurrent
 		if len(env.stack) >= 2 {
 			switch env.In(1, STR).Str() {
 			case "set":
-				when = os.SEEK_SET
+				when = io.SeekStart
 			case "cur":
-				when = os.SEEK_CUR
+				when = io.SeekCurrent
 			case "end":
-				when = os.SEEK_END
+				when = io.SeekEnd
 			default:
 				panic("bad argument")
 			}
@@ -104,6 +111,17 @@ var (
 		} else {
 			env.Return(Value{}, Str(err.Error()))
 		}
+	})
+	fileLinesImpl = NativeFun(func(env *Env) {
+		f := bufio.NewReader(env.In(0, ANY).Any().(File))
+		env.A = NativeFun(func(env *Env) {
+			buf, err := f.ReadBytes('\n')
+			if err != nil {
+				env.Return(Value{}, Str(err.Error()))
+			} else {
+				env.A = Str(string(bytes.TrimRight(buf, "\n")))
+			}
+		})
 	})
 	fileCloseImpl = NativeFun(func(env *Env) {
 		if err := env.In(0, ANY).Any().(File).Close(); err == nil {
@@ -130,118 +148,34 @@ var (
 				env.A = fileCloseImpl
 			case "seek":
 				env.A = fileSeekImpl
+			case "lines":
+				env.A = fileLinesImpl
 			case "flush":
 				env.A = fileFlushImpl
 			}
 		}))
 )
 
-func fmtPrint(flag byte) func(env *Env) {
-	return func(env *Env) {
+func initLibAux() {
+	G.Puts("print", NativeFun(func(env *Env) {
 		args := make([]interface{}, len(env.stack))
 		for i := range args {
 			args[i] = env.stack[i].Any()
 		}
-		var n int
-		var err error
-
-		switch flag {
-		case 'l':
-			n, err = fmt.Println(args...)
-		case 'f':
-			n, err = fmt.Printf(args[0].(string), args[1:]...)
-		default:
-			n, err = fmt.Print(args...)
-		}
-
-		if err != nil {
+		if n, err := fmt.Println(args...); err != nil {
 			env.Return(Value{}, Str(err.Error()))
 		} else {
 			env.Return(Num(float64(n)))
 		}
-	}
-}
-
-func fmtSprint(flag byte) func(env *Env) {
-	return func(env *Env) {
-		args := make([]interface{}, len(env.stack))
-		for i := range args {
-			args[i] = env.stack[i].Any()
-		}
-		var n string
-		switch flag {
-		case 'l':
-			n = fmt.Sprintln(args...)
-		case 'f':
-			n = fmt.Sprintf(env.Get(0).Expect(STR).Str(), args...)
-		default:
-			n = fmt.Sprint(args...)
-		}
-		env.A = Str(n)
-	}
-}
-
-// func fmtFprint(flag byte) func(env *Env) Value {
-// 	return func(env *Env) Value {
-// 		args := make([]interface{}, env.Size())
-// 		for i := range args {
-// 			args[i] = env.Get(i).AsInterface()
-// 		}
-// 		var n int
-// 		var err error
-// 		switch flag {
-// 		case 'l':
-// 			n, err = fmt.Fprintln(args[0].(io.Writer), args[1:]...)
-// 		case 'f':
-// 			n, err = fmt.Fprintf(args[0].(io.Writer), args[1].(string), args[2:]...)
-// 		default:
-// 			n, err = fmt.Fprint(args[0].(io.Writer), args[1:]...)
-// 		}
-//
-// 		if err != nil {
-// 			env.B = Str(err.Error())
-// 		}
-// 		return Num(float64(n))
-// 	}
-// }
-// func fmtWrite(env *Env) Value {
-// 	var n int
-// 	var err error
-// 	f := env.Get(0).AsInterface().(io.Writer)
-//
-// 	for i := 1; i < env.Size(); i++ {
-// 		switch a := env.Get(i); a.Type() {
-// 		case STR:
-// 			n, err = f.write([]byte(env.Get(i).Str()))
-// 		default:
-// 			panicf("stdWrite can't write: %+v", a)
-// 		}
-// 	}
-//
-// 	if err != nil {
-// 		env.B = Str(err.Error())
-// 	}
-// 	return Num(float64(n))
-// }
-//
-
-// func stringsIndex(env *Env) Value {
-// 	return Num(float64(strings.Index(env.Get(0).MustString(), env.Get(1).MustString())))
-// }
-
-func initLibAux() {
-	// 	lfmt.Put("Printf", NativeFun(1, fmtPrint('f')))
-	// 	lfmt.Put("Sprintln", NativeFun(0, fmtSprint('l')))
-	// 	lfmt.Put("Sprint", NativeFun(0, fmtSprint(0)))
-	// 	lfmt.Put("Sprintf", NativeFun(1, fmtSprint('f')))
-	G.Puts("print", NativeFun(fmtPrint('l')))
+	}))
 
 	lio := &Table{}
 	lio.Puts("open", NativeFun(func(env *Env) {
-		perm := os.FileMode(0777)
+		perm := os.FileMode(0666)
 		flag := os.O_RDONLY
 		if len(env.stack) == 2 {
 			switch strings.Replace(env.In(1, STR).Str(), "b", "", 1) {
+			case "r":
 			case "w":
 				flag = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 			case "a":
@@ -267,19 +201,126 @@ func initLibAux() {
 		env.A, env.V = fileReadImpl.Fun().Call(append([]Value{Any(DefaultInput)}, env.stack...)...)
 	}))
 	lio.Puts("write", NativeFun(func(env *Env) {
-		env.A, env.V = fileWriteImpl.Fun().Call(append([]Value{Any(DefaultInput)}, env.stack...)...)
+		env.A, env.V = fileWriteImpl.Fun().Call(append([]Value{Any(DefaultOutput)}, env.stack...)...)
+	}))
+	lio.Puts("type", NativeFun(func(env *Env) {
+		env.A = Value{}
+		if v := env.Get(0); v.Type() == ANY {
+			if f, ok := v.Any().(File); ok {
+				buf := [0]byte{}
+				if _, err := f.Read(buf[:]); err == nil {
+					env.A = Str("file")
+				} else if err.(*os.PathError).Err == os.ErrClosed {
+					env.A = Str("closed file")
+				} else {
+					env.Return(Str("unknown file"), Str(err.Error()))
+				}
+			}
+		}
+	}))
+	lio.Puts("lines", NativeFun(func(env *Env) {
+		i := DefaultInput
+		if len(env.stack) == 1 {
+			f, err := os.Open(env.In(0, STR).Str())
+			if err != nil {
+				env.Return(Value{}, Str(err.Error()))
+				return
+			}
+			i = File{f}
+		}
+		env.A, env.V = fileLinesImpl.Fun().Call(append([]Value{Any(i)}, env.stack...)...)
+	}))
+	lio.Puts("tmpfile", NativeFun(func(env *Env) {
+		p := filepath.Join(os.TempDir(), fmt.Sprintf("pol%d%d", time.Now().Unix(), rand.Int()))
+		f, err := os.Create(p)
+		if err != nil {
+			env.Return(Value{}, Str(err.Error()))
+			return
+		}
+		env.Return(Any(File{f}), Str(p))
 	}))
 	G.Puts("io", Tab(lio))
 	//
 	los := &Table{}
-	los.Puts("stdout", Any(os.Stdout))
-	los.Puts("stdin", Any(os.Stdin))
-	los.Puts("stderr", Any(os.Stderr))
+	los.Puts("time", NativeFun(func(env *Env) {
+		if v := env.Get(0); !v.IsNil() {
+			nz := func(v Value) int {
+				if v.Type() == NUM {
+					return int(v.Num())
+				}
+				return 0
+			}
+			t := env.In(0, TAB).Tab()
+			env.A = Num(float64(time.Date(
+				nz(t.Get(Str("year"))),
+				time.Month(nz(t.Get(Str("month")))),
+				nz(t.Get(Str("day"))),
+				nz(t.Get(Str("hour"))),
+				nz(t.Get(Str("min"))),
+				nz(t.Get(Str("sec"))), 0, time.UTC).Unix()))
+		} else {
+			env.A = Num(float64(time.Now().Unix()))
+		}
+	}))
+	los.Puts("clock", NativeFun(func(env *Env) {
+		x := time.Now()
+		s := *(*[2]int64)(unsafe.Pointer(&x))
+		env.A = Num(float64(s[1] / 1e9))
+	}))
+	los.Puts("microclock", NativeFun(func(env *Env) {
+		x := time.Now()
+		s := *(*[2]int64)(unsafe.Pointer(&x))
+		env.A = Num(float64(s[1] / 1e3))
+	}))
+	los.Puts("exit", NativeFun(func(env *Env) {
+		if v := env.Get(0); !v.IsNil() {
+			os.Exit(int(env.In(0, NUM).Num()))
+		}
+		os.Exit(0)
+	}))
 	G.Puts("os", Tab(los))
 
 	lstring := &Table{}
-	lstring.Puts("format", NativeFun(fmtSprint('f')))
+	lstring.Puts("format", NativeFun(func(env *Env) {
+		f := env.In(0, STR).Str()
+		args := make([]interface{}, 0, len(env.stack))
+		for x, i, f := byte(0), 1, f; ; {
+			x, f = findNextFormat(f)
+			if x == 0 {
+				break
+			}
+			switch x {
+			case 'c', 'd', 'i':
+				args = append(args, atoint64(env.Get(i)))
+			case 'o', 'u', 'X', 'x':
+				args = append(args, atouint64(env.Get(i)))
+			default:
+				args = append(args, env.Get(i).Any())
+			}
+		}
+		env.A = Str(fmt.Sprintf(f, args...))
+	}))
 	lstring.Puts("rep", NativeFun(func(env *Env) { env.A = Str(strings.Repeat(env.In(0, STR).Str(), int(env.In(1, NUM).Num()))) }))
 	lstring.Puts("char", NativeFun(func(env *Env) { env.A = Str(string(rune(env.In(0, NUM).Num()))) }))
 	G.Puts("string", Tab(lstring))
+}
+
+func findNextFormat(f string) (byte, string) {
+	i := strings.Index(f, "%")
+	if i == -1 || i == len(f)-1 {
+		return 0, "" // no more format strings
+	}
+	i++
+	if f[i] == '%' { // %%
+		return findNextFormat(f[i+1:])
+	}
+	for i < len(f) {
+		switch f[i] {
+		case '#', '+', '-', ' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+			i++
+		default:
+			return f[i], f[i+1:]
+		}
+	}
+	return 0, ""
 }
