@@ -35,7 +35,7 @@ func (e *ExecError) Error() string {
 				_, opx, _, _ = r.cls.Pos.readABC(i)
 			}
 			if r.cursor >= op && r.cursor < opx {
-				src = fmt.Sprintf("%s:%d:%d", r.cls.source, line, col)
+				src = fmt.Sprintf("%s:%d:%d", r.cls.Source, line, col)
 				break
 			}
 		}
@@ -134,17 +134,15 @@ func execCursorLoop(env *Env, K *Closure, cursor uint32) (result Value, resultV 
 		K = r.cls
 		r.env.A, r.env.V = returnVararg(v, env.V)
 		caddr = kodeaddr(K.Code)
-		if r.cls.Is(ClsNoEnvEscape) {
-			if stackEnv != nil {
-				for i := range stackEnv.stack {
-					stackEnv.stack[i] = Value{}
-				}
-				stackEnv.stack = stackEnv.stack[:0]
-				recycledStacks = append(recycledStacks, stackEnv)
+		if stackEnv != nil {
+			for i := range stackEnv.stack {
+				stackEnv.stack[i] = Value{}
 			}
-			stackEnv = env
-			stackEnv.Clear()
+			stackEnv.stack = stackEnv.stack[:0]
+			recycledStacks = append(recycledStacks, stackEnv)
 		}
+		stackEnv = env
+		stackEnv.Clear()
 		// log.Println(unsafe.Pointer(&stackEnv.stack))
 		env = r.env
 		retStack = retStack[:len(retStack)-1]
@@ -355,12 +353,6 @@ MAIN:
 			if stackEnv == nil {
 				stackEnv = NewEnv(nil)
 			}
-			// if opb == 0 {
-			// 	if len(stackEnv.stack) > 0 && opb == 0 {
-			// 		log.Println(stackEnv.stack)
-			// 	}
-			// 	stackEnv.stack = stackEnv.stack[:0]
-			// }
 			if v := env._get(opa, K); v.Type() == UPK {
 				stackEnv.stack = append(stackEnv.stack, v._Upk()...)
 			} else {
@@ -381,7 +373,7 @@ MAIN:
 			v, env.V = returnVararg(v, env.V)
 			return v, env.V, cursor, true
 		case OpLambda:
-			env.A = Fun(pkReadClosure(K.Code, &cursor, env, opa, opb))
+			env.A = Fun(K.Funcs[opa])
 		case OpCall:
 			var cls *Closure
 			switch a := env._get(opa, K); a.Type() {
@@ -409,8 +401,13 @@ MAIN:
 					stackEnv._set(uint16(cls.NumParam), newUnpackedValue(varg))
 				}
 
+				if env.global == nil { // env itself is the global env
+					stackEnv.global = env
+				} else {
+					stackEnv.global = env.global
+				}
+
 				if cls.Is(ClsYieldable | ClsNative) {
-					stackEnv.parent = env
 					env.A, env.V = cls.exec(stackEnv)
 
 					if cls.Is(ClsYieldable) {
@@ -429,7 +426,6 @@ MAIN:
 					cursor = 0
 					K = cls
 					caddr = kodeaddr(K.Code)
-					stackEnv.parent = cls.Env
 					env = stackEnv
 
 					if opb == 0 {
@@ -441,6 +437,13 @@ MAIN:
 					} else {
 						stackEnv = recycledStacks[len(recycledStacks)-1]
 						recycledStacks = recycledStacks[:len(recycledStacks)-1]
+					}
+
+					if cls.stackSize > 0 {
+						if env == nil {
+							env = &Env{stack: make([]Value, cls.stackSize)}
+						}
+						env.grow(int(cls.stackSize))
 					}
 				}
 			}

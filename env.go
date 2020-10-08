@@ -10,7 +10,7 @@ import (
 // A and V stores the results of the execution (e.g: return a, b, c => env.A = a, env.V = []Value{b, c})
 // For native variadic functions, V also stores the incoming varargs.
 type Env struct {
-	parent *Env
+	global *Env
 	stack  []Value
 	V      []Value
 	A      Value
@@ -18,11 +18,11 @@ type Env struct {
 
 // NewEnv creates the Env for closure to run within
 // parent can be nil, which means this is a top Env
-func NewEnv(parent *Env) *Env {
+func NewEnv(global *Env) *Env {
 	//b := make([]byte, 4096)
 	//n := runtime.Stack(b, false)
 	//log.Println(string(b[:n]))
-	return &Env{parent: parent}
+	return &Env{global: global}
 }
 
 func (env *Env) grow(newSize int) {
@@ -72,14 +72,6 @@ func (env *Env) Size() int {
 	return len(env.stack)
 }
 
-func (env *Env) Parent() *Env {
-	return env.parent
-}
-
-func (env *Env) SetParent(parent *Env) {
-	env.parent = parent
-}
-
 // go:noescape
 // func envGet(env *Env, yx uint16, K *Closure) Value
 
@@ -94,16 +86,15 @@ func (env *Env) _get(yx uint16, cls *Closure) (zzz Value) {
 		return cls.ConstTable[index]
 	}
 
-REPEAT:
-	if y > 0 && env != nil {
-		y, env = y-1, env.parent
-		goto REPEAT
+	if y == 1 {
+		env = env.global
+		if env == nil {
+			panic("nil global")
+		}
 	}
-	if s := env.stack; index < len(s) {
-		return *(*Value)(unsafe.Pointer(uintptr(unsafe.Pointer(&s[0])) + SizeOfValue*uintptr(index)))
-		// return s[index]
-	}
-	return Value{}
+
+	s := env.stack
+	return *(*Value)(unsafe.Pointer(uintptr(unsafe.Pointer(&s[0])) + SizeOfValue*uintptr(index)))
 }
 
 func (env *Env) _set(yx uint16, v Value) {
@@ -111,15 +102,14 @@ func (env *Env) _set(yx uint16, v Value) {
 		env.A = v
 	} else {
 		y := yx >> 10
-	REPEAT:
-		if y > 0 && env != nil {
-			y, env = y-1, env.parent
-			goto REPEAT
+
+		if y == 1 {
+			env = env.global
+			if env.global == nil {
+				panic("nil global")
+			}
 		}
 		index := int(yx & 0x3ff)
-		if index >= len(env.stack) {
-			env.grow(index + 1)
-		}
 		env.stack[index] = v
 	}
 }

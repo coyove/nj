@@ -123,40 +123,41 @@ func (p posVByte) readABC(i int) (next int, a, b uint32, c uint16) {
 }
 
 type packet struct {
-	data   []uint32
-	pos    posVByte
-	source string
+	Funcs  []*Closure
+	Code   []uint32
+	Pos    posVByte
+	Source string
 }
 
 func (b *packet) write(buf packet) {
-	datalen := len(b.data)
-	b.data = append(b.data, buf.data...)
+	datalen := len(b.Code)
+	b.Code = append(b.Code, buf.Code...)
 	i := 0
-	for i < len(buf.pos) {
+	for i < len(buf.Pos) {
 		var a, b_ uint32
 		var c uint16
-		i, a, b_, c = buf.pos.readABC(i)
-		b.pos.append(a+uint32(datalen), b_, c)
+		i, a, b_, c = buf.Pos.readABC(i)
+		b.Pos.append(a+uint32(datalen), b_, c)
 	}
-	if b.source == "" {
-		b.source = buf.source
+	if b.Source == "" {
+		b.Source = buf.Source
 	}
 }
 
 func (b *packet) writeBytes(buf []uint32) {
-	b.data = append(b.data, buf...)
+	b.Code = append(b.Code, buf...)
 }
 
 func (b *packet) write32(v uint32) {
-	b.data = append(b.data, v)
+	b.Code = append(b.Code, v)
 }
 
 func (b *packet) writeOP(op _Opcode, opa, opb uint16) {
-	b.data = append(b.data, makeop(op, opa, opb))
+	b.Code = append(b.Code, makeop(op, opa, opb))
 }
 
 func (b *packet) writeJmpOP(op _Opcode, opa uint16, d int) {
-	b.data = append(b.data, makejmpop(op, opa, d))
+	b.Code = append(b.Code, makejmpop(op, opa, d))
 }
 
 func (b *packet) writePos(p parser.Position) {
@@ -164,15 +165,15 @@ func (b *packet) writePos(p parser.Position) {
 		// Debug Code, used to detect a null meta struct
 		panicf("null line")
 	}
-	b.pos.append(uint32(len(b.data)), p.Line, uint16(p.Column))
+	b.Pos.append(uint32(len(b.Code)), p.Line, uint16(p.Column))
 	if p.Source != "" {
-		b.source = p.Source
+		b.Source = p.Source
 	}
 }
 
 func (b *packet) truncateLast() {
-	if len(b.data) > 0 {
-		b.data = b.data[:len(b.data)-1]
+	if len(b.Code) > 0 {
+		b.Code = b.Code[:len(b.Code)-1]
 	}
 }
 
@@ -208,38 +209,8 @@ func (b *packet) writeConstTable(consts []interface{}) {
 	b.writeBytes(u32FromBytes(buf.Bytes()))
 }
 
-func pkReadConstTable(code []uint32, cursor *uint32, n int) []Value {
-	res := make([]Value, 0, n)
-	buf := pkReadBytes(code, int(pkRead32(code, cursor)), cursor)
-	for init := buf; len(buf) > 0; {
-		switch buf[0] {
-		case 0: // float
-			x := math.Float64frombits(binary.BigEndian.Uint64(buf[1:]))
-			res = append(res, Num(x))
-			buf = buf[9:]
-		case 1: // int
-			v, n := binary.Varint(buf[1:])
-			res = append(res, Num(float64(v)))
-			buf = buf[1+n:]
-		case 2: // string
-			l, n := binary.Uvarint(buf[1:])
-			res = append(res, _StrBytes(buf[1+n:1+n+int(l)]))
-			buf = buf[1+n+int(l):]
-		case 3: // true
-			res = append(res, Bln(true))
-			buf = buf[1:]
-		case 4: // false
-			res = append(res, Bln(false))
-			buf = buf[1:]
-		default:
-			panicf("invalid const table entry: %v in %x", buf[0], init)
-		}
-	}
-	return res
-}
-
 func (b *packet) Len() int {
-	return len(b.data)
+	return len(b.Code)
 }
 
 func pkRead(data []uint32, len int, cursor *uint32) []uint32 {
@@ -282,7 +253,7 @@ func pkPrettify(c *Closure, tab int) string {
 		spaces2 = strings.Repeat("        ", tab-1) + "+-------"
 	}
 
-	sb.WriteString(spaces2 + "+ START " + string(c.source) + "\n")
+	sb.WriteString(spaces2 + "+ START " + c.Source + "\n")
 
 	var cursor uint32
 	readAddr := func(a uint16) string {
@@ -295,7 +266,10 @@ func pkPrettify(c *Closure, tab int) string {
 		if a>>10 == 7 {
 			return fmt.Sprintf("k$%d(%v)", a&0x03ff, c.ConstTable[a&0x3ff].toString(0, true))
 		}
-		return fmt.Sprintf("$%d$%d", a>>10, a&0x03ff)
+		if a>>10 == 1 {
+			return fmt.Sprintf("g$%d", a&0x03ff)
+		}
+		return fmt.Sprintf("$%d", a&0x03ff)
 	}
 
 	oldpos := c.Pos
@@ -363,7 +337,7 @@ MAIN:
 			sb.WriteString("yield " + readAddr(a))
 		case OpLambda:
 			sb.WriteString("$a = closure:\n")
-			cls := pkReadClosure(c.Code, &cursor, nil, a, b)
+			cls := c.Funcs[a]
 			sb.WriteString(pkPrettify(cls, tab+1))
 		case OpCall:
 			if b == 1 {
@@ -408,27 +382,6 @@ MAIN:
 
 	c.Pos = oldpos
 
-	sb.WriteString(spaces2 + "+ END " + string(c.source))
+	sb.WriteString(spaces2 + "+ END " + c.Source)
 	return sb.String()
-}
-
-func pkReadClosure(code []uint32, cursor *uint32, env *Env, opa, opb uint16) *Closure {
-	opaopb := uint32(opa)<<13 | uint32(opb)
-	numParam := byte(opaopb >> 18)
-	options := byte(opaopb >> 10)
-
-	ct := pkReadConstTable(code, cursor, int(uint16(opaopb&0x3ff)))
-	src := pkReadBytes(code, int(pkRead32(code, cursor)), cursor)
-	pos := pkReadBytes(code, int(pkRead32(code, cursor)), cursor)
-	clsCode := pkRead(code, int(pkRead32(code, cursor)), cursor)
-
-	return &Closure{
-		Code:       clsCode,
-		ConstTable: ct,
-		Env:        env,
-		NumParam:   numParam,
-		Pos:        pos,
-		options:    options,
-		source:     src,
-	}
 }

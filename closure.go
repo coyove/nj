@@ -12,13 +12,12 @@ const (
 )
 
 type Closure struct {
-	Code       []uint32
-	Pos        posVByte
-	source     []byte
+	packet
 	ConstTable []Value
 	Env        *Env
 	NumParam   byte
 	options    byte
+	stackSize  uint16
 	lastCursor uint32
 	lastEnv    *Env
 	native     func(env *Env)
@@ -36,8 +35,6 @@ func (c *Closure) setOpt(flag bool, opt byte) {
 }
 
 func (c *Closure) Is(opt byte) bool { return (c.options & opt) > 0 }
-
-func (c *Closure) Source() string { return string(c.source) }
 
 func (c Closure) Dup() *Closure { return &c }
 
@@ -80,8 +77,6 @@ func (c *Closure) exec(newEnv *Env) (Value, []Value) {
 	if c.native == nil {
 		if c.lastEnv != nil {
 			newEnv = c.lastEnv
-		} else {
-			newEnv.SetParent(c.Env)
 		}
 
 		v, vb, np, yield := execCursorLoop(newEnv, c, c.lastCursor)

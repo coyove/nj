@@ -35,7 +35,7 @@ type symtable struct {
 	code packet
 
 	// variable name lookup
-	parent    *symtable
+	global    *symtable
 	sym       map[string]*symbol
 	maskedSym []map[string]*symbol
 
@@ -151,7 +151,7 @@ func (table *symtable) get(varname parser.Symbol) uint16 {
 		}
 
 		depth++
-		table = table.parent
+		table = table.global
 	}
 
 	return regNil
@@ -202,6 +202,21 @@ func (table *symtable) loadK(v interface{}) uint16 {
 	}()
 
 	return 0x7<<10 | kaddr
+}
+
+func (table *symtable) constsToValues() []Value {
+	consts := make([]Value, len(table.consts))
+	for i, k := range table.consts {
+		switch k := k.(type) {
+		case float64:
+			consts[i] = Num(k)
+		case string:
+			consts[i] = Str(k)
+		case bool:
+			consts[i] = Bln(k)
+		}
+	}
+	return consts
 }
 
 var flatOpMapping = map[string]_Opcode{
@@ -315,7 +330,7 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 	case parser.AFor.Text:
 		yx = table.compileWhileOp(nodes)
 	case parser.AContinue.Text, parser.ABreak.Text:
-yx = table.compileBreakOp(nodes)
+		yx = table.compileBreakOp(nodes)
 	case parser.ACall.Text, parser.ATailCall.Text:
 		yx = table.compileCallOp(nodes)
 	case parser.AHash.Text, parser.AHashArray.Text, parser.AArray.Text:
@@ -368,22 +383,11 @@ func compileNodeTopLevel(n parser.Node) (cls *Closure, err error) {
 	table.compileNode(n)
 	table.code.writeOP(OpEOB, 0, 0)
 	table.patchGoto()
-	consts := make([]Value, len(table.consts))
-	for i, k := range table.consts {
-		switch k := k.(type) {
-		case float64:
-			consts[i] = Num(k)
-		case string:
-			consts[i] = Str(k)
-		case bool:
-			consts[i] = Bln(k)
-		}
-	}
-	cls = &Closure{Code: table.code.data, ConstTable: consts}
+	cls = &Closure{packet: table.code, ConstTable: table.constsToValues()}
 	cls.lastEnv = NewEnv(nil)
-	cls.Pos = table.code.pos
-	cls.source = []byte("root " + cls.String() + " " + table.code.source)
+	cls.Source = "root " + cls.String() + " " + table.code.Source
 	cls.lastEnv.stack = coreStack.stack
+	cls.lastEnv.grow(int(table.vp))
 	return cls, err
 }
 
