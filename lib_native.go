@@ -23,7 +23,7 @@ var (
 				case "append":
 					env.A = NativeFun(func(env *Env) {
 						a := env.In(0, ANY).Any().(Bytes)
-						for _, v := range env.stack[1:] {
+						for _, v := range env.Stack()[1:] {
 							a = append(a, byte(v.ExpectMsg(NUM, "append").Num()))
 						}
 						env.A = Any(a)

@@ -19,7 +19,7 @@ type Closure struct {
 	options    byte
 	stackSize  uint16
 	lastCursor uint32
-	lastEnv    *Env
+	lastEnv    Env
 	native     func(env *Env)
 }
 
@@ -59,7 +59,7 @@ func (c *Closure) String() string {
 	}
 
 	x := fmt.Sprintf("<%s-%d-%04x-%dk", p, c.NumParam, hash/65536, len(c.ConstTable))
-	if c.lastEnv != nil {
+	if c.lastEnv.stack != nil {
 		x += fmt.Sprintf("-%xy", c.lastCursor)
 	}
 	return x + ">"
@@ -73,9 +73,9 @@ func (c *Closure) PrettyString() string {
 }
 
 // exec executes the closure with the given Env
-func (c *Closure) exec(newEnv *Env) (Value, []Value) {
+func (c *Closure) exec(newEnv Env) (Value, []Value) {
 	if c.native == nil {
-		if c.lastEnv != nil {
+		if c.lastEnv.stack != nil {
 			newEnv = c.lastEnv
 		}
 
@@ -85,22 +85,21 @@ func (c *Closure) exec(newEnv *Env) (Value, []Value) {
 			c.lastEnv = newEnv
 		} else {
 			c.lastCursor = 0
-			c.lastEnv = nil
+			c.lastEnv = Env{}
 		}
 		return v, vb
 	}
 
 	// Native function doesn't have its own Env,
 	// so newEnv's parent is the Env where this function was called.
-	c.native(newEnv)
+	c.native(&newEnv)
 	return newEnv.A, newEnv.V
 }
 
 func (c *Closure) Call(a ...Value) (Value, []Value) {
-	var newEnv *Env
+	var newEnv Env
 	var varg []Value
-	if c.lastEnv == nil {
-		newEnv = NewEnv(c.Env)
+	if c.lastEnv.stack == nil {
 		for i := range a {
 			if i >= int(c.NumParam) {
 				varg = append(varg, a[i])

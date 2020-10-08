@@ -9,9 +9,9 @@ import (
 )
 
 type stacktrace struct {
-	cursor uint32
-	env    *Env
-	cls    *Closure
+	cursor      uint32
+	stackOffset uint32
+	cls         *Closure
 }
 
 // ExecError represents the runtime error
@@ -84,30 +84,14 @@ func returnVararg(a Value, b []Value) (Value, []Value) {
 }
 
 // execCursorLoop executes 'K' under 'Env' from the given start 'cursor'
-func execCursorLoop(env *Env, K *Closure, cursor uint32) (result Value, resultV []Value, nextCursor uint32, yielded bool) {
-	var stackEnv *Env
+func execCursorLoop(env Env, K *Closure, cursor uint32) (result Value, resultV []Value, nextCursor uint32, yielded bool) {
+	var stackEnv = env
 	var retStack []stacktrace
-	var recycledStacks []*Env
-	var caddr = kodeaddr(K.Code)
+
+	stackEnv.stackOffset = len(*env.stack)
 
 	defer func() {
 		if r := recover(); r != nil {
-			// stk := append(retStack, stacktrace{cls: K})
-			// for i := len(stk) - 1; i >= 0; i-- {
-			// 	if stk[i].cls.Is(ClsRecoverable) {
-			// 		nextCursor, yielded = 0, false
-			// 		if rv, ok := r.(Value); ok {
-			// 			result = rv
-			// 			resultV = env.V
-			// 		} else {
-			// 			p := bytes.Buffer{}
-			// 			fmt.Fprint(&p, r)
-			// 			result = Str(p.String())
-			// 		}
-			// 		return
-			// 	}
-			// }
-
 			rr := stacktrace{
 				cursor: cursor,
 				cls:    K,
@@ -132,19 +116,11 @@ func execCursorLoop(env *Env, K *Closure, cursor uint32) (result Value, resultV 
 		r := retStack[len(retStack)-1]
 		cursor = r.cursor
 		K = r.cls
-		r.env.A, r.env.V = returnVararg(v, env.V)
-		caddr = kodeaddr(K.Code)
-		if stackEnv != nil {
-			for i := range stackEnv.stack {
-				stackEnv.stack[i] = Value{}
-			}
-			stackEnv.stack = stackEnv.stack[:0]
-			recycledStacks = append(recycledStacks, stackEnv)
-		}
-		stackEnv = env
-		stackEnv.Clear()
-		// log.Println(unsafe.Pointer(&stackEnv.stack))
-		env = r.env
+
+		env.stackOffset = int(r.stackOffset)
+		env.A, env.V = returnVararg(v, env.V)
+		*env.stack = (*env.stack)[:env.stackOffset+int(r.cls.stackSize)]
+		stackEnv.stackOffset = len(*env.stack)
 		retStack = retStack[:len(retStack)-1]
 	}
 
@@ -153,7 +129,7 @@ MAIN:
 		//	if flag != nil && atomic.LoadUintptr(flag) == 1 {
 		//		panicf("canceled")
 		//	}
-		v := *(*uint32)(unsafe.Pointer(uintptr(cursor)*4 + caddr))
+		v := K.Code[cursor]
 		cursor++
 		bop, opa, opb := op(v)
 
@@ -307,27 +283,23 @@ MAIN:
 				env.A, _ = v.GetMetamethod(M__len).ExpectMsg(FUN, "metamethod operator #").Fun().Call(v)
 			}
 		case OpMakeTable:
-			if stackEnv == nil {
-				env.A = Tab(&Table{})
-			} else {
-				switch opa {
-				case 1, 3: // 1: make hash; 3: make hash part of the table stored in $a
-					var m *Table
-					if opa == 3 {
-						m = env.A.Tab()
-					} else {
-						m = &Table{}
-					}
-					for i := 0; i < stackEnv.Size(); i += 2 {
-						m.RawPut(stackEnv.stack[i], stackEnv.stack[i+1])
-					}
-					stackEnv.Clear()
-					env.A = Tab(m)
-				case 2: // 2: make array
-					m := &Table{a: append([]Value{}, stackEnv.stack...)}
-					stackEnv.Clear()
-					env.A = Tab(m)
+			switch opa {
+			case 1, 3: // 1: make hash; 3: make hash part of the table stored in $a
+				var m *Table
+				if opa == 3 {
+					m = env.A.Tab()
+				} else {
+					m = &Table{}
 				}
+				for i := 0; i < stackEnv.Size(); i += 2 {
+					m.RawPut(stackEnv.Get(i), stackEnv.Get(i+1))
+				}
+				stackEnv.Clear()
+				env.A = Tab(m)
+			case 2: // 2: make array
+				m := &Table{a: append([]Value{}, stackEnv.Stack()...)}
+				stackEnv.Clear()
+				env.A = Tab(m)
 			}
 		case OpStore:
 			subject, v := env._get(opa, K), env._get(opb, K)
@@ -350,16 +322,13 @@ MAIN:
 				env.A, _ = a.GetMetamethod(M__index).ExpectMsg(FUN, "metamethod index").Fun().Call(a, idx)
 			}
 		case OpPush:
-			if stackEnv == nil {
-				stackEnv = NewEnv(nil)
-			}
 			if v := env._get(opa, K); v.Type() == UPK {
-				stackEnv.stack = append(stackEnv.stack, v._Upk()...)
+				*stackEnv.stack = append(*stackEnv.stack, v._Upk()...)
 			} else {
 				stackEnv.Push(v)
 			}
 			if opa == regA && len(env.V) > 0 {
-				stackEnv.stack = append(stackEnv.stack, env.V...)
+				*stackEnv.stack = append(*stackEnv.stack, env.V...)
 			}
 		case OpRet:
 			v := env._get(opa, K)
@@ -380,74 +349,61 @@ MAIN:
 			case FUN:
 				cls = a.Fun()
 			default:
-				cls = a.GetMetamethod(M__call).ExpectMsg(FUN, "metamethod call").Fun()
-				stackEnv.stack = append([]Value{a}, stackEnv.stack...)
+				panic("TODO")
+				// cls = a.GetMetamethod(M__call).ExpectMsg(FUN, "metamethod call").Fun()
+				// stackEnv.stack = append([]Value{a}, stackEnv.stack...)
 			}
-			if cls.lastEnv != nil { // resume yielded coroutine
-				env.A, env.V = cls.exec(nil)
-				if stackEnv != nil {
-					stackEnv.stack = stackEnv.stack[:0]
-				}
+			if cls.lastEnv.stack != nil { // resume yielded coroutine
+				env.A, env.V = cls.exec(Env{})
+				stackEnv.Clear()
 			} else {
-				if stackEnv == nil {
-					stackEnv = NewEnv(env)
-				}
-
 				if cls.Is(ClsVararg) && !cls.Is(ClsNative) {
-					var varg []Value
-					if stackEnv.Size() > int(cls.NumParam) {
-						varg = append([]Value{}, stackEnv.stack[cls.NumParam:]...)
-					}
-					stackEnv._set(uint16(cls.NumParam), newUnpackedValue(varg))
+					panic("todo")
+					// var varg []Value
+					// if stackEnv.Size() > int(cls.NumParam) {
+					// 	varg = append([]Value{}, stackEnv.stack[cls.NumParam:]...)
+					// }
+					// stackEnv._set(uint16(cls.NumParam), newUnpackedValue(varg))
 				}
 
 				if env.global == nil { // env itself is the global env
-					stackEnv.global = env
+					stackEnv.global = env.Stack()
 				} else {
 					stackEnv.global = env.global
 				}
 
 				if cls.Is(ClsYieldable | ClsNative) {
-					env.A, env.V = cls.exec(stackEnv)
-
 					if cls.Is(ClsYieldable) {
-						stackEnv = nil
-					} else {
-						stackEnv.Clear()
+						x := append([]Value{}, stackEnv.Stack()...)
+						stackEnv.stackOffset = 0
+						stackEnv.stack = &x
 					}
+					env.A, env.V = cls.exec(stackEnv)
+					stackEnv.Clear()
 				} else {
 					last := stacktrace{
-						cls:    K,
-						cursor: cursor,
-						env:    env,
+						cls:         K,
+						cursor:      cursor,
+						stackOffset: uint32(env.stackOffset),
 					}
 
 					// switch to the Env of cls
 					cursor = 0
 					K = cls
-					caddr = kodeaddr(K.Code)
-					env = stackEnv
+					env.stackOffset = stackEnv.stackOffset
+					env.global = stackEnv.global
 
 					if opb == 0 {
 						retStack = append(retStack, last)
 					}
 
-					if len(recycledStacks) == 0 {
-						stackEnv = nil
-					} else {
-						stackEnv = recycledStacks[len(recycledStacks)-1]
-						recycledStacks = recycledStacks[:len(recycledStacks)-1]
-					}
-
 					if cls.stackSize > 0 {
-						if env == nil {
-							env = &Env{stack: make([]Value, cls.stackSize)}
-						}
 						env.grow(int(cls.stackSize))
 					}
+
+					stackEnv.stackOffset = len(*env.stack)
 				}
 			}
-
 		case OpJmp:
 			cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 		case OpIfNot:

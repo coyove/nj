@@ -25,7 +25,7 @@ var (
 	DefaultOutput = File{os.Stdout}
 	fileWriteImpl = NativeFun(func(env *Env) {
 		out := env.In(0, ANY).Any().(File)
-		for _, v := range env.stack[1:] {
+		for _, v := range env.Stack()[1:] {
 			switch v.Type() {
 			case STR:
 				out.Write(v._StrBytes())
@@ -43,7 +43,7 @@ var (
 				env.V = append(env.V, v)
 			}
 		}
-		for i, a := range env.stack[1:] {
+		for i, a := range env.Stack()[1:] {
 			switch a.Type() {
 			case NUM:
 				b := make([]byte, int(a.Num()))
@@ -91,7 +91,7 @@ var (
 	fileSeekImpl = NativeFun(func(env *Env) {
 		var off int64 = 0
 		var when = io.SeekCurrent
-		if len(env.stack) >= 2 {
+		if len(env.Stack()) >= 2 {
 			switch env.In(1, STR).Str() {
 			case "set":
 				when = io.SeekStart
@@ -103,7 +103,7 @@ var (
 				panic("bad argument")
 			}
 		}
-		if len(env.stack) == 3 {
+		if len(env.Stack()) == 3 {
 			off = int64(env.In(2, NUM).Num())
 		}
 		if n, err := env.In(0, ANY).Any().(File).Seek(off, when); err == nil {
@@ -158,9 +158,9 @@ var (
 
 func initLibAux() {
 	G.Puts("print", NativeFun(func(env *Env) {
-		args := make([]interface{}, len(env.stack))
+		args := make([]interface{}, len(env.Stack()))
 		for i := range args {
-			args[i] = env.stack[i].Any()
+			args[i] = env.Stack()[i].Any()
 		}
 		if n, err := fmt.Println(args...); err != nil {
 			env.Return(Value{}, Str(err.Error()))
@@ -173,7 +173,7 @@ func initLibAux() {
 	lio.Puts("open", NativeFun(func(env *Env) {
 		perm := os.FileMode(0666)
 		flag := os.O_RDONLY
-		if len(env.stack) == 2 {
+		if len(env.Stack()) == 2 {
 			switch strings.Replace(env.In(1, STR).Str(), "b", "", 1) {
 			case "r":
 			case "w":
@@ -198,10 +198,10 @@ func initLibAux() {
 		}
 	}))
 	lio.Puts("read", NativeFun(func(env *Env) {
-		env.A, env.V = fileReadImpl.Fun().Call(append([]Value{Any(DefaultInput)}, env.stack...)...)
+		env.A, env.V = fileReadImpl.Fun().Call(append([]Value{Any(DefaultInput)}, env.Stack()...)...)
 	}))
 	lio.Puts("write", NativeFun(func(env *Env) {
-		env.A, env.V = fileWriteImpl.Fun().Call(append([]Value{Any(DefaultOutput)}, env.stack...)...)
+		env.A, env.V = fileWriteImpl.Fun().Call(append([]Value{Any(DefaultOutput)}, env.Stack()...)...)
 	}))
 	lio.Puts("type", NativeFun(func(env *Env) {
 		env.A = Value{}
@@ -220,7 +220,7 @@ func initLibAux() {
 	}))
 	lio.Puts("lines", NativeFun(func(env *Env) {
 		i := DefaultInput
-		if len(env.stack) == 1 {
+		if len(env.Stack()) == 1 {
 			f, err := os.Open(env.In(0, STR).Str())
 			if err != nil {
 				env.Return(Value{}, Str(err.Error()))
@@ -228,7 +228,7 @@ func initLibAux() {
 			}
 			i = File{f}
 		}
-		env.A, env.V = fileLinesImpl.Fun().Call(append([]Value{Any(i)}, env.stack...)...)
+		env.A, env.V = fileLinesImpl.Fun().Call(append([]Value{Any(i)}, env.Stack()...)...)
 	}))
 	lio.Puts("tmpfile", NativeFun(func(env *Env) {
 		p := filepath.Join(os.TempDir(), fmt.Sprintf("pol%d%d", time.Now().Unix(), rand.Int()))
@@ -283,7 +283,7 @@ func initLibAux() {
 	lstring := &Table{}
 	lstring.Puts("format", NativeFun(func(env *Env) {
 		f := env.In(0, STR).Str()
-		args := make([]interface{}, 0, len(env.stack))
+		args := make([]interface{}, 0, len(env.Stack()))
 		for x, i, f := byte(0), 1, f; ; {
 			x, f = findNextFormat(f)
 			if x == 0 {

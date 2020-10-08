@@ -370,7 +370,7 @@ func compileNodeTopLevel(n parser.Node) (cls *Closure, err error) {
 
 	table := newsymtable()
 
-	coreStack := NewEnv(nil)
+	coreStack := NewEnv()
 	G.iterStringKeys(func(k string, v Value) {
 		table.put(k, uint16(coreStack.Size()))
 		coreStack.Push(v)
@@ -384,10 +384,10 @@ func compileNodeTopLevel(n parser.Node) (cls *Closure, err error) {
 	table.code.writeOP(OpEOB, 0, 0)
 	table.patchGoto()
 	cls = &Closure{packet: table.code, ConstTable: table.constsToValues()}
-	cls.lastEnv = NewEnv(nil)
 	cls.Source = "root " + cls.String() + " " + table.code.Source
 	cls.lastEnv.stack = coreStack.stack
 	cls.lastEnv.grow(int(table.vp))
+	cls.stackSize = table.vp
 	return cls, err
 }
 

@@ -31,7 +31,7 @@ var (
 func init() {
 	strMetatable = (&Table{}).Puts("sub", NativeFun(func(env *Env) {
 		i, j, s := int(env.In(1, NUM).Num()), -1, env.In(0, STR).Str()
-		if len(env.stack) > 2 {
+		if len(env.Stack()) > 2 {
 			j = int(env.Get(2).Expect(NUM).Num())
 		}
 		if i < 0 {

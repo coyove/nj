@@ -19,10 +19,10 @@ func initCoreLibs() {
 	G.Puts("unpack", NativeFun(func(env *Env) {
 		a := env.In(0, TAB).Tab().a
 		start, end := 1, len(a)
-		if len(env.stack) > 1 {
+		if len(env.Stack()) > 1 {
 			start = int(env.Get(1).Expect(NUM).Num())
 		}
-		if len(env.stack) > 2 {
+		if len(env.Stack()) > 2 {
 			end = int(env.Get(2).Expect(NUM).Num())
 		}
 		env.A = newUnpackedValue(a[start-1 : end])
@@ -30,7 +30,7 @@ func initCoreLibs() {
 	ltable := &Table{}
 	ltable.Puts("insert", NativeFun(func(env *Env) {
 		t := env.In(0, TAB).Tab()
-		if len(env.stack) > 2 {
+		if len(env.Stack()) > 2 {
 			t.Insert(env.In(1, NUM), env.Get(2))
 			env.A = env.Get(2)
 		} else {
@@ -40,7 +40,7 @@ func initCoreLibs() {
 	ltable.Puts("remove", NativeFun(func(env *Env) {
 		t := env.In(0, TAB).Tab()
 		n := t.Len()
-		if len(env.stack) > 1 {
+		if len(env.Stack()) > 1 {
 			n = int(env.Get(1).Expect(NUM).Num())
 		}
 		t.Remove(n)
@@ -92,15 +92,15 @@ func initCoreLibs() {
 				env.Return(Bln(false))
 			}
 		}()
-		a, v := env.In(0, FUN).Fun().Call(env.stack[1:]...)
+		a, v := env.In(0, FUN).Fun().Call(env.Stack()[1:]...)
 		env.Return(Bln(true), append([]Value{a}, v...)...)
 	}))
 	G.Puts("select", NativeFun(func(env *Env) {
 		switch a := env.Get(0); a.Type() {
 		case STR:
-			env.A = Num(float64(len(env.stack[1:])))
+			env.A = Num(float64(len(env.Stack()[1:])))
 		case NUM:
-			if u, idx := env.stack[1:], int(a.Num())-1; idx < len(u) {
+			if u, idx := env.Stack()[1:], int(a.Num())-1; idx < len(u) {
 				env.Return(u[idx], u[idx+1:]...)
 			} else {
 				env.Return(Value{})
@@ -179,7 +179,7 @@ func initCoreLibs() {
 	lmath.Puts("e", Num(math.E))
 	lmath.Puts("randomseed", NativeFun(func(env *Env) { rand.Seed(int64(env.In(0, NUM).Num())) }))
 	lmath.Puts("random", NativeFun(func(env *Env) {
-		switch len(env.stack) {
+		switch len(env.Stack()) {
 		case 2:
 			a, b := int(env.In(0, NUM).Num()), int(env.In(1, NUM).Num())
 			env.A = Num(float64(rand.Intn(b-a)+a) + 1)
@@ -201,11 +201,11 @@ func initCoreLibs() {
 	lmath.Puts("ldexp", NativeFun(func(env *Env) { env.A = Num(math.Ldexp(env.In(0, NUM).Num(), int(env.In(1, NUM).Num()))) }))
 	lmath.Puts("modf", NativeFun(func(env *Env) { a, b := math.Modf(env.In(0, NUM).Num()); env.Return(Num(a), Num(float64(b))) }))
 	lmath.Puts("min", NativeFun(func(env *Env) {
-		if len(env.stack) == 0 {
+		if len(env.Stack()) == 0 {
 			env.A = Value{}
 		} else {
 			min := env.Get(0).Expect(NUM).Num()
-			for i := 1; i < len(env.stack); i++ {
+			for i := 1; i < len(env.Stack()); i++ {
 				if x := env.Get(i).Expect(NUM).Num(); x < min {
 					min = x
 				}
@@ -214,11 +214,11 @@ func initCoreLibs() {
 		}
 	}))
 	lmath.Puts("max", NativeFun(func(env *Env) {
-		if len(env.stack) == 0 {
+		if len(env.Stack()) == 0 {
 			env.A = Value{}
 		} else {
 			max := env.Get(0).Expect(NUM).Num()
-			for i := 1; i < len(env.stack); i++ {
+			for i := 1; i < len(env.Stack()); i++ {
 				if x := env.Get(i).Expect(NUM).Num(); x > max {
 					max = x
 				}
@@ -230,7 +230,7 @@ func initCoreLibs() {
 
 	lnative := &Table{}
 	lnative.Puts("int64", NativeFun(func(env *Env) {
-		if len(env.stack) == 2 {
+		if len(env.Stack()) == 2 {
 			v := int64(uint32(env.In(0, NUM).Num()))<<32 | int64(uint32(env.In(1, NUM).Num()))
 			env.A = Any(Int64(v))
 		} else {
@@ -238,7 +238,7 @@ func initCoreLibs() {
 		}
 	}))
 	lnative.Puts("uint64", NativeFun(func(env *Env) {
-		if len(env.stack) == 2 {
+		if len(env.Stack()) == 2 {
 			v := uint64(uint32(env.In(0, NUM).Num()))<<32 | uint64(uint32(env.In(1, NUM).Num()))
 			env.A = Any(UInt64(v))
 		} else {
