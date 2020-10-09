@@ -123,7 +123,7 @@ func (p posVByte) readABC(i int) (next int, a, b uint32, c uint16) {
 }
 
 type packet struct {
-	Funcs  []*Closure
+	Funcs  []*Func
 	Code   []uint32
 	Pos    posVByte
 	Source string
@@ -245,7 +245,7 @@ var singleOp = map[_Opcode]parser.Symbol{
 	OpPow:    parser.APow,
 }
 
-func pkPrettify(c *Closure, tab int) string {
+func pkPrettify(c *Func, tab int) string {
 	sb := &bytes.Buffer{}
 	spaces := strings.Repeat("        ", tab)
 	spaces2 := ""
@@ -253,7 +253,7 @@ func pkPrettify(c *Closure, tab int) string {
 		spaces2 = strings.Repeat("        ", tab-1) + "+-------"
 	}
 
-	sb.WriteString(spaces2 + "+ START " + c.Source + "\n")
+	sb.WriteString(spaces2 + "+ START " + c.String() + " " + c.Source + "\n")
 
 	var cursor uint32
 	readAddr := func(a uint16) string {
@@ -264,7 +264,7 @@ func pkPrettify(c *Closure, tab int) string {
 			return "nil"
 		}
 		if a>>10 == 7 {
-			return fmt.Sprintf("k$%d(%v)", a&0x03ff, c.ConstTable[a&0x3ff].toString(0, true))
+			return fmt.Sprintf("k$%d(%v)", a&0x03ff, c.ConstTable[a&0x3ff].toString(0))
 		}
 		if a>>10 == 1 {
 			return fmt.Sprintf("g$%d", a&0x03ff)
@@ -311,7 +311,7 @@ MAIN:
 		case OpPopV:
 			switch a {
 			case 0:
-				sb.WriteString("$a = popv-last-and-clear")
+				sb.WriteString("$a = popv-last-and-clear-rest")
 			case 1:
 				sb.WriteString("$a = popv")
 			case 2:
@@ -382,6 +382,6 @@ MAIN:
 
 	c.Pos = oldpos
 
-	sb.WriteString(spaces2 + "+ END " + c.Source)
+	sb.WriteString(spaces2 + "+ END " + c.String() + " " + c.Source)
 	return sb.String()
 }

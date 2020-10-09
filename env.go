@@ -1,25 +1,21 @@
 package potatolang
 
 // Env is the environment for a closure to run within.
-// stack contains arguments used to execute the closure
-// then the local variables will take the following spaces sequentially.
+// stack contains arguments used by the execution and is a global shared value, local can only use stack[stackOffset:]
 // A and V stores the results of the execution (e.g: return a, b, c => env.A = a, env.V = []Value{b, c})
-// For native variadic functions, V also stores the incoming varargs.
 type Env struct {
-	global      []Value
+	// Global
+	global *Global
+	stack  *[]Value
+
+	// Local
 	stackOffset int
-	stack       *[]Value
 	V           []Value
 	A           Value
 }
 
-// NewEnv creates the Env for closure to run within
-// parent can be nil, which means this is a top Env
-func NewEnv() *Env {
-	//b := make([]byte, 4096)
-	//n := runtime.Stack(b, false)
-	//log.Println(string(b[:n]))
-	return &Env{stack: new([]Value)}
+type Global struct {
+	Stack *[]Value
 }
 
 func (env *Env) grow(newSize int) {
@@ -58,7 +54,7 @@ func (env *Env) Size() int {
 	return len(*env.stack) - env.stackOffset
 }
 
-func (env *Env) _get(yx uint16, cls *Closure) (zzz Value) {
+func (env *Env) _get(yx uint16, cls *Func) (zzz Value) {
 	if yx == regA {
 		return env.A
 	}
@@ -69,20 +65,18 @@ func (env *Env) _get(yx uint16, cls *Closure) (zzz Value) {
 		return cls.ConstTable[index]
 	}
 
-	s := *env.stack
 	if y == 1 {
-		s = env.global
-		if s == nil {
+		if env.global == nil {
 			panic("nil global")
 		}
-		return s[index]
+		return (*env.global.Stack)[index]
 	}
 
+	s := *env.stack
 	index += env.stackOffset
 	if index >= len(s) {
 		return Value{}
 	}
-	// return *(*Value)(unsafe.Pointer(uintptr(unsafe.Pointer(&s[0])) + SizeOfValue*uintptr(index)))
 	return s[index]
 }
 
@@ -94,18 +88,16 @@ func (env *Env) _set(yx uint16, v Value) {
 		y := yx >> 10
 		s := (*env.stack)
 		if y == 1 {
-			s = env.global
-			if s == nil {
+			if env.global == nil {
 				panic("nil global")
 			}
-			s[index] = v
+			(*env.global.Stack)[index] = v
 		} else {
 			s[index+env.stackOffset] = v
 		}
 	}
 }
 
-// Stack returns the current stack
 func (env *Env) Stack() []Value {
 	return (*env.stack)[env.stackOffset:]
 }

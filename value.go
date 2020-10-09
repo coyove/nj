@@ -11,18 +11,15 @@ import (
 )
 
 const (
-	NIL = 0   // nil
-	BLN = 1   // boolean
-	NUM = 3   // number
-	STR = 7   // string
-	TAB = 15  // table
-	FUN = 31  // function
-	ANY = 63  // generic type
-	UPK = 255 // unpacked values
+	NIL = 0  // nil
+	NUM = 3  // number
+	STR = 7  // string
+	TAB = 15 // table
+	FUN = 31 // function
+	ANY = 63 // generic
 
 	NilNil = NIL * 2
 	NumNum = NUM * 2
-	BlnBln = BLN * 2
 	StrStr = STR * 2
 	TabTab = TAB * 2
 	FunFun = FUN * 2
@@ -30,69 +27,58 @@ const (
 )
 
 // Value is the basic value used by the intepreter
-// For numbers there are 4 NaNs which are not representable: [0xffffffff`fffffffc, 0xffffffff`ffffffff]
+// For float numbers there is one NaN which is not representable: 0xffffffff_ffffffff
 // An empty Value naturally represent nil
 type Value struct {
 	v uint64
 	p unsafe.Pointer
 }
 
-const SizeOfValue = unsafe.Sizeof(Value{})
-
 // Type returns the type of value, its logic should align IsFalse()
 func (v Value) Type() byte {
-	if v.p == nil {
-		if v.v <= 3 {
-			// v.v==0: nil, v.v==1: true, v.v==3: false
-			//      0: niltype   1: booltype   3 & 1 == 1 -> booltype
-			return byte(v.v & 1)
+	if v.p == nil || v.p == int64Marker {
+		if v.v == 0 {
+			return NIL
 		}
 		return NUM
+	}
+	if v.v&0xffff_ffff_ffff > 4096 {
+		return ANY
 	}
 	return byte(v.v)
 }
 
-// IsFalse tests whether value contains a falsy value
-// Type assertion should be aligned with Type()
+// IsFalse tests whether value contains a falsy value: nil or 0
 func (v Value) IsFalse() bool {
-	// if v.p == nil {
-	// 	return v.v == 0 || v.v == 3
-	// }
-	// return false
 	x := uintptr(v.p) + uintptr(v.v)
-	return x == 0 || x == 3
+	return x == 0 || x == 0xffffffff_ffffffff
 }
 
 var (
 	typeMappings = map[byte]string{
-		NIL: "nil", BLN: "boolean", NUM: "number", STR: "string", FUN: "function", ANY: "any", TAB: "table", UPK: "unpacked",
+		NIL: "nil", NUM: "number", STR: "string", FUN: "function", ANY: "any", TAB: "table",
 	}
-	emptyUPK = []Value{}
+	int64Marker = unsafe.Pointer(new(int64))
 )
 
-func init() {
-	initCoreLibs()
-}
-
-func newUnpackedValue(stack []Value) Value {
-	if stack == nil {
-		stack = emptyUPK
+func NumBool(v bool) Value {
+	if v {
+		return Num(1)
 	}
-	return Value{v: UPK, p: unsafe.Pointer(&stack)}
+	return Num(0)
 }
 
 // Num returns a number value
 func Num(f float64) Value {
-	x := *(*uint64)(unsafe.Pointer(&f))
-	return Value{v: ^x}
+	return Value{v: ^math.Float64bits(f)}
 }
 
-// Bln returns a boolean value
-func Bln(b bool) Value {
-	if !b {
-		return Value{v: 3}
+// Int also returns a number value as Num does, but it preserves int64 values which may be truncated in float64
+func Int(i int64) Value {
+	if int64(float64(i)) == i {
+		return Value{v: ^math.Float64bits(float64(i))}
 	}
-	return Value{v: 1}
+	return Value{v: uint64(i), p: int64Marker}
 }
 
 // Tab returns a table value
@@ -104,7 +90,7 @@ func Tab(m *Table) Value {
 }
 
 // Fun returns a closure value
-func Fun(c *Closure) Value {
+func Fun(c *Func) Value {
 	return Value{v: FUN, p: unsafe.Pointer(c)}
 }
 
@@ -118,26 +104,26 @@ func Str(s string) Value {
 	return Value{v: STR, p: unsafe.Pointer(&s)}
 }
 
-func _StrBytes(s []byte) Value {
-	return Value{v: STR, p: unsafe.Pointer(&s)}
-}
-
 func Any(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
 		return Value{}
 	case bool:
-		return Bln(v)
+		return NumBool(v)
 	case float64:
 		return Num(v)
+	case int64:
+		return Int(v)
 	case string:
 		return Str(v)
 	case *Table:
 		return Tab(v)
-	case *Closure:
+	case *Func:
 		return Fun(v)
 	}
-	return Value{v: ANY, p: unsafe.Pointer(&i)}
+	x := *(*[2]uintptr)(unsafe.Pointer(&i))
+	return Value{v: uint64(x[0]), p: unsafe.Pointer(x[1])}
+	// return Value{v: ANY, p: unsafe.Pointer(&i)}
 }
 
 // Str cast value to string
@@ -168,46 +154,39 @@ func (v Value) _StrBytes() []byte {
 
 func (v Value) IsNil() bool { return v == Value{} }
 
-// Num cast value to float64
-func (v Value) Num() float64 { return math.Float64frombits(^v.v) }
+func (v Value) Num() (float64, int64, bool) {
+	if v.p == int64Marker {
+		return float64(int64(v.v)), int64(v.v), true
+	}
+	x := math.Float64frombits(^v.v)
+	return x, int64(x), false
+}
 
-// Bln cast value to bool
-func (v Value) Bln() bool { return v.v == 1 }
+func (v Value) Int() int64 {
+	_, i, _ := v.Num()
+	return i
+}
+
+func (v Value) F64() float64 {
+	f, _, _ := v.Num()
+	return f
+}
 
 // Tab cast value to map of values
 func (v Value) Tab() *Table { return (*Table)(v.p) }
 
-func (v Value) _Upk() []Value {
-	if v.p == unsafe.Pointer(&emptyUPK) {
-		return nil
-	}
-	return *(*[]Value)(v.p)
-}
-
-func (v Value) _TestUpkLen() (int, bool) {
-	if v.Type() == UPK {
-		return len(v._Upk()), true
-	}
-	return 1, false
-}
-
-func (v Value) _AppendTo(arr []Value) []Value {
-	if v.Type() == UPK {
-		return append(arr, v._Upk()...)
-	}
-	return append(arr, v)
-}
-
 // Fun cast value to closure
-func (v Value) Fun() *Closure { return (*Closure)(v.p) }
+func (v Value) Fun() *Func { return (*Func)(v.p) }
 
 // Any returns the interface{}
 func (v Value) Any() interface{} {
 	switch v.Type() {
-	case BLN:
-		return v.Bln()
 	case NUM:
-		return v.Num()
+		vf, vi, vIsInt := v.Num()
+		if vIsInt {
+			return vi
+		}
+		return vf
 	case STR:
 		return v.Str()
 	case TAB:
@@ -215,7 +194,12 @@ func (v Value) Any() interface{} {
 	case FUN:
 		return v.Fun()
 	case ANY:
-		return *(*interface{})(v.p)
+		// return *(*interface{})(v.p)
+		var i interface{}
+		x := (*[2]uintptr)(unsafe.Pointer(&i))
+		(*x)[0] = uintptr(v.v)
+		(*x)[1] = uintptr(v.p)
+		return i
 	}
 	return nil
 }
@@ -234,27 +218,19 @@ func (v Value) ExpectMsg(t byte, msg string) Value {
 	return v
 }
 
-func (v Value) String() string { return v.toString(0, false) }
-
-func (v Value) GoString() string { return v.toString(0, true) }
+func (v Value) String() string { return v.toString(0) }
 
 // Equal tests whether value is equal to another value
 func (v Value) Equal(r Value) bool {
 	switch v.Type() + r.Type() {
-	case NumNum, BlnBln, NilNil:
+	case NumNum, NilNil, AnyAny:
 		return v == r
 	case StrStr:
 		return r.Str() == v.Str()
 	case TabTab:
-		if v == r {
-			return true
-		}
+		return v == r
 	case FunFun:
 		return v.Fun() == r.Fun()
-	}
-	if eq := findmm(v, r, M__eq); eq.Type() == FUN {
-		e, _ := eq.Fun().Call(v, r)
-		return !e.IsFalse()
 	}
 	return false
 }
@@ -272,21 +248,17 @@ func (v Value) Hash() uint64 {
 	return xxhash.Sum64(b)
 }
 
-func (v Value) toString(lv int, raw bool) string {
+func (v Value) toString(lv int) string {
 	if lv > 32 {
 		return "<omit deep nesting>"
 	}
-	if !raw {
-		if f := v.GetMetamethod(M__tostring); f.Type() == FUN {
-			s, _ := f.Fun().Call(v)
-			return s.Str()
-		}
-	}
 	switch v.Type() {
-	case BLN:
-		return strconv.FormatBool(v.Bln())
 	case NUM:
-		return strconv.FormatFloat(v.Num(), 'f', -1, 64)
+		vf, vi, vIsInt := v.Num()
+		if vIsInt {
+			return strconv.FormatInt(vi, 10)
+		}
+		return strconv.FormatFloat(vf, 'f', -1, 64)
 	case STR:
 		return v.Str()
 	case TAB:
@@ -295,8 +267,10 @@ func (v Value) toString(lv int, raw bool) string {
 		return v.Fun().String()
 	case ANY:
 		return fmt.Sprintf("<any:%v>", v.Any())
-	case UPK:
-		return fmt.Sprintf("<unpacked:%v>", v._Upk())
 	}
 	return "nil"
+}
+
+func (v Value) isUnpack() bool {
+	return v.Type() == TAB && v.Tab().unpacked
 }

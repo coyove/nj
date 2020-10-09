@@ -28,7 +28,7 @@ func (lex *Lexer) loadFile(path string) Node {
 
 	// Now the required code is loaded, we will wrap them into a closure
 	pos := Position{Line: 1, Column: 1, Source: path}
-	cls := __func(Cpl(), n).SetPos(pos)
+	cls := __func(emptyNode, Cpl(), n).SetPos(pos)
 	node := __call(cls, Cpl()).SetPos(pos)
 	lex.cache[path] = node
 	return cloneNode(node)

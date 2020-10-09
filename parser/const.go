@@ -18,11 +18,12 @@ func (s Symbol) SetPos(pos Position) Symbol { s.Position = pos; return s }
 func (s Symbol) String() string { return s.Text + "@" + s.Position.String() }
 
 var (
-	NUM = interfaceType(1.0)
-	STR = interfaceType("")
-	SYM = interfaceType(Symbol{})
-	CPL = interfaceType([]Node{})
-	ADR = interfaceType(uint16(1))
+	NUM    = interfaceType(1.0)
+	numINT = interfaceType(int64(1))
+	STR    = interfaceType("")
+	SYM    = interfaceType(Symbol{})
+	CPL    = interfaceType([]Node{})
+	ADR    = interfaceType(uint16(1))
 
 	breakNode     = Cpl(Node{ABreak})
 	popvNode      = Cpl(Node{APopV})
@@ -108,7 +109,7 @@ func __if(cond, truebody, falsebody Node) Node { return Cpl(Node{AIf}, cond, tru
 
 func __loop(body Node) Node { return Cpl(Node{AFor}, body) }
 
-func __func(paramlist, body Node) Node { return Cpl(Node{AFunc}, emptyNode, paramlist, body) }
+func __func(name, paramlist, body Node) Node { return Cpl(Node{AFunc}, name, paramlist, body) }
 
 func __call(cls, args Node) Node { return Cpl(Node{ACall}, cls, args) }
 

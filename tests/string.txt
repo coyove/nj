@@ -5,10 +5,6 @@ local abc = "abc"
 assert( "abc吱吱吱" == abc .. "吱吱" .. "吱")
 assert( "abc吱吱吱" == "abc\u5431\u5431\u5431")
 
-setmetatable(0, { __add = function (a, b)
-    return tonumber(a) + tonumber(b)
-end})
-
 assert(1 + "2" == 3)
 
 return {name = abc}

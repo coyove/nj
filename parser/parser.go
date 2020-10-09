@@ -1015,7 +1015,7 @@ yydefault:
 			forVar, forEnd := SymTok(yyDollar[2].token), randomVarname()
 			if yyDollar[8].expr.Type() == NUM { // step is a static number, easy case
 				var cond Node
-				if yyDollar[8].expr.Num() < 0 {
+				if f, i := yyDollar[8].expr.Num(); f < 0 || i < 0 {
 					cond = __lessEq(forEnd, forVar)
 				} else {
 					cond = __lessEq(forVar, forEnd)
@@ -1103,14 +1103,14 @@ yydefault:
 			}
 			yyVAL.expr = __chain(
 				x(funcname, Node{ANil}).SetPos(yyDollar[1].expr.Pos()),
-				__move(funcname, __func(yyDollar[3].expr, yyDollar[4].expr).SetPos(yyDollar[1].expr.Pos())).SetPos(yyDollar[1].expr.Pos()),
+				__move(funcname, __func(funcname, yyDollar[3].expr, yyDollar[4].expr).SetPos(yyDollar[1].expr.Pos())).SetPos(yyDollar[1].expr.Pos()),
 			)
 		}
 	case 36:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line parser.go.y:297
 		{
-			yyVAL.expr = __store(yyDollar[2].expr, Node{yyDollar[4].token.Str}, __func(yyDollar[5].expr, yyDollar[6].expr).SetPos(yyDollar[1].expr.Pos())).SetPos(yyDollar[1].expr.Pos())
+			yyVAL.expr = __store(yyDollar[2].expr, Node{yyDollar[4].token.Str}, __func(SymTok(yyDollar[4].token), yyDollar[5].expr, yyDollar[6].expr).SetPos(yyDollar[1].expr.Pos())).SetPos(yyDollar[1].expr.Pos())
 		}
 	case 37:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -1118,14 +1118,14 @@ yydefault:
 		{
 			paramlist := yyDollar[5].expr.CplPrepend(Sym("self"))
 			yyVAL.expr = __store(
-				yyDollar[2].expr, Node{yyDollar[4].token.Str}, __func(paramlist, yyDollar[6].expr).SetPos(yyDollar[1].expr.Pos()),
+				yyDollar[2].expr, Node{yyDollar[4].token.Str}, __func(SymTok(yyDollar[4].token), paramlist, yyDollar[6].expr).SetPos(yyDollar[1].expr.Pos()),
 			).SetPos(yyDollar[1].expr.Pos())
 		}
 	case 38:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line parser.go.y:308
 		{
-			yyVAL.expr = __func(yyDollar[2].expr, yyDollar[3].expr).SetPos(yyDollar[1].expr.Pos()).SetPos(yyDollar[1].expr.Pos())
+			yyVAL.expr = __func(emptyNode, yyDollar[2].expr, yyDollar[3].expr).SetPos(yyDollar[1].expr.Pos()).SetPos(yyDollar[1].expr.Pos())
 		}
 	case 39:
 		yyDollar = yyS[yypt-2 : yypt+1]

@@ -39,9 +39,8 @@ type symtable struct {
 	sym       map[string]*symbol
 	maskedSym []map[string]*symbol
 
-	y         bool // has yield op
-	envescape bool
-	inloop    []*breaklabel
+	y      bool // has yield op
+	inloop []*breaklabel
 
 	vp uint16
 
@@ -210,10 +209,12 @@ func (table *symtable) constsToValues() []Value {
 		switch k := k.(type) {
 		case float64:
 			consts[i] = Num(k)
+		case int64:
+			consts[i] = Int(k)
 		case string:
 			consts[i] = Str(k)
 		case bool:
-			consts[i] = Bln(k)
+			consts[i] = NumBool(k)
 		}
 	}
 	return consts
@@ -352,7 +353,7 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 	return yx
 }
 
-func compileNodeTopLevel(n parser.Node) (cls *Closure, err error) {
+func compileNodeTopLevel(n parser.Node) (cls *Func, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			cls = nil
@@ -370,7 +371,7 @@ func compileNodeTopLevel(n parser.Node) (cls *Closure, err error) {
 
 	table := newsymtable()
 
-	coreStack := NewEnv()
+	coreStack := &Env{stack: new([]Value)}
 	G.iterStringKeys(func(k string, v Value) {
 		table.put(k, uint16(coreStack.Size()))
 		coreStack.Push(v)
@@ -383,15 +384,18 @@ func compileNodeTopLevel(n parser.Node) (cls *Closure, err error) {
 	table.compileNode(n)
 	table.code.writeOP(OpEOB, 0, 0)
 	table.patchGoto()
-	cls = &Closure{packet: table.code, ConstTable: table.constsToValues()}
-	cls.Source = "root " + cls.String() + " " + table.code.Source
-	cls.lastEnv.stack = coreStack.stack
-	cls.lastEnv.grow(int(table.vp))
+	cls = &Func{}
+	cls.Name = "main"
+	cls.packet = table.code
+	cls.ConstTable = table.constsToValues()
+	cls.yEnv.stack = coreStack.stack
+	cls.yEnv.grow(int(table.vp))
+	cls.yEnv.global = &Global{Stack: cls.yEnv.stack} // yEnv itself is the global stack
 	cls.stackSize = table.vp
 	return cls, err
 }
 
-func LoadFile(path string) (*Closure, error) {
+func LoadFile(path string) (*Func, error) {
 	code, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -401,16 +405,16 @@ func LoadFile(path string) (*Closure, error) {
 	if err != nil {
 		return nil, err
 	}
-	// n.Dump(os.Stderr)
+	// n.Dump(os.Stderr, "  ")
 	return compileNodeTopLevel(n)
 }
 
-func LoadString(code string) (*Closure, error) {
+func LoadString(code string) (*Func, error) {
 	_, fn, _, _ := runtime.Caller(1)
 	return loadStringName(code, fn)
 }
 
-func loadStringName(code, name string) (*Closure, error) {
+func loadStringName(code, name string) (*Func, error) {
 	n, err := parser.Parse(bytes.NewReader([]byte(code)), name)
 	if err != nil {
 		return nil, err

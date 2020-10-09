@@ -67,7 +67,7 @@ local a, b, c = (function() return 1, 2, 3 end)()
 assert(a == 1 and b == 2 and c == 3)
 
 a,b,c = (function (a, b ,c)
-    local function f(a, b) return b, a end
+    wlocal function f(a, b) assert(true); return b, a end
     b, c = f(b, c)
     return c, b, a
 end)(1,2,3)
@@ -97,16 +97,9 @@ do
 end
 assert(ms == nil and ms2 == 2)
 
-assert(native.int64("0x7ffffffffffffffd") < native.int64("0x7fffffffffffffff"))
-assert(native.int64("0x12345678f1234567") == native.int64(0x12345678, 0xf1234567))
-assert(native.uint64("0x12345678f1234567") == native.int64(0x12345678, 0xf1234567))
-
-local a = native.bytes(2)
-a[0] = 49
-a = a:append(32, unpack({33, 34}))
-assert(a == {49,0,32,33,34} and {49,0,32,33,34} == a)
-assert(a:tostring() == "1\x00 !\"")
-assert(a == "1\x00 !\"" and a == native.bytes(a:tostring()))
+assert(0x7ffffffffffffffd < 0x7fffffffffffffff)
+assert(0x7ffffffffffffffd + 2 == 0x7fffffffffffffff)
+assert(0x7ffffffffffffffe + 1 == 0x7fffffffffffffff)
 
 local str = require "string.txt"
 assert(str.name == "abc")
@@ -120,12 +113,12 @@ do
 end
 assert(scope == 1)
 
-do
-local a, i = {}, 1
-a[1 + i ] = i;
-(function () return a end)().test = 1
-assert(a[2] == 1 and a["test"] == 1)
-end
+-- do
+-- local a, i = {}, 1
+-- a[1 + i ] = i;
+-- (function () return a end)().test = 1
+-- assert(a[2] == 1 and a["test"] == 1)
+-- end
 
 function callstr(a) 
     return a .. "a"
@@ -194,10 +187,10 @@ fib2 = function(a, b)
    end
 end
 
-fib3 = closure.copy(fib2)
+fib3 = copyfunction(fib2)
  
 fib_seq = { 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418, 317811, 514229, 832040, 1346269, 2178309, 3524578, 5702887, 9227465, }
-for i = 0,32 do local s = fib2(0,1);  assert(fib_seq[i +1] == s) end
+for i = 0,32 do local s = fib2(0,1); assert(fib_seq[i +1] == s) end
 
 assert( (fib2())==9227465)
 assert( (fib3(0, 1)+fib3()+fib3()+fib3()) == 11)
@@ -227,8 +220,8 @@ a = 2
 assert( 1 + 2 *3/5 == 2.2)
 assert( 1 /2+ 2.2 * (a + 1) * 5 == 33.5)
 
-mul = (function (a) b = 1 return function() b = b * a; return b end end)(2)
-assert( mul() == 2 and mul() == 4 and mul() == 8)
+-- mul = (function (a) b = 1 return function() b = b * a; return b end end)(2)
+-- assert( mul() == 2 and mul() == 4 and mul() == 8)
 
 --[[
 

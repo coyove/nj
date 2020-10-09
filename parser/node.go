@@ -3,7 +3,7 @@ package parser
 import (
 	"fmt"
 	"io"
-	"math"
+	"math/big"
 	"reflect"
 	"strconv"
 	"strings"
@@ -44,6 +44,13 @@ func Sym(s string) Node { return Node{Symbol{Text: s}} }
 func Num(arg interface{}) Node {
 	n := Node{}
 	switch x := arg.(type) {
+	case *big.Float:
+		v, acc := x.Int64()
+		if acc == big.Exact {
+			n.Value = v
+		} else {
+			n.Value, _ = x.Float64()
+		}
 	case string:
 		num, err := StringToNumber(x)
 		if err != nil {
@@ -65,7 +72,13 @@ func (n Node) Valid() bool {
 	return t == SYM || t == NUM || t == STR || t == CPL || t == ADR
 }
 
-func (n Node) Type() uintptr { return interfaceType(n.Value) }
+func (n Node) Type() uintptr {
+	t := interfaceType(n.Value)
+	if t == numINT {
+		t = NUM
+	}
+	return t
+}
 
 func (n Node) TypeName() string { return reflect.TypeOf(n.Value).String() }
 
@@ -87,7 +100,21 @@ func (n Node) Str() string { a, _ := n.Value.(string); return a }
 
 func (n Node) Sym() Symbol { a, _ := n.Value.(Symbol); return a }
 
-func (n Node) Num() float64 { a, _ := n.Value.(float64); return a }
+func (n Node) Num() (float64, int64) {
+	a, ok := n.Value.(float64)
+	if ok {
+		return a, 0
+	}
+	return 0, n.Value.(int64)
+}
+
+func (n Node) Num1() *big.Float {
+	a, ok := n.Value.(float64)
+	if ok {
+		return (&big.Float{}).SetFloat64(a)
+	}
+	return (&big.Float{}).SetInt64(n.Value.(int64))
+}
 
 func Cpl(args ...Node) Node {
 	if len(args) == 3 {
@@ -97,25 +124,25 @@ func Cpl(args ...Node) Node {
 			return Node{a.Str() + b.Str()}
 		}
 		if a.Type() == NUM && b.Type() == NUM {
-			switch v1, v2 := a.Num(), b.Num(); op.Text {
+			switch v1, v2 := a.Num1(), b.Num1(); op.Text {
 			case AAdd.Text:
-				return Num(v1 + v2)
+				return Num(v1.Add(v1, v2))
 			case ASub.Text:
-				return Num(v1 - v2)
+				return Num(v1.Sub(v1, v2))
 			case AMul.Text:
-				return Num(v1 * v2)
+				return Num(v1.Mul(v1, v2))
 			case ADiv.Text:
-				return Num(v1 / v2)
-			case AMod.Text:
-				return Num(math.Mod(v1, v2))
-			case APow.Text:
-				return Num(math.Pow(v1, v2))
+				return Num(v1.Quo(v1, v2))
 			}
 		}
 	}
 	if len(args) == 2 {
 		if args[0].Sym().Equals(AUnm) && args[1].Type() == NUM {
-			return Node{-args[1].Num()}
+			f, i := args[1].Num()
+			if i == 0 {
+				return Node{-f}
+			}
+			return Node{-i}
 		}
 	}
 	return Node{args}
@@ -156,10 +183,13 @@ func (n Node) Pos() Position {
 	}
 }
 
-func StringToNumber(arg string) (float64, error) {
+func StringToNumber(arg string) (interface{}, error) {
 	i, err := strconv.ParseInt(arg, 0, 64)
 	if err == nil {
-		return float64(i), nil
+		if int64(float64(i)) == i {
+			return float64(i), nil
+		}
+		return i, nil
 	}
 	return strconv.ParseFloat(arg, 64)
 }

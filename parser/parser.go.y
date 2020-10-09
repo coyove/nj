@@ -220,7 +220,7 @@ for_stat:
             forVar, forEnd := SymTok($2), randomVarname()
             if $8.Type() == NUM { // step is a static number, easy case
                 var cond Node
-                if $8.Num() < 0 {
+                if f, i := $8.Num(); f < 0 || i < 0 {
                     cond = __lessEq(forEnd, forVar)
                 } else {
                     cond = __lessEq(forVar, forEnd)
@@ -291,22 +291,22 @@ func_stat:
             }
             $$ = __chain(
                 x(funcname, Node{ANil}).SetPos($1.Pos()), 
-                __move(funcname, __func($3, $4).SetPos($1.Pos())).SetPos($1.Pos()),
+                __move(funcname, __func(funcname, $3, $4).SetPos($1.Pos())).SetPos($1.Pos()),
             )
         } |
         func ident_dot_list '.' TIdent func_params_list stats TEnd {
-            $$ = __store($2, Node{$4.Str}, __func($5, $6).SetPos($1.Pos())).SetPos($1.Pos()) 
+	    $$ = __store($2, Node{$4.Str}, __func(SymTok($4), $5, $6).SetPos($1.Pos())).SetPos($1.Pos()) 
         } |
         func ident_dot_list ':' TIdent func_params_list stats TEnd {
             paramlist := $5.CplPrepend(Sym("self"))
             $$ = __store(
-                $2, Node{$4.Str}, __func(paramlist, $6).SetPos($1.Pos()),
+			 $2, Node{$4.Str}, __func(SymTok($4), paramlist, $6).SetPos($1.Pos()),
             ).SetPos($1.Pos()) 
         }
 
 function:
         func func_params_list stats TEnd %prec FUNC {
-            $$ = __func($2, $3).SetPos($1.Pos()).SetPos($1.Pos()) 
+	    $$ = __func(emptyNode, $2, $3).SetPos($1.Pos()).SetPos($1.Pos()) 
         }
 
 func_params_list:

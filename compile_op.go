@@ -280,11 +280,15 @@ func (table *symtable) compileCallOp(nodes []parser.Node) uint16 {
 
 // [lambda name? [namelist] [chain ...]]
 func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
-	table.envescape = true
 	vararg := false
 	params := atoms[2]
 	newtable := newsymtable()
-	newtable.global = table
+
+	if table.global == nil {
+		newtable.global = table
+	} else {
+		newtable.global = table.global
+	}
 
 	for i, p := range params.Cpl() {
 		argname := p.Value.(parser.Symbol)
@@ -316,13 +320,15 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 	code.Source = atoms[0].Pos().Source
 	code.writeOP(OpEOB, 0, 0)
 
-	cls := &Closure{}
+	cls := &Func{}
+	if atoms[1].Type() == parser.SYM {
+		cls.Name = atoms[1].Sym().Text
+	}
 	cls.NumParam = byte(ln)
 	cls.stackSize = newtable.vp
-	cls.setOpt(newtable.y, ClsYieldable)
-	cls.setOpt(vararg, ClsVararg)
+	cls.setOpt(newtable.y, FuncYield)
+	cls.setOpt(vararg, FuncVararg)
 	cls.packet = code
-	cls.Source = cls.String() + " " + code.Source
 	cls.ConstTable = newtable.constsToValues()
 
 	table.code.Funcs = append(table.code.Funcs, cls)
@@ -379,7 +385,7 @@ func (table *symtable) patchGoto() {
 	for i, l := range table.forwardGoto {
 		pos, ok := table.labelPos[l]
 		if !ok {
-			panicf("label %s not found", l)
+			panicf("label %q not found", l)
 		}
 		code[i] = makejmpop(OpJmp, 0, pos-(i+1))
 	}

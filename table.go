@@ -6,76 +6,45 @@ import (
 )
 
 type Table struct {
-	a  []Value
-	m  Map
-	mt *Table
+	unpacked bool
+	a        []Value
+	m        Map
 }
 
-func (t *Table) _put(k, v Value, raw bool) {
-	var ni Value
+func (t *Table) Put(k, v Value) {
 	if k.Type() == NUM {
-		idx := k.Num()
-		if float64(int(idx)) == idx {
-			if idx >= 1 && int(idx) <= len(t.a) {
-				t.a[int(idx)-1] = v
-				if v.IsNil() {
-					t.Compact()
-				}
-				return
+		_, idx, _ := k.Num()
+		if idx >= 1 && int(idx) <= len(t.a) {
+			t.a[int(idx)-1] = v
+			if v.IsNil() {
+				t.Compact()
 			}
-			if int(idx) == len(t.a)+1 {
-				if !raw {
-					if ni = t.mt.RawGet(M__newindex); !ni.IsNil() {
-						goto newindex
-					}
-				}
-
-				if !v.IsNil() {
-					t.a = append(t.a, v)
-				}
-				t.m.Put(k, Value{})
-				return
-			}
+			return
 		}
-	}
-
-	if !raw && t.m.Get(k).IsNil() {
-		if ni = t.mt.RawGet(M__newindex); !ni.IsNil() {
-			goto newindex
+		if int(idx) == len(t.a)+1 {
+			if !v.IsNil() {
+				t.a = append(t.a, v)
+			}
+			t.m.Put(k, Value{})
+			return
 		}
 	}
 
 	t.m.Put(k, v)
-	return
-
-newindex:
-	switch ni.Type() {
-	case FUN:
-		ni.Fun().Call(Tab(t), k, v)
-	case TAB:
-		if ni.Tab() == t {
-			panicf("invalid __newindex, recursive delegation")
-		}
-		ni.Tab().Put(k, v)
-	default:
-		panicf("invalid __newindex, expect table or function")
-	}
 }
 
 func (t *Table) Insert(k, v Value) {
 	if k.Type() == NUM {
-		idx := k.Num()
-		if float64(int(idx)) == idx {
-			if idx >= 1 && int(idx) <= len(t.a) {
-				t.a = append(t.a[:int(idx)-1], append([]Value{v}, t.a[int(idx)-1:]...)...)
-				if v.IsNil() {
-					t.Compact()
-				}
-				return
+		_, idx, _ := k.Num()
+		if idx >= 1 && int(idx) <= len(t.a) {
+			t.a = append(t.a[:int(idx)-1], append([]Value{v}, t.a[int(idx)-1:]...)...)
+			if v.IsNil() {
+				t.Compact()
 			}
+			return
 		}
 	}
-	t.RawPut(k, v)
+	t.Put(k, v)
 }
 
 func (t *Table) Remove(idx int) Value {
@@ -84,45 +53,20 @@ func (t *Table) Remove(idx int) Value {
 	return v
 }
 
-func (t *Table) Put(k, v Value) *Table { t._put(k, v, false); return t }
+func (t *Table) Get(k Value) (v Value) { return t._get(k, false) }
 
-func (t *Table) RawPut(k, v Value) *Table { t._put(k, v, true); return t }
-
-func (t *Table) Puts(k string, v Value) *Table { return t.Put(Str(k), v) }
-
-func (t *Table) Get(k Value) (v Value) { return t._get(k, false, false) }
-
-func (t *Table) RawGet(k Value) (v Value) { return t._get(k, false, true) }
-
-func (t *Table) _get(k Value, lookinarray bool, raw bool) (v Value) {
+func (t *Table) _get(k Value, lookinarray bool) (v Value) {
 	if t == nil {
 		return
 	}
 	if k.Type() == NUM {
-		idx := k.Num()
-		if float64(int(idx)) == idx {
-			if idx >= 1 && int(idx) <= len(t.a) {
-				return t.a[int(idx)-1]
-			}
+		_, idx, _ := k.Num()
+		if idx >= 1 && int(idx) <= len(t.a) {
+			return t.a[int(idx)-1]
 		}
 	}
 	if lookinarray {
 		return Value{}
-	}
-	if !raw && t.m.Get(k).IsNil() {
-		switch ni := t.mt.RawGet(M__index); ni.Type() {
-		case FUN:
-			v, _ = ni.Fun().Call(Tab(t), k)
-			return v
-		case TAB:
-			if ni.Tab() == t {
-				panicf("invalid __index, recursive delegation")
-			}
-			return ni.Tab().Get(k)
-		case NIL:
-		default:
-			panicf("invalid __index, expect table or function")
-		}
 	}
 	return t.m.Get(k)
 }
@@ -183,14 +127,34 @@ func (t *Table) Next(k Value) (Value, Value) {
 	}
 
 	if k.Type() == NUM {
-		idx := k.Num()
-		if v := t._get(Num(idx+1), true, false); !v.IsNil() {
-			return Num(idx + 1), v
+		_, idx, _ := k.Num()
+		if v := t._get(Int(idx+1), true); !v.IsNil() {
+			return Int(idx + 1), v
 		}
 
-		if v := t._get(Num(idx), true, false); !v.IsNil() {
+		if v := t._get(Int(idx), true); !v.IsNil() {
 			return t.m.Next(Value{})
 		}
 	}
 	return t.m.Next(k)
+}
+
+func buildtable(args ...interface{}) *Table {
+	t := &Table{m: *NewMap(len(args) / 2)}
+	for i := 0; i < len(args); i += 2 {
+		k := args[i].(string)
+		switch x := args[i+1].(type) {
+		case func(env *Env):
+			f := Native(x)
+			f.Fun().Name = k
+			t.Put(Str(k), f)
+		case *Table:
+			t.Put(Str(k), Tab(x))
+		case Value:
+			t.Put(Str(k), x)
+		default:
+			panicf("build: %T", x)
+		}
+	}
+	return t
 }

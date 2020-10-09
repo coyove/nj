@@ -95,7 +95,7 @@ ARG:
 	runtime.GOMAXPROCS(runtime.NumCPU() * *goroutinePerCPU)
 	start := time.Now()
 
-	var b *potatolang.Closure
+	var b *potatolang.Func
 	var err error
 
 	defer func() {
