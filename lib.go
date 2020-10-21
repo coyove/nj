@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,20 @@ import (
 var g = map[string]Value{}
 
 func init() {
+	buildg("ref", func(env *Env) {
+		v := env.Get(0)
+		env.A = Any(&v)
+	})
+	buildg("deref", func(env *Env) {
+		env.A = *env.In(0, ANY).Any().(*Value)
+		if env.A.Type() == STK {
+			env.V = env.A.unpackedStack().a
+		}
+	})
+	buildg("array", func(env *Env) {
+		env.V = make([]Value, env.In(0, NUM).Int())
+		env.A = unpackedStack(&unpacked{a: env.V})
+	})
 	buildg("copyfunction", func(env *Env) {
 		f := *env.In(0, FUN).Fun()
 		env.A = Fun(&f)
@@ -153,6 +168,22 @@ func init() {
 	})
 	buildg("strchar", func(env *Env) {
 		env.A = Str(string(rune(env.In(0, NUM).Int())))
+	})
+	buildg("match", func(env *Env) {
+		m := regexp.MustCompile(env.In(0, STR).Str()).
+			FindAllStringSubmatch(env.In(1, STR).Str(), int(env.InNum(2, Int(-1)).Int()))
+		var mm []string
+		for _, m := range m {
+			for _, m := range m {
+				mm = append(mm, m)
+			}
+		}
+		if len(mm) > 0 {
+			env.A = Str(mm[0])
+			for i := 1; i < len(mm); i++ {
+				env.V = append(env.V, Str(mm[i]))
+			}
+		}
 	})
 	buildg("mutex", func(env *Env) {
 		env.A = Any(&sync.Mutex{})

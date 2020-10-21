@@ -28,7 +28,6 @@ var (
 
 	breakNode     = Cpl(Node{ABreak})
 	popvNode      = Cpl(Node{APopV})
-	popvEndNode   = Cpl(Node{APopVEnd})
 	popvClearNode = Cpl(Node{APopVClear})
 	zeroNode      = Num(0)
 	oneNode       = Num(1)
@@ -40,52 +39,49 @@ func interfaceType(a interface{}) uintptr {
 }
 
 var (
-	ANop         = Symbol{Text: "nop"}
-	ADoBlock     = Symbol{Text: "do"}
-	AConcat      = Symbol{Text: "con"}
-	ANil         = Symbol{Text: "nil"}
-	ASet         = Symbol{Text: "set"}
-	AInc         = Symbol{Text: "inc"}
-	AMove        = Symbol{Text: "mov"}
-	AIf          = Symbol{Text: "if"}
-	AFor         = Symbol{Text: "for"}
-	APatchVararg = Symbol{Text: "pvag"}
-	AFunc        = Symbol{Text: "fun"}
-	ABreak       = Symbol{Text: "brk"}
-	AContinue    = Symbol{Text: "cont"}
-	ABegin       = Symbol{Text: "prog"}
-	ALoad        = Symbol{Text: "load"}
-	AStore       = Symbol{Text: "stor"}
-	ACall        = Symbol{Text: "call"}
-	ATailCall    = Symbol{Text: "tail"}
-	AReturn      = Symbol{Text: "ret"}
-	AYield       = Symbol{Text: "yld"}
-	AHash        = Symbol{Text: "hash"}
-	AHashArray   = Symbol{Text: "harr"}
-	AArray       = Symbol{Text: "arr"}
-	AAdd         = Symbol{Text: "add"}
-	ASub         = Symbol{Text: "sub"}
-	AUnm         = Symbol{Text: "unm"}
-	AMul         = Symbol{Text: "mul"}
-	ADiv         = Symbol{Text: "div"}
-	AMod         = Symbol{Text: "mod"}
-	APow         = Symbol{Text: "pow"}
-	AEq          = Symbol{Text: "eq"}
-	ANeq         = Symbol{Text: "neq"}
-	AAnd         = Symbol{Text: "and"}
-	AOr          = Symbol{Text: "or"}
-	ANot         = Symbol{Text: "not"}
-	ALess        = Symbol{Text: "lt"}
-	ALessEq      = Symbol{Text: "le"}
-	ALen         = Symbol{Text: "len"}
-	ARetAddr     = Symbol{Text: "reta"}
-	APopV        = Symbol{Text: "popv"}
-	APopVEnd     = Symbol{Text: "pope"}
-	APopVAll     = Symbol{Text: "popa"}
-	APopVAllA    = Symbol{Text: "ppaa"}
-	APopVClear   = Symbol{Text: "popc"}
-	ALabel       = Symbol{Text: "lbl"}
-	AGoto        = Symbol{Text: "goto"}
+	ANop       = Symbol{Text: "nop"}
+	ADoBlock   = Symbol{Text: "do"}
+	AConcat    = Symbol{Text: "con"}
+	ANil       = Symbol{Text: "nil"}
+	ASet       = Symbol{Text: "set"}
+	AInc       = Symbol{Text: "inc"}
+	AMove      = Symbol{Text: "mov"}
+	AIf        = Symbol{Text: "if"}
+	AFor       = Symbol{Text: "for"}
+	AFunc      = Symbol{Text: "fun"}
+	ABreak     = Symbol{Text: "break"}
+	AContinue  = Symbol{Text: "cont"}
+	ABegin     = Symbol{Text: "prog"}
+	ALoad      = Symbol{Text: "load"}
+	AStore     = Symbol{Text: "stor"}
+	ACall      = Symbol{Text: "call"}
+	ATailCall  = Symbol{Text: "tail"}
+	AReturn    = Symbol{Text: "ret"}
+	AYield     = Symbol{Text: "yield"}
+	AAdd       = Symbol{Text: "add"}
+	ASub       = Symbol{Text: "sub"}
+	AUnm       = Symbol{Text: "unm"}
+	AMul       = Symbol{Text: "mul"}
+	ADiv       = Symbol{Text: "div"}
+	AMod       = Symbol{Text: "mod"}
+	APow       = Symbol{Text: "pow"}
+	AEq        = Symbol{Text: "eq"}
+	ANeq       = Symbol{Text: "neq"}
+	AAnd       = Symbol{Text: "and"}
+	AOr        = Symbol{Text: "or"}
+	ANot       = Symbol{Text: "not"}
+	ALess      = Symbol{Text: "lt"}
+	ALessEq    = Symbol{Text: "le"}
+	ALen       = Symbol{Text: "len"}
+	ARetAddr   = Symbol{Text: "reta"}
+	APopV      = Symbol{Text: "popv"}
+	APopVClear = Symbol{Text: "endv"}
+	APopVAll   = Symbol{Text: "allv"}
+	APopVAllA  = Symbol{Text: "allva"}
+	ALabel     = Symbol{Text: "label"}
+	AGoto      = Symbol{Text: "goto"}
+	ARef       = Symbol{Text: "ref"}
+	ADeref     = Symbol{Text: "deref"}
 )
 
 func __chain(args ...Node) Node { return Cpl(append([]Node{Node{ABegin}}, args...)...) }
@@ -146,12 +142,12 @@ func forLoop(pos Position, rcv []Node, exprIters []Node, body Node) Node {
 	if len(exprIters) > 2 {
 		r = r.CplAppend(__set(rcv[0], exprIters[2]).SetPos(pos))
 	} else {
-		r = r.CplAppend(__set(rcv[0], popvEndNode).SetPos(pos))
+		r = r.CplAppend(__set(rcv[0], __chain(popvNode, popvClearNode)).SetPos(pos))
 	}
 	rr := __chain()
 	for i := 1; i < len(rcv); i++ {
 		if i == len(rcv)-1 {
-			rr = rr.CplAppend(__set(rcv[i], popvEndNode).SetPos(pos))
+			rr = rr.CplAppend(__set(rcv[i], __chain(popvNode, popvClearNode)).SetPos(pos))
 		} else {
 			rr = rr.CplAppend(__set(rcv[i], popvNode).SetPos(pos))
 		}

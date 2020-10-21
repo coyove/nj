@@ -102,10 +102,18 @@ func (env *Env) Stack() []Value {
 	return (*env.stack)[env.stackOffset:]
 }
 
+func (env *Env) InNum(i int, defaultValue Value) Value {
+	v := env.Get(i)
+	if v.Type() != NUM {
+		return defaultValue
+	}
+	return v
+}
+
 func (env *Env) In(i int, expectedType byte) Value {
 	v := env.Get(i)
 	if v.Type() != expectedType {
-		panicf("bad argument #%d: expect %q, got %+v", i, typeMappings[expectedType], v)
+		panicf("bad argument #%d: expect %q, got %#v", i, typeMappings[expectedType], v)
 	}
 	return v
 }

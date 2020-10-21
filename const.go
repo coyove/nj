@@ -17,7 +17,6 @@ const (
 	OpAdd
 	OpConcat
 	OpSub
-	OpUnm
 	OpMul
 	OpDiv
 	OpInc
@@ -35,6 +34,8 @@ const (
 	OpPush
 	OpPushV
 	OpPopV
+	OpPopVAll
+	OpPopVClear
 	OpCall
 	OpRet
 	OpYield

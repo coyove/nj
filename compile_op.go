@@ -118,7 +118,7 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []parser.Node) uint16 {
 	table.collapse(atoms[1:], true)
 
 	switch bop {
-	case OpNot, OpUnm, OpRet, OpYield, OpLen:
+	case OpNot, OpRet, OpYield, OpLen:
 		// unary op
 		table.writeOpcode(bop, atoms[1], parser.Node{})
 	default:
@@ -133,20 +133,17 @@ func (table *symtable) writeOpcode3(bop _Opcode, atoms []parser.Node) uint16 {
 func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
 	head := atoms[0].Value.(parser.Symbol)
 	switch head.Text {
-	case parser.APopVAllA.Text:
-		table.code.writeOP(OpPopV, 4, 0)
+	case parser.APopV.Text:
+		table.code.writeOP(OpPopV, 0, 0)
 		return regA
 	case parser.APopVClear.Text:
-		table.code.writeOP(OpPopV, 3, 0)
+		table.code.writeOP(OpPopVClear, 0, 0)
 		return regA
 	case parser.APopVAll.Text:
-		table.code.writeOP(OpPopV, 2, 0)
+		table.code.writeOP(OpPopVAll, 0, 0)
 		return regA
-	case parser.APopV.Text:
-		table.code.writeOP(OpPopV, 1, 0)
-		return regA
-	case parser.APopVEnd.Text:
-		table.code.writeOP(OpPopV, 0, 0)
+	case parser.APopVAllA.Text:
+		table.code.writeOP(OpPopVAll, 1, 0)
 		return regA
 	}
 

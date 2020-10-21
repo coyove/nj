@@ -30,13 +30,12 @@ func (e *ExecError) Error() string {
 		for i := 0; i < len(r.cls.Pos); {
 			var op, line uint32
 			var opx uint32 = math.MaxUint32
-			var col uint16
-			i, op, line, col = r.cls.Pos.readABC(i)
+			i, op, line = r.cls.Pos.read(i)
 			if i < len(r.cls.Pos)-1 {
-				_, opx, _, _ = r.cls.Pos.readABC(i)
+				_, opx, _ = r.cls.Pos.read(i)
 			}
 			if r.cursor >= op && r.cursor < opx {
-				src = fmt.Sprintf("%s:%d:%d", r.cls.Source, line, col)
+				src = fmt.Sprintf("%s:%d", r.cls.Source, line)
 				break
 			}
 		}
@@ -62,6 +61,10 @@ func returnVararg(a Value, b []Value) (Value, []Value) {
 			}
 			return u[0], u[1:]
 		}
+		return a, nil
+	}
+
+	if flag && &a.unpackedStack().a[0] == &b[0] {
 		return a, nil
 	}
 
@@ -150,29 +153,22 @@ MAIN:
 				env.V = make([]Value, 0, opb)
 			}
 			env.V = append(env.V, env._get(opa, K))
-		case OpPopV:
-			switch opa {
-			case 4: // popv-all-with-a, e.g.: local ... = foo()
+		case OpPopVClear:
+			env.V = nil
+		case OpPopVAll:
+			if opa == 1 {
+				// popv-all-with-a, e.g.: local ... = foo()
 				env.A = unpackedStack(&unpacked{append([]Value{env.A}, env.V...)})
-				env.V = nil
-			case 2: // popv-all, e.g.: local a, ... = foo()
+			} else {
+				// popv-all, e.g.: local a, ... = foo()
 				env.A = unpackedStack(&unpacked{env.V})
-				env.V = nil
-			case 3: // popv-clear
-				env.V = nil
-			case 1: // popv
-				if len(env.V) == 0 {
-					env.A = Value{}
-				} else {
-					env.A, env.V = env.V[0], env.V[1:]
-				}
-			case 0: // popv-last-and-clear-rest
-				if len(env.V) == 0 {
-					env.A = Value{}
-				} else {
-					env.A = env.V[0]
-				}
-				env.V = nil
+			}
+			env.V = nil
+		case OpPopV:
+			if len(env.V) == 0 {
+				env.A = Value{}
+			} else {
+				env.A, env.V = env.V[0], env.V[1:]
 			}
 		case OpInc:
 			vaf, vai, vaIsInt := env._get(opa, K).Expect(NUM).Num()
@@ -188,7 +184,16 @@ MAIN:
 			case StrStr:
 				env.A = Str(va.Str() + vb.Str())
 			default:
-				va, vb = va.Expect(STR), vb.Expect(STR)
+				if va.Type() == STR && vb.Type() == NUM {
+					vbf, vbi, vbIsInt := vb.Num()
+					if vbIsInt {
+						env.A = Str(va.Str() + strconv.FormatInt(vbi, 10))
+					} else {
+						env.A = Str(va.Str() + strconv.FormatFloat(vbf, 'f', 0, 64))
+					}
+				} else {
+					va, vb = va.Expect(STR), vb.Expect(STR)
+				}
 			}
 		case OpAdd:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
@@ -210,13 +215,6 @@ MAIN:
 						vbf, _ := strconv.ParseFloat(vb.Str(), 64)
 						env.A = Num(vaf + vbf)
 					}
-				} else if va.Type() == STR && vb.Type() == NUM {
-					vbf, vbi, vbIsInt := vb.Num()
-					if vbIsInt {
-						env.A = Str(va.Str() + strconv.FormatInt(vbi, 10))
-					} else {
-						env.A = Str(va.Str() + strconv.FormatFloat(vbf, 'f', 0, 64))
-					}
 				} else {
 					va, vb = va.Expect(NUM), vb.Expect(NUM)
 				}
@@ -233,18 +231,6 @@ MAIN:
 				}
 			default:
 				va, vb = va.Expect(NUM), vb.Expect(NUM)
-			}
-		case OpUnm:
-			switch va := env._get(opa, K); va.Type() {
-			case NUM:
-				vaf, vai, vaIsInt := va.Num()
-				if vaIsInt {
-					env.A = Int(-vai)
-				} else {
-					env.A = Num(-vaf)
-				}
-			default:
-				va = va.Expect(NUM)
 			}
 		case OpMul:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {

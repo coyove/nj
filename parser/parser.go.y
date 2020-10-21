@@ -34,7 +34,7 @@ package parser
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
-%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' ':'
+%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&'
 %token<token> TAddEq TSubEq TMulEq TDivEq TModEq
 %token<token> TSquare TDotDot 
 
@@ -109,10 +109,10 @@ assign_stat:
             m, n := len($2.Cpl()), len($4.Cpl())
             for i, count := 0, m - n; i < count; i++ {
                 if i == count - 1 {
-                    $4 = $4.CplAppend(popvEndNode)
-                } else {
-                    $4 = $4.CplAppend(popvNode)
-                }
+                    $4 = $4.CplAppend(__chain(popvNode, popvClearNode))
+		} else {
+		  $4 = $4.CplAppend(popvNode)
+		}
             }
 
             $$ = __chain()
@@ -134,10 +134,10 @@ assign_stat:
             m, n := len(nodes), len($3.Cpl())
             for i, count := 0, m - n; i < count; i++ {
                 if i == count - 1 {
-                    $3 = $3.CplAppend(popvEndNode)
-                } else {
-                    $3 = $3.CplAppend(popvNode)
-                }
+		    $3 = $3.CplAppend(__chain(popvNode, popvClearNode))
+		} else {
+		    $3 = $3.CplAppend(popvNode)
+		}
             } 
              
 	    if head := nodes[0]; len(nodes) == 1 && !nodes[0].SymDDD() {
@@ -355,8 +355,10 @@ expr:
         expr '/' expr                     { $$ = Cpl(Node{ADiv}, $1,$3).SetPos($2.Pos) } |
         expr '%' expr                     { $$ = Cpl(Node{AMod}, $1,$3).SetPos($2.Pos) } |
         expr '^' expr                     { $$ = Cpl(Node{APow}, $1,$3).SetPos($2.Pos) } |
-        '-' expr %prec UNARY              { $$ = Cpl(Node{AUnm}, $2).SetPos($1.Pos) } |
         TNot expr %prec UNARY             { $$ = Cpl(Node{ANot}, $2).SetPos($1.Pos) } |
+        '-' expr %prec UNARY              { $$ = Cpl(Node{ASub}, zeroNode, $2).SetPos($1.Pos) } |
+        '&' TIdent %prec UNARY            { $$ = Cpl(Node{ARef}, SymTok($2)).SetPos($1.Pos) } |
+        '*' TIdent %prec UNARY            { $$ = Cpl(Node{ADeref}, SymTok($2)).SetPos($1.Pos) } |
         '#' expr %prec UNARY              { $$ = Cpl(Node{ALen}, $2).SetPos($1.Pos) }
 
 prefix_expr:

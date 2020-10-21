@@ -6,23 +6,17 @@ import (
 	"reflect"
 	"strconv"
 	"unsafe"
-
-	"github.com/cespare/xxhash"
 )
 
 const (
-	NIL = 0  // nil
-	NUM = 3  // number
-	STR = 7  // string
-	STK = 15 // stack
-	FUN = 31 // function
-	ANY = 63 // generic
-
-	NilNil = NIL * 2
+	NIL    = 0  // nil
+	NUM    = 3  // number
+	STR    = 7  // string
+	STK    = 15 // stack
+	FUN    = 31 // function
+	ANY    = 63 // generic
 	NumNum = NUM * 2
 	StrStr = STR * 2
-	FunFun = FUN * 2
-	AnyAny = ANY * 2
 )
 
 // Value is the basic value used by the intepreter
@@ -55,7 +49,7 @@ func (v Value) IsFalse() bool {
 
 var (
 	typeMappings = map[byte]string{
-		NIL: "nil", NUM: "number", STR: "string", FUN: "function", ANY: "any", STK: "table",
+		NIL: "nil", NUM: "number", STR: "string", FUN: "function", ANY: "any", STK: "stack",
 	}
 	int64Marker = unsafe.Pointer(new(int64))
 )
@@ -125,10 +119,9 @@ func Any(i interface{}) Value {
 		return v
 	}
 	rv := reflect.ValueOf(i)
-	switch rv.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+	if k := rv.Kind(); k >= reflect.Int && k <= reflect.Int64 {
 		return Int(rv.Int())
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+	} else if k >= reflect.Uint && k <= reflect.Uintptr {
 		return Int(int64(rv.Uint()))
 	}
 
@@ -243,29 +236,16 @@ func (v Value) String() string { return v.toString(0) }
 // Equal tests whether value is equal to another value
 func (v Value) Equal(r Value) bool {
 	switch v.Type() + r.Type() {
-	case NumNum, NilNil, AnyAny:
+	case NumNum, NIL * 2:
 		return v == r
 	case StrStr:
 		return r.Str() == v.Str()
-	case unpackedStack * 2:
-		return v == r
-	case FunFun:
+	case FUN * 2:
 		return v.Fun() == r.Fun()
+	case ANY * 2:
+		return v.Any() == r.Any()
 	}
 	return false
-}
-
-//go:nosplit
-func (v Value) Hash() uint64 {
-	if v.Type() == STR {
-		return xxhash.Sum64(v._StrBytes())
-	}
-	var b []byte
-	bh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-	bh.Data = uintptr(unsafe.Pointer(&v))
-	bh.Len = int(unsafe.Sizeof(v))
-	bh.Cap = int(unsafe.Sizeof(v))
-	return xxhash.Sum64(b)
 }
 
 func (v Value) toString(lv int) string {
@@ -286,7 +266,7 @@ func (v Value) toString(lv int) string {
 	case FUN:
 		return v.Fun().String()
 	case ANY:
-		return fmt.Sprintf("<any:%v>", v.Any())
+		return fmt.Sprintf("<any:%#v>", v.Any())
 	}
 	return "nil"
 }
