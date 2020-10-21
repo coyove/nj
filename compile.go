@@ -334,8 +334,6 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileBreakOp(nodes)
 	case parser.ACall.Text, parser.ATailCall.Text:
 		yx = table.compileCallOp(nodes)
-	case parser.AHash.Text, parser.AHashArray.Text, parser.AArray.Text:
-		yx = table.compileHashArrayOp(nodes)
 	case parser.AOr.Text, parser.AAnd.Text:
 		yx = table.compileAndOrOp(nodes)
 	case parser.AFunc.Text:
@@ -372,13 +370,10 @@ func compileNodeTopLevel(n parser.Node) (cls *Func, err error) {
 	table := newsymtable()
 
 	coreStack := &Env{stack: new([]Value)}
-	G.iterStringKeys(func(k string, v Value) {
+	for k, v := range g {
 		table.put(k, uint16(coreStack.Size()))
 		coreStack.Push(v)
-	})
-
-	table.put("_G", uint16(coreStack.Size()))
-	coreStack.Push(Tab(G))
+	}
 
 	table.vp = uint16(len(table.sym))
 	table.compileNode(n)
@@ -419,6 +414,6 @@ func loadStringName(code, name string) (*Func, error) {
 	if err != nil {
 		return nil, err
 	}
-	// n.Dump(os.Stderr)
+	// n.Dump(os.Stderr, "  ")
 	return compileNodeTopLevel(n)
 }

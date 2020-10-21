@@ -85,49 +85,6 @@ func (table *symtable) compileRetOp(atoms []parser.Node) uint16 {
 	return regA
 }
 
-func (table *symtable) compileHashArrayOp(atoms []parser.Node) uint16 {
-	switch atoms[0].Value.(parser.Symbol).Text {
-	case parser.AHash.Text, parser.AArray.Text:
-		table.collapse(atoms[1].Cpl(), true)
-
-		args := atoms[1].Cpl()
-		for i := 0; i < len(args); i++ {
-			table.writeOpcode(OpPush, args[i], parser.Node{uint16(i)})
-		}
-
-		table.returnAddresses(args)
-	case parser.AHashArray.Text:
-		table.collapse(atoms[1].Cpl(), false)
-		table.collapse(atoms[2].Cpl(), false)
-
-		arrayElements := atoms[2].Cpl()
-		for i := 0; i < len(arrayElements); i++ {
-			table.writeOpcode(OpPush, arrayElements[i], parser.Node{uint16(i)})
-		}
-		table.code.writeOP(OpMakeTable, 2, 0)
-
-		hashElements := atoms[1].Cpl()
-		for i := 0; i < len(hashElements); i++ {
-			table.writeOpcode(OpPush, hashElements[i], parser.Node{uint16(i)})
-		}
-		table.code.writeOP(OpMakeTable, 3, 0)
-		table.code.writePos(atoms[0].Pos())
-
-		table.returnAddresses(arrayElements)
-		table.returnAddresses(hashElements)
-		return regA
-	}
-
-	switch atoms[0].Value.(parser.Symbol).Text {
-	case parser.AHash.Text:
-		table.code.writeOP(OpMakeTable, 1, 0)
-	case parser.AArray.Text:
-		table.code.writeOP(OpMakeTable, 2, 0)
-	}
-	table.code.writePos(atoms[0].Pos())
-	return regA
-}
-
 // writeOpcode3 accepts 3 arguments at most, 2 arguments will be encoded into opcode itself, the 3rd one will be in regA
 func (table *symtable) writeOpcode3(bop _Opcode, atoms []parser.Node) uint16 {
 	// first atom: the op name, tail atoms: the args

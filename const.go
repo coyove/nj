@@ -31,7 +31,6 @@ const (
 	OpIf
 	OpIfNot
 	OpJmp
-	OpMakeTable
 	OpLambda
 	OpPush
 	OpPushV

@@ -14,14 +14,13 @@ const (
 	NIL = 0  // nil
 	NUM = 3  // number
 	STR = 7  // string
-	TAB = 15 // table
+	STK = 15 // stack
 	FUN = 31 // function
 	ANY = 63 // generic
 
 	NilNil = NIL * 2
 	NumNum = NUM * 2
 	StrStr = STR * 2
-	TabTab = TAB * 2
 	FunFun = FUN * 2
 	AnyAny = ANY * 2
 )
@@ -56,7 +55,7 @@ func (v Value) IsFalse() bool {
 
 var (
 	typeMappings = map[byte]string{
-		NIL: "nil", NUM: "number", STR: "string", FUN: "function", ANY: "any", TAB: "table",
+		NIL: "nil", NUM: "number", STR: "string", FUN: "function", ANY: "any", STK: "table",
 	}
 	int64Marker = unsafe.Pointer(new(int64))
 )
@@ -81,12 +80,12 @@ func Int(i int64) Value {
 	return Value{v: uint64(i), p: int64Marker}
 }
 
-// Tab returns a table value
-func Tab(m *Table) Value {
+// unpackedStack returns a table value
+func unpackedStack(m *unpacked) Value {
 	if m == nil {
 		return Value{}
 	}
-	return Value{v: TAB, p: unsafe.Pointer(m)}
+	return Value{v: STK, p: unsafe.Pointer(m)}
 }
 
 // Fun returns a closure value
@@ -112,15 +111,27 @@ func Any(i interface{}) Value {
 		return NumBool(v)
 	case float64:
 		return Num(v)
+	case float32:
+		return Num(float64(v))
 	case int64:
 		return Int(v)
 	case string:
 		return Str(v)
-	case *Table:
-		return Tab(v)
+	case *unpacked:
+		return unpackedStack(v)
 	case *Func:
 		return Fun(v)
+	case Value:
+		return v
 	}
+	rv := reflect.ValueOf(i)
+	switch rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return Int(rv.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return Int(int64(rv.Uint()))
+	}
+
 	x := *(*[2]uintptr)(unsafe.Pointer(&i))
 	return Value{v: uint64(x[0]), p: unsafe.Pointer(x[1])}
 	// return Value{v: ANY, p: unsafe.Pointer(&i)}
@@ -172,8 +183,8 @@ func (v Value) F64() float64 {
 	return f
 }
 
-// Tab cast value to map of values
-func (v Value) Tab() *Table { return (*Table)(v.p) }
+// unpackedStack cast value to map of values
+func (v Value) unpackedStack() *unpacked { return (*unpacked)(v.p) }
 
 // Fun cast value to closure
 func (v Value) Fun() *Func { return (*Func)(v.p) }
@@ -189,8 +200,8 @@ func (v Value) Any() interface{} {
 		return vf
 	case STR:
 		return v.Str()
-	case TAB:
-		return v.Tab()
+	case STK:
+		return v.unpackedStack()
 	case FUN:
 		return v.Fun()
 	case ANY:
@@ -202,6 +213,15 @@ func (v Value) Any() interface{} {
 		return i
 	}
 	return nil
+}
+
+func (v Value) AnyTyped(t reflect.Type) interface{} {
+	if v.Type() == NUM && t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
+		rv := reflect.ValueOf(v.Any())
+		rv = rv.Convert(t)
+		return rv.Interface()
+	}
+	return v.Any()
 }
 
 func (v Value) Expect(t byte) Value {
@@ -227,7 +247,7 @@ func (v Value) Equal(r Value) bool {
 		return v == r
 	case StrStr:
 		return r.Str() == v.Str()
-	case TabTab:
+	case unpackedStack * 2:
 		return v == r
 	case FunFun:
 		return v.Fun() == r.Fun()
@@ -261,16 +281,12 @@ func (v Value) toString(lv int) string {
 		return strconv.FormatFloat(vf, 'f', -1, 64)
 	case STR:
 		return v.Str()
-	case TAB:
-		return v.Tab().String()
+	case STK:
+		return v.unpackedStack().String()
 	case FUN:
 		return v.Fun().String()
 	case ANY:
 		return fmt.Sprintf("<any:%v>", v.Any())
 	}
 	return "nil"
-}
-
-func (v Value) isUnpack() bool {
-	return v.Type() == TAB && v.Tab().unpacked
 }

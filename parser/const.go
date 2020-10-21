@@ -3,6 +3,7 @@ package parser
 import (
 	"math/rand"
 	"strconv"
+	"strings"
 	"unsafe"
 )
 
@@ -91,9 +92,18 @@ func __chain(args ...Node) Node { return Cpl(append([]Node{Node{ABegin}}, args..
 
 func __do(args ...Node) Node { return Cpl(append([]Node{Node{ADoBlock}}, args...)...) }
 
-func __move(dest, src Node) Node { return Cpl(Node{AMove}, dest, src) }
+func __removeddd(dest Node) Node {
+	sym := dest.Value.(Symbol)
+	if sym.Text != "..." {
+		sym.Text = strings.TrimLeft(sym.Text, ".")
+		dest.Value = sym
+	}
+	return dest
+}
 
-func __set(dest, src Node) Node { return Cpl(Node{ASet}, dest, src) }
+func __move(dest, src Node) Node { return Cpl(Node{AMove}, __removeddd(dest), src) }
+
+func __set(dest, src Node) Node { return Cpl(Node{ASet}, __removeddd(dest), src) }
 
 func __less(lhs, rhs Node) Node { return Cpl(Node{ALess}, lhs, rhs) }
 
@@ -113,9 +123,9 @@ func __func(name, paramlist, body Node) Node { return Cpl(Node{AFunc}, name, par
 
 func __call(cls, args Node) Node { return Cpl(Node{ACall}, cls, args) }
 
-func __popvAll(i int) Node {
+func __popvAll(i int, k Node) Node {
 	if i == 0 {
-		return Cpl(Node{APopVAllA})
+		return __chain(k, Cpl(Node{APopVAllA}))
 	}
 	return Cpl(Node{APopVAll})
 }

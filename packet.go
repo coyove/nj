@@ -360,15 +360,6 @@ MAIN:
 			}
 		case OpInc:
 			sb.WriteString("inc " + readAddr(a) + " " + readAddr(uint16(b)))
-		case OpMakeTable:
-			switch a {
-			case 1:
-				sb.WriteString("make-hash")
-			case 2:
-				sb.WriteString("make-array")
-			case 3:
-				sb.WriteString("make-hash-a")
-			}
 		default:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs.Text + " " + readAddr(a) + " " + readAddr(b))

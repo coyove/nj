@@ -6,10 +6,8 @@ package parser
 %type<expr> declarator
 %type<expr> declarator_list
 %type<expr> ident_list
-%type<expr> ident_dot_list
 %type<expr> expr_list
 %type<expr> expr_list_paren
-%type<expr> expr_assign_list
 %type<expr> expr
 %type<expr> postfix_incdec
 %type<expr> _postfix_assign
@@ -24,7 +22,6 @@ package parser
 %type<expr> func_stat
 %type<expr> function
 %type<expr> func_params_list
-%type<expr> table_gen
 
 %union {
   token Token
@@ -120,8 +117,8 @@ assign_stat:
 
             $$ = __chain()
             for i, v := range $2.Cpl() {
-                if v.Sym().Text == "..." {
-                    $$ = $$.CplAppend(__set(v, __popvAll(i)).SetPos($1.Pos))
+                if v.SymDDD() { 
+                    $$ = $$.CplAppend(__set(v, __popvAll(i, $4.CplIndex(i))).SetPos($1.Pos))
                 } else {
                     $$ = $$.CplAppend(__set(v, $4.CplIndex(i)).SetPos($1.Pos))
                 }
@@ -143,7 +140,7 @@ assign_stat:
                 }
             } 
              
-            if head := nodes[0]; len(nodes) == 1 {
+	    if head := nodes[0]; len(nodes) == 1 && !nodes[0].SymDDD() {
                 // a0 = b0
                 // if a, s, ok := $3.CplIndex(0).isSimpleAddSub(); ok && a.Equals(head.Sym()) {
                 //    $$ = __inc(head, Num(s)).SetPos($2.Pos)
@@ -157,8 +154,8 @@ assign_stat:
                 for i := range nodes {
                     names = append(names, randomVarname())
                     retaddr = retaddr.CplAppend(names[i])
-                    if nodes[i].Sym().Text == "..." {
-                        $$ = $$.CplAppend(__set(names[i], __popvAll(i)).SetPos($2.Pos))
+                    if nodes[i].SymDDD() {
+                        $$ = $$.CplAppend(__set(names[i], __popvAll(i, $3.CplIndex(i))).SetPos($2.Pos))
                     } else {
                         $$ = $$.CplAppend(__set(names[i], $3.CplIndex(i)).SetPos($2.Pos))
                     }
@@ -293,15 +290,6 @@ func_stat:
                 x(funcname, Node{ANil}).SetPos($1.Pos()), 
                 __move(funcname, __func(funcname, $3, $4).SetPos($1.Pos())).SetPos($1.Pos()),
             )
-        } |
-        func ident_dot_list '.' TIdent func_params_list stats TEnd {
-	    $$ = __store($2, Node{$4.Str}, __func(SymTok($4), $5, $6).SetPos($1.Pos())).SetPos($1.Pos()) 
-        } |
-        func ident_dot_list ':' TIdent func_params_list stats TEnd {
-            paramlist := $5.CplPrepend(Sym("self"))
-            $$ = __store(
-			 $2, Node{$4.Str}, __func(SymTok($4), paramlist, $6).SetPos($1.Pos()),
-            ).SetPos($1.Pos()) 
         }
 
 function:
@@ -346,17 +334,12 @@ ident_list:
         TIdent                            { $$ = Cpl(SymTok($1)) } | 
         ident_list ',' TIdent             { $$ = $1.CplAppend(SymTok($3)) }
 
-ident_dot_list:
-        TIdent                            { $$ = SymTok($1) } | 
-        ident_dot_list '.' TIdent         { $$ = __load($1, Node{$3.Str}).SetPos($1.Pos()) }
-
 expr:
         TNumber                           { $$ = Num($1.Str) } |
         TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str)) } |
         function                          { $$ = $1 } |
-        table_gen                         { $$ = $1 } |
-        prefix_expr                       { $$ = $1 } |
         TString                           { $$ = Node{$1.Str} } |
+	prefix_expr                       { $$ = $1 } |
         expr TOr expr                     { $$ = Cpl(Node{AOr}, $1,$3).SetPos($2.Pos) } |
         expr TAnd expr                    { $$ = Cpl(Node{AAnd}, $1,$3).SetPos($2.Pos) } |
         expr '>' expr                     { $$ = Cpl(Node{ALess}, $3,$1).SetPos($2.Pos) } |
@@ -379,7 +362,6 @@ expr:
 prefix_expr:
         declarator                        { $$ = $1 } |
         prefix_expr TString               { $$ = __call($1, Cpl(Node{$2.Str})).SetPos($1.Pos()) } |
-        prefix_expr ':' TIdent expr_list_paren { $$ = __call(__load($1, Node{$3.Str}).SetPos($2.Pos), $4.CplPrepend($1)).SetPos($2.Pos) } |
         prefix_expr expr_list_paren       { $$ = __call($1, $2).SetPos($1.Pos()) } |
         '(' expr ')'                      { $$ = $2 } // shift/reduce conflict
 
@@ -389,25 +371,7 @@ expr_list:
 
 expr_list_paren:
         '(' ')'                           { $$ = Cpl() } |
-        '(' expr_list ')'                 { $$ = $2 } |
-        table_gen                         { $$ = Cpl($1) }
-
-expr_assign_list:
-        TIdent '=' expr                            { $$ = Cpl(Node{$1.Str}, $3) } |
-        '[' expr ']' '=' expr                      { $$ = Cpl($2, $5) } |
-        expr_assign_list ',' TIdent '=' expr       { $$ = $1.CplAppend(Node{$3.Str}, $5) } |
-        expr_assign_list ',' '[' expr ']' '=' expr { $$ = $1.CplAppend($4, $7) }
-
-table_gen:
-        '{' '}'                                    { $$ = Cpl(Node{AArray}, emptyNode).SetPos($1.Pos) } |
-        '{' expr_assign_list     '}'               { $$ = Cpl(Node{AHash}, $2).SetPos($1.Pos) } |
-        '{' expr_assign_list ',' '}'               { $$ = Cpl(Node{AHash}, $2).SetPos($1.Pos) } |
-        '{' expr_assign_list ';' expr_list '}'     { $$ = Cpl(Node{AHashArray}, $2, $4).SetPos($1.Pos) } |
-        '{' expr_assign_list ';' expr_list ',' '}' { $$ = Cpl(Node{AHashArray}, $2, $4).SetPos($1.Pos) } |
-        '{' expr_list            '}'               { $$ = Cpl(Node{AArray}, $2).SetPos($1.Pos) } |
-        '{' expr_list ';' expr_assign_list '}'     { $$ = Cpl(Node{AHashArray}, $4, $2).SetPos($1.Pos) } |
-        '{' expr_list ';' expr_assign_list ',' '}' { $$ = Cpl(Node{AHashArray}, $4, $2).SetPos($1.Pos) } |
-        '{' expr_list ','        '}'               { $$ = Cpl(Node{AArray}, $2).SetPos($1.Pos) }
+        '(' expr_list ')'                 { $$ = $2 }
 
 %%
 

@@ -348,8 +348,7 @@ redo:
 		ch = sc.skipWhiteSpace(whitespace2)
 	}
 
-	var _buf bytes.Buffer
-	buf := &_buf
+	buf := &bytes.Buffer{}
 	tok.Pos = sc.Pos
 
 	switch {
@@ -479,9 +478,11 @@ redo:
 					tok.Type = TDotDot
 					tok.Str = ".."
 				} else {
+					buf.WriteString("..")
 					sc.Next()
+					sc.scanIdent('.', buf)
 					tok.Type = TIdent
-					tok.Str = "..."
+					tok.Str = buf.String()
 				}
 			default:
 				tok.Type = '.'

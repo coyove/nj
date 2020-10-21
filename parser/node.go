@@ -100,6 +100,8 @@ func (n Node) Str() string { a, _ := n.Value.(string); return a }
 
 func (n Node) Sym() Symbol { a, _ := n.Value.(Symbol); return a }
 
+func (n Node) SymDDD() bool { a, _ := n.Value.(Symbol); return strings.HasPrefix(a.Text, "...") }
+
 func (n Node) Num() (float64, int64) {
 	a, ok := n.Value.(float64)
 	if ok {

@@ -53,10 +53,10 @@ func kodeaddr(code []uint32) uintptr { return (*reflect.SliceHeader)(unsafe.Poin
 func konstaddr(consts []Value) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&consts)).Data }
 
 func returnVararg(a Value, b []Value) (Value, []Value) {
-	flag := a.isUnpack()
+	flag := a.Type() == STK
 	if len(b) == 0 {
 		if flag {
-			u := a.Tab().a
+			u := a.unpackedStack().a
 			if len(u) == 0 {
 				return Value{}, nil
 			}
@@ -66,7 +66,7 @@ func returnVararg(a Value, b []Value) (Value, []Value) {
 	}
 
 	for _, b := range b {
-		flag = flag || b.isUnpack()
+		flag = flag || b.Type() == STK
 	}
 
 	if !flag {
@@ -75,14 +75,14 @@ func returnVararg(a Value, b []Value) (Value, []Value) {
 	}
 
 	var b2 []Value
-	if a.isUnpack() {
-		b2 = append(b2, a.Tab().a...)
+	if a.Type() == STK {
+		b2 = append(b2, a.unpackedStack().a...)
 	} else {
 		b2 = append(b2, a)
 	}
 	for _, b := range b {
-		if b.isUnpack() {
-			b2 = append(b2, b.Tab().a...)
+		if b.Type() == STK {
+			b2 = append(b2, b.unpackedStack().a...)
 		} else {
 			b2 = append(b2, b)
 		}
@@ -153,10 +153,10 @@ MAIN:
 		case OpPopV:
 			switch opa {
 			case 4: // popv-all-with-a, e.g.: local ... = foo()
-				env.A = Tab(&Table{a: append([]Value{env.A}, env.V...), unpacked: true})
+				env.A = unpackedStack(&unpacked{append([]Value{env.A}, env.V...)})
 				env.V = nil
 			case 2: // popv-all, e.g.: local a, ... = foo()
-				env.A = Tab(&Table{a: env.V, unpacked: true})
+				env.A = unpackedStack(&unpacked{env.V})
 				env.V = nil
 			case 3: // popv-clear
 				env.V = nil
@@ -338,52 +338,37 @@ MAIN:
 			switch v := env._get(opa, K); v.Type() {
 			case STR:
 				env.A = Num(float64(len(v.Str())))
-			case TAB:
-				t := v.Tab()
+			case STK:
+				t := v.unpackedStack()
 				env.A = Num(float64(t.Len()))
 			case FUN:
 				env.A = Num(float64(v.Fun().NumParam))
 			default:
-				v = v.Expect(TAB)
-			}
-		case OpMakeTable:
-			switch opa {
-			case 1, 3: // 1: make hash; 3: make hash part of the table stored in $a
-				var m *Table
-				if opa == 3 {
-					m = env.A.Tab()
-				} else {
-					m = &Table{m: *NewMap(stackEnv.Size() / 2 * 3 / 2)} // 1.5x spaces
-				}
-				for i := 0; i < stackEnv.Size(); i += 2 {
-					m.Put(stackEnv.Get(i), stackEnv.Get(i+1))
-				}
-				stackEnv.Clear()
-				env.A = Tab(m)
-			case 2: // 2: make array
-				m := &Table{a: append([]Value{}, stackEnv.Stack()...)}
-				stackEnv.Clear()
-				env.A = Tab(m)
+				v = v.Expect(STK)
 			}
 		case OpStore:
 			subject, v := env._get(opa, K), env._get(opb, K)
 			switch subject.Type() {
-			case TAB:
-				subject.Tab().Put(env.A, v)
+			case STK:
+				subject.unpackedStack().Put(env.A.ExpectMsg(NUM, "store").Int(), v)
+			case ANY:
+				reflectStore(subject.Any(), camelKey(env.A.ExpectMsg(STR, "store").Str()), v)
 			default:
-				subject = subject.Expect(TAB)
+				subject = subject.Expect(STK)
 			}
 			env.A = v
 		case OpLoad:
 			switch a := env._get(opa, K); a.Type() {
-			case TAB:
-				env.A = a.Tab().Get(env._get(opb, K))
+			case STK:
+				env.A = a.unpackedStack().Get(env._get(opb, K).ExpectMsg(NUM, "load").Int())
+			case ANY:
+				env.A = reflectLoad(a.Any(), camelKey(env._get(opb, K).ExpectMsg(STR, "load").Str()))
 			default:
-				a = a.Expect(TAB)
+				a = a.Expect(STK)
 			}
 		case OpPush:
-			if v := env._get(opa, K); v.isUnpack() {
-				*stackEnv.stack = append(*stackEnv.stack, v.Tab().a...)
+			if v := env._get(opa, K); v.Type() == STK {
+				*stackEnv.stack = append(*stackEnv.stack, v.unpackedStack().a...)
 			} else {
 				stackEnv.Push(v)
 			}
@@ -417,7 +402,7 @@ MAIN:
 					if stackEnv.Size() <= int(cls.NumParam) {
 						stackEnv.grow(int(cls.NumParam) + 1)
 					}
-					stackEnv._set(uint16(cls.NumParam), Tab(&Table{a: varg, unpacked: true}))
+					stackEnv._set(uint16(cls.NumParam), unpackedStack(&unpacked{a: varg}))
 				}
 
 				if env.global == nil {

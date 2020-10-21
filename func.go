@@ -114,7 +114,7 @@ func (c *Func) Call(a ...Value) (Value, []Value) {
 		}
 		if c.native == nil && c.Is(FuncVararg) {
 			newEnv.grow(int(c.NumParam) + 1)
-			newEnv._set(uint16(c.NumParam), Tab(&Table{a: varg, unpacked: true}))
+			newEnv._set(uint16(c.NumParam), unpackedStack(&unpacked{a: varg}))
 		}
 	}
 	return c.exec(newEnv)
