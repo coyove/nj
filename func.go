@@ -9,6 +9,7 @@ import (
 const (
 	FuncYield = 1 << iota
 	FuncVararg
+	FuncLocked
 )
 
 type Func struct {
@@ -31,6 +32,8 @@ func Native(f func(env *Env)) Value {
 func (c *Func) setOpt(flag bool, opt byte) {
 	if flag {
 		c.options |= opt
+	} else {
+		c.options &^= opt
 	}
 }
 
@@ -82,40 +85,65 @@ func (c *Func) PrettyString() string {
 
 // exec executes the closure with the given Env
 func (c *Func) exec(newEnv Env) (Value, []Value) {
-	if c.native == nil {
-		if c.yEnv.stack != nil {
-			newEnv = c.yEnv
-		}
-
-		v, vb, np, yield := execCursorLoop(newEnv, c, c.yCursor)
-		if yield {
-			c.yCursor = np
-			c.yEnv = newEnv
-		} else {
-			c.yCursor = 0
-			c.yEnv = Env{}
-		}
-		return v, vb
+	if c.native != nil {
+		c.native(&newEnv)
+		return newEnv.A, newEnv.V
 	}
 
-	c.native(&newEnv)
-	return newEnv.A, newEnv.V
+	if c.Is(FuncLocked) {
+		panicf("reenter yielded function")
+	}
+	if c.yEnv.stack != nil {
+		newEnv = c.yEnv
+	}
+	if c.Is(FuncYield) {
+		c.setOpt(true, FuncLocked)
+	}
+
+	v, vb, np, yield := execCursorLoop(newEnv, c, c.yCursor)
+	c.setOpt(false, FuncLocked)
+
+	if yield {
+		c.yCursor, c.yEnv = np, newEnv
+	} else {
+		c.yCursor, c.yEnv = 0, Env{}
+	}
+	return v, vb
 }
 
 func (c *Func) Call(a ...Value) (Value, []Value) {
+	return c.CallEnv(nil, a...)
+}
+
+func (c *Func) CallEnv(env *Env, a ...Value) (Value, []Value) {
+	if c.yEnv.stack != nil {
+		return c.exec(c.yEnv)
+	}
+
 	var newEnv Env
 	var varg []Value
-	if c.yEnv.stack == nil {
-		for i := range a {
-			if i >= int(c.NumParam) {
-				varg = append(varg, a[i])
-			}
-			newEnv.Push(a[i])
+	if env == nil || env.global == nil {
+		panicf("call function without global env")
+	}
+	newEnv = *env
+	newEnv.stackOffset = len(*newEnv.stack)
+	for i := range a {
+		if i >= int(c.NumParam) {
+			varg = append(varg, a[i])
 		}
-		if c.native == nil && c.Is(FuncVararg) {
+		newEnv.Push(a[i])
+	}
+	if c.native == nil {
+		if c.Is(FuncVararg) {
 			newEnv.grow(int(c.NumParam) + 1)
 			newEnv._set(uint16(c.NumParam), unpackedStack(&unpacked{a: varg}))
 		}
+		if c.Is(FuncYield) {
+			x := append([]Value{}, newEnv.Stack()...)
+			newEnv.stack = &x
+			newEnv.stackOffset = 0
+		}
+		newEnv.grow(int(c.stackSize))
 	}
 	return c.exec(newEnv)
 }

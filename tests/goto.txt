@@ -33,4 +33,4 @@ end
 
 -- goto innerlabel panic
 
-return "goto"
+_GOTO = "goto"

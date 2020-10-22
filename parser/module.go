@@ -10,7 +10,7 @@ import (
 
 func (lex *Lexer) loadFile(path string) Node {
 	if strings.Contains(lex.loop, path) {
-		lex.Error(fmt.Sprintf("%s and %s are importing each other", lex.scanner.Pos.Source, path))
+		lex.Error(fmt.Sprintf("%q and %q are including each other", lex.scanner.Pos.Source, path))
 	}
 
 	if n, ok := lex.cache[path]; ok {
@@ -27,11 +27,8 @@ func (lex *Lexer) loadFile(path string) Node {
 	}
 
 	// Now the required code is loaded, we will wrap them into a closure
-	pos := Position{Line: 1, Column: 1, Source: path}
-	cls := __func(emptyNode, Cpl(), n).SetPos(pos)
-	node := __call(cls, Cpl()).SetPos(pos)
-	lex.cache[path] = node
-	return cloneNode(node)
+	lex.cache[path] = n
+	return cloneNode(n)
 }
 
 func joinSourcePath(path1 string, filename2 string) string {

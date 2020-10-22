@@ -41,22 +41,21 @@ func interfaceType(a interface{}) uintptr {
 var (
 	ANop       = Symbol{Text: "nop"}
 	ADoBlock   = Symbol{Text: "do"}
-	AConcat    = Symbol{Text: "con"}
+	AConcat    = Symbol{Text: "concat"}
 	ANil       = Symbol{Text: "nil"}
 	ASet       = Symbol{Text: "set"}
-	AInc       = Symbol{Text: "inc"}
-	AMove      = Symbol{Text: "mov"}
+	AInc       = Symbol{Text: "incr"}
+	AMove      = Symbol{Text: "move"}
 	AIf        = Symbol{Text: "if"}
-	AFor       = Symbol{Text: "for"}
-	AFunc      = Symbol{Text: "fun"}
+	AFor       = Symbol{Text: "loop"}
+	AFunc      = Symbol{Text: "function"}
 	ABreak     = Symbol{Text: "break"}
-	AContinue  = Symbol{Text: "cont"}
 	ABegin     = Symbol{Text: "prog"}
 	ALoad      = Symbol{Text: "load"}
-	AStore     = Symbol{Text: "stor"}
+	AStore     = Symbol{Text: "store"}
 	ACall      = Symbol{Text: "call"}
-	ATailCall  = Symbol{Text: "tail"}
-	AReturn    = Symbol{Text: "ret"}
+	ATailCall  = Symbol{Text: "tailcall"}
+	AReturn    = Symbol{Text: "return"}
 	AYield     = Symbol{Text: "yield"}
 	AAdd       = Symbol{Text: "add"}
 	ASub       = Symbol{Text: "sub"}
@@ -72,11 +71,11 @@ var (
 	ALess      = Symbol{Text: "lt"}
 	ALessEq    = Symbol{Text: "le"}
 	ALen       = Symbol{Text: "len"}
-	ARetAddr   = Symbol{Text: "reta"}
+	ARetAddr   = Symbol{Text: "retaddr"}
 	APopV      = Symbol{Text: "popv"}
-	APopVClear = Symbol{Text: "endv"}
-	APopVAll   = Symbol{Text: "allv"}
-	APopVAllA  = Symbol{Text: "allva"}
+	APopVClear = Symbol{Text: "clearv"}
+	APopVAll   = Symbol{Text: "popallv"}
+	APopVAllA  = Symbol{Text: "popallva"}
 	ALabel     = Symbol{Text: "label"}
 	AGoto      = Symbol{Text: "goto"}
 )

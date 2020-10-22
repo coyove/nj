@@ -21,6 +21,15 @@ var (
 	now int64
 )
 
+func AddGlobalValue(k string, v interface{}) {
+	switch v := v.(type) {
+	case func(*Env):
+		g[k] = Fun(&Func{Name: k, native: v})
+	default:
+		g[k] = Any(v)
+	}
+}
+
 func init() {
 	go func() {
 		for a := range time.Tick(time.Second) {
@@ -42,10 +51,10 @@ func init() {
 	AddGlobalValue("pcall", func(env *Env) {
 		defer func() {
 			if r := recover(); r != nil {
-				env.Return(NumBool(false))
+				env.Return(NumBool(false), Any(errors.New(fmt.Sprint(r))))
 			}
 		}()
-		a, v := env.In(0, FUN).Fun().Call(env.Stack()[1:]...)
+		a, v := env.In(0, FUN).Fun().CallEnv(env, env.Stack()[1:]...)
 		env.Return(NumBool(true), append([]Value{a}, v...)...)
 	})
 	AddGlobalValue("select", func(env *Env) {
@@ -69,8 +78,7 @@ func init() {
 	})
 
 	AddGlobalValue("tostring", func(env *Env) {
-		v := env.Get(0)
-		env.A = Str(v.String())
+		env.A = Str(env.Get(0).String())
 	})
 	AddGlobalValue("tonumber", func(env *Env) {
 		v := env.Get(0)
@@ -103,9 +111,7 @@ func init() {
 	AddGlobalValue("infinite", Num(math.Inf(1)))
 	AddGlobalValue("PI", Num(math.Pi))
 	AddGlobalValue("E", Num(math.E))
-	AddGlobalValue("randomseed", func(env *Env) {
-		rand.Seed(env.In(0, NUM).Int())
-	})
+	AddGlobalValue("randomseed", func(env *Env) { rand.Seed(env.In(0, NUM).Int()) })
 	AddGlobalValue("random", func(env *Env) {
 		switch len(env.Stack()) {
 		case 2:
@@ -129,16 +135,12 @@ func init() {
 	AddGlobalValue("ldexp", func(env *Env) { env.A = Num(math.Ldexp(env.In(0, NUM).F64(), int(env.In(1, NUM).F64()))) })
 	AddGlobalValue("modf", func(env *Env) { a, b := math.Modf(env.In(0, NUM).F64()); env.Return(Num(a), Num(float64(b))) })
 	AddGlobalValue("min", func(env *Env) {
-		if len(env.Stack()) == 0 {
-			env.A = Value{}
-		} else {
+		if len(env.Stack()) > 0 {
 			mathMinMax(env, false)
 		}
 	})
 	AddGlobalValue("max", func(env *Env) {
-		if len(env.Stack()) == 0 {
-			env.A = Value{}
-		} else {
+		if len(env.Stack()) > 0 {
 			mathMinMax(env, true)
 		}
 	})
@@ -151,25 +153,21 @@ func init() {
 	AddGlobalValue("clock", func(env *Env) {
 		x := time.Now()
 		s := *(*[2]int64)(unsafe.Pointer(&x))
-		env.A = Num(float64(s[1] / 1e9))
-	})
-	AddGlobalValue("microclock", func(env *Env) {
-		x := time.Now()
-		s := *(*[2]int64)(unsafe.Pointer(&x))
-		env.A = Num(float64(s[1] / 1e3))
+		if env.InStr(0, "") == "micro" {
+			env.A = Int(s[1] / 1e3)
+		} else {
+			env.A = Int(s[1] / 1e9)
+		}
 	})
 	AddGlobalValue("exit", func(env *Env) {
-		if v := env.Get(0); !v.IsNil() {
-			os.Exit(int(env.In(0, NUM).Int()))
-		}
-		os.Exit(0)
+		os.Exit(int(env.InInt(0, 0)))
 	})
 	AddGlobalValue("char", func(env *Env) {
 		env.A = Str(string(rune(env.In(0, NUM).Int())))
 	})
 	AddGlobalValue("match", func(env *Env) {
-		m := regexp.MustCompile(env.In(0, STR).Str()).
-			FindAllStringSubmatch(env.In(1, STR).Str(), int(env.InNum(2, Int(-1)).Int()))
+		m := regexp.MustCompile(env.In(1, STR).Str()).
+			FindAllStringSubmatch(env.In(0, STR).Str(), int(env.InInt(2, -1)))
 		var mm []string
 		for _, m := range m {
 			for _, m := range m {
@@ -183,6 +181,60 @@ func init() {
 			}
 		}
 	})
+	AddGlobalValue("startswith", func(env *Env) {
+		env.A = NumBool(strings.HasPrefix(env.In(0, STR).Str(), env.In(1, STR).Str()))
+	})
+	AddGlobalValue("endswith", func(env *Env) {
+		env.A = NumBool(strings.HasSuffix(env.In(0, STR).Str(), env.In(1, STR).Str()))
+	})
+	AddGlobalValue("trim", func(env *Env) {
+		switch a, cutset := env.In(0, STR).Str(), env.InStr(1, " "); env.InStr(2, "") {
+		case "left":
+			env.A = Str(strings.TrimLeft(a, cutset))
+		case "right":
+			env.A = Str(strings.TrimRight(a, cutset))
+		case "prefix":
+			env.A = Str(strings.TrimPrefix(a, cutset))
+		case "suffix":
+			env.A = Str(strings.TrimSuffix(a, cutset))
+		default:
+			env.A = Str(strings.Trim(a, cutset))
+		}
+	})
+	AddGlobalValue("replace", func(env *Env) {
+		a := env.In(0, STR).Str()
+		rx := regexp.MustCompile(env.In(1, STR).Str())
+		switch f := env.Get(2); f.Type() {
+		case STR:
+			env.A = Str(rx.ReplaceAllString(a, f.Str()))
+		case FUN:
+			env.A = Str(rx.ReplaceAllStringFunc(a, func(in string) string {
+				v, _ := f.Fun().CallEnv(env, Str(in))
+				return v.String()
+			}))
+		}
+	})
+	AddGlobalValue("split", func(env *Env) {
+		x := strings.Split(env.In(0, STR).Str(), env.In(1, STR).Str())
+		v := make([]Value, len(x))
+		for i := range x {
+			v[i] = Str(x[i])
+		}
+		env.Return(v[0], v[1:]...)
+	})
+	AddGlobalValue("substr", func(env *Env) {
+		s, a := env.In(0, STR).Str(), env.InInt(1, 1)
+		b := env.InInt(2, int64(len(s)))
+		env.A = Str(s[a-1 : b-1+1])
+	})
+	AddGlobalValue("strpos", func(env *Env) {
+		a, b := env.In(0, STR).Str(), env.In(1, STR).Str()
+		if env.InStr(1, "") == "last" {
+			env.A = Int(int64(strings.LastIndex(a, b)))
+		} else {
+			env.A = Int(int64(strings.Index(a, b)))
+		}
+	})
 	AddGlobalValue("mutex", func(env *Env) { env.A = Any(&sync.Mutex{}) })
 	AddGlobalValue("error", func(env *Env) { env.A = Any(errors.New(env.InStr(0, ""))) })
 	AddGlobalValue("iserror", func(env *Env) { _, ok := env.In(0, ANY).Any().(error); env.A = NumBool(ok) })
@@ -191,22 +243,22 @@ func init() {
 		if len(j) == 0 {
 			return
 		}
+		if j == "null" {
+			return
+		}
 		switch j[0] {
-		case 'n':
-		case 't':
-			env.A = NumBool(true)
-		case 'f':
-			env.A = NumBool(false)
+		case 't', 'f':
+			env.A = NumBool(j[0] == 't')
 		case '[':
 			var a []interface{}
-			json.Unmarshal([]byte(j), &a)
-			env.A = Any(a)
+			err := json.Unmarshal([]byte(j), &a)
+			env.Return(Any(a), Any(err))
 		case '{':
 			a := map[string]interface{}{}
-			json.Unmarshal([]byte(j), &a)
-			env.A = Any(a)
+			err := json.Unmarshal([]byte(j), &a)
+			env.Return(Any(a), Any(err))
 		default:
-			panicf("malformed json string: %q", j)
+			env.Return(Value{}, Any(fmt.Errorf("malformed json string: %q", j)))
 		}
 	})
 	AddGlobalValue("json", func(env *Env) {
@@ -275,13 +327,4 @@ func ipow(base, exp int64) int64 {
 		base *= base
 	}
 	return result
-}
-
-func AddGlobalValue(k string, v interface{}) {
-	switch v := v.(type) {
-	case func(*Env):
-		g[k] = Fun(&Func{Name: k, native: v})
-	default:
-		g[k] = Any(v)
-	}
 }

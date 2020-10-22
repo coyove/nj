@@ -329,7 +329,7 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileIfOp(nodes)
 	case parser.AFor.Text:
 		yx = table.compileWhileOp(nodes)
-	case parser.AContinue.Text, parser.ABreak.Text:
+	case parser.ABreak.Text:
 		yx = table.compileBreakOp(nodes)
 	case parser.ACall.Text, parser.ATailCall.Text:
 		yx = table.compileCallOp(nodes)

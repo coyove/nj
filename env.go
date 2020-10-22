@@ -63,12 +63,6 @@ func (env *Env) Size() int {
 	return len(*env.stack) - env.stackOffset
 }
 
-func (env *Env) Deadline() (context.Context, func(), time.Time) {
-	d := time.Unix(env.global.Deadline, 0)
-	ctx, cancel := context.WithDeadline(context.Background(), d)
-	return ctx, cancel, d
-}
-
 func (env *Env) _get(yx uint16, cls *Func) (zzz Value) {
 	if yx == regA {
 		return env.A
@@ -117,12 +111,14 @@ func (env *Env) Stack() []Value {
 	return (*env.stack)[env.stackOffset:]
 }
 
-func (env *Env) InNum(i int, defaultValue Value) Value {
+// Some useful helper functions
+
+func (env *Env) InInt(i int, defaultValue int64) int64 {
 	v := env.Get(i)
 	if v.Type() != NUM {
 		return defaultValue
 	}
-	return v
+	return v.Int()
 }
 
 func (env *Env) InStr(i int, defaultValue string) string {
@@ -133,14 +129,24 @@ func (env *Env) InStr(i int, defaultValue string) string {
 	return v.Str()
 }
 
-func (env *Env) In(i int, expectedType byte) Value {
+func (env *Env) In(i int, expectedType valueType) Value {
 	v := env.Get(i)
 	if v.Type() != expectedType {
-		panicf("bad argument #%d: expect %q, got %v", i, typeMappings[expectedType], v)
+		panicf("bad argument #%d: expect %v, got %v", i, typeMappings[expectedType], v)
 	}
 	return v
 }
 
 func (env *Env) Return(a1 Value, an ...Value) {
 	env.A, env.V = a1, an
+}
+
+func (env *Env) Deadline() (context.Context, func(), time.Time) {
+	d := time.Unix(env.global.Deadline, 0)
+	ctx, cancel := context.WithDeadline(context.Background(), d)
+	return ctx, cancel, d
+}
+
+func (env *Env) GetGlobalCustomValue(key string) interface{} {
+	return env.global.Extras[key]
 }

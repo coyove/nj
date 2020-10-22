@@ -9,15 +9,17 @@ import (
 )
 
 const (
-	NIL    = 0  // nil
-	NUM    = 3  // number
-	STR    = 7  // string
-	STK    = 15 // stack
-	FUN    = 31 // function
-	ANY    = 63 // generic
-	NumNum = NUM * 2
-	StrStr = STR * 2
+	NIL    valueType = 0  // nil
+	NUM              = 3  // number
+	STR              = 7  // string
+	STK              = 15 // stack
+	FUN              = 31 // function
+	ANY              = 63 // generic
+	NumNum           = NUM * 2
+	StrStr           = STR * 2
 )
+
+type valueType byte
 
 // Value is the basic value used by the intepreter
 // For float numbers there is one NaN which is not representable: 0xffffffff_ffffffff
@@ -28,7 +30,7 @@ type Value struct {
 }
 
 // Type returns the type of value, its logic should align IsFalse()
-func (v Value) Type() byte {
+func (v Value) Type() valueType {
 	if v.p == nil || v.p == int64Marker {
 		if v.v == 0 {
 			return NIL
@@ -38,7 +40,7 @@ func (v Value) Type() byte {
 	if v.v&0xffff_ffff_ffff > 4096 {
 		return ANY
 	}
-	return byte(v.v)
+	return valueType(v.v)
 }
 
 // IsFalse tests whether value contains a falsy value: nil or 0
@@ -48,7 +50,7 @@ func (v Value) IsFalse() bool {
 }
 
 var (
-	typeMappings = map[byte]string{
+	typeMappings = map[valueType]string{
 		NIL: "nil", NUM: "number", STR: "string", FUN: "function", ANY: "any", STK: "stack",
 	}
 	int64Marker = unsafe.Pointer(new(int64))
@@ -222,14 +224,14 @@ func (v Value) AnyTyped(t reflect.Type) interface{} {
 	return v.Any()
 }
 
-func (v Value) Expect(t byte) Value {
+func (v Value) Expect(t valueType) Value {
 	if v.Type() != t {
 		panicf("expect %s, got %s", typeMappings[t], typeMappings[v.Type()])
 	}
 	return v
 }
 
-func (v Value) ExpectMsg(t byte, msg string) Value {
+func (v Value) ExpectMsg(t valueType, msg string) Value {
 	if v.Type() != t {
 		panicf("%s: expect %s, got %s", msg, typeMappings[t], typeMappings[v.Type()])
 	}
@@ -275,7 +277,7 @@ func (v Value) toString(lv int) string {
 		if err := reflectCheckCyclicStruct(i); err != nil {
 			return fmt.Sprintf("<any: omit deep nesting>")
 		}
-		return fmt.Sprintf("%#v", i)
+		return fmt.Sprintf("%v", i)
 	}
 	return "nil"
 }

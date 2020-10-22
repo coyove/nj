@@ -305,7 +305,7 @@ jmp_stat:
         TYield expr_list                  { $$ = Cpl(Node{AYield}, $2).SetPos($1.Pos) } |
         TYieldVoid                        { $$ = Cpl(Node{AYield}, emptyNode).SetPos($1.Pos) } |
         TBreak                            { $$ = Cpl(Node{ABreak}).SetPos($1.Pos) } |
-        TImport TString                   { $$ = __move(Sym(moduleNameFromPath($2.Str)), yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str))).SetPos($1.Pos) } |
+        TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str)) } |
         TGoto TIdent                      { $$ = Cpl(Node{AGoto}, SymTok($2)).SetPos($1.Pos) } |
         TLabel TIdent TLabel              { $$ = Cpl(Node{ALabel}, SymTok($2)) } |
         TReturnVoid                       { $$ = Cpl(Node{AReturn}, emptyNode).SetPos($1.Pos) } |
@@ -336,7 +336,6 @@ ident_list:
 
 expr:
         TNumber                           { $$ = Num($1.Str) } |
-        TImport TString                   { $$ = yylex.(*Lexer).loadFile(joinSourcePath($1.Pos.Source, $2.Str)) } |
         function                          { $$ = $1 } |
         TString                           { $$ = Node{$1.Str} } |
 	prefix_expr                       { $$ = $1 } |

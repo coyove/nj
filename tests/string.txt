@@ -7,11 +7,25 @@ assert( "abc吱吱吱" == "abc\u5431\u5431\u5431")
 
 assert(1 + "2" == 3)
 
-local a, b, c, d = match([["(\d+)"]], "a\"12\" \"2\"3")
+local a, b, c, d = match("a\"12\" \"2\"3", [["(\d+)"]])
 assert(a == [["12"]] and b == "12" and c == [["2"]] and d == "2")
 
 local err = error("err")
 assert(err.error() == "err")
+assert("eerrrr" == replace(err.error(), "(e|r)", "$1$1"))
+assert("REE" == replace(err.error(), "(e|r)", function (s)
+		return s == "e" and "R" or "E"
+end))
+
+assert("1 2 3 1 2 3" == replace("a b c d e f", "(\\w)", function (s)
+yield 1
+yield 2
+return 3
+end))
+
+assert("x" == trim("嘻x嘻", "嘻"))
+assert("嘻x" == trim("嘻x嘻", "嘻", "right"))
+assert("x嘻" == trim("嘻x嘻", "嘻", "left"))
 
 strname = abc
-return "r:" .. abc .. global_x
+_STRING= "r:" .. abc .. global_x
