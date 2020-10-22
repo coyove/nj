@@ -124,6 +124,7 @@ func pkRead32(data []uint32, cursor *uint32) uint32 {
 }
 
 var singleOp = map[_Opcode]parser.Symbol{
+	OpConcat: parser.AConcat,
 	OpAdd:    parser.AAdd,
 	OpSub:    parser.ASub,
 	OpMul:    parser.AMul,
@@ -233,7 +234,7 @@ MAIN:
 			sb.WriteString("ret " + readAddr(a))
 		case OpYield:
 			sb.WriteString("yield " + readAddr(a))
-		case OpLambda:
+		case OpLoadFunc:
 			sb.WriteString("$a = closure:\n")
 			cls := c.Funcs[a]
 			sb.WriteString(pkPrettify(cls, tab+1))

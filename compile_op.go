@@ -286,7 +286,7 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 	cls.ConstTable = newtable.constsToValues()
 
 	table.code.Funcs = append(table.code.Funcs, cls)
-	table.code.writeOP(OpLambda, uint16(len(table.code.Funcs))-1, 0)
+	table.code.writeOP(OpLoadFunc, uint16(len(table.code.Funcs))-1, 0)
 	table.code.writePos(atoms[0].Pos())
 	return regA
 }

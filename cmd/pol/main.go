@@ -139,15 +139,16 @@ ARG:
 
 	var ok = make(chan bool, 1)
 	if *timeout > 0 {
-		go func() {
-			select {
-			case <-time.After(time.Duration(*timeout) * time.Millisecond):
-				b.Terminate()
-				log.Println("Timeout:", *timeout, "ms")
-			case <-ok:
-				// peacefully exit
-			}
-		}()
+		potatolang.WithTimeout(b, time.Second*time.Duration(*timeout))
+		// go func() {
+		// 	select {
+		// 	case <-time.After(time.Duration(*timeout) * time.Millisecond):
+		// 		b.Terminate()
+		// 		log.Println("Timeout:", *timeout, "ms")
+		// 	case <-ok:
+		// 		// peacefully exit
+		// 	}
+		// }()
 	}
 
 	i, i2 := b.Call()

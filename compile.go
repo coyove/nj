@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"time"
 
 	"github.com/coyove/potatolang/parser"
 )
@@ -414,4 +415,19 @@ func loadStringName(code, name string) (*Func, error) {
 	}
 	// n.Dump(os.Stderr, "  ")
 	return compileNodeTopLevel(n)
+}
+
+func WithTimeout(f *Func, d time.Duration) { f.yEnv.global.Deadline = time.Now().Add(d).Unix() }
+
+func WithDeadline(f *Func, d time.Time) { f.yEnv.global.Deadline = d.Unix() }
+
+func WithMaxStackSize(f *Func, sz int64) { f.yEnv.global.MaxStackSize = sz }
+
+func WithMaxStringSize(f *Func, sz int64) { f.yEnv.global.MaxStringSize = sz }
+
+func WithValue(f *Func, k string, v interface{}) {
+	if f.yEnv.global.Extras == nil {
+		f.yEnv.global.Extras = map[string]interface{}{}
+	}
+	f.yEnv.global.Extras[k] = v
 }

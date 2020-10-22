@@ -138,15 +138,6 @@ func Cpl(args ...Node) Node {
 			}
 		}
 	}
-	if len(args) == 2 {
-		if args[0].Sym().Equals(AUnm) && args[1].Type() == NUM {
-			f, i := args[1].Num()
-			if i == 0 {
-				return Node{-f}
-			}
-			return Node{-i}
-		}
-	}
 	return Node{args}
 }
 

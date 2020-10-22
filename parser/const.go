@@ -60,7 +60,6 @@ var (
 	AYield     = Symbol{Text: "yield"}
 	AAdd       = Symbol{Text: "add"}
 	ASub       = Symbol{Text: "sub"}
-	AUnm       = Symbol{Text: "unm"}
 	AMul       = Symbol{Text: "mul"}
 	ADiv       = Symbol{Text: "div"}
 	AMod       = Symbol{Text: "mod"}
@@ -80,8 +79,6 @@ var (
 	APopVAllA  = Symbol{Text: "allva"}
 	ALabel     = Symbol{Text: "label"}
 	AGoto      = Symbol{Text: "goto"}
-	ARef       = Symbol{Text: "ref"}
-	ADeref     = Symbol{Text: "deref"}
 )
 
 func __chain(args ...Node) Node { return Cpl(append([]Node{Node{ABegin}}, args...)...) }

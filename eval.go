@@ -6,6 +6,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -61,10 +62,6 @@ func returnVararg(a Value, b []Value) (Value, []Value) {
 			}
 			return u[0], u[1:]
 		}
-		return a, nil
-	}
-
-	if flag && &a.unpackedStack().a[0] == &b[0] {
 		return a, nil
 	}
 
@@ -139,6 +136,12 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 
 MAIN:
 	for {
+		if env.global.Deadline != 0 {
+			if atomic.LoadInt64(&now) > env.global.Deadline {
+				panicf("timeout")
+			}
+		}
+
 		v := K.Code[cursor]
 		cursor++
 		bop, opa, opb := op(v)
@@ -180,21 +183,26 @@ MAIN:
 			}
 			env._set(opa, env.A)
 		case OpConcat:
+			var x string
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case StrStr:
-				env.A = Str(va.Str() + vb.Str())
+				x = va.Str() + vb.Str()
 			default:
 				if va.Type() == STR && vb.Type() == NUM {
 					vbf, vbi, vbIsInt := vb.Num()
 					if vbIsInt {
-						env.A = Str(va.Str() + strconv.FormatInt(vbi, 10))
+						x = va.Str() + strconv.FormatInt(vbi, 10)
 					} else {
-						env.A = Str(va.Str() + strconv.FormatFloat(vbf, 'f', 0, 64))
+						x = va.Str() + strconv.FormatFloat(vbf, 'f', 0, 64)
 					}
 				} else {
 					va, vb = va.Expect(STR), vb.Expect(STR)
 				}
 			}
+			if env.global.MaxStringSize > 0 && int64(len(x)) > env.global.MaxStringSize {
+				panicf("string overflow, max: %d", env.global.MaxStringSize)
+			}
+			env.A = Str(x)
 		case OpAdd:
 			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
 			case NumNum:
@@ -312,8 +320,8 @@ MAIN:
 			case NumNum:
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
-				if vaIsInt && vbIsInt {
-					env.A = Int(int64(math.Pow(float64(vai), float64(vbi))))
+				if vaIsInt && vbIsInt && vbi >= 1 {
+					env.A = Int(ipow(vai, vbi))
 				} else {
 					env.A = Num(math.Pow(vaf, vbf))
 				}
@@ -325,12 +333,11 @@ MAIN:
 			case STR:
 				env.A = Num(float64(len(v.Str())))
 			case STK:
-				t := v.unpackedStack()
-				env.A = Num(float64(t.Len()))
+				env.A = Num(float64(v.unpackedStack().Len()))
 			case FUN:
 				env.A = Num(float64(v.Fun().NumParam))
 			default:
-				v = v.Expect(STK)
+				env.A = Int(int64(reflectLen(v.Any())))
 			}
 		case OpStore:
 			subject, v := env._get(opa, K), env._get(opb, K)
@@ -338,7 +345,7 @@ MAIN:
 			case STK:
 				subject.unpackedStack().Put(env.A.ExpectMsg(NUM, "store").Int(), v)
 			case ANY:
-				reflectStore(subject.Any(), camelKey(env.A.ExpectMsg(STR, "store").Str()), v)
+				reflectStore(subject.Any(), env.A, v)
 			default:
 				subject = subject.Expect(STK)
 			}
@@ -348,7 +355,11 @@ MAIN:
 			case STK:
 				env.A = a.unpackedStack().Get(env._get(opb, K).ExpectMsg(NUM, "load").Int())
 			case ANY:
-				env.A = reflectLoad(a.Any(), camelKey(env._get(opb, K).ExpectMsg(STR, "load").Str()))
+				env.A = reflectLoad(a.Any(), env._get(opb, K))
+			case STR:
+				if idx, s := env._get(opb, K).ExpectMsg(NUM, "load").Int(), a.Str(); idx >= 1 && idx <= int64(len(s)) {
+					env.A = Int(int64(s[idx]))
+				}
 			default:
 				a = a.Expect(STK)
 			}
@@ -361,6 +372,9 @@ MAIN:
 			if opa == regA && len(env.V) > 0 {
 				*stackEnv.stack = append(*stackEnv.stack, env.V...)
 			}
+			if env.global.MaxStackSize > 0 && int64(len(*stackEnv.stack)) > env.global.MaxStackSize {
+				panicf("stack overflow, max: %d", env.global.MaxStackSize)
+			}
 		case OpRet:
 			v := env._get(opa, K)
 			if len(retStack) == 0 {
@@ -372,7 +386,7 @@ MAIN:
 			v := env._get(opa, K)
 			v, env.V = returnVararg(v, env.V)
 			return v, env.V, cursor, true
-		case OpLambda:
+		case OpLoadFunc:
 			env.A = Fun(K.Funcs[opa])
 		case OpCall:
 			cls := env._get(opa, K).ExpectMsg(FUN, "call").Fun()

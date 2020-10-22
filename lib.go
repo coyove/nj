@@ -1,11 +1,12 @@
 package potatolang
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
 	"os"
-	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -15,31 +16,30 @@ import (
 	"github.com/coyove/potatolang/parser"
 )
 
-var g = map[string]Value{}
+var (
+	g   = map[string]Value{}
+	now int64
+)
 
 func init() {
-	buildg("ref", func(env *Env) {
-		v := env.Get(0)
-		env.A = Any(&v)
-	})
-	buildg("deref", func(env *Env) {
-		env.A = *env.In(0, ANY).Any().(*Value)
-		if env.A.Type() == STK {
-			env.V = env.A.unpackedStack().a
+	go func() {
+		for a := range time.Tick(time.Second) {
+			now = a.Unix()
 		}
+	}()
+
+	AddGlobalValue("array", func(env *Env) {
+		n := env.In(0, NUM).Int()
+		env.Return(Int(n), make([]Value, n)...)
 	})
-	buildg("array", func(env *Env) {
-		env.V = make([]Value, env.In(0, NUM).Int())
-		env.A = unpackedStack(&unpacked{a: env.V})
-	})
-	buildg("copyfunction", func(env *Env) {
+	AddGlobalValue("copyfunction", func(env *Env) {
 		f := *env.In(0, FUN).Fun()
 		env.A = Fun(&f)
 	})
-	buildg("type", func(env *Env) {
+	AddGlobalValue("type", func(env *Env) {
 		env.A = Str(typeMappings[env.Get(0).Type()])
 	})
-	buildg("pcall", func(env *Env) {
+	AddGlobalValue("pcall", func(env *Env) {
 		defer func() {
 			if r := recover(); r != nil {
 				env.Return(NumBool(false))
@@ -48,7 +48,7 @@ func init() {
 		a, v := env.In(0, FUN).Fun().Call(env.Stack()[1:]...)
 		env.Return(NumBool(true), append([]Value{a}, v...)...)
 	})
-	buildg("select", func(env *Env) {
+	AddGlobalValue("select", func(env *Env) {
 		switch a := env.Get(0); a.Type() {
 		case STR:
 			env.A = Num(float64(len(env.Stack()[1:])))
@@ -60,7 +60,7 @@ func init() {
 			}
 		}
 	})
-	buildg("assert", func(env *Env) {
+	AddGlobalValue("assert", func(env *Env) {
 		if v := env.Get(0); !v.IsFalse() {
 			env.A = v
 			return
@@ -68,11 +68,11 @@ func init() {
 		panic("assertion failed")
 	})
 
-	buildg("tostring", func(env *Env) {
+	AddGlobalValue("tostring", func(env *Env) {
 		v := env.Get(0)
 		env.A = Str(v.String())
 	})
-	buildg("tonumber", func(env *Env) {
+	AddGlobalValue("tonumber", func(env *Env) {
 		v := env.Get(0)
 		switch v.Type() {
 		case NUM:
@@ -88,24 +88,25 @@ func init() {
 			env.A = Value{}
 		}
 	})
-	buildg("print", func(env *Env) {
-		args := make([]interface{}, len(env.Stack()))
-		for i := range args {
-			args[i] = env.Stack()[i].Any()
+	AddGlobalValue("print", func(env *Env) {
+		for _, a := range env.Stack() {
+			fmt.Print(a.String())
 		}
-		if n, err := fmt.Println(args...); err != nil {
-			env.Return(Value{}, Str(err.Error()))
-		} else {
-			env.Return(Num(float64(n)))
-		}
+		fmt.Println()
 	})
-	buildg("infinite", Num(math.Inf(1)))
-	buildg("PI", Num(math.Pi))
-	buildg("E", Num(math.E))
-	buildg("randomseed", func(env *Env) {
+	AddGlobalValue("println", func(env *Env) {
+		for _, a := range env.Stack() {
+			fmt.Print(a.String(), " ")
+		}
+		fmt.Println()
+	})
+	AddGlobalValue("infinite", Num(math.Inf(1)))
+	AddGlobalValue("PI", Num(math.Pi))
+	AddGlobalValue("E", Num(math.E))
+	AddGlobalValue("randomseed", func(env *Env) {
 		rand.Seed(env.In(0, NUM).Int())
 	})
-	buildg("random", func(env *Env) {
+	AddGlobalValue("random", func(env *Env) {
 		switch len(env.Stack()) {
 		case 2:
 			a, b := int(env.In(0, NUM).Int()), int(env.In(1, NUM).Int())
@@ -116,60 +117,57 @@ func init() {
 			env.A = Num(rand.Float64())
 		}
 	})
-	buildg("sqrt", func(env *Env) { env.A = Num(math.Sqrt(env.In(0, NUM).F64())) })
-	buildg("floor", func(env *Env) { env.A = Num(math.Floor(env.In(0, NUM).F64())) })
-	buildg("ceil", func(env *Env) { env.A = Num(math.Ceil(env.In(0, NUM).F64())) })
-	buildg("fmod", func(env *Env) { env.A = Num(math.Mod(env.In(0, NUM).F64(), env.In(1, NUM).F64())) })
-	buildg("abs", func(env *Env) { env.A = Num(math.Abs(env.In(0, NUM).F64())) })
-	buildg("acos", func(env *Env) { env.A = Num(math.Acos(env.In(0, NUM).F64())) })
-	buildg("asin", func(env *Env) { env.A = Num(math.Asin(env.In(0, NUM).F64())) })
-	buildg("atan", func(env *Env) { env.A = Num(math.Atan(env.In(0, NUM).F64())) })
-	buildg("atan2", func(env *Env) { env.A = Num(math.Atan2(env.In(0, NUM).F64(), env.In(1, NUM).F64())) })
-	buildg("ldexp", func(env *Env) { env.A = Num(math.Ldexp(env.In(0, NUM).F64(), int(env.In(1, NUM).F64()))) })
-	buildg("modf", func(env *Env) { a, b := math.Modf(env.In(0, NUM).F64()); env.Return(Num(a), Num(float64(b))) })
-	buildg("min", func(env *Env) {
+	AddGlobalValue("sqrt", func(env *Env) { env.A = Num(math.Sqrt(env.In(0, NUM).F64())) })
+	AddGlobalValue("floor", func(env *Env) { env.A = Num(math.Floor(env.In(0, NUM).F64())) })
+	AddGlobalValue("ceil", func(env *Env) { env.A = Num(math.Ceil(env.In(0, NUM).F64())) })
+	AddGlobalValue("fmod", func(env *Env) { env.A = Num(math.Mod(env.In(0, NUM).F64(), env.In(1, NUM).F64())) })
+	AddGlobalValue("abs", func(env *Env) { env.A = Num(math.Abs(env.In(0, NUM).F64())) })
+	AddGlobalValue("acos", func(env *Env) { env.A = Num(math.Acos(env.In(0, NUM).F64())) })
+	AddGlobalValue("asin", func(env *Env) { env.A = Num(math.Asin(env.In(0, NUM).F64())) })
+	AddGlobalValue("atan", func(env *Env) { env.A = Num(math.Atan(env.In(0, NUM).F64())) })
+	AddGlobalValue("atan2", func(env *Env) { env.A = Num(math.Atan2(env.In(0, NUM).F64(), env.In(1, NUM).F64())) })
+	AddGlobalValue("ldexp", func(env *Env) { env.A = Num(math.Ldexp(env.In(0, NUM).F64(), int(env.In(1, NUM).F64()))) })
+	AddGlobalValue("modf", func(env *Env) { a, b := math.Modf(env.In(0, NUM).F64()); env.Return(Num(a), Num(float64(b))) })
+	AddGlobalValue("min", func(env *Env) {
 		if len(env.Stack()) == 0 {
 			env.A = Value{}
 		} else {
 			mathMinMax(env, false)
 		}
 	})
-	buildg("max", func(env *Env) {
+	AddGlobalValue("max", func(env *Env) {
 		if len(env.Stack()) == 0 {
 			env.A = Value{}
 		} else {
 			mathMinMax(env, true)
 		}
 	})
-	buildg("int", func(env *Env) {
+	AddGlobalValue("int", func(env *Env) {
 		env.A = Int(env.In(0, NUM).Int())
 	})
-	buildg("time", func(env *Env) {
+	AddGlobalValue("time", func(env *Env) {
 		env.A = Num(float64(time.Now().Unix()))
 	})
-	buildg("clock", func(env *Env) {
+	AddGlobalValue("clock", func(env *Env) {
 		x := time.Now()
 		s := *(*[2]int64)(unsafe.Pointer(&x))
 		env.A = Num(float64(s[1] / 1e9))
 	})
-	buildg("microclock", func(env *Env) {
+	AddGlobalValue("microclock", func(env *Env) {
 		x := time.Now()
 		s := *(*[2]int64)(unsafe.Pointer(&x))
 		env.A = Num(float64(s[1] / 1e3))
 	})
-	buildg("exit", func(env *Env) {
+	AddGlobalValue("exit", func(env *Env) {
 		if v := env.Get(0); !v.IsNil() {
 			os.Exit(int(env.In(0, NUM).Int()))
 		}
 		os.Exit(0)
 	})
-	buildg("strrep", func(env *Env) {
-		env.A = Str(strings.Repeat(env.In(0, STR).Str(), int(env.In(1, NUM).Int())))
-	})
-	buildg("strchar", func(env *Env) {
+	AddGlobalValue("char", func(env *Env) {
 		env.A = Str(string(rune(env.In(0, NUM).Int())))
 	})
-	buildg("match", func(env *Env) {
+	AddGlobalValue("match", func(env *Env) {
 		m := regexp.MustCompile(env.In(0, STR).Str()).
 			FindAllStringSubmatch(env.In(1, STR).Str(), int(env.InNum(2, Int(-1)).Int()))
 		var mm []string
@@ -185,8 +183,63 @@ func init() {
 			}
 		}
 	})
-	buildg("mutex", func(env *Env) {
-		env.A = Any(&sync.Mutex{})
+	AddGlobalValue("mutex", func(env *Env) { env.A = Any(&sync.Mutex{}) })
+	AddGlobalValue("error", func(env *Env) { env.A = Any(errors.New(env.InStr(0, ""))) })
+	AddGlobalValue("iserror", func(env *Env) { _, ok := env.In(0, ANY).Any().(error); env.A = NumBool(ok) })
+	AddGlobalValue("jsonparse", func(env *Env) {
+		j := strings.TrimSpace(env.In(0, STR).Str())
+		if len(j) == 0 {
+			return
+		}
+		switch j[0] {
+		case 'n':
+		case 't':
+			env.A = NumBool(true)
+		case 'f':
+			env.A = NumBool(false)
+		case '[':
+			var a []interface{}
+			json.Unmarshal([]byte(j), &a)
+			env.A = Any(a)
+		case '{':
+			a := map[string]interface{}{}
+			json.Unmarshal([]byte(j), &a)
+			env.A = Any(a)
+		default:
+			panicf("malformed json string: %q", j)
+		}
+	})
+	AddGlobalValue("json", func(env *Env) {
+		var cv func(Value) interface{}
+		cv = func(v Value) interface{} {
+			if v.Type() == STK {
+				x := v.unpackedStack().a
+				tmp := make([]interface{}, len(x))
+				for i := range x {
+					tmp[i] = cv(x[i])
+				}
+				return tmp
+			}
+			return v.Any()
+		}
+		v := env.Get(0)
+		if env.Size() > 1 {
+			v = unpackedStack(&unpacked{a: env.Stack()})
+		}
+
+		i := cv(v)
+		if err := reflectCheckCyclicStruct(i); err != nil {
+			env.Return(Value{}, Any(err))
+			return
+		}
+		var buf []byte
+		var err error
+		if ident := env.InStr(1, ""); ident != "" {
+			buf, err = json.MarshalIndent(i, "", ident)
+		} else {
+			buf, err = json.Marshal(i)
+		}
+		env.Return(StrBytes(buf), Any(err))
 	})
 }
 
@@ -209,87 +262,26 @@ func mathMinMax(env *Env, max bool) {
 	}
 }
 
-func camelKey(k string) string {
-	if k == "" {
-		return k
-	}
-	if k[0] >= 'a' && k[0] <= 'z' {
-		return string(k[0]-'a'+'A') + k[1:]
-	}
-	return k
-}
-
-func reflectLoad(v interface{}, k string) Value {
-	rv := reflect.ValueOf(v)
-	f := rv.MethodByName(k)
-	if !f.IsValid() {
-		if rv.Kind() == reflect.Ptr {
-			rv = rv.Elem()
+func ipow(base, exp int64) int64 {
+	var result int64 = 1
+	for {
+		if exp&1 == 1 {
+			result *= base
 		}
-		f := rv.FieldByName(k)
-		if f.IsValid() {
-			return Any(f.Interface())
+		exp >>= 1
+		if exp == 0 {
+			break
 		}
-		panicf("%q not found in %#v", k, v)
+		base *= base
 	}
-	return Fun(&Func{
-		Name: k,
-		native: func(env *Env) {
-			rt := f.Type()
-			rtNumIn := rt.NumIn()
-			ins := make([]reflect.Value, 0, rtNumIn)
-			getter := func(i int, t reflect.Type) reflect.Value {
-				return reflect.ValueOf(env.Get(i).AnyTyped(t))
-			}
-
-			if !rt.IsVariadic() {
-				for i := 0; i < rtNumIn; i++ {
-					ins = append(ins, getter(i, rt.In(i)))
-				}
-			} else {
-				for i := 0; i < rtNumIn-1; i++ {
-					ins = append(ins, getter(i, rt.In(i)))
-				}
-				for i := rtNumIn - 1; i < env.Size(); i++ {
-					ins = append(ins, getter(i, rt.In(rtNumIn-1)))
-				}
-			}
-
-			outs := f.Call(ins)
-			if rt.NumOut() == 0 {
-				return
-			}
-
-			a := make([]Value, len(outs))
-			for i := range outs {
-				a[i] = Any(outs[i])
-			}
-			env.Return(a[0], a[1:]...)
-		},
-	})
+	return result
 }
 
-func reflectStore(v interface{}, k string, v2 Value) {
-	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr {
-		rv = rv.Elem()
-	}
-	f := rv.FieldByName(k)
-	if !f.IsValid() || !f.CanAddr() {
-		panicf("%q not assignable in %#v", k, v)
-	}
-	if f.Type() == reflect.TypeOf(Value{}) {
-		f.Set(reflect.ValueOf(v2))
-	} else {
-		f.Set(reflect.ValueOf(v2.AnyTyped(f.Type())))
-	}
-}
-
-func buildg(k string, v interface{}) {
+func AddGlobalValue(k string, v interface{}) {
 	switch v := v.(type) {
 	case func(*Env):
 		g[k] = Fun(&Func{Name: k, native: v})
-	case Value:
-		g[k] = v
+	default:
+		g[k] = Any(v)
 	}
 }

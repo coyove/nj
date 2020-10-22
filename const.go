@@ -30,7 +30,7 @@ const (
 	OpIf
 	OpIfNot
 	OpJmp
-	OpLambda
+	OpLoadFunc
 	OpPush
 	OpPushV
 	OpPopV

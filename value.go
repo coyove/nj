@@ -97,6 +97,11 @@ func Str(s string) Value {
 	return Value{v: STR, p: unsafe.Pointer(&s)}
 }
 
+// StrBytes returns a string value
+func StrBytes(s []byte) Value {
+	return Str(*(*string)(unsafe.Pointer(&s)))
+}
+
 func Any(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
@@ -231,8 +236,6 @@ func (v Value) ExpectMsg(t byte, msg string) Value {
 	return v
 }
 
-func (v Value) String() string { return v.toString(0) }
-
 // Equal tests whether value is equal to another value
 func (v Value) Equal(r Value) bool {
 	switch v.Type() + r.Type() {
@@ -248,6 +251,8 @@ func (v Value) Equal(r Value) bool {
 	return false
 }
 
+func (v Value) String() string { return v.toString(0) }
+
 func (v Value) toString(lv int) string {
 	if lv > 32 {
 		return "<omit deep nesting>"
@@ -262,11 +267,15 @@ func (v Value) toString(lv int) string {
 	case STR:
 		return v.Str()
 	case STK:
-		return v.unpackedStack().String()
+		return v.unpackedStack().toString(lv + 1)
 	case FUN:
 		return v.Fun().String()
 	case ANY:
-		return fmt.Sprintf("<any:%#v>", v.Any())
+		i := v.Any()
+		if err := reflectCheckCyclicStruct(i); err != nil {
+			return fmt.Sprintf("<any: omit deep nesting>")
+		}
+		return fmt.Sprintf("%#v", i)
 	}
 	return "nil"
 }

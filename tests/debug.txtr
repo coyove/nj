@@ -1,8 +1,0 @@
-testStruct := {
-    k: 10,
-    v: "a",
-}
-
-for i, v := range testStruct {
-    fmt.Println(i,  v)
-}

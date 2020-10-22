@@ -1,5 +1,10 @@
 package potatolang
 
+import (
+	"context"
+	"time"
+)
+
 // Env is the environment for a closure to run within.
 // stack contains arguments used by the execution and is a global shared value, local can only use stack[stackOffset:]
 // A and V stores the results of the execution (e.g: return a, b, c => env.A = a, env.V = []Value{b, c})
@@ -15,7 +20,11 @@ type Env struct {
 }
 
 type Global struct {
-	Stack *[]Value
+	Deadline      int64
+	MaxStackSize  int64
+	MaxStringSize int64
+	Extras        map[string]interface{}
+	Stack         *[]Value
 }
 
 func (env *Env) grow(newSize int) {
@@ -52,6 +61,12 @@ func (env *Env) Push(v Value) {
 
 func (env *Env) Size() int {
 	return len(*env.stack) - env.stackOffset
+}
+
+func (env *Env) Deadline() (context.Context, func(), time.Time) {
+	d := time.Unix(env.global.Deadline, 0)
+	ctx, cancel := context.WithDeadline(context.Background(), d)
+	return ctx, cancel, d
 }
 
 func (env *Env) _get(yx uint16, cls *Func) (zzz Value) {
@@ -110,10 +125,18 @@ func (env *Env) InNum(i int, defaultValue Value) Value {
 	return v
 }
 
+func (env *Env) InStr(i int, defaultValue string) string {
+	v := env.Get(i)
+	if v.Type() != STR {
+		return defaultValue
+	}
+	return v.Str()
+}
+
 func (env *Env) In(i int, expectedType byte) Value {
 	v := env.Get(i)
 	if v.Type() != expectedType {
-		panicf("bad argument #%d: expect %q, got %#v", i, typeMappings[expectedType], v)
+		panicf("bad argument #%d: expect %q, got %v", i, typeMappings[expectedType], v)
 	}
 	return v
 }

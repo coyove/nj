@@ -357,8 +357,6 @@ expr:
         expr '^' expr                     { $$ = Cpl(Node{APow}, $1,$3).SetPos($2.Pos) } |
         TNot expr %prec UNARY             { $$ = Cpl(Node{ANot}, $2).SetPos($1.Pos) } |
         '-' expr %prec UNARY              { $$ = Cpl(Node{ASub}, zeroNode, $2).SetPos($1.Pos) } |
-        '&' TIdent %prec UNARY            { $$ = Cpl(Node{ARef}, SymTok($2)).SetPos($1.Pos) } |
-        '*' TIdent %prec UNARY            { $$ = Cpl(Node{ADeref}, SymTok($2)).SetPos($1.Pos) } |
         '#' expr %prec UNARY              { $$ = Cpl(Node{ALen}, $2).SetPos($1.Pos) }
 
 prefix_expr:

@@ -10,5 +10,8 @@ assert(1 + "2" == 3)
 local a, b, c, d = match([["(\d+)"]], "a\"12\" \"2\"3")
 assert(a == [["12"]] and b == "12" and c == [["2"]] and d == "2")
 
+local err = error("err")
+assert(err.error() == "err")
+
 strname = abc
 return "r:" .. abc .. global_x

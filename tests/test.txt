@@ -1,4 +1,10 @@
 do
+local m = jsonparse([[ { "a": 1, "b": 2} ]])
+m.b = m 
+print(m)
+end
+
+do
     local function vararg2(...) return ..., true  end
     local function vararg(...) return vararg2(...) end
     local a, ... = vararg(1, 2, 3)

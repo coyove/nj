@@ -3,7 +3,9 @@
 -- contributed by Mike Pall
 
 local N = tonumber(arg and arg[1]) or 550
-local u, v, t = array(N), array(N), array(N)
+local _, ...u = array(N)
+local _, ...v = array(N)
+local _, ...t = array(N)
 
 for i=1,N do u[i] = 1 end
 
