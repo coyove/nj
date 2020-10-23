@@ -21,11 +21,10 @@ type Env struct {
 }
 
 type Global struct {
-	Deadline      int64
-	MaxStackSize  int64
-	MaxStringSize int64
-	Extras        map[string]interface{}
-	Stack         *[]Value
+	Deadline     int64
+	MaxStackSize int64
+	Extras       map[string]interface{}
+	Stack        *[]Value
 }
 
 func (env *Env) grow(newSize int) {
@@ -153,12 +152,24 @@ func (env *Env) GetGlobalCustomValue(key string) interface{} {
 }
 
 func (e *Env) NewString(s string) Value {
-	if e.global.MaxStringSize > 0 && int64(len(s)) > e.global.MaxStringSize {
-		panicf("string overflow, max: %d", e.global.MaxStringSize)
+	if e.global.MaxStackSize > 0 {
+		// Loosely control the string size
+		remain := (e.global.MaxStackSize - int64(len(*e.stack))) * 16
+		if int64(len(s)) > remain {
+			panicf("string overflow, max: %d", remain)
+		}
 	}
+	return _str(s)
+}
+
+func (e *Env) NewUnlimitedString(s string) Value {
 	return _str(s)
 }
 
 func (e *Env) NewStringBytes(s []byte) Value {
 	return e.NewString(*(*string)(unsafe.Pointer(&s)))
+}
+
+func (e *Env) NewUnlimitedStringBytes(s []byte) Value {
+	return e.NewUnlimitedString(*(*string)(unsafe.Pointer(&s)))
 }

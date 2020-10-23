@@ -281,6 +281,7 @@ func:
 
 func_stat:
         func TIdent func_params_list stats TEnd {
+	  __findTailCall($4.Cpl())
             funcname := SymTok($2)
             x := __move
             if $1.Sym().Equals(ASet) {
@@ -294,6 +295,7 @@ func_stat:
 
 function:
         func func_params_list stats TEnd %prec FUNC {
+	  __findTailCall($3.Cpl())
 	    $$ = __func(emptyNode, $2, $3).SetPos($1.Pos()).SetPos($1.Pos()) 
         }
 

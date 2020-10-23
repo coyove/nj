@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"math"
-	"reflect"
 	"strconv"
 	"sync/atomic"
-	"unsafe"
 )
 
 type stacktrace struct {
@@ -48,11 +46,7 @@ func (e *ExecError) Error() string {
 	return msg.String()
 }
 
-func kodeaddr(code []uint32) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&code)).Data }
-
-func konstaddr(consts []Value) uintptr { return (*reflect.SliceHeader)(unsafe.Pointer(&consts)).Data }
-
-func returnVararg(a Value, b []Value) (Value, []Value) {
+func returnVararg(env *Global, a Value, b []Value) (Value, []Value) {
 	flag := a.Type() == VStack
 	if len(b) == 0 {
 		if flag {
@@ -85,6 +79,9 @@ func returnVararg(a Value, b []Value) (Value, []Value) {
 			b2 = append(b2, b._unpackedStack().a...)
 		} else {
 			b2 = append(b2, b)
+		}
+		if env.MaxStackSize > 0 && int64(len(b2)) > env.MaxStackSize {
+			panicf("vararg: stack overflow, max: %d", env.MaxStackSize)
 		}
 	}
 	if len(b2) == 0 {
@@ -128,7 +125,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 		K = r.cls
 
 		env.stackOffset = int(r.stackOffset)
-		env.A, env.V = returnVararg(v, env.V)
+		env.A, env.V = returnVararg(env.global, v, env.V)
 		*env.stack = (*env.stack)[:env.stackOffset+int(r.cls.stackSize)]
 		stackEnv.stackOffset = len(*env.stack)
 		retStack = retStack[:len(retStack)-1]
@@ -375,16 +372,18 @@ MAIN:
 		case OpRet:
 			v := env._get(opa, K)
 			if len(retStack) == 0 {
-				v, env.V = returnVararg(v, env.V)
+				v, env.V = returnVararg(env.global, v, env.V)
 				return v, env.V, 0, false
 			}
 			returnUpperWorld(v)
 		case OpYield:
 			v := env._get(opa, K)
-			v, env.V = returnVararg(v, env.V)
+			v, env.V = returnVararg(env.global, v, env.V)
 			return v, env.V, cursor, true
 		case OpLoadFunc:
-			env.A = Function(K.Funcs[opa])
+			f := K.Funcs[opa]
+			f.loadGlobal = env.global
+			env.A = Function(f)
 		case OpCall:
 			cls := env._get(opa, K).ExpectMsg(VFunction, "call").Function()
 			if cls.yEnv.stack != nil { // resume yielded coroutine
@@ -402,9 +401,6 @@ MAIN:
 					stackEnv._set(uint16(cls.NumParam), _unpackedStack(&unpacked{a: varg}))
 				}
 
-				if env.global == nil {
-					panic("nil global")
-				}
 				stackEnv.global = env.global
 
 				if cls.Is(FuncYield) {

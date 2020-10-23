@@ -22,6 +22,7 @@ type Func struct {
 	yCursor    uint32
 	yEnv       Env
 	native     func(env *Env)
+	loadGlobal *Global
 }
 
 // Native creates a golang-native function
@@ -115,6 +116,19 @@ func (c *Func) Call(a ...Value) (Value, []Value) {
 	return c.CallEnv(nil, a...)
 }
 
+func (c *Func) PCall(a ...Value) (v1 Value, v []Value, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err, _ = r.(error)
+			if err == nil {
+				err = fmt.Errorf("%v", r)
+			}
+		}
+	}()
+	v1, v = c.CallEnv(nil, a...)
+	return
+}
+
 func (c *Func) CallEnv(env *Env, a ...Value) (Value, []Value) {
 	if c.yEnv.stack != nil {
 		return c.exec(c.yEnv)
@@ -123,16 +137,22 @@ func (c *Func) CallEnv(env *Env, a ...Value) (Value, []Value) {
 	var newEnv Env
 	var varg []Value
 	if env == nil || env.global == nil {
-		panicf("call function without global env")
+		// panicf("call function without global env")
+		x := make([]Value, 0)
+		newEnv.stack = &x
+		newEnv.global = c.loadGlobal
+	} else {
+		newEnv = *env
+		newEnv.stackOffset = len(*newEnv.stack)
 	}
-	newEnv = *env
-	newEnv.stackOffset = len(*newEnv.stack)
+
 	for i := range a {
 		if i >= int(c.NumParam) {
 			varg = append(varg, a[i])
 		}
 		newEnv.Push(a[i])
 	}
+
 	if c.native == nil {
 		if c.Is(FuncVararg) {
 			newEnv.grow(int(c.NumParam) + 1)

@@ -122,6 +122,34 @@ func __popvAll(i int, k Node) Node {
 	return Cpl(Node{APopVAll})
 }
 
+func __findTailCall(stats []Node) {
+	for len(stats) > 0 {
+		x := stats[len(stats)-1]
+		c := x.Cpl()
+		if len(c) == 3 && c[0].Sym().Equals(ACall) {
+			tc := c[0].Sym()
+			tc.Text = ATailCall.Text
+			x.Value.([]Node)[0] = Node{tc}
+			stats[len(stats)-1] = x
+			return
+		}
+
+		if len(c) > 0 {
+			if c[0].Sym().Equals(ABegin) {
+				__findTailCall(c)
+				return
+			}
+
+			switch c[0].Sym().Text {
+			case APopV.Text, APopVClear.Text, APopVAll.Text, APopVAllA.Text:
+				stats = stats[:len(stats)-1]
+				continue
+			}
+		}
+		return
+	}
+}
+
 func randomVarname() Node {
 	return Sym("v" + strconv.FormatInt(rand.Int63(), 10))
 }

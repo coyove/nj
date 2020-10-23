@@ -14,6 +14,7 @@ import (
 )
 
 func init() {
+	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	log.SetFlags(log.Lshortfile | log.Ltime)
 }
 
@@ -32,12 +33,52 @@ func runFile(t *testing.T, path string) {
 }
 
 func TestSMain(t *testing.T) {
-	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	runFile(t, "tests/test.txt")
 }
 
 func TestSR2(t *testing.T) {
 	runFile(t, "tests/r2.txt")
+}
+
+func TestReturnFunction(t *testing.T) {
+	cls, _ := LoadString(`
+a = 1
+return function(n) 
+a+=n
+return a
+end
+`)
+	v, _ := cls.Call()
+	if v, _ := v.Function().Call(Int(10)); v.Int() != 11 {
+		t.Fatal(v)
+	}
+
+	if v, _ := v.Function().Call(Int(100)); v.Int() != 111 {
+		t.Fatal(v)
+	}
+}
+
+func TestTailCallPanic(t *testing.T) {
+	cls, _ := LoadString(`
+x = 0
+function foo()
+x+=1
+if x == 1e6 then assert(false) end
+foo()
+end
+foo()
+`)
+	if s := cls.PrettyString(); !strings.Contains(s, "tail-call") {
+		t.Fatal(s)
+	}
+
+	_, _, err := cls.PCall()
+	if err == nil {
+		t.FailNow()
+	}
+	if len(err.Error()) > 1e6 { // error too long, which means tail call is not effective
+		t.Fatal(len(err.Error()))
+	}
 }
 
 func TestArithmeticUnfold(t *testing.T) {
@@ -68,7 +109,20 @@ print(err)
 assert(match(err.Error(), "overflow" ))
 `)
 	WithMaxStackSize(cls, 7+int64(len(g)))
-	t.Log(cls.Call())
+	cls.Call()
+
+	cls, _ = LoadString(`
+a = ""
+for i = 1,1e3 do
+a = a .. i
+end
+return a
+`)
+	WithMaxStackSize(cls, int64(len(g))+10) // 10: a small value
+	res, _, err := cls.PCall()
+	if !strings.Contains(err.Error(), "string overflow") {
+		t.Fatal(res)
+	}
 }
 
 func TestRegisterOptimzation(t *testing.T) {

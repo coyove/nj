@@ -77,11 +77,6 @@ func Function(c *Func) Value {
 }
 
 func _str(s string) Value {
-	if len(s) <= 16 {
-		b := [16]byte{}
-		copy(b[:], s)
-		return Value{v: uint64(len(s)+1)<<56 | VString, p: unsafe.Pointer(&b)}
-	}
 	return Value{v: VString, p: unsafe.Pointer(&s)}
 }
 
@@ -120,13 +115,6 @@ func Interface(i interface{}) Value {
 
 // _str cast value to string
 func (v Value) _str() string {
-	if l := v.v >> 56; l > 0 {
-		var ss string
-		b := (*[2]uintptr)(unsafe.Pointer(&ss))
-		(*b)[0] = uintptr(v.p)
-		(*b)[1] = uintptr(l - 1)
-		return ss
-	}
 	return *(*string)(v.p)
 }
 

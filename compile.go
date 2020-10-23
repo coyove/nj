@@ -404,8 +404,8 @@ func LoadFile(path string) (*Func, error) {
 }
 
 func LoadString(code string) (*Func, error) {
-	_, fn, _, _ := runtime.Caller(1)
-	return loadStringName(code, fn)
+	_, fn, line, _ := runtime.Caller(1)
+	return loadStringName(code, fmt.Sprintf("%s(L%d)", fn, line))
 }
 
 func loadStringName(code, name string) (*Func, error) {
@@ -422,8 +422,6 @@ func WithTimeout(f *Func, d time.Duration) { f.yEnv.global.Deadline = time.Now()
 func WithDeadline(f *Func, d time.Time) { f.yEnv.global.Deadline = d.Unix() }
 
 func WithMaxStackSize(f *Func, sz int64) { f.yEnv.global.MaxStackSize = sz }
-
-func WithMaxStringSize(f *Func, sz int64) { f.yEnv.global.MaxStringSize = sz }
 
 func WithValue(f *Func, k string, v interface{}) {
 	if f.yEnv.global.Extras == nil {

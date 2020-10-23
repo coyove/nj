@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 	"unsafe"
 
 	"github.com/coyove/script/parser"
@@ -47,7 +48,7 @@ func init() {
 		env.A = Function(&f)
 	})
 	AddGlobalValue("type", func(env *Env) {
-		env.A = env.NewString(typeMappings[env.Get(0).Type()])
+		env.A = _str(typeMappings[env.Get(0).Type()])
 	})
 	AddGlobalValue("pcall", func(env *Env) {
 		defer func() {
@@ -77,7 +78,7 @@ func init() {
 		}
 		panic("assertion failed")
 	})
-	AddGlobalValue("tonumber", func(env *Env) {
+	AddGlobalValue("num", func(env *Env) {
 		v := env.Get(0)
 		switch v.Type() {
 		case VNumber:
@@ -174,6 +175,10 @@ func init() {
 	AddGlobalValue("char", func(env *Env) {
 		env.A = env.NewString(string(rune(env.In(0, VNumber).Int())))
 	})
+	AddGlobalValue("rune", func(env *Env) {
+		r, sz := utf8.DecodeRuneInString(env.In(0, VString).Str())
+		env.Return(Int(int64(r)), Int(int64(sz)))
+	})
 	AddGlobalValue("match", func(env *Env) {
 		rx, err := regexp.Compile(env.In(1, VString)._str())
 		if err != nil {
@@ -188,9 +193,9 @@ func init() {
 			}
 		}
 		if len(mm) > 0 {
-			env.A = env.NewString(mm[0])
+			env.A = _str(mm[0])
 			for i := 1; i < len(mm); i++ {
-				env.V = append(env.V, env.NewString(mm[i]))
+				env.V = append(env.V, _str(mm[i]))
 			}
 		}
 	})
@@ -203,15 +208,15 @@ func init() {
 	AddGlobalValue("trim", func(env *Env) {
 		switch a, cutset := env.In(0, VString)._str(), env.InStr(1, " "); env.InStr(2, "") {
 		case "left", "l":
-			env.A = env.NewString(strings.TrimLeft(a, cutset))
+			env.A = _str(strings.TrimLeft(a, cutset))
 		case "right", "r":
-			env.A = env.NewString(strings.TrimRight(a, cutset))
+			env.A = _str(strings.TrimRight(a, cutset))
 		case "prefix", "start":
-			env.A = env.NewString(strings.TrimPrefix(a, cutset))
+			env.A = _str(strings.TrimPrefix(a, cutset))
 		case "suffix", "end":
-			env.A = env.NewString(strings.TrimSuffix(a, cutset))
+			env.A = _str(strings.TrimSuffix(a, cutset))
 		default:
-			env.A = env.NewString(strings.Trim(a, cutset))
+			env.A = _str(strings.Trim(a, cutset))
 		}
 	})
 	AddGlobalValue("replace", func(env *Env) {
@@ -235,14 +240,14 @@ func init() {
 		x := strings.Split(env.In(0, VString)._str(), env.In(1, VString)._str())
 		v := make([]Value, len(x))
 		for i := range x {
-			v[i] = env.NewString(x[i])
+			v[i] = _str(x[i])
 		}
 		env.Return(v[0], v[1:]...)
 	})
 	AddGlobalValue("substr", func(env *Env) {
 		s, a := env.In(0, VString)._str(), env.InInt(1, 1)
 		b := env.InInt(2, int64(len(s)))
-		env.A = env.NewString(s[a-1 : b-1+1])
+		env.A = _str(s[a-1 : b-1+1])
 	})
 	AddGlobalValue("strpos", func(env *Env) {
 		a, b := env.In(0, VString)._str(), env.In(1, VString)._str()
