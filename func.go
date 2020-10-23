@@ -1,4 +1,4 @@
-package potatolang
+package script
 
 import (
 	"bytes"
@@ -26,7 +26,7 @@ type Func struct {
 
 // Native creates a golang-native function
 func Native(f func(env *Env)) Value {
-	return Fun(&Func{native: f})
+	return Function(&Func{native: f})
 }
 
 func (c *Func) setOpt(flag bool, opt byte) {
@@ -136,7 +136,7 @@ func (c *Func) CallEnv(env *Env, a ...Value) (Value, []Value) {
 	if c.native == nil {
 		if c.Is(FuncVararg) {
 			newEnv.grow(int(c.NumParam) + 1)
-			newEnv._set(uint16(c.NumParam), unpackedStack(&unpacked{a: varg}))
+			newEnv._set(uint16(c.NumParam), _unpackedStack(&unpacked{a: varg}))
 		}
 		if c.Is(FuncYield) {
 			x := append([]Value{}, newEnv.Stack()...)

@@ -1,6 +1,7 @@
-package potatolang
+package script
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"reflect"
@@ -8,18 +9,7 @@ import (
 	"unsafe"
 )
 
-const (
-	NIL    valueType = 0  // nil
-	NUM              = 3  // number
-	STR              = 7  // string
-	STK              = 15 // stack
-	FUN              = 31 // function
-	ANY              = 63 // generic
-	NumNum           = NUM * 2
-	StrStr           = STR * 2
-)
-
-type valueType byte
+var int64Marker = unsafe.Pointer(new(int64))
 
 // Value is the basic value used by the intepreter
 // For float numbers there is one NaN which is not representable: 0xffffffff_ffffffff
@@ -33,12 +23,12 @@ type Value struct {
 func (v Value) Type() valueType {
 	if v.p == nil || v.p == int64Marker {
 		if v.v == 0 {
-			return NIL
+			return VNil
 		}
-		return NUM
+		return VNumber
 	}
 	if v.v&0xffff_ffff_ffff > 4096 {
-		return ANY
+		return VInterface
 	}
 	return valueType(v.v)
 }
@@ -49,26 +39,24 @@ func (v Value) IsFalse() bool {
 	return x == 0 || x == 0xffffffff_ffffffff
 }
 
-var (
-	typeMappings = map[valueType]string{
-		NIL: "nil", NUM: "number", STR: "string", FUN: "function", ANY: "any", STK: "stack",
-	}
-	int64Marker = unsafe.Pointer(new(int64))
-)
-
-func NumBool(v bool) Value {
-	if v {
-		return Num(1)
-	}
-	return Num(0)
+func (v Value) IsNil() bool {
+	return v == Value{}
 }
 
-// Num returns a number value
-func Num(f float64) Value {
+// Bool returns a NUMBER value: true -> 1 and false -> 0
+func Bool(v bool) Value {
+	if v {
+		return Float(1)
+	}
+	return Float(0)
+}
+
+// Float returns a number value
+func Float(f float64) Value {
 	return Value{v: ^math.Float64bits(f)}
 }
 
-// Int also returns a number value as Num does, but it preserves int64 values which may be truncated in float64
+// Int returns a number value like Float does, but it preserves int64 values which may overflow float64
 func Int(i int64) Value {
 	if int64(float64(i)) == i {
 		return Value{v: ^math.Float64bits(float64(i))}
@@ -76,52 +64,45 @@ func Int(i int64) Value {
 	return Value{v: uint64(i), p: int64Marker}
 }
 
-// unpackedStack returns a table value
-func unpackedStack(m *unpacked) Value {
+func _unpackedStack(m *unpacked) Value {
 	if m == nil {
 		return Value{}
 	}
-	return Value{v: STK, p: unsafe.Pointer(m)}
+	return Value{v: VStack, p: unsafe.Pointer(m)}
 }
 
-// Fun returns a closure value
-func Fun(c *Func) Value {
-	return Value{v: FUN, p: unsafe.Pointer(c)}
+// Function returns a closure value
+func Function(c *Func) Value {
+	return Value{v: VFunction, p: unsafe.Pointer(c)}
 }
 
-// Str returns a string value
-func Str(s string) Value {
+func _str(s string) Value {
 	if len(s) <= 16 {
 		b := [16]byte{}
 		copy(b[:], s)
-		return Value{v: uint64(len(s)+1)<<56 | STR, p: unsafe.Pointer(&b)}
+		return Value{v: uint64(len(s)+1)<<56 | VString, p: unsafe.Pointer(&b)}
 	}
-	return Value{v: STR, p: unsafe.Pointer(&s)}
+	return Value{v: VString, p: unsafe.Pointer(&s)}
 }
 
-// StrBytes returns a string value
-func StrBytes(s []byte) Value {
-	return Str(*(*string)(unsafe.Pointer(&s)))
-}
-
-func Any(i interface{}) Value {
+func Interface(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
 		return Value{}
 	case bool:
-		return NumBool(v)
+		return Bool(v)
 	case float64:
-		return Num(v)
+		return Float(v)
 	case float32:
-		return Num(float64(v))
+		return Float(float64(v))
 	case int64:
 		return Int(v)
 	case string:
-		return Str(v)
+		return _str(v)
 	case *unpacked:
-		return unpackedStack(v)
+		return _unpackedStack(v)
 	case *Func:
-		return Fun(v)
+		return Function(v)
 	case Value:
 		return v
 	}
@@ -134,11 +115,11 @@ func Any(i interface{}) Value {
 
 	x := *(*[2]uintptr)(unsafe.Pointer(&i))
 	return Value{v: uint64(x[0]), p: unsafe.Pointer(x[1])}
-	// return Value{v: ANY, p: unsafe.Pointer(&i)}
+	// return Value{v: VInterface, p: unsafe.Pointer(&i)}
 }
 
-// Str cast value to string
-func (v Value) Str() string {
+// _str cast value to string
+func (v Value) _str() string {
 	if l := v.v >> 56; l > 0 {
 		var ss string
 		b := (*[2]uintptr)(unsafe.Pointer(&ss))
@@ -149,7 +130,7 @@ func (v Value) Str() string {
 	return *(*string)(v.p)
 }
 
-func (v Value) _StrBytes() []byte {
+func (v Value) _unsafeBytes() []byte {
 	var ss []byte
 	b := (*[3]uintptr)(unsafe.Pointer(&ss))
 	if l := v.v >> 56; l > 0 {
@@ -163,9 +144,7 @@ func (v Value) _StrBytes() []byte {
 	return ss
 }
 
-func (v Value) IsNil() bool { return v == Value{} }
-
-func (v Value) Num() (float64, int64, bool) {
+func (v Value) Num() (floatValue float64, intValue int64, isInt bool) {
 	if v.p == int64Marker {
 		return float64(int64(v.v)), int64(v.v), true
 	}
@@ -173,38 +152,36 @@ func (v Value) Num() (float64, int64, bool) {
 	return x, int64(x), false
 }
 
-func (v Value) Int() int64 {
-	_, i, _ := v.Num()
-	return i
-}
+func (v Value) Int() int64 { _, i, _ := v.Num(); return i }
 
-func (v Value) F64() float64 {
-	f, _, _ := v.Num()
-	return f
-}
+func (v Value) Float() float64 { f, _, _ := v.Num(); return f }
 
-// unpackedStack cast value to map of values
-func (v Value) unpackedStack() *unpacked { return (*unpacked)(v.p) }
+func (v Value) _unpackedStack() *unpacked { return (*unpacked)(v.p) }
 
-// Fun cast value to closure
-func (v Value) Fun() *Func { return (*Func)(v.p) }
+// Function cast value to function
+func (v Value) Function() *Func { return (*Func)(v.p) }
 
-// Any returns the interface{}
-func (v Value) Any() interface{} {
+// Interface returns the interface{}
+func (v Value) Interface() interface{} {
 	switch v.Type() {
-	case NUM:
+	case VNumber:
 		vf, vi, vIsInt := v.Num()
 		if vIsInt {
 			return vi
 		}
 		return vf
-	case STR:
-		return v.Str()
-	case STK:
-		return v.unpackedStack()
-	case FUN:
-		return v.Fun()
-	case ANY:
+	case VString:
+		return v._str()
+	case VStack:
+		a := v._unpackedStack().a
+		x := make([]interface{}, len(a))
+		for i := range a {
+			x[i] = a[i].Interface()
+		}
+		return x
+	case VFunction:
+		return v.Function()
+	case VInterface:
 		// return *(*interface{})(v.p)
 		var i interface{}
 		x := (*[2]uintptr)(unsafe.Pointer(&i))
@@ -215,13 +192,26 @@ func (v Value) Any() interface{} {
 	return nil
 }
 
-func (v Value) AnyTyped(t reflect.Type) interface{} {
-	if v.Type() == NUM && t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
-		rv := reflect.ValueOf(v.Any())
-		rv = rv.Convert(t)
-		return rv.Interface()
+func (v Value) TypedInterface(t reflect.Type) interface{} {
+	switch v.Type() {
+	case VNumber:
+		if t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
+			rv := reflect.ValueOf(v.Interface())
+			rv = rv.Convert(t)
+			return rv.Interface()
+		}
+	case VStack:
+		a := v._unpackedStack().a
+		if t.Kind() == reflect.Slice {
+			e := t.Elem()
+			s := reflect.MakeSlice(t, len(a), len(a))
+			for i := range a {
+				s.Index(i).Set(reflect.ValueOf(a[i].TypedInterface(e)))
+			}
+			return s.Interface()
+		}
 	}
-	return v.Any()
+	return v.Interface()
 }
 
 func (v Value) Expect(t valueType) Value {
@@ -241,14 +231,14 @@ func (v Value) ExpectMsg(t valueType, msg string) Value {
 // Equal tests whether value is equal to another value
 func (v Value) Equal(r Value) bool {
 	switch v.Type() + r.Type() {
-	case NumNum, NIL * 2:
+	case _NumNum, VNil * 2:
 		return v == r
-	case StrStr:
-		return r.Str() == v.Str()
-	case FUN * 2:
-		return v.Fun() == r.Fun()
-	case ANY * 2:
-		return v.Any() == r.Any()
+	case _StrStr:
+		return r._str() == v._str()
+	case VFunction * 2:
+		return v.Function() == r.Function()
+	case VInterface * 2:
+		return v.Interface() == r.Interface()
 	}
 	return false
 }
@@ -260,24 +250,51 @@ func (v Value) toString(lv int) string {
 		return "<omit deep nesting>"
 	}
 	switch v.Type() {
-	case NUM:
+	case VNumber:
 		vf, vi, vIsInt := v.Num()
 		if vIsInt {
 			return strconv.FormatInt(vi, 10)
 		}
 		return strconv.FormatFloat(vf, 'f', -1, 64)
-	case STR:
-		return v.Str()
-	case STK:
-		return v.unpackedStack().toString(lv + 1)
-	case FUN:
-		return v.Fun().String()
-	case ANY:
-		i := v.Any()
+	case VString:
+		return v._str()
+	case VStack:
+		t := v._unpackedStack()
+		p := bytes.NewBufferString("[")
+		for _, a := range t.a {
+			p.WriteString(a.toString(lv + 1))
+			p.WriteString(",")
+		}
+		if len(t.a) > 0 {
+			p.Truncate(p.Len() - 1)
+		}
+		p.WriteString("]")
+		return p.String()
+	case VFunction:
+		return v.Function().String()
+	case VInterface:
+		i := v.Interface()
 		if err := reflectCheckCyclicStruct(i); err != nil {
 			return fmt.Sprintf("<any: omit deep nesting>")
 		}
 		return fmt.Sprintf("%v", i)
 	}
 	return "nil"
+}
+
+type unpacked struct{ a []Value }
+
+func (t *unpacked) Put(idx int64, v Value) {
+	idx--
+	if idx < int64(len(t.a)) && idx >= 0 {
+		t.a[idx] = v
+	}
+}
+
+func (t *unpacked) Get(idx int64) (v Value) {
+	idx--
+	if idx < int64(len(t.a)) && idx >= 0 {
+		return t.a[idx]
+	}
+	return Value{}
 }

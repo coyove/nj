@@ -1,4 +1,4 @@
-package potatolang
+package script
 
 import (
 	"fmt"
@@ -18,20 +18,20 @@ func reflectLoad(v interface{}, key Value) Value {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		v := rv.MapIndex(reflect.ValueOf(key.AnyTyped(rv.Type().Elem())))
+		v := rv.MapIndex(reflect.ValueOf(key.TypedInterface(rv.Type().Elem())))
 		if v.IsValid() {
-			return Any(v.Interface())
+			return Interface(v.Interface())
 		}
 		return Value{}
 	case reflect.Slice, reflect.Array:
-		idx := key.ExpectMsg(NUM, "loadarray").Int() - 1
+		idx := key.ExpectMsg(VNumber, "loadarray").Int() - 1
 		if idx >= int64(rv.Len()) || idx < 0 {
 			return Value{}
 		}
-		return Any(rv.Index(int(idx)).Interface())
+		return Interface(rv.Index(int(idx)).Interface())
 	}
 
-	k := camelKey(key.ExpectMsg(STR, "loadstruct").Str())
+	k := camelKey(key.ExpectMsg(VString, "loadstruct")._str())
 	f := rv.MethodByName(k)
 	if !f.IsValid() {
 		if rv.Kind() == reflect.Ptr {
@@ -39,19 +39,19 @@ func reflectLoad(v interface{}, key Value) Value {
 		}
 		f := rv.FieldByName(k)
 		if f.IsValid() {
-			return Any(f.Interface())
+			return Interface(f.Interface())
 		}
 		// panicf("%q not found in %#v", k, v)
 		return Value{}
 	}
-	return Fun(&Func{
+	return Function(&Func{
 		Name: k,
 		native: func(env *Env) {
 			rt := f.Type()
 			rtNumIn := rt.NumIn()
 			ins := make([]reflect.Value, 0, rtNumIn)
 			getter := func(i int, t reflect.Type) reflect.Value {
-				return reflect.ValueOf(env.Get(i).AnyTyped(t))
+				return reflect.ValueOf(env.Get(i).TypedInterface(t))
 			}
 
 			if !rt.IsVariadic() {
@@ -74,7 +74,7 @@ func reflectLoad(v interface{}, key Value) Value {
 
 			a := make([]Value, len(outs))
 			for i := range outs {
-				a[i] = Any(outs[i].Interface())
+				a[i] = Interface(outs[i].Interface())
 			}
 			env.Return(a[0], a[1:]...)
 		},
@@ -85,7 +85,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		rk := reflect.ValueOf(key.AnyTyped(rv.Type().Elem()))
+		rk := reflect.ValueOf(key.TypedInterface(rv.Type().Elem()))
 		v := rv.MapIndex(rk)
 		if !v.IsValid() {
 			panicf("store: readonly map")
@@ -93,15 +93,15 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		if v2.IsNil() {
 			rv.SetMapIndex(rk, reflect.Value{})
 		} else {
-			rv.SetMapIndex(rk, reflect.ValueOf(v2.AnyTyped(rv.Type().Elem())))
+			rv.SetMapIndex(rk, reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
 		}
 		return
 	case reflect.Slice, reflect.Array:
-		idx := key.ExpectMsg(NUM, "storearray").Int() - 1
+		idx := key.ExpectMsg(VNumber, "storearray").Int() - 1
 		if idx >= int64(rv.Len()) || idx < 0 {
 			return
 		}
-		rv.Index(int(idx)).Set(reflect.ValueOf(v2.AnyTyped(rv.Type().Elem())))
+		rv.Index(int(idx)).Set(reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
 		return
 	}
 
@@ -109,7 +109,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		rv = rv.Elem()
 	}
 
-	k := camelKey(key.ExpectMsg(STR, "storestruct").Str())
+	k := camelKey(key.ExpectMsg(VString, "storestruct")._str())
 	f := rv.FieldByName(k)
 	if !f.IsValid() || !f.CanAddr() {
 		panicf("%q not assignable in %#v", k, v)
@@ -117,7 +117,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 	if f.Type() == reflect.TypeOf(Value{}) {
 		f.Set(reflect.ValueOf(v2))
 	} else {
-		f.Set(reflect.ValueOf(v2.AnyTyped(f.Type())))
+		f.Set(reflect.ValueOf(v2.TypedInterface(f.Type())))
 	}
 }
 

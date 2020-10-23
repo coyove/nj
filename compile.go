@@ -1,4 +1,4 @@
-package potatolang
+package script
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/coyove/potatolang/parser"
+	"github.com/coyove/script/parser"
 )
 
 type symbol struct {
@@ -209,19 +209,19 @@ func (table *symtable) constsToValues() []Value {
 	for i, k := range table.consts {
 		switch k := k.(type) {
 		case float64:
-			consts[i] = Num(k)
+			consts[i] = Float(k)
 		case int64:
 			consts[i] = Int(k)
 		case string:
-			consts[i] = Str(k)
+			consts[i] = _str(k)
 		case bool:
-			consts[i] = NumBool(k)
+			consts[i] = Bool(k)
 		}
 	}
 	return consts
 }
 
-var flatOpMapping = map[string]_Opcode{
+var flatOpMapping = map[string]opCode{
 	parser.AAdd.Text:       OpAdd,
 	parser.AConcat.Text:    OpConcat,
 	parser.ASub.Text:       OpSub,
@@ -244,7 +244,7 @@ var flatOpMapping = map[string]_Opcode{
 	parser.APopVClear.Text: OpEOB, // special
 }
 
-func (table *symtable) writeOpcode(op _Opcode, n0, n1 parser.Node) {
+func (table *symtable) writeOpcode(op opCode, n0, n1 parser.Node) {
 	var tmp []uint16
 	getAddr := func(n parser.Node) uint16 {
 		switch n.Type() {

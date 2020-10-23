@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coyove/potatolang"
+	"github.com/coyove/script"
 )
 
 const VERSION = "0.2.0"
@@ -37,7 +37,7 @@ func main() {
 	log.SetFlags(0)
 
 	if *version {
-		fmt.Println("\"pol\": potatolang virtual machine v" + VERSION + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")")
+		fmt.Println("\"pol\": script virtual machine v" + VERSION + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")")
 		flag.Usage()
 		return
 	}
@@ -95,7 +95,7 @@ ARG:
 	runtime.GOMAXPROCS(runtime.NumCPU() * *goroutinePerCPU)
 	start := time.Now()
 
-	var b *potatolang.Func
+	var b *script.Func
 	var err error
 
 	defer func() {
@@ -125,9 +125,9 @@ ARG:
 	}()
 
 	if *input == "f" {
-		b, err = potatolang.LoadFile(source)
+		b, err = script.LoadFile(source)
 	} else {
-		b, err = potatolang.LoadString(source)
+		b, err = script.LoadString(source)
 	}
 	if err != nil {
 		log.Fatalln(err)
@@ -139,7 +139,7 @@ ARG:
 
 	var ok = make(chan bool, 1)
 	if *timeout > 0 {
-		potatolang.WithTimeout(b, time.Second*time.Duration(*timeout))
+		script.WithTimeout(b, time.Second*time.Duration(*timeout))
 		// go func() {
 		// 	select {
 		// 	case <-time.After(time.Duration(*timeout) * time.Millisecond):

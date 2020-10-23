@@ -1,8 +1,9 @@
-package potatolang
+package script
 
 import (
 	"context"
 	"time"
+	"unsafe"
 )
 
 // Env is the environment for a closure to run within.
@@ -115,7 +116,7 @@ func (env *Env) Stack() []Value {
 
 func (env *Env) InInt(i int, defaultValue int64) int64 {
 	v := env.Get(i)
-	if v.Type() != NUM {
+	if v.Type() != VNumber {
 		return defaultValue
 	}
 	return v.Int()
@@ -123,10 +124,10 @@ func (env *Env) InInt(i int, defaultValue int64) int64 {
 
 func (env *Env) InStr(i int, defaultValue string) string {
 	v := env.Get(i)
-	if v.Type() != STR {
+	if v.Type() != VString {
 		return defaultValue
 	}
-	return v.Str()
+	return v._str()
 }
 
 func (env *Env) In(i int, expectedType valueType) Value {
@@ -149,4 +150,15 @@ func (env *Env) Deadline() (context.Context, func(), time.Time) {
 
 func (env *Env) GetGlobalCustomValue(key string) interface{} {
 	return env.global.Extras[key]
+}
+
+func (e *Env) NewString(s string) Value {
+	if e.global.MaxStringSize > 0 && int64(len(s)) > e.global.MaxStringSize {
+		panicf("string overflow, max: %d", e.global.MaxStringSize)
+	}
+	return _str(s)
+}
+
+func (e *Env) NewStringBytes(s []byte) Value {
+	return e.NewString(*(*string)(unsafe.Pointer(&s)))
 }

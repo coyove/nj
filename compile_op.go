@@ -1,9 +1,9 @@
-package potatolang
+package script
 
 import (
 	"math"
 
-	"github.com/coyove/potatolang/parser"
+	"github.com/coyove/script/parser"
 )
 
 var _nodeRegA = parser.Node{regA}
@@ -85,8 +85,8 @@ func (table *symtable) compileRetOp(atoms []parser.Node) uint16 {
 	return regA
 }
 
-// writeOpcode3 accepts 3 arguments at most, 2 arguments will be encoded into opcode itself, the 3rd one will be in regA
-func (table *symtable) writeOpcode3(bop _Opcode, atoms []parser.Node) uint16 {
+// writeOpcode3 accepts 3 arguments at most, 2 arguments will be encoded into opCode itself, the 3rd one will be in regA
+func (table *symtable) writeOpcode3(bop opCode, atoms []parser.Node) uint16 {
 	// first atom: the op name, tail atoms: the args
 	if len(atoms) > 4 {
 		panic("shouldn't happen: too many arguments")

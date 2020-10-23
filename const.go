@@ -1,4 +1,4 @@
-package potatolang
+package script
 
 import "fmt"
 
@@ -7,10 +7,10 @@ const (
 	regNil uint16 = 0x3ff - 1
 )
 
-type _Opcode byte
+type opCode byte
 
 const (
-	_ _Opcode = iota
+	_ opCode = iota
 	OpSet
 	OpStore
 	OpLoad
@@ -43,10 +43,26 @@ const (
 	OpEOB
 )
 
-func panicerr(err error) {
-	if err != nil {
-		panic(err)
-	}
+type valueType byte
+
+const (
+	VNil       valueType = 0  // nil
+	VNumber              = 3  // number
+	VString              = 7  // string
+	VStack               = 15 // stack
+	VFunction            = 31 // function
+	VInterface           = 63 // interface
+	_NumNum              = VNumber * 2
+	_StrStr              = VString * 2
+)
+
+var typeMappings = map[valueType]string{
+	VNil:       "nil",
+	VNumber:    "number",
+	VString:    "string",
+	VFunction:  "function",
+	VInterface: "any",
+	VStack:     "stack",
 }
 
 func panicf(msg string, args ...interface{}) {

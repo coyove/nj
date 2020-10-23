@@ -1,4 +1,4 @@
-package potatolang
+package script
 
 import (
 	"flag"
@@ -48,11 +48,11 @@ func TestArithmeticUnfold(t *testing.T) {
 		t.Error(err)
 	}
 
-	if len(cls.ConstTable) != 1 || cls.ConstTable[0].F64() != 2.5 {
+	if len(cls.ConstTable) != 1 || cls.ConstTable[0].Float() != 2.5 {
 		t.Error("unfolding failed")
 	}
 
-	if v, _ := cls.Call(); v.F64() != 2.5 {
+	if v, _ := cls.Call(); v.Float() != 2.5 {
 		t.Error("exec failed")
 	}
 }
@@ -107,7 +107,7 @@ a = 0
 		t.Error(err)
 	}
 
-	if v, _ := cls.Call(); !math.IsNaN(v.F64()) {
+	if v, _ := cls.Call(); !math.IsNaN(v.Float()) {
 		t.Error("wrong answer")
 	}
 }
@@ -158,12 +158,12 @@ func TestFalsyValue(t *testing.T) {
 		}
 	}
 
-	assert(Num(0).IsFalse())
-	assert(!Num(1 / math.Inf(-1)).IsFalse())
-	assert(!Num(math.NaN()).IsFalse())
+	assert(Float(0).IsFalse())
+	assert(!Float(1 / math.Inf(-1)).IsFalse())
+	assert(!Float(math.NaN()).IsFalse())
 
-	s := NumBool(true)
+	s := Bool(true)
 	assert(!s.IsFalse())
-	s = NumBool(false)
+	s = Bool(false)
 	assert(s.IsFalse())
 }
