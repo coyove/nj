@@ -252,7 +252,7 @@ MAIN:
 			case _NumNum:
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
-				if vaIsInt && vbIsInt {
+				if vaIsInt && vbIsInt && vai%vbi == 0 {
 					env.A = Int(vai / vbi)
 				} else {
 					env.A = Float(vaf / vbf)

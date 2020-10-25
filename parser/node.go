@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/big"
 	"strconv"
 	"strings"
 )
@@ -53,37 +52,33 @@ func NewSymbol(s string) Node { return Node{Type: Symbol, strSym: s} }
 
 func NewString(s string) Node { return Node{Type: String, strSym: s} }
 
-func NewNumberFromBig(x *big.Float) Node {
-	n := Node{}
-	v, acc := x.Int64()
-	if acc == big.Exact {
-		n.Type = Int
-		n.num = uint64(v)
-	} else {
-		n.Type = Float
-		f, _ := x.Float64()
-		n.num = math.Float64bits(f)
-	}
-	return n
-}
-
 func NewNumberFromString(v string) Node {
 	i, err := strconv.ParseInt(v, 0, 64)
 	if err == nil {
-		if int64(float64(i)) == i {
-			return Node{Type: Float, num: math.Float64bits(float64(i))}
-		}
 		return Node{Type: Int, num: uint64(i)}
 	}
+	if err.(*strconv.NumError).Err == strconv.ErrRange {
+		i, err := strconv.ParseUint(v, 0, 64)
+		if err == nil {
+			return Node{Type: Int, num: uint64(int64(i))}
+		}
+	}
 	f, _ := strconv.ParseFloat(v, 64)
+	if float64(int64(f)) == f {
+		return Node{Type: Int, num: uint64(int64(f))}
+	}
 	return Node{Type: Float, num: math.Float64bits(f)}
 }
 
 func NewNumberFromInt(v int64) Node {
-	if int64(float64(v)) == v {
-		return Node{Type: Float, num: math.Float64bits(float64(v))}
-	}
 	return Node{num: uint64(v), Type: Int}
+}
+
+func NewNumberFromFloat(v float64) Node {
+	if float64(int64(v)) == v {
+		return Node{num: uint64(int64(v)), Type: Int}
+	}
+	return Node{Type: Float, num: math.Float64bits(float64(v))}
 }
 
 func (n Node) Valid() bool {
@@ -108,10 +103,9 @@ func (n Node) FloatValue() float64 { return math.Float64frombits(n.num) }
 
 func (n Node) NumberValue() (float64, int64, bool) {
 	if n.Type == Int {
-		return (&big.Float{}).SetFloat64(n.FloatValue())
+		return float64(n.IntValue()), n.IntValue(), true
 	}
-	x := (&big.Float{}).SetInt64(n.IntValue())
-	return x
+	return n.FloatValue(), int64(n.FloatValue()), false
 }
 
 func (n Node) IsNegativeNumber() bool {
@@ -129,16 +123,41 @@ func NewComplex(args ...Node) Node {
 			return NewString(a.StringValue() + b.StringValue())
 		}
 		if a.IsNumber() && b.IsNumber() {
-			// switch v1, v2 := a.BigValue(), b.BigValue(); op {
-			// case AAdd:
-			// 	return NewNumberFromBig(v1.Add(v1, v2))
-			// case ASub:
-			// 	return NewNumberFromBig(v1.Sub(v1, v2))
-			// case AMul:
-			// 	return NewNumberFromBig(v1.Mul(v1, v2))
-			// case ADiv:
-			// 	return NewNumberFromBig(v1.Quo(v1, v2))
-			// }
+			switch op {
+			case AAdd:
+				af, ai, aIsInt := a.NumberValue()
+				bf, bi, bIsInt := b.NumberValue()
+				if aIsInt && bIsInt {
+					return NewNumberFromInt(ai + bi)
+				} else {
+					return NewNumberFromFloat(af + bf)
+				}
+			case ASub:
+				af, ai, aIsInt := a.NumberValue()
+				bf, bi, bIsInt := b.NumberValue()
+				if aIsInt && bIsInt {
+					return NewNumberFromInt(ai - bi)
+				} else {
+					return NewNumberFromFloat(af - bf)
+
+				}
+			case AMul:
+				af, ai, aIsInt := a.NumberValue()
+				bf, bi, bIsInt := b.NumberValue()
+				if aIsInt && bIsInt {
+					return NewNumberFromInt(ai * bi)
+				} else {
+					return NewNumberFromFloat(af * bf)
+				}
+			case ADiv:
+				af, ai, aIsInt := a.NumberValue()
+				bf, bi, bIsInt := b.NumberValue()
+				if aIsInt && bIsInt && ai%bi == 0 {
+					return NewNumberFromInt(ai / bi)
+				} else {
+					return NewNumberFromFloat(af / bf)
+				}
+			}
 		}
 	}
 	return Node{Nodes: args, Type: Complex}

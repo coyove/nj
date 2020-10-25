@@ -414,7 +414,7 @@ redo:
 				sc.Next()
 			default:
 				tok.Type = ch
-				tok.Str = string(ch)
+				tok.Str = string(rune(ch))
 			}
 		case '"', '\'':
 			err = sc.scanString(ch, buf)
@@ -428,7 +428,7 @@ redo:
 				tok.Str = buf.String()
 			} else {
 				tok.Type = ch
-				tok.Str = string(ch)
+				tok.Str = string(rune(ch))
 			}
 		case '=':
 			if p := sc.Peek(); p == '=' {
@@ -437,7 +437,7 @@ redo:
 				sc.Next()
 			} else {
 				tok.Type = ch
-				tok.Str = string(ch)
+				tok.Str = string(rune(ch))
 			}
 		case '!', '~':
 			if sc.Peek() == '=' {
@@ -446,7 +446,7 @@ redo:
 				sc.Next()
 			} else {
 				tok.Type = ch
-				tok.Str = string(ch)
+				tok.Str = string(rune(ch))
 			}
 		case '<':
 			if sc.Peek() == '=' {
@@ -455,7 +455,7 @@ redo:
 				sc.Next()
 			} else {
 				tok.Type = ch
-				tok.Str = string(ch)
+				tok.Str = string(rune(ch))
 			}
 		case '>':
 			if sc.Peek() == '=' {
@@ -464,7 +464,7 @@ redo:
 				sc.Next()
 			} else {
 				tok.Type = ch
-				tok.Str = string(ch)
+				tok.Str = string(rune(ch))
 			}
 		case '.':
 			switch ch2 := sc.Peek(); {
@@ -490,7 +490,7 @@ redo:
 			}
 		case '(', ')', '{', '}', ']', ';', ',', '#', '^':
 			tok.Type = ch
-			tok.Str = string(ch)
+			tok.Str = string(rune(ch))
 		case ':':
 			if sc.Peek() == ':' {
 				tok.Type = TLabel
@@ -503,12 +503,12 @@ redo:
 		case '+', '*', '/', '%':
 			switch sc.Peek() {
 			case '=':
-				tok.Type = [...]uint32{TAddEq, TMulEq, TDivEq, TModEq}[strings.Index("+*/%", string(ch))]
-				tok.Str = string(ch) + "="
+				tok.Type = [...]uint32{TAddEq, TMulEq, TDivEq, TModEq}[strings.Index("+*/%", string(rune(ch)))]
+				tok.Str = string(rune(ch)) + "="
 				sc.Next()
 			default:
 				tok.Type = ch
-				tok.Str = string(ch)
+				tok.Str = string(rune(ch))
 			}
 		default:
 			writeChar(buf, ch)

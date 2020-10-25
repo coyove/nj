@@ -253,7 +253,7 @@ func TestFalsyValue(t *testing.T) {
 	}
 
 	assert(Float(0).IsFalse())
-	assert(!Float(1 / math.Inf(-1)).IsFalse())
+	assert(Float(1 / math.Inf(-1)).IsFalse())
 	assert(!Float(math.NaN()).IsFalse())
 
 	s := Bool(true)
