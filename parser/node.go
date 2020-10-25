@@ -106,11 +106,12 @@ func (n Node) IntValue() int64 { return int64(n.num) }
 
 func (n Node) FloatValue() float64 { return math.Float64frombits(n.num) }
 
-func (n Node) BigValue() *big.Float {
-	if n.Type == Float {
+func (n Node) NumberValue() (float64, int64, bool) {
+	if n.Type == Int {
 		return (&big.Float{}).SetFloat64(n.FloatValue())
 	}
-	return (&big.Float{}).SetInt64(n.IntValue())
+	x := (&big.Float{}).SetInt64(n.IntValue())
+	return x
 }
 
 func (n Node) IsNegativeNumber() bool {
@@ -128,16 +129,16 @@ func NewComplex(args ...Node) Node {
 			return NewString(a.StringValue() + b.StringValue())
 		}
 		if a.IsNumber() && b.IsNumber() {
-			switch v1, v2 := a.BigValue(), b.BigValue(); op {
-			case AAdd:
-				return NewNumberFromBig(v1.Add(v1, v2))
-			case ASub:
-				return NewNumberFromBig(v1.Sub(v1, v2))
-			case AMul:
-				return NewNumberFromBig(v1.Mul(v1, v2))
-			case ADiv:
-				return NewNumberFromBig(v1.Quo(v1, v2))
-			}
+			// switch v1, v2 := a.BigValue(), b.BigValue(); op {
+			// case AAdd:
+			// 	return NewNumberFromBig(v1.Add(v1, v2))
+			// case ASub:
+			// 	return NewNumberFromBig(v1.Sub(v1, v2))
+			// case AMul:
+			// 	return NewNumberFromBig(v1.Mul(v1, v2))
+			// case ADiv:
+			// 	return NewNumberFromBig(v1.Quo(v1, v2))
+			// }
 		}
 	}
 	return Node{Nodes: args, Type: Complex}
@@ -203,7 +204,7 @@ func (n Node) Dump(w io.Writer, ident string) {
 		}
 		io.WriteString(w, "]\n")
 	case Symbol:
-		io.WriteString(w, fmt.Sprintf("%s(%d)", n.strSym, n.symLine))
+		io.WriteString(w, fmt.Sprintf("%s.%d", n.strSym, n.symLine))
 	default:
 		io.WriteString(w, n.String())
 	}

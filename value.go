@@ -21,7 +21,10 @@ type Value struct {
 
 // Type returns the type of value, its logic should align IsFalse()
 func (v Value) Type() valueType {
-	if v.p == nil || v.p == int64Marker {
+	if v.p == int64Marker {
+		return VNumber
+	}
+	if v.p == nil {
 		if v.v == 0 {
 			return VNil
 		}
@@ -36,7 +39,7 @@ func (v Value) Type() valueType {
 // IsFalse tests whether value contains a falsy value: nil or 0
 func (v Value) IsFalse() bool {
 	x := uintptr(v.p) + uintptr(v.v)
-	return x == 0 || x == 0xffffffff_ffffffff
+	return x == 0 || x == uintptr(int64Marker)
 }
 
 func (v Value) IsNil() bool {
@@ -53,14 +56,14 @@ func Bool(v bool) Value {
 
 // Float returns a number value
 func Float(f float64) Value {
+	if float64(int64(f)) == f {
+		return Value{v: uint64(int64(f)), p: int64Marker}
+	}
 	return Value{v: ^math.Float64bits(f)}
 }
 
 // Int returns a number value like Float does, but it preserves int64 values which may overflow float64
 func Int(i int64) Value {
-	if int64(float64(i)) == i {
-		return Value{v: ^math.Float64bits(float64(i))}
-	}
 	return Value{v: uint64(i), p: int64Marker}
 }
 
