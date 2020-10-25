@@ -143,7 +143,7 @@ func (c *Func) CallEnv(env *Env, a ...Value) (Value, []Value) {
 		newEnv.global = c.loadGlobal
 	} else {
 		newEnv = *env
-		newEnv.stackOffset = len(*newEnv.stack)
+		newEnv.stackOffset = uint32(len(*newEnv.stack))
 	}
 
 	for i := range a {

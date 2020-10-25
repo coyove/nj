@@ -176,7 +176,7 @@ func init() {
 		env.A = env.NewString(string(rune(env.In(0, VNumber).Int())))
 	})
 	AddGlobalValue("rune", func(env *Env) {
-		r, sz := utf8.DecodeRuneInString(env.In(0, VString).Str())
+		r, sz := utf8.DecodeRuneInString(env.In(0, VString)._str())
 		env.Return(Int(int64(r)), Int(int64(sz)))
 	})
 	AddGlobalValue("match", func(env *Env) {

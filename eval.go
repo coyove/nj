@@ -95,7 +95,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 	var stackEnv = env
 	var retStack []stacktrace
 
-	stackEnv.stackOffset = len(*env.stack)
+	stackEnv.stackOffset = uint32(len(*env.stack))
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -124,10 +124,10 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 		cursor = r.cursor
 		K = r.cls
 
-		env.stackOffset = int(r.stackOffset)
+		env.stackOffset = r.stackOffset
 		env.A, env.V = returnVararg(env.global, v, env.V)
-		*env.stack = (*env.stack)[:env.stackOffset+int(r.cls.stackSize)]
-		stackEnv.stackOffset = len(*env.stack)
+		*env.stack = (*env.stack)[:env.stackOffset+uint32(r.cls.stackSize)]
+		stackEnv.stackOffset = uint32(len(*env.stack))
 		retStack = retStack[:len(retStack)-1]
 	}
 
@@ -405,11 +405,11 @@ MAIN:
 
 				if cls.Is(FuncYield) {
 					x := stackEnv
-					tmp := append([]Value{}, x.Stack()...)
+					tmp := make([]Value, cls.stackSize)
+					copy(tmp, stackEnv.Stack())
 					stackEnv.Clear()
 					x.stack = &tmp
 					x.stackOffset = 0
-					x.grow(int(cls.stackSize))
 					env.A, env.V = cls.exec(x)
 				} else if cls.native != nil {
 					env.A, env.V = cls.exec(stackEnv)
@@ -435,7 +435,7 @@ MAIN:
 						env.grow(int(cls.stackSize))
 					}
 
-					stackEnv.stackOffset = len(*env.stack)
+					stackEnv.stackOffset = uint32(len(*env.stack))
 				}
 			}
 		case OpJmp:

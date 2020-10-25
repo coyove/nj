@@ -15,7 +15,7 @@ type Env struct {
 	stack  *[]Value
 
 	// Local
-	stackOffset int
+	stackOffset uint32
 	V           []Value
 	A           Value
 }
@@ -29,7 +29,7 @@ type Global struct {
 
 func (env *Env) grow(newSize int) {
 	s := *env.stack
-	sz := env.stackOffset + newSize
+	sz := int(env.stackOffset) + newSize
 	if sz > cap(s) {
 		old := s
 		s = make([]Value, sz, sz+newSize)
@@ -60,7 +60,7 @@ func (env *Env) Push(v Value) {
 }
 
 func (env *Env) Size() int {
-	return len(*env.stack) - env.stackOffset
+	return len(*env.stack) - int(env.stackOffset)
 }
 
 func (env *Env) _get(yx uint16, cls *Func) (zzz Value) {
@@ -82,7 +82,7 @@ func (env *Env) _get(yx uint16, cls *Func) (zzz Value) {
 	}
 
 	s := *env.stack
-	index += env.stackOffset
+	index += int(env.stackOffset)
 	if index >= len(s) {
 		return Value{}
 	}
@@ -102,7 +102,7 @@ func (env *Env) _set(yx uint16, v Value) {
 			}
 			(*env.global.Stack)[index] = v
 		} else {
-			s[index+env.stackOffset] = v
+			s[index+int(env.stackOffset)] = v
 		}
 	}
 }
