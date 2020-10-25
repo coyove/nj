@@ -5,27 +5,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math"
 	"os"
-	"runtime"
 	"runtime/debug"
-	"time"
 
 	"github.com/coyove/script/parser"
 )
 
 type symbol struct {
-	addr  uint16
-	usage int
+	addr uint16
 }
 
 func (s *symbol) String() string { return fmt.Sprintf("symbol:%d", s.addr) }
-
-type gotolabel struct {
-	gotoMarker [4]uint32
-	labelPos   int
-	labelMet   bool
-}
 
 type breaklabel struct {
 	labelPos []int
@@ -35,12 +25,14 @@ type breaklabel struct {
 type symtable struct {
 	code packet
 
+	// toplevel symtable
+	funcs []*Func
+
 	// variable name lookup
 	global    *symtable
 	sym       map[string]*symbol
 	maskedSym []map[string]*symbol
 
-	y      bool // has yield op
 	inloop []*breaklabel
 
 	vp uint16
@@ -72,8 +64,8 @@ func (table *symtable) borrowAddress() uint16 {
 			return tmp
 		}
 	}
-	if table.vp > 1000 { //1<<10 {
-		panic("Code too complex, may be there are too many variables (1000) in a single scope")
+	if table.vp > 2000 { // 11 bits {
+		panic("too many variables (2000) in a single scope")
 	}
 	table.reusableTmps[table.vp] = false
 	table.vp++
@@ -84,7 +76,7 @@ func (table *symtable) returnAddress(v uint16) {
 	if v == regNil || v == regA {
 		return
 	}
-	if v>>10 == 7 {
+	if v>>11 == 3 {
 		return
 	}
 	//	log.Println("$$", table.reusableTmps, v, table.vp)
@@ -101,8 +93,8 @@ func (table *symtable) returnAddresses(a interface{}) {
 	switch a := a.(type) {
 	case []parser.Node:
 		for _, n := range a {
-			if n.Type() == parser.ADR {
-				table.returnAddress(n.Value.(uint16))
+			if n.Type == parser.Address {
+				table.returnAddress(n.Addr)
 			}
 		}
 	case []uint16:
@@ -110,14 +102,14 @@ func (table *symtable) returnAddresses(a interface{}) {
 			table.returnAddress(n)
 		}
 	default:
-		panic("returnAddresses: shouldn't happen")
+		panic("FIXME returnAddresses")
 	}
 }
 
-func (table *symtable) get(varname parser.Symbol) uint16 {
+func (table *symtable) get(varname string) uint16 {
 	depth := uint16(0)
 
-	switch varname.Text {
+	switch varname {
 	case "nil":
 		return regNil
 	case "true":
@@ -127,11 +119,7 @@ func (table *symtable) get(varname parser.Symbol) uint16 {
 	}
 
 	calc := func(k *symbol) uint16 {
-		if depth > 6 || (depth == 6 && k.addr > 1000) {
-			panic("too many levels (7) to refer a variable, try simplifing your code")
-		}
-
-		addr := (depth << 10) | (uint16(k.addr) & 0x03ff)
+		addr := (depth << 11) | (uint16(k.addr) & 0x07ff)
 		return addr
 	}
 
@@ -141,12 +129,12 @@ func (table *symtable) get(varname parser.Symbol) uint16 {
 		// The rightmost map of this slice is the innermost do-block
 		for i := len(table.maskedSym) - 1; i >= 0; i-- {
 			m := table.maskedSym[i]
-			if k, ok := m[varname.Text]; ok {
+			if k, ok := m[varname]; ok {
 				return calc(k)
 			}
 		}
 
-		if k, ok := table.sym[varname.Text]; ok {
+		if k, ok := table.sym[varname]; ok {
 			return calc(k)
 		}
 
@@ -159,12 +147,10 @@ func (table *symtable) get(varname parser.Symbol) uint16 {
 
 func (table *symtable) put(varname string, addr uint16) {
 	if addr == regA {
-		panic("debug")
+		panic("FIXME: put $a?")
 	}
-	c := math.MaxInt64
 	sym := &symbol{
-		addr:  addr,
-		usage: c,
+		addr: addr,
 	}
 	if len(table.maskedSym) > 0 {
 		table.maskedSym[len(table.maskedSym)-1][varname] = sym
@@ -192,7 +178,7 @@ func (table *symtable) loadK(v interface{}) uint16 {
 		}
 
 		table.consts = append(table.consts, v)
-		if len(table.consts) > 1<<10-1 {
+		if len(table.consts) > 1<<11-1 {
 			panic("too many constants")
 		}
 
@@ -201,7 +187,7 @@ func (table *symtable) loadK(v interface{}) uint16 {
 		return idx
 	}()
 
-	return 0x7<<10 | kaddr
+	return 0x3<<11 | kaddr
 }
 
 func (table *symtable) constsToValues() []Value {
@@ -222,44 +208,48 @@ func (table *symtable) constsToValues() []Value {
 }
 
 var flatOpMapping = map[string]opCode{
-	parser.AAdd.Text:       OpAdd,
-	parser.AConcat.Text:    OpConcat,
-	parser.ASub.Text:       OpSub,
-	parser.AMul.Text:       OpMul,
-	parser.ADiv.Text:       OpDiv,
-	parser.AMod.Text:       OpMod,
-	parser.ALess.Text:      OpLess,
-	parser.ALessEq.Text:    OpLessEq,
-	parser.AEq.Text:        OpEq,
-	parser.ANeq.Text:       OpNeq,
-	parser.ANot.Text:       OpNot,
-	parser.APow.Text:       OpPow,
-	parser.AStore.Text:     OpStore,
-	parser.ALoad.Text:      OpLoad,
-	parser.ALen.Text:       OpLen,
-	parser.AInc.Text:       OpInc,
-	parser.APopV.Text:      OpEOB, // special
-	parser.APopVAll.Text:   OpEOB, // special
-	parser.APopVAllA.Text:  OpEOB, // special
-	parser.APopVClear.Text: OpEOB, // special
+	parser.AAdd:       OpAdd,
+	parser.AConcat:    OpConcat,
+	parser.ASub:       OpSub,
+	parser.AMul:       OpMul,
+	parser.ADiv:       OpDiv,
+	parser.AMod:       OpMod,
+	parser.ALess:      OpLess,
+	parser.ALessEq:    OpLessEq,
+	parser.AEq:        OpEq,
+	parser.ANeq:       OpNeq,
+	parser.ANot:       OpNot,
+	parser.APow:       OpPow,
+	parser.AStore:     OpStore,
+	parser.ALoad:      OpLoad,
+	parser.ALen:       OpLen,
+	parser.AInc:       OpInc,
+	parser.APopV:      OpEOB, // special
+	parser.APopVAll:   OpEOB, // special
+	parser.APopVAllA:  OpEOB, // special
+	parser.APopVClear: OpEOB, // special
 }
 
 func (table *symtable) writeOpcode(op opCode, n0, n1 parser.Node) {
 	var tmp []uint16
 	getAddr := func(n parser.Node) uint16 {
-		switch n.Type() {
-		case parser.CPL:
+		switch n.Type {
+		case parser.Complex:
 			addr := table.compileNodeInto(n, true, 0)
 			tmp = append(tmp, addr)
 			return addr
-		case parser.SYM:
-			return table.get(n.Value.(parser.Symbol))
-		case parser.NUM, parser.STR:
-			return table.loadK(n.Value)
-		case parser.ADR:
-			return n.Value.(uint16)
+		case parser.Symbol:
+			return table.get(n.SymbolValue())
+		case parser.String:
+			return table.loadK(n.StringValue())
+		case parser.Float:
+			return table.loadK(n.FloatValue())
+		case parser.Int:
+			return table.loadK(n.IntValue())
+		case parser.Address:
+			return n.Addr
 		default:
-			panicf("writeOpcode: shouldn't happend: unknown type: %v", n.TypeName())
+			panicf("FIXME writeOpcode unknown type: %#v", n)
 			return 0
 		}
 	}
@@ -299,58 +289,59 @@ func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existe
 }
 
 func (table *symtable) compileNode(node parser.Node) uint16 {
-	switch node.Type() {
-	case parser.ADR:
-		return node.Value.(uint16)
-	case parser.STR, parser.NUM:
-		return table.loadK(node.Value)
-	case parser.SYM:
-		return table.get(node.Sym())
+	switch node.Type {
+	case parser.Address:
+		return node.Addr
+	case parser.String:
+		return table.loadK(node.StringValue())
+	case parser.Float:
+		return table.loadK(node.FloatValue())
+	case parser.Int:
+		return table.loadK(node.IntValue())
+	case parser.Symbol:
+		return table.get(node.SymbolValue())
 	}
 
-	nodes := node.Cpl()
+	nodes := node.Nodes
 	if len(nodes) == 0 {
 		return regA
 	}
-	name, ok := nodes[0].Value.(parser.Symbol)
-	if !ok {
-		panicf("compileNode: shouldn't happend: invalid op: %v", nodes)
-	}
 
+	name := nodes[0].SymbolValue()
 	var yx uint16
-	switch name.Text {
-	case parser.ADoBlock.Text, parser.ABegin.Text:
+	switch name {
+	case parser.ADoBlock, parser.ABegin:
 		yx = table.compileChainOp(node)
-	case parser.ASet.Text, parser.AMove.Text:
+	case parser.ASet, parser.AMove:
 		yx = table.compileSetOp(nodes)
-	case parser.AReturn.Text, parser.AYield.Text:
+	case parser.AReturn, parser.AYield:
 		yx = table.compileRetOp(nodes)
-	case parser.AIf.Text:
+	case parser.AIf:
 		yx = table.compileIfOp(nodes)
-	case parser.AFor.Text:
+	case parser.AFor:
 		yx = table.compileWhileOp(nodes)
-	case parser.ABreak.Text:
+	case parser.ABreak:
 		yx = table.compileBreakOp(nodes)
-	case parser.ACall.Text, parser.ATailCall.Text:
+	case parser.ACall, parser.ATailCall:
 		yx = table.compileCallOp(nodes)
-	case parser.AOr.Text, parser.AAnd.Text:
+	case parser.AOr, parser.AAnd:
 		yx = table.compileAndOrOp(nodes)
-	case parser.AFunc.Text:
+	case parser.AFunc:
 		yx = table.compileLambdaOp(nodes)
-	case parser.ARetAddr.Text:
+	case parser.ARetAddr:
 		yx = table.compileRetAddrOp(nodes)
-	case parser.AGoto.Text, parser.ALabel.Text:
+	case parser.AGoto, parser.ALabel:
 		yx = table.compileGotoOp(nodes)
 	default:
-		if _, ok := flatOpMapping[name.Text]; ok {
+		if _, ok := flatOpMapping[name]; ok {
 			return table.compileFlatOp(nodes)
 		}
-		panicf("compileNode: shouldn't happen: unknown symbol: %s", name)
+		panicf("FIXME: compileNode unknown symbol: %q", name)
 	}
 	return yx
 }
 
-func compileNodeTopLevel(n parser.Node) (cls *Func, err error) {
+func compileNodeTopLevel(n parser.Node) (cls *Program, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			cls = nil
@@ -378,18 +369,22 @@ func compileNodeTopLevel(n parser.Node) (cls *Func, err error) {
 	table.compileNode(n)
 	table.code.writeOP(OpEOB, 0, 0)
 	table.patchGoto()
-	cls = &Func{}
-	cls.Name = "main"
-	cls.packet = table.code
-	cls.ConstTable = table.constsToValues()
-	cls.yEnv.stack = coreStack.stack
-	cls.yEnv.grow(int(table.vp))
-	cls.yEnv.global = &Global{Stack: cls.yEnv.stack} // yEnv itself is the global stack
+	coreStack.grow(int(table.vp))
+
+	cls = &Program{}
+	cls.name = "main"
+	cls.code = table.code
+	cls.constTable = table.constsToValues()
 	cls.stackSize = table.vp
+	cls.Stack = coreStack.stack
+	cls.Funcs = table.funcs
+	for _, f := range cls.Funcs {
+		f.loadGlobal = cls
+	}
 	return cls, err
 }
 
-func LoadFile(path string) (*Func, error) {
+func LoadFile(path string) (*Program, error) {
 	code, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -403,29 +398,11 @@ func LoadFile(path string) (*Func, error) {
 	return compileNodeTopLevel(n)
 }
 
-func LoadString(code string) (*Func, error) {
-	_, fn, line, _ := runtime.Caller(1)
-	return loadStringName(code, fmt.Sprintf("%s(L%d)", fn, line))
-}
-
-func loadStringName(code, name string) (*Func, error) {
-	n, err := parser.Parse(bytes.NewReader([]byte(code)), name)
+func LoadString(code string) (*Program, error) {
+	n, err := parser.Parse(bytes.NewReader([]byte(code)), "")
 	if err != nil {
 		return nil, err
 	}
 	// n.Dump(os.Stderr, "  ")
 	return compileNodeTopLevel(n)
-}
-
-func WithTimeout(f *Func, d time.Duration) { f.yEnv.global.Deadline = time.Now().Add(d).Unix() }
-
-func WithDeadline(f *Func, d time.Time) { f.yEnv.global.Deadline = d.Unix() }
-
-func WithMaxStackSize(f *Func, sz int64) { f.yEnv.global.MaxStackSize = sz }
-
-func WithValue(f *Func, k string, v interface{}) {
-	if f.yEnv.global.Extras == nil {
-		f.yEnv.global.Extras = map[string]interface{}{}
-	}
-	f.yEnv.global.Extras[k] = v
 }

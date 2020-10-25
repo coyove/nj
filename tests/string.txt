@@ -13,19 +13,34 @@ assert(a == [["12"]] and b == "12" and c == [["2"]] and d == "2")
 local err = error("err")
 assert(err.error() == "err")
 assert("eerrrr" == replace(err.error(), "(e|r)", "$1$1"))
-assert("REE" == replace(err.error(), "(e|r)", function (s)
-		return s == "e" and "R" or "E"
-end))
 
-assert("1 2 3 1 2 3" == replace("a b c d e f", "(\\w)", function (s)
-yield 1
-yield 2
-return 3
-end))
+function cb(s)
+		return s == "e" and "R" or "E"
+end
+assert("REE" == replace(err.error(), "(e|r)", cb))
+
+do
+	local c, r, state = 0
+	local function loop123()
+	    yield 1
+	    yield 2
+	    return 3
+	end
+
+	function stringcallback()
+	    r, c, ...state = resume(loop123, c, state)
+	    c = c and c or 0
+	    println(c, state)
+	    return r
+	end
+end
+
+assert(loop123 == nil)
+
+assert("1 2 3 1 2 3" == replace("a b c d e f", "(\\w)", stringcallback))
 
 assert("x" == trim("嘻x嘻", "嘻"))
 assert("嘻x" == trim("嘻x嘻", "嘻", "right"))
 assert("x嘻" == trim("嘻x嘻", "嘻", "left"))
 
 strname = abc
-_STRING= "r:" .. abc .. global_x

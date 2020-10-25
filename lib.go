@@ -26,7 +26,7 @@ var (
 func AddGlobalValue(k string, v interface{}) {
 	switch v := v.(type) {
 	case func(*Env):
-		g[k] = Function(&Func{Name: k, native: v})
+		g[k] = Function(&Func{name: k, native: v})
 	default:
 		g[k] = Interface(v)
 	}
@@ -43,21 +43,26 @@ func init() {
 		n := env.In(0, VNumber).Int()
 		env.Return(Int(n), make([]Value, n)...)
 	})
-	AddGlobalValue("copyfunction", func(env *Env) {
-		f := *env.In(0, VFunction).Function()
-		env.A = Function(&f)
+	AddGlobalValue("resume", func(env *Env) {
+		f := env.In(0, VFunction).Function()
+		cursor := env.In(1, VNumber).Int()
+		stack := env.Stack()[2:]
+		newEnv := *env
+		newEnv.stackOffset = uint32(len(*newEnv.stack))
+		*newEnv.stack = append(*newEnv.stack, stack...)
+		newEnv.grow(int(f.stackSize))
+		env.A, env.V = execCursorLoop(newEnv, f, uint32(cursor))
 	})
 	AddGlobalValue("type", func(env *Env) {
 		env.A = _str(typeMappings[env.Get(0).Type()])
 	})
 	AddGlobalValue("pcall", func(env *Env) {
-		defer func() {
-			if r := recover(); r != nil {
-				env.Return(Bool(false), Interface(errors.New(fmt.Sprint(r))))
-			}
-		}()
-		a, v := env.In(0, VFunction).Function().CallEnv(env, env.Stack()[1:]...)
-		env.Return(Bool(true), append([]Value{a}, v...)...)
+		a, v, err := env.In(0, VFunction).Function().Call(env, env.Stack()[1:]...)
+		if err == nil {
+			env.Return(Bool(true), append([]Value{a}, v...)...)
+		} else {
+			env.Return(Bool(false), Interface(err))
+		}
 	})
 	AddGlobalValue("select", func(env *Env) {
 		switch a := env.Get(0); a.Type() {
@@ -84,11 +89,11 @@ func init() {
 		case VNumber:
 			env.A = v
 		case VString:
-			switch v, _ := parser.StringToNumber(v._str()); v := v.(type) {
-			case float64:
-				env.A = Float(v)
-			case int64:
-				env.A = Int(v)
+			switch v := parser.NewNumberFromString(v._str()); v.Type {
+			case parser.Float:
+				env.A = Float(v.FloatValue())
+			case parser.Int:
+				env.A = Int(v.IntValue())
 			}
 		default:
 			env.A = Value{}
@@ -231,7 +236,7 @@ func init() {
 			env.A = env.NewString(rx.ReplaceAllString(a, f._str()))
 		case VFunction:
 			env.A = env.NewString(rx.ReplaceAllStringFunc(a, func(in string) string {
-				v, _ := f.Function().CallEnv(env, env.NewString(in))
+				v, _, _ := f.Function().Call(env, env.NewString(in))
 				return v.String()
 			}))
 		}

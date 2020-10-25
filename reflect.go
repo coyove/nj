@@ -45,7 +45,7 @@ func reflectLoad(v interface{}, key Value) Value {
 		return Value{}
 	}
 	return Function(&Func{
-		Name: k,
+		name: k,
 		native: func(env *Env) {
 			rt := f.Type()
 			rtNumIn := rt.NumIn()

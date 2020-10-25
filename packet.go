@@ -56,10 +56,8 @@ func (p posVByte) read(i int) (next int, idx, line uint32) {
 }
 
 type packet struct {
-	Funcs  []*Func
-	Code   []uint32
-	Pos    posVByte
-	Source string
+	Code []uint32
+	Pos  posVByte
 }
 
 func (b *packet) write(buf packet) {
@@ -70,9 +68,6 @@ func (b *packet) write(buf packet) {
 		var idx, line uint32
 		i, idx, line = buf.Pos.read(i)
 		b.Pos.append(idx+uint32(datalen), line)
-	}
-	if b.Source == "" {
-		b.Source = buf.Source
 	}
 }
 
@@ -98,9 +93,6 @@ func (b *packet) writePos(p parser.Position) {
 		panicf("null line")
 	}
 	b.Pos.append(uint32(len(b.Code)), p.Line)
-	if p.Source != "" {
-		b.Source = p.Source
-	}
 }
 
 func (b *packet) truncateLast() {
@@ -123,7 +115,7 @@ func pkRead32(data []uint32, cursor *uint32) uint32 {
 	return data[*cursor-1]
 }
 
-var singleOp = map[opCode]parser.Symbol{
+var singleOp = map[opCode]string{
 	OpConcat: parser.AConcat,
 	OpAdd:    parser.AAdd,
 	OpSub:    parser.ASub,
@@ -141,7 +133,7 @@ var singleOp = map[opCode]parser.Symbol{
 	OpPow:    parser.APow,
 }
 
-func pkPrettify(c *Func, tab int) string {
+func pkPrettify(c *Func, p *Program, tab int) string {
 	sb := &bytes.Buffer{}
 	spaces := strings.Repeat("        ", tab)
 	spaces2 := ""
@@ -149,7 +141,7 @@ func pkPrettify(c *Func, tab int) string {
 		spaces2 = strings.Repeat("        ", tab-1) + "+-------"
 	}
 
-	sb.WriteString(spaces2 + "+ START " + c.String() + " " + c.Source + "\n")
+	sb.WriteString(spaces2 + "+ START " + c.String() + "\n")
 
 	var cursor uint32
 	readAddr := func(a uint16) string {
@@ -159,31 +151,31 @@ func pkPrettify(c *Func, tab int) string {
 		if a == regNil {
 			return "nil"
 		}
-		if a>>10 == 7 {
-			return fmt.Sprintf("k$%d(%v)", a&0x03ff, c.ConstTable[a&0x3ff].toString(0))
+		if a>>11 == 3 {
+			return fmt.Sprintf("k$%d(%v)", a&0x07ff, c.constTable[a&0x7ff].toString(0))
 		}
-		if a>>10 == 1 {
-			return fmt.Sprintf("g$%d", a&0x03ff)
+		if a>>11 == 1 {
+			return fmt.Sprintf("g$%d", a&0x07ff)
 		}
-		return fmt.Sprintf("$%d", a&0x03ff)
+		return fmt.Sprintf("$%d", a&0x07ff)
 	}
 
-	oldpos := c.Pos
+	oldpos := c.code.Pos
 	lastLine := uint32(0)
 MAIN:
 	for {
-		bop, a, b := op(pkRead32(c.Code, &cursor))
+		bop, a, b := op(pkRead32(c.code.Code, &cursor))
 		sb.WriteString(spaces)
 
-		if len(c.Pos) > 0 {
-			next, op, line := c.Pos.read(0)
+		if len(c.code.Pos) > 0 {
+			next, op, line := c.code.Pos.read(0)
 			// log.Println(cursor, op, unsafe.Pointer(&Pos))
 			for cursor > op {
-				c.Pos = c.Pos[next:]
-				if len(c.Pos) == 0 {
+				c.code.Pos = c.code.Pos[next:]
+				if len(c.code.Pos) == 0 {
 					break
 				}
-				if next, op, line = c.Pos.read(0); cursor <= op {
+				if next, op, line = c.code.Pos.read(0); cursor <= op {
 					break
 				}
 			}
@@ -195,7 +187,7 @@ MAIN:
 					lastLine = line
 				}
 				sb.WriteString(fmt.Sprintf("|%-4s % 4d| ", x, cursor-1))
-				c.Pos = c.Pos[next:]
+				c.code.Pos = c.code.Pos[next:]
 			} else {
 				sb.WriteString(fmt.Sprintf("|     % 4d| ", cursor-1))
 			}
@@ -236,8 +228,8 @@ MAIN:
 			sb.WriteString("yield " + readAddr(a))
 		case OpLoadFunc:
 			sb.WriteString("$a = closure:\n")
-			cls := c.Funcs[a]
-			sb.WriteString(pkPrettify(cls, tab+1))
+			cls := p.Funcs[a]
+			sb.WriteString(pkPrettify(cls, p, tab+1))
 		case OpCall:
 			if b == 1 {
 				sb.WriteString("tail-call " + readAddr(a))
@@ -261,7 +253,7 @@ MAIN:
 			sb.WriteString("inc " + readAddr(a) + " " + readAddr(uint16(b)))
 		default:
 			if bs, ok := singleOp[bop]; ok {
-				sb.WriteString(bs.Text + " " + readAddr(a) + " " + readAddr(b))
+				sb.WriteString(bs + " " + readAddr(a) + " " + readAddr(b))
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))
 			}
@@ -270,8 +262,8 @@ MAIN:
 		sb.WriteString("\n")
 	}
 
-	c.Pos = oldpos
+	c.code.Pos = oldpos
 
-	sb.WriteString(spaces2 + "+ END " + c.String() + " " + c.Source)
+	sb.WriteString(spaces2 + "+ END " + c.String())
 	return sb.String()
 }

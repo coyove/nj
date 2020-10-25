@@ -4,7 +4,7 @@ import "fmt"
 
 const (
 	regA   uint16 = 0x1fff // full 13 bits
-	regNil uint16 = 0x3ff - 1
+	regNil uint16 = 0x7ff - 1
 )
 
 type opCode byte
@@ -61,10 +61,19 @@ var typeMappings = map[valueType]string{
 	VNumber:    "number",
 	VString:    "string",
 	VFunction:  "function",
-	VInterface: "any",
+	VInterface: "interface",
 	VStack:     "stack",
 }
 
 func panicf(msg string, args ...interface{}) {
 	panic(fmt.Errorf(msg, args...))
+}
+
+func catchErr(err *error) {
+	if r := recover(); r != nil {
+		*err, _ = r.(error)
+		if *err == nil {
+			*err = fmt.Errorf("%v", r)
+		}
+	}
 }

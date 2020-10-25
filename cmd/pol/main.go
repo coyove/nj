@@ -71,13 +71,13 @@ func main() {
 		}
 	}
 
-	var _opcode, _timing, _ret, _compileonly, _roughsize bool
+	var _opcode, _timing, _ret, _compileonly bool
 
 ARG:
 	for _, a := range strings.Split(*output, ",") {
 		switch a {
 		case "n", "no", "none":
-			_opcode, _ret, _timing, _compileonly, _roughsize = false, false, false, false, false
+			_opcode, _ret, _timing, _compileonly = false, false, false, false
 			break ARG
 		case "o", "opcode", "op":
 			_opcode = true
@@ -87,15 +87,13 @@ ARG:
 			_timing = true
 		case "co", "compile", "compileonly":
 			_compileonly = true
-		case "cs", "compiledsize", "rs", "roughsize":
-			_roughsize = true
 		}
 	}
 
 	runtime.GOMAXPROCS(runtime.NumCPU() * *goroutinePerCPU)
 	start := time.Now()
 
-	var b *script.Func
+	var b *script.Program
 	var err error
 
 	defer func() {
@@ -104,15 +102,7 @@ ARG:
 		}
 
 		if _opcode {
-			log.Println(b.PrettyString())
-		}
-		if _roughsize {
-			ln := len(b.Code)
-			ln += len(b.ConstTable) * 8
-			ln += len(b.Pos)
-
-			// 1.1: a factor
-			log.Printf("Compiled size: ~%.1fK with %d opcode\n", float64(ln)/1024*1.1, len(b.Code))
+			log.Println(b.PrettyCode())
 		}
 		if _timing {
 			e := float64(time.Now().Sub(start).Nanoseconds()) / 1e6
@@ -139,7 +129,7 @@ ARG:
 
 	var ok = make(chan bool, 1)
 	if *timeout > 0 {
-		script.WithTimeout(b, time.Second*time.Duration(*timeout))
+		b.SetTimeout(time.Second * time.Duration(*timeout))
 		// go func() {
 		// 	select {
 		// 	case <-time.After(time.Duration(*timeout) * time.Millisecond):
@@ -151,9 +141,9 @@ ARG:
 		// }()
 	}
 
-	i, i2 := b.Call()
+	i, i2, err := b.Call()
 	ok <- true
 	if _ret {
-		fmt.Println(i, i2)
+		fmt.Println(i, i2, err)
 	}
 }

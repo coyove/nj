@@ -11,20 +11,13 @@ import (
 // A and V stores the results of the execution (e.g: return a, b, c => env.A = a, env.V = []Value{b, c})
 type Env struct {
 	// Global
-	global *Global
+	global *Program
 	stack  *[]Value
 
 	// Local
 	stackOffset uint32
 	V           []Value
 	A           Value
-}
-
-type Global struct {
-	Deadline     int64
-	MaxStackSize int64
-	Extras       map[string]interface{}
-	Stack        *[]Value
 }
 
 func (env *Env) grow(newSize int) {
@@ -40,12 +33,12 @@ func (env *Env) grow(newSize int) {
 
 // Get gets a value from the current stack
 func (env *Env) Get(index int) Value {
-	return env._get(uint16(index)&0x3ff, nil)
+	return env._get(uint16(index)&0x7ff, nil)
 }
 
 // Set sets a value in the current stack
 func (env *Env) Set(index int, value Value) {
-	env._set(uint16(index)&0x3ff, value)
+	env._set(uint16(index)&0x7ff, value)
 }
 
 // Clear clears the current stack
@@ -67,11 +60,11 @@ func (env *Env) _get(yx uint16, cls *Func) (zzz Value) {
 	if yx == regA {
 		return env.A
 	}
-	y := yx >> 10
-	index := int(yx & 0x3ff)
+	y := yx >> 11
+	index := int(yx & 0x7ff)
 
-	if y == 7 {
-		return cls.ConstTable[index]
+	if y == 3 {
+		return cls.constTable[index]
 	}
 
 	if y == 1 {
@@ -93,8 +86,8 @@ func (env *Env) _set(yx uint16, v Value) {
 	if yx == regA {
 		env.A = v
 	} else {
-		index := int(yx & 0x3ff)
-		y := yx >> 10
+		index := int(yx & 0x7ff)
+		y := yx >> 11
 		s := (*env.stack)
 		if y == 1 {
 			if env.global == nil {

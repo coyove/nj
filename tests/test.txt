@@ -4,57 +4,40 @@ m.b = m
 print(m)
 end
 
-do
-    function yrec(x, e)
+function yrec(x, e)
     while true do
-    	    if x == e then return x end
-	    yield x
-	    x += 1
-	    end
+	if x == e then return x end
+	yield x
+	x += 1
     end
-    local ...arr = (function(...) return ... end)(1,2,3,4,5)
-    yrec(0, 5)
-    for i in yrec do
-    	assert(i == arr[i])
+end
+
+function array(...) return ... end
+
+do
+    local ...arr = array(1,2,3,4,5)
+    local _, c, ...state = yrec(0, 5)
+
+    while true do
+    	  i, c, ...state = resume(yrec, c, state)
+    	  assert(i == arr[i])
+	  if not c then break end
     end
+end
 
-    local function yrec()
-    yield 1
-    yrec()
-    end
+print("s2")
 
-    local _, err = pcall(function() yrec() yrec() end)
-    assert(match(err, "reenter"))
-
-    local yrec2
-    local function yrec(n)
-	for i=1,n do
-	    yrec2()
-	    yield i
-	end
-    end
-
-    function yrec2()
-	print("yrec2")
-	yrec(10)
-	yield 2
-    end
-
-    local _, err = pcall(function() yrec2() end)
-    assert(match(err, "reenter"))
+local function vararg2(...) return ..., true  end
+local function vararg(...) return vararg2(...) end
+local function test(a0,b0,c0,d0,a, b, c, d)
+      assert(a0==a and b0==b and c0==c and d0==d)
 end
 
 do
-    local function vararg2(...) return ..., true  end
-    local function vararg(...) return vararg2(...) end
     local a, ... = vararg(1, 2, 3)
     assert(a == 1 and ...[1] == 2 and ...[2] == 3 and ...[3])
     local ... = vararg()
     assert(#... == 1)
-
-    local function test(a0,b0,c0,d0,a, b, c, d)
-        assert(a0==a and b0==b and c0==c and d0==d)
-    end
     test(1,2,3,true,vararg(1, 2, 3))
     test(1,2,true,3,vararg(1,2),3)
     test(1,1,2,true,vararg(1,2),vararg(1,2))
@@ -64,8 +47,8 @@ do
     vararg(1, 1)
     vararg(1, ...)
 
+    local function foo() return 1, 2, 3 end
     local function bar()
-        local function foo() return 1, 2, 3 end
         local a, b = foo()
         return true
     end
@@ -73,7 +56,6 @@ do
     assert(a and b == nil)
 end
 
-function array(...) return ... end
 
 assert(true and true or false)
 assert(false and false or true)
@@ -106,24 +88,24 @@ do
 	end
 end
 
-require "goto.txt"
-assert(_GOTO == "goto")
+-- require "goto.txt"
+-- assert(_GOTO == "goto")
 
-local a, b, c = (function() return 1, 2, 3 end)()
-assert(a == 1 and b == 2 and c == 3)
+function return123() return 1, 2, 3 end
 
-a,b,c = (function (a, b ,c)
+do
+    local a, b, c = return123()
+    assert(a == 1 and b == 2 and c == 3)
+end
+
+do
     local function f(a, b) assert(true); return b, a end
-    b, c = f(b, c)
-    return c, b, a
-end)(1,2,3)
-assert(a == 2 and b == 3 and c == 1)
-
-for v1, v2 in (function() 
-    yield 1, 1
-    yield 2, 2
-end) do
-    assert(v1 != nil and v1 == v2)
+    local function g(a, b ,c)
+	b, c = f(b, c)
+	return c, b, a
+    end
+    a,b,c = g(1,2,3)
+    assert(a == 2 and b == 3 and c == 1)
 end
 
 function syntax_return_void() return end
@@ -138,7 +120,7 @@ assert(ex3 == 2 and ex[1] == nil and ex[2] == 1)
 
 do
     local ...ms = array(0)
-    ms[1], ms2 = (function () return 1, 2 end)()
+    ms[1], ms2 = return123()
     assert(ms[1] == 1 and ms2 == 2)
 end
 assert(ms == nil and ms2 == 2)
@@ -147,17 +129,17 @@ assert(0x7ffffffffffffffd < 0x7fffffffffffffff)
 assert(0x7ffffffffffffffd + 2 == 0x7fffffffffffffff)
 assert(0x7ffffffffffffffe + 1 == 0x7fffffffffffffff)
 
-do
-global_x = 1
-require "string.txt"
-assert(_STRING == "r:abc1")
-
-global_x = 2
-require "string.txt"
-assert(_STRING == "r:abc2")
-
-assert(strname == "abc")
-end
+-- do
+-- global_x = 1
+-- require "string.txt"
+-- assert(_STRING == "r:abc1")
+-- 
+-- global_x = 2
+-- require "string.txt"
+-- assert(_STRING == "r:abc2")
+-- 
+-- assert(strname == "abc")
+-- end
  
 do
     scope = 1
@@ -230,7 +212,8 @@ assert(a == 1)
 
 function add(a,b) return a + b end
 
-fib2 = function(a, b)
+function fib2(a, b)
+    yield "start"
    while true do
        c = add(a, b)
        a = b
@@ -239,30 +222,31 @@ fib2 = function(a, b)
    end
 end
 
-fib3 = copyfunction(fib2)
-
-...fib_seq = array( 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418, 317811, 514229, 832040, 1346269, 2178309, 3524578, 5702887, 9227465)
-for i = 0,32 do local s = fib2(0,1); assert(fib_seq[i +1] == s) end
- 
-assert( (fib2())==9227465)
-assert( (fib3(0, 1)+fib3()+fib3()+fib3()) == 11)
-
-function yieldtest()
-    yield 1
-    yield 2
-    yield 3
-end
-
-assert(yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 and yieldtest()==nil)
-assert(yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 and yieldtest()==nil)
- 
 do
-	local ...tmp = array(3,2,1)
-	 function counter() for i= 3,1,-1 do yield i end end
-	 function yieldtest() while true do yield tmp[counter()] end end
-	 assert( yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 )
-	 print("yield test", tmp)
+    ...fib_seq = array(1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418, 317811, 514229, 832040, 1346269, 2178309, 3524578, 5702887, 9227465)
+
+    local s, ...state = fib2(0, 1)
+    for i = 0,32 do
+	s, ...state = resume(fib2, state)
+	print(s)
+	assert(fib_seq[i +1] == s)
+    end
 end
+
+-- do
+--     function yieldtest()
+-- 	yield 1
+-- 	yield 2
+-- 	yield 3
+--     end
+--     assert(yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 and yieldtest()==nil)
+--     assert(yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 and yieldtest()==nil)
+--     local ...tmp = array(3,2,1)
+--     function counter() for i= 3,1,-1 do yield i end end
+--     function yieldtest() while true do yield tmp[counter()] end end
+--     assert( yieldtest() ==1 and yieldtest()==2 and yieldtest()==3 )
+--     print("yield test", tmp)
+-- end
 
 function deepadd(a)
     if (a <= 0) then return 0 end

@@ -4,144 +4,135 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
-	"unsafe"
 )
 
-type Symbol struct {
-	Position
-	Text string
-}
-
-func (s Symbol) Equals(s2 Symbol) bool { return s.Text == s2.Text }
-
-func (s Symbol) SetPos(pos Position) Symbol { s.Position = pos; return s }
-
-func (s Symbol) String() string { return s.Text + "@" + s.Position.String() }
+const (
+	Float = iota + 1
+	Int
+	String
+	Symbol
+	Complex
+	Address
+)
 
 var (
-	NUM    = interfaceType(1.0)
-	numINT = interfaceType(int64(1))
-	STR    = interfaceType("")
-	SYM    = interfaceType(Symbol{})
-	CPL    = interfaceType([]Node{})
-	ADR    = interfaceType(uint16(1))
-
-	breakNode     = Cpl(Node{ABreak})
-	popvNode      = Cpl(Node{APopV})
-	popvClearNode = Cpl(Node{APopVClear})
-	zeroNode      = Num(0)
-	oneNode       = Num(1)
-	emptyNode     = Cpl()
+	breakNode     = NewComplex(NewSymbol(ABreak))
+	popvNode      = NewComplex(NewSymbol(APopV))
+	popvClearNode = NewComplex(NewSymbol(APopVClear))
+	zeroNode      = NewNumberFromInt(0)
+	oneNode       = NewNumberFromInt(1)
+	emptyNode     = NewComplex()
 )
 
-func interfaceType(a interface{}) uintptr {
-	return (*(*[2]uintptr)(unsafe.Pointer(&a)))[0]
+const (
+	ANop       = "nop"
+	ADoBlock   = "do"
+	AConcat    = "concat"
+	ANil       = "nil"
+	ASet       = "set"
+	AInc       = "incr"
+	AMove      = "move"
+	AIf        = "if"
+	AFor       = "loop"
+	AFunc      = "function"
+	ABreak     = "break"
+	ABegin     = "prog"
+	ALoad      = "load"
+	AStore     = "store"
+	ACall      = "call"
+	ATailCall  = "tailcall"
+	AReturn    = "return"
+	AYield     = "yield"
+	AAdd       = "add"
+	ASub       = "sub"
+	AMul       = "mul"
+	ADiv       = "div"
+	AMod       = "mod"
+	APow       = "pow"
+	AEq        = "eq"
+	ANeq       = "neq"
+	AAnd       = "and"
+	AOr        = "or"
+	ANot       = "not"
+	ALess      = "lt"
+	ALessEq    = "le"
+	ALen       = "len"
+	ARetAddr   = "retaddr"
+	APopV      = "popv"
+	APopVClear = "clearv"
+	APopVAll   = "popallv"
+	APopVAllA  = "popallva"
+	ALabel     = "label"
+	AGoto      = "goto"
+)
+
+func __chain(args ...Node) Node {
+	return NewComplex(append([]Node{NewSymbol(ABegin)}, args...)...)
 }
 
-var (
-	ANop       = Symbol{Text: "nop"}
-	ADoBlock   = Symbol{Text: "do"}
-	AConcat    = Symbol{Text: "concat"}
-	ANil       = Symbol{Text: "nil"}
-	ASet       = Symbol{Text: "set"}
-	AInc       = Symbol{Text: "incr"}
-	AMove      = Symbol{Text: "move"}
-	AIf        = Symbol{Text: "if"}
-	AFor       = Symbol{Text: "loop"}
-	AFunc      = Symbol{Text: "function"}
-	ABreak     = Symbol{Text: "break"}
-	ABegin     = Symbol{Text: "prog"}
-	ALoad      = Symbol{Text: "load"}
-	AStore     = Symbol{Text: "store"}
-	ACall      = Symbol{Text: "call"}
-	ATailCall  = Symbol{Text: "tailcall"}
-	AReturn    = Symbol{Text: "return"}
-	AYield     = Symbol{Text: "yield"}
-	AAdd       = Symbol{Text: "add"}
-	ASub       = Symbol{Text: "sub"}
-	AMul       = Symbol{Text: "mul"}
-	ADiv       = Symbol{Text: "div"}
-	AMod       = Symbol{Text: "mod"}
-	APow       = Symbol{Text: "pow"}
-	AEq        = Symbol{Text: "eq"}
-	ANeq       = Symbol{Text: "neq"}
-	AAnd       = Symbol{Text: "and"}
-	AOr        = Symbol{Text: "or"}
-	ANot       = Symbol{Text: "not"}
-	ALess      = Symbol{Text: "lt"}
-	ALessEq    = Symbol{Text: "le"}
-	ALen       = Symbol{Text: "len"}
-	ARetAddr   = Symbol{Text: "retaddr"}
-	APopV      = Symbol{Text: "popv"}
-	APopVClear = Symbol{Text: "clearv"}
-	APopVAll   = Symbol{Text: "popallv"}
-	APopVAllA  = Symbol{Text: "popallva"}
-	ALabel     = Symbol{Text: "label"}
-	AGoto      = Symbol{Text: "goto"}
-)
+func __do(args ...Node) Node {
+	return NewComplex(append([]Node{NewSymbol(ADoBlock)}, args...)...)
+}
 
-func __chain(args ...Node) Node { return Cpl(append([]Node{Node{ABegin}}, args...)...) }
-
-func __do(args ...Node) Node { return Cpl(append([]Node{Node{ADoBlock}}, args...)...) }
-
-func __removeddd(dest Node) Node {
-	sym := dest.Value.(Symbol)
-	if sym.Text != "..." {
-		sym.Text = strings.TrimLeft(sym.Text, ".")
-		dest.Value = sym
+func RemoveDDD(dest Node) Node {
+	sym := dest.strSym
+	if sym != "..." {
+		sym = strings.TrimLeft(sym, ".")
+		dest.strSym = sym
 	}
 	return dest
 }
 
-func __move(dest, src Node) Node { return Cpl(Node{AMove}, __removeddd(dest), src) }
+func __move(dest, src Node) Node { return NewComplex(NewSymbol(AMove), RemoveDDD(dest), src) }
 
-func __set(dest, src Node) Node { return Cpl(Node{ASet}, __removeddd(dest), src) }
+func __set(dest, src Node) Node { return NewComplex(NewSymbol(ASet), RemoveDDD(dest), src) }
 
-func __less(lhs, rhs Node) Node { return Cpl(Node{ALess}, lhs, rhs) }
+func __less(lhs, rhs Node) Node { return NewComplex(NewSymbol(ALess), lhs, rhs) }
 
-func __lessEq(lhs, rhs Node) Node { return Cpl(Node{ALessEq}, lhs, rhs) }
+func __lessEq(lhs, rhs Node) Node { return NewComplex(NewSymbol(ALessEq), lhs, rhs) }
 
-func __inc(subject, step Node) Node { return Cpl(Node{AInc}, subject, step) }
+func __inc(subject, step Node) Node { return NewComplex(NewSymbol(AInc), subject, step) }
 
-func __load(subject, key Node) Node { return Cpl(Node{ALoad}, subject, key) }
+func __load(subject, key Node) Node { return NewComplex(NewSymbol(ALoad), subject, key) }
 
-func __store(subject, key, value Node) Node { return Cpl(Node{AStore}, subject, value, key) }
+func __store(subject, key, value Node) Node { return NewComplex(NewSymbol(AStore), subject, value, key) }
 
-func __if(cond, truebody, falsebody Node) Node { return Cpl(Node{AIf}, cond, truebody, falsebody) }
+func __if(cond, truebody, falsebody Node) Node {
+	return NewComplex(NewSymbol(AIf), cond, truebody, falsebody)
+}
 
-func __loop(body Node) Node { return Cpl(Node{AFor}, body) }
+func __loop(body Node) Node { return NewComplex(NewSymbol(AFor), body) }
 
-func __func(name, paramlist, body Node) Node { return Cpl(Node{AFunc}, name, paramlist, body) }
+func __func(name, paramlist, body Node) Node {
+	return NewComplex(NewSymbol(AFunc), name, paramlist, body)
+}
 
-func __call(cls, args Node) Node { return Cpl(Node{ACall}, cls, args) }
+func __call(cls, args Node) Node { return NewComplex(NewSymbol(ACall), cls, args) }
 
 func __popvAll(i int, k Node) Node {
 	if i == 0 {
-		return __chain(k, Cpl(Node{APopVAllA}))
+		return __chain(k, NewComplex(NewSymbol(APopVAllA)))
 	}
-	return Cpl(Node{APopVAll})
+	return NewComplex(NewSymbol(APopVAll))
 }
 
 func __findTailCall(stats []Node) {
 	for len(stats) > 0 {
 		x := stats[len(stats)-1]
-		c := x.Cpl()
-		if len(c) == 3 && c[0].Sym().Equals(ACall) {
-			tc := c[0].Sym()
-			tc.Text = ATailCall.Text
-			x.Value.([]Node)[0] = Node{tc}
-			stats[len(stats)-1] = x
+		c := x.Nodes
+		if len(c) == 3 && c[0].SymbolValue() == (ACall) {
+			c[0].strSym = ATailCall
 			return
 		}
 
 		if len(c) > 0 {
-			if c[0].Sym().Equals(ABegin) {
+			if c[0].SymbolValue() == (ABegin) {
 				__findTailCall(c)
 				return
 			}
 
-			switch c[0].Sym().Text {
-			case APopV.Text, APopVClear.Text, APopVAll.Text, APopVAllA.Text:
+			switch c[0].SymbolValue() {
+			case APopV, APopVClear, APopVAll, APopVAllA:
 				stats = stats[:len(stats)-1]
 				continue
 			}
@@ -151,37 +142,5 @@ func __findTailCall(stats []Node) {
 }
 
 func randomVarname() Node {
-	return Sym("v" + strconv.FormatInt(rand.Int63(), 10))
-}
-
-func forLoop(pos Position, rcv []Node, exprIters []Node, body Node) Node {
-	iter := randomVarname()
-	subject := randomVarname()
-	r := __do(__set(iter, exprIters[0]).SetPos(pos))
-	if len(exprIters) > 1 {
-		r = r.CplAppend(__set(subject, exprIters[1]).SetPos(pos))
-	} else {
-		r = r.CplAppend(__set(subject, popvNode).SetPos(pos))
-	}
-	if len(exprIters) > 2 {
-		r = r.CplAppend(__set(rcv[0], exprIters[2]).SetPos(pos))
-	} else {
-		r = r.CplAppend(__set(rcv[0], __chain(popvNode, popvClearNode)).SetPos(pos))
-	}
-	rr := __chain()
-	for i := 1; i < len(rcv); i++ {
-		if i == len(rcv)-1 {
-			rr = rr.CplAppend(__set(rcv[i], __chain(popvNode, popvClearNode)).SetPos(pos))
-		} else {
-			rr = rr.CplAppend(__set(rcv[i], popvNode).SetPos(pos))
-		}
-	}
-	r = r.CplAppend(__loop(
-		__chain(
-			__move(rcv[0], __call(iter, Cpl(subject, rcv[0])).SetPos(pos)).SetPos(pos),
-			rr,
-			__if(rcv[0], body, breakNode).SetPos(pos),
-		),
-	).SetPos(pos))
-	return r
+	return NewSymbol("v" + strconv.FormatInt(rand.Int63(), 10))
 }

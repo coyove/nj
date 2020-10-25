@@ -71,6 +71,7 @@ func isDigit(ch uint32) bool {
 type Scanner struct {
 	Pos    Position
 	reader *bufio.Reader
+	buffer bytes.Buffer
 }
 
 func NewScanner(reader io.Reader, source string) *Scanner {
@@ -327,14 +328,12 @@ var reservedWords = map[string]uint32{
 	"not":      TNot,
 	"len":      TLen,
 	"return":   TReturn,
-	"require":  TImport,
 	"for":      TFor,
 	"while":    TWhile,
 	"repeat":   TRepeat,
 	"until":    TUntil,
 	"do":       TDo,
 	"yield":    TYield,
-	"in":       TIn,
 	"goto":     TGoto,
 }
 
@@ -348,7 +347,8 @@ redo:
 		ch = sc.skipWhiteSpace(whitespace2)
 	}
 
-	buf := &bytes.Buffer{}
+	buf := &sc.buffer
+	buf.Reset()
 	tok.Pos = sc.Pos
 
 	switch {
@@ -526,7 +526,6 @@ finally:
 type Lexer struct {
 	scanner *Scanner
 	loop    string
-	cache   map[string]Node
 	Stmts   Node
 	Token   Token
 }
@@ -556,13 +555,12 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 	panic(lx.scanner.TokenError(tok, message))
 }
 
-func parse(reader io.Reader, name string, cache map[string]Node, loop string) (chunk Node, lexer *Lexer, err error) {
+func parse(reader io.Reader, name string, loop string) (chunk Node, lexer *Lexer, err error) {
 	lexer = &Lexer{
 		scanner: NewScanner(reader, name),
 		loop:    loop,
 		Stmts:   Node{},
 		Token:   Token{Str: ""},
-		cache:   cache,
 	}
 	defer func() {
 		if os.Getenv("PL_STACK") != "" {
@@ -578,8 +576,8 @@ func parse(reader io.Reader, name string, cache map[string]Node, loop string) (c
 }
 
 func Parse(reader io.Reader, name string) (chunk Node, err error) {
-	chunk, _, err = parse(reader, name, make(map[string]Node), name)
-	if chunk.Value == nil && err == nil {
+	chunk, _, err = parse(reader, name, name)
+	if !chunk.Valid() && err == nil {
 		err = fmt.Errorf("invalid chunk")
 	}
 	return

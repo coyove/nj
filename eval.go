@@ -26,27 +26,27 @@ func (e *ExecError) Error() string {
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
 		src := "<unknown>"
-		for i := 0; i < len(r.cls.Pos); {
+		for i := 0; i < len(r.cls.code.Pos); {
 			var op, line uint32
 			var opx uint32 = math.MaxUint32
-			i, op, line = r.cls.Pos.read(i)
-			if i < len(r.cls.Pos)-1 {
-				_, opx, _ = r.cls.Pos.read(i)
+			i, op, line = r.cls.code.Pos.read(i)
+			if i < len(r.cls.code.Pos)-1 {
+				_, opx, _ = r.cls.code.Pos.read(i)
 			}
 			if r.cursor >= op && r.cursor < opx {
-				src = fmt.Sprintf("%s:%d", r.cls.Source, line)
+				src = fmt.Sprintf("line %d", line)
 				break
 			}
 		}
 		// the recorded cursor was advanced by 1 already
-		msg.WriteString(fmt.Sprintf("at %d in %s\n", r.cursor-1, src))
+		msg.WriteString(fmt.Sprintf("%s at %s (%d)\n", r.cls.name, src, r.cursor-1))
 	}
 	msg.WriteString("root panic:\n")
 	msg.WriteString(fmt.Sprintf("%v\n", e.r))
 	return msg.String()
 }
 
-func returnVararg(env *Global, a Value, b []Value) (Value, []Value) {
+func returnVararg(p *Program, a Value, b []Value) (Value, []Value) {
 	flag := a.Type() == VStack
 	if len(b) == 0 {
 		if flag {
@@ -80,8 +80,8 @@ func returnVararg(env *Global, a Value, b []Value) (Value, []Value) {
 		} else {
 			b2 = append(b2, b)
 		}
-		if env.MaxStackSize > 0 && int64(len(b2)) > env.MaxStackSize {
-			panicf("vararg: stack overflow, max: %d", env.MaxStackSize)
+		if p.MaxStackSize > 0 && int64(len(b2)) > p.MaxStackSize {
+			panicf("vararg: stack overflow, max: %d", p.MaxStackSize)
 		}
 	}
 	if len(b2) == 0 {
@@ -91,7 +91,7 @@ func returnVararg(env *Global, a Value, b []Value) (Value, []Value) {
 }
 
 // execCursorLoop executes 'K' under 'Env' from the given start 'cursor'
-func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Value, nextCursor uint32, yielded bool) {
+func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Value) {
 	var stackEnv = env
 	var retStack []stacktrace
 
@@ -139,7 +139,7 @@ MAIN:
 			}
 		}
 
-		v := K.Code[cursor]
+		v := K.code.Code[cursor]
 		cursor++
 		bop, opa, opb := op(v)
 
@@ -329,7 +329,7 @@ MAIN:
 			case VStack:
 				env.A = Int(int64(len(v._unpackedStack().a)))
 			case VFunction:
-				env.A = Float(float64(v.Function().NumParam))
+				env.A = Float(float64(v.Function().numParams))
 			default:
 				env.A = Int(int64(reflectLen(v.Interface())))
 			}
@@ -373,70 +373,62 @@ MAIN:
 			v := env._get(opa, K)
 			if len(retStack) == 0 {
 				v, env.V = returnVararg(env.global, v, env.V)
-				return v, env.V, 0, false
+				return v, env.V
 			}
 			returnUpperWorld(v)
 		case OpYield:
 			v := env._get(opa, K)
+			env.V = append(env.V, Int(int64(cursor)))
+			env.V = append(env.V, env.Stack()...)
 			v, env.V = returnVararg(env.global, v, env.V)
-			return v, env.V, cursor, true
+			if len(retStack) == 0 {
+				v, env.V = returnVararg(env.global, v, env.V)
+				return v, env.V
+			}
+			returnUpperWorld(v)
 		case OpLoadFunc:
-			f := K.Funcs[opa]
-			f.loadGlobal = env.global
+			f := env.global.Funcs[opa]
+			// f.loadGlobal = env.global
 			env.A = Function(f)
 		case OpCall:
 			cls := env._get(opa, K).ExpectMsg(VFunction, "call").Function()
-			if cls.yEnv.stack != nil { // resume yielded coroutine
-				env.A, env.V = cls.exec(Env{})
+			stackEnv.global = env.global
+
+			if cls.native != nil {
+				cls.native(&stackEnv)
+				env.A, env.V = stackEnv.A, stackEnv.V
 				stackEnv.Clear()
 			} else {
-				if cls.Is(FuncVararg) && cls.native == nil {
+				if cls.isVariadic {
 					var varg []Value
-					if stackEnv.Size() > int(cls.NumParam) {
-						varg = append([]Value{}, stackEnv.Stack()[cls.NumParam:]...)
+					if stackEnv.Size() > int(cls.numParams) {
+						varg = append([]Value{}, stackEnv.Stack()[cls.numParams:]...)
 					}
-					if stackEnv.Size() <= int(cls.NumParam) {
-						stackEnv.grow(int(cls.NumParam) + 1)
-					}
-					stackEnv._set(uint16(cls.NumParam), _unpackedStack(&unpacked{a: varg}))
-				}
-
-				stackEnv.global = env.global
-
-				if cls.Is(FuncYield) {
-					x := stackEnv
-					tmp := make([]Value, cls.stackSize)
-					copy(tmp, stackEnv.Stack())
-					stackEnv.Clear()
-					x.stack = &tmp
-					x.stackOffset = 0
-					env.A, env.V = cls.exec(x)
-				} else if cls.native != nil {
-					env.A, env.V = cls.exec(stackEnv)
-					stackEnv.Clear()
+					stackEnv.grow(int(cls.stackSize))
+					stackEnv._set(uint16(cls.numParams), _unpackedStack(&unpacked{a: varg}))
 				} else {
-					last := stacktrace{
-						cls:         K,
-						cursor:      cursor,
-						stackOffset: uint32(env.stackOffset),
-					}
-
-					// Switch to the Env of cls
-					cursor = 0
-					K = cls
-					env.stackOffset = stackEnv.stackOffset
-					env.global = stackEnv.global
-
-					if opb == 0 {
-						retStack = append(retStack, last)
-					}
-
 					if cls.stackSize > 0 {
-						env.grow(int(cls.stackSize))
+						stackEnv.grow(int(cls.stackSize))
 					}
-
-					stackEnv.stackOffset = uint32(len(*env.stack))
 				}
+
+				last := stacktrace{
+					cls:         K,
+					cursor:      cursor,
+					stackOffset: uint32(env.stackOffset),
+				}
+
+				// Switch 'env' to 'stackEnv' and clear 'stackEnv'
+				cursor = 0
+				K = cls
+				env.stackOffset = stackEnv.stackOffset
+				env.global = stackEnv.global
+
+				if opb == 0 {
+					retStack = append(retStack, last)
+				}
+
+				stackEnv.stackOffset = uint32(len(*env.stack))
 			}
 		case OpJmp:
 			cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
@@ -455,5 +447,5 @@ MAIN:
 		returnUpperWorld(Value{})
 		goto MAIN
 	}
-	return Value{}, nil, 0, false
+	return Value{}, nil
 }

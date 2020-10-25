@@ -1,11 +1,12 @@
 package script
 
 import (
+	"bytes"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
-	"os"
 	"strings"
 	"testing"
 
@@ -28,12 +29,23 @@ func runFile(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 
-	i, i2 := b.Call()
-	t.Log(i, i2)
+	i, i2, err := b.Call()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(i, i2, err)
 }
 
 func TestSMain(t *testing.T) {
 	runFile(t, "tests/test.txt")
+}
+
+func TestSString(t *testing.T) {
+	runFile(t, "tests/string.txt")
+}
+
+func TestSGoto(t *testing.T) {
+	runFile(t, "tests/goto.txt")
 }
 
 func TestSR2(t *testing.T) {
@@ -41,20 +53,43 @@ func TestSR2(t *testing.T) {
 }
 
 func TestReturnFunction(t *testing.T) {
-	cls, _ := LoadString(`
+	{
+		cls, _ := LoadString(`
 a = 1
-return function(n) 
+function foo(n) 
 a+=n
 return a
 end
+return foo
 `)
-	v, _ := cls.Call()
-	if v, _ := v.Function().Call(Int(10)); v.Int() != 11 {
-		t.Fatal(v)
-	}
+		v, _, _ := cls.Call()
+		if v, _, _ := v.Function().Call(nil, Int(10)); v.Int() != 11 {
+			t.Fatal(v)
+		}
 
-	if v, _ := v.Function().Call(Int(100)); v.Int() != 111 {
-		t.Fatal(v)
+		if v, _, _ := v.Function().Call(nil, Int(100)); v.Int() != 111 {
+			t.Fatal(v)
+		}
+	}
+	{
+		cls, _ := LoadString(`
+a = 1
+function foo(...x) 
+for i=1,#x do
+a+=x[i]
+end
+return a
+end
+return foo
+`)
+		v, _, _ := cls.Call()
+		if v, _, _ := v.Function().Call(nil, Int(1), Int(2), Int(3), Int(4)); v.Int() != 11 {
+			t.Fatal(v)
+		}
+
+		if v, _, _ := v.Function().Call(nil, Int(10), Int(20)); v.Int() != 41 {
+			t.Fatal(v)
+		}
 	}
 }
 
@@ -68,11 +103,11 @@ foo()
 end
 foo()
 `)
-	if s := cls.PrettyString(); !strings.Contains(s, "tail-call") {
+	if s := cls.PrettyCode(); !strings.Contains(s, "tail-call") {
 		t.Fatal(s)
 	}
 
-	_, _, err := cls.PCall()
+	_, _, err := cls.Call()
 	if err == nil {
 		t.FailNow()
 	}
@@ -89,26 +124,27 @@ func TestArithmeticUnfold(t *testing.T) {
 		t.Error(err)
 	}
 
-	if len(cls.ConstTable) != 1 || cls.ConstTable[0].Float() != 2.5 {
+	if len(cls.constTable) != 1 || cls.constTable[0].Float() != 2.5 {
 		t.Error("unfolding failed")
 	}
 
-	if v, _ := cls.Call(); v.Float() != 2.5 {
+	if v, _, _ := cls.Call(); v.Float() != 2.5 {
 		t.Error("exec failed")
 	}
 }
 
 func TestPCallStackSize(t *testing.T) {
 	cls, _ := LoadString(`
-_, err = pcall(function() 
+function test() 
 local a, b, c = 1, 2, 3
 assert(a, b, c)
 return a
-end)
+end
+_, err = pcall(test)
 print(err)
 assert(match(err.Error(), "overflow" ))
 `)
-	WithMaxStackSize(cls, 7+int64(len(g)))
+	cls.MaxStackSize = 7 + int64(len(g))
 	cls.Call()
 
 	cls, _ = LoadString(`
@@ -118,10 +154,10 @@ a = a .. i
 end
 return a
 `)
-	WithMaxStackSize(cls, int64(len(g))+10) // 10: a small value
-	res, _, err := cls.PCall()
+	cls.MaxStackSize = int64(len(g)) + 10 // 10: a small value
+	res, _, err := cls.Call()
 	if !strings.Contains(err.Error(), "string overflow") {
-		t.Fatal(res)
+		t.Fatal(res, err)
 	}
 }
 
@@ -147,7 +183,7 @@ func TestRegisterOptimzation(t *testing.T) {
 	// But after the if block, there is another c = a + b, we can't re-use the registers R0 and R1
 	// because they will not contain the value we want as the if block was not executed at all.
 
-	if n, _ := cls.Call(); n.Int() != 3 {
+	if n, _, _ := cls.Call(); n.Int() != 3 {
 		t.Error("exec failed:", n, cls)
 	}
 }
@@ -161,46 +197,50 @@ a = 0
 		t.Error(err)
 	}
 
-	if v, _ := cls.Call(); !math.IsNaN(v.Float()) {
+	if v, _, _ := cls.Call(); !math.IsNaN(v.Float()) {
 		t.Error("wrong answer")
-	}
-}
-
-func TestImportLoop(t *testing.T) {
-	os.MkdirAll("tmp/src", 0777)
-	defer os.RemoveAll("tmp")
-
-	ioutil.WriteFile("tmp/1.txt", []byte(`
-		require "2.txt" 
-		require "src/3.txt"`), 0777)
-	ioutil.WriteFile("tmp/2.txt", []byte(`require "src/3.txt"`), 0777)
-	ioutil.WriteFile("tmp/src/3.txt", []byte(`require "1.txt"`), 0777)
-	ioutil.WriteFile("tmp/src/1.txt", []byte(`require  "../1.txt"`), 0777)
-
-	_, err := LoadFile("tmp/1.txt")
-	if !strings.Contains(err.Error(), "including each other") {
-		t.Error("something wrong")
-	}
-
-	ioutil.WriteFile("tmp/1.txt", []byte(`require "1.txt"`), 0777)
-	_, err = LoadFile("tmp/1.txt")
-	if !strings.Contains(err.Error(), "including each other") {
-		t.Error("something wrong")
 	}
 }
 
 func BenchmarkCompiling(b *testing.B) {
 	buf, _ := ioutil.ReadFile("tests/string.txt")
-	src := "(func() {" + string(buf) + "})()"
 	for i := 0; i < b.N; i++ {
-		y := make([]byte, len(src)*i)
-		for x := 0; x < i; x++ {
-			copy(y[x*len(src):], src)
-		}
+		y := bytes.Repeat(buf, 100)
 		_, err := LoadString(string(y))
 		if err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func TestTooManyVariables(t *testing.T) {
+	n := 2000 - len(g)
+
+	makeCode := func(n int) string {
+		buf := bytes.Buffer{}
+		for i := 0; i < n; i++ {
+			buf.WriteString(fmt.Sprintf("a%d = %d\n", i, i))
+		}
+		buf.WriteString("return ")
+		for i := 0; i < n; i++ {
+			buf.WriteString(fmt.Sprintf("a%d,", i))
+		}
+		buf.Truncate(buf.Len() - 1)
+		return buf.String()
+	}
+
+	f, _ := LoadString(makeCode(n))
+	_, v2, _ := f.Call()
+
+	for i := 1; i < n; i++ {
+		if v2[i-1].Int() != int64(i) {
+			t.Fatal(v2)
+		}
+	}
+
+	_, err := LoadString(makeCode(2000))
+	if !strings.Contains(err.Error(), "too many") {
+		t.Fatal(err)
 	}
 }
 

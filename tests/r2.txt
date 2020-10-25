@@ -12,7 +12,8 @@ assert( "sep2")
 assert( (a + 1) == (a + 1) / (a - 1))
 assert( "sep3")
 
-assert( (a + 1) == (a + 1) / (function(a) return a - 1 end)(a))
+function sub1(a) return a - 1 end
+assert( (a + 1) == (a + 1) / sub1(a))
 assert( "sep4")
 
 assert( a + (a + (a + (a + 1))) == 9)
@@ -21,7 +22,8 @@ assert( "sep5")
 assert( 1 + (1 + (1 + (1 + a))) == 6)
 assert( "sep6")
 
-...c = (function(...) return ... end )(1,2,3,4)
+function array(...) return ... end
+...c = array(1,2,3,4)
 assert( 1 + (1 + (1 + (1 + a))) + # c == 10)
 assert( "sep7")
 
