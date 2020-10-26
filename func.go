@@ -2,6 +2,7 @@ package script
 
 import (
 	"bytes"
+	"io"
 	"strconv"
 	"time"
 )
@@ -19,11 +20,13 @@ type Func struct {
 
 type Program struct {
 	Func
-	Deadline     int64
-	MaxStackSize int64
-	Extras       map[string]interface{}
-	Stack        *[]Value
-	Funcs        []*Func
+	Deadline              int64
+	MaxStackSize          int64
+	MaxCallStackSize      int64
+	Extras                map[string]interface{}
+	Stack                 *[]Value
+	Funcs                 []*Func
+	Stdout, Stdin, Stderr io.ReadWriteCloser
 }
 
 // Native creates a golang-native function
@@ -39,6 +42,9 @@ func (c *Func) Signature() (numParams int, isVariadic bool, stackSize int) {
 
 func (c *Func) String() string {
 	if c.native != nil {
+		if c.name != "" {
+			return c.name
+		}
 		return "<native>"
 	}
 
@@ -91,7 +97,7 @@ func (p *Program) Run() (v1 Value, v []Value, err error) {
 func (p *Program) Call() (v1 Value, v []Value, err error) {
 	defer catchErr(&err)
 	newEnv := Env{
-		global: p,
+		Global: p,
 		stack:  p.Stack,
 	}
 	v1, v = execCursorLoop(newEnv, &p.Func, 0)
@@ -103,11 +109,11 @@ func (c *Func) Call(env *Env, a ...Value) (v1 Value, v []Value, err error) {
 
 	var newEnv Env
 	var varg []Value
-	if env == nil || env.global == nil {
-		// panicf("call function without global env")
+	if env == nil || env.Global == nil {
+		// panicf("call function without Global env")
 		x := make([]Value, 0)
 		newEnv.stack = &x
-		newEnv.global = c.loadGlobal
+		newEnv.Global = c.loadGlobal
 	} else {
 		newEnv = *env
 		newEnv.stackOffset = uint32(len(*newEnv.stack))

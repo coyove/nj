@@ -42,7 +42,7 @@ end
 -- call(g, a) will fail
  
 lim = 10
-_, ...a = array(lim)
+_, ...a = narray(lim)
 i = 1
 while i <= lim do a[i] = i; i=i+1 end
 assert(max(a) == lim)

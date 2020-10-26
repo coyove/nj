@@ -248,7 +248,7 @@ func (n Node) String() string {
 	case Address:
 		return "0x" + strconv.FormatInt(int64(n.Addr), 16)
 	default:
-		return fmt.Sprintf("FIXME: %#v", n)
+		return fmt.Sprintf("DEBUG: %#v", n)
 	}
 }
 

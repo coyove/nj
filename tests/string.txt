@@ -11,6 +11,7 @@ local a, b, c, d = match("a\"12\" \"2\"3", [["(\d+)"]])
 assert(a == [["12"]] and b == "12" and c == [["2"]] and d == "2")
 
 local err = error("err")
+print("reflectLoad: ", err.error())
 assert(err.error() == "err")
 assert("eerrrr" == replace(err.error(), "(e|r)", "$1$1"))
 
@@ -43,4 +44,14 @@ assert("x" == trim("嘻x嘻", "嘻"))
 assert("嘻x" == trim("嘻x嘻", "嘻", "right"))
 assert("x嘻" == trim("嘻x嘻", "嘻", "left"))
 
-strname = abc
+assert(("abc")[1,2] == "ab")
+assert(("abc")[20,2] == nil)
+assert(("cde")[rune("b") - rune("a"),2] == "cd")
+assert(("efg")[rune("b") - rune("a"), rune("c") - rune("a")] == "ef")
+
+local s = struct("a", 1, "b", 2, 3, "c")
+assert(s.a == 1 and s.b == 2 and s[3] == "c")
+s.b += s.a
+assert(s.b == 3)
+s.a = s
+print(s)

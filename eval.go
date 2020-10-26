@@ -46,7 +46,7 @@ func (e *ExecError) Error() string {
 	return msg.String()
 }
 
-func returnVararg(p *Program, a Value, b []Value) (Value, []Value) {
+func returnVararg(env *Env, a Value, b []Value) (Value, []Value) {
 	flag := a.Type() == VStack
 	if len(b) == 0 {
 		if flag {
@@ -80,8 +80,8 @@ func returnVararg(p *Program, a Value, b []Value) (Value, []Value) {
 		} else {
 			b2 = append(b2, b)
 		}
-		if p.MaxStackSize > 0 && int64(len(b2)) > p.MaxStackSize {
-			panicf("vararg: stack overflow, max: %d", p.MaxStackSize)
+		if env.Global.MaxStackSize > 0 && int64(len(b2)+len(*env.stack)) > env.Global.MaxStackSize {
+			panicf("vararg: stack overflow, max: %d", env.Global.MaxStackSize)
 		}
 	}
 	if len(b2) == 0 {
@@ -125,7 +125,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 		K = r.cls
 
 		env.stackOffset = r.stackOffset
-		env.A, env.V = returnVararg(env.global, v, env.V)
+		env.A, env.V = returnVararg(&env, v, env.V)
 		*env.stack = (*env.stack)[:env.stackOffset+uint32(r.cls.stackSize)]
 		stackEnv.stackOffset = uint32(len(*env.stack))
 		retStack = retStack[:len(retStack)-1]
@@ -133,8 +133,8 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 
 MAIN:
 	for {
-		if env.global.Deadline != 0 {
-			if atomic.LoadInt64(&now) > env.global.Deadline {
+		if env.Global.Deadline != 0 {
+			if atomic.LoadInt64(&now) > env.Global.Deadline {
 				panicf("timeout")
 			}
 		}
@@ -344,6 +344,24 @@ MAIN:
 				subject = subject.Expect(VStack)
 			}
 			env.A = v
+		case OpSlice:
+			subject := env._get(opa, K)
+			start, end := env.A.ExpectMsg(VNumber, "slice").Int(), env._get(opb, K).ExpectMsg(VNumber, "slice").Int()
+			switch subject.Type() {
+			case VStack:
+				env.A = _unpackedStack(&unpacked{a: subject._unpackedStack().Slice(start, end)})
+			case VString:
+				s := subject._str()
+				if start >= 1 && start <= int64(len(s)) && end >= 1 && end <= int64(len(s)) && end >= start {
+					env.A = _str(s[start-1 : end])
+				} else {
+					env.A = Value{}
+				}
+			case VInterface:
+				env.A = Interface(reflectSlice(subject.Interface(), start, end))
+			default:
+				subject = subject.Expect(VStack)
+			}
 		case OpLoad:
 			switch a := env._get(opa, K); a.Type() {
 			case VStack:
@@ -352,7 +370,7 @@ MAIN:
 				env.A = reflectLoad(a.Interface(), env._get(opb, K))
 			case VString:
 				if idx, s := env._get(opb, K).ExpectMsg(VNumber, "load").Int(), a._str(); idx >= 1 && idx <= int64(len(s)) {
-					env.A = Int(int64(s[idx]))
+					env.A = Int(int64(s[idx-1]))
 				}
 			default:
 				a = a.Expect(VStack)
@@ -366,13 +384,13 @@ MAIN:
 			if opa == regA && len(env.V) > 0 {
 				*stackEnv.stack = append(*stackEnv.stack, env.V...)
 			}
-			if env.global.MaxStackSize > 0 && int64(len(*stackEnv.stack)) > env.global.MaxStackSize {
-				panicf("stack overflow, max: %d", env.global.MaxStackSize)
+			if env.Global.MaxStackSize > 0 && int64(len(*stackEnv.stack)) > env.Global.MaxStackSize {
+				panicf("stack overflow, max: %d", env.Global.MaxStackSize)
 			}
 		case OpRet:
 			v := env._get(opa, K)
 			if len(retStack) == 0 {
-				v, env.V = returnVararg(env.global, v, env.V)
+				v, env.V = returnVararg(&env, v, env.V)
 				return v, env.V
 			}
 			returnUpperWorld(v)
@@ -380,19 +398,19 @@ MAIN:
 			v := env._get(opa, K)
 			env.V = append(env.V, Int(int64(cursor)))
 			env.V = append(env.V, env.Stack()...)
-			v, env.V = returnVararg(env.global, v, env.V)
+			v, env.V = returnVararg(&env, v, env.V)
 			if len(retStack) == 0 {
-				v, env.V = returnVararg(env.global, v, env.V)
+				v, env.V = returnVararg(&env, v, env.V)
 				return v, env.V
 			}
 			returnUpperWorld(v)
 		case OpLoadFunc:
-			f := env.global.Funcs[opa]
-			// f.loadGlobal = env.global
+			f := env.Global.Funcs[opa]
+			// f.loadGlobal = env.Global
 			env.A = Function(f)
 		case OpCall:
 			cls := env._get(opa, K).ExpectMsg(VFunction, "call").Function()
-			stackEnv.global = env.global
+			stackEnv.Global = env.Global
 
 			if cls.native != nil {
 				cls.native(&stackEnv)
@@ -422,10 +440,14 @@ MAIN:
 				cursor = 0
 				K = cls
 				env.stackOffset = stackEnv.stackOffset
-				env.global = stackEnv.global
+				env.Global = stackEnv.Global
 
 				if opb == 0 {
 					retStack = append(retStack, last)
+				}
+
+				if env.Global.MaxCallStackSize > 0 && int64(len(retStack)) > env.Global.MaxCallStackSize {
+					panicf("call stack overflow, max: %d", env.Global.MaxCallStackSize)
 				}
 
 				stackEnv.stackOffset = uint32(len(*env.stack))

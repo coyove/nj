@@ -104,11 +104,46 @@ func Interface(i interface{}) Value {
 	case Value:
 		return v
 	}
+
 	rv := reflect.ValueOf(i)
 	if k := rv.Kind(); k >= reflect.Int && k <= reflect.Int64 {
 		return Int(rv.Int())
 	} else if k >= reflect.Uint && k <= reflect.Uintptr {
 		return Int(int64(rv.Uint()))
+	} else if k == reflect.Func {
+		nf, _ := i.(func(*Env))
+		if nf == nil {
+			rt := rv.Type()
+			rtNumIn := rt.NumIn()
+			nf = func(env *Env) {
+				getter := func(i int, t reflect.Type) reflect.Value {
+					return reflect.ValueOf(env.Get(i).TypedInterface(t))
+				}
+				ins := make([]reflect.Value, 0, rtNumIn)
+				if !rt.IsVariadic() {
+					for i := 0; i < rtNumIn; i++ {
+						ins = append(ins, getter(i, rt.In(i)))
+					}
+				} else {
+					for i := 0; i < rtNumIn-1; i++ {
+						ins = append(ins, getter(i, rt.In(i)))
+					}
+					for i := rtNumIn - 1; i < env.Size(); i++ {
+						ins = append(ins, getter(i, rt.In(rtNumIn-1).Elem()))
+					}
+				}
+				outs := rv.Call(ins)
+				if rt.NumOut() == 0 {
+					return
+				}
+				a := make([]Value, len(outs))
+				for i := range outs {
+					a[i] = Interface(outs[i].Interface())
+				}
+				env.Return(a[0], a[1:]...)
+			}
+		}
+		return Function(&Func{name: "<native>", native: nf})
 	}
 
 	x := *(*[2]uintptr)(unsafe.Pointer(&i))
@@ -207,14 +242,14 @@ func (v Value) TypedInterface(t reflect.Type) interface{} {
 
 func (v Value) Expect(t valueType) Value {
 	if v.Type() != t {
-		panicf("expect %s, got %s", typeMappings[t], typeMappings[v.Type()])
+		panicf("expect %v, got %v", t, v.Type())
 	}
 	return v
 }
 
 func (v Value) ExpectMsg(t valueType, msg string) Value {
 	if v.Type() != t {
-		panicf("%s: expect %s, got %s", msg, typeMappings[t], typeMappings[v.Type()])
+		panicf("%s: expect %v, got %v", msg, t, v.Type())
 	}
 	return v
 }
@@ -230,6 +265,26 @@ func (v Value) Equal(r Value) bool {
 		return v.Function() == r.Function()
 	case VInterface * 2:
 		return v.Interface() == r.Interface()
+	}
+	return false
+}
+
+func (v Value) Less(r Value) bool {
+	switch v.Type() + r.Type() {
+	case _NumNum:
+		vf, vi, vIsInt := v.Num()
+		rf, ri, rIsInt := r.Num()
+		if vIsInt && rIsInt {
+			return vi < ri
+		}
+		return vf < rf
+	case _StrStr:
+		return r._str() < v._str()
+	case VString + VNumber:
+		if v.Type() == VNumber {
+			return true
+		}
+		return false
 	}
 	return false
 }
@@ -274,6 +329,17 @@ func (v Value) toString(lv int) string {
 }
 
 type unpacked struct{ a []Value }
+
+func (t *unpacked) Slice(start int64, end int64) []Value {
+	start--
+	end--
+	if start < int64(len(t.a)) && start >= 0 &&
+		end < int64(len(t.a)) && end >= 0 &&
+		end >= start {
+		return t.a[start : end+1]
+	}
+	return nil
+}
 
 func (t *unpacked) Put(idx int64, v Value) {
 	idx--

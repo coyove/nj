@@ -322,7 +322,8 @@ jmp_stat:
 
 declarator:
         TIdent                            { $$ = NewSymbolFromToken($1) } |
-        prefix_expr '[' expr ']'          { $$ = __load($1, $3).SetPos($2.Pos) /* (10)[0] is valid if number has metamethod */ } |
+        prefix_expr '[' expr ']'          { $$ = __load($1, $3).SetPos($2.Pos) } |
+        prefix_expr '[' expr ',' expr ']' { $$ = NewComplex(NewSymbol(ASlice), $1, $3, $5).SetPos($2.Pos) } |
         prefix_expr '.' TIdent            { $$ = __load($1, NewString($3.Str)).SetPos($2.Pos) }
 
 declarator_list:

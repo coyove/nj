@@ -1,3 +1,0 @@
-a = 0
-add = import "imported.txt"
-add()

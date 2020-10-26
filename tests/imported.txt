@@ -1,3 +1,0 @@
-return func() {
-    a = a + 1
-}

@@ -7,11 +7,11 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
-
-	// _ "net/http/pprof"
-	"runtime"
+	"time"
 )
 
 func init() {
@@ -24,7 +24,16 @@ func runFile(t *testing.T, path string) {
 		flag.Parse()
 	}
 
-	b, err := LoadFile(path)
+	b, err := LoadFile(path,
+		"nativeVarargTest", func(a ...int) int {
+			return len(a)
+		},
+		"nativeVarargTest2", func(b string, a ...int) string {
+			return b + strconv.Itoa(len(a))
+		},
+		"intAlias", func(d time.Duration) time.Time {
+			return time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).Add(d)
+		})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,32 +45,29 @@ func runFile(t *testing.T, path string) {
 	t.Log(i, i2, err)
 }
 
-func TestSMain(t *testing.T) {
-	runFile(t, "tests/test.txt")
-}
+func TestFileTest(t *testing.T) { runFile(t, "tests/test.txt") }
 
-func TestSString(t *testing.T) {
-	runFile(t, "tests/string.txt")
-}
+func TestFileString(t *testing.T) { runFile(t, "tests/string.txt") }
 
-func TestSGoto(t *testing.T) {
-	runFile(t, "tests/goto.txt")
-}
+func TestFileGoto(t *testing.T) { runFile(t, "tests/goto.txt") }
 
-func TestSR2(t *testing.T) {
-	runFile(t, "tests/r2.txt")
-}
+func TestFileR2(t *testing.T) { runFile(t, "tests/r2.txt") }
+
+func TestFleStringIndex(t *testing.T) { runFile(t, "tests/indexstr.txt") }
+
+func TestFileVararg(t *testing.T) { runFile(t, "tests/vararg.txt") }
 
 func TestReturnFunction(t *testing.T) {
 	{
 		cls, _ := LoadString(`
-a = 1
+print(init)
+a = init
 function foo(n) 
 a+=n
 return a
 end
 return foo
-`)
+`, "init", 1)
 		v, _, _ := cls.Call()
 		if v, _, _ := v.Function().Call(nil, Int(10)); v.Int() != 11 {
 			t.Fatal(v)
@@ -88,6 +94,10 @@ return foo
 		}
 
 		if v, _, _ := v.Function().Call(nil, Int(10), Int(20)); v.Int() != 41 {
+			t.Fatal(v)
+		}
+
+		if v, _, _ := v.Function().Call(nil); v.Int() != 41 {
 			t.Fatal(v)
 		}
 	}

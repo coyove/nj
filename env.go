@@ -7,11 +7,11 @@ import (
 )
 
 // Env is the environment for a closure to run within.
-// stack contains arguments used by the execution and is a global shared value, local can only use stack[stackOffset:]
+// stack contains arguments used by the execution and is a Global shared value, local can only use stack[stackOffset:]
 // A and V stores the results of the execution (e.g: return a, b, c => env.A = a, env.V = []Value{b, c})
 type Env struct {
 	// Global
-	global *Program
+	Global *Program
 	stack  *[]Value
 
 	// Local
@@ -68,10 +68,10 @@ func (env *Env) _get(yx uint16, cls *Func) (zzz Value) {
 	}
 
 	if y == 1 {
-		if env.global == nil {
-			panic("nil global")
+		if env.Global == nil {
+			panic("nil Global")
 		}
-		return (*env.global.Stack)[index]
+		return (*env.Global.Stack)[index]
 	}
 
 	s := *env.stack
@@ -90,10 +90,10 @@ func (env *Env) _set(yx uint16, v Value) {
 		y := yx >> 11
 		s := (*env.stack)
 		if y == 1 {
-			if env.global == nil {
-				panic("nil global")
+			if env.Global == nil {
+				panic("nil Global")
 			}
-			(*env.global.Stack)[index] = v
+			(*env.Global.Stack)[index] = v
 		} else {
 			s[index+int(env.stackOffset)] = v
 		}
@@ -125,7 +125,7 @@ func (env *Env) InStr(i int, defaultValue string) string {
 func (env *Env) In(i int, expectedType valueType) Value {
 	v := env.Get(i)
 	if v.Type() != expectedType {
-		panicf("bad argument #%d: expect %v, got %v", i, typeMappings[expectedType], v)
+		panicf("bad argument #%d: expect %v, got %v", i+1, expectedType, v.Type())
 	}
 	return v
 }
@@ -135,19 +135,19 @@ func (env *Env) Return(a1 Value, an ...Value) {
 }
 
 func (env *Env) Deadline() (context.Context, func(), time.Time) {
-	d := time.Unix(env.global.Deadline, 0)
+	d := time.Unix(env.Global.Deadline, 0)
 	ctx, cancel := context.WithDeadline(context.Background(), d)
 	return ctx, cancel, d
 }
 
 func (env *Env) GetGlobalCustomValue(key string) interface{} {
-	return env.global.Extras[key]
+	return env.Global.Extras[key]
 }
 
 func (e *Env) NewString(s string) Value {
-	if e.global.MaxStackSize > 0 {
+	if e.Global.MaxStackSize > 0 {
 		// Loosely control the string size
-		remain := (e.global.MaxStackSize - int64(len(*e.stack))) * 16
+		remain := (e.Global.MaxStackSize - int64(len(*e.stack))) * 16
 		if int64(len(s)) > remain {
 			panicf("string overflow, max: %d", remain)
 		}

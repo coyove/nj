@@ -39,6 +39,7 @@ const (
 	ABegin     = "prog"
 	ALoad      = "load"
 	AStore     = "store"
+	ASlice     = "slice"
 	ACall      = "call"
 	ATailCall  = "tailcall"
 	AReturn    = "return"

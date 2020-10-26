@@ -129,6 +129,7 @@ var singleOp = map[opCode]string{
 	OpLen:    parser.ALen,
 	OpLoad:   parser.ALoad,
 	OpStore:  parser.AStore,
+	OpSlice:  parser.ASlice,
 	OpNot:    parser.ANot,
 	OpPow:    parser.APow,
 }

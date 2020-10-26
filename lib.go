@@ -1,13 +1,16 @@
 package script
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +24,10 @@ import (
 var (
 	g   = map[string]Value{}
 	now int64
+	rg  = struct {
+		sync.Mutex
+		*rand.Rand
+	}{Rand: rand.New(rand.NewSource(1))}
 )
 
 func AddGlobalValue(k string, v interface{}) {
@@ -39,7 +46,7 @@ func init() {
 		}
 	}()
 
-	AddGlobalValue("array", func(env *Env) {
+	AddGlobalValue("narray", func(env *Env) {
 		n := env.In(0, VNumber).Int()
 		env.Return(Int(n), make([]Value, n)...)
 	})
@@ -53,9 +60,7 @@ func init() {
 		newEnv.grow(int(f.stackSize))
 		env.A, env.V = execCursorLoop(newEnv, f, uint32(cursor))
 	})
-	AddGlobalValue("type", func(env *Env) {
-		env.A = _str(typeMappings[env.Get(0).Type()])
-	})
+	AddGlobalValue("type", func(env *Env) { env.A = _str(env.Get(0).Type().String()) })
 	AddGlobalValue("pcall", func(env *Env) {
 		a, v, err := env.In(0, VFunction).Function().Call(env, env.Stack()[1:]...)
 		if err == nil {
@@ -76,9 +81,9 @@ func init() {
 			}
 		}
 	})
+	AddGlobalValue("panic", func(env *Env) { panic(env.InStr(0, "user panic")) })
 	AddGlobalValue("assert", func(env *Env) {
 		if v := env.Get(0); !v.IsFalse() {
-			env.A = v
 			return
 		}
 		panic("assertion failed")
@@ -101,66 +106,109 @@ func init() {
 	})
 	AddGlobalValue("print", func(env *Env) {
 		for _, a := range env.Stack() {
-			fmt.Print(a.String())
+			fmt.Fprint(env.Global.Stdout, a.String())
 		}
-		fmt.Println()
+		fmt.Fprintln(env.Global.Stdout)
 	})
 	AddGlobalValue("println", func(env *Env) {
 		for _, a := range env.Stack() {
-			fmt.Print(a.String(), " ")
+			fmt.Fprint(env.Global.Stdout, a.String(), " ")
 		}
-		fmt.Println()
+		fmt.Fprintln(env.Global.Stdout)
 	})
-	AddGlobalValue("infinite", Float(math.Inf(1)))
+	AddGlobalValue("scanln", func(env *Env) {
+		var results []Value
+		nIdx := 0
+		if p := env.InStr(0, ""); p != "" {
+			fmt.Fprint(env.Global.Stdout, p)
+			nIdx++
+		}
+		var r io.Reader = env.Global.Stdin
+		if env.Global.MaxStackSize > 0 {
+			r = io.LimitReader(r, (env.Global.MaxStackSize-int64(len(*env.stack)))*16)
+		}
+		for n := env.InInt(nIdx, 1); n > 0; n-- {
+			var s string
+			if _, err := fmt.Fscan(r, &s); err != nil {
+				break
+			}
+			results = append(results, env.NewString(s))
+		}
+		if len(results) > 0 {
+			env.Return(results[0], results[1:]...)
+		}
+	})
+	AddGlobalValue("INF", Float(math.Inf(1)))
 	AddGlobalValue("PI", Float(math.Pi))
 	AddGlobalValue("E", Float(math.E))
-	AddGlobalValue("randomseed", func(env *Env) { rand.Seed(env.In(0, VNumber).Int()) })
+	AddGlobalValue("randomseed", func(env *Env) {
+		rg.Lock()
+		rg.Rand.Seed(env.InInt(0, 1))
+		rg.Unlock()
+	})
 	AddGlobalValue("random", func(env *Env) {
+		rg.Lock()
 		switch len(env.Stack()) {
 		case 2:
 			a, b := int(env.In(0, VNumber).Int()), int(env.In(1, VNumber).Int())
-			env.A = Float(float64(rand.Intn(b-a)+a) + 1)
+			env.A = Float(float64(rg.Intn(b-a)+a) + 1)
 		case 1:
-			env.A = Float(float64(rand.Intn(int(env.In(0, VNumber).Int()))) + 1)
+			env.A = Float(float64(rg.Intn(int(env.In(0, VNumber).Int()))) + 1)
 		default:
-			env.A = Float(rand.Float64())
+			env.A = Float(rg.Float64())
 		}
+		rg.Unlock()
 	})
+	AddGlobalValue("bitand", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() & env.In(1, VNumber).Int()) })
+	AddGlobalValue("bitor", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() | env.In(1, VNumber).Int()) })
+	AddGlobalValue("bitxor", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() ^ env.In(1, VNumber).Int()) })
+	AddGlobalValue("bitrsh", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() >> env.In(1, VNumber).Int()) })
+	AddGlobalValue("bitlsh", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() << env.In(1, VNumber).Int()) })
 	AddGlobalValue("sqrt", func(env *Env) { env.A = Float(math.Sqrt(env.In(0, VNumber).Float())) })
 	AddGlobalValue("floor", func(env *Env) { env.A = Float(math.Floor(env.In(0, VNumber).Float())) })
 	AddGlobalValue("ceil", func(env *Env) { env.A = Float(math.Ceil(env.In(0, VNumber).Float())) })
-	AddGlobalValue("fmod", func(env *Env) { env.A = Float(math.Mod(env.In(0, VNumber).Float(), env.In(1, VNumber).Float())) })
+	AddGlobalValue("mod", func(env *Env) { env.A = Float(math.Mod(env.In(0, VNumber).Float(), env.In(1, VNumber).Float())) })
 	AddGlobalValue("abs", func(env *Env) { env.A = Float(math.Abs(env.In(0, VNumber).Float())) })
 	AddGlobalValue("acos", func(env *Env) { env.A = Float(math.Acos(env.In(0, VNumber).Float())) })
 	AddGlobalValue("asin", func(env *Env) { env.A = Float(math.Asin(env.In(0, VNumber).Float())) })
 	AddGlobalValue("atan", func(env *Env) { env.A = Float(math.Atan(env.In(0, VNumber).Float())) })
 	AddGlobalValue("atan2", func(env *Env) { env.A = Float(math.Atan2(env.In(0, VNumber).Float(), env.In(1, VNumber).Float())) })
-	AddGlobalValue("ldexp", func(env *Env) { env.A = Float(math.Ldexp(env.In(0, VNumber).Float(), int(env.In(1, VNumber).Float()))) })
-	AddGlobalValue("modf", func(env *Env) { a, b := math.Modf(env.In(0, VNumber).Float()); env.Return(Float(a), Float(float64(b))) })
-	AddGlobalValue("min", func(env *Env) {
-		if len(env.Stack()) > 0 {
-			mathMinMax(env, false)
-		}
-	})
-	AddGlobalValue("max", func(env *Env) {
-		if len(env.Stack()) > 0 {
-			mathMinMax(env, true)
-		}
-	})
+	AddGlobalValue("ldexp", func(env *Env) { env.A = Float(math.Ldexp(env.In(0, VNumber).Float(), int(env.InInt(1, 0)))) })
+	AddGlobalValue("modf", func(env *Env) { a, b := math.Modf(env.In(0, VNumber).Float()); env.Return(Float(a), Float(b)) })
+	AddGlobalValue("min", func(env *Env) { mathMinMax(env, false) })
+	AddGlobalValue("max", func(env *Env) { mathMinMax(env, true) })
 	AddGlobalValue("str", func(env *Env) {
-		env.A = env.NewString(env.Get(0).String())
+		if v := env.Get(0); v.Type() == VNumber {
+			env.A = env.NewString(fmt.Sprintf(env.InStr(1, "%v"), v.Interface()))
+		} else {
+			env.A = env.NewString(v.String())
+		}
 	})
 	AddGlobalValue("int", func(env *Env) {
 		switch v := env.Get(0); v.Type() {
 		case VNumber:
 			env.A = Int(v.Int())
 		default:
-			v, err := strconv.ParseInt(v.String(), int(env.InInt(1, 10)), 64)
+			v, err := strconv.ParseInt(v.String(), 0, 64)
 			env.Return(Int(v), Interface(err))
 		}
 	})
-	AddGlobalValue("time", func(env *Env) {
-		env.A = Float(float64(time.Now().Unix()))
+	AddGlobalValue("time", func(env *Env) { env.A = Float(float64(time.Now().Unix())) })
+	AddGlobalValue("sleep", func(env *Env) { time.Sleep(time.Duration(env.In(0, VNumber).Int()) * time.Millisecond) })
+	AddGlobalValue("Go_time", func(env *Env) {
+		if env.Size() > 0 {
+			loc := time.UTC
+			if env.InStr(7, "") == "local" {
+				loc = time.Local
+			}
+			env.A = Interface(time.Date(
+				int(env.InInt(0, 1970)), time.Month(env.InInt(1, 1)), int(env.InInt(2, 1)),
+				int(env.InInt(3, 0)), int(env.InInt(4, 0)), int(env.InInt(5, 0)),
+				int(env.InInt(6, 0)), loc,
+			))
+		} else {
+			env.A = Interface(time.Now())
+		}
 	})
 	AddGlobalValue("clock", func(env *Env) {
 		x := time.Now()
@@ -249,11 +297,6 @@ func init() {
 		}
 		env.Return(v[0], v[1:]...)
 	})
-	AddGlobalValue("substr", func(env *Env) {
-		s, a := env.In(0, VString)._str(), env.InInt(1, 1)
-		b := env.InInt(2, int64(len(s)))
-		env.A = _str(s[a-1 : b-1+1])
-	})
 	AddGlobalValue("strpos", func(env *Env) {
 		a, b := env.In(0, VString)._str(), env.In(1, VString)._str()
 		if env.InStr(1, "") == "last" {
@@ -306,9 +349,15 @@ func init() {
 		}
 		env.Return(env.NewStringBytes(buf), Interface(err))
 	})
+	AddGlobalValue("struct", func(env *Env) {
+		env.A = Interface(NewFixedStruct(env.Stack()...))
+	})
 }
 
 func mathMinMax(env *Env, max bool) {
+	if len(env.Stack()) <= 0 {
+		return
+	}
 	f, i, isInt := env.Get(0).Expect(VNumber).Num()
 	if isInt {
 		for ii := 1; ii < len(env.Stack()); ii++ {
@@ -340,4 +389,56 @@ func ipow(base, exp int64) int64 {
 		base *= base
 	}
 	return result
+}
+
+type FixedStruct struct {
+	rl bool
+	kv [][2]Value
+}
+
+func NewFixedStruct(kv ...Value) *FixedStruct {
+	if len(kv)%2 != 0 {
+		kv = append(kv, Value{})
+	}
+	s := &FixedStruct{}
+	for i := 0; i < len(kv); i += 2 {
+		s.kv = append(s.kv, [2]Value{kv[i], kv[i+1]})
+	}
+	sort.Slice(s.kv, func(i, j int) bool { return s.kv[i][0].Less(s.kv[j][0]) })
+	return s
+}
+
+func (s *FixedStruct) Get(k Value) Value {
+	i := sort.Search(len(s.kv), func(i int) bool { return !s.kv[i][0].Less(k) })
+	if i < len(s.kv) && s.kv[i][0].Equal(k) {
+		return s.kv[i][1]
+	}
+	return Value{}
+}
+
+func (s *FixedStruct) Set(k Value, v Value) {
+	i := sort.Search(len(s.kv), func(i int) bool { return !s.kv[i][0].Less(k) })
+	if i < len(s.kv) && s.kv[i][0].Equal(k) {
+		s.kv[i][1] = v
+	}
+}
+
+func (s *FixedStruct) Len() int {
+	return len(s.kv)
+}
+
+func (s *FixedStruct) String() string {
+	if s.rl {
+		return "(...)"
+	}
+	s.rl = true
+	p := bytes.NewBufferString("(")
+	for _, kv := range s.kv {
+		p.WriteString(kv[0].String())
+		p.WriteString("=")
+		p.WriteString(kv[1].String())
+		p.WriteString(" ")
+	}
+	s.rl = false
+	return strings.TrimSpace(p.String()) + ")"
 }

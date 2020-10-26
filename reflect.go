@@ -6,6 +6,9 @@ import (
 )
 
 func reflectLen(v interface{}) int {
+	if s, ok := v.(*FixedStruct); ok {
+		return s.Len()
+	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map, reflect.Slice, reflect.Array:
@@ -15,6 +18,10 @@ func reflectLen(v interface{}) int {
 }
 
 func reflectLoad(v interface{}, key Value) Value {
+	if s, ok := v.(*FixedStruct); ok {
+		return s.Get(key)
+	}
+
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
@@ -44,44 +51,27 @@ func reflectLoad(v interface{}, key Value) Value {
 		// panicf("%q not found in %#v", k, v)
 		return Value{}
 	}
-	return Function(&Func{
-		name: k,
-		native: func(env *Env) {
-			rt := f.Type()
-			rtNumIn := rt.NumIn()
-			ins := make([]reflect.Value, 0, rtNumIn)
-			getter := func(i int, t reflect.Type) reflect.Value {
-				return reflect.ValueOf(env.Get(i).TypedInterface(t))
-			}
+	return Interface(f.Interface())
+}
 
-			if !rt.IsVariadic() {
-				for i := 0; i < rtNumIn; i++ {
-					ins = append(ins, getter(i, rt.In(i)))
-				}
-			} else {
-				for i := 0; i < rtNumIn-1; i++ {
-					ins = append(ins, getter(i, rt.In(i)))
-				}
-				for i := rtNumIn - 1; i < env.Size(); i++ {
-					ins = append(ins, getter(i, rt.In(rtNumIn-1)))
-				}
-			}
-
-			outs := f.Call(ins)
-			if rt.NumOut() == 0 {
-				return
-			}
-
-			a := make([]Value, len(outs))
-			for i := range outs {
-				a[i] = Interface(outs[i].Interface())
-			}
-			env.Return(a[0], a[1:]...)
-		},
-	})
+func reflectSlice(v interface{}, start, end int64) interface{} {
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Slice, reflect.Array, reflect.String:
+		start := int(start - 1)
+		end := int(end - 1 + 1)
+		if start >= 0 && start < rv.Len() && end >= 0 && end < rv.Len() && start <= end {
+			return rv.Slice(start, end).Interface()
+		}
+	}
+	return nil
 }
 
 func reflectStore(v interface{}, key Value, v2 Value) {
+	if s, ok := v.(*FixedStruct); ok {
+		s.Set(key, v2)
+		return
+	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:

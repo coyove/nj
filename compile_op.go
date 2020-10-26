@@ -88,7 +88,7 @@ func (table *symtable) compileRetOp(atoms []parser.Node) uint16 {
 func (table *symtable) writeOpcode3(bop opCode, atoms []parser.Node) uint16 {
 	// first atom: the op name, tail atoms: the args
 	if len(atoms) > 4 {
-		panic("FIXME: too many arguments")
+		panic("DEBUG: too many arguments")
 	}
 
 	atoms = append([]parser.Node{}, atoms...) // duplicate
@@ -101,15 +101,36 @@ func (table *symtable) writeOpcode3(bop opCode, atoms []parser.Node) uint16 {
 
 		for i := 1; i <= 2; i++ { // subject and value shouldn't use regA
 			if atoms[i].Type == parser.Address && atoms[i].Addr == regA {
-				n := parser.Node{Type: parser.Address, Addr: table.borrowAddress()}
+				n := parser.NewAddress(table.borrowAddress())
 				table.writeOpcode(OpSet, n, _nodeRegA)
 				atoms[i] = n
 			}
 		}
 
-		// We would love to see key using regA, in this case writeOpcode will just omit it
+		// We would love to see 'key' using regA, in this case writeOpcode will just omit it
 		table.writeOpcode(OpSet, _nodeRegA, atoms[3])
 		table.writeOpcode(OpStore, atoms[1], atoms[2])
+		table.returnAddresses(atoms[1:])
+		return regA
+	}
+
+	if bop == OpSlice {
+		table.collapse(atoms[1:], true)
+
+		// (atoms    1      2    3 )
+		// (slice subject start end) subject => opa, start => $a, end => opb
+
+		for i := 1; i <= 3; i += 2 { // subject and end shouldn't use regA
+			if atoms[i].Type == parser.Address && atoms[i].Addr == regA {
+				n := parser.NewAddress(table.borrowAddress())
+				table.writeOpcode(OpSet, n, _nodeRegA)
+				atoms[i] = n
+			}
+		}
+
+		// We would love to see 'start' using regA, in this case writeOpcode will just omit it
+		table.writeOpcode(OpSet, _nodeRegA, atoms[2])
+		table.writeOpcode(OpSlice, atoms[1], atoms[3])
 		table.returnAddresses(atoms[1:])
 		return regA
 	}
@@ -148,7 +169,7 @@ func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
 
 	op, ok := flatOpMapping[head]
 	if !ok {
-		panicf("FIXME compileFlatOp invalid op: %v", atoms[0])
+		panicf("DEBUG compileFlatOp invalid op: %v", atoms[0])
 	}
 	yx := table.writeOpcode3(op, atoms)
 	if p := atoms[0].Pos(); p.Source != "" {

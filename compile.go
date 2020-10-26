@@ -102,7 +102,7 @@ func (table *symtable) returnAddresses(a interface{}) {
 			table.returnAddress(n)
 		}
 	default:
-		panic("FIXME returnAddresses")
+		panic("DEBUG returnAddresses")
 	}
 }
 
@@ -113,9 +113,9 @@ func (table *symtable) get(varname string) uint16 {
 	case "nil":
 		return regNil
 	case "true":
-		return table.loadK(true)
+		return table.loadK(int64(1))
 	case "false":
-		return table.loadK(false)
+		return table.loadK(int64(0))
 	}
 
 	calc := func(k *symbol) uint16 {
@@ -147,7 +147,7 @@ func (table *symtable) get(varname string) uint16 {
 
 func (table *symtable) put(varname string, addr uint16) {
 	if addr == regA {
-		panic("FIXME: put $a?")
+		panic("DEBUG: put $a?")
 	}
 	sym := &symbol{
 		addr: addr,
@@ -222,6 +222,7 @@ var flatOpMapping = map[string]opCode{
 	parser.APow:       OpPow,
 	parser.AStore:     OpStore,
 	parser.ALoad:      OpLoad,
+	parser.ASlice:     OpSlice,
 	parser.ALen:       OpLen,
 	parser.AInc:       OpInc,
 	parser.APopV:      OpEOB, // special
@@ -249,7 +250,7 @@ func (table *symtable) writeOpcode(op opCode, n0, n1 parser.Node) {
 		case parser.Address:
 			return n.Addr
 		default:
-			panicf("FIXME writeOpcode unknown type: %#v", n)
+			panicf("DEBUG writeOpcode unknown type: %#v", n)
 			return 0
 		}
 	}
@@ -336,12 +337,12 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		if _, ok := flatOpMapping[name]; ok {
 			return table.compileFlatOp(nodes)
 		}
-		panicf("FIXME: compileNode unknown symbol: %q", name)
+		panicf("DEBUG: compileNode unknown symbol: %q", name)
 	}
 	return yx
 }
 
-func compileNodeTopLevel(n parser.Node) (cls *Program, err error) {
+func compileNodeTopLevel(n parser.Node, globalKeyValues ...interface{}) (cls *Program, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			cls = nil
@@ -365,6 +366,17 @@ func compileNodeTopLevel(n parser.Node) (cls *Program, err error) {
 		coreStack.Push(v)
 	}
 
+	if len(globalKeyValues)%2 != 0 {
+		globalKeyValues = append(globalKeyValues, nil)
+	}
+	for i := 0; i < len(globalKeyValues); i += 2 {
+		k, ok := globalKeyValues[i].(string)
+		if ok {
+			table.put(k, uint16(coreStack.Size()))
+			coreStack.Push(Interface(globalKeyValues[i+1]))
+		}
+	}
+
 	table.vp = uint16(len(table.sym))
 	table.compileNode(n)
 	table.code.writeOP(OpEOB, 0, 0)
@@ -381,10 +393,13 @@ func compileNodeTopLevel(n parser.Node) (cls *Program, err error) {
 	for _, f := range cls.Funcs {
 		f.loadGlobal = cls
 	}
+	cls.Stdout = os.Stdout
+	cls.Stdin = os.Stdin
+	cls.Stderr = os.Stderr
 	return cls, err
 }
 
-func LoadFile(path string) (*Program, error) {
+func LoadFile(path string, globalKeyValues ...interface{}) (*Program, error) {
 	code, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -395,14 +410,14 @@ func LoadFile(path string) (*Program, error) {
 		return nil, err
 	}
 	// n.Dump(os.Stderr, "  ")
-	return compileNodeTopLevel(n)
+	return compileNodeTopLevel(n, globalKeyValues...)
 }
 
-func LoadString(code string) (*Program, error) {
+func LoadString(code string, globalKeyValues ...interface{}) (*Program, error) {
 	n, err := parser.Parse(bytes.NewReader([]byte(code)), "")
 	if err != nil {
 		return nil, err
 	}
 	// n.Dump(os.Stderr, "  ")
-	return compileNodeTopLevel(n)
+	return compileNodeTopLevel(n, globalKeyValues...)
 }

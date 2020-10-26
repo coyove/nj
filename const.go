@@ -1,6 +1,9 @@
 package script
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 const (
 	regA   uint16 = 0x1fff // full 13 bits
@@ -14,6 +17,7 @@ const (
 	OpSet
 	OpStore
 	OpLoad
+	OpSlice
 	OpAdd
 	OpConcat
 	OpSub
@@ -56,13 +60,23 @@ const (
 	_StrStr              = VString * 2
 )
 
-var typeMappings = map[valueType]string{
-	VNil:       "nil",
-	VNumber:    "number",
-	VString:    "string",
-	VFunction:  "function",
-	VInterface: "interface",
-	VStack:     "stack",
+func (t valueType) String() string {
+	switch t {
+	case VNil:
+		return "nil"
+	case VNumber:
+		return "number"
+	case VString:
+		return "string"
+	case VFunction:
+		return "function"
+	case VInterface:
+		return "interface"
+	case VStack:
+		return "stack"
+	default:
+		return "corrupted$" + strconv.Itoa(int(t))
+	}
 }
 
 func panicf(msg string, args ...interface{}) {
