@@ -141,7 +141,7 @@ MAIN:
 
 		v := K.code.Code[cursor]
 		cursor++
-		bop, opa, opb := op(v)
+		bop, opa, opb := splitInst(v)
 
 		switch bop {
 		case OpEOB:

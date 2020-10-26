@@ -86,7 +86,7 @@ func (table *symtable) compileRetOp(atoms []parser.Node) uint16 {
 
 // writeOpcode3 accepts 3 arguments at most, 2 arguments will be encoded into opCode itself, the 3rd one will be in regA
 func (table *symtable) writeOpcode3(bop opCode, atoms []parser.Node) uint16 {
-	// first atom: the op name, tail atoms: the args
+	// first atom: the splitInst name, tail atoms: the args
 	if len(atoms) > 4 {
 		panic("DEBUG: too many arguments")
 	}
@@ -139,10 +139,10 @@ func (table *symtable) writeOpcode3(bop opCode, atoms []parser.Node) uint16 {
 
 	switch bop {
 	case OpNot, OpRet, OpYield, OpLen:
-		// unary op
+		// unary splitInst
 		table.writeOpcode(bop, atoms[1], parser.Node{})
 	default:
-		// binary op
+		// binary splitInst
 		table.writeOpcode(bop, atoms[1], atoms[2])
 		table.returnAddresses(atoms[1:])
 	}
@@ -169,7 +169,7 @@ func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
 
 	op, ok := flatOpMapping[head]
 	if !ok {
-		panicf("DEBUG compileFlatOp invalid op: %v", atoms[0])
+		panicf("DEBUG compileFlatOp invalid splitInst: %v", atoms[0])
 	}
 	yx := table.writeOpcode3(op, atoms)
 	if p := atoms[0].Pos(); p.Source != "" {
@@ -193,7 +193,7 @@ func (table *symtable) compileAndOrOp(atoms []parser.Node) uint16 {
 	table.writeOpcode(OpSet, _nodeRegA, atoms[2])
 	part2 := table.code.Len()
 
-	table.code.Code[part1-1] = makejmpop(bop, regA, part2-part1)
+	table.code.Code[part1-1] = jmpInst(bop, regA, part2-part1)
 	table.code.writePos(atoms[0].Pos())
 	return regA
 }
@@ -222,11 +222,11 @@ func (table *symtable) compileIfOp(atoms []parser.Node) uint16 {
 	table.removeMaskedSymTable()
 
 	if len(falseBranch.Nodes) > 0 {
-		table.code.Code[init-1] = makejmpop(OpIfNot, condyx, part1-init+1)
-		table.code.Code[part1] = makejmpop(OpJmp, 0, part2-part1-1)
+		table.code.Code[init-1] = jmpInst(OpIfNot, condyx, part1-init+1)
+		table.code.Code[part1] = jmpInst(OpJmp, 0, part2-part1-1)
 	} else {
-		table.code.truncateLast() // the last op is used to skip the false branch, since we don't have one, we don't need this jmp
-		table.code.Code[init-1] = makejmpop(OpIfNot, condyx, part1-init)
+		table.code.truncateLast() // the last splitInst is used to skip the false branch, since we don't have one, we don't need this jmp
+		table.code.Code[init-1] = jmpInst(OpIfNot, condyx, part1-init)
 	}
 	return regA
 }
@@ -333,7 +333,7 @@ func (table *symtable) compileWhileOp(atoms []parser.Node) uint16 {
 
 	table.code.writeJmpOP(OpJmp, 0, -(table.code.Len()-init)-1)
 	for _, idx := range breaks.labelPos {
-		table.code.Code[idx] = makejmpop(OpJmp, 0, table.code.Len()-idx-1)
+		table.code.Code[idx] = jmpInst(OpJmp, 0, table.code.Len()-idx-1)
 	}
 	return regA
 }
@@ -360,7 +360,7 @@ func (table *symtable) patchGoto() {
 		if !ok {
 			panicf("label %q not found", l)
 		}
-		code[i] = makejmpop(OpJmp, 0, pos-(i+1))
+		code[i] = jmpInst(OpJmp, 0, pos-(i+1))
 	}
 }
 
@@ -403,7 +403,7 @@ func (table *symtable) collapse(atoms []parser.Node, optLast bool) {
 
 	if lastCompound.n.Valid() {
 		if optLast {
-			_, old, opb := op(table.code.Code[len(table.code.Code)-1])
+			_, old, opb := splitInst(table.code.Code[len(table.code.Code)-1])
 			table.code.truncateLast()
 			table.returnAddress(old)
 			atoms[lastCompound.i] = parser.NewAddress(opb)

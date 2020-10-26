@@ -10,12 +10,12 @@ import (
 	"github.com/coyove/script/parser"
 )
 
-func makeop(op opCode, a, b uint16) uint32 {
+func inst(op opCode, a, b uint16) uint32 {
 	// 6 + 13 + 13
 	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
 }
 
-func makejmpop(op opCode, a uint16, dist int) uint32 {
+func jmpInst(op opCode, a uint16, dist int) uint32 {
 	if dist < -(1<<12) || dist >= 1<<12 {
 		panic("long jump")
 	}
@@ -24,10 +24,10 @@ func makejmpop(op opCode, a uint16, dist int) uint32 {
 	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
 }
 
-func op(x uint32) (op opCode, a, b uint16) {
-	op = opCode(x >> 26)
-	a = uint16(x>>13) & 0x1fff
-	b = uint16(x) & 0x1fff
+func splitInst(op uint32) (op1 opCode, a, b uint16) {
+	op1 = opCode(op >> 26)
+	a = uint16(op>>13) & 0x1fff
+	b = uint16(op) & 0x1fff
 	return
 }
 
@@ -80,11 +80,11 @@ func (b *packet) write32(v uint32) {
 }
 
 func (b *packet) writeOP(op opCode, opa, opb uint16) {
-	b.Code = append(b.Code, makeop(op, opa, opb))
+	b.Code = append(b.Code, inst(op, opa, opb))
 }
 
 func (b *packet) writeJmpOP(op opCode, opa uint16, d int) {
-	b.Code = append(b.Code, makejmpop(op, opa, d))
+	b.Code = append(b.Code, jmpInst(op, opa, d))
 }
 
 func (b *packet) writePos(p parser.Position) {
@@ -165,12 +165,12 @@ func pkPrettify(c *Func, p *Program, tab int) string {
 	lastLine := uint32(0)
 MAIN:
 	for {
-		bop, a, b := op(pkRead32(c.code.Code, &cursor))
+		bop, a, b := splitInst(pkRead32(c.code.Code, &cursor))
 		sb.WriteString(spaces)
 
 		if len(c.code.Pos) > 0 {
 			next, op, line := c.code.Pos.read(0)
-			// log.Println(cursor, op, unsafe.Pointer(&Pos))
+			// log.Println(cursor, splitInst, unsafe.Pointer(&Pos))
 			for cursor > op {
 				c.code.Pos = c.code.Pos[next:]
 				if len(c.code.Pos) == 0 {

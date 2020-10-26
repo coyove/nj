@@ -50,9 +50,9 @@ type Error struct {
 func (e *Error) Error() string {
 	pos := e.Pos
 	if pos.Line == EOF {
-		return fmt.Sprintf("%v:eof: %s\n", pos.Source, e.Message)
+		return fmt.Sprintf("%s\n", e.Message)
 	} else {
-		return fmt.Sprintf("%v@%v:%d:%d: %s\n", e.Token, pos.Source, pos.Line, pos.Column, e.Message)
+		return fmt.Sprintf("%v at line %d: %s\n", e.Token, pos.Line, e.Message)
 	}
 }
 

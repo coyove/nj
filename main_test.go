@@ -17,6 +17,7 @@ import (
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	log.SetFlags(log.Lshortfile | log.Ltime)
+	AddGlobalValue("G", 1)
 }
 
 func runFile(t *testing.T, path string) {
@@ -33,7 +34,8 @@ func runFile(t *testing.T, path string) {
 		},
 		"intAlias", func(d time.Duration) time.Time {
 			return time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).Add(d)
-		})
+		},
+		"G", "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +190,7 @@ func TestRegisterOptimzation(t *testing.T) {
 		t.Error(err)
 	}
 
-	// At the end of the if block, the op Code will be like:
+	// At the end of the if block, the splitInst Code will be like:
 	// R0 = a, R1 = b -> Add
 	// But after the if block, there is another c = a + b, we can't re-use the registers R0 and R1
 	// because they will not contain the value we want as the if block was not executed at all.

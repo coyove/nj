@@ -39,6 +39,10 @@ func AddGlobalValue(k string, v interface{}) {
 	}
 }
 
+func RemoveGlobalValue(k string) {
+	delete(g, k)
+}
+
 func init() {
 	go func() {
 		for a := range time.Tick(time.Second) {

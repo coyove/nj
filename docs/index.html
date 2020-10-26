@@ -1,0 +1,105 @@
+<!doctype html>
+
+<title>Playground</title>
+<meta charset="utf-8"/>
+
+<link rel=stylesheet href="https://codemirror.net/lib/codemirror.css">
+<script src="https://codemirror.net/lib/codemirror.js"></script>
+<script src="https://codemirror.net/mode/lua/lua.js"></script>
+
+<style>
+  * {
+      box-sizing: border-box;
+      font-size: 14px;
+  }
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
+  .CodeMirror {
+      height: 100%;
+      background: #ffc;
+  }
+  #output {
+      position: absolute;
+      width: 100%;
+      top: 75%;
+      bottom: 0;
+      overflow-y: scroll;
+  }
+  #output div {
+      white-space: pre-wrap;
+      word-break: break-all;
+      padding: 0.5em;
+  }
+  #output div.title {
+      background: #098;
+      color: white;
+  }
+  #output div.content {
+      font-family: monospace;
+  }
+-</style>
+
+<body>
+  <div style="position:relative;height:100%">
+    <div style="line-height: 32px;height:32px;padding:0 0.5em">
+	<button onclick="run()">Run</button>
+	&emsp;
+	<select onchange="editor.setValue(demos[this.value] || '')">
+	<option selected>Select a demo...</option>
+	<option>yield</option>
+	<option>goto</option>
+	<option>fib</option>
+	<option>n-body</option>
+	</select>
+    </div>
+    <div style="position:absolute;left:0;top:32px;width:100%;bottom:25%">
+	<div style="border:solid 1px #aaa;border-width:1px 0 1px 0;height:100%">
+	    <textarea id="code" ></textarea>
+	</div>
+    </div>
+    <div id="output" style=""></div>
+  </div>
+</body>
+
+<script src="demo.js"></script>
+<script>
+  var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+      mode: "lua",
+      lineNumbers: true
+  });
+
+  function div(html, title) {
+      var el = document.createElement("div");
+      el.className = title ? 'title' : 'content';
+      el.innerHTML = html;
+      return el;
+  }
+
+  function run() {
+      var host = location.protocol == "file:" ? 'http://127.0.0.1:8080/' : 'http://fweibo.com:8990/';
+      fetch(host + '?code=' + encodeURIComponent(editor.getValue()))
+	  .then(response => response.json())
+	  .then(function(data) {
+	      var el = document.getElementById("output");
+	      el.innerHTML = '';
+
+	      if (data.error) {
+		  el.appendChild(div("Error", true))
+		  el.appendChild(div(data.error))
+	      } else {
+		el.appendChild(div("Results", true))
+		el.appendChild(div(JSON.stringify(data.results)));
+		if (data.stdout) {
+		    el.appendChild(div("Stdout", true));
+		    el.appendChild(div(data.stdout));
+		}
+		el.appendChild(div("Elapsed", true))
+		el.appendChild(div(data.elapsed + 's'));
+	      }
+	      el.appendChild(div("Compiled", true));
+	      el.appendChild(div(data.opcode));
+	  });
+  }
+</script>

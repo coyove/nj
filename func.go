@@ -26,7 +26,7 @@ type Program struct {
 	Extras                map[string]interface{}
 	Stack                 *[]Value
 	Funcs                 []*Func
-	Stdout, Stdin, Stderr io.ReadWriteCloser
+	Stdout, Stdin, Stderr io.ReadWriter
 }
 
 // Native creates a golang-native function
