@@ -5,10 +5,7 @@ import (
 	"strconv"
 )
 
-const (
-	regA   uint16 = 0x1fff // full 13 bits
-	regNil uint16 = 0x7ff - 1
-)
+const regA uint16 = 0x1fff // full 13 bits
 
 type opCode byte
 
@@ -41,10 +38,11 @@ const (
 	OpPopVAll
 	OpPopVClear
 	OpCall
+	OpCallMap
 	OpRet
 	OpYield
 	OpLen
-	OpEOB
+	OpJSON
 )
 
 type valueType byte

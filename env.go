@@ -33,12 +33,12 @@ func (env *Env) grow(newSize int) {
 
 // Get gets a value from the current stack
 func (env *Env) Get(index int) Value {
-	return env._get(uint16(index)&0x7ff, nil)
+	return env._get(uint16(index) & 0xfff)
 }
 
 // Set sets a value in the current stack
 func (env *Env) Set(index int, value Value) {
-	env._set(uint16(index)&0x7ff, value)
+	env._set(uint16(index)&0xfff, value)
 }
 
 // Clear clears the current stack
@@ -56,21 +56,13 @@ func (env *Env) Size() int {
 	return len(*env.stack) - int(env.stackOffset)
 }
 
-func (env *Env) _get(yx uint16, cls *Func) (zzz Value) {
+func (env *Env) _get(yx uint16) (zzz Value) {
 	if yx == regA {
 		return env.A
 	}
-	y := yx >> 11
-	index := int(yx & 0x7ff)
 
-	if y == 3 {
-		return cls.constTable[index]
-	}
-
-	if y == 1 {
-		if env.Global == nil {
-			panic("nil Global")
-		}
+	index := int(yx & 0xfff)
+	if yx>>12 == 1 {
 		return (*env.Global.Stack)[index]
 	}
 
@@ -86,13 +78,9 @@ func (env *Env) _set(yx uint16, v Value) {
 	if yx == regA {
 		env.A = v
 	} else {
-		index := int(yx & 0x7ff)
-		y := yx >> 11
+		index := int(yx & 0xfff)
 		s := (*env.stack)
-		if y == 1 {
-			if env.Global == nil {
-				panic("nil Global")
-			}
+		if yx>>12 == 1 {
 			(*env.Global.Stack)[index] = v
 		} else {
 			s[index+int(env.stackOffset)] = v

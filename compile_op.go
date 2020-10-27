@@ -31,7 +31,7 @@ func (table *symtable) compileSetOp(atoms []parser.Node) uint16 {
 	newYX := table.get(aDest)
 	if atoms[0].SymbolValue() == (parser.AMove) {
 		// a = b
-		if newYX == regNil {
+		if newYX == table.loadK(nil) {
 			t, h := table, 0
 			if t.global != nil {
 				t, h = t.global, 1
@@ -41,7 +41,7 @@ func (table *symtable) compileSetOp(atoms []parser.Node) uint16 {
 			// Do not use t.put() because it may put the symbol into masked tables
 			// e.g.: do a = 1 end
 			t.sym[aDest] = &symbol{addr: yx}
-			newYX = uint16(h)<<11 | yx
+			newYX = uint16(h)<<12 | yx
 		}
 	} else {
 		// local a = b
@@ -50,7 +50,7 @@ func (table *symtable) compileSetOp(atoms []parser.Node) uint16 {
 	}
 
 	fromYX := table.compileNode(atoms[2])
-	table.code.writeOP(OpSet, newYX, fromYX)
+	table.code.writeInst(OpSet, newYX, fromYX)
 	table.code.writePos(atoms[0].Pos())
 	return newYX
 }
@@ -63,7 +63,7 @@ func (table *symtable) compileRetOp(atoms []parser.Node) uint16 {
 
 	values := atoms[1].Nodes
 	if len(values) == 0 { // return
-		table.code.writeOP(op, regNil, 0)
+		table.code.writeInst(op, table.loadK(nil), 0)
 		return regA
 	}
 
@@ -154,16 +154,16 @@ func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
 	head := atoms[0].SymbolValue()
 	switch head {
 	case parser.APopV:
-		table.code.writeOP(OpPopV, 0, 0)
+		table.code.writeInst(OpPopV, 0, 0)
 		return regA
 	case parser.APopVClear:
-		table.code.writeOP(OpPopVClear, 0, 0)
+		table.code.writeInst(OpPopVClear, 0, 0)
 		return regA
 	case parser.APopVAll:
-		table.code.writeOP(OpPopVAll, 0, 0)
+		table.code.writeInst(OpPopVAll, 0, 0)
 		return regA
 	case parser.APopVAllA:
-		table.code.writeOP(OpPopVAll, 1, 0)
+		table.code.writeInst(OpPopVAll, 1, 0)
 		return regA
 	}
 
@@ -187,7 +187,7 @@ func (table *symtable) compileAndOrOp(atoms []parser.Node) uint16 {
 	}
 
 	table.writeOpcode(OpSet, _nodeRegA, atoms[1])
-	table.code.writeOP(bop, regA, 0)
+	table.code.writeInst(bop, regA, 0)
 	part1 := table.code.Len()
 
 	table.writeOpcode(OpSet, _nodeRegA, atoms[2])
@@ -207,14 +207,14 @@ func (table *symtable) compileIfOp(atoms []parser.Node) uint16 {
 
 	table.addMaskedSymTable()
 
-	table.code.writeJmpOP(OpIfNot, condyx, 0)
+	table.code.writeJmpInst(OpIfNot, condyx, 0)
 	table.code.writePos(atoms[0].Pos())
 	init := table.code.Len()
 
 	table.compileNode(trueBranch)
 	part1 := table.code.Len()
 
-	table.code.writeJmpOP(OpJmp, 0, 0)
+	table.code.writeJmpInst(OpJmp, 0, 0)
 
 	table.compileNode(falseBranch)
 	part2 := table.code.Len()
@@ -240,14 +240,16 @@ func (table *symtable) compileCallOp(nodes []parser.Node) uint16 {
 		table.writeOpcode(OpPush, tmp[i], parser.NewAddress(uint16(i-1)))
 	}
 
-	var opb uint16
-	if nodes[0].SymbolValue() == (parser.ATailCall) {
-		opb = 1
+	switch nodes[0].SymbolValue() {
+	case parser.ACallMap:
+		table.writeOpcode(OpCallMap, tmp[0], parser.Node{})
+	case parser.ACall:
+		table.writeOpcode(OpCall, tmp[0], parser.NewAddress(0))
+	case parser.ATailCall:
+		table.writeOpcode(OpCall, tmp[0], parser.NewAddress(1))
 	}
 
-	table.writeOpcode(OpCall, tmp[0], parser.NewAddress(opb))
 	table.code.writePos(nodes[0].Pos())
-
 	table.returnAddresses(tmp)
 	return regA
 }
@@ -257,6 +259,7 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 	vararg := false
 	params := atoms[2]
 	newtable := newsymtable()
+	paramMap := map[string]uint16{}
 
 	if table.global == nil {
 		newtable.global = table
@@ -279,6 +282,7 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 			panicf("%v: duplicated parameter: %q", atoms[0], n)
 		}
 		newtable.put(n, uint16(i))
+		paramMap[n] = uint16(i)
 	}
 
 	ln := len(newtable.sym)
@@ -294,7 +298,7 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 	newtable.patchGoto()
 
 	code := newtable.code
-	code.writeOP(OpEOB, 0, 0)
+	code.writeInst(OpRet, table.loadK(nil), 0)
 
 	cls := &Func{}
 	cls.name = atoms[1].SymbolValue()
@@ -302,10 +306,10 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 	cls.stackSize = newtable.vp
 	cls.isVariadic = vararg
 	cls.code = code
-	cls.constTable = newtable.constsToValues()
+	cls.paramMap = paramMap
 
 	table.funcs = append(table.funcs, cls)
-	table.code.writeOP(OpLoadFunc, uint16(len(table.funcs))-1, 0)
+	table.code.writeInst(OpLoadFunc, uint16(len(table.funcs))-1, 0)
 	table.code.writePos(atoms[0].Pos())
 	return regA
 }
@@ -316,7 +320,7 @@ func (table *symtable) compileBreakOp(atoms []parser.Node) uint16 {
 		panicf("break outside loop")
 	}
 	table.inloop[len(table.inloop)-1].labelPos = append(table.inloop[len(table.inloop)-1].labelPos, table.code.Len())
-	table.code.writeJmpOP(OpJmp, 0, 0)
+	table.code.writeJmpInst(OpJmp, 0, 0)
 	return regA
 }
 
@@ -331,7 +335,7 @@ func (table *symtable) compileWhileOp(atoms []parser.Node) uint16 {
 	table.removeMaskedSymTable()
 	table.inloop = table.inloop[:len(table.inloop)-1]
 
-	table.code.writeJmpOP(OpJmp, 0, -(table.code.Len()-init)-1)
+	table.code.writeJmpInst(OpJmp, 0, -(table.code.Len()-init)-1)
 	for _, idx := range breaks.labelPos {
 		table.code.Code[idx] = jmpInst(OpJmp, 0, table.code.Len()-idx-1)
 	}
@@ -344,9 +348,9 @@ func (table *symtable) compileGotoOp(atoms []parser.Node) uint16 {
 		table.labelPos[label] = table.code.Len()
 	} else { // goto label
 		if pos, ok := table.labelPos[label]; ok {
-			table.code.writeJmpOP(OpJmp, 0, pos-(table.code.Len()+1))
+			table.code.writeJmpInst(OpJmp, 0, pos-(table.code.Len()+1))
 		} else {
-			table.code.writeJmpOP(OpJmp, 0, 0)
+			table.code.writeJmpInst(OpJmp, 0, 0)
 			table.forwardGoto[table.code.Len()-1] = label
 		}
 	}
@@ -375,6 +379,43 @@ func (table *symtable) compileRetAddrOp(atoms []parser.Node) uint16 {
 			delete(table.sym, s)
 		}
 	}
+	return regA
+}
+
+func (table *symtable) compileJSONOp(atoms []parser.Node) uint16 {
+	var args []parser.Node
+	var toFinalString uint16 = 0
+
+	if !table.insideJSONGenerator {
+		// OpJSON will only output a 'jsonQuotedString' value, when toFinalString == 1
+		// it will output a 'string' value
+		toFinalString = 1
+		table.insideJSONGenerator = true
+		defer func() { table.insideJSONGenerator = false }()
+	}
+
+	if len(atoms[1].Nodes) > 0 {
+		// Make array
+		table.collapse(atoms[1].Nodes, true)
+		args = atoms[1].Nodes
+	} else {
+		// Make object
+		table.collapse(atoms[2].Nodes, true)
+		args = atoms[2].Nodes
+	}
+
+	for i := 0; i < len(args); i++ {
+		table.writeOpcode(OpPush, args[i], parser.NewAddress(uint16(i)))
+	}
+
+	table.returnAddresses(args)
+	if len(atoms[1].Nodes) > 0 {
+		table.code.writeInst(OpJSON, 0, toFinalString)
+	} else {
+		table.code.writeInst(OpJSON, 1, toFinalString)
+	}
+
+	table.code.writePos(atoms[0].Pos())
 	return regA
 }
 

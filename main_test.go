@@ -35,10 +35,31 @@ func runFile(t *testing.T, path string) {
 		"intAlias", func(d time.Duration) time.Time {
 			return time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).Add(d)
 		},
+		"boolConvert", func(v bool) {
+			if !v {
+				panic("bad")
+			}
+		},
+		"mapFunc", NativeWithParamMap(func(env *Env, in map[string]Value) {
+			if !in["a"].IsNil() {
+				env.A = _str("a")
+			}
+			if !in["b"].IsNil() {
+				env.A = _str("b")
+			}
+			if !in["c"].IsNil() {
+				env.A = _str("c")
+			}
+			if !in["d"].IsNil() {
+				env.A = _str("d")
+			}
+		}, "a", "b", "c", "d"),
 		"G", "test")
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// log.Println(b.PrettyCode())
 
 	i, i2, err := b.Call()
 	if err != nil {
@@ -134,10 +155,6 @@ func TestArithmeticUnfold(t *testing.T) {
 `)
 	if err != nil {
 		t.Error(err)
-	}
-
-	if len(cls.constTable) != 1 || cls.constTable[0].Float() != 2.5 {
-		t.Error("unfolding failed")
 	}
 
 	if v, _, _ := cls.Call(); v.Float() != 2.5 {
@@ -242,7 +259,10 @@ func TestTooManyVariables(t *testing.T) {
 	}
 
 	f, _ := LoadString(makeCode(n))
-	_, v2, _ := f.Call()
+	_, v2, err := f.Call()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for i := 1; i < n; i++ {
 		if v2[i-1].Int() != int64(i) {
@@ -250,7 +270,7 @@ func TestTooManyVariables(t *testing.T) {
 		}
 	}
 
-	_, err := LoadString(makeCode(2000))
+	_, err = LoadString(makeCode(2000))
 	if !strings.Contains(err.Error(), "too many") {
 		t.Fatal(err)
 	}
@@ -272,4 +292,24 @@ func TestFalsyValue(t *testing.T) {
 	assert(!s.IsFalse())
 	s = Bool(false)
 	assert(s.IsFalse())
+}
+
+func TestFunctionClosure(t *testing.T) {
+	p, _ := LoadString(` local a = 0
+function add ()
+a+=1
+return a
+end
+return add`)
+	add, _, _ := p.Run()
+
+	p2, _ := LoadString(`
+local a = 100
+return a + add(), a + add(), a + add()
+`, "add", add)
+	v, v1, err := p2.Run()
+	if v.Int() != 101 || v1[0].Int() != 102 || v1[1].Int() != 103 {
+		t.Fatal(v, v1, err, p2.PrettyCode())
+	}
+
 }

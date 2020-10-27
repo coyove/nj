@@ -41,6 +41,7 @@ const (
 	AStore     = "store"
 	ASlice     = "slice"
 	ACall      = "call"
+	ACallMap   = "callmap"
 	ATailCall  = "tailcall"
 	AReturn    = "return"
 	AYield     = "yield"
@@ -65,6 +66,7 @@ const (
 	APopVAllA  = "popallva"
 	ALabel     = "label"
 	AGoto      = "goto"
+	AJSON      = "map"
 )
 
 func __chain(args ...Node) Node {
@@ -121,7 +123,7 @@ func __findTailCall(stats []Node) {
 	for len(stats) > 0 {
 		x := stats[len(stats)-1]
 		c := x.Nodes
-		if len(c) == 3 && c[0].SymbolValue() == (ACall) {
+		if len(c) == 3 && c[0].SymbolValue() == ACall {
 			c[0].strSym = ATailCall
 			return
 		}

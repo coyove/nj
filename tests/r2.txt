@@ -29,3 +29,27 @@ assert( "sep7")
 
  a = 10
 assert( 1 + (1 + a) == 12)
+
+function foo1(a, b, c)
+return a, b, c
+end
+
+local a, b, c = foo1(1, 2, 3)
+assert(a == 1 and b + c == 5)
+a,b,c = foo1(c=10,b="a")
+assert(a==nil and c == 10 and b == "a")
+
+function foo1(a, b, c, ...)
+return a, b, c, ...
+end
+
+local _, _, _, x = foo1(1,2,3,"4")
+assert(x == "4")
+
+_, b, _, x = foo1(["b"]=2)
+assert(b == 2 and x == nil)
+
+do
+	assert("a" == mapFunc(a=1))
+	assert("c" == mapFunc(c=1))
+end

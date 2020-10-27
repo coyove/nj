@@ -7,7 +7,7 @@ Here are some single-threaded results by the 'real' output of `time ./prog`:
 |       | potatolang | tengo | lua5.3 | perl5 |
 | ----- | ---------- | ----- | ------ | ----- |
 |fib (n=35) | 1.5 | 2.9 | 1.6 | 3.4 |
-|nbody (iteration=500000) | 8.1 | 9.1 | 1.8 | 4.3 |
+|nbody (iteration=500000) | 18.0 | 9.1 | 1.8 | 4.3 |
 |binarytree (depth=23)    | 10.0 | 23.4 | 13.4 | 19.1 |
 |spectralnorms (size=2000, cores=8) | 5.0 | TODO | TODO | 2.9 |
 |spectralnorms (size=2000, cores=1) | 24.9 | 51.1 | 14.8 | 11.5 |

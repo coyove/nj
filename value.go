@@ -145,10 +145,13 @@ func Interface(i interface{}) Value {
 		}
 		return Function(&Func{name: "<native>", native: nf})
 	}
+	return _interface(i)
+}
 
+func _interface(i interface{}) Value {
 	x := *(*[2]uintptr)(unsafe.Pointer(&i))
-	return Value{v: uint64(x[0]), p: unsafe.Pointer(x[1])}
 	// return Value{v: VInterface, p: unsafe.Pointer(&i)}
+	return Value{v: uint64(x[0]), p: unsafe.Pointer(x[1])}
 }
 
 // _str cast value to string
@@ -225,6 +228,9 @@ func (v Value) TypedInterface(t reflect.Type) interface{} {
 			rv := reflect.ValueOf(v.Interface())
 			rv = rv.Convert(t)
 			return rv.Interface()
+		}
+		if t.Kind() == reflect.Bool {
+			return !v.IsFalse()
 		}
 	case VStack:
 		a := v._unpackedStack().a
@@ -355,3 +361,9 @@ func (t *unpacked) Get(idx int64) (v Value) {
 	}
 	return Value{}
 }
+
+type jsonQuotedString []byte
+
+func (jsq jsonQuotedString) MarshalJSON() ([]byte, error) { return []byte(jsq), nil }
+
+func (jsq jsonQuotedString) String() string { return string(jsq) }

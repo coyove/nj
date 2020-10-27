@@ -71,26 +71,18 @@ func (b *packet) write(buf packet) {
 	}
 }
 
-func (b *packet) writeBytes(buf []uint32) {
-	b.Code = append(b.Code, buf...)
-}
-
-func (b *packet) write32(v uint32) {
-	b.Code = append(b.Code, v)
-}
-
-func (b *packet) writeOP(op opCode, opa, opb uint16) {
+func (b *packet) writeInst(op opCode, opa, opb uint16) {
 	b.Code = append(b.Code, inst(op, opa, opb))
 }
 
-func (b *packet) writeJmpOP(op opCode, opa uint16, d int) {
+func (b *packet) writeJmpInst(op opCode, opa uint16, d int) {
 	b.Code = append(b.Code, jmpInst(op, opa, d))
 }
 
 func (b *packet) writePos(p parser.Position) {
 	if p.Line == 0 {
 		// Debug Code, used to detect a null meta struct
-		panicf("null line")
+		panicf("DEBUG: null line")
 	}
 	b.Pos.append(uint32(len(b.Code)), p.Line)
 }
@@ -103,16 +95,6 @@ func (b *packet) truncateLast() {
 
 func (b *packet) Len() int {
 	return len(b.Code)
-}
-
-func pkRead(data []uint32, len int, cursor *uint32) []uint32 {
-	*cursor += uint32(len)
-	return data[*cursor-uint32(len) : *cursor]
-}
-
-func pkRead32(data []uint32, cursor *uint32) uint32 {
-	*cursor++
-	return data[*cursor-1]
 }
 
 var singleOp = map[opCode]string{
@@ -134,7 +116,7 @@ var singleOp = map[opCode]string{
 	OpPow:    parser.APow,
 }
 
-func pkPrettify(c *Func, p *Program, tab int) string {
+func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 	sb := &bytes.Buffer{}
 	spaces := strings.Repeat("        ", tab)
 	spaces2 := ""
@@ -144,44 +126,52 @@ func pkPrettify(c *Func, p *Program, tab int) string {
 
 	sb.WriteString(spaces2 + "+ START " + c.String() + "\n")
 
-	var cursor uint32
-	readAddr := func(a uint16) string {
+	readAddr := func(a uint16, rValue bool) string {
 		if a == regA {
 			return "$a"
 		}
-		if a == regNil {
-			return "nil"
+
+		suffix := ""
+		if rValue {
+			if a&0xfff == p.NilIndex {
+				return "nil"
+			}
+			if a>>12 == 1 || toplevel {
+				v := (*p.Stack)[a&0xfff]
+				if !v.IsNil() {
+					suffix = "`" + v.String()
+				}
+			}
 		}
-		if a>>11 == 3 {
-			return fmt.Sprintf("k$%d(%v)", a&0x07ff, c.constTable[a&0x7ff].toString(0))
+
+		if a>>12 == 1 {
+			return fmt.Sprintf("g$%d", a&0xfff) + suffix
 		}
-		if a>>11 == 1 {
-			return fmt.Sprintf("g$%d", a&0x07ff)
-		}
-		return fmt.Sprintf("$%d", a&0x07ff)
+		return fmt.Sprintf("$%d", a&0xfff) + suffix
 	}
 
 	oldpos := c.code.Pos
 	lastLine := uint32(0)
-MAIN:
-	for {
-		bop, a, b := splitInst(pkRead32(c.code.Code, &cursor))
+
+	for i, inst := range c.code.Code {
+		cursor := uint32(i) + 1
+		bop, a, b := splitInst(inst)
 		sb.WriteString(spaces)
 
 		if len(c.code.Pos) > 0 {
 			next, op, line := c.code.Pos.read(0)
 			// log.Println(cursor, splitInst, unsafe.Pointer(&Pos))
-			for cursor > op {
+			for uint32(cursor) > op {
 				c.code.Pos = c.code.Pos[next:]
 				if len(c.code.Pos) == 0 {
 					break
 				}
-				if next, op, line = c.code.Pos.read(0); cursor <= op {
+				if next, op, line = c.code.Pos.read(0); uint32(cursor) <= op {
 					break
 				}
 			}
 
-			if op == cursor {
+			if op == uint32(cursor) {
 				x := "."
 				if line != lastLine {
 					x = strconv.Itoa(int(line))
@@ -197,52 +187,60 @@ MAIN:
 		}
 
 		switch bop {
-		case OpEOB:
-			sb.WriteString("end\n")
-			break MAIN
 		case OpSet:
-			sb.WriteString(readAddr(a) + " = " + readAddr(b))
+			sb.WriteString(readAddr(a, false) + " = " + readAddr(b, true))
 		case OpPopVClear:
 			sb.WriteString("clear-v")
 		case OpPopVAll:
-			switch a {
-			case 0:
+			if a == 0 {
 				sb.WriteString("$a = popv-all")
-			case 1:
+			} else {
 				sb.WriteString("$a = popv-all-with-a")
 			}
 		case OpPopV:
 			sb.WriteString("$a = pop-v")
 		case OpPushV:
-			sb.WriteString("pushv " + readAddr(a))
+			sb.WriteString("pushv " + readAddr(a, true))
 			if b != 0 {
 				sb.WriteString(" cap=" + strconv.Itoa(int(b)))
 			}
 		case OpPush:
-			sb.WriteString(fmt.Sprintf("push-%d %v", b, readAddr(a)))
+			sb.WriteString(fmt.Sprintf("push-%d %v", b, readAddr(a, true)))
 			if a == regA {
 				sb.WriteString(" $v")
 			}
 		case OpRet:
-			sb.WriteString("ret " + readAddr(a))
+			sb.WriteString("ret " + readAddr(a, true))
 		case OpYield:
-			sb.WriteString("yield " + readAddr(a))
+			sb.WriteString("yield " + readAddr(a, true))
 		case OpLoadFunc:
-			sb.WriteString("$a = closure:\n")
+			sb.WriteString("$a = function:\n")
 			cls := p.Funcs[a]
-			sb.WriteString(pkPrettify(cls, p, tab+1))
+			sb.WriteString(pkPrettify(cls, p, false, tab+1))
 		case OpCall:
 			if b == 1 {
-				sb.WriteString("tail-call " + readAddr(a))
+				sb.WriteString("tail-call " + readAddr(a, true))
 			} else {
-				sb.WriteString("call " + readAddr(a))
+				sb.WriteString("call " + readAddr(a, true))
+			}
+		case OpCallMap:
+			sb.WriteString("callmap " + readAddr(a, true))
+		case OpJSON:
+			if a == 0 && b == 0 {
+				sb.WriteString("json-array")
+			} else if a == 0 && b == 1 {
+				sb.WriteString("json-array-final")
+			} else if a == 1 && b == 0 {
+				sb.WriteString("json-object")
+			} else {
+				sb.WriteString("json-object-final")
 			}
 		case OpJmp:
 			pos := int32(b) - 1<<12
 			pos2 := uint32(int32(cursor) + pos)
 			sb.WriteString("jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
 		case OpIf, OpIfNot:
-			addr := readAddr(a)
+			addr := readAddr(a, true)
 			pos := int32(b) - 1<<12
 			pos2 := strconv.Itoa(int(int32(cursor) + pos))
 			if bop == OpIfNot {
@@ -251,10 +249,10 @@ MAIN:
 				sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
 			}
 		case OpInc:
-			sb.WriteString("inc " + readAddr(a) + " " + readAddr(uint16(b)))
+			sb.WriteString("inc " + readAddr(a, false) + " " + readAddr(uint16(b), true))
 		default:
 			if bs, ok := singleOp[bop]; ok {
-				sb.WriteString(bs + " " + readAddr(a) + " " + readAddr(b))
+				sb.WriteString(bs + " " + readAddr(a, true) + " " + readAddr(b, true))
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))
 			}

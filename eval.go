@@ -2,6 +2,7 @@ package script
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -119,19 +120,6 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 		}
 	}()
 
-	returnUpperWorld := func(v Value) {
-		r := retStack[len(retStack)-1]
-		cursor = r.cursor
-		K = r.cls
-
-		env.stackOffset = r.stackOffset
-		env.A, env.V = returnVararg(&env, v, env.V)
-		*env.stack = (*env.stack)[:env.stackOffset+uint32(r.cls.stackSize)]
-		stackEnv.stackOffset = uint32(len(*env.stack))
-		retStack = retStack[:len(retStack)-1]
-	}
-
-MAIN:
 	for {
 		if env.Global.Deadline != 0 {
 			if atomic.LoadInt64(&now) > env.Global.Deadline {
@@ -144,23 +132,19 @@ MAIN:
 		bop, opa, opb := splitInst(v)
 
 		switch bop {
-		case OpEOB:
-			break MAIN
 		case OpSet:
-			env._set(opa, env._get(opb, K))
+			env._set(opa, env._get(opb))
 		case OpPushV:
 			if opb != 0 {
 				env.V = make([]Value, 0, opb)
 			}
-			env.V = append(env.V, env._get(opa, K))
+			env.V = append(env.V, env._get(opa))
 		case OpPopVClear:
 			env.V = nil
 		case OpPopVAll:
-			if opa == 1 {
-				// popv-all-with-a, e.g.: local ... = foo()
+			if opa == 1 { // popv-all-with-a, e.g.: local ... = foo()
 				env.A = _unpackedStack(&unpacked{append([]Value{env.A}, env.V...)})
-			} else {
-				// popv-all, e.g.: local a, ... = foo()
+			} else { // popv-all, e.g.: local a, ... = foo()
 				env.A = _unpackedStack(&unpacked{env.V})
 			}
 			env.V = nil
@@ -171,35 +155,57 @@ MAIN:
 				env.A, env.V = env.V[0], env.V[1:]
 			}
 		case OpInc:
-			vaf, vai, vaIsInt := env._get(opa, K).Expect(VNumber).Num()
-			vbf, vbi, vbIsInt := env._get(opb, K).Expect(VNumber).Num()
+			vaf, vai, vaIsInt := env._get(opa).Expect(VNumber).Num()
+			vbf, vbi, vbIsInt := env._get(opb).Expect(VNumber).Num()
 			if vaIsInt && vbIsInt {
 				env.A = Int(vai + vbi)
 			} else {
 				env.A = Float(vaf + vbf)
 			}
 			env._set(opa, env.A)
+		case OpJSON:
+			var buf []byte
+			switch opa {
+			case 0:
+				a := make([]interface{}, stackEnv.Size())
+				for i, v := range stackEnv.Stack() {
+					a[i] = v.Interface()
+				}
+				buf, _ = json.Marshal(a)
+			case 1:
+				a := make(map[string]interface{}, stackEnv.Size()/2)
+				for i := 0; i < stackEnv.Size(); i += 2 {
+					var x interface{}
+					if i+1 < stackEnv.Size() {
+						x = stackEnv.Stack()[i+1].Interface()
+					}
+					a[stackEnv.Stack()[i].String()] = x
+				}
+				buf, _ = json.Marshal(a)
+			}
+			if opb == 0 {
+				env.A = Interface(jsonQuotedString(buf))
+			} else {
+				env.A = env.NewStringBytes(buf)
+			}
+			stackEnv.Clear()
 		case OpConcat:
 			var x string
-			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _StrStr:
+			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _StrStr {
 				x = va._str() + vb._str()
-			default:
-				if va.Type() == VString && vb.Type() == VNumber {
-					vbf, vbi, vbIsInt := vb.Num()
-					if vbIsInt {
-						x = va._str() + strconv.FormatInt(vbi, 10)
-					} else {
-						x = va._str() + strconv.FormatFloat(vbf, 'f', 0, 64)
-					}
+			} else if va.Type() == VString && vb.Type() == VNumber {
+				vbf, vbi, vbIsInt := vb.Num()
+				if vbIsInt {
+					x = va._str() + strconv.FormatInt(vbi, 10)
 				} else {
-					va, vb = va.Expect(VString), vb.Expect(VString)
+					x = va._str() + strconv.FormatFloat(vbf, 'f', 0, 64)
 				}
+			} else {
+				va, vb = va.Expect(VString), vb.Expect(VString)
 			}
 			env.A = env.NewString(x)
 		case OpAdd:
-			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumNum:
+			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _NumNum {
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt {
@@ -207,23 +213,20 @@ MAIN:
 				} else {
 					env.A = Float(vaf + vbf)
 				}
-			default:
-				if va.Type() == VNumber && vb.Type() == VString {
-					vaf, vai, vaIsInt := va.Num()
-					if vaIsInt {
-						vbi, _ := strconv.ParseInt(vb._str(), 0, 64)
-						env.A = Int(vai + vbi)
-					} else {
-						vbf, _ := strconv.ParseFloat(vb._str(), 64)
-						env.A = Float(vaf + vbf)
-					}
+			} else if va.Type() == VNumber && vb.Type() == VString {
+				vaf, vai, vaIsInt := va.Num()
+				if vaIsInt {
+					vbi, _ := strconv.ParseInt(vb._str(), 0, 64)
+					env.A = Int(vai + vbi)
 				} else {
-					va, vb = va.Expect(VNumber), vb.Expect(VNumber)
+					vbf, _ := strconv.ParseFloat(vb._str(), 64)
+					env.A = Float(vaf + vbf)
 				}
+			} else {
+				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
 			}
 		case OpSub:
-			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumNum:
+			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _NumNum {
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt {
@@ -231,12 +234,11 @@ MAIN:
 				} else {
 					env.A = Float(vaf - vbf)
 				}
-			default:
+			} else {
 				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
 			}
 		case OpMul:
-			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumNum:
+			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _NumNum {
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt {
@@ -244,12 +246,11 @@ MAIN:
 				} else {
 					env.A = Float(vaf * vbf)
 				}
-			default:
+			} else {
 				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
 			}
 		case OpDiv:
-			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumNum:
+			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _NumNum {
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt && vai%vbi == 0 {
@@ -257,12 +258,11 @@ MAIN:
 				} else {
 					env.A = Float(vaf / vbf)
 				}
-			default:
+			} else {
 				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
 			}
 		case OpMod:
-			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
-			case _NumNum:
+			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _NumNum {
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt {
@@ -270,15 +270,15 @@ MAIN:
 				} else {
 					env.A = Float(math.Remainder(vaf, vbf))
 				}
-			default:
+			} else {
 				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
 			}
 		case OpEq:
-			env.A = Bool(env._get(opa, K).Equal(env._get(opb, K)))
+			env.A = Bool(env._get(opa).Equal(env._get(opb)))
 		case OpNeq:
-			env.A = Bool(!env._get(opa, K).Equal(env._get(opb, K)))
+			env.A = Bool(!env._get(opa).Equal(env._get(opb)))
 		case OpLess:
-			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
 			case _NumNum:
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
@@ -293,7 +293,7 @@ MAIN:
 				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
 			}
 		case OpLessEq:
-			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
 			case _NumNum:
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
@@ -308,9 +308,9 @@ MAIN:
 				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
 			}
 		case OpNot:
-			env.A = Bool(env._get(opa, K).IsFalse())
+			env.A = Bool(env._get(opa).IsFalse())
 		case OpPow:
-			switch va, vb := env._get(opa, K), env._get(opb, K); va.Type() + vb.Type() {
+			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
 			case _NumNum:
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
@@ -323,7 +323,7 @@ MAIN:
 				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
 			}
 		case OpLen:
-			switch v := env._get(opa, K); v.Type() {
+			switch v := env._get(opa); v.Type() {
 			case VString:
 				env.A = Float(float64(len(v._str())))
 			case VStack:
@@ -334,7 +334,7 @@ MAIN:
 				env.A = Int(int64(reflectLen(v.Interface())))
 			}
 		case OpStore:
-			subject, v := env._get(opa, K), env._get(opb, K)
+			subject, v := env._get(opa), env._get(opb)
 			switch subject.Type() {
 			case VStack:
 				subject._unpackedStack().Put(env.A.ExpectMsg(VNumber, "store").Int(), v)
@@ -345,8 +345,8 @@ MAIN:
 			}
 			env.A = v
 		case OpSlice:
-			subject := env._get(opa, K)
-			start, end := env.A.ExpectMsg(VNumber, "slice").Int(), env._get(opb, K).ExpectMsg(VNumber, "slice").Int()
+			subject := env._get(opa)
+			start, end := env.A.ExpectMsg(VNumber, "slice").Int(), env._get(opb).ExpectMsg(VNumber, "slice").Int()
 			switch subject.Type() {
 			case VStack:
 				env.A = _unpackedStack(&unpacked{a: subject._unpackedStack().Slice(start, end)})
@@ -363,20 +363,20 @@ MAIN:
 				subject = subject.Expect(VStack)
 			}
 		case OpLoad:
-			switch a := env._get(opa, K); a.Type() {
+			switch a := env._get(opa); a.Type() {
 			case VStack:
-				env.A = a._unpackedStack().Get(env._get(opb, K).ExpectMsg(VNumber, "load").Int())
+				env.A = a._unpackedStack().Get(env._get(opb).ExpectMsg(VNumber, "load").Int())
 			case VInterface:
-				env.A = reflectLoad(a.Interface(), env._get(opb, K))
+				env.A = reflectLoad(a.Interface(), env._get(opb))
 			case VString:
-				if idx, s := env._get(opb, K).ExpectMsg(VNumber, "load").Int(), a._str(); idx >= 1 && idx <= int64(len(s)) {
+				if idx, s := env._get(opb).ExpectMsg(VNumber, "load").Int(), a._str(); idx >= 1 && idx <= int64(len(s)) {
 					env.A = Int(int64(s[idx-1]))
 				}
 			default:
 				a = a.Expect(VStack)
 			}
 		case OpPush:
-			if v := env._get(opa, K); v.Type() == VStack {
+			if v := env._get(opa); v.Type() == VStack {
 				*stackEnv.stack = append(*stackEnv.stack, v._unpackedStack().a...)
 			} else {
 				stackEnv.Push(v)
@@ -387,32 +387,52 @@ MAIN:
 			if env.Global.MaxStackSize > 0 && int64(len(*stackEnv.stack)) > env.Global.MaxStackSize {
 				panicf("stack overflow, max: %d", env.Global.MaxStackSize)
 			}
-		case OpRet:
-			v := env._get(opa, K)
-			if len(retStack) == 0 {
-				v, env.V = returnVararg(&env, v, env.V)
-				return v, env.V
-			}
-			returnUpperWorld(v)
 		case OpYield:
-			v := env._get(opa, K)
 			env.V = append(env.V, Int(int64(cursor)))
 			env.V = append(env.V, env.Stack()...)
-			v, env.V = returnVararg(&env, v, env.V)
+			fallthrough
+		case OpRet:
+			v := env._get(opa)
 			if len(retStack) == 0 {
 				v, env.V = returnVararg(&env, v, env.V)
 				return v, env.V
 			}
-			returnUpperWorld(v)
+			// Return upper stack
+			r := retStack[len(retStack)-1]
+			cursor = r.cursor
+			K = r.cls
+			env.stackOffset = r.stackOffset
+			env.A, env.V = returnVararg(&env, v, env.V)
+			*env.stack = (*env.stack)[:env.stackOffset+uint32(r.cls.stackSize)]
+			stackEnv.stackOffset = uint32(len(*env.stack))
+			retStack = retStack[:len(retStack)-1]
 		case OpLoadFunc:
-			f := env.Global.Funcs[opa]
-			// f.loadGlobal = env.Global
-			env.A = Function(f)
+			env.A = Function(env.Global.Funcs[opa])
+		case OpCallMap:
+			cls := env._get(opa).ExpectMsg(VFunction, "callmap").Function()
+			m := map[uint16]Value{}
+			for i := 0; i < stackEnv.Size(); i += 2 {
+				name := stackEnv.Stack()[i].String()
+				idx, ok := cls.paramMap[name]
+				if ok {
+					m[idx] = stackEnv.Stack()[i+1]
+				}
+			}
+			stackEnv.Clear()
+			for i := byte(0); i < cls.numParams; i++ {
+				v, ok := m[uint16(i)]
+				if ok {
+					stackEnv.Push(v)
+				} else {
+					stackEnv.Push(Value{})
+				}
+			}
+			fallthrough
 		case OpCall:
-			cls := env._get(opa, K).ExpectMsg(VFunction, "call").Function()
-			stackEnv.Global = env.Global
+			cls := env._get(opa).ExpectMsg(VFunction, "call").Function()
 
 			if cls.native != nil {
+				stackEnv.Global = env.Global
 				cls.native(&stackEnv)
 				env.A, env.V = stackEnv.A, stackEnv.V
 				stackEnv.Clear()
@@ -440,7 +460,8 @@ MAIN:
 				cursor = 0
 				K = cls
 				env.stackOffset = stackEnv.stackOffset
-				env.Global = stackEnv.Global
+				env.Global = cls.loadGlobal
+				env.V = env.V[:0]
 
 				if opb == 0 {
 					retStack = append(retStack, last)
@@ -455,19 +476,13 @@ MAIN:
 		case OpJmp:
 			cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 		case OpIfNot:
-			if cond := env._get(opa, K); cond.IsFalse() {
+			if cond := env._get(opa); cond.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
 		case OpIf:
-			if cond := env._get(opa, K); !cond.IsFalse() {
+			if cond := env._get(opa); !cond.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
 			}
 		}
 	}
-
-	if len(retStack) > 0 {
-		returnUpperWorld(Value{})
-		goto MAIN
-	}
-	return Value{}, nil
 }

@@ -10,6 +10,7 @@ package parser
 %type<expr> ident_list
 %type<expr> expr_list
 %type<expr> expr_list_paren
+%type<expr> expr_assign_list
 %type<expr> expr
 %type<expr> postfix_incdec
 %type<expr> _postfix_assign
@@ -23,6 +24,7 @@ package parser
 %type<expr> func
 %type<expr> func_stat
 %type<expr> func_params_list
+%type<expr> json_gen
 
 %union {
   token Token
@@ -338,6 +340,7 @@ expr:
         TNumber                           { $$ = NewNumberFromString($1.Str) } |
         TString                           { $$ = NewString($1.Str) } |
 	prefix_expr                       { $$ = $1 } |
+	json_gen                          { $$ = $1 } |
         expr TOr expr                     { $$ = NewComplex(NewSymbol(AOr), $1,$3).SetPos($2.Pos) } |
         expr TAnd expr                    { $$ = NewComplex(NewSymbol(AAnd), $1,$3).SetPos($2.Pos) } |
         expr '>' expr                     { $$ = NewComplex(NewSymbol(ALess), $3,$1).SetPos($2.Pos) } |
@@ -361,6 +364,7 @@ prefix_expr:
         declarator                        { $$ = $1 } |
         prefix_expr TString               { $$ = __call($1, NewComplex(NewString($2.Str))).SetPos($1.Pos()) } |
         prefix_expr expr_list_paren       { $$ = __call($1, $2).SetPos($1.Pos()) } |
+	prefix_expr '('expr_assign_list')'{ $$ = NewComplex(NewSymbol(ACallMap), $1, $3).SetPos($1.Pos()) } |
         '(' expr ')'                      { $$ = $2 } // shift/reduce conflict
 
 expr_list:
@@ -370,6 +374,18 @@ expr_list:
 expr_list_paren:
         '(' ')'                           { $$ = NewComplex() } |
         '(' expr_list ')'                 { $$ = $2 }
+
+expr_assign_list:
+        TIdent '=' expr                            { $$ = NewComplex(NewString($1.Str), $3) } |
+        '[' expr ']' '=' expr                      { $$ = NewComplex($2, $5) } |
+        expr_assign_list ',' TIdent '=' expr       { $$ = $1.append(NewString($3.Str)).append($5) } |
+        expr_assign_list ',' '[' expr ']' '=' expr { $$ = $1.append($4).append($7) }
+
+json_gen:
+	'{' expr_assign_list     '}'               { $$ = NewComplex(NewSymbol(AJSON), emptyNode, $2).SetPos($1.Pos) } |
+	'{' expr_assign_list ',' '}'               { $$ = NewComplex(NewSymbol(AJSON), emptyNode, $2).SetPos($1.Pos) } |
+	'{' expr_list            '}'               { $$ = NewComplex(NewSymbol(AJSON), $2, emptyNode).SetPos($1.Pos) } |
+	'{' expr_list ','        '}'               { $$ = NewComplex(NewSymbol(AJSON), $2, emptyNode).SetPos($1.Pos) }
 
 %%
 

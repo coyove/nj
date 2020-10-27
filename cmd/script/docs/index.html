@@ -29,7 +29,7 @@
   }
   #output div {
       white-space: pre-wrap;
-      word-break: break-all;
+      word-wrap: break-all;
       padding: 0.5em;
   }
   #output div.title {
@@ -48,7 +48,10 @@
 	&emsp;
 	<select onchange="editor.setValue(demos[this.value] || '')">
 	<option selected>Select a demo...</option>
+	<option>time</option>
+	<option>call</option>
 	<option>yield</option>
+	<option>json</option>
 	<option>goto</option>
 	<option>fib</option>
 	<option>n-body</option>
@@ -63,7 +66,6 @@
   </div>
 </body>
 
-<script src="demo.js"></script>
 <script>
   var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
       mode: "lua",
@@ -78,8 +80,7 @@
   }
 
   function run() {
-      var host = location.protocol == "file:" ? 'http://127.0.0.1:8080/' : 'http://fweibo.com:8990/';
-      fetch(host + '?code=' + encodeURIComponent(editor.getValue()))
+      fetch('/eval?code=' + encodeURIComponent(editor.getValue()))
 	  .then(response => response.json())
 	  .then(function(data) {
 	      var el = document.getElementById("output");
@@ -103,3 +104,4 @@
 	  });
   }
 </script>
+<script src="demo.js"></script>

@@ -1,9 +1,13 @@
 assert(G == "test")
 
 do
-local m = jsonparse([[ { "a": 1, "b": 2} ]])
-m.b = m 
-print(m)
+	local j = { a= 1, b= 2, array= { 1, 2, {inner="inner"}}}
+	assert(json(j, "a") == 1)
+	assert(json(j, "b") == 2)
+	local n, a, b, c = json(j, "array")
+	assert(n == 3 and a == 1 and b == 2 and json(c, "inner")== "inner")
+	assert(json(j, "array.2.inner")=="inner")
+	print(json(j, "array"))
 end
 
 function yrec(x, e)
@@ -90,9 +94,6 @@ do
 	end
 end
 
--- require "goto.txt"
--- assert(_GOTO == "goto")
-
 function return123() return 1, 2, 3 end
 
 do
@@ -131,30 +132,11 @@ assert(0x7ffffffffffffffd < 0x7fffffffffffffff)
 assert(0x7ffffffffffffffd + 2 == 0x7fffffffffffffff)
 assert(0x7ffffffffffffffe + 1 == 0x7fffffffffffffff)
 
--- do
--- global_x = 1
--- require "string.txt"
--- assert(_STRING == "r:abc1")
--- 
--- global_x = 2
--- require "string.txt"
--- assert(_STRING == "r:abc2")
--- 
--- assert(strname == "abc")
--- end
- 
 do
     scope = 1
     assert(scope == 1)
 end
 assert(scope == 1)
-
--- do
--- local a, i = {}, 1
--- a[1 + i ] = i;
--- (function () return a end)().test = 1
--- assert(a[2] == 1 and a["test"] == 1)
--- end
 
 function callstr(a) 
     return a .. "a"
@@ -280,3 +262,10 @@ assert("11"==nativeVarargTest2("1", 2))
 assert(intAlias(1e9).Unix() == 1)
 print(Go_time().Format("2006-01-02"))
 
+println("boolean test")
+boolConvert(1)
+
+function returnnil()
+local _ = 1 + 1
+end
+assert(returnnil() == nil)

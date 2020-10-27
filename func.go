@@ -10,12 +10,12 @@ import (
 type Func struct {
 	code       packet
 	name       string
-	constTable []Value
 	numParams  byte
 	isVariadic bool
 	stackSize  uint16
 	native     func(env *Env)
 	loadGlobal *Program
+	paramMap   map[string]uint16
 }
 
 type Program struct {
@@ -27,10 +27,34 @@ type Program struct {
 	Stack                 *[]Value
 	Funcs                 []*Func
 	Stdout, Stdin, Stderr io.ReadWriter
+	NilIndex              uint16
 }
 
 // Native creates a golang-native function
-func Native(f func(env *Env)) Value { return Function(&Func{native: f}) }
+func Native(f func(env *Env)) Value {
+	return Function(&Func{native: f})
+}
+
+func NativeWithParamMap(f func(*Env, map[string]Value), params ...string) Value {
+	m := map[string]uint16{}
+	for i, p := range params {
+		m[p] = uint16(i)
+	}
+	return Function(&Func{
+		paramMap:  m,
+		numParams: byte(len(params)),
+		native: func(env *Env) {
+			stack := env.Stack()
+			args := make(map[string]Value, len(stack))
+			for i := range stack {
+				if i < len(params) {
+					args[params[i]] = stack[i]
+				}
+			}
+			f(env, args)
+		},
+	})
+}
 
 func (c *Func) Name() string { return c.name }
 
@@ -55,8 +79,6 @@ func (c *Func) String() string {
 		p.WriteString("function")
 	}
 
-	p.WriteString("$")
-	p.WriteString(strconv.Itoa(len(c.constTable)))
 	p.WriteString("(")
 	for i := 0; i < int(c.numParams); i++ {
 		p.WriteString("a")
@@ -79,7 +101,7 @@ func (c *Func) PrettyCode() string {
 	if c.native != nil {
 		return "[native code]"
 	}
-	return pkPrettify(c, nil, 0)
+	return pkPrettify(c, c.loadGlobal, false, 0)
 }
 
 func (c *Func) exec(newEnv Env) (Value, []Value) {
@@ -139,14 +161,14 @@ func (c *Func) Call(env *Env, a ...Value) (v1 Value, v []Value, err error) {
 }
 
 // Terminate will try to stop the execution, when called the closure (along with duplicates) become invalid immediately
-func (c *Func) Terminate() {
-	const Stop = uint32(OpEOB) << 26
-	for i := range c.code.Code {
-		c.code.Code[i] = Stop
-	}
-}
+// func (c *Func) Terminate() {
+// 	const Stop = uint32(OpRet) << 26
+// 	for i := range c.code.Code {
+// 		c.code.Code[i] = Stop
+// 	}
+// }
 
-func (p *Program) PrettyCode() string { return pkPrettify(&p.Func, p, 0) }
+func (p *Program) PrettyCode() string { return pkPrettify(&p.Func, p, true, 0) }
 
 func (p *Program) SetTimeout(d time.Duration) { p.Deadline = time.Now().Add(d).Unix() }
 

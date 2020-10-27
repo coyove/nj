@@ -1,8 +1,6 @@
 package script
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +8,6 @@ import (
 	"math/rand"
 	"os"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +16,7 @@ import (
 	"unsafe"
 
 	"github.com/coyove/script/parser"
+	"github.com/tidwall/gjson"
 )
 
 var (
@@ -35,7 +33,11 @@ func AddGlobalValue(k string, v interface{}) {
 	case func(*Env):
 		g[k] = Function(&Func{name: k, native: v})
 	default:
-		g[k] = Interface(v)
+		tmp := Interface(v)
+		if tmp.Type() == VFunction {
+			tmp.Function().name = k
+		}
+		g[k] = tmp
 	}
 }
 
@@ -50,6 +52,8 @@ func init() {
 		}
 	}()
 
+	AddGlobalValue("True", _interface(true))
+	AddGlobalValue("False", _interface(false))
 	AddGlobalValue("narray", func(env *Env) {
 		n := env.In(0, VNumber).Int()
 		env.Return(Int(n), make([]Value, n)...)
@@ -312,49 +316,42 @@ func init() {
 	AddGlobalValue("mutex", func(env *Env) { env.A = Interface(&sync.Mutex{}) })
 	AddGlobalValue("error", func(env *Env) { env.A = Interface(errors.New(env.InStr(0, ""))) })
 	AddGlobalValue("iserror", func(env *Env) { _, ok := env.In(0, VInterface).Interface().(error); env.A = Bool(ok) })
-	AddGlobalValue("jsonparse", func(env *Env) {
-		j := strings.TrimSpace(env.In(0, VString)._str())
-		switch j {
-		case "", "null":
-			return
-		case "true", "false":
-			env.A = Bool(j == "true")
-			return
-		}
-		switch j[0] {
-		case '[':
-			var a []interface{}
-			err := json.Unmarshal([]byte(j), &a)
-			env.Return(Interface(a), Interface(err))
-		case '{':
-			a := map[string]interface{}{}
-			err := json.Unmarshal([]byte(j), &a)
-			env.Return(Interface(a), Interface(err))
-		default:
-			env.Return(Value{}, Interface(fmt.Errorf("malformed json string: %q", j)))
-		}
-	})
 	AddGlobalValue("json", func(env *Env) {
-		v := env.Get(0)
-		if env.Size() > 1 {
-			v = _unpackedStack(&unpacked{a: env.Stack()})
+		cv := func(r gjson.Result) Value {
+			switch r.Type {
+			case gjson.String:
+				return _str(r.Str)
+			case gjson.Number:
+				return Float(r.Float())
+			case gjson.True, gjson.False:
+				return Bool(r.Bool())
+			}
+			return Value{}
 		}
-		i := v.Interface()
-		if err := reflectCheckCyclicStruct(i); err != nil {
-			env.Return(Value{}, Interface(err))
-			return
+		j := strings.TrimSpace(env.In(0, VString)._str())
+		result := gjson.Get(j, env.In(1, VString)._str())
+		switch result.Type {
+		case gjson.String, gjson.Number, gjson.True, gjson.False:
+			env.A = cv(result)
+		default:
+			if result.IsArray() {
+				a := result.Array()
+				if len(a) > 0 {
+					tmp := make([]Value, len(a))
+					for i := range a {
+						switch a[i].Type {
+						case gjson.String, gjson.False, gjson.Number, gjson.True:
+							tmp[i] = cv(a[i])
+						default:
+							tmp[i] = _str(a[i].Raw)
+						}
+					}
+					env.Return(Int(int64(len(a))), tmp...)
+				}
+			} else if result.IsObject() {
+				env.A = _str(result.Raw)
+			}
 		}
-		var buf []byte
-		var err error
-		if ident := env.InStr(1, ""); ident != "" {
-			buf, err = json.MarshalIndent(i, "", ident)
-		} else {
-			buf, err = json.Marshal(i)
-		}
-		env.Return(env.NewStringBytes(buf), Interface(err))
-	})
-	AddGlobalValue("struct", func(env *Env) {
-		env.A = Interface(NewFixedStruct(env.Stack()...))
 	})
 }
 
@@ -393,56 +390,4 @@ func ipow(base, exp int64) int64 {
 		base *= base
 	}
 	return result
-}
-
-type FixedStruct struct {
-	rl bool
-	kv [][2]Value
-}
-
-func NewFixedStruct(kv ...Value) *FixedStruct {
-	if len(kv)%2 != 0 {
-		kv = append(kv, Value{})
-	}
-	s := &FixedStruct{}
-	for i := 0; i < len(kv); i += 2 {
-		s.kv = append(s.kv, [2]Value{kv[i], kv[i+1]})
-	}
-	sort.Slice(s.kv, func(i, j int) bool { return s.kv[i][0].Less(s.kv[j][0]) })
-	return s
-}
-
-func (s *FixedStruct) Get(k Value) Value {
-	i := sort.Search(len(s.kv), func(i int) bool { return !s.kv[i][0].Less(k) })
-	if i < len(s.kv) && s.kv[i][0].Equal(k) {
-		return s.kv[i][1]
-	}
-	return Value{}
-}
-
-func (s *FixedStruct) Set(k Value, v Value) {
-	i := sort.Search(len(s.kv), func(i int) bool { return !s.kv[i][0].Less(k) })
-	if i < len(s.kv) && s.kv[i][0].Equal(k) {
-		s.kv[i][1] = v
-	}
-}
-
-func (s *FixedStruct) Len() int {
-	return len(s.kv)
-}
-
-func (s *FixedStruct) String() string {
-	if s.rl {
-		return "(...)"
-	}
-	s.rl = true
-	p := bytes.NewBufferString("(")
-	for _, kv := range s.kv {
-		p.WriteString(kv[0].String())
-		p.WriteString("=")
-		p.WriteString(kv[1].String())
-		p.WriteString(" ")
-	}
-	s.rl = false
-	return strings.TrimSpace(p.String()) + ")"
 }

@@ -136,5 +136,34 @@ while c do
     c, ...state = resume(yieldable, state)
 end
 `,
+      "time": `println("Unix timestamp:", time())
+println("Go time.Time:", Go_time().Format("2006-01-02 15:04:05"))`,
+
+      "json": `local j = { a=1, b=2, array={ 1, 2, { inner="inner" } } }
+--[[
+There is no table type, code above will actually generate the
+correspondent JSON STRING: '{"a":1,"b":2,....}'
+]]
+
+assert(json(j, "a") == 1)
+assert(json(j, "b") == 2)
+local n, a, b, c = json(j, "array")
+assert(n == 3 and a == 1 and b == 2 and json(c, "inner")== "inner")
+assert(json(j, "array.2.inner")=="inner")
+println(json(j, "array"))
+
+--[[
+json() uses https://github.com/tidwall/gjson
+Learn its syntax at https://github.com/tidwall/gjson/blob/master/SYNTAX.md
+]]
+
+`,
+
+      "call": `function veryComplexFunction(a, b, c, d, e, f, g, H, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, Z)
+    println(H, Z)
+end
+veryComplexFunction(Z="world", ["H"]="hello")
+`,
+
       "eof": ""
   };

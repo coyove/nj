@@ -49,9 +49,15 @@ assert(("abc")[20,2] == nil)
 assert(("cde")[rune("b") - rune("a"),2] == "cd")
 assert(("efg")[rune("b") - rune("a"), rune("c") - rune("a")] == "ef")
 
-local s = struct("a", 1, "b", 2, 3, "c")
-assert(s.a == 1 and s.b == 2 and s[3] == "c")
-s.b += s.a
-assert(s.b == 3)
-s.a = s
-print(s)
+-- json generator
+do
+	local j = {
+	      a = 1,
+	      ["b-2"] = true,
+	      [("c")[1,1]] = True,
+	}
+	assert(j == [[{"a":1,"b-2":1,"c":true}]])
+	j = {1, 2, {[3] = 4}}
+	assert(j == '[1,2,{"3":4}]')
+	print(j)
+end

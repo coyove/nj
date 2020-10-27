@@ -27,6 +27,7 @@ var (
 	quiet           = flag.Bool("quieterr", false, "suppress the error output (if any)")
 	timeout         = flag.Int("t", 0, "max execution time in ms")
 	apiServer       = flag.String("serve", "", "start as language playground")
+	apiServerStatic = flag.String("serve-static", "./docs", "start as language playground, static files")
 )
 
 func main() {
@@ -44,7 +45,10 @@ func main() {
 	if *apiServer != "" {
 		script.RemoveGlobalValue("sleep")
 		script.RemoveGlobalValue("narray")
-		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Handle("/", http.FileServer(http.Dir(*apiServerStatic)))
+		http.HandleFunc("/eval", func(w http.ResponseWriter, r *http.Request) {
+			defer func() { recover() }()
+
 			start := time.Now()
 			c := strings.TrimSpace(r.FormValue("code"))
 			if c == "" {
@@ -59,7 +63,7 @@ func main() {
 				writeJSON(w, map[string]interface{}{"error": err.Error()})
 				return
 			}
-			bufOut := &bytes.Buffer{}
+			bufOut := &limitedWriter{limit: 128 * 1024}
 			p.SetTimeout(time.Second / 2)
 			p.MaxCallStackSize = 100
 			p.MaxStackSize = 32 * 1024
@@ -97,7 +101,7 @@ func main() {
 		return
 	}
 
-	{
+	if p, _ := os.Getwd(); !strings.Contains(p, "/cmd/script") {
 		f, err := os.Create("cpuprofile")
 		if err != nil {
 			log.Fatal(err)
@@ -200,4 +204,16 @@ func writeJSON(w http.ResponseWriter, m map[string]interface{}) {
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 	buf, _ := json.Marshal(m)
 	w.Write(buf)
+}
+
+type limitedWriter struct {
+	limit int
+	bytes.Buffer
+}
+
+func (w *limitedWriter) Write(b []byte) (int, error) {
+	if w.Len() > w.limit {
+		return 0, fmt.Errorf("overflow")
+	}
+	return w.Buffer.Write(b)
 }

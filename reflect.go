@@ -6,9 +6,6 @@ import (
 )
 
 func reflectLen(v interface{}) int {
-	if s, ok := v.(*FixedStruct); ok {
-		return s.Len()
-	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map, reflect.Slice, reflect.Array:
@@ -18,10 +15,6 @@ func reflectLen(v interface{}) int {
 }
 
 func reflectLoad(v interface{}, key Value) Value {
-	if s, ok := v.(*FixedStruct); ok {
-		return s.Get(key)
-	}
-
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
@@ -68,30 +61,27 @@ func reflectSlice(v interface{}, start, end int64) interface{} {
 }
 
 func reflectStore(v interface{}, key Value, v2 Value) {
-	if s, ok := v.(*FixedStruct); ok {
-		s.Set(key, v2)
-		return
-	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		rk := reflect.ValueOf(key.TypedInterface(rv.Type().Elem()))
-		v := rv.MapIndex(rk)
-		if !v.IsValid() {
-			panicf("store: readonly map")
-		}
-		if v2.IsNil() {
-			rv.SetMapIndex(rk, reflect.Value{})
-		} else {
-			rv.SetMapIndex(rk, reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
-		}
+		// 	rk := reflect.ValueOf(key.TypedInterface(rv.Type().Elem()))
+		// 	v := rv.MapIndex(rk)
+		// 	if !v.IsValid() {
+		// 		panicf("store: readonly map")
+		// 	}
+		// 	if v2.IsNil() {
+		// 		rv.SetMapIndex(rk, reflect.Value{})
+		// 	} else {
+		// 		// panicf("store: readonly map")
+		// 		rv.SetMapIndex(rk, reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
+		// 	}
 		return
 	case reflect.Slice, reflect.Array:
-		idx := key.ExpectMsg(VNumber, "storearray").Int() - 1
-		if idx >= int64(rv.Len()) || idx < 0 {
-			return
-		}
-		rv.Index(int(idx)).Set(reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
+		// 	idx := key.ExpectMsg(VNumber, "storearray").Int() - 1
+		// 	if idx >= int64(rv.Len()) || idx < 0 {
+		// 		return
+		// 	}
+		// 	rv.Index(int(idx)).Set(reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
 		return
 	}
 

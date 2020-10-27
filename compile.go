@@ -23,13 +23,14 @@ type breaklabel struct {
 
 // symtable is responsible for recording the state of compilation
 type symtable struct {
+	global *symtable
+
 	code packet
 
 	// toplevel symtable
 	funcs []*Func
 
 	// variable name lookup
-	global    *symtable
 	sym       map[string]*symbol
 	maskedSym []map[string]*symbol
 
@@ -37,8 +38,10 @@ type symtable struct {
 
 	vp uint16
 
-	consts   []interface{}
-	constMap map[interface{}]uint16
+	insideJSONGenerator bool
+
+	collectConstsMode bool
+	constMap          map[interface{}]uint16
 
 	reusableTmps map[uint16]bool
 
@@ -64,8 +67,8 @@ func (table *symtable) borrowAddress() uint16 {
 			return tmp
 		}
 	}
-	if table.vp > 2000 { // 11 bits {
-		panic("too many variables (2000) in a single scope")
+	if table.vp > 4000 { // 12 bits {
+		panic("too many variables (4000) in a single scope")
 	}
 	table.reusableTmps[table.vp] = false
 	table.vp++
@@ -73,17 +76,12 @@ func (table *symtable) borrowAddress() uint16 {
 }
 
 func (table *symtable) returnAddress(v uint16) {
-	if v == regNil || v == regA {
+	if v == regA {
 		return
 	}
-	if v>>11 == 3 {
-		return
+	if v>>12 == 1 {
+		panic("DEBUG")
 	}
-	//	log.Println("$$", table.reusableTmps, v, table.vp)
-	//if v == table.vp-1 {
-	//	table.vp--
-	//	return
-	//}
 	if _, existed := table.reusableTmps[v]; existed {
 		table.reusableTmps[v] = true
 	}
@@ -108,6 +106,7 @@ func (table *symtable) returnAddresses(a interface{}) {
 
 func (table *symtable) get(varname string) uint16 {
 	depth := uint16(0)
+	regNil := table.loadK(nil)
 
 	switch varname {
 	case "nil":
@@ -119,7 +118,7 @@ func (table *symtable) get(varname string) uint16 {
 	}
 
 	calc := func(k *symbol) uint16 {
-		addr := (depth << 11) | (uint16(k.addr) & 0x07ff)
+		addr := (depth << 12) | (uint16(k.addr) & 0xfff)
 		return addr
 	}
 
@@ -172,39 +171,21 @@ func (table *symtable) removeMaskedSymTable() {
 }
 
 func (table *symtable) loadK(v interface{}) uint16 {
-	kaddr := func() uint16 {
-		if i, ok := table.constMap[v]; ok {
-			return i
-		}
-
-		table.consts = append(table.consts, v)
-		if len(table.consts) > 1<<11-1 {
-			panic("too many constants")
-		}
-
-		idx := uint16(len(table.consts) - 1)
-		table.constMap[v] = idx
-		return idx
-	}()
-
-	return 0x3<<11 | kaddr
-}
-
-func (table *symtable) constsToValues() []Value {
-	consts := make([]Value, len(table.consts))
-	for i, k := range table.consts {
-		switch k := k.(type) {
-		case float64:
-			consts[i] = Float(k)
-		case int64:
-			consts[i] = Int(k)
-		case string:
-			consts[i] = _str(k)
-		case bool:
-			consts[i] = Bool(k)
-		}
+	if table.global != nil {
+		return 1<<12 | table.global.loadK(v)
 	}
-	return consts
+
+	if i, ok := table.constMap[v]; ok {
+		return i
+	}
+
+	if !table.collectConstsMode {
+		panicf("DEBUG: collect consts %#v", v)
+	}
+
+	idx := table.borrowAddress()
+	table.constMap[v] = idx
+	return idx
 }
 
 var flatOpMapping = map[string]opCode{
@@ -225,10 +206,10 @@ var flatOpMapping = map[string]opCode{
 	parser.ASlice:     OpSlice,
 	parser.ALen:       OpLen,
 	parser.AInc:       OpInc,
-	parser.APopV:      OpEOB, // special
-	parser.APopVAll:   OpEOB, // special
-	parser.APopVAllA:  OpEOB, // special
-	parser.APopVClear: OpEOB, // special
+	parser.APopV:      OpRet, // special
+	parser.APopVAll:   OpRet, // special
+	parser.APopVAllA:  OpRet, // special
+	parser.APopVClear: OpRet, // special
 }
 
 func (table *symtable) writeOpcode(op opCode, n0, n1 parser.Node) {
@@ -258,13 +239,13 @@ func (table *symtable) writeOpcode(op opCode, n0, n1 parser.Node) {
 	defer table.returnAddresses(tmp)
 
 	if !n0.Valid() {
-		table.code.writeOP(op, 0, 0)
+		table.code.writeInst(op, 0, 0)
 		return
 	}
 
 	n0a := getAddr(n0)
 	if !n1.Valid() {
-		table.code.writeOP(op, n0a, 0)
+		table.code.writeInst(op, n0a, 0)
 		return
 	}
 
@@ -272,7 +253,7 @@ func (table *symtable) writeOpcode(op opCode, n0, n1 parser.Node) {
 	if op == OpSet && n0a == n1a {
 		return
 	}
-	table.code.writeOP(op, n0a, n1a)
+	table.code.writeInst(op, n0a, n1a)
 }
 
 func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existedVar uint16) uint16 {
@@ -285,7 +266,7 @@ func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existe
 		yx = existedVar
 	}
 
-	table.code.writeOP(OpSet, yx, newYX)
+	table.code.writeInst(OpSet, yx, newYX)
 	return yx
 }
 
@@ -323,7 +304,7 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileWhileOp(nodes)
 	case parser.ABreak:
 		yx = table.compileBreakOp(nodes)
-	case parser.ACall, parser.ATailCall:
+	case parser.ACall, parser.ATailCall, parser.ACallMap:
 		yx = table.compileCallOp(nodes)
 	case parser.AOr, parser.AAnd:
 		yx = table.compileAndOrOp(nodes)
@@ -333,6 +314,8 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileRetAddrOp(nodes)
 	case parser.AGoto, parser.ALabel:
 		yx = table.compileGotoOp(nodes)
+	case parser.AJSON:
+		yx = table.compileJSONOp(nodes)
 	default:
 		if _, ok := flatOpMapping[name]; ok {
 			return table.compileFlatOp(nodes)
@@ -340,6 +323,21 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		panicf("DEBUG: compileNode unknown symbol: %q", name)
 	}
 	return yx
+}
+
+func (table *symtable) collectConsts(node parser.Node) {
+	switch node.Type {
+	case parser.String:
+		table.loadK(node.StringValue())
+	case parser.Float:
+		table.loadK(node.FloatValue())
+	case parser.Int:
+		table.loadK(node.IntValue())
+	case parser.Complex:
+		for _, n := range node.Nodes {
+			table.collectConsts(n)
+		}
+	}
 }
 
 func compileNodeTopLevel(n parser.Node, globalKeyValues ...interface{}) (cls *Program, err error) {
@@ -377,25 +375,50 @@ func compileNodeTopLevel(n parser.Node, globalKeyValues ...interface{}) (cls *Pr
 		}
 	}
 
-	table.vp = uint16(len(table.sym))
+	table.vp = uint16(coreStack.Size())
+
+	// Find and fill consts
+	table.collectConstsMode = true
+	table.loadK(nil)
+	table.loadK(int64(1))
+	table.loadK(int64(0))
+	table.collectConsts(n)
+	table.collectConstsMode = false
+
 	table.compileNode(n)
-	table.code.writeOP(OpEOB, 0, 0)
+	table.code.writeInst(OpRet, table.loadK(nil), 0)
 	table.patchGoto()
+
 	coreStack.grow(int(table.vp))
+	for k, stackPos := range table.constMap {
+		switch k := k.(type) {
+		case float64:
+			coreStack.Set(int(stackPos), Float(k))
+		case int64:
+			coreStack.Set(int(stackPos), Int(k))
+		case string:
+			coreStack.Set(int(stackPos), _str(k))
+		case nil:
+			coreStack.Set(int(stackPos), Value{})
+		default:
+			panic("DEBUG")
+		}
+	}
 
 	cls = &Program{}
 	cls.name = "main"
 	cls.code = table.code
-	cls.constTable = table.constsToValues()
 	cls.stackSize = table.vp
 	cls.Stack = coreStack.stack
 	cls.Funcs = table.funcs
-	for _, f := range cls.Funcs {
-		f.loadGlobal = cls
-	}
 	cls.Stdout = os.Stdout
 	cls.Stdin = os.Stdin
 	cls.Stderr = os.Stderr
+	for _, f := range cls.Funcs {
+		f.loadGlobal = cls
+	}
+	cls.loadGlobal = cls
+	cls.NilIndex = table.loadK(nil)
 	return cls, err
 }
 
