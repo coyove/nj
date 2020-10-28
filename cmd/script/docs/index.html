@@ -2,9 +2,11 @@
 
 <title>Playground</title>
 <meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <link rel=stylesheet href="https://codemirror.net/lib/codemirror.css">
 <script src="https://codemirror.net/lib/codemirror.js"></script>
+<script src="https://codemirror.net/addon/edit/matchbrackets.js"></script>
 <script src="https://codemirror.net/mode/lua/lua.js"></script>
 
 <style>
@@ -39,7 +41,7 @@
   #output div.content {
       font-family: monospace;
   }
--</style>
+</style>
 
 <body>
   <div style="position:relative;height:100%">
@@ -52,10 +54,14 @@
 	<option>call</option>
 	<option>yield</option>
 	<option>json</option>
+	<option>http</option>
+	<option>goquery</option>
 	<option>goto</option>
 	<option>fib</option>
-	<option>n-body</option>
 	</select>
+	<span style="float:right">
+	  <a href="https://github.com/coyove/script">Github</a>
+	</span>
     </div>
     <div style="position:absolute;left:0;top:32px;width:100%;bottom:25%">
 	<div style="border:solid 1px #aaa;border-width:1px 0 1px 0;height:100%">
@@ -69,13 +75,15 @@
 <script>
   var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
       mode: "lua",
+      indentUnit: 4,
+      matchBrackets: true,
       lineNumbers: true
   });
 
   function div(html, title) {
       var el = document.createElement("div");
       el.className = title ? 'title' : 'content';
-      el.innerHTML = html;
+      el.innerText = html;
       return el;
   }
 
@@ -92,16 +100,16 @@
 	      } else {
 		el.appendChild(div("Results", true))
 		el.appendChild(div(JSON.stringify(data.results)));
-		if (data.stdout) {
-		    el.appendChild(div("Stdout", true));
-		    el.appendChild(div(data.stdout));
-		}
-		el.appendChild(div("Elapsed", true))
-		el.appendChild(div(data.elapsed + 's'));
+	      }
+	      if (data.stdout) {
+	    	  el.appendChild(div("Stdout", true));
+	    	  el.appendChild(div(data.stdout));
+		  el.appendChild(div("Elapsed", true))
+		  el.appendChild(div(data.elapsed + 's'));
 	      }
 	      el.appendChild(div("Compiled", true));
 	      el.appendChild(div(data.opcode));
 	  });
   }
 </script>
-<script src="demo.js"></script>
+<script src="demo.js?v=10"></script>

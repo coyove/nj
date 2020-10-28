@@ -364,8 +364,11 @@ prefix_expr:
         declarator                        { $$ = $1 } |
         prefix_expr TString               { $$ = __call($1, NewComplex(NewString($2.Str))).SetPos($1.Pos()) } |
         prefix_expr expr_list_paren       { $$ = __call($1, $2).SetPos($1.Pos()) } |
-	prefix_expr '('expr_assign_list')'{ $$ = NewComplex(NewSymbol(ACallMap), $1, $3).SetPos($1.Pos()) } |
-        '(' expr ')'                      { $$ = $2 } // shift/reduce conflict
+        '(' expr ')'                      { $$ = $2 } | // shift/reduce conflict
+	prefix_expr '(' expr_assign_list ')'                { $$ = __callMap($1, emptyNode, $3).SetPos($1.Pos()) } |
+	prefix_expr '(' expr_assign_list',' ')'             { $$ = __callMap($1, emptyNode, $3).SetPos($1.Pos()) } |
+	prefix_expr '(' expr_list','expr_assign_list ')'    { $$ = __callMap($1, $3, $5).SetPos($1.Pos()) } |
+	prefix_expr '(' expr_list','expr_assign_list',' ')' { $$ = __callMap($1, $3, $5).SetPos($1.Pos()) }
 
 expr_list:
         expr                              { $$ = NewComplex($1) } |

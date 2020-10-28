@@ -112,6 +112,15 @@ func __func(name, paramlist, body Node) Node {
 
 func __call(cls, args Node) Node { return NewComplex(NewSymbol(ACall), cls, args) }
 
+func __callMap(cls, argsArray, argsMap Node) Node {
+	args := make([]Node, 0, len(argsArray.Nodes)+len(argsMap.Nodes))
+	for i, n := range argsArray.Nodes {
+		args = append(args, NewNumberFromInt(int64(i)), n)
+	}
+	args = append(args, argsMap.Nodes...)
+	return NewComplex(NewSymbol(ACallMap), cls, NewComplex(args...))
+}
+
 func __popvAll(i int, k Node) Node {
 	if i == 0 {
 		return __chain(k, NewComplex(NewSymbol(APopVAllA)))

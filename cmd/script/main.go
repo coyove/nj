@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/coyove/script"
+	"github.com/coyove/script/lib"
 )
 
 const VERSION = "0.2.0"
@@ -45,6 +46,9 @@ func main() {
 	if *apiServer != "" {
 		script.RemoveGlobalValue("sleep")
 		script.RemoveGlobalValue("narray")
+		lib.HostWhitelist["httpbin.org"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
+		lib.HostWhitelist["example.com"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
+
 		http.Handle("/", http.FileServer(http.Dir(*apiServerStatic)))
 		http.HandleFunc("/eval", func(w http.ResponseWriter, r *http.Request) {
 			defer func() { recover() }()
@@ -64,15 +68,18 @@ func main() {
 				return
 			}
 			bufOut := &limitedWriter{limit: 128 * 1024}
-			p.SetTimeout(time.Second / 2)
+			p.SetTimeout(time.Second)
 			p.MaxCallStackSize = 100
 			p.MaxStackSize = 32 * 1024
 			p.Stdout = bufOut
+			code := p.PrettyCode()
 			v, v1, err := p.Run()
 			if err != nil {
 				writeJSON(w, map[string]interface{}{
-					"error":  err.Error(),
-					"opcode": p.PrettyCode(),
+					"error":   err.Error(),
+					"elapsed": time.Since(start).Seconds(),
+					"stdout":  bufOut.String(),
+					"opcode":  code,
 				})
 				return
 			}
@@ -85,7 +92,7 @@ func main() {
 				"elapsed": time.Since(start).Seconds(),
 				"results": results,
 				"stdout":  bufOut.String(),
-				"opcode":  p.PrettyCode(),
+				"opcode":  code,
 			})
 		})
 		log.Println("listen", *apiServer)

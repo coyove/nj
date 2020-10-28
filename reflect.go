@@ -22,13 +22,11 @@ func reflectLoad(v interface{}, key Value) Value {
 		if v.IsValid() {
 			return Interface(v.Interface())
 		}
-		return Value{}
 	case reflect.Slice, reflect.Array:
 		idx := key.ExpectMsg(VNumber, "loadarray").Int() - 1
-		if idx >= int64(rv.Len()) || idx < 0 {
-			return Value{}
+		if idx < int64(rv.Len()) && idx >= 0 {
+			return Interface(rv.Index(int(idx)).Interface())
 		}
-		return Interface(rv.Index(int(idx)).Interface())
 	}
 
 	k := camelKey(key.ExpectMsg(VString, "loadstruct")._str())

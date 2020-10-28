@@ -187,6 +187,17 @@ func (v Value) Float() float64 { f, _, _ := v.Num(); return f }
 
 func (v Value) _unpackedStack() *unpacked { return (*unpacked)(v.p) }
 
+func (v Value) Stack() []Value { return v._unpackedStack().a }
+
+func (v Value) _append(v2 Value) Value {
+	if v.Type() == VStack {
+		s := v._unpackedStack()
+		s.a = append(s.a, v2)
+		return _unpackedStack(s)
+	}
+	return _unpackedStack(&unpacked{a: []Value{v, v2}})
+}
+
 // Function cast value to function
 func (v Value) Function() *Func { return (*Func)(v.p) }
 
@@ -327,7 +338,7 @@ func (v Value) toString(lv int) string {
 	case VInterface:
 		i := v.Interface()
 		if err := reflectCheckCyclicStruct(i); err != nil {
-			return fmt.Sprintf("<any: omit deep nesting>")
+			return fmt.Sprintf("<interface: omit deep nesting>")
 		}
 		return fmt.Sprintf("%v", i)
 	}

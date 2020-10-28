@@ -410,19 +410,24 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			env.A = Function(env.Global.Funcs[opa])
 		case OpCallMap:
 			cls := env._get(opa).ExpectMsg(VFunction, "callmap").Function()
-			m := map[uint16]Value{}
+			m := make(map[string]Value, stackEnv.Size()/2)
 			for i := 0; i < stackEnv.Size(); i += 2 {
-				name := stackEnv.Stack()[i].String()
-				idx, ok := cls.paramMap[name]
-				if ok {
-					m[idx] = stackEnv.Stack()[i+1]
+				var name string
+				if a := stackEnv.Stack()[i]; a.Type() == VNumber && a.Int() < int64(len(cls.params)) {
+					name = cls.params[a.Int()]
+				} else {
+					name = a.String()
+				}
+				if v, ok := m[name]; ok {
+					m[name] = v._append(stackEnv.Stack()[i+1])
+				} else {
+					m[name] = stackEnv.Stack()[i+1]
 				}
 			}
 			stackEnv.Clear()
 			for i := byte(0); i < cls.numParams; i++ {
-				v, ok := m[uint16(i)]
-				if ok {
-					stackEnv.Push(v)
+				if int(i) < len(cls.params) {
+					stackEnv.Push(m[cls.params[i]])
 				} else {
 					stackEnv.Push(Value{})
 				}

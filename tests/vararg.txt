@@ -53,16 +53,13 @@ print("+")
 
 function oneless (...) return select(2, ...) end
  
-function f (n, a, ...)
+function f (n, a, ...x)
   local b
-  -- assert(arg == _G.arg)   -- no local 'arg'
   if n == 0 then
-    local b, c, d = select(1, ...)
-    return a, b, c, d, oneless(oneless(oneless(...)))
+    local b, c, d = select(1, x)
+    return a, b, c, d, oneless(oneless(oneless(x)))
   else
-    -- n, b, a = n-1, ..., a
-    -- assert(b == ...)
-    return f(n - 1, a, ...)
+    return f(n - 1, a, x)
   end
 end
  

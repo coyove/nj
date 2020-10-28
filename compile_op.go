@@ -259,7 +259,7 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 	vararg := false
 	params := atoms[2]
 	newtable := newsymtable()
-	paramMap := map[string]uint16{}
+	paramsString := []string{}
 
 	if table.global == nil {
 		newtable.global = table
@@ -282,7 +282,7 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 			panicf("%v: duplicated parameter: %q", atoms[0], n)
 		}
 		newtable.put(n, uint16(i))
-		paramMap[n] = uint16(i)
+		paramsString = append(paramsString, n)
 	}
 
 	ln := len(newtable.sym)
@@ -306,7 +306,7 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 	cls.stackSize = newtable.vp
 	cls.isVariadic = vararg
 	cls.code = code
-	cls.paramMap = paramMap
+	cls.params = paramsString
 
 	table.funcs = append(table.funcs, cls)
 	table.code.writeInst(OpLoadFunc, uint16(len(table.funcs))-1, 0)

@@ -15,7 +15,7 @@ type Func struct {
 	stackSize  uint16
 	native     func(env *Env)
 	loadGlobal *Program
-	paramMap   map[string]uint16
+	params     []string
 }
 
 type Program struct {
@@ -30,18 +30,30 @@ type Program struct {
 	NilIndex              uint16
 }
 
+type Arguments map[string]Value
+
+func (a Arguments) GetString(name string, defaultValue string) string {
+	if a[name].Type() == VString {
+		return a[name].String()
+	}
+	return defaultValue
+}
+
+func (a Arguments) GetInt(name string, defaultValue int64) int64 {
+	if a[name].Type() == VNumber {
+		return a[name].Int()
+	}
+	return defaultValue
+}
+
 // Native creates a golang-native function
 func Native(f func(env *Env)) Value {
 	return Function(&Func{native: f})
 }
 
-func NativeWithParamMap(f func(*Env, map[string]Value), params ...string) Value {
-	m := map[string]uint16{}
-	for i, p := range params {
-		m[p] = uint16(i)
-	}
+func NativeWithParamMap(f func(*Env, Arguments), params ...string) Value {
 	return Function(&Func{
-		paramMap:  m,
+		params:    params,
 		numParams: byte(len(params)),
 		native: func(env *Env) {
 			stack := env.Stack()
@@ -51,7 +63,7 @@ func NativeWithParamMap(f func(*Env, map[string]Value), params ...string) Value 
 					args[params[i]] = stack[i]
 				}
 			}
-			f(env, args)
+			f(env, Arguments(args))
 		},
 	})
 }
@@ -65,27 +77,24 @@ func (c *Func) Signature() (numParams int, isVariadic bool, stackSize int) {
 }
 
 func (c *Func) String() string {
-	if c.native != nil {
-		if c.name != "" {
-			return c.name
-		}
-		return "<native>"
-	}
-
 	p := bytes.Buffer{}
 	if c.name != "" {
 		p.WriteString(c.name)
+	} else if c.native != nil {
+		p.WriteString("native")
 	} else {
 		p.WriteString("function")
 	}
 
 	p.WriteString("(")
 	for i := 0; i < int(c.numParams); i++ {
-		p.WriteString("a")
-		p.WriteString(strconv.Itoa(i))
+		if i < len(c.params) {
+			p.WriteString(c.params[i])
+		} else {
+			p.WriteString("a" + strconv.Itoa(i))
+		}
 		p.WriteString(",")
 	}
-
 	if c.isVariadic {
 		p.WriteString("...")
 	} else {

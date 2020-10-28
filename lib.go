@@ -315,7 +315,7 @@ func init() {
 	})
 	AddGlobalValue("mutex", func(env *Env) { env.A = Interface(&sync.Mutex{}) })
 	AddGlobalValue("error", func(env *Env) { env.A = Interface(errors.New(env.InStr(0, ""))) })
-	AddGlobalValue("iserror", func(env *Env) { _, ok := env.In(0, VInterface).Interface().(error); env.A = Bool(ok) })
+	AddGlobalValue("iserror", func(env *Env) { _, ok := env.Get(0).Interface().(error); env.A = Bool(ok) })
 	AddGlobalValue("json", func(env *Env) {
 		cv := func(r gjson.Result) Value {
 			switch r.Type {

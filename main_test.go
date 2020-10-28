@@ -40,18 +40,18 @@ func runFile(t *testing.T, path string) {
 				panic("bad")
 			}
 		},
-		"mapFunc", NativeWithParamMap(func(env *Env, in map[string]Value) {
+		"mapFunc", NativeWithParamMap(func(env *Env, in Arguments) {
 			if !in["a"].IsNil() {
 				env.A = _str("a")
 			}
 			if !in["b"].IsNil() {
-				env.A = _str("b")
+				env.A = in["b"]
 			}
 			if !in["c"].IsNil() {
-				env.A = _str("c")
+				env.A = _str(in["c"].String())
 			}
 			if !in["d"].IsNil() {
-				env.A = _str("d")
+				env.A = _str(env.A.String() + in["d"].String())
 			}
 		}, "a", "b", "c", "d"),
 		"G", "test")
