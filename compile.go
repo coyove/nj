@@ -212,7 +212,7 @@ var flatOpMapping = map[string]opCode{
 	parser.APopVClear: OpRet, // special
 }
 
-func (table *symtable) writeOpcode(op opCode, n0, n1 parser.Node) {
+func (table *symtable) writeInst(op opCode, n0, n1 parser.Node) {
 	var tmp []uint16
 	getAddr := func(n parser.Node) uint16 {
 		switch n.Type {
@@ -231,7 +231,7 @@ func (table *symtable) writeOpcode(op opCode, n0, n1 parser.Node) {
 		case parser.Address:
 			return n.Addr
 		default:
-			panicf("DEBUG writeOpcode unknown type: %#v", n)
+			panicf("DEBUG writeInst unknown type: %#v", n)
 			return 0
 		}
 	}

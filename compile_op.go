@@ -6,7 +6,7 @@ import (
 	"github.com/coyove/script/parser"
 )
 
-var _nodeRegA = parser.Node{Addr: regA, Type: parser.Address}
+var _nodeRegA = parser.NewAddress(regA)
 
 func (table *symtable) compileChainOp(chain parser.Node) uint16 {
 	doblock := chain.Nodes[0].SymbolValue() == (parser.ADoBlock)
@@ -73,12 +73,12 @@ func (table *symtable) compileRetOp(atoms []parser.Node) uint16 {
 	for i := 1; i < len(values); i++ {
 		if i == 1 {
 			// First OpPushV will contain the total number of V in opb
-			table.writeOpcode(OpPushV, values[i], parser.Node{Type: parser.Address, Addr: uint16(len(values) - 1)})
+			table.writeInst(OpPushV, values[i], parser.NewAddress(uint16(len(values)-1)))
 		} else {
-			table.writeOpcode(OpPushV, values[i], parser.Node{})
+			table.writeInst(OpPushV, values[i], parser.Node{})
 		}
 	}
-	table.writeOpcode(op, values[0], parser.Node{})
+	table.writeInst(op, values[0], parser.Node{})
 
 	table.returnAddresses(values)
 	return regA
@@ -102,14 +102,14 @@ func (table *symtable) writeOpcode3(bop opCode, atoms []parser.Node) uint16 {
 		for i := 1; i <= 2; i++ { // subject and value shouldn't use regA
 			if atoms[i].Type == parser.Address && atoms[i].Addr == regA {
 				n := parser.NewAddress(table.borrowAddress())
-				table.writeOpcode(OpSet, n, _nodeRegA)
+				table.writeInst(OpSet, n, _nodeRegA)
 				atoms[i] = n
 			}
 		}
 
-		// We would love to see 'key' using regA, in this case writeOpcode will just omit it
-		table.writeOpcode(OpSet, _nodeRegA, atoms[3])
-		table.writeOpcode(OpStore, atoms[1], atoms[2])
+		// We would love to see 'key' using regA, in this case writeInst will just omit it
+		table.writeInst(OpSet, _nodeRegA, atoms[3])
+		table.writeInst(OpStore, atoms[1], atoms[2])
 		table.returnAddresses(atoms[1:])
 		return regA
 	}
@@ -123,14 +123,14 @@ func (table *symtable) writeOpcode3(bop opCode, atoms []parser.Node) uint16 {
 		for i := 1; i <= 3; i += 2 { // subject and end shouldn't use regA
 			if atoms[i].Type == parser.Address && atoms[i].Addr == regA {
 				n := parser.NewAddress(table.borrowAddress())
-				table.writeOpcode(OpSet, n, _nodeRegA)
+				table.writeInst(OpSet, n, _nodeRegA)
 				atoms[i] = n
 			}
 		}
 
-		// We would love to see 'start' using regA, in this case writeOpcode will just omit it
-		table.writeOpcode(OpSet, _nodeRegA, atoms[2])
-		table.writeOpcode(OpSlice, atoms[1], atoms[3])
+		// We would love to see 'start' using regA, in this case writeInst will just omit it
+		table.writeInst(OpSet, _nodeRegA, atoms[2])
+		table.writeInst(OpSlice, atoms[1], atoms[3])
 		table.returnAddresses(atoms[1:])
 		return regA
 	}
@@ -140,10 +140,10 @@ func (table *symtable) writeOpcode3(bop opCode, atoms []parser.Node) uint16 {
 	switch bop {
 	case OpNot, OpRet, OpYield, OpLen:
 		// unary splitInst
-		table.writeOpcode(bop, atoms[1], parser.Node{})
+		table.writeInst(bop, atoms[1], parser.Node{})
 	default:
 		// binary splitInst
-		table.writeOpcode(bop, atoms[1], atoms[2])
+		table.writeInst(bop, atoms[1], atoms[2])
 		table.returnAddresses(atoms[1:])
 	}
 
@@ -186,11 +186,11 @@ func (table *symtable) compileAndOrOp(atoms []parser.Node) uint16 {
 		bop = OpIf
 	}
 
-	table.writeOpcode(OpSet, _nodeRegA, atoms[1])
+	table.writeInst(OpSet, _nodeRegA, atoms[1])
 	table.code.writeInst(bop, regA, 0)
 	part1 := table.code.Len()
 
-	table.writeOpcode(OpSet, _nodeRegA, atoms[2])
+	table.writeInst(OpSet, _nodeRegA, atoms[2])
 	part2 := table.code.Len()
 
 	table.code.Code[part1-1] = jmpInst(bop, regA, part2-part1)
@@ -225,7 +225,7 @@ func (table *symtable) compileIfOp(atoms []parser.Node) uint16 {
 		table.code.Code[init-1] = jmpInst(OpIfNot, condyx, part1-init+1)
 		table.code.Code[part1] = jmpInst(OpJmp, 0, part2-part1-1)
 	} else {
-		table.code.truncateLast() // the last splitInst is used to skip the false branch, since we don't have one, we don't need this jmp
+		table.code.truncateLast() // the last inst is used to skip the false branch, since we don't have one, we don't need this jmp
 		table.code.Code[init-1] = jmpInst(OpIfNot, condyx, part1-init)
 	}
 	return regA
@@ -237,16 +237,16 @@ func (table *symtable) compileCallOp(nodes []parser.Node) uint16 {
 	table.collapse(tmp, true)
 
 	for i := 1; i < len(tmp); i++ {
-		table.writeOpcode(OpPush, tmp[i], parser.NewAddress(uint16(i-1)))
+		table.writeInst(OpPush, tmp[i], parser.NewAddress(uint16(i-1)))
 	}
 
 	switch nodes[0].SymbolValue() {
 	case parser.ACallMap:
-		table.writeOpcode(OpCallMap, tmp[0], parser.Node{})
+		table.writeInst(OpCallMap, tmp[0], parser.Node{})
 	case parser.ACall:
-		table.writeOpcode(OpCall, tmp[0], parser.NewAddress(0))
+		table.writeInst(OpCall, tmp[0], parser.NewAddress(0))
 	case parser.ATailCall:
-		table.writeOpcode(OpCall, tmp[0], parser.NewAddress(1))
+		table.writeInst(OpCall, tmp[0], parser.NewAddress(1))
 	}
 
 	table.code.writePos(nodes[0].Pos())
@@ -406,7 +406,7 @@ func (table *symtable) compileJSONOp(atoms []parser.Node) uint16 {
 	}
 
 	for i := 0; i < len(args); i++ {
-		table.writeOpcode(OpPush, args[i], parser.NewAddress(uint16(i)))
+		table.writeInst(OpPush, args[i], parser.NewAddress(uint16(i)))
 	}
 
 	table.returnAddresses(args)

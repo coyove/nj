@@ -418,7 +418,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 					m[name] = stackEnv.Get(i + 1)
 				}
 			}
-			stackEnv.Clear()
+			stackEnv.Clear() // TODO: support variadic function?
 			for i := byte(0); i < cls.numParams; i++ {
 				if int(i) < len(cls.params) {
 					stackEnv.Push(m[cls.params[i]])

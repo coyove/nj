@@ -48,9 +48,7 @@ func init() {
 		if len(HostWhitelist) > 0 {
 			ok := false
 			for _, allow := range HostWhitelist[u.Host] {
-				if strings.ToUpper(allow) == strings.ToUpper(method) {
-					ok = true
-				}
+				ok = ok || strings.EqualFold(allow, method)
 			}
 			if !ok {
 				panicErr(fmt.Errorf("%s %v not allowed", method, u))

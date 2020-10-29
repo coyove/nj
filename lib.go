@@ -85,7 +85,7 @@ func init() {
 		*newEnv.stack = append(*newEnv.stack, stack...)
 		newEnv.grow(int(f.stackSize))
 		env.A, env.V = execCursorLoop(newEnv, f, uint32(cursor))
-	}, "resume(function, state) => returned values, new state")
+	}, "resume(function, state) => returned_values ..., new_state ...")
 	AddGlobalValue("type", func(env *Env) {
 		env.A = _str(env.Get(0).Type().String())
 	}, "type(value) => string", "return value's type")
@@ -117,7 +117,7 @@ func init() {
 			return
 		}
 		panic("assertion failed")
-	}, "assert(value)")
+	}, "assert(value)", "panic when value is falsy")
 	AddGlobalValue("num", func(env *Env) {
 		v := env.Get(0)
 		switch v.Type() {
@@ -169,8 +169,8 @@ func init() {
 		}
 	},
 		"scanln(prompt) => string", "  print prompt and read user input",
-		"scanln(n) => string, string, string", "  read user input n times",
-		"scanln(prompt, n) => string, string, string", "  print prompt and read user input n times",
+		"scanln(n) => s1, s2, ..., sn", "  read user input n times",
+		"scanln(prompt, n) => s1, s2, ..., sn", "  print prompt and read user input n times",
 	)
 	AddGlobalValue("INF", Float(math.Inf(1)))
 	AddGlobalValue("PI", Float(math.Pi))
@@ -228,11 +228,28 @@ func init() {
 		}
 	}, "int(value) => integer", "convert value to integer number (int64)")
 	AddGlobalValue("time", func(env *Env) {
-		env.A = Float(float64(time.Now().Unix()))
-	}, "time() => unix timestamp in seconds")
+		switch env.InStr(0, "") {
+		case "nano":
+			env.A = Int(time.Now().UnixNano())
+		case "micro":
+			env.A = Int(time.Now().UnixNano() / 1e3)
+		case "milli":
+			env.A = Int(time.Now().UnixNano() / 1e6)
+		default:
+			env.A = Int(time.Now().Unix())
+		}
+	},
+		"time('nano'|'micro'|'milli') => unix timestamp in (nano|micro|milli)seconds",
+		"time() => unix timestamp in seconds",
+	)
 	AddGlobalValue("sleep", func(env *Env) {
-		time.Sleep(time.Duration(env.In(0, VNumber).Int()) * time.Millisecond)
-	}, "sleep(milliseconds)")
+		if env.Get(0).Type() == VString {
+			d, _ := time.ParseDuration(env.InStr(0, ""))
+			time.Sleep(d)
+		} else {
+			time.Sleep(time.Duration(env.In(0, VNumber).Int()) * time.Millisecond)
+		}
+	}, "sleep(milliseconds|duration_string)")
 	AddGlobalValue("Go_time", func(env *Env) {
 		if env.Size() > 0 {
 			loc := time.UTC
@@ -264,9 +281,7 @@ func init() {
 			env.A = Int(s[1] / 1e9)
 		}
 	},
-		"clock('nano') => nanoseconds since startup",
-		"clock('micro') => microseconds since startup",
-		"clock('milli') => milliseconds since startup",
+		"clock('nano'|'micro'|'milli') => (nano|micro|milli)seconds since startup",
 		"clock() => seconds since startup",
 	)
 	AddGlobalValue("exit", func(env *Env) { os.Exit(int(env.InInt(0, 0))) }, "exit(code)")
@@ -276,7 +291,7 @@ func init() {
 	AddGlobalValue("rune", func(env *Env) {
 		r, sz := utf8.DecodeRuneInString(env.In(0, VString)._str())
 		env.Return(Int(int64(r)), Int(int64(sz)))
-	}, "rune(string) => char code")
+	}, "rune(one_char_string) => char code")
 	AddGlobalValue("match", func(env *Env) {
 		rx, err := regexp.Compile(env.In(1, VString)._str())
 		if err != nil {
@@ -367,12 +382,16 @@ func init() {
 		f = strings.Replace(f, "{}", "%v", -1)
 		env.A = env.NewString(fmt.Sprintf(f, env.StackInterface()[1:]...))
 	}, "format(pattern, a1, a2, ...)", "'{}' is the placeholder, no need to escape '%'")
-	AddGlobalValue("mutex", func(env *Env) { env.A = Interface(&sync.Mutex{}) }, "mutex()", "create a mutex")
-	AddGlobalValue("error", func(env *Env) { env.A = Interface(errors.New(env.InStr(0, ""))) }, "error(text)", "create an error")
+	AddGlobalValue("mutex", func(env *Env) {
+		env.A = Interface(&sync.Mutex{})
+	}, "mutex()", "create a sync.Mutex")
+	AddGlobalValue("error", func(env *Env) {
+		env.A = Interface(errors.New(env.InStr(0, "")))
+	}, "error(text)", "create an error")
 	AddGlobalValue("iserror", func(env *Env) {
 		_, ok := env.Get(0).Interface().(error)
 		env.A = Bool(ok)
-	}, "iserror(value)", "does value satisfy error interface")
+	}, "iserror(value)", "whether value is an error")
 	AddGlobalValue("json", func(env *Env) {
 		cv := func(r gjson.Result) Value {
 			switch r.Type {
@@ -387,6 +406,13 @@ func init() {
 		}
 		j := strings.TrimSpace(env.In(0, VString)._str())
 		result := gjson.Get(j, env.In(1, VString)._str())
+
+		if expectedType := env.InStr(2, ""); expectedType != "" {
+			if !strings.EqualFold(result.Type.String(), expectedType) {
+				return
+			}
+		}
+
 		switch result.Type {
 		case gjson.String, gjson.Number, gjson.True, gjson.False:
 			env.A = cv(result)
@@ -409,11 +435,20 @@ func init() {
 				env.A = _str(result.Raw)
 			}
 		}
-	})
+	},
+		"json(json_string, selector) => true|false|number|string",
+		"json(json_string, selector) => n, ...array",
+		"json(json_string, selector) => object_string",
+		"json(json_string, selector, expected_type) => value",
+	)
 	AddGlobalValue("jsonunwrap", func(env *Env) {
 		x := env.In(0, VString)._str()
 		env.A = Interface(jsonQuotedString([]byte(x)))
-	})
+	},
+		"jsonunwrap(json_string) => unwrapped_json_value",
+		"example: local a = { a = 1 }",
+		`{ b = a } will yield: '{"b":"{\"a\":1}"}'`,
+		`{ b = jsonunwrap(a) } will yield: b == '{"b":{"a":1}}'`)
 }
 
 func mathMinMax(env *Env, max bool) {

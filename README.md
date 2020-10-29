@@ -1,4 +1,4 @@
-`script` is a simple script engine written in golang with Lua-like syntax. [Playground](http://play.fweibo.com:8990)
+`script` is a simple script engine written in golang with Lua-like syntax. [Playground](http://play.fweibo.com)
 
 (If you are looking for a Lua 5.2 compatible engine, refer to tag `v0.2`)
 
