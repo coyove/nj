@@ -26,7 +26,6 @@ var (
 	output          = flag.String("o", "none", "separated by comma: (none|compileonly|opcode|bytes|ret|timing)+")
 	input           = flag.String("i", "f", "input source, 'f': file, '-': stdin, others: string")
 	version         = flag.Bool("v", false, "print version and usage")
-	quiet           = flag.Bool("quieterr", false, "suppress the error output (if any)")
 	timeout         = flag.Int("t", 0, "max execution time in ms")
 	apiServer       = flag.String("serve", "", "start as language playground")
 	apiServerStatic = flag.String("serve-static", "./docs", "start as language playground, static files")
@@ -47,6 +46,7 @@ func main() {
 	if *apiServer != "" {
 		script.RemoveGlobalValue("sleep")
 		script.RemoveGlobalValue("narray")
+		script.RemoveGlobalValue("scanln")
 		lib.HostWhitelist["httpbin.org"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
 		lib.HostWhitelist["example.com"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
 
@@ -157,13 +157,8 @@ func main() {
 	}
 
 	var _opcode, _timing, _ret, _compileonly bool
-
-ARG:
 	for _, a := range strings.Split(*output, ",") {
 		switch a {
-		case "n", "no", "none":
-			_opcode, _ret, _timing, _compileonly = false, false, false, false
-			break ARG
 		case "o", "opcode", "op":
 			_opcode = true
 		case "r", "ret", "return":
@@ -182,20 +177,11 @@ ARG:
 	var err error
 
 	defer func() {
-		if *quiet {
-			recover()
-		}
-
 		if _opcode {
 			log.Println(b.PrettyCode())
 		}
 		if _timing {
-			e := float64(time.Now().Sub(start).Nanoseconds()) / 1e6
-			if e < 1000 {
-				log.Printf("Time elapsed: %.1fms\n", e)
-			} else {
-				log.Printf("Time elapsed: %.3fs\n", e/1e3)
-			}
+			log.Printf("Time elapsed: %v\n", time.Since(start))
 		}
 	}()
 
@@ -211,7 +197,6 @@ ARG:
 	if _compileonly {
 		return
 	}
-
 	if *timeout > 0 {
 		b.SetTimeout(time.Second * time.Duration(*timeout))
 	}

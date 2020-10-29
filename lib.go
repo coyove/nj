@@ -20,6 +20,8 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+const Version int64 = 233
+
 var (
 	g   = map[string]Value{}
 	now int64
@@ -53,6 +55,7 @@ func init() {
 		}
 	}()
 
+	AddGlobalValue("VERSION", Int(Version))
 	AddGlobalValue("True", _interface(true))
 	AddGlobalValue("False", _interface(false))
 	AddGlobalValue("globals", func(env *Env) {
@@ -113,10 +116,13 @@ func init() {
 	}, "select(n, ...)", "lua-style select function")
 	AddGlobalValue("panic", func(env *Env) { panic(env.InStr(0, "user panic")) }, "panic(string)")
 	AddGlobalValue("assert", func(env *Env) {
-		if v := env.Get(0); !v.IsFalse() {
-			return
+		v := env.Get(0)
+		if env.Size() <= 1 && v.IsFalse() {
+			panicf("assertion failed")
 		}
-		panic("assertion failed")
+		if env.Size() == 2 && !v.Equal(env.Get(1)) {
+			panicf("assertion failed: %v and %v", v, env.Get(1))
+		}
 	}, "assert(value)", "panic when value is falsy")
 	AddGlobalValue("num", func(env *Env) {
 		v := env.Get(0)
