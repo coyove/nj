@@ -288,18 +288,8 @@ func:
         TLocal TFunc { $$ = NewSymbol(ASet).SetPos($1.Pos) }
 
 func_stat:
-        func TIdent func_params_list stats TEnd {
-	  __findTailCall($4.Nodes)
-            funcname := NewSymbolFromToken($2)
-            x := __move
-            if $1.SymbolValue() == ASet {
-                x = __set
-            }
-            $$ = __chain(
-                x(funcname, NewSymbol(ANil)).SetPos($1.Pos()), 
-                __move(funcname, __func(funcname, $3, $4).SetPos($1.Pos())).SetPos($1.Pos()),
-            )
-        }
+        func TIdent func_params_list stats TEnd         { $$ = __func($1, $2, $3, "", $4) } | 
+        func TIdent func_params_list TString stats TEnd { $$ = __func($1, $2, $3, $4.Str, $5) }
 
 func_params_list:
         '(' ')'                           { $$ = NewComplex() } |

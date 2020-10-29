@@ -106,8 +106,19 @@ func __if(cond, truebody, falsebody Node) Node {
 
 func __loop(body Node) Node { return NewComplex(NewSymbol(AFor), body) }
 
-func __func(name, paramlist, body Node) Node {
-	return NewComplex(NewSymbol(AFunc), name, paramlist, body)
+func __func(setOrMove Node, name Token, paramList Node, doc string, stats Node) Node {
+	__findTailCall(stats.Nodes)
+	funcname := NewSymbolFromToken(name)
+	x := __move
+	if setOrMove.SymbolValue() == ASet {
+		x = __set
+	}
+	p := setOrMove.Pos()
+	return __chain(
+		x(funcname, NewSymbol(ANil)).SetPos(p),
+		__move(funcname,
+			NewComplex(NewSymbol(AFunc), funcname, paramList, stats, NewString(doc)).SetPos(p)).SetPos(p),
+	)
 }
 
 func __call(cls, args Node) Node { return NewComplex(NewSymbol(ACall), cls, args) }

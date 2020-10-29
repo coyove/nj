@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 )
 
 type Func struct {
 	code       packet
-	name       string
+	name, doc  string
 	numParams  byte
 	isVariadic bool
 	stackSize  uint16
@@ -47,14 +48,15 @@ func (a Arguments) GetInt(name string, defaultValue int64) int64 {
 }
 
 // Native creates a golang-native function
-func Native(f func(env *Env)) Value {
-	return Function(&Func{native: f})
+func Native(f func(env *Env), doc ...string) Value {
+	return Function(&Func{native: f, doc: strings.Join(doc, "\n")})
 }
 
-func NativeWithParamMap(f func(*Env, Arguments), params ...string) Value {
+func NativeWithParamMap(f func(*Env, Arguments), doc string, params ...string) Value {
 	return Function(&Func{
 		params:    params,
 		numParams: byte(len(params)),
+		doc:       doc,
 		native: func(env *Env) {
 			stack := env.Stack()
 			args := make(map[string]Value, len(stack))
@@ -179,9 +181,9 @@ func (c *Func) Call(env *Env, a ...Value) (v1 Value, v []Value, err error) {
 
 func (p *Program) PrettyCode() string { return pkPrettify(&p.Func, p, true, 0) }
 
-func (p *Program) SetTimeout(d time.Duration) { p.Deadline = time.Now().Add(d).Unix() }
+func (p *Program) SetTimeout(d time.Duration) { p.Deadline = time.Now().Add(d).UnixNano() }
 
-func (p *Program) SetDeadline(d time.Time) { p.Deadline = d.Unix() }
+func (p *Program) SetDeadline(d time.Time) { p.Deadline = d.UnixNano() }
 
 func (p *Program) AddValue(k string, v interface{}) *Program {
 	if p.Extras == nil {

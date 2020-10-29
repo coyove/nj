@@ -2,6 +2,9 @@ package script
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"runtime/debug"
 	"strconv"
 )
 
@@ -86,6 +89,9 @@ func catchErr(err *error) {
 		*err, _ = r.(error)
 		if *err == nil {
 			*err = fmt.Errorf("%v", r)
+		}
+		if os.Getenv("PL_STACK") != "" {
+			log.Println(string(debug.Stack()))
 		}
 	}
 }

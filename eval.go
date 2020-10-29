@@ -167,19 +167,13 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			var buf []byte
 			switch opa {
 			case 0:
-				a := make([]interface{}, stackEnv.Size())
-				for i, v := range stackEnv.Stack() {
-					a[i] = v.Interface()
-				}
-				buf, _ = json.Marshal(a)
+				buf, _ = json.Marshal(stackEnv.StackInterface())
 			case 1:
 				a := make(map[string]interface{}, stackEnv.Size()/2)
 				for i := 0; i < stackEnv.Size(); i += 2 {
-					var x interface{}
-					if i+1 < stackEnv.Size() {
-						x = stackEnv.Stack()[i+1].Interface()
+					if k := stackEnv.Stack()[i]; !k.IsNil() {
+						a[k.String()] = stackEnv.Get(i + 1).Interface()
 					}
-					a[stackEnv.Stack()[i].String()] = x
 				}
 				buf, _ = json.Marshal(a)
 			}
@@ -419,9 +413,9 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 					name = a.String()
 				}
 				if v, ok := m[name]; ok {
-					m[name] = v._append(stackEnv.Stack()[i+1])
+					m[name] = v._append(stackEnv.Get(i + 1))
 				} else {
-					m[name] = stackEnv.Stack()[i+1]
+					m[name] = stackEnv.Get(i + 1)
 				}
 			}
 			stackEnv.Clear()
@@ -447,12 +441,10 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 					if stackEnv.Size() > int(cls.numParams) {
 						varg = append([]Value{}, stackEnv.Stack()[cls.numParams:]...)
 					}
-					stackEnv.grow(int(cls.stackSize))
+					stackEnv.growZero(int(cls.stackSize))
 					stackEnv._set(uint16(cls.numParams), _unpackedStack(&unpacked{a: varg}))
 				} else {
-					if cls.stackSize > 0 {
-						stackEnv.grow(int(cls.stackSize))
-					}
+					stackEnv.growZero(int(cls.stackSize))
 				}
 
 				last := stacktrace{

@@ -53,7 +53,7 @@ func runFile(t *testing.T, path string) {
 			if !in["d"].IsNil() {
 				env.A = _str(env.A.String() + in["d"].String())
 			}
-		}, "a", "b", "c", "d"),
+		}, "doc...", "a", "b", "c", "d"),
 		"G", "test")
 	if err != nil {
 		t.Fatal(err)

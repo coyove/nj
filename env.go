@@ -20,6 +20,14 @@ type Env struct {
 	A           Value
 }
 
+func (env *Env) growZero(newSize int) {
+	old := len(*env.stack)
+	env.grow(newSize)
+	for i := old; i < len(*env.stack); i++ {
+		(*env.stack)[i] = Value{}
+	}
+}
+
 func (env *Env) grow(newSize int) {
 	s := *env.stack
 	sz := int(env.stackOffset) + newSize
@@ -90,6 +98,14 @@ func (env *Env) _set(yx uint16, v Value) {
 
 func (env *Env) Stack() []Value {
 	return (*env.stack)[env.stackOffset:]
+}
+
+func (env *Env) StackInterface() []interface{} {
+	r := make([]interface{}, env.Size())
+	for i := range r {
+		r[i] = env.Stack()[i].Interface()
+	}
+	return r
 }
 
 // Some useful helper functions

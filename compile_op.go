@@ -254,7 +254,7 @@ func (table *symtable) compileCallOp(nodes []parser.Node) uint16 {
 	return regA
 }
 
-// [lambda name? [namelist] [chain ...]]
+// [function name [namelist] [chain ...] docstring]
 func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 	vararg := false
 	params := atoms[2]
@@ -302,6 +302,7 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 
 	cls := &Func{}
 	cls.name = atoms[1].SymbolValue()
+	cls.doc = atoms[4].StringValue()
 	cls.numParams = byte(ln)
 	cls.stackSize = newtable.vp
 	cls.isVariadic = vararg

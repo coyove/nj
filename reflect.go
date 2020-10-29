@@ -65,7 +65,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		// 	rk := reflect.ValueOf(key.TypedInterface(rv.Type().Elem()))
 		// 	v := rv.MapIndex(rk)
 		// 	if !v.IsValid() {
-		// 		panicf("store: readonly map")
+		panicf("store: readonly map")
 		// 	}
 		// 	if v2.IsNil() {
 		// 		rv.SetMapIndex(rk, reflect.Value{})
@@ -75,6 +75,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		// 	}
 		return
 	case reflect.Slice, reflect.Array:
+		panicf("store: readonly slice")
 		// 	idx := key.ExpectMsg(VNumber, "storearray").Int() - 1
 		// 	if idx >= int64(rv.Len()) || idx < 0 {
 		// 		return

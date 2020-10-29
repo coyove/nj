@@ -1,15 +1,19 @@
 package lib
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/coyove/script"
+	"github.com/tidwall/gjson"
 )
 
 var HostWhitelist = map[string][]string{}
@@ -17,49 +21,51 @@ var HostWhitelist = map[string][]string{}
 func init() {
 	script.AddGlobalValue("http", script.NativeWithParamMap(func(env *script.Env, args script.Arguments) {
 		ctx, cancel, _ := env.Deadline()
-		defer cancel()
+		defer func() {
+			cancel()
+			if r := recover(); r != nil {
+				env.A = script.Interface(r)
+			}
+		}()
 
-		method := args.GetString("method", "GET")
+		method := strings.ToUpper(args.GetString("method", "GET"))
 
 		u, err := url.Parse(args.GetString("url", "bad://%url%"))
-		if err != nil {
-			env.Return(script.Interface(err))
-			return
+		panicErr(err)
+
+		addKV := func(p, pp string, add func(k, v string)) {
+			iterStrings(args[p], func(line string) {
+				if k, v, ok := splitKV(line); ok {
+					add(k, v)
+				}
+			})
+			iterStringPairs(args[p+"_key"], args[p+"_val"], func(k, v string) { add(k, v) })
+			for k, v := range gjson.Parse(args.GetString(pp, "")).Map() {
+				add(k, v.String())
+			}
 		}
 
 		if len(HostWhitelist) > 0 {
 			ok := false
 			for _, allow := range HostWhitelist[u.Host] {
-				if allow == method {
+				if strings.ToUpper(allow) == strings.ToUpper(method) {
 					ok = true
 				}
 			}
 			if !ok {
-				env.Return(script.Interface(fmt.Errorf("%s %v not allowed", method, u)))
-				return
+				panicErr(fmt.Errorf("%s %v not allowed", method, u))
 			}
 		}
 
-		{ // Append queries to url
-			q := u.Query()
-			iterStrings(args["query"], func(line string) {
-				if k, v, ok := splitKV(line); ok {
-					q.Add(k, v)
-				}
-			})
-			u.RawQuery = q.Encode()
-		}
+		additionalQueries := u.Query()
+		addKV("query", "queries", additionalQueries.Add) // append queries to url
+		u.RawQuery = additionalQueries.Encode()
 
 		body := args.GetString("rawbody", "")
-		urlForm, jsonForm := false, false
+		dataFrom, urlForm, jsonForm := (*multipart.Writer)(nil), false, false
 		if body == "" {
-			// Check "form"
 			form := url.Values{}
-			iterStrings(args["form"], func(line string) {
-				if k, v, ok := splitKV(line); ok {
-					form.Add(k, v)
-				}
-			})
+			addKV("form", "forms", form.Add) // check "form"
 			body = form.Encode()
 			urlForm = len(form) > 0
 		}
@@ -69,35 +75,66 @@ func init() {
 			jsonForm = len(body) > 0
 		}
 
-		req, err := http.NewRequestWithContext(ctx, method, u.String(), strings.NewReader(body))
-		if err != nil {
-			env.Return(script.Interface(err))
-			return
+		var bodyReader io.Reader = strings.NewReader(body)
+
+		if body == "" && method == "POST" {
+			// Check form-data
+			payload := bytes.Buffer{}
+			writer := multipart.NewWriter(&payload)
+			addKV("multipart", "multiparts", func(k, v string) {
+				if strings.HasPrefix(v, "@") {
+					path := v[1:]
+					buf, err := ioutil.ReadFile(path)
+					panicErr(err)
+					part, err := writer.CreateFormFile(k, filepath.Base(path))
+					panicErr(err)
+					_, err = part.Write(buf)
+					panicErr(err)
+				} else {
+					part, err := writer.CreateFormField(k)
+					panicErr(err)
+					_, err = io.WriteString(part, v)
+					panicErr(err)
+				}
+			})
+			panicErr(writer.Close())
+			if payload.Len() > 0 {
+				bodyReader = &payload
+				dataFrom = writer
+			}
 		}
+
+		req, err := http.NewRequestWithContext(ctx, method, u.String(), bodyReader)
+		panicErr(err)
 
 		switch {
 		case urlForm:
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 		case jsonForm:
 			req.Header.Add("Content-Type", "application/json")
+		case dataFrom != nil:
+			req.Header.Add("Content-Type", dataFrom.FormDataContentType())
 		}
 
-		iterStrings(args["header"], func(line string) {
-			if k, v, ok := splitKV(line); ok {
-				req.Header.Add(k, v)
-			}
-		})
+		addKV("header", "headers", req.Header.Add) // append headers
 
+		// Construct HTTP client
 		client := &http.Client{}
 		if to := args.GetInt("timeout", 0); to > 0 {
 			client.Timeout = time.Duration(to) * time.Millisecond
 		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			env.Return(script.Interface(err))
-			return
+		if !args["jar"].IsNil() {
+			client.Jar = args["jar"].Interface().(http.CookieJar)
 		}
+		if p := args.GetString("proxy", ""); p != "" {
+			client.Transport = &http.Transport{
+				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
+			}
+		}
+
+		// Send
+		resp, err := client.Do(req)
+		panicErr(err)
 
 		defer resp.Body.Close()
 
@@ -115,8 +152,15 @@ func init() {
 			script.Int(int64(resp.StatusCode)),
 			script.Interface(hdr),
 			env.NewStringBytes(buf),
+			script.Interface(client.Jar),
 		)
-	}, "method", "url", "rawbody", "header", "query", "timeout", "form", "json"))
+	}, `http(...)`,
+		"method", "url", "rawbody", "timeout", "proxy",
+		"header", "header_key", "header_val", "headers",
+		"query", "query_key", "query_val", "queries",
+		"form", "form_key", "form_val", "forms",
+		"multipart", "multipart_key", "multipart_val", "multiparts",
+		"json", "jar"))
 }
 
 func splitKV(line string) (k string, v string, ok bool) {
@@ -147,5 +191,24 @@ func iterStrings(v script.Value, f func(string)) {
 		for _, line := range v.Stack() {
 			f(line.String())
 		}
+	}
+}
+
+func iterStringPairs(v1, v2 script.Value, f func(string, string)) {
+	switch v1.Type() + v2.Type() {
+	case script.VString * 2:
+		f(v1.String(), v2.String())
+	case script.VStack * 2:
+		for i, line := range v1.Stack() {
+			if i < len(v2.Stack()) {
+				f(line.String(), v2.Stack()[i].String())
+			}
+		}
+	}
+}
+
+func panicErr(err error) {
+	if err != nil {
+		panic(err)
 	}
 }

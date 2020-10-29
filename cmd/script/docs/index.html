@@ -15,40 +15,49 @@
       font-size: 14px;
   }
   html, body {
-    height: 100%;
-    margin: 0;
+      height: 100%;
+      margin: 0;
   }
   .CodeMirror {
       height: 100%;
       background: #ffc;
   }
+  #input {
+      position:absolute;
+      left:0;
+      top:32px;
+      width:100%;
+      bottom:33%;
+  }
   #output {
       position: absolute;
       width: 100%;
-      top: 75%;
+      top: 67%;
       bottom: 0;
       overflow-y: scroll;
   }
   #output div {
       white-space: pre-wrap;
-      word-wrap: break-all;
-      padding: 0.5em;
+      word-break: break-all;
+      padding: 0.2em 0.5em;
   }
   #output div.title {
-      background: #098;
-      color: white;
+      font-size: 90%;
+      background: #eee;
   }
   #output div.content {
       font-family: monospace;
+      padding: 0.5em;
   }
 </style>
 
 <body>
   <div style="position:relative;height:100%">
     <div style="line-height: 32px;height:32px;padding:0 0.5em">
-	<button onclick="run()">Run</button>
+	<button onclick="run()">Run (F5)</button>
+	<button onclick="share()">Share</button>
 	&emsp;
-	<select onchange="editor.setValue(demos[this.value] || '')">
+	<select id='demo' onchange="editor.setValue(demos[this.value] || '');editor.focus();output.innerHTML=''">
 	<option selected>Select a demo...</option>
 	<option>time</option>
 	<option>call</option>
@@ -63,7 +72,7 @@
 	  <a href="https://github.com/coyove/script">Github</a>
 	</span>
     </div>
-    <div style="position:absolute;left:0;top:32px;width:100%;bottom:25%">
+    <div id="input">
 	<div style="border:solid 1px #aaa;border-width:1px 0 1px 0;height:100%">
 	    <textarea id="code" ></textarea>
 	</div>
@@ -72,13 +81,34 @@
   </div>
 </body>
 
+<script src="demo.js?v=11"></script>
 <script>
   var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
       mode: "lua",
       indentUnit: 4,
       matchBrackets: true,
+      extraKeys: {"F5": run},
       lineNumbers: true
-  });
+  }), output = document.getElementById("output");
+
+  function share(get) {
+      fetch('/share?code=' + encodeURIComponent(editor.getValue()) + (get ? "&get=" + get : ""))
+	  .then(response => response.json())
+	  .then(function(data) {
+	      output.innerHTML = '';
+
+	      if (data.error) {
+		  output.appendChild(div("Error", true))
+		  output.appendChild(div(data.error))
+	      } else if (get) {
+		  editor.setValue(data.data);
+	      } else {
+		  output.appendChild(div("URL", true))
+		  output.appendChild(div(data.data.replace(/http:\/\/sprunge.us\/(\S+)$/,
+							   location.origin + "/?src=$1")));
+	      }
+	  })
+  }
 
   function div(html, title) {
       var el = document.createElement("div");
@@ -91,15 +121,15 @@
       fetch('/eval?code=' + encodeURIComponent(editor.getValue()))
 	  .then(response => response.json())
 	  .then(function(data) {
-	      var el = document.getElementById("output");
+	      var el = output;
 	      el.innerHTML = '';
 
 	      if (data.error) {
 		  el.appendChild(div("Error", true))
 		  el.appendChild(div(data.error))
 	      } else {
-		el.appendChild(div("Results", true))
-		el.appendChild(div(JSON.stringify(data.results)));
+		  el.appendChild(div("Results", true))
+		  el.appendChild(div(JSON.stringify(data.results).replace(/(^\[|\]$)/g,'')));
 	      }
 	      if (data.stdout) {
 	    	  el.appendChild(div("Stdout", true));
@@ -111,5 +141,8 @@
 	      el.appendChild(div(data.opcode));
 	  });
   }
+
+  var src = new URLSearchParams(window.location.search).get('src');
+  if (src) share(src)
+  document.getElementById("demo").onchange()
 </script>
-<script src="demo.js?v=10"></script>
