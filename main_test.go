@@ -76,7 +76,7 @@ func TestFileGoto(t *testing.T) { runFile(t, "tests/goto.txt") }
 
 func TestFileR2(t *testing.T) { runFile(t, "tests/r2.txt") }
 
-func TestFleStringIndex(t *testing.T) { runFile(t, "tests/indexstr.txt") }
+func TestFileStringIndex(t *testing.T) { runFile(t, "tests/indexstr.txt") }
 
 func TestFileVararg(t *testing.T) { runFile(t, "tests/vararg.txt") }
 
@@ -312,4 +312,28 @@ return a + add(), a + add(), a + add()
 		t.Fatal(v, v1, err, p2.PrettyCode())
 	}
 
+}
+
+func TestNumberLexer(t *testing.T) {
+	assert := func(src string, v Value) {
+		_, fn, ln, _ := runtime.Caller(1)
+		r, _ := MustRun(LoadString("return " + src))
+		if r != v {
+			t.Fatal(fn, ln, r, v)
+		}
+	}
+	assert("1 + 2 ", Int(3))
+	assert("1+ 2 ", Int(3))
+	assert("-1+ 2 ", Int(1))
+	assert("1- 2 ", Int(-1))
+	assert("1 - 2 ", Int(-1))
+	assert("1.5 +2", Float(3.5))
+	assert("1.5+ 2 ", Float(3.5))
+	assert("12.5e-1+ 2 ", Float(3.25))
+	assert("1.5e+1+ 2", Float(17))
+	assert(".5+ 2 ", Float(2.5))
+	assert("-.5+ 2", Float(1.5))
+	assert("0x1+ 2", Int(3))
+	assert("0xE+1 ", Int(15))
+	assert(".5E+1 ", Int(5))
 }

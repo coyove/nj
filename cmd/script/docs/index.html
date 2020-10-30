@@ -81,7 +81,7 @@
   </div>
 </body>
 
-<script src="demo.js?v=11"></script>
+<script src="demo.js?v=15"></script>
 <script>
   var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
       mode: "lua",
@@ -92,6 +92,12 @@
   }), output = document.getElementById("output");
 
   function share(get) {
+      var d = document.getElementById("demo").value;
+      if (editor.getValue() == demos[d]) {
+	  output.appendChild(div("URL", true))
+	  output.appendChild(div(location.origin + "/?demo=" + d))
+	  return;
+      }
       fetch('/share?code=' + encodeURIComponent(editor.getValue()) + (get ? "&get=" + get : ""))
 	  .then(response => response.json())
 	  .then(function(data) {
@@ -127,9 +133,10 @@
 	      if (data.error) {
 		  el.appendChild(div("Error", true))
 		  el.appendChild(div(data.error))
-	      } else {
+	      } else if (data.results && data.results.length && data.results[0]) {
 		  el.appendChild(div("Results", true))
-		  el.appendChild(div(JSON.stringify(data.results).replace(/(^\[|\]$)/g,'')));
+		  for (var i = 0 ; i < data.results.length; i++) 
+		      el.appendChild(div(data.results[i]));
 	      }
 	      if (data.stdout) {
 	    	  el.appendChild(div("Stdout", true));
@@ -137,12 +144,16 @@
 		  el.appendChild(div("Elapsed", true))
 		  el.appendChild(div(data.elapsed + 's'));
 	      }
-	      el.appendChild(div("Compiled", true));
-	      el.appendChild(div(data.opcode));
+	      if (data.opcode) {
+		  el.appendChild(div("Compiled", true));
+		  el.appendChild(div(data.opcode));
+	      }
 	  });
   }
 
   var src = new URLSearchParams(window.location.search).get('src');
   if (src) share(src)
+  var src = new URLSearchParams(window.location.search).get('demo');
+  if (src) document.getElementById("demo").value = src;
   document.getElementById("demo").onchange()
 </script>

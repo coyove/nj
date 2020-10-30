@@ -2,9 +2,6 @@ package script
 
 import (
 	"fmt"
-	"log"
-	"os"
-	"runtime/debug"
 	"strconv"
 )
 
@@ -82,16 +79,4 @@ func (t valueType) String() string {
 
 func panicf(msg string, args ...interface{}) {
 	panic(fmt.Errorf(msg, args...))
-}
-
-func catchErr(err *error) {
-	if r := recover(); r != nil {
-		*err, _ = r.(error)
-		if *err == nil {
-			*err = fmt.Errorf("%v", r)
-		}
-		if os.Getenv("PL_STACK") != "" {
-			log.Println(string(debug.Stack()))
-		}
-	}
 }

@@ -7,7 +7,7 @@ import (
 
 func TestHashString(t *testing.T) {
 	t.Log(Parse(strings.NewReader(`
-a = 1
+a = 1e3
 -- local b, ... = a()
 `), ""))
 }

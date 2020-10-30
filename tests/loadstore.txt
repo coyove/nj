@@ -1,2 +1,0 @@
-local mu = mutex()
-mu.Lock()

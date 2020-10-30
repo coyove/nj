@@ -32,7 +32,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TLen TReturn TReturnVoid TYield TYieldVoid TRepeat TUntil TNot TLabel TGoto
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TYield TYieldVoid TRepeat TUntil TNot TLabel TGoto
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 

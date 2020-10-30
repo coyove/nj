@@ -249,6 +249,10 @@ func (table *symtable) compileCallOp(nodes []parser.Node) uint16 {
 		table.writeInst(OpCall, tmp[0], parser.NewAddress(1))
 	}
 
+	if _, opa, _ := splitInst(table.code.Code[table.code.Len()-1]); opa == table.loadK(nil) {
+		panicf("function %s not found", nodes[1])
+	}
+
 	table.code.writePos(nodes[0].Pos())
 	table.returnAddresses(tmp)
 	return regA

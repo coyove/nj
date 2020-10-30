@@ -444,3 +444,14 @@ func LoadString(code string, globalKeyValues ...interface{}) (*Program, error) {
 	// n.Dump(os.Stderr, "  ")
 	return compileNodeTopLevel(n, globalKeyValues...)
 }
+
+func MustRun(p *Program, err error) (Value, []Value) {
+	if err != nil {
+		panic(err)
+	}
+	v, v1, err := p.Run()
+	if err != nil {
+		panic(err)
+	}
+	return v, v1
+}

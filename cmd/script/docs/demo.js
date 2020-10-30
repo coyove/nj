@@ -1,13 +1,21 @@
   var demos = {
       "Select a demo...": `-- Print all global values, mainly functions
 -- use doc(function) to view its documentation
-local ...g = globals()
+local n, ...g = globals()
 
-print(format("Total {} globals", g[1]))
+print(format("version {}, total global values: {}\\n", VERSION, n))
 
-for i=2,#g do
-    print(i-1, ": ", g[i])
-    print(type(g[i]) == "function" and doc(g[i]) or "N/A")
+for i=1,#g do
+    local name = str(g[i])
+    if #name > 32 then
+        name = name[1,16] .. '...' .. name[#name-16,#name]
+    end
+
+    title = i .. ": " .. name
+    print((",----------------------------------------------------------------")[1,#title+3], '.')
+    print("| ", title, " |")
+    print(("'----------------------------------------------------------------")[1,#title+3], "'")
+    print(type(g[i]) == "function" and doc(g[i]) or "\tN/A")
     print()
 end
 `,
@@ -56,7 +64,7 @@ correspondent JSON STRING: '{"a":1,"b":2,"array":[1,2,{"inner":"inner"}]}'
 assert(json(j, "a") == 1)
 assert(json(j, "b") == 2)
 local n, a, b, c = json(j, "array")
-assert(n == 3 and a == 1 and b == 2 and json(c, "inner")== "inner")
+assert(n == 3 and a == 1 and b == 2 and json(c, "inner") == "inner")
 assert(json(j, "array.2.inner")=="inner")
 println(json(j, "array"))
 
@@ -71,7 +79,7 @@ print({arr})
 
 --[[
 JSON object is a bit harder to write,
-first we need to trick the parser with syntax "{ [nil] = whatever }" so it knows this is an object,
+first we need to trick the parser with syntax "{ [nil] = something }" so it knows this is an object,
 within "whatever" we layout the key-value pairs sequentially, so it looks like:
 { [nil] = key1, value1, key2, value2, ... }
 however the above sequence is misaligned: Nth key becomes Nth value and Nth value becomes (N+1)th key

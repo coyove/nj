@@ -63,7 +63,10 @@ func NewNumberFromString(v string) Node {
 			return Node{Type: Int, num: uint64(int64(i))}
 		}
 	}
-	f, _ := strconv.ParseFloat(v, 64)
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		panic("invalid number format: " + v)
+	}
 	if float64(int64(f)) == f {
 		return Node{Type: Int, num: uint64(int64(f))}
 	}

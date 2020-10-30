@@ -31,15 +31,25 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
+	"unsafe"
 )
 
-const EOF = 0xffffffff
-const whitespace1 = 1<<'\t' | 1<<' '
-const whitespace2 = 1<<'\t' | 1<<'\n' | 1<<'\r' | 1<<' '
+const (
+	EOF         = 0xffffffff
+	whitespace1 = 1<<'\t' | 1<<' '
+	whitespace2 = 1<<'\t' | 1<<'\n' | 1<<'\r' | 1<<' '
+)
+
+var numberChars = func() (x [256]bool) {
+	for _, r := range "0123456789abcdefABCDEF.xX" {
+		x[byte(r)] = true
+	}
+	return
+}()
 
 type Error struct {
 	Pos     Position
@@ -58,10 +68,8 @@ func (e *Error) Error() string {
 
 func writeChar(buf *bytes.Buffer, c uint32) { buf.WriteByte(byte(c)) }
 
-func isDecimal(ch uint32) bool { return '0' <= ch && ch <= '9' }
-
 func isIdent(ch uint32, pos int) bool {
-	return ch == '_' || 'A' <= ch && ch <= 'Z' || 'a' <= ch && ch <= 'z' || isDecimal(ch) && pos > 0
+	return ch == '_' || 'A' <= ch && ch <= 'Z' || 'a' <= ch && ch <= 'z' || '0' <= ch && ch <= '9' && pos > 0
 }
 
 func isDigit(ch uint32) bool {
@@ -144,16 +152,13 @@ func (sc *Scanner) skipComments() {
 }
 
 func (sc *Scanner) skipBlockComments() error {
-	for {
-		a := sc.Next()
-		if a == EOF {
-			return sc.Error("", "unterminated block comments")
-		}
+	for a := sc.Next(); a != EOF; a = sc.Next() {
 		if a == ']' && sc.Peek() == ']' {
 			sc.Next()
 			return nil
 		}
 	}
+	return sc.Error("", "unterminated block comments")
 }
 
 func (sc *Scanner) scanIdent(ch uint32, buf *bytes.Buffer) error {
@@ -164,137 +169,61 @@ func (sc *Scanner) scanIdent(ch uint32, buf *bytes.Buffer) error {
 	return nil
 }
 
-func (sc *Scanner) scanDecimal(ch uint32, buf *bytes.Buffer) error {
-	writeChar(buf, ch)
-	for isDecimal(sc.Peek()) {
-		writeChar(buf, sc.Next())
-	}
-	return nil
-}
-
 func (sc *Scanner) scanNumber(ch uint32, buf *bytes.Buffer) error {
-	if ch == '0' { // octal
-		switch sc.Peek() {
-		case 'x', 'X', 'b', 'B':
-			writeChar(buf, ch)
-			writeChar(buf, sc.Next())
-			hasvalue := false
-			for isDigit(sc.Peek()) {
-				writeChar(buf, sc.Next())
-				hasvalue = true
-			}
-			if !hasvalue {
-				return sc.Error(buf.String(), "illegal number")
+	writeChar(buf, ch)
+	for {
+		ch := byte(sc.Peek())
+		if !numberChars[ch] {
+			if ch == '+' || ch == '-' {
+				x := buf.Bytes()
+				if e := x[len(x)-1]; e == 'e' || e == 'E' {
+					if len(x) >= 2 && x[1] != 'x' && x[1] != 'X' {
+						goto OK
+					}
+				}
 			}
 			return nil
 		}
-	}
-	sc.scanDecimal(ch, buf)
-	if sc.Peek() == '.' {
-		sc.scanDecimal(sc.Next(), buf)
-	}
-	if ch = sc.Peek(); ch == 'e' || ch == 'E' {
+	OK:
 		writeChar(buf, sc.Next())
-		if ch = sc.Peek(); ch == '-' || ch == '+' {
-			writeChar(buf, sc.Next())
-		}
-		sc.scanDecimal(sc.Next(), buf)
 	}
-
-	return nil
 }
 
 func (sc *Scanner) scanString(quote uint32, buf *bytes.Buffer) error {
 	ch := sc.Next()
-	for ch != quote {
+	lastIsSlash := false
+
+	for ch != quote || lastIsSlash {
 		if ch == '\n' || ch == '\r' || ch < 0 {
 			return sc.Error(buf.String(), "unterminated string")
 		}
-		if ch == '\\' {
-			if err := sc.scanEscape(ch, buf); err != nil {
-				return err
-			}
-		} else {
-			writeChar(buf, ch)
-		}
+		lastIsSlash = ch == '\\'
+		writeChar(buf, ch)
 		ch = sc.Next()
 	}
-	return nil
-}
 
-func (sc *Scanner) scanEscape(ch uint32, buf *bytes.Buffer) error {
-	ch = sc.Next()
-	switch ch {
-	case 'a':
-		buf.WriteByte('\a')
-	case 'b':
-		buf.WriteByte('\b')
-	case 'f':
-		buf.WriteByte('\f')
-	case 'n':
-		buf.WriteByte('\n')
-	case 'r':
-		buf.WriteByte('\r')
-	case 't':
-		buf.WriteByte('\t')
-	case 'v':
-		buf.WriteByte('\v')
-	case '\\':
-		buf.WriteByte('\\')
-	case '"':
-		buf.WriteByte('"')
-	case '\'':
-		buf.WriteByte('\'')
-	case '\n':
-		buf.WriteByte('\n')
-	case '\r':
-		buf.WriteByte('\n')
-		sc.Newline('\r')
-	case 'u':
-		ubuf := make([]byte, 4)
-		for i := 0; i < 4; i++ {
-			if isDigit(sc.Peek()) {
-				ubuf[i] = byte(sc.Next())
-			} else {
-				return sc.Error(buf.String(), "invalid unicode escape sequence")
-			}
+	x := buf.Bytes()
+	s := *(*string)(unsafe.Pointer(&x))
+	buf.Reset()
+
+	// Hack: escaped string's length is always greater or equal to its unescaped one
+	// So we reset the buffer and write unescaped chars back directly because it will never
+	// catch up the progress of 'UnquoteChar(escaped_string)'
+	var runeTmp [utf8.UTFMax]byte
+	for len(s) > 0 {
+		c, multibyte, ss, err := strconv.UnquoteChar(s, byte(quote))
+		if err != nil {
+			return err
 		}
-		val, _ := strconv.ParseInt(string(ubuf), 16, 32)
-		buf.WriteRune(rune(val))
-	case 'x':
-		bbuf := make([]byte, 2)
-		for i := 0; i < 2; i++ {
-			if isDigit(sc.Peek()) {
-				bbuf[i] = byte(sc.Next())
-			} else {
-				return sc.Error(buf.String(), "invalid hex escape sequence")
-			}
-		}
-		val, _ := strconv.ParseInt(string(bbuf), 16, 32)
-		buf.WriteByte(byte(val))
-	default:
-		if '0' <= ch && ch <= '9' {
-			bytes := []byte{byte(ch)}
-			for i := 0; i < 2 && isDecimal(sc.Peek()); i++ {
-				bytes = append(bytes, byte(sc.Next()))
-			}
-			val, _ := strconv.ParseInt(string(bytes), 10, 32)
-			writeChar(buf, uint32(val))
+		s = ss
+		if c < utf8.RuneSelf || !multibyte {
+			buf.WriteByte(byte(c))
 		} else {
-			buf.WriteByte('\\')
-			writeChar(buf, ch)
-			return sc.Error(buf.String(), "invalid escape sequence")
+			n := utf8.EncodeRune(runeTmp[:], c)
+			buf.Write(runeTmp[:n])
 		}
 	}
 	return nil
-}
-
-func (sc *Scanner) countSep(ch uint32) (int, uint32) {
-	count := 0
-	for ; ch == '='; count = count + 1 {
-		ch = sc.Next()
-	}
-	return count, ch
 }
 
 func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
@@ -326,7 +255,6 @@ var reservedWords = map[string]uint32{
 	"then":     TThen,
 	"end":      TEnd,
 	"not":      TNot,
-	"len":      TLen,
 	"return":   TReturn,
 	"for":      TFor,
 	"while":    TWhile,
@@ -385,7 +313,7 @@ redo:
 				tok.Type = typ
 			}
 		}
-	case isDecimal(ch):
+	case ch >= '0' && ch <= '9':
 		tok.Type = TNumber
 		err = sc.scanNumber(ch, buf)
 		tok.Str = buf.String()
@@ -468,7 +396,7 @@ redo:
 			}
 		case '.':
 			switch ch2 := sc.Peek(); {
-			case isDecimal(ch2):
+			case ch2 >= '0' && ch2 <= '9':
 				tok.Type = TNumber
 				err = sc.scanNumber(ch, buf)
 				tok.Str = buf.String()
@@ -525,7 +453,6 @@ finally:
 
 type Lexer struct {
 	scanner *Scanner
-	loop    string
 	Stmts   Node
 	Token   Token
 }
@@ -555,28 +482,20 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 	panic(lx.scanner.TokenError(tok, message))
 }
 
-func parse(reader io.Reader, name string, loop string) (chunk Node, lexer *Lexer, err error) {
+func parse(reader io.Reader, name string) (chunk Node, lexer *Lexer, err error) {
 	lexer = &Lexer{
 		scanner: NewScanner(reader, name),
-		loop:    loop,
 		Stmts:   Node{},
 		Token:   Token{Str: ""},
 	}
-	defer func() {
-		if os.Getenv("PL_STACK") != "" {
-			return
-		}
-		if e := recover(); e != nil {
-			err = fmt.Errorf("%v", e)
-		}
-	}()
+	defer CatchError(&err)
 	yyParse(lexer)
 	chunk = lexer.Stmts
 	return
 }
 
 func Parse(reader io.Reader, name string) (chunk Node, err error) {
-	chunk, _, err = parse(reader, name, name)
+	chunk, _, err = parse(reader, name)
 	if !chunk.Valid() && err == nil {
 		err = fmt.Errorf("invalid chunk")
 	}

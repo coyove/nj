@@ -20,7 +20,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const Version int64 = 233
+const Version int64 = 234
 
 var (
 	g   = map[string]Value{}
@@ -68,17 +68,17 @@ func init() {
 		for _, k := range keys {
 			env.V = append(env.V, g[k])
 		}
-	}, "globals() => g1, g2, ...", "list all global values")
+	}, "globals() => n, g1, g2, ...", "\tlist all global values")
 	AddGlobalValue("doc", func(env *Env) {
 		env.A = _str(env.In(0, VFunction).Function().doc)
-	}, "doc(function) => string", "return function's documentation")
+	}, "doc(function) => string", "\treturn function's documentation")
 	AddGlobalValue("narray", func(env *Env) {
 		n := env.In(0, VNumber).Int()
 		env.Return(Int(n), make([]Value, n)...)
-	}, "narray(n) => n, ...array", "return an array size of n, filled with nil")
+	}, "narray(n) => n, ...array", "\treturn an array size of n, filled with nil")
 	AddGlobalValue("array", func(env *Env) {
 		env.Return(Int(int64(env.Size())), append([]Value{}, env.Stack()...)...)
-	}, "array(a, b, c, ...) => n, a, b, c, ...", "return the number of input arguments, followed by the arugments themselves")
+	}, "array(a, b, c, ...) => n, a, b, c, ...", "\treturn the number of input arguments, followed by the arugments themselves")
 	AddGlobalValue("resume", func(env *Env) {
 		f := env.In(0, VFunction).Function()
 		cursor := env.In(1, VNumber).Int()
@@ -87,11 +87,14 @@ func init() {
 		newEnv.stackOffset = uint32(len(*newEnv.stack))
 		*newEnv.stack = append(*newEnv.stack, stack...)
 		newEnv.grow(int(f.stackSize))
+		if cursor >= int64(f.code.Len()) {
+			panicf("invalid state: cursor overflowed")
+		}
 		env.A, env.V = execCursorLoop(newEnv, f, uint32(cursor))
 	}, "resume(function, state) => returned_values ..., new_state ...")
 	AddGlobalValue("type", func(env *Env) {
 		env.A = _str(env.Get(0).Type().String())
-	}, "type(value) => string", "return value's type")
+	}, "type(value) => string", "\treturn value's type")
 	AddGlobalValue("pcall", func(env *Env) {
 		a, v, err := env.In(0, VFunction).Function().Call(env, env.Stack()[1:]...)
 		if err == nil {
@@ -100,8 +103,8 @@ func init() {
 			env.Return(Bool(false), Interface(err))
 		}
 	}, "pcall(function, arg1, arg2, ...)",
-		"execute the function, catch panic and return: 0, err",
-		"if everything went well, return: 1, ...")
+		"\texecute the function, catch panic and return: 0, panic_as_error",
+		"\tif everything went well, return what function returned: 1, ...")
 	AddGlobalValue("select", func(env *Env) {
 		switch a := env.Get(0); a.Type() {
 		case VString:
@@ -113,7 +116,7 @@ func init() {
 				env.Return(Value{})
 			}
 		}
-	}, "select(n, ...)", "lua-style select function")
+	}, "select(n, ...)", "\tlua-style select function")
 	AddGlobalValue("panic", func(env *Env) { panic(env.InStr(0, "user panic")) }, "panic(string)")
 	AddGlobalValue("assert", func(env *Env) {
 		v := env.Get(0)
@@ -123,7 +126,7 @@ func init() {
 		if env.Size() == 2 && !v.Equal(env.Get(1)) {
 			panicf("assertion failed: %v and %v", v, env.Get(1))
 		}
-	}, "assert(value)", "panic when value is falsy")
+	}, "assert(value)", "\tpanic when value is falsy")
 	AddGlobalValue("num", func(env *Env) {
 		v := env.Get(0)
 		switch v.Type() {
@@ -139,19 +142,23 @@ func init() {
 		default:
 			env.A = Value{}
 		}
-	}, "num(value) => number", "convert string to number")
+	}, "num(value) => number", "\tconvert string to number")
 	AddGlobalValue("print", func(env *Env) {
+		length := 0
 		for _, a := range env.Stack() {
-			fmt.Fprint(env.Global.Stdout, a.String())
+			s := a.String()
+			length += len(s)
+			fmt.Fprint(env.Global.Stdout, s)
 		}
 		fmt.Fprintln(env.Global.Stdout)
-	}, "print(a, b, c, ...)", "print values, no space between them")
+		env.A = Int(int64(length))
+	}, "print(a, b, c, ...)", "\tprint values, no space between them")
 	AddGlobalValue("println", func(env *Env) {
 		for _, a := range env.Stack() {
 			fmt.Fprint(env.Global.Stdout, a.String(), " ")
 		}
 		fmt.Fprintln(env.Global.Stdout)
-	}, "println(a, b, c, ...)", "print values, insert space between each of them")
+	}, "println(a, b, c, ...)", "\tprint values, insert space between each of them")
 	AddGlobalValue("scanln", func(env *Env) {
 		var results []Value
 		nIdx := 0
@@ -174,9 +181,9 @@ func init() {
 			env.Return(results[0], results[1:]...)
 		}
 	},
-		"scanln(prompt) => string", "  print prompt and read user input",
-		"scanln(n) => s1, s2, ..., sn", "  read user input n times",
-		"scanln(prompt, n) => s1, s2, ..., sn", "  print prompt and read user input n times",
+		"scanln(prompt) => string", "\tprint prompt and read user input",
+		"scanln(n) => s1, s2, ..., sn", "\tread user input n times",
+		"scanln(prompt, n) => s1, s2, ..., sn", "\tprint prompt and read user input n times",
 	)
 	AddGlobalValue("INF", Float(math.Inf(1)))
 	AddGlobalValue("PI", Float(math.Pi))
@@ -185,7 +192,7 @@ func init() {
 		rg.Lock()
 		rg.Rand.Seed(env.InInt(0, 1))
 		rg.Unlock()
-	})
+	}, "randomseed(int)")
 	AddGlobalValue("random", func(env *Env) {
 		rg.Lock()
 		switch len(env.Stack()) {
@@ -198,7 +205,11 @@ func init() {
 			env.A = Float(rg.Float64())
 		}
 		rg.Unlock()
-	})
+	},
+		"random() => [0,1]",
+		"random(n) => [1, n]",
+		"random(a, b) => [a, b]",
+	)
 	AddGlobalValue("bitand", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() & env.In(1, VNumber).Int()) })
 	AddGlobalValue("bitor", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() | env.In(1, VNumber).Int()) })
 	AddGlobalValue("bitxor", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() ^ env.In(1, VNumber).Int()) })
@@ -221,9 +232,12 @@ func init() {
 		if v := env.Get(0); v.Type() == VNumber {
 			env.A = env.NewString(fmt.Sprintf(env.InStr(1, "%v"), v.Interface()))
 		} else {
-			env.A = env.NewString(v.String())
+			env.A = env.NewString(fmt.Sprintf(env.InStr(1, "%s"), v.String()))
 		}
-	}, "str(value) => string", "convert value to string")
+	},
+		"str(value) => string", "\tconvert value to string",
+		"str(value, format) => string", "\tconvert value to string using format",
+	)
 	AddGlobalValue("int", func(env *Env) {
 		switch v := env.Get(0); v.Type() {
 		case VNumber:
@@ -232,7 +246,7 @@ func init() {
 			v, err := strconv.ParseInt(v.String(), 0, 64)
 			env.Return(Int(v), Interface(err))
 		}
-	}, "int(value) => integer", "convert value to integer number (int64)")
+	}, "int(value) => integer", "\tconvert value to integer number (int64)")
 	AddGlobalValue("time", func(env *Env) {
 		switch env.InStr(0, "") {
 		case "nano":
@@ -245,8 +259,8 @@ func init() {
 			env.A = Int(time.Now().Unix())
 		}
 	},
-		"time('nano'|'micro'|'milli') => unix timestamp in (nano|micro|milli)seconds",
-		"time() => unix timestamp in seconds",
+		"time('nano'|'micro'|'milli') => int", "\tunix timestamp in (nano|micro|milli)seconds",
+		"time() => int", "\tunix timestamp in seconds",
 	)
 	AddGlobalValue("sleep", func(env *Env) {
 		if env.Get(0).Type() == VString {
@@ -287,17 +301,31 @@ func init() {
 			env.A = Int(s[1] / 1e9)
 		}
 	},
-		"clock('nano'|'micro'|'milli') => (nano|micro|milli)seconds since startup",
-		"clock() => seconds since startup",
+		"clock('nano'|'micro'|'milli') => int", "\t(nano|micro|milli)seconds since startup",
+		"clock() => int", "\tseconds since startup",
 	)
 	AddGlobalValue("exit", func(env *Env) { os.Exit(int(env.InInt(0, 0))) }, "exit(code)")
 	AddGlobalValue("char", func(env *Env) {
 		env.A = env.NewString(string(rune(env.In(0, VNumber).Int())))
 	}, "char(number) => string")
-	AddGlobalValue("rune", func(env *Env) {
+	AddGlobalValue("unicode", func(env *Env) {
 		r, sz := utf8.DecodeRuneInString(env.In(0, VString)._str())
 		env.Return(Int(int64(r)), Int(int64(sz)))
-	}, "rune(one_char_string) => char code")
+	}, "unicode(one_char_string) => char_unicode")
+	AddGlobalValue("charpos", func(env *Env) {
+		index, i := env.InInt(1, 0), 1
+		for s := env.In(0, VString)._str(); ; {
+			_, sz := utf8.DecodeRuneInString(s)
+			if sz == 0 {
+				return
+			}
+			if index--; index <= 0 {
+				break
+			}
+			s, i = s[sz:], i+sz
+		}
+		env.A = Int(int64(i))
+	}, "charpos(string, index) => int", "\tconvert char-based index to byte-based index")
 	AddGlobalValue("match", func(env *Env) {
 		rx, err := regexp.Compile(env.In(1, VString)._str())
 		if err != nil {
@@ -338,10 +366,10 @@ func init() {
 			env.A = _str(strings.Trim(a, cutset))
 		}
 	},
-		"trim(text) => trim spaces",
-		"trim(text, cutset) => trim chars inside 'cutset'",
-		"trim(text, cutset, 'left'|'right') => trim right/left chars inside 'cutset'",
-		"trim(text, pattern, 'suffix'|'prefix') => trim prefix/suffix",
+		"trim(text) => string", "\ttrim spaces",
+		"trim(text, cutset) => string", "\ttrim chars inside 'cutset'",
+		"trim(text, cutset, 'left'|'right') => string", "\ttrim right/left chars inside 'cutset'",
+		"trim(text, pattern, 'suffix'|'prefix') => string", "\ttrim prefix/suffix",
 	)
 	AddGlobalValue("replace", func(env *Env) {
 		a := env.In(0, VString)._str()
@@ -362,7 +390,7 @@ func init() {
 	},
 		"replace(text, regex, newtext) => string",
 		"replace(text, regex, callback) => string",
-		"callback will be called in such way: new_string = f(captured_string)",
+		"\tcallback will be called in such way: new_string = f(captured_string)",
 	)
 	AddGlobalValue("split", func(env *Env) {
 		x := strings.Split(env.In(0, VString)._str(), env.In(1, VString)._str())
@@ -380,24 +408,21 @@ func init() {
 			env.A = Int(int64(strings.Index(a, b)) + 1)
 		}
 	},
-		"strpos(text, needle) => first occurrence of needle in text",
-		"strpos(text, needle, 'last') => last occurrence of needle in text",
+		"strpos(text, needle) => int", "\tfirst occurrence of needle in text, or 0 if not found",
+		"strpos(text, needle, 'last') => int", "\tlast occurrence of needle in text",
 	)
 	AddGlobalValue("format", func(env *Env) {
 		f := strings.Replace(env.In(0, VString)._str(), "%", "%%", -1)
 		f = strings.Replace(f, "{}", "%v", -1)
 		env.A = env.NewString(fmt.Sprintf(f, env.StackInterface()[1:]...))
-	}, "format(pattern, a1, a2, ...)", "'{}' is the placeholder, no need to escape '%'")
-	AddGlobalValue("mutex", func(env *Env) {
-		env.A = Interface(&sync.Mutex{})
-	}, "mutex()", "create a sync.Mutex")
+	}, "format(pattern, a1, a2, ...)", "\t'{}' is the placeholder, no need to escape '%'")
 	AddGlobalValue("error", func(env *Env) {
 		env.A = Interface(errors.New(env.InStr(0, "")))
-	}, "error(text)", "create an error")
+	}, "error(text)", "\tcreate an error")
 	AddGlobalValue("iserror", func(env *Env) {
 		_, ok := env.Get(0).Interface().(error)
 		env.A = Bool(ok)
-	}, "iserror(value)", "whether value is an error")
+	}, "iserror(value)", "\ttest whether value is an error")
 	AddGlobalValue("json", func(env *Env) {
 		cv := func(r gjson.Result) Value {
 			switch r.Type {
@@ -452,9 +477,9 @@ func init() {
 		env.A = Interface(jsonQuotedString([]byte(x)))
 	},
 		"jsonunwrap(json_string) => unwrapped_json_value",
-		"example: local a = { a = 1 }",
-		`{ b = a } will yield: '{"b":"{\"a\":1}"}'`,
-		`{ b = jsonunwrap(a) } will yield: b == '{"b":{"a":1}}'`)
+		"\texample: local a = { a = 1 }",
+		`	{ b = a } will yield: '{"b":"{\"a\":1}"}'`,
+		`	{ b = jsonunwrap(a) } will yield: b == '{"b":{"a":1}}'`)
 }
 
 func mathMinMax(env *Env, max bool) {

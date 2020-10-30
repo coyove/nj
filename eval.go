@@ -26,21 +26,25 @@ func (e *ExecError) Error() string {
 	msg.WriteString("stacktrace:\n")
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
-		src := "<unknown>"
+		src := uint32(0)
 		for i := 0; i < len(r.cls.code.Pos); {
-			var op, line uint32
 			var opx uint32 = math.MaxUint32
-			i, op, line = r.cls.code.Pos.read(i)
-			if i < len(r.cls.code.Pos)-1 {
-				_, opx, _ = r.cls.code.Pos.read(i)
+			ii, op, line := r.cls.code.Pos.read(i)
+			if ii < len(r.cls.code.Pos)-1 {
+				_, opx, _ = r.cls.code.Pos.read(ii)
 			}
 			if r.cursor >= op && r.cursor < opx {
-				src = fmt.Sprintf("line %d", line)
+				src = line
 				break
 			}
+			if r.cursor < op && i == 0 {
+				src = line
+				break
+			}
+			i = ii
 		}
 		// the recorded cursor was advanced by 1 already
-		msg.WriteString(fmt.Sprintf("%s at %s (%d)\n", r.cls.name, src, r.cursor-1))
+		msg.WriteString(fmt.Sprintf("%s at line %d (cursor: %d)\n", r.cls.name, src, r.cursor-1))
 	}
 	msg.WriteString("root panic:\n")
 	msg.WriteString(fmt.Sprintf("%v\n", e.r))
@@ -188,11 +192,16 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _StrStr {
 				x = va._str() + vb._str()
 			} else if va.Type() == VString && vb.Type() == VNumber {
-				vbf, vbi, vbIsInt := vb.Num()
-				if vbIsInt {
+				if vbf, vbi, vbIsInt := vb.Num(); vbIsInt {
 					x = va._str() + strconv.FormatInt(vbi, 10)
 				} else {
 					x = va._str() + strconv.FormatFloat(vbf, 'f', 0, 64)
+				}
+			} else if vb.Type() == VString && va.Type() == VNumber {
+				if vaf, vai, vaIsInt := va.Num(); vaIsInt {
+					x = strconv.FormatInt(vai, 10) + vb._str()
+				} else {
+					x = strconv.FormatFloat(vaf, 'f', 0, 64) + vb._str()
 				}
 			} else {
 				va, vb = va.Expect(VString), vb.Expect(VString)

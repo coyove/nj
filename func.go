@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/coyove/script/parser"
 )
 
 type Func struct {
@@ -128,7 +130,7 @@ func (p *Program) Run() (v1 Value, v []Value, err error) {
 }
 
 func (p *Program) Call() (v1 Value, v []Value, err error) {
-	defer catchErr(&err)
+	defer parser.CatchError(&err)
 	newEnv := Env{
 		Global: p,
 		stack:  p.Stack,
@@ -138,7 +140,7 @@ func (p *Program) Call() (v1 Value, v []Value, err error) {
 }
 
 func (c *Func) Call(env *Env, a ...Value) (v1 Value, v []Value, err error) {
-	defer catchErr(&err)
+	defer parser.CatchError(&err)
 
 	var newEnv Env
 	var varg []Value
