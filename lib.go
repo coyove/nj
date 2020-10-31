@@ -36,11 +36,7 @@ func AddGlobalValue(k string, v interface{}, doc ...string) {
 	case func(*Env):
 		g[k] = Function(&Func{name: k, native: v, doc: strings.Join(doc, "\n")})
 	default:
-		tmp := Interface(v)
-		if tmp.Type() == VFunction {
-			tmp.Function().name = k
-		}
-		g[k] = tmp
+		g[k] = Interface(v)
 	}
 }
 
@@ -100,7 +96,12 @@ func init() {
 		if err == nil {
 			env.Return(Bool(true), append([]Value{a}, v...)...)
 		} else {
-			env.Return(Bool(false), Interface(err))
+			switch err := err.(type) {
+			case *ExecError:
+				env.Return(Bool(false), Interface(err.r))
+			default:
+				env.Return(Bool(false), Interface(err))
+			}
 		}
 	}, "pcall(function, arg1, arg2, ...)",
 		"\texecute the function, catch panic and return: 0, panic_as_error",
@@ -117,7 +118,7 @@ func init() {
 			}
 		}
 	}, "select(n, ...)", "\tlua-style select function")
-	AddGlobalValue("panic", func(env *Env) { panic(env.InStr(0, "user panic")) }, "panic(string)")
+	AddGlobalValue("panic", func(env *Env) { panic(env.Get(0)) }, "panic(value)")
 	AddGlobalValue("assert", func(env *Env) {
 		v := env.Get(0)
 		if env.Size() <= 1 && v.IsFalse() {
@@ -126,7 +127,8 @@ func init() {
 		if env.Size() == 2 && !v.Equal(env.Get(1)) {
 			panicf("assertion failed: %v and %v", v, env.Get(1))
 		}
-	}, "assert(value)", "\tpanic when value is falsy")
+	}, "assert(value)", "\tpanic when value is falsy",
+		"assert(value1, value2)", "\tpanic when two values are not equal")
 	AddGlobalValue("num", func(env *Env) {
 		v := env.Get(0)
 		switch v.Type() {
@@ -218,16 +220,9 @@ func init() {
 	AddGlobalValue("sqrt", func(env *Env) { env.A = Float(math.Sqrt(env.In(0, VNumber).Float())) })
 	AddGlobalValue("floor", func(env *Env) { env.A = Float(math.Floor(env.In(0, VNumber).Float())) })
 	AddGlobalValue("ceil", func(env *Env) { env.A = Float(math.Ceil(env.In(0, VNumber).Float())) })
-	AddGlobalValue("mod", func(env *Env) { env.A = Float(math.Mod(env.In(0, VNumber).Float(), env.In(1, VNumber).Float())) })
 	AddGlobalValue("abs", func(env *Env) { env.A = Float(math.Abs(env.In(0, VNumber).Float())) })
-	AddGlobalValue("acos", func(env *Env) { env.A = Float(math.Acos(env.In(0, VNumber).Float())) })
-	AddGlobalValue("asin", func(env *Env) { env.A = Float(math.Asin(env.In(0, VNumber).Float())) })
-	AddGlobalValue("atan", func(env *Env) { env.A = Float(math.Atan(env.In(0, VNumber).Float())) })
-	AddGlobalValue("atan2", func(env *Env) { env.A = Float(math.Atan2(env.In(0, VNumber).Float(), env.In(1, VNumber).Float())) })
-	AddGlobalValue("ldexp", func(env *Env) { env.A = Float(math.Ldexp(env.In(0, VNumber).Float(), int(env.InInt(1, 0)))) })
-	AddGlobalValue("modf", func(env *Env) { a, b := math.Modf(env.In(0, VNumber).Float()); env.Return(Float(a), Float(b)) })
-	AddGlobalValue("min", func(env *Env) { mathMinMax(env, false) })
-	AddGlobalValue("max", func(env *Env) { mathMinMax(env, true) })
+	AddGlobalValue("min", func(env *Env) { mathMinMax(env, false) }, "max(a, b, ...) => number")
+	AddGlobalValue("max", func(env *Env) { mathMinMax(env, true) }, "min(a, b, ...) => number")
 	AddGlobalValue("str", func(env *Env) {
 		if v := env.Get(0); v.Type() == VNumber {
 			env.A = env.NewString(fmt.Sprintf(env.InStr(1, "%v"), v.Interface()))

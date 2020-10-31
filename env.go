@@ -18,6 +18,8 @@ type Env struct {
 	stackOffset uint32
 	V           []Value
 	A           Value
+
+	nativeSource *Func
 }
 
 func (env *Env) growZero(newSize int) {
@@ -129,7 +131,8 @@ func (env *Env) InStr(i int, defaultValue string) string {
 func (env *Env) In(i int, expectedType valueType) Value {
 	v := env.Get(i)
 	if v.Type() != expectedType {
-		panicf("bad argument #%d: expect %v, got %v", i+1, expectedType, v.Type())
+		panicf("%s: bad argument #%d, expect %v, got %v",
+			env.nativeSource.name, i+1, expectedType, v.Type())
 	}
 	return v
 }
@@ -169,4 +172,10 @@ func (e *Env) NewStringBytes(s []byte) Value {
 
 func (e *Env) NewUnlimitedStringBytes(s []byte) Value {
 	return e.NewUnlimitedString(*(*string)(unsafe.Pointer(&s)))
+}
+
+func (e *Env) checkRemainStackSize(sz int) {
+	if e.Global.MaxStackSize > 0 && int64(sz+len(*e.stack)) > e.Global.MaxStackSize {
+		panicf("stack overflow, max: %d", e.Global.MaxStackSize)
+	}
 }

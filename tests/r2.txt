@@ -93,3 +93,28 @@ do
 	flag = true
 	nilCall(1, 2)
 end
+
+function remove(el, ...arr)
+    for i=1,#arr do
+	if arr[i] == el then
+	    return arr[1,i-1], arr[i+1,#arr]
+	end
+    end
+    return arr
+end
+
+do
+	local ...r = remove(1, 1, 2, 3)
+	assert(r[1] == 2 and r[2] == 3)
+	local ...r = remove(2, 1, 2, 3)
+	assert(r[1] == 1 and r[2] == 3)
+	local ...r = remove(3, 1, 2, 3)
+	assert(r[1] == 1 and r[2] == 2)
+	println(r)
+end
+
+do
+	function bad(n) panic("bad" ..n) end
+	local _, err = pcall(bad, "boy")
+	assert(err == "badboy")
+end

@@ -19,7 +19,7 @@ import (
 var HostWhitelist = map[string][]string{}
 
 func init() {
-	script.AddGlobalValue("http", script.NativeWithParamMap(func(env *script.Env, args script.Arguments) {
+	script.AddGlobalValue("http", script.NativeWithParamMap("http", func(env *script.Env, args script.Arguments) {
 		ctx, cancel, _ := env.Deadline()
 		defer func() {
 			cancel()

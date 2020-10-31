@@ -45,7 +45,8 @@ assert("嘻x" == trim("嘻x嘻", "嘻", "right"))
 assert("x嘻" == trim("嘻x嘻", "嘻", "left"))
 
 assert(("abc")[1,2] == "ab")
-assert(("abc")[20,2] == nil)
+assert(("abc")[3,3] == "c")
+assert(("abc")[1,0] == "")
 assert(("cde")[unicode("b") - unicode("a"),2] == "cd")
 assert(("efg")[unicode("b") - unicode("a"), unicode("c") - unicode("a")] == "ef")
 

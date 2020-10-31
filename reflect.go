@@ -49,11 +49,7 @@ func reflectSlice(v interface{}, start, end int64) interface{} {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Slice, reflect.Array, reflect.String:
-		start := int(start - 1)
-		end := int(end - 1 + 1)
-		if start >= 0 && start < rv.Len() && end >= 0 && end < rv.Len() && start <= end {
-			return rv.Slice(start, end).Interface()
-		}
+		return rv.Slice(sliceInRange(start, end, rv.Len())).Interface()
 	}
 	return nil
 }
@@ -183,4 +179,16 @@ func camelKey(k string) string {
 		return string(k[0]-'a'+'A') + k[1:]
 	}
 	return k
+}
+
+func sliceInRange(start, end int64, length int) (int, int) {
+	{
+		start := int(start - 1)
+		end := int(end - 1 + 1)
+		if start >= 0 && start <= length && end >= 0 && end <= length && start <= end {
+			return start, int(end)
+		}
+	}
+	panicf("slice [%d,%d] overflows [1,%d]", start, end, length)
+	return 0, 0
 }

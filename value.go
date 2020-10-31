@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strconv"
 	"unsafe"
+
+	"github.com/coyove/script/parser"
 )
 
 var int64Marker = unsafe.Pointer(new(int64))
@@ -18,6 +20,8 @@ type Value struct {
 	v uint64
 	p unsafe.Pointer
 }
+
+func (v Value) IsValue(parser.Node) {}
 
 // Type returns the type of value, its logic should align IsFalse()
 func (v Value) Type() valueType {
@@ -76,6 +80,9 @@ func _unpackedStack(m *unpacked) Value {
 
 // Function returns a closure value
 func Function(c *Func) Value {
+	if c.name == "" {
+		c.name = "function"
+	}
 	return Value{v: VFunction, p: unsafe.Pointer(c)}
 }
 
@@ -103,6 +110,8 @@ func Interface(i interface{}) Value {
 		return Function(v)
 	case Value:
 		return v
+	case parser.CatchedError:
+		return Interface(v.Original)
 	}
 
 	rv := reflect.ValueOf(i)
@@ -348,14 +357,10 @@ func (v Value) toString(lv int) string {
 type unpacked struct{ a []Value }
 
 func (t *unpacked) Slice(start int64, end int64) []Value {
-	start--
-	end--
-	if start < int64(len(t.a)) && start >= 0 &&
-		end < int64(len(t.a)) && end >= 0 &&
-		end >= start {
-		return t.a[start : end+1]
+	{
+		start, end := sliceInRange(start, end, len(t.a))
+		return t.a[start:end]
 	}
-	return nil
 }
 
 func (t *unpacked) Put(idx int64, v Value) {

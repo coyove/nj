@@ -53,7 +53,9 @@ end
 `,
 /* = = = = = = = = */
       "time": `println("Unix timestamp:", time())
-println("Go time.Time:", Go_time().Format("2006-01-02 15:04:05"))`,
+println("Go time.Time:", Go_time().Format("2006-01-02 15:04:05"))
+println(doc(Go_time))
+`,
 /* = = = = = = = = */
       "json": `local j = { a=1, b=2, array={ 1, 2, { inner="inner" } } }
 --[[
@@ -78,9 +80,9 @@ local _, ...arr = array(1, 2, 3)
 print({arr})
 
 --[[
-JSON object is a bit harder to write,
+JSON dynamic object creation is a bit harder to write,
 first we need to trick the parser with syntax "{ [nil] = something }" so it knows this is an object,
-within "whatever" we layout the key-value pairs sequentially, so it looks like:
+then we layout the key-value pairs sequentially, so it looks like:
 { [nil] = key1, value1, key2, value2, ... }
 however the above sequence is misaligned: Nth key becomes Nth value and Nth value becomes (N+1)th key
 so we have to prepend the sequence with a dummy value to correct the positions:
@@ -128,6 +130,33 @@ local el = goquery(body, "div").nodes()
 for i = 1,#el do
     println(el[i].text())
 end`,
+      /* = = = = = = = = */
+      "array-tricks": `--[[
+There is no support for table, array, no anything similar,
+but there are some tricks to simulate part of them (with performance penalty)
+]]
+
+local n, ...arr = array(1, 2, "3", 4)
+println(n, "elements:")
+for i = 1, #arr do
+    print('* ', arr[i])
+end
+
+n, ...arr = array(arr, 5)
+println("now there are", n, "elements:", arr)
+
+function remove(el, ...arr)
+    for i=1,#arr do
+        if arr[i] == el then
+            return arr[1,i-1], arr[i+1,#arr]
+        end
+    end
+    return arr
+end
+
+println("remove 3 from array:", remove("3", arr))
+println("remove nothing from array:", remove(random(), arr))
+`,
 /* = = = = = = = = */
       "eof": ""
   };

@@ -70,6 +70,7 @@ func returnVararg(env *Env, a Value, b []Value) (Value, []Value) {
 
 	if !flag {
 		// both 'a' and 'b' are not (neither containing) unpacked values
+		env.checkRemainStackSize(len(b))
 		return a, b
 	}
 
@@ -85,9 +86,7 @@ func returnVararg(env *Env, a Value, b []Value) (Value, []Value) {
 		} else {
 			b2 = append(b2, b)
 		}
-		if env.Global.MaxStackSize > 0 && int64(len(b2)+len(*env.stack)) > env.Global.MaxStackSize {
-			panicf("vararg: stack overflow, max: %d", env.Global.MaxStackSize)
-		}
+		env.checkRemainStackSize(len(b2))
 	}
 	if len(b2) == 0 {
 		return Value{}, nil
@@ -355,11 +354,8 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 				env.A = _unpackedStack(&unpacked{a: subject._unpackedStack().Slice(start, end)})
 			case VString:
 				s := subject._str()
-				if start >= 1 && start <= int64(len(s)) && end >= 1 && end <= int64(len(s)) && end >= start {
-					env.A = _str(s[start-1 : end])
-				} else {
-					env.A = Value{}
-				}
+				start, end := sliceInRange(start, end, len(s))
+				env.A = _str(s[start:end])
 			case VInterface:
 				env.A = Interface(reflectSlice(subject.Interface(), start, end))
 			default:
@@ -386,6 +382,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			}
 			if opa == regA && len(env.V) > 0 {
 				*stackEnv.stack = append(*stackEnv.stack, env.V...)
+				env.V = env.V[:0]
 			}
 			if env.Global.MaxStackSize > 0 && int64(len(*stackEnv.stack)) > env.Global.MaxStackSize {
 				panicf("stack overflow, max: %d", env.Global.MaxStackSize)
@@ -441,8 +438,10 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 
 			if cls.native != nil {
 				stackEnv.Global = env.Global
+				stackEnv.nativeSource = cls
 				cls.native(&stackEnv)
 				env.A, env.V = stackEnv.A, stackEnv.V
+				stackEnv.nativeSource = nil
 				stackEnv.Clear()
 			} else {
 				if cls.isVariadic {

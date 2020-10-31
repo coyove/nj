@@ -50,12 +50,13 @@ func (a Arguments) GetInt(name string, defaultValue int64) int64 {
 }
 
 // Native creates a golang-native function
-func Native(f func(env *Env), doc ...string) Value {
-	return Function(&Func{native: f, doc: strings.Join(doc, "\n")})
+func Native(name string, f func(env *Env), doc ...string) Value {
+	return Function(&Func{name: name, native: f, doc: strings.Join(doc, "\n")})
 }
 
-func NativeWithParamMap(f func(*Env, Arguments), doc string, params ...string) Value {
+func NativeWithParamMap(name string, f func(*Env, Arguments), doc string, params ...string) Value {
 	return Function(&Func{
+		name:      name,
 		params:    params,
 		numParams: byte(len(params)),
 		doc:       doc,
