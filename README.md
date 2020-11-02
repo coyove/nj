@@ -49,7 +49,11 @@ v, v1, err := program.Run() // v == 2
 program, _ = script.LoadString("return G() + 2")
 v, v1, err := program.Run() // v == 3
 
-program, _ = script.LoadString("return G + 2", "G", 10) // override the global 'G'
+program, _ = script.LoadString("return G + 2", CompileOptions{
+	GlobalKeyValues: {
+		"G": 10, // override the global 'G'
+	},
+})
 v, v1, err := program.Run() // v == 12
 ```
 

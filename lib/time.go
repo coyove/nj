@@ -2,6 +2,7 @@ package lib
 
 import (
 	"bytes"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -9,38 +10,38 @@ import (
 )
 
 func init() {
-	script.AddGlobalValue("Go_timefmt", func(env *script.Env) {
+	script.AddGlobalValue("strtime", func(env *script.Env) {
 		f := env.InStr(0, "")
-		switch f {
-		case "ANSIC":
+		switch strings.ToLower(f) {
+		case "ansic":
 			f = time.ANSIC
-		case "UnixDate":
+		case "unixdate":
 			f = time.UnixDate
-		case "RubyDate":
+		case "rubydate":
 			f = time.RubyDate
-		case "RFC822":
+		case "rfc822":
 			f = time.RFC822
-		case "RFC822Z":
+		case "rfc822z":
 			f = time.RFC822Z
-		case "RFC850":
+		case "rfc850":
 			f = time.RFC850
-		case "RFC1123":
+		case "rfc1123":
 			f = time.RFC1123
-		case "RFC1123Z":
+		case "rfc1123z":
 			f = time.RFC1123Z
-		case "RFC3339":
+		case "rfc3339":
 			f = time.RFC3339
-		case "RFC3339Nano":
+		case "rfc3339nano":
 			f = time.RFC3339Nano
-		case "Kitchen":
+		case "kitchen":
 			f = time.Kitchen
-		case "Stamp":
+		case "stamp":
 			f = time.Stamp
-		case "StampMilli":
+		case "stampmilli":
 			f = time.StampMilli
-		case "StampMicro":
+		case "stampmicro":
 			f = time.StampMicro
-		case "StampNano":
+		case "stampnano":
 			f = time.StampNano
 		default:
 			buf := bytes.Buffer{}
@@ -112,14 +113,28 @@ func init() {
 
 		tt, ok := env.Get(1).Interface().(time.Time)
 		if !ok {
-			tt = time.Now()
+			ts := env.InInt(1, 0)
+			if ts > 0 {
+				if ts < 1<<33 {
+					tt = time.Unix(ts, 0)
+				} else if ts < 1<<33*1e3 {
+					tt = time.Unix(0, ts*1e6)
+				} else if ts < 1<<33*1e6 {
+					tt = time.Unix(0, ts*1e3)
+				} else {
+					tt = time.Unix(0, ts)
+				}
+			} else {
+				tt = time.Now()
+			}
 		}
 
 		r := tt.Format(f)
 		env.A = env.NewString(r)
 	},
-		"Go_timefmt(format_string) => string",
-		"Go_timefmt(format_string, time.Time) => string",
+		"strtime(format_string) => string",
+		"strtime(format_string, time.Time) => string",
+		"strtime(format_string, unix_timestamp) => string",
 		"\tformat doc: https://www.php.net/manual/datetime.format.php",
 	)
 }

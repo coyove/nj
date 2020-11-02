@@ -8,7 +8,7 @@ import (
 
 var _nodeRegA = parser.NewAddress(regA)
 
-func (table *symtable) compileChainOp(chain parser.Node) uint16 {
+func (table *symtable) compileChain(chain parser.Node) uint16 {
 	doblock := chain.Nodes[0].SymbolValue() == (parser.ADoBlock)
 
 	if doblock {
@@ -26,7 +26,7 @@ func (table *symtable) compileChainOp(chain parser.Node) uint16 {
 	return regA
 }
 
-func (table *symtable) compileSetOp(atoms []parser.Node) uint16 {
+func (table *symtable) compileSetMove(atoms []parser.Node) uint16 {
 	aDest := atoms[1].SymbolValue()
 	newYX := table.get(aDest)
 	if atoms[0].SymbolValue() == (parser.AMove) {
@@ -55,9 +55,12 @@ func (table *symtable) compileSetOp(atoms []parser.Node) uint16 {
 	return newYX
 }
 
-func (table *symtable) compileRetOp(atoms []parser.Node) uint16 {
+func (table *symtable) compileReturn(atoms []parser.Node) uint16 {
 	op := OpRet
 	if atoms[0].SymbolValue() == (parser.AYield) {
+		if table.options.DisableYield {
+			panicf("%v: yield is not allowed by options", atoms[0])
+		}
 		op = OpYield
 	}
 
@@ -84,8 +87,8 @@ func (table *symtable) compileRetOp(atoms []parser.Node) uint16 {
 	return regA
 }
 
-// writeOpcode3 accepts 3 arguments at most, 2 arguments will be encoded into opCode itself, the 3rd one will be in regA
-func (table *symtable) writeOpcode3(bop opCode, atoms []parser.Node) uint16 {
+// writeInst3 accepts 3 arguments at most, 2 arguments will be encoded into opCode itself, the 3rd one will be in regA
+func (table *symtable) writeInst3(bop opCode, atoms []parser.Node) uint16 {
 	// first atom: the splitInst name, tail atoms: the args
 	if len(atoms) > 4 {
 		panic("DEBUG: too many arguments")
@@ -150,7 +153,7 @@ func (table *symtable) writeOpcode3(bop opCode, atoms []parser.Node) uint16 {
 	return regA
 }
 
-func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
+func (table *symtable) compileFlat(atoms []parser.Node) uint16 {
 	head := atoms[0].SymbolValue()
 	switch head {
 	case parser.APopV:
@@ -169,9 +172,9 @@ func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
 
 	op, ok := flatOpMapping[head]
 	if !ok {
-		panicf("DEBUG compileFlatOp invalid splitInst: %v", atoms[0])
+		panicf("DEBUG compileFlat invalid symbol: %v", atoms[0])
 	}
-	yx := table.writeOpcode3(op, atoms)
+	yx := table.writeInst3(op, atoms)
 	if p := atoms[0].Pos(); p.Source != "" {
 		table.code.writePos(p)
 	}
@@ -180,7 +183,7 @@ func (table *symtable) compileFlatOp(atoms []parser.Node) uint16 {
 
 // [and a b] => $a = a if not a then return else $a = b end
 // [or a b]  => $a = a if a then do nothing else $a = b end
-func (table *symtable) compileAndOrOp(atoms []parser.Node) uint16 {
+func (table *symtable) compileAndOr(atoms []parser.Node) uint16 {
 	bop := OpIfNot
 	if atoms[0].SymbolValue() == (parser.AOr) {
 		bop = OpIf
@@ -199,7 +202,7 @@ func (table *symtable) compileAndOrOp(atoms []parser.Node) uint16 {
 }
 
 // [if condition [true-chain ...] [false-chain ...]]
-func (table *symtable) compileIfOp(atoms []parser.Node) uint16 {
+func (table *symtable) compileIf(atoms []parser.Node) uint16 {
 	condition := atoms[1]
 	trueBranch, falseBranch := atoms[2], atoms[3]
 
@@ -225,14 +228,15 @@ func (table *symtable) compileIfOp(atoms []parser.Node) uint16 {
 		table.code.Code[init-1] = jmpInst(OpIfNot, condyx, part1-init+1)
 		table.code.Code[part1] = jmpInst(OpJmp, 0, part2-part1-1)
 	} else {
-		table.code.truncateLast() // the last inst is used to skip the false branch, since we don't have one, we don't need this jmp
+		// The last inst is used to skip the false branch, since we don't have one, we don't need this jmp
+		table.code.truncateLast()
 		table.code.Code[init-1] = jmpInst(OpIfNot, condyx, part1-init)
 	}
 	return regA
 }
 
 // [call callee [args ...]]
-func (table *symtable) compileCallOp(nodes []parser.Node) uint16 {
+func (table *symtable) compileCall(nodes []parser.Node) uint16 {
 	tmp := append([]parser.Node{nodes[1]}, nodes[2].Nodes...)
 	table.collapse(tmp, true)
 
@@ -258,11 +262,15 @@ func (table *symtable) compileCallOp(nodes []parser.Node) uint16 {
 	return regA
 }
 
-// [function name [namelist] [chain ...] docstring]
-func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
+// [function name [paramlist] [chain ...] docstring]
+func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
+	if table.options.DisableDefineFunc {
+		panicf("%v: function definition is not allowed by options", atoms[1])
+	}
+
 	vararg := false
 	params := atoms[2]
-	newtable := newsymtable()
+	newtable := newsymtable(table.options)
 	paramsString := []string{}
 
 	if table.global == nil {
@@ -275,7 +283,7 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 		n := p.SymbolValue()
 		if p.IsSymbolDotDotDot() {
 			if i != len(params.Nodes)-1 {
-				panicf("%v: vararg must be the last parameter", atoms[0])
+				panicf("%v: vararg must be the last parameter", atoms[1])
 			}
 			vararg = true
 			if n != "..." {
@@ -283,7 +291,7 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 			}
 		}
 		if _, ok := newtable.sym[n]; ok {
-			panicf("%v: duplicated parameter: %q", atoms[0], n)
+			panicf("%v: duplicated parameter: %q", atoms[1], n)
 		}
 		newtable.put(n, uint16(i))
 		paramsString = append(paramsString, n)
@@ -294,7 +302,7 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 		ln--
 	}
 	if ln > 255 {
-		panicf("%v: too many parameters", atoms[0])
+		panicf("%v: too many parameters, 255 at most", atoms[1])
 	}
 
 	newtable.vp = uint16(len(newtable.sym))
@@ -320,25 +328,25 @@ func (table *symtable) compileLambdaOp(atoms []parser.Node) uint16 {
 }
 
 // [break]
-func (table *symtable) compileBreakOp(atoms []parser.Node) uint16 {
-	if len(table.inloop) == 0 {
+func (table *symtable) compileBreak(atoms []parser.Node) uint16 {
+	if len(table.forLoops) == 0 {
 		panicf("break outside loop")
 	}
-	table.inloop[len(table.inloop)-1].labelPos = append(table.inloop[len(table.inloop)-1].labelPos, table.code.Len())
+	table.forLoops[len(table.forLoops)-1].labelPos = append(table.forLoops[len(table.forLoops)-1].labelPos, table.code.Len())
 	table.code.writeJmpInst(OpJmp, 0, 0)
 	return regA
 }
 
 // [loop [chain ...]]
-func (table *symtable) compileWhileOp(atoms []parser.Node) uint16 {
+func (table *symtable) compileWhile(atoms []parser.Node) uint16 {
 	init := table.code.Len()
 	breaks := &breaklabel{}
 
-	table.inloop = append(table.inloop, breaks)
+	table.forLoops = append(table.forLoops, breaks)
 	table.addMaskedSymTable()
 	table.compileNode(atoms[1])
 	table.removeMaskedSymTable()
-	table.inloop = table.inloop[:len(table.inloop)-1]
+	table.forLoops = table.forLoops[:len(table.forLoops)-1]
 
 	table.code.writeJmpInst(OpJmp, 0, -(table.code.Len()-init)-1)
 	for _, idx := range breaks.labelPos {
@@ -347,7 +355,7 @@ func (table *symtable) compileWhileOp(atoms []parser.Node) uint16 {
 	return regA
 }
 
-func (table *symtable) compileGotoOp(atoms []parser.Node) uint16 {
+func (table *symtable) compileGoto(atoms []parser.Node) uint16 {
 	label := atoms[1].SymbolValue()
 	if atoms[0].SymbolValue() == (parser.ALabel) { // :: label ::
 		table.labelPos[label] = table.code.Len()
@@ -373,7 +381,7 @@ func (table *symtable) patchGoto() {
 	}
 }
 
-func (table *symtable) compileRetAddrOp(atoms []parser.Node) uint16 {
+func (table *symtable) compileRetAddr(atoms []parser.Node) uint16 {
 	for i := 1; i < len(atoms); i++ {
 		s := atoms[i].SymbolValue()
 		yx := table.get(s)
@@ -387,7 +395,7 @@ func (table *symtable) compileRetAddrOp(atoms []parser.Node) uint16 {
 	return regA
 }
 
-func (table *symtable) compileJSONOp(atoms []parser.Node) uint16 {
+func (table *symtable) compileJSON(atoms []parser.Node) uint16 {
 	var args []parser.Node
 	var toFinalString uint16 = 0
 

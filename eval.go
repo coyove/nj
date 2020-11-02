@@ -389,7 +389,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			}
 		case OpYield:
 			env.V = append(env.V, Int(int64(cursor)))
-			env.V = append(env.V, env.Stack()...)
+			env.V = append(env.V, _interface(&Env{V: append([]Value{}, env.Stack()...)}))
 			fallthrough
 		case OpRet:
 			v := env._get(opa)
@@ -440,7 +440,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 				stackEnv.Global = env.Global
 				stackEnv.nativeSource = cls
 				cls.native(&stackEnv)
-				env.A, env.V = stackEnv.A, stackEnv.V
+				env.A, env.V = returnVararg(&env, stackEnv.A, stackEnv.V)
 				stackEnv.nativeSource = nil
 				stackEnv.Clear()
 			} else {

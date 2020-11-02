@@ -1,7 +1,9 @@
 package script
 
 import (
+	"bytes"
 	"context"
+	"reflect"
 	"time"
 	"unsafe"
 )
@@ -128,6 +130,19 @@ func (env *Env) InStr(i int, defaultValue string) string {
 	return v._str()
 }
 
+func (env *Env) InInterface(i int, allowNil bool, expectedType reflect.Type) interface{} {
+	v := env.Get(i)
+	if v.Type() == VNil && allowNil {
+		return nil
+	}
+	itf := v.Interface()
+	if rt := reflect.TypeOf(itf); rt != expectedType {
+		panicf("%s: bad argument #%d, expect %v, got %v",
+			env.nativeSource.name, i+1, expectedType, rt)
+	}
+	return itf
+}
+
 func (env *Env) In(i int, expectedType valueType) Value {
 	v := env.Get(i)
 	if v.Type() != expectedType {
@@ -149,6 +164,17 @@ func (env *Env) Deadline() (context.Context, func(), time.Time) {
 
 func (env *Env) GetGlobalCustomValue(key string) interface{} {
 	return env.Global.Extras[key]
+}
+
+func (env *Env) String() string {
+	buf := bytes.NewBufferString("env(")
+	buf.WriteString(env.A.String())
+	for _, v := range env.V {
+		buf.WriteString(",")
+		buf.WriteString(v.String())
+	}
+	buf.WriteString(")")
+	return buf.String()
 }
 
 func (e *Env) NewString(s string) Value {
@@ -175,7 +201,7 @@ func (e *Env) NewUnlimitedStringBytes(s []byte) Value {
 }
 
 func (e *Env) checkRemainStackSize(sz int) {
-	if e.Global.MaxStackSize > 0 && int64(sz+len(*e.stack)) > e.Global.MaxStackSize {
+	if e.Global.MaxStackSize > 0 && float64(sz+len(*e.stack))*1.618 > float64(e.Global.MaxStackSize) {
 		panicf("stack overflow, max: %d", e.Global.MaxStackSize)
 	}
 }

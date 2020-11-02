@@ -21,6 +21,7 @@ type Value struct {
 	p unsafe.Pointer
 }
 
+// Reverse-reference in 'parser' package
 func (v Value) IsValue(parser.Node) {}
 
 // Type returns the type of value, its logic should align IsFalse()
@@ -34,9 +35,9 @@ func (v Value) Type() valueType {
 		}
 		return VNumber
 	}
-	if v.v&0xffff_ffff_ffff > 4096 {
-		return VInterface
-	}
+	// if v.v&0xffff_ffff_ffff > 4096 {
+	// 	return VInterface
+	// }
 	return valueType(v.v)
 }
 
@@ -158,8 +159,8 @@ func Interface(i interface{}) Value {
 }
 
 func _interface(i interface{}) Value {
+	return Value{v: VInterface, p: unsafe.Pointer(&i)}
 	x := *(*[2]uintptr)(unsafe.Pointer(&i))
-	// return Value{v: VInterface, p: unsafe.Pointer(&i)}
 	return Value{v: uint64(x[0]), p: unsafe.Pointer(x[1])}
 }
 
@@ -171,14 +172,9 @@ func (v Value) _str() string {
 func (v Value) _unsafeBytes() []byte {
 	var ss []byte
 	b := (*[3]uintptr)(unsafe.Pointer(&ss))
-	if l := v.v >> 56; l > 0 {
-		(*b)[0] = uintptr(v.p)
-		(*b)[1], (*b)[2] = uintptr(l-1), uintptr(l-1)
-	} else {
-		vpp := *(*[2]uintptr)(v.p)
-		(*b)[0] = vpp[0]
-		(*b)[1], (*b)[2] = vpp[1], vpp[1]
-	}
+	vpp := *(*[2]uintptr)(v.p)
+	(*b)[0] = vpp[0]
+	(*b)[1], (*b)[2] = vpp[1], vpp[1]
 	return ss
 }
 
@@ -231,7 +227,7 @@ func (v Value) Interface() interface{} {
 	case VFunction:
 		return v.Function()
 	case VInterface:
-		// return *(*interface{})(v.p)
+		return *(*interface{})(v.p)
 		var i interface{}
 		x := (*[2]uintptr)(unsafe.Pointer(&i))
 		(*x)[0] = uintptr(v.v)

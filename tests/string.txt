@@ -31,7 +31,6 @@ do
 	function stringcallback()
 	    r, c, ...state = resume(loop123, c, state)
 	    c = c and c or 0
-	    println(c, state)
 	    return r
 	end
 end
@@ -61,4 +60,36 @@ do
 	j = {1, 2, {[3] = 4}}
 	assert(j == '[1,2,{"3":4}]')
 	print(j)
+end
+
+do
+    function zip(l ,r)
+	    assert(#l, #r, "input sources sizes not matched")
+	    local _, ...z = narray(#l)
+	    for i = 1, #z do
+		z[i] = l[i] .. r[i]
+	    end
+	    return z
+    end
+    local a, b, c = (zip(
+	l='a', r='1',
+	l='b', r='2',
+	l='c', r=1+2,
+    ))
+    assert(a == "a1" and b == "b2" and c == "c3")
+
+    local _, ...kv = array()
+    for i = 0, 9 do
+    	_, ...kv = array(kv, 'l', char(unicode('a') + i), 'r', i)
+    end
+
+    -- l: a ~ i
+    -- r: 0 ~ 9
+    -- zip(l ,r): a0 ~ j9
+
+    local ...results = (zip([nil] = array(kv)))
+    for i = 1, #results do
+    	assert(results[i], char(unicode('a') + i - 1) .. (i - 1))
+    end
+    print(results[1], '...', results[#results])
 end

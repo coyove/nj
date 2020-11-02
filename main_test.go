@@ -25,36 +25,39 @@ func runFile(t *testing.T, path string) {
 		flag.Parse()
 	}
 
-	b, err := LoadFile(path,
-		"nativeVarargTest", func(a ...int) int {
-			return len(a)
+	b, err := LoadFile(path, CompileOptions{
+		GlobalKeyValues: map[string]interface{}{
+			"nativeVarargTest": func(a ...int) int {
+				return len(a)
+			},
+			"nativeVarargTest2": func(b string, a ...int) string {
+				return b + strconv.Itoa(len(a))
+			},
+			"intAlias": func(d time.Duration) time.Time {
+				return time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).Add(d)
+			},
+			"boolConvert": func(v bool) {
+				if !v {
+					panic("bad")
+				}
+			},
+			"mapFunc": NativeWithParamMap("mapFunc", func(env *Env, in Arguments) {
+				if !in["a"].IsNil() {
+					env.A = _str("a")
+				}
+				if !in["b"].IsNil() {
+					env.A = in["b"]
+				}
+				if !in["c"].IsNil() {
+					env.A = _str(in["c"].String())
+				}
+				if !in["d"].IsNil() {
+					env.A = _str(env.A.String() + in["d"].String())
+				}
+			}, "doc...", "a", "b", "c", "d"),
+			"G": "test",
 		},
-		"nativeVarargTest2", func(b string, a ...int) string {
-			return b + strconv.Itoa(len(a))
-		},
-		"intAlias", func(d time.Duration) time.Time {
-			return time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).Add(d)
-		},
-		"boolConvert", func(v bool) {
-			if !v {
-				panic("bad")
-			}
-		},
-		"mapFunc", NativeWithParamMap("mapFunc", func(env *Env, in Arguments) {
-			if !in["a"].IsNil() {
-				env.A = _str("a")
-			}
-			if !in["b"].IsNil() {
-				env.A = in["b"]
-			}
-			if !in["c"].IsNil() {
-				env.A = _str(in["c"].String())
-			}
-			if !in["d"].IsNil() {
-				env.A = _str(env.A.String() + in["d"].String())
-			}
-		}, "doc...", "a", "b", "c", "d"),
-		"G", "test")
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +93,7 @@ a+=n
 return a
 end
 return foo
-`, "init", 1)
+`, CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
 		v, _, _ := cls.Call()
 		if v, _, _ := v.Function().Call(nil, Int(10)); v.Int() != 11 {
 			t.Fatal(v)
@@ -233,8 +236,8 @@ a = 0
 
 func BenchmarkCompiling(b *testing.B) {
 	buf, _ := ioutil.ReadFile("tests/string.txt")
+	y := string(bytes.Repeat(buf, 100))
 	for i := 0; i < b.N; i++ {
-		y := bytes.Repeat(buf, 100)
 		_, err := LoadString(string(y))
 		if err != nil {
 			b.Fatal(err)
@@ -274,6 +277,18 @@ func TestTooManyVariables(t *testing.T) {
 	if !strings.Contains(err.Error(), "too many") {
 		t.Fatal(err)
 	}
+
+	{
+		buf := bytes.NewBufferString("function foo(")
+		for i := 0; i < 256; i++ {
+			buf.WriteString(fmt.Sprintf("a%d,", i))
+		}
+		buf.WriteString("x) end")
+		_, err = LoadString(buf.String())
+		if !strings.Contains(err.Error(), "too many") {
+			t.Fatal(err)
+		}
+	}
 }
 
 func TestFalsyValue(t *testing.T) {
@@ -306,7 +321,7 @@ return add`)
 	p2, _ := LoadString(`
 local a = 100
 return a + add(), a + add(), a + add()
-`, "add", add)
+`, CompileOptions{GlobalKey: "add", GlobalValue: add})
 	v, v1, err := p2.Run()
 	if v.Int() != 101 || v1[0].Int() != 102 || v1[1].Int() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())

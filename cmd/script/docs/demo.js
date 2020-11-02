@@ -101,6 +101,12 @@ veryComplexFunction(Z="world", ["H"]="hello")
 -- This is a trick from 'json' demo
 local _, ...args = array("Z", "世界")
 veryComplexFunction([nil] = array(args, "H", "你好"))
+
+function foo() return "hello", "world" end
+function bar() return "world", "hello" end
+
+local ...a = random() > 0.5 and foo() or bar()
+println(a)
 `,
 /* = = = = = = = = */
       "http": `local code, headers, body = http(
@@ -157,6 +163,82 @@ end
 println("remove 3 from array:", remove("3", arr))
 println("remove nothing from array:", remove(random(), arr))
 `,
+/* = = = = = = = = */
+      "zip-strings": `function alloc(n)
+    if n == 0 then return end
+    local _, ...r = array(nil)
+    for i = 2,n do
+        _, ...r = array(r, nil) 
+    end
+    return r
+end
+
+function zip(l ,r)
+    assert(#l, #r, "input sources sizes not matched")
+    local ...z = alloc(#l)
+
+    for i = 1, #z do
+        z[i] = l[i] .. r[i]
+    end
+
+    println("zip:", l, "+++", r, "===", z)
+    return z
+end
+
+local a, b, c = (zip(
+    l='a', r='1',
+    l='b', r='2',
+    l='c', r=1+2,
+))
+assert(a == "a1" and b == "b2" and c == "c3")
+
+local _, ...kv = array()
+for i = 0, 9 do
+    _, ...kv = array(kv, 'l', char(unicode('a') + i), 'r', i)
+end
+
+zip([nil] = array(kv))`,
+/* = = = = = = = = */
+      "countdown": `function countdown(n)
+    yield true
+    while n do
+       	n -= 1
+        yield n
+    end
+end
+
+local _, ...state1 = countdown(4)
+local _, ...state2 = countdown(5)
+initstate1, initstate2 = state1, state2
+
+function run(ss)
+    local result
+    local ...s = __g(ss)
+    result, ...s = resume(countdown, s)
+    if s and #s then 
+        __g(ss, s) 
+        return result, true
+    end
+    __g(ss, __g("init" .. ss))
+    return result, false
+end
+
+function runCountdown(s)
+    while true do
+        local tick, ok = run(s)
+        if not ok then break end
+        println(tick)
+    end
+end
+
+println("Run 1st countdown")
+runCountdown("state1")
+println("Run 2nd countdown")
+runCountdown("state2")
+println("Re-run 1st countdown")
+runCountdown("state1")
+println("Re-run 1st countdown again")
+runCountdown("state1")`,
 /* = = = = = = = = */
       "eof": ""
   };

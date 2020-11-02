@@ -269,3 +269,20 @@ function returnnil()
 local _ = 1 + 1
 end
 assert(returnnil() == nil)
+
+do -- yieldable variadic function
+    function generator(...array)
+	local i = 1
+	while i <= #array do
+	    yield array[i]
+	    i += 1
+	end
+    end
+
+    local i, v, state = 1, generator(1, 2, 3)
+    repeat
+	assert(i, v)
+    	v, ...state = resume(generator, state)
+	i += 1
+    until not v
+end

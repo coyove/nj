@@ -20,7 +20,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const Version int64 = 234
+const Version int64 = 236
 
 var (
 	g   = map[string]Value{}
@@ -76,18 +76,26 @@ func init() {
 		env.Return(Int(int64(env.Size())), append([]Value{}, env.Stack()...)...)
 	}, "array(a, b, c, ...) => n, a, b, c, ...", "\treturn the number of input arguments, followed by the arugments themselves")
 	AddGlobalValue("resume", func(env *Env) {
-		f := env.In(0, VFunction).Function()
-		cursor := env.In(1, VNumber).Int()
-		stack := env.Stack()[2:]
-		newEnv := *env
+		var (
+			f      = env.In(0, VFunction).Function()
+			cursor = env.InInt(1, 0)
+			newEnv = *env
+			stack  []Value
+		)
+		if state, ok := env.Get(2).Interface().(*Env); ok {
+			stack = state.V
+		}
 		newEnv.stackOffset = uint32(len(*newEnv.stack))
 		*newEnv.stack = append(*newEnv.stack, stack...)
 		newEnv.grow(int(f.stackSize))
 		if cursor >= int64(f.code.Len()) {
-			panicf("invalid state: cursor overflowed")
+			panicf("cursor overflowed")
 		}
 		env.A, env.V = execCursorLoop(newEnv, f, uint32(cursor))
-	}, "resume(function, state) => returned_values ..., new_state ...")
+	},
+		"resume(function, cursor, state) => yielded_value1, y2, ..., new_cursor, new_state",
+		"\tresume executing the given function using the cursor an the state",
+	)
 	AddGlobalValue("type", func(env *Env) {
 		env.A = _str(env.Get(0).Type().String())
 	}, "type(value) => string", "\treturn value's type")
@@ -127,6 +135,9 @@ func init() {
 		if env.Size() == 2 && !v.Equal(env.Get(1)) {
 			panicf("assertion failed: %v and %v", v, env.Get(1))
 		}
+		if env.Size() == 3 && !v.Equal(env.Get(1)) {
+			panicf("%s: %v and %v", env.Get(2).String(), v, env.Get(1))
+		}
 	}, "assert(value)", "\tpanic when value is falsy",
 		"assert(value1, value2)", "\tpanic when two values are not equal")
 	AddGlobalValue("num", func(env *Env) {
@@ -145,6 +156,9 @@ func init() {
 			env.A = Value{}
 		}
 	}, "num(value) => number", "\tconvert string to number")
+	AddGlobalValue("stdout", func(env *Env) {
+		env.A = _interface(env.Global.Stdout)
+	}, "stdout() => stdout", "\treturn stdout interface")
 	AddGlobalValue("print", func(env *Env) {
 		length := 0
 		for _, a := range env.Stack() {
@@ -155,6 +169,15 @@ func init() {
 		fmt.Fprintln(env.Global.Stdout)
 		env.A = Int(int64(length))
 	}, "print(a, b, c, ...)", "\tprint values, no space between them")
+	AddGlobalValue("write", func(env *Env) {
+		w, ok := env.In(0, VInterface).Interface().(io.Writer)
+		if !ok {
+			panicf("invalid stdout")
+		}
+		for _, a := range env.Stack()[1:] {
+			fmt.Fprint(w, a.String())
+		}
+	}, "write(stdout, a, b, c, ...)", "\twrite raw values to stdout")
 	AddGlobalValue("println", func(env *Env) {
 		for _, a := range env.Stack() {
 			fmt.Fprint(env.Global.Stdout, a.String(), " ")
@@ -378,7 +401,10 @@ func init() {
 			env.A = env.NewString(rx.ReplaceAllString(a, f._str()))
 		case VFunction:
 			env.A = env.NewString(rx.ReplaceAllStringFunc(a, func(in string) string {
-				v, _, _ := f.Function().Call(env, env.NewString(in))
+				v, _, err := f.Function().Call(env, env.NewString(in))
+				if err != nil {
+					panic(err)
+				}
 				return v.String()
 			}))
 		}

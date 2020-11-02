@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
-	"runtime/debug"
 
 	"github.com/coyove/script/parser"
 )
@@ -21,8 +19,19 @@ type breaklabel struct {
 	labelPos []int
 }
 
+type CompileOptions struct {
+	DisableYield      bool
+	DisableGFunc      bool
+	DisableDefineFunc bool
+	GlobalKeyValues   map[string]interface{}
+	GlobalKey         string
+	GlobalValue       interface{}
+}
+
 // symtable is responsible for recording the state of compilation
 type symtable struct {
+	options CompileOptions
+
 	global *symtable
 
 	code packet
@@ -34,14 +43,14 @@ type symtable struct {
 	sym       map[string]*symbol
 	maskedSym []map[string]*symbol
 
-	inloop []*breaklabel
+	forLoops []*breaklabel
 
 	vp uint16
 
 	insideJSONGenerator bool
 
-	collectConstsMode bool
-	constMap          map[interface{}]uint16
+	collectConstMode bool
+	constMap         map[interface{}]uint16
 
 	reusableTmps map[uint16]bool
 
@@ -49,13 +58,14 @@ type symtable struct {
 	labelPos    map[string]int
 }
 
-func newsymtable() *symtable {
+func newsymtable(opt CompileOptions) *symtable {
 	t := &symtable{
 		sym:          make(map[string]*symbol),
 		constMap:     make(map[interface{}]uint16),
 		reusableTmps: make(map[uint16]bool),
 		forwardGoto:  make(map[int]string),
 		labelPos:     make(map[string]int),
+		options:      opt,
 	}
 	return t
 }
@@ -102,6 +112,14 @@ func (table *symtable) returnAddresses(a interface{}) {
 	default:
 		panic("DEBUG returnAddresses")
 	}
+}
+
+func (table *symtable) mustGetSymbol(name string) uint16 {
+	addr := table.get(name)
+	if addr == table.loadK(nil) {
+		panicf("%q not found", name)
+	}
+	return addr
 }
 
 func (table *symtable) get(varname string) uint16 {
@@ -179,7 +197,7 @@ func (table *symtable) loadK(v interface{}) uint16 {
 		return i
 	}
 
-	if !table.collectConstsMode {
+	if !table.collectConstMode {
 		panicf("DEBUG: collect consts %#v", v)
 	}
 
@@ -220,23 +238,13 @@ func (table *symtable) writeInst(op opCode, n0, n1 parser.Node) {
 			addr := table.compileNodeInto(n, true, 0)
 			tmp = append(tmp, addr)
 			return addr
-		case parser.Symbol:
-			return table.get(n.SymbolValue())
-		case parser.String:
-			return table.loadK(n.StringValue())
-		case parser.Float:
-			return table.loadK(n.FloatValue())
-		case parser.Int:
-			return table.loadK(n.IntValue())
-		case parser.Address:
-			return n.Addr
+		case parser.Symbol, parser.String, parser.Float, parser.Int, parser.Address:
+			return table.compileNode(n)
 		default:
 			panicf("DEBUG writeInst unknown type: %#v", n)
 			return 0
 		}
 	}
-
-	defer table.returnAddresses(tmp)
 
 	if !n0.Valid() {
 		table.code.writeInst(op, 0, 0)
@@ -246,14 +254,17 @@ func (table *symtable) writeInst(op opCode, n0, n1 parser.Node) {
 	n0a := getAddr(n0)
 	if !n1.Valid() {
 		table.code.writeInst(op, n0a, 0)
+		table.returnAddresses(tmp)
 		return
 	}
 
 	n1a := getAddr(n1)
 	if op == OpSet && n0a == n1a {
-		return
+		// No need to set, mostly n0a and n1a are both $a
+	} else {
+		table.code.writeInst(op, n0a, n1a)
 	}
-	table.code.writeInst(op, n0a, n1a)
+	table.returnAddresses(tmp)
 }
 
 func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existedVar uint16) uint16 {
@@ -293,32 +304,32 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 	var yx uint16
 	switch name {
 	case parser.ADoBlock, parser.ABegin:
-		yx = table.compileChainOp(node)
+		yx = table.compileChain(node)
 	case parser.ASet, parser.AMove:
-		yx = table.compileSetOp(nodes)
+		yx = table.compileSetMove(nodes)
 	case parser.AReturn, parser.AYield:
-		yx = table.compileRetOp(nodes)
+		yx = table.compileReturn(nodes)
 	case parser.AIf:
-		yx = table.compileIfOp(nodes)
+		yx = table.compileIf(nodes)
 	case parser.AFor:
-		yx = table.compileWhileOp(nodes)
+		yx = table.compileWhile(nodes)
 	case parser.ABreak:
-		yx = table.compileBreakOp(nodes)
+		yx = table.compileBreak(nodes)
 	case parser.ACall, parser.ATailCall, parser.ACallMap:
-		yx = table.compileCallOp(nodes)
+		yx = table.compileCall(nodes)
 	case parser.AOr, parser.AAnd:
-		yx = table.compileAndOrOp(nodes)
+		yx = table.compileAndOr(nodes)
 	case parser.AFunc:
-		yx = table.compileLambdaOp(nodes)
+		yx = table.compileFunction(nodes)
 	case parser.ARetAddr:
-		yx = table.compileRetAddrOp(nodes)
+		yx = table.compileRetAddr(nodes)
 	case parser.AGoto, parser.ALabel:
-		yx = table.compileGotoOp(nodes)
+		yx = table.compileGoto(nodes)
 	case parser.AJSON:
-		yx = table.compileJSONOp(nodes)
+		yx = table.compileJSON(nodes)
 	default:
 		if _, ok := flatOpMapping[name]; ok {
-			return table.compileFlatOp(nodes)
+			return table.compileFlat(nodes)
 		}
 		panicf("DEBUG: compileNode unknown symbol: %q", name)
 	}
@@ -340,50 +351,46 @@ func (table *symtable) collectConsts(node parser.Node) {
 	}
 }
 
-func compileNodeTopLevel(n parser.Node, globalKeyValues ...interface{}) (cls *Program, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			cls = nil
-			if err, _ = r.(error); err == nil {
-				err = fmt.Errorf("recovered panic: %v", r)
-			}
-			if os.Getenv("PL_STACK") != "" {
-				log.Println(string(debug.Stack()))
-			}
-		}
-		if os.Getenv("PL_STACK") != "" {
-			n.Dump(os.Stderr, "")
-		}
-	}()
+func compileNodeTopLevel(n parser.Node, opt CompileOptions) (cls *Program, err error) {
+	defer parser.CatchError(&err)
 
-	table := newsymtable()
+	table := newsymtable(opt)
 
 	coreStack := &Env{stack: new([]Value)}
-	for k, v := range g {
+	push := func(k string, v Value) {
 		table.put(k, uint16(coreStack.Size()))
 		coreStack.Push(v)
 	}
 
-	if len(globalKeyValues)%2 != 0 {
-		globalKeyValues = append(globalKeyValues, nil)
+	for k, v := range g {
+		push(k, v)
 	}
-	for i := 0; i < len(globalKeyValues); i += 2 {
-		k, ok := globalKeyValues[i].(string)
-		if ok {
-			table.put(k, uint16(coreStack.Size()))
-			coreStack.Push(Interface(globalKeyValues[i+1]))
-		}
+	for k, v := range opt.GlobalKeyValues {
+		push(k, Interface(v))
+	}
+	if !opt.DisableGFunc {
+		push("__g", Native("__g", func(env *Env) {
+			if env.Size() > 1 { // store
+				v := env.Get(1)
+				if env.Size() > 2 {
+					v = _unpackedStack(&unpacked{a: append([]Value{}, env.Stack()[1:]...)})
+				}
+				coreStack.Set(int(table.mustGetSymbol(env.InStr(0, ""))), v)
+			} else { // load
+				env.A = coreStack.Get(int(table.mustGetSymbol(env.InStr(0, ""))))
+			}
+		}, "__g(name) => value", "\tload global value by name", "__g(name, value)", "\tstore global value by name"))
 	}
 
 	table.vp = uint16(coreStack.Size())
 
 	// Find and fill consts
-	table.collectConstsMode = true
+	table.collectConstMode = true
 	table.loadK(nil)
 	table.loadK(int64(1))
 	table.loadK(int64(0))
 	table.collectConsts(n)
-	table.collectConstsMode = false
+	table.collectConstMode = false
 
 	table.compileNode(n)
 	table.code.writeInst(OpRet, table.loadK(nil), 0)
@@ -422,7 +429,7 @@ func compileNodeTopLevel(n parser.Node, globalKeyValues ...interface{}) (cls *Pr
 	return cls, err
 }
 
-func LoadFile(path string, globalKeyValues ...interface{}) (*Program, error) {
+func LoadFile(path string, opt ...CompileOptions) (*Program, error) {
 	code, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -433,16 +440,16 @@ func LoadFile(path string, globalKeyValues ...interface{}) (*Program, error) {
 		return nil, err
 	}
 	// n.Dump(os.Stderr, "  ")
-	return compileNodeTopLevel(n, globalKeyValues...)
+	return compileNodeTopLevel(n, joinOptions(opt))
 }
 
-func LoadString(code string, globalKeyValues ...interface{}) (*Program, error) {
+func LoadString(code string, opt ...CompileOptions) (*Program, error) {
 	n, err := parser.Parse(bytes.NewReader([]byte(code)), "")
 	if err != nil {
 		return nil, err
 	}
 	// n.Dump(os.Stderr, "  ")
-	return compileNodeTopLevel(n, globalKeyValues...)
+	return compileNodeTopLevel(n, joinOptions(opt))
 }
 
 func MustRun(p *Program, err error) (Value, []Value) {
@@ -454,4 +461,20 @@ func MustRun(p *Program, err error) (Value, []Value) {
 		panic(err)
 	}
 	return v, v1
+}
+
+func joinOptions(opts []CompileOptions) (opt CompileOptions) {
+	opt.GlobalKeyValues = map[string]interface{}{}
+	for _, o := range opts {
+		for k, v := range o.GlobalKeyValues {
+			opt.GlobalKeyValues[k] = v
+		}
+		if o.GlobalKey != "" {
+			opt.GlobalKeyValues[o.GlobalKey] = o.GlobalValue
+		}
+		opt.DisableGFunc = opt.DisableGFunc || o.DisableGFunc
+		opt.DisableDefineFunc = opt.DisableDefineFunc || o.DisableDefineFunc
+		opt.DisableYield = opt.DisableYield || o.DisableYield
+	}
+	return opt
 }
