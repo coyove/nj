@@ -21,7 +21,9 @@ type Env struct {
 	V           []Value
 	A           Value
 
-	nativeSource *Func
+	// Used by native functions
+	nativeSource *Func // points to itself
+	nativeCaller *Func // points to where it was called
 }
 
 func (env *Env) growZero(newSize int) {
@@ -152,7 +154,13 @@ func (env *Env) In(i int, expectedType valueType) Value {
 	return v
 }
 
-func (env *Env) Return(a1 Value, an ...Value) {
+func (env *Env) Return(a ...Value) {
+	if len(a) > 0 {
+		env.A, env.V = a[0], a[1:]
+	}
+}
+
+func (env *Env) Return2(a1 Value, an ...Value) {
 	env.A, env.V = a1, an
 }
 
@@ -160,10 +168,6 @@ func (env *Env) Deadline() (context.Context, func(), time.Time) {
 	d := time.Unix(env.Global.Deadline, 0)
 	ctx, cancel := context.WithDeadline(context.Background(), d)
 	return ctx, cancel, d
-}
-
-func (env *Env) GetGlobalCustomValue(key string) interface{} {
-	return env.Global.Extras[key]
 }
 
 func (env *Env) String() string {
@@ -178,13 +182,13 @@ func (env *Env) String() string {
 }
 
 func (e *Env) NewString(s string) Value {
-	if e.Global.MaxStackSize > 0 {
+	if e.Global.MaxStringSize > 0 {
 		// Loosely control the string size
-		remain := (e.Global.MaxStackSize - int64(len(*e.stack))) * 16
-		if int64(len(s)) > remain {
-			panicf("string overflow, max: %d", remain)
+		if int64(len(s)) > e.Global.MaxStringSize {
+			panicf("string overflow, max: %d", e.Global.MaxStringSize)
 		}
 	}
+	e.Global.Survey.TotalStringAlloc += int64(len(s))
 	return _str(s)
 }
 

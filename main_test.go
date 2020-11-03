@@ -68,7 +68,7 @@ func runFile(t *testing.T, path string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log(i, i2, err)
+	t.Log(i, i2, err, "str alloc:", b.Survey.TotalStringAlloc)
 }
 
 func TestFileTest(t *testing.T) { runFile(t, "tests/test.txt") }
@@ -95,11 +95,11 @@ end
 return foo
 `, CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
 		v, _, _ := cls.Call()
-		if v, _, _ := v.Function().Call(nil, Int(10)); v.Int() != 11 {
+		if v, _, _ := v.Function().Call(Int(10)); v.Int() != 11 {
 			t.Fatal(v)
 		}
 
-		if v, _, _ := v.Function().Call(nil, Int(100)); v.Int() != 111 {
+		if v, _, _ := v.Function().Call(Int(100)); v.Int() != 111 {
 			t.Fatal(v)
 		}
 	}
@@ -115,15 +115,15 @@ end
 return foo
 `)
 		v, _, _ := cls.Call()
-		if v, _, _ := v.Function().Call(nil, Int(1), Int(2), Int(3), Int(4)); v.Int() != 11 {
+		if v, _, _ := v.Function().Call(Int(1), Int(2), Int(3), Int(4)); v.Int() != 11 {
 			t.Fatal(v)
 		}
 
-		if v, _, _ := v.Function().Call(nil, Int(10), Int(20)); v.Int() != 41 {
+		if v, _, _ := v.Function().Call(Int(10), Int(20)); v.Int() != 41 {
 			t.Fatal(v)
 		}
 
-		if v, _, _ := v.Function().Call(nil); v.Int() != 41 {
+		if v, _, _ := v.Function().Call(); v.Int() != 41 {
 			t.Fatal(v)
 		}
 	}
@@ -186,7 +186,7 @@ a = a .. i
 end
 return a
 `)
-	cls.MaxStackSize = int64(len(g)) + 10 // 10: a small value
+	cls.MaxStringSize = (int64(len(g)) + 10) * 16 // 10: a small value
 	res, _, err := cls.Call()
 	if !strings.Contains(err.Error(), "string overflow") {
 		t.Fatal(res, err)
@@ -238,10 +238,12 @@ func BenchmarkCompiling(b *testing.B) {
 	buf, _ := ioutil.ReadFile("tests/string.txt")
 	y := string(bytes.Repeat(buf, 100))
 	for i := 0; i < b.N; i++ {
-		_, err := LoadString(string(y))
+		p, err := LoadString(string(y))
 		if err != nil {
 			b.Fatal(err)
 		}
+		p.Stdout = ioutil.Discard
+		// p.Run()
 	}
 }
 

@@ -89,8 +89,10 @@ func main() {
 			bufOut := &limitedWriter{limit: 128 * 1024}
 			p.SetTimeout(time.Second)
 			p.MaxCallStackSize = 100
-			p.MaxStackSize = 32 * 1024
+			p.MaxStackSize = 2 * 1024
+			p.MaxStringSize = 256 * 1024
 			p.Stdout = bufOut
+			p.Stderr = bufOut
 			code := p.PrettyCode()
 			v, v1, err := p.Run()
 			if err != nil {

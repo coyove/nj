@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"unsafe"
 
 	"github.com/coyove/script/parser"
 )
@@ -68,6 +69,14 @@ func newsymtable(opt CompileOptions) *symtable {
 		options:      opt,
 	}
 	return t
+}
+
+func (table *symtable) symbolsToDebugLocals() []string {
+	x := make([]string, table.vp)
+	for sym, info := range table.sym {
+		x[info.addr] = sym
+	}
+	return x
 }
 
 func (table *symtable) borrowAddress() uint16 {
@@ -351,11 +360,11 @@ func (table *symtable) collectConsts(node parser.Node) {
 	}
 }
 
-func compileNodeTopLevel(n parser.Node, opt CompileOptions) (cls *Program, err error) {
+func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls *Program, err error) {
 	defer parser.CatchError(&err)
 
 	table := newsymtable(opt)
-
+	shadowTable := &symtable{sym: table.sym, constMap: table.constMap}
 	coreStack := &Env{stack: new([]Value)}
 	push := func(k string, v Value) {
 		table.put(k, uint16(coreStack.Size()))
@@ -373,13 +382,16 @@ func compileNodeTopLevel(n parser.Node, opt CompileOptions) (cls *Program, err e
 			if env.Size() > 1 { // store
 				v := env.Get(1)
 				if env.Size() > 2 {
-					v = _unpackedStack(&unpacked{a: append([]Value{}, env.Stack()[1:]...)})
+					v = _unpackedStack(append([]Value{}, env.Stack()[1:]...))
 				}
-				coreStack.Set(int(table.mustGetSymbol(env.InStr(0, ""))), v)
+				coreStack.Set(int(shadowTable.mustGetSymbol(env.InStr(0, ""))), v)
 			} else { // load
-				env.A = coreStack.Get(int(table.mustGetSymbol(env.InStr(0, ""))))
+				env.A = coreStack.Get(int(shadowTable.mustGetSymbol(env.InStr(0, ""))))
 			}
 		}, "__g(name) => value", "\tload global value by name", "__g(name, value)", "\tstore global value by name"))
+
+		push("COMPILE_OPTIONS", Interface(opt))
+		push("SOURCE_CODE", _str(source))
 	}
 
 	table.vp = uint16(coreStack.Size())
@@ -417,6 +429,7 @@ func compileNodeTopLevel(n parser.Node, opt CompileOptions) (cls *Program, err e
 	cls.code = table.code
 	cls.stackSize = table.vp
 	cls.Stack = coreStack.stack
+	cls.debugLocals = table.symbolsToDebugLocals()
 	cls.Funcs = table.funcs
 	cls.Stdout = os.Stdout
 	cls.Stdin = os.Stdin
@@ -426,6 +439,15 @@ func compileNodeTopLevel(n parser.Node, opt CompileOptions) (cls *Program, err e
 	}
 	cls.loadGlobal = cls
 	cls.NilIndex = table.loadK(nil)
+	cls.Get = func(k string) (v Value, err error) {
+		defer parser.CatchError(&err)
+		return coreStack.Get(int(shadowTable.mustGetSymbol(k))), nil
+	}
+	cls.Set = func(k string, v Value) (err error) {
+		defer parser.CatchError(&err)
+		coreStack.Set(int(shadowTable.mustGetSymbol(k)), v)
+		return nil
+	}
 	return cls, err
 }
 
@@ -440,7 +462,7 @@ func LoadFile(path string, opt ...CompileOptions) (*Program, error) {
 		return nil, err
 	}
 	// n.Dump(os.Stderr, "  ")
-	return compileNodeTopLevel(n, joinOptions(opt))
+	return compileNodeTopLevel(*(*string)(unsafe.Pointer(&code)), n, joinOptions(opt))
 }
 
 func LoadString(code string, opt ...CompileOptions) (*Program, error) {
@@ -449,7 +471,7 @@ func LoadString(code string, opt ...CompileOptions) (*Program, error) {
 		return nil, err
 	}
 	// n.Dump(os.Stderr, "  ")
-	return compileNodeTopLevel(n, joinOptions(opt))
+	return compileNodeTopLevel(code, n, joinOptions(opt))
 }
 
 func MustRun(p *Program, err error) (Value, []Value) {

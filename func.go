@@ -3,6 +3,7 @@ package script
 import (
 	"bytes"
 	"io"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -11,26 +12,34 @@ import (
 )
 
 type Func struct {
-	code       packet
-	name, doc  string
-	numParams  byte
-	isVariadic bool
-	stackSize  uint16
-	native     func(env *Env)
-	loadGlobal *Program
-	params     []string
+	code        packet
+	name, doc   string
+	numParams   byte
+	isVariadic  bool
+	stackSize   uint16
+	native      func(env *Env)
+	loadGlobal  *Program
+	params      []string
+	debugLocals []string
 }
 
 type Program struct {
 	Func
-	Deadline              int64
-	MaxStackSize          int64
-	MaxCallStackSize      int64
-	Extras                map[string]interface{}
-	Stack                 *[]Value
-	Funcs                 []*Func
-	Stdout, Stdin, Stderr io.ReadWriter
-	NilIndex              uint16
+	Deadline         int64
+	MaxStackSize     int64
+	MaxCallStackSize int64
+	MaxStringSize    int64
+	Stack            *[]Value
+	Funcs            []*Func
+	Stdout, Stderr   io.Writer
+	Stdin            io.Reader
+	Logger           *log.Logger
+	NilIndex         uint16
+	Get              func(string) (Value, error)
+	Set              func(string, Value) error
+	Survey           struct {
+		TotalStringAlloc int64
+	}
 }
 
 type Arguments map[string]Value
@@ -140,21 +149,17 @@ func (p *Program) Call() (v1 Value, v []Value, err error) {
 	return
 }
 
-func (c *Func) Call(env *Env, a ...Value) (v1 Value, v []Value, err error) {
+func (c *Func) Call(a ...Value) (v1 Value, v []Value, err error) {
 	defer parser.CatchError(&err)
 
-	var newEnv Env
-	var varg []Value
-	if env == nil || env.Global == nil {
-		// panicf("call function without Global env")
-		x := make([]Value, 0)
-		newEnv.stack = &x
-		newEnv.Global = c.loadGlobal
-	} else {
-		newEnv = *env
-		newEnv.stackOffset = uint32(len(*newEnv.stack))
+	oldLen := len(*c.loadGlobal.Stack)
+	newEnv := Env{
+		Global:      c.loadGlobal,
+		stack:       c.loadGlobal.Stack,
+		stackOffset: uint32(oldLen),
 	}
 
+	var varg []Value
 	for i := range a {
 		if i >= int(c.numParams) {
 			varg = append(varg, a[i])
@@ -163,24 +168,17 @@ func (c *Func) Call(env *Env, a ...Value) (v1 Value, v []Value, err error) {
 	}
 
 	if c.native == nil {
-		newEnv.grow(int(c.stackSize))
+		newEnv.growZero(int(c.stackSize))
 		if c.isVariadic {
 			// newEnv.grow(int(c.numParams) + 1)
-			newEnv._set(uint16(c.numParams), _unpackedStack(&unpacked{a: varg}))
+			newEnv._set(uint16(c.numParams), _unpackedStack(varg))
 		}
 	}
 
 	v1, v = c.exec(newEnv)
+	*c.loadGlobal.Stack = (*c.loadGlobal.Stack)[:oldLen]
 	return
 }
-
-// Terminate will try to stop the execution, when called the closure (along with duplicates) become invalid immediately
-// func (c *Func) Terminate() {
-// 	const Stop = uint32(OpRet) << 26
-// 	for i := range c.code.Code {
-// 		c.code.Code[i] = Stop
-// 	}
-// }
 
 func (p *Program) PrettyCode() string { return pkPrettify(&p.Func, p, true, 0) }
 
@@ -188,10 +186,46 @@ func (p *Program) SetTimeout(d time.Duration) { p.Deadline = time.Now().Add(d).U
 
 func (p *Program) SetDeadline(d time.Time) { p.Deadline = d.UnixNano() }
 
-func (p *Program) AddValue(k string, v interface{}) *Program {
-	if p.Extras == nil {
-		p.Extras = map[string]interface{}{}
+func (p *Program) Print(a ...interface{}) { p.log("", "", a...) }
+
+func (p *Program) Printf(f string, a ...interface{}) { p.log("f", f, a...) }
+
+func (p *Program) Println(a ...interface{}) { p.log("l", "", a...) }
+
+func (p *Program) Fatal(a ...interface{}) { p.log("F", "", a...) }
+
+func (p *Program) Fatalf(f string, a ...interface{}) { p.log("Ff", f, a...) }
+
+func (p *Program) Fatalln(a ...interface{}) { p.log("Fl", "", a...) }
+
+func (p *Program) Panic(a ...interface{}) { p.log("P", "", a...) }
+
+func (p *Program) Panicf(f string, a ...interface{}) { p.log("Pf", f, a...) }
+
+func (p *Program) Panicln(a ...interface{}) { p.log("Pl", "", a...) }
+
+func (p *Program) log(o, f string, a ...interface{}) {
+	if p.Logger == nil {
+		p.Logger = log.New(p.Stderr, "", log.LstdFlags)
 	}
-	p.Extras[k] = v
-	return p
+	switch o {
+	default:
+		p.Logger.Print(a...)
+	case "f":
+		p.Logger.Printf(f, a...)
+	case "l":
+		p.Logger.Println(a...)
+	case "F":
+		p.Logger.Fatal(a...)
+	case "Ff":
+		p.Logger.Fatalf(f, a...)
+	case "Fl":
+		p.Logger.Fatalln(a...)
+	case "P":
+		p.Logger.Panic(a...)
+	case "Pf":
+		p.Logger.Panicf(f, a...)
+	case "Pl":
+		p.Logger.Panicln(a...)
+	}
 }

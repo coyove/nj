@@ -320,6 +320,7 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 	cls.isVariadic = vararg
 	cls.code = code
 	cls.params = paramsString
+	cls.debugLocals = newtable.symbolsToDebugLocals()
 
 	table.funcs = append(table.funcs, cls)
 	table.code.writeInst(OpLoadFunc, uint16(len(table.funcs))-1, 0)
@@ -357,7 +358,7 @@ func (table *symtable) compileWhile(atoms []parser.Node) uint16 {
 
 func (table *symtable) compileGoto(atoms []parser.Node) uint16 {
 	label := atoms[1].SymbolValue()
-	if atoms[0].SymbolValue() == (parser.ALabel) { // :: label ::
+	if atoms[0].SymbolValue() == parser.ALabel { // :: label ::
 		table.labelPos[label] = table.code.Len()
 	} else { // goto label
 		if pos, ok := table.labelPos[label]; ok {

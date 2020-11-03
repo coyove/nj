@@ -146,9 +146,9 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			env.V = nil
 		case OpPopVAll:
 			if opa == 1 { // popv-all-with-a, e.g.: local ... = foo()
-				env.A = _unpackedStack(&unpacked{append([]Value{env.A}, env.V...)})
+				env.A = _unpackedStack(append([]Value{env.A}, env.V...))
 			} else { // popv-all, e.g.: local a, ... = foo()
-				env.A = _unpackedStack(&unpacked{env.V})
+				env.A = _unpackedStack(env.V)
 			}
 			env.V = nil
 		case OpPopV:
@@ -351,7 +351,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			start, end := env.A.ExpectMsg(VNumber, "slice").Int(), env._get(opb).ExpectMsg(VNumber, "slice").Int()
 			switch subject.Type() {
 			case VStack:
-				env.A = _unpackedStack(&unpacked{a: subject._unpackedStack().Slice(start, end)})
+				env.A = _unpackedStack(subject._unpackedStack().Slice(start, end))
 			case VString:
 				s := subject._str()
 				start, end := sliceInRange(start, end, len(s))
@@ -397,7 +397,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 				v, env.V = returnVararg(&env, v, env.V)
 				return v, env.V
 			}
-			// Return upper stack
+			// Return2 upper stack
 			r := retStack[len(retStack)-1]
 			cursor = r.cursor
 			K = r.cls
@@ -438,10 +438,10 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 
 			if cls.native != nil {
 				stackEnv.Global = env.Global
-				stackEnv.nativeSource = cls
+				stackEnv.nativeSource, stackEnv.nativeCaller = cls, K
 				cls.native(&stackEnv)
 				env.A, env.V = returnVararg(&env, stackEnv.A, stackEnv.V)
-				stackEnv.nativeSource = nil
+				stackEnv.nativeSource, stackEnv.nativeCaller = nil, nil
 				stackEnv.Clear()
 			} else {
 				if cls.isVariadic {
@@ -450,7 +450,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 						varg = append([]Value{}, stackEnv.Stack()[cls.numParams:]...)
 					}
 					stackEnv.growZero(int(cls.stackSize))
-					stackEnv._set(uint16(cls.numParams), _unpackedStack(&unpacked{a: varg}))
+					stackEnv._set(uint16(cls.numParams), _unpackedStack(varg))
 				} else {
 					stackEnv.growZero(int(cls.stackSize))
 				}

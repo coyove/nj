@@ -20,7 +20,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const Version int64 = 236
+const Version int64 = 237
 
 var (
 	g   = map[string]Value{}
@@ -68,12 +68,31 @@ func init() {
 	AddGlobalValue("doc", func(env *Env) {
 		env.A = _str(env.In(0, VFunction).Function().doc)
 	}, "doc(function) => string", "\treturn function's documentation")
+	AddGlobalValue("debug_locals", func(env *Env) {
+		var r []Value
+		start := env.stackOffset - uint32(env.nativeCaller.stackSize)
+		for i, name := range env.nativeCaller.debugLocals {
+			idx := start + uint32(i)
+			r = append(r, Int(int64(idx)), _str(name), (*env.stack)[idx])
+		}
+		env.Return(r...)
+	})
+	AddGlobalValue("debug_globals", func(env *Env) {
+		var r []Value
+		for i, name := range env.Global.Func.debugLocals {
+			r = append(r, Int(int64(i)), _str(name), (*env.Global.Stack)[i])
+		}
+		env.Return(r...)
+	})
+	AddGlobalValue("debug_set", func(env *Env) {
+		(*env.Global.Stack)[env.In(0, VNumber).Int()] = env.Get(1)
+	})
 	AddGlobalValue("narray", func(env *Env) {
 		n := env.In(0, VNumber).Int()
-		env.Return(Int(n), make([]Value, n)...)
+		env.Return2(Int(n), make([]Value, n)...)
 	}, "narray(n) => n, ...array", "\treturn an array size of n, filled with nil")
 	AddGlobalValue("array", func(env *Env) {
-		env.Return(Int(int64(env.Size())), append([]Value{}, env.Stack()...)...)
+		env.Return2(Int(int64(env.Size())), append([]Value{}, env.Stack()...)...)
 	}, "array(a, b, c, ...) => n, a, b, c, ...", "\treturn the number of input arguments, followed by the arugments themselves")
 	AddGlobalValue("resume", func(env *Env) {
 		var (
@@ -100,15 +119,15 @@ func init() {
 		env.A = _str(env.Get(0).Type().String())
 	}, "type(value) => string", "\treturn value's type")
 	AddGlobalValue("pcall", func(env *Env) {
-		a, v, err := env.In(0, VFunction).Function().Call(env, env.Stack()[1:]...)
+		a, v, err := env.In(0, VFunction).Function().Call(env.Stack()[1:]...)
 		if err == nil {
-			env.Return(Bool(true), append([]Value{a}, v...)...)
+			env.Return2(Bool(true), append([]Value{a}, v...)...)
 		} else {
 			switch err := err.(type) {
 			case *ExecError:
-				env.Return(Bool(false), Interface(err.r))
+				env.Return2(Bool(false), Interface(err.r))
 			default:
-				env.Return(Bool(false), Interface(err))
+				env.Return2(Bool(false), Interface(err))
 			}
 		}
 	}, "pcall(function, arg1, arg2, ...)",
@@ -120,9 +139,9 @@ func init() {
 			env.A = Float(float64(len(env.Stack()[1:])))
 		case VNumber:
 			if u, idx := env.Stack()[1:], int(a.Int())-1; idx < len(u) {
-				env.Return(u[idx], u[idx+1:]...)
+				env.Return2(u[idx], u[idx+1:]...)
 			} else {
-				env.Return(Value{})
+				env.Return2(Value{})
 			}
 		}
 	}, "select(n, ...)", "\tlua-style select function")
@@ -202,9 +221,7 @@ func init() {
 			}
 			results = append(results, env.NewString(s))
 		}
-		if len(results) > 0 {
-			env.Return(results[0], results[1:]...)
-		}
+		env.Return(results...)
 	},
 		"scanln(prompt) => string", "\tprint prompt and read user input",
 		"scanln(n) => s1, s2, ..., sn", "\tread user input n times",
@@ -247,10 +264,11 @@ func init() {
 	AddGlobalValue("min", func(env *Env) { mathMinMax(env, false) }, "max(a, b, ...) => number")
 	AddGlobalValue("max", func(env *Env) { mathMinMax(env, true) }, "min(a, b, ...) => number")
 	AddGlobalValue("str", func(env *Env) {
-		if v := env.Get(0); v.Type() == VNumber {
-			env.A = env.NewString(fmt.Sprintf(env.InStr(1, "%v"), v.Interface()))
-		} else {
+		switch v := env.Get(0); v.Type() {
+		case VString:
 			env.A = env.NewString(fmt.Sprintf(env.InStr(1, "%s"), v.String()))
+		default:
+			env.A = env.NewString(fmt.Sprintf(env.InStr(1, "%v"), v.Interface()))
 		}
 	},
 		"str(value) => string", "\tconvert value to string",
@@ -262,7 +280,7 @@ func init() {
 			env.A = Int(v.Int())
 		default:
 			v, err := strconv.ParseInt(v.String(), 0, 64)
-			env.Return(Int(v), Interface(err))
+			env.Return2(Int(v), Interface(err))
 		}
 	}, "int(value) => integer", "\tconvert value to integer number (int64)")
 	AddGlobalValue("time", func(env *Env) {
@@ -328,7 +346,7 @@ func init() {
 	}, "char(number) => string")
 	AddGlobalValue("unicode", func(env *Env) {
 		r, sz := utf8.DecodeRuneInString(env.In(0, VString)._str())
-		env.Return(Int(int64(r)), Int(int64(sz)))
+		env.Return2(Int(int64(r)), Int(int64(sz)))
 	}, "unicode(one_char_string) => char_unicode")
 	AddGlobalValue("charpos", func(env *Env) {
 		index, i := env.InInt(1, 0), 1
@@ -401,7 +419,7 @@ func init() {
 			env.A = env.NewString(rx.ReplaceAllString(a, f._str()))
 		case VFunction:
 			env.A = env.NewString(rx.ReplaceAllStringFunc(a, func(in string) string {
-				v, _, err := f.Function().Call(env, env.NewString(in))
+				v, _, err := f.Function().Call(env.NewString(in))
 				if err != nil {
 					panic(err)
 				}
@@ -419,7 +437,7 @@ func init() {
 		for i := range x {
 			v[i] = _str(x[i])
 		}
-		env.Return(v[0], v[1:]...)
+		env.Return(v...)
 	}, "split(text, sep) => part1, part2, ...")
 	AddGlobalValue("strpos", func(env *Env) {
 		a, b := env.In(0, VString)._str(), env.In(1, VString)._str()
@@ -481,7 +499,7 @@ func init() {
 							tmp[i] = _str(a[i].Raw)
 						}
 					}
-					env.Return(Int(int64(len(a))), tmp...)
+					env.Return2(Int(int64(len(a))), tmp...)
 				}
 			} else if result.IsObject() {
 				env.A = _str(result.Raw)

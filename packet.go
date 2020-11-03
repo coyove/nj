@@ -108,11 +108,9 @@ var singleOp = map[opCode]string{
 	OpNeq:    parser.ANeq,
 	OpLess:   parser.ALess,
 	OpLessEq: parser.ALessEq,
-	OpLen:    parser.ALen,
 	OpLoad:   parser.ALoad,
 	OpStore:  parser.AStore,
 	OpSlice:  parser.ASlice,
-	OpNot:    parser.ANot,
 	OpPow:    parser.APow,
 }
 
@@ -250,6 +248,10 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 			}
 		case OpInc:
 			sb.WriteString("inc " + readAddr(a, false) + " " + readAddr(uint16(b), true))
+		case OpLen:
+			sb.WriteString("len " + readAddr(a, true))
+		case OpNot:
+			sb.WriteString("not " + readAddr(a, true))
 		default:
 			if bs, ok := singleOp[bop]; ok {
 				sb.WriteString(bs + " " + readAddr(a, true) + " " + readAddr(b, true))

@@ -146,7 +146,7 @@ func init() {
 		for k := range resp.Header {
 			hdr[k] = resp.Header.Get(k)
 		}
-		env.Return(
+		env.Return2(
 			script.Int(int64(resp.StatusCode)),
 			script.Interface(hdr),
 			env.NewStringBytes(buf),

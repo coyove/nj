@@ -1,5 +1,9 @@
   var demos = {
-      "Select a demo...": `-- Print all global values, mainly functions
+      "Select a demo...": `-- Author: coyove
+_, author = match(SOURCE_CODE, [[Author: (\\S+)]])
+println("Author is:", author)
+
+-- Print all global values, mainly functions
 -- use doc(function) to view its documentation
 local n, ...g = globals()
 
@@ -94,8 +98,12 @@ println({ [nil] = array(kvpairs, "key3", "value3") })
 `,
 /* = = = = = = = = */
       "call": `function veryComplexFunction(a, b, c, d, e, f, g, H, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, Z)
+    [[This is a very complex function,
+it will only print H and Z's values]]
     println(H, Z)
 end
+
+println(doc(veryComplexFunction))
 veryComplexFunction(Z="world", ["H"]="hello")
 
 -- This is a trick from 'json' demo
@@ -239,6 +247,37 @@ println("Re-run 1st countdown")
 runCountdown("state1")
 println("Re-run 1st countdown again")
 runCountdown("state1")`,
+/* = = = = = = = = */
+      "debug": `function debug_find(name, ...info) 
+    --[[
+    debug info are laid out as such:
+    0, var_name1, var_value1, 1, var_name2, var_value2, 2, var_name3, ...
+    index starts from 0 to align with the internal logic
+    ]]
+    for i=1,#info,3 do
+        if info[i+1] == name then return info[i] end
+    end
+    return -1
+end
+
+function foo(a, b)
+    local c = a + b -- c == 3
+
+    println(debug_locals())
+
+    local d = a * b -- d == 2
+
+    local d_on_stack = debug_find("d", debug_locals()) -- find d's position on stack
+
+    println(debug_locals())
+
+    debug_set(d_on_stack, 100) -- alter d to 100
+
+    return c / d
+end
+
+return foo(1,2)
+`,
 /* = = = = = = = = */
       "eof": ""
   };

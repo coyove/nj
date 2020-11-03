@@ -72,11 +72,8 @@ func Int(i int64) Value {
 	return Value{v: uint64(i), p: int64Marker}
 }
 
-func _unpackedStack(m *unpacked) Value {
-	if m == nil {
-		return Value{}
-	}
-	return Value{v: VStack, p: unsafe.Pointer(m)}
+func _unpackedStack(m []Value) Value {
+	return Value{v: VStack, p: unsafe.Pointer(&unpacked{a: m})}
 }
 
 // Function returns a closure value
@@ -105,7 +102,7 @@ func Interface(i interface{}) Value {
 		return Int(v)
 	case string:
 		return _str(v)
-	case *unpacked:
+	case []Value:
 		return _unpackedStack(v)
 	case *Func:
 		return Function(v)
@@ -150,7 +147,7 @@ func Interface(i interface{}) Value {
 				for i := range outs {
 					a[i] = Interface(outs[i].Interface())
 				}
-				env.Return(a[0], a[1:]...)
+				env.Return2(a[0], a[1:]...)
 			}
 		}
 		return Function(&Func{name: "<native>", native: nf})
@@ -198,9 +195,9 @@ func (v Value) _append(v2 Value) Value {
 	if v.Type() == VStack {
 		s := v._unpackedStack()
 		s.a = append(s.a, v2)
-		return _unpackedStack(s)
+		return _unpackedStack(s.a)
 	}
-	return _unpackedStack(&unpacked{a: []Value{v, v2}})
+	return _unpackedStack([]Value{v, v2})
 }
 
 // Function cast value to function
