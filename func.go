@@ -16,6 +16,7 @@ type Func struct {
 	name, doc   string
 	numParams   byte
 	isVariadic  bool
+	isDebug     bool
 	stackSize   uint16
 	native      func(env *Env)
 	loadGlobal  *Program
@@ -35,11 +36,13 @@ type Program struct {
 	Stdin            io.Reader
 	Logger           *log.Logger
 	NilIndex         uint16
-	Get              func(string) (Value, error)
-	Set              func(string, Value) error
 	Survey           struct {
-		TotalStringAlloc int64
+		Elapsed         float64
+		StringAlloc     int64
+		YieldSize       int64
+		AdjustedReturns int64
 	}
+	shadowTable *symtable
 }
 
 type Arguments map[string]Value
@@ -60,7 +63,12 @@ func (a Arguments) GetInt(name string, defaultValue int64) int64 {
 
 // Native creates a golang-native function
 func Native(name string, f func(env *Env), doc ...string) Value {
-	return Function(&Func{name: name, native: f, doc: strings.Join(doc, "\n")})
+	return Function(&Func{
+		name:    name,
+		native:  f,
+		doc:     strings.Join(doc, "\n"),
+		isDebug: strings.HasPrefix(name, "debug_"),
+	})
 }
 
 func NativeWithParamMap(name string, f func(*Env, Arguments), doc string, params ...string) Value {
@@ -68,7 +76,8 @@ func NativeWithParamMap(name string, f func(*Env, Arguments), doc string, params
 		name:      name,
 		params:    params,
 		numParams: byte(len(params)),
-		doc:       doc,
+		doc:       strings.Replace(doc, "$a...a$", strings.Join(params, ","), -1),
+		isDebug:   strings.HasPrefix(name, "debug_"),
 		native: func(env *Env) {
 			stack := env.Stack()
 			args := make(map[string]Value, len(stack))
@@ -85,6 +94,8 @@ func NativeWithParamMap(name string, f func(*Env, Arguments), doc string, params
 func (c *Func) Name() string { return c.name }
 
 func (c *Func) IsNative() bool { return c.native != nil }
+
+func (c *Func) IsDebug() bool { return c.isDebug }
 
 func (c *Func) Signature() (numParams int, isVariadic bool, stackSize int) {
 	return int(c.numParams), c.isVariadic, int(c.stackSize)
@@ -141,11 +152,13 @@ func (p *Program) Run() (v1 Value, v []Value, err error) {
 
 func (p *Program) Call() (v1 Value, v []Value, err error) {
 	defer parser.CatchError(&err)
+	start := time.Now()
 	newEnv := Env{
 		Global: p,
 		stack:  p.Stack,
 	}
 	v1, v = execCursorLoop(newEnv, &p.Func, 0)
+	p.Survey.Elapsed = time.Since(start).Seconds()
 	return
 }
 
@@ -228,4 +241,20 @@ func (p *Program) log(o, f string, a ...interface{}) {
 	case "Pl":
 		p.Logger.Panicln(a...)
 	}
+}
+
+func (p *Program) Get(k string) (v Value, err error) {
+	defer parser.CatchError(&err)
+	return (*p.Stack)[int(p.shadowTable.mustGetSymbol(k))], nil
+}
+
+func (p *Program) Set(k string, v Value) (err error) {
+	defer parser.CatchError(&err)
+	(*p.Stack)[int(p.shadowTable.mustGetSymbol(k))] = v
+	return nil
+}
+
+func (p *Program) ResetSurvey() {
+	p2 := Program{}
+	p.Survey = p2.Survey
 }

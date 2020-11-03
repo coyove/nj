@@ -23,7 +23,15 @@ type Env struct {
 
 	// Used by native functions
 	nativeSource *Func // points to itself
-	nativeCaller *Func // points to where it was called
+
+	// Used by native debug function
+	debug *debugInfo
+}
+
+type debugInfo struct {
+	Caller     *Func
+	Stacktrace []stacktrace
+	Cursor     uint32
 }
 
 func (env *Env) growZero(newSize int) {
@@ -188,7 +196,7 @@ func (e *Env) NewString(s string) Value {
 			panicf("string overflow, max: %d", e.Global.MaxStringSize)
 		}
 	}
-	e.Global.Survey.TotalStringAlloc += int64(len(s))
+	e.Global.Survey.StringAlloc += int64(len(s))
 	return _str(s)
 }
 

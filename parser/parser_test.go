@@ -1,13 +1,15 @@
 package parser
 
 import (
-	"strings"
 	"testing"
 )
 
 func TestHashString(t *testing.T) {
-	t.Log(Parse(strings.NewReader(`
+	t.Log(Parse(`
 a = 1e3
+b = a + 1
+_=[[
+s]]
 -- local b, ... = a()
-`), ""))
+`, ""))
 }

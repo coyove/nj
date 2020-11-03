@@ -1,7 +1,6 @@
 package script
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -439,15 +438,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls 
 	}
 	cls.loadGlobal = cls
 	cls.NilIndex = table.loadK(nil)
-	cls.Get = func(k string) (v Value, err error) {
-		defer parser.CatchError(&err)
-		return coreStack.Get(int(shadowTable.mustGetSymbol(k))), nil
-	}
-	cls.Set = func(k string, v Value) (err error) {
-		defer parser.CatchError(&err)
-		coreStack.Set(int(shadowTable.mustGetSymbol(k)), v)
-		return nil
-	}
+	cls.shadowTable = shadowTable
 	return cls, err
 }
 
@@ -457,7 +448,7 @@ func LoadFile(path string, opt ...CompileOptions) (*Program, error) {
 		return nil, err
 	}
 
-	n, err := parser.Parse(bytes.NewReader(code), path)
+	n, err := parser.Parse(*(*string)(unsafe.Pointer(&code)), path)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +457,7 @@ func LoadFile(path string, opt ...CompileOptions) (*Program, error) {
 }
 
 func LoadString(code string, opt ...CompileOptions) (*Program, error) {
-	n, err := parser.Parse(bytes.NewReader([]byte(code)), "")
+	n, err := parser.Parse(code, "")
 	if err != nil {
 		return nil, err
 	}

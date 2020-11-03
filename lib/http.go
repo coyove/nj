@@ -82,17 +82,12 @@ func init() {
 			addKV("multipart", "multiparts", func(k, v string) {
 				if strings.HasPrefix(v, "@") {
 					path := v[1:]
-					buf, err := ioutil.ReadFile(path)
-					panicErr(err)
-					part, err := writer.CreateFormFile(k, filepath.Base(path))
-					panicErr(err)
-					_, err = part.Write(buf)
-					panicErr(err)
+					buf := panicErr2(ioutil.ReadFile(path)).([]byte)
+					part := panicErr2(writer.CreateFormFile(k, filepath.Base(path))).(io.Writer)
+					panicErr2(part.Write(buf))
 				} else {
-					part, err := writer.CreateFormField(k)
-					panicErr(err)
-					_, err = io.WriteString(part, v)
-					panicErr(err)
+					part := panicErr2(writer.CreateFormField(k)).(io.Writer)
+					panicErr2(io.WriteString(part, v))
 				}
 			})
 			panicErr(writer.Close())
@@ -124,6 +119,11 @@ func init() {
 		if !args["jar"].IsNil() {
 			client.Jar = args["jar"].Interface().(http.CookieJar)
 		}
+		if !args["no_redirect"].IsFalse() {
+			client.CheckRedirect = func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			}
+		}
 		if p := args.GetString("proxy", ""); p != "" {
 			client.Transport = &http.Transport{
 				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
@@ -140,7 +140,7 @@ func init() {
 		if env.Global.MaxStackSize > 0 {
 			r = io.LimitReader(r, env.Global.MaxStackSize*16)
 		}
-		buf, _ := ioutil.ReadAll(r)
+		buf := panicErr2(ioutil.ReadAll(r)).([]byte)
 
 		hdr := map[string]string{}
 		for k := range resp.Header {
@@ -152,13 +152,23 @@ func init() {
 			env.NewStringBytes(buf),
 			script.Interface(client.Jar),
 		)
-	}, `http(...)`,
+	}, `http($a...a$) => code, body, headers, cookie_jar
+	'url' is a mandatory parameter, others are optional and pretty self explanatory,
+	some parameters share the same prefix, like X, (X_key, X_val) and Xs, which are just different ways of doing the same thing:
+	http(url="...") -- GET req
+	http(url="...", no_redirect=true)
+	http("POST", "...")
+	http("POST", "...", form="key=value")
+	http("POST", "...", form_key='key', form_val='value')
+	http("POST", "...", forms={key:value})
+	http("POST", "...", multipart_key='file', multipart_val='@path/to/file')`,
+
 		"method", "url", "rawbody", "timeout", "proxy",
 		"header", "header_key", "header_val", "headers",
 		"query", "query_key", "query_val", "queries",
 		"form", "form_key", "form_val", "forms",
 		"multipart", "multipart_key", "multipart_val", "multiparts",
-		"json", "jar"))
+		"json", "jar", "no_redirect"))
 }
 
 func splitKV(line string) (k string, v string, ok bool) {
@@ -209,4 +219,11 @@ func panicErr(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func panicErr2(v interface{}, err error) interface{} {
+	if err != nil {
+		panic(err)
+	}
+	return v
 }

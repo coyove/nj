@@ -74,12 +74,7 @@ func (table *symtable) compileReturn(atoms []parser.Node) uint16 {
 	table.collapse(values, true)
 
 	for i := 1; i < len(values); i++ {
-		if i == 1 {
-			// First OpPushV will contain the total number of V in opb
-			table.writeInst(OpPushV, values[i], parser.NewAddress(uint16(len(values)-1)))
-		} else {
-			table.writeInst(OpPushV, values[i], parser.Node{})
-		}
+		table.writeInst(OpPushV, values[i], parser.Node{})
 	}
 	table.writeInst(op, values[0], parser.Node{})
 

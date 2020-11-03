@@ -286,3 +286,7 @@ do -- yieldable variadic function
 	i += 1
     until not v
 end
+
+G_FLAG = 1
+findGlobal()
+assert(G_FLAG == 'ok')

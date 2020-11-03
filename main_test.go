@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -41,6 +42,14 @@ func runFile(t *testing.T, path string) {
 					panic("bad")
 				}
 			},
+			"findGlobal": func(env *Env) {
+				v, _ := env.Global.Get("G_FLAG")
+				if v.IsFalse() {
+					panic("findGlobal failed")
+				}
+				env.Global.Set("G_FLAG", _str("ok"))
+				env.Global.Println("find global")
+			},
 			"mapFunc": NativeWithParamMap("mapFunc", func(env *Env, in Arguments) {
 				if !in["a"].IsNil() {
 					env.A = _str("a")
@@ -68,7 +77,15 @@ func runFile(t *testing.T, path string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log(i, i2, err, "str alloc:", b.Survey.TotalStringAlloc)
+	t.Log(i, i2, err,
+		"str alloc:", b.Survey.StringAlloc,
+		"yield count:", b.Survey.YieldSize,
+		"adj returns:", b.Survey.AdjustedReturns,
+	)
+
+	if os.Getenv("crab") != "" {
+		fmt.Println(b.PrettyCode())
+	}
 }
 
 func TestFileTest(t *testing.T) { runFile(t, "tests/test.txt") }

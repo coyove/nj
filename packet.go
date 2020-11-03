@@ -199,9 +199,6 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 			sb.WriteString("$a = pop-v")
 		case OpPushV:
 			sb.WriteString("pushv " + readAddr(a, true))
-			if b != 0 {
-				sb.WriteString(" cap=" + strconv.Itoa(int(b)))
-			}
 		case OpPush:
 			sb.WriteString(fmt.Sprintf("push-%d %v", b, readAddr(a, true)))
 			if a == regA {

@@ -86,7 +86,7 @@ func main() {
 				writeJSON(w, map[string]interface{}{"error": err.Error()})
 				return
 			}
-			bufOut := &limitedWriter{limit: 128 * 1024}
+			bufOut := &limitedWriter{limit: 16 * 1024}
 			p.SetTimeout(time.Second)
 			p.MaxCallStackSize = 100
 			p.MaxStackSize = 2 * 1024
@@ -114,6 +114,7 @@ func main() {
 				"results": results,
 				"stdout":  bufOut.String(),
 				"opcode":  code,
+				"survey":  p.Survey,
 			})
 		})
 		log.Println("listen", *apiServer)

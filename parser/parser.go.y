@@ -185,7 +185,18 @@ assign_stat:
 
 postfix_incdec:
         TIdent _postfix_assign expr %prec ASSIGN  {
-            $$ = __move(NewSymbolFromToken($1), NewComplex($2, NewSymbolFromToken($1), $3)).SetPos($2.Pos())
+	    if $2.SymbolValue() == AAdd && $3.IsNumber() {
+              $$ = __inc(NewSymbolFromToken($1), $3).SetPos($2.Pos())
+	    } else if $2.SymbolValue() == ASub && $3.IsNumber() {
+		f, i, isInt := $3.NumberValue()
+		if isInt {
+	          $$ = __inc(NewSymbolFromToken($1), NewNumberFromInt(-i)).SetPos($2.Pos())
+		} else {
+	          $$ = __inc(NewSymbolFromToken($1), NewNumberFromFloat(-f)).SetPos($2.Pos())
+		}
+	    } else {
+              $$ = __move(NewSymbolFromToken($1), NewComplex($2, NewSymbolFromToken($1), $3)).SetPos($2.Pos())
+	    }
         } |
         prefix_expr '[' expr ']' _postfix_assign expr %prec ASSIGN {
             $$ = __store($1, $3, NewComplex($5, __load($1, $3), $6).SetPos($5.Pos()))

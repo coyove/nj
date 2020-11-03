@@ -20,7 +20,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const Version int64 = 237
+const Version int64 = 238
 
 var (
 	g   = map[string]Value{}
@@ -34,7 +34,7 @@ var (
 func AddGlobalValue(k string, v interface{}, doc ...string) {
 	switch v := v.(type) {
 	case func(*Env):
-		g[k] = Function(&Func{name: k, native: v, doc: strings.Join(doc, "\n")})
+		g[k] = Native(k, v, doc...)
 	default:
 		g[k] = Interface(v)
 	}
@@ -70,23 +70,49 @@ func init() {
 	}, "doc(function) => string", "\treturn function's documentation")
 	AddGlobalValue("debug_locals", func(env *Env) {
 		var r []Value
-		start := env.stackOffset - uint32(env.nativeCaller.stackSize)
-		for i, name := range env.nativeCaller.debugLocals {
+		start := env.stackOffset - uint32(env.debug.Caller.stackSize)
+		for i, name := range env.debug.Caller.debugLocals {
 			idx := start + uint32(i)
 			r = append(r, Int(int64(idx)), _str(name), (*env.stack)[idx])
 		}
 		env.Return(r...)
-	})
+	}, "debug_locals() => index1, name1, value1, i2, n2, v2, i3, n3, v3, ...")
 	AddGlobalValue("debug_globals", func(env *Env) {
 		var r []Value
 		for i, name := range env.Global.Func.debugLocals {
 			r = append(r, Int(int64(i)), _str(name), (*env.Global.Stack)[i])
 		}
 		env.Return(r...)
-	})
+	}, "debug_globals() => index1, name1, value1, i2, n2, v2, i3, n3, v3, ...")
 	AddGlobalValue("debug_set", func(env *Env) {
 		(*env.Global.Stack)[env.In(0, VNumber).Int()] = env.Get(1)
-	})
+	}, "debug_set(idx, value)")
+	AddGlobalValue("debug_stacktrace", func(env *Env) {
+		stacks := env.debug.Stacktrace
+		lines := make([]Value, 0, len(stacks))
+		for i := len(stacks) - 1 - int(env.InInt(0, 0)); i >= 0; i-- {
+			r := stacks[i]
+			src := uint32(0)
+			for i := 0; i < len(r.cls.code.Pos); {
+				var opx uint32 = math.MaxUint32
+				ii, op, line := r.cls.code.Pos.read(i)
+				if ii < len(r.cls.code.Pos)-1 {
+					_, opx, _ = r.cls.code.Pos.read(ii)
+				}
+				if r.cursor >= op && r.cursor < opx {
+					src = line
+					break
+				}
+				if r.cursor < op && i == 0 {
+					src = line
+					break
+				}
+				i = ii
+			}
+			lines = append(lines, _str(r.cls.name), Int(int64(src)), Int(int64(r.cursor-1)))
+		}
+		env.Return(lines...)
+	}, "debug_stacktrace(skip) => func_name1, line1, cursor1, n2, l2, c2, ...")
 	AddGlobalValue("narray", func(env *Env) {
 		n := env.In(0, VNumber).Int()
 		env.Return2(Int(n), make([]Value, n)...)
@@ -384,10 +410,13 @@ func init() {
 	}, "match(string, regex) => match1, match2, ...")
 	AddGlobalValue("startswith", func(env *Env) {
 		env.A = Bool(strings.HasPrefix(env.In(0, VString)._str(), env.In(1, VString)._str()))
-	}, "startswith(text, prefix)")
+	}, "startswith(text, prefix) => bool")
 	AddGlobalValue("endswith", func(env *Env) {
 		env.A = Bool(strings.HasSuffix(env.In(0, VString)._str(), env.In(1, VString)._str()))
-	}, "endswith(text, suffix)")
+	}, "endswith(text, suffix) => bool")
+	AddGlobalValue("stricmp", func(env *Env) {
+		env.A = Bool(strings.EqualFold(env.In(0, VString)._str(), env.In(1, VString)._str()))
+	}, "stricmp(text1, text2) => bool")
 	AddGlobalValue("trim", func(env *Env) {
 		switch a, cutset := env.In(0, VString)._str(), env.InStr(1, " "); env.InStr(2, "") {
 		case "left", "l":

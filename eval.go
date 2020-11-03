@@ -91,6 +91,7 @@ func returnVararg(env *Env, a Value, b []Value) (Value, []Value) {
 	if len(b2) == 0 {
 		return Value{}, nil
 	}
+	env.Global.Survey.AdjustedReturns += int64(len(b2))
 	return b2[0], b2[1:]
 }
 
@@ -138,9 +139,9 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 		case OpSet:
 			env._set(opa, env._get(opb))
 		case OpPushV:
-			if opb != 0 {
-				env.V = make([]Value, 0, opb)
-			}
+			// if opb != 0 {
+			// 	env.V = make([]Value, 0, opb)
+			// }
 			env.V = append(env.V, env._get(opa))
 		case OpPopVClear:
 			env.V = nil
@@ -390,6 +391,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 		case OpYield:
 			env.V = append(env.V, Int(int64(cursor)))
 			env.V = append(env.V, _interface(&Env{V: append([]Value{}, env.Stack()...)}))
+			env.Global.Survey.YieldSize += int64(env.Size())
 			fallthrough
 		case OpRet:
 			v := env._get(opa)
@@ -438,10 +440,20 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 
 			if cls.native != nil {
 				stackEnv.Global = env.Global
-				stackEnv.nativeSource, stackEnv.nativeCaller = cls, K
-				cls.native(&stackEnv)
+				stackEnv.nativeSource = cls
+				if cls.isDebug {
+					stackEnv.debug = &debugInfo{
+						Caller:     K,
+						Cursor:     cursor,
+						Stacktrace: append(retStack, stacktrace{cls: K, cursor: cursor}),
+					}
+					cls.native(&stackEnv)
+					stackEnv.debug = nil
+				} else {
+					cls.native(&stackEnv)
+				}
 				env.A, env.V = returnVararg(&env, stackEnv.A, stackEnv.V)
-				stackEnv.nativeSource, stackEnv.nativeCaller = nil, nil
+				stackEnv.nativeSource = nil
 				stackEnv.Clear()
 			} else {
 				if cls.isVariadic {

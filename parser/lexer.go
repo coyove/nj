@@ -1,36 +1,9 @@
-// Taken from: https://github.com/yuin/gopher-lua/blob/master/parse
-
-/*
-The MIT License (MIT)
-
-Copyright (c) 2015 Yusuke Inuzuka
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR Sym PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
-
+// Modified upon: yuin/gopher-lua
 package parser
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"unicode"
@@ -38,11 +11,7 @@ import (
 	"unsafe"
 )
 
-const (
-	EOF         = 0xffffffff
-	whitespace1 = 1<<'\t' | 1<<' '
-	whitespace2 = 1<<'\t' | 1<<'\n' | 1<<'\r' | 1<<' '
-)
+const EOF = 0xffffffff
 
 var numberChars = func() (x [256]bool) {
 	for _, r := range "0123456789abcdefABCDEF.xX" {
@@ -66,59 +35,48 @@ func (e *Error) Error() string {
 	}
 }
 
-func writeChar(buf *bytes.Buffer, c uint32) { buf.WriteByte(byte(c)) }
-
 func isIdent(ch uint32, pos int) bool {
 	return ch == '_' || 'A' <= ch && ch <= 'Z' || 'a' <= ch && ch <= 'z' || '0' <= ch && ch <= '9' && pos > 0
 }
 
-func isDigit(ch uint32) bool {
-	return '0' <= ch && ch <= '9' || 'a' <= ch && ch <= 'f' || 'A' <= ch && ch <= 'F'
-}
-
 type Scanner struct {
 	Pos    Position
-	reader *bufio.Reader
 	buffer bytes.Buffer
+	offset int64
+	text   string
 }
 
-func NewScanner(reader io.Reader, source string) *Scanner {
+func NewScanner(text string, source string) *Scanner {
 	return &Scanner{
-		Pos:    Position{Source: source, Line: 1, Column: 0},
-		reader: bufio.NewReaderSize(reader, 4096),
+		Pos:  Position{Source: source, Line: 1, Column: 0},
+		text: text,
 	}
 }
 
-func (sc *Scanner) Error(tok string, msg string) *Error { return &Error{sc.Pos, msg, tok} }
+func (sc *Scanner) Error(tok string, msg string) *Error {
+	return &Error{sc.Pos, msg, tok}
+}
 
-func (sc *Scanner) TokenError(tok Token, msg string) *Error { return &Error{tok.Pos, msg, tok.Str} }
+func (sc *Scanner) TokenError(tok Token, msg string) *Error {
+	return &Error{tok.Pos, msg, tok.Str}
+}
 
-func (sc *Scanner) readNext() uint32 {
-	ch, err := sc.reader.ReadByte()
-	if err == io.EOF {
+func (sc *Scanner) Peek() uint32 {
+	if sc.offset >= int64(len(sc.text)) {
 		return EOF
 	}
-	return uint32(ch)
-}
-
-func (sc *Scanner) Newline(ch uint32) {
-	if ch < 0 {
-		return
-	}
-	sc.Pos.Line++
-	sc.Pos.Column = 0
-	next := sc.Peek()
-	if ch == '\n' && next == '\r' || ch == '\r' && next == '\n' {
-		sc.reader.ReadByte()
-	}
+	return uint32(sc.text[sc.offset])
 }
 
 func (sc *Scanner) Next() uint32 {
-	ch := sc.readNext()
+	ch := sc.Peek()
+	sc.offset++
 	switch ch {
-	case '\n', '\r':
-		sc.Newline(ch)
-		ch = uint32('\n')
+	case '\r':
+		return sc.Next()
+	case '\n':
+		sc.Pos.Line++
+		sc.Pos.Column = 0
 	case EOF:
 		sc.Pos.Line = EOF
 		sc.Pos.Column = 0
@@ -128,24 +86,9 @@ func (sc *Scanner) Next() uint32 {
 	return ch
 }
 
-func (sc *Scanner) Peek() uint32 {
-	ch := sc.readNext()
-	if ch != EOF {
-		sc.reader.UnreadByte()
-	}
-	return ch
-}
-
-func (sc *Scanner) skipWhiteSpace(whitespace int64) uint32 {
-	ch := sc.Next()
-	for ; whitespace&(1<<uint(ch)) != 0; ch = sc.Next() {
-	}
-	return ch
-}
-
 func (sc *Scanner) skipComments() {
 	for ch := sc.Next(); ; ch = sc.Next() {
-		if ch == '\n' || ch == '\r' || ch < 0 || ch == EOF {
+		if ch == '\n' || ch < 0 || ch == EOF {
 			return
 		}
 	}
@@ -161,44 +104,48 @@ func (sc *Scanner) skipBlockComments() error {
 	return sc.Error("", "unterminated block comments")
 }
 
-func (sc *Scanner) scanIdent(ch uint32, buf *bytes.Buffer) error {
-	writeChar(buf, ch)
+func (sc *Scanner) scanIdent(offsetOffset int64) string {
+	start := sc.offset - 1 - offsetOffset
 	for isIdent(sc.Peek(), 1) {
-		writeChar(buf, sc.Next())
+		sc.Next()
 	}
-	return nil
+	return sc.text[start:sc.offset]
 }
 
-func (sc *Scanner) scanNumber(ch uint32, buf *bytes.Buffer) error {
-	writeChar(buf, ch)
+func (sc *Scanner) scanNumber() string {
+	start := sc.offset - 1
 	for {
 		ch := byte(sc.Peek())
 		if !numberChars[ch] {
 			if ch == '+' || ch == '-' {
-				x := buf.Bytes()
-				if e := x[len(x)-1]; e == 'e' || e == 'E' {
-					if len(x) >= 2 && x[1] != 'x' && x[1] != 'X' {
+				before := sc.text[sc.offset-1]
+				if before == 'e' || before == 'E' {
+					if x := sc.text[start+1]; x != 'x' && x != 'X' {
+						// Not a hexdecimal string, so it is a float64 value (maybe)
 						goto OK
 					}
 				}
 			}
-			return nil
+			dxx := sc.text[start:sc.offset]
+			return dxx
 		}
 	OK:
-		writeChar(buf, sc.Next())
+		sc.Next()
 	}
 }
 
-func (sc *Scanner) scanString(quote uint32, buf *bytes.Buffer) error {
-	ch := sc.Next()
+func (sc *Scanner) scanString(quote uint32) (string, error) {
 	lastIsSlash := false
+	buf := &sc.buffer
+	buf.Reset()
 
+	ch := sc.Next()
 	for ch != quote || lastIsSlash {
-		if ch == '\n' || ch == '\r' || ch < 0 {
-			return sc.Error(buf.String(), "unterminated string")
+		if ch == '\n' || ch < 0 {
+			return "", sc.Error(buf.String(), "unterminated string")
 		}
 		lastIsSlash = ch == '\\'
-		writeChar(buf, ch)
+		buf.WriteByte(byte(ch))
 		ch = sc.Next()
 	}
 
@@ -213,7 +160,7 @@ func (sc *Scanner) scanString(quote uint32, buf *bytes.Buffer) error {
 	for len(s) > 0 {
 		c, multibyte, ss, err := strconv.UnquoteChar(s, byte(quote))
 		if err != nil {
-			return err
+			return "", err
 		}
 		s = ss
 		if c < utf8.RuneSelf || !multibyte {
@@ -223,24 +170,22 @@ func (sc *Scanner) scanString(quote uint32, buf *bytes.Buffer) error {
 			buf.Write(runeTmp[:n])
 		}
 	}
-	return nil
+	return buf.String(), nil
 }
 
-func (sc *Scanner) scanBlockString(buf *bytes.Buffer) error {
+func (sc *Scanner) scanBlockString() (string, error) {
+	start := sc.offset
 	for {
 		ch := sc.Next()
 		if ch == EOF {
-			return sc.Error(buf.String(), "unexpected end of string block")
+			return "", sc.Error("", "unexpected end of string block")
 		}
-		if ch == ']' {
-			if sc.Peek() == ']' {
-				sc.Next()
-				break
-			}
+		if ch == ']' && sc.Peek() == ']' {
+			sc.Next()
+			break
 		}
-		writeChar(buf, ch)
 	}
-	return nil
+	return sc.text[start : sc.offset-2], nil // -2: exclude ']' and ']' at end
 }
 
 var reservedWords = map[string]uint32{
@@ -268,26 +213,21 @@ var reservedWords = map[string]uint32{
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
 redo:
 	var err error
-	tok := Token{}
+	var tok Token
 
-	ch := sc.skipWhiteSpace(whitespace1)
-	if ch == '\n' || ch == '\r' {
-		ch = sc.skipWhiteSpace(whitespace2)
+skipspaces:
+	ch := sc.Next()
+	if unicode.IsSpace(rune(ch)) {
+		goto skipspaces
 	}
 
-	buf := &sc.buffer
-	buf.Reset()
 	tok.Pos = sc.Pos
 
 	switch {
 	case isIdent(ch, 0):
 		tok.Type = TIdent
-		err = sc.scanIdent(ch, buf)
-		tok.Str = buf.String()
+		tok.Str = sc.scanIdent(0)
 
-		if err != nil {
-			goto finally
-		}
 		if typ, ok := reservedWords[tok.Str]; ok {
 			crlf := false
 			for n := sc.Peek(); (unicode.IsSpace(rune(n)) || n == 'e') && n != EOF; n = sc.Peek() {
@@ -296,15 +236,16 @@ redo:
 					break
 				}
 				if n == 'e' {
-					buf, _ := sc.reader.Peek(3)
-					crlf = bytes.Equal(buf, []byte("end"))
+					crlf = strings.HasPrefix(sc.text[sc.offset:], "end")
 					break
 				}
 				sc.Next()
 			}
 
 			// return/yield without an arg, but with a CrLf afterward will be considered
-			// as return nil/yield nil
+			// as return nil/yield nil. This rule implies the following syntax:
+			//   1. return end
+			//   2. return \n end
 			if tok.Str == "return" && crlf {
 				tok.Type = TReturnVoid
 			} else if tok.Str == "yield" && crlf {
@@ -315,8 +256,7 @@ redo:
 		}
 	case ch >= '0' && ch <= '9':
 		tok.Type = TNumber
-		err = sc.scanNumber(ch, buf)
-		tok.Str = buf.String()
+		tok.Str = sc.scanNumber()
 	default:
 		switch ch {
 		case EOF:
@@ -342,83 +282,54 @@ redo:
 				sc.Next()
 			default:
 				tok.Type = ch
-				tok.Str = string(rune(ch))
+				tok.Str = "-"
 			}
 		case '"', '\'':
-			err = sc.scanString(ch, buf)
 			tok.Type = TString
-			tok.Str = buf.String()
+			tok.Str, err = sc.scanString(ch)
 		case '[':
 			if sc.Peek() == '[' {
 				sc.Next()
 				tok.Type = TString
-				err = sc.scanBlockString(buf)
-				tok.Str = buf.String()
+				tok.Str, err = sc.scanBlockString()
 			} else {
 				tok.Type = ch
-				tok.Str = string(rune(ch))
+				tok.Str = "["
 			}
-		case '=':
+		case '=', '!', '~', '<', '>':
+			idx := strings.IndexByte("=!~<>", byte(ch))
 			if p := sc.Peek(); p == '=' {
-				tok.Type = TEqeq
-				tok.Str = "=="
+				tok.Type = [...]uint32{TEqeq, TNeq, TNeq, TLte, TGte}[idx]
+				tok.Str = [...]string{"==", "!=", "~=", "<=", ">="}[idx]
 				sc.Next()
 			} else {
 				tok.Type = ch
-				tok.Str = string(rune(ch))
-			}
-		case '!', '~':
-			if sc.Peek() == '=' {
-				tok.Type = TNeq
-				tok.Str = "~="
-				sc.Next()
-			} else {
-				tok.Type = ch
-				tok.Str = string(rune(ch))
-			}
-		case '<':
-			if sc.Peek() == '=' {
-				tok.Type = TLte
-				tok.Str = "<="
-				sc.Next()
-			} else {
-				tok.Type = ch
-				tok.Str = string(rune(ch))
-			}
-		case '>':
-			if sc.Peek() == '=' {
-				tok.Type = TGte
-				tok.Str = ">="
-				sc.Next()
-			} else {
-				tok.Type = ch
-				tok.Str = string(rune(ch))
+				tok.Str = [...]string{"=", "!", "~", "<", ">"}[idx]
 			}
 		case '.':
 			switch ch2 := sc.Peek(); {
 			case ch2 >= '0' && ch2 <= '9':
 				tok.Type = TNumber
-				err = sc.scanNumber(ch, buf)
-				tok.Str = buf.String()
+				tok.Str = sc.scanNumber()
 			case ch2 == '.':
 				sc.Next()
 				if sc.Peek() != '.' {
 					tok.Type = TDotDot
 					tok.Str = ".."
 				} else {
-					buf.WriteString("..")
 					sc.Next()
-					sc.scanIdent('.', buf)
 					tok.Type = TIdent
-					tok.Str = buf.String()
+					tok.Str = sc.scanIdent(2)
 				}
 			default:
 				tok.Type = '.'
-				tok.Str = buf.String()
+				tok.Str = "."
 			}
 		case '(', ')', '{', '}', ']', ';', ',', '#', '^':
+			const pat = "(){}];,#^"
+			idx := strings.IndexByte(pat, byte(ch))
 			tok.Type = ch
-			tok.Str = string(rune(ch))
+			tok.Str = pat[idx : idx+1]
 		case ':':
 			if sc.Peek() == ':' {
 				tok.Type = TLabel
@@ -429,18 +340,17 @@ redo:
 				tok.Str = ":"
 			}
 		case '+', '*', '/', '%':
-			switch sc.Peek() {
+			switch ii := strings.IndexByte("+*/%", byte(ch)); sc.Peek() {
 			case '=':
-				tok.Type = [...]uint32{TAddEq, TMulEq, TDivEq, TModEq}[strings.Index("+*/%", string(rune(ch)))]
-				tok.Str = string(rune(ch)) + "="
+				tok.Type = [...]uint32{TAddEq, TMulEq, TDivEq, TModEq}[ii]
+				tok.Str = [...]string{"+=", "*=", "/=", "%="}[ii]
 				sc.Next()
 			default:
 				tok.Type = ch
-				tok.Str = string(rune(ch))
+				tok.Str = [...]string{"+", "*", "/", "%"}[ii]
 			}
 		default:
-			writeChar(buf, ch)
-			err = sc.Error(buf.String(), "invalid token")
+			err = sc.Error(string(rune(ch)), "invalid token")
 			goto finally
 		}
 	}
@@ -482,7 +392,7 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 	panic(lx.scanner.TokenError(tok, message))
 }
 
-func parse(reader io.Reader, name string) (chunk Node, lexer *Lexer, err error) {
+func parse(reader string, name string) (chunk Node, lexer *Lexer, err error) {
 	lexer = &Lexer{
 		scanner: NewScanner(reader, name),
 		Stmts:   Node{},
@@ -494,8 +404,8 @@ func parse(reader io.Reader, name string) (chunk Node, lexer *Lexer, err error) 
 	return
 }
 
-func Parse(reader io.Reader, name string) (chunk Node, err error) {
-	chunk, _, err = parse(reader, name)
+func Parse(text, name string) (chunk Node, err error) {
+	chunk, _, err = parse(text, name)
 	if !chunk.Valid() && err == nil {
 		err = fmt.Errorf("invalid chunk")
 	}

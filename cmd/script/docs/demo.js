@@ -19,7 +19,7 @@ for i=1,#g do
     print((",----------------------------------------------------------------")[1,#title+3], '.')
     print("| ", title, " |")
     print(("'----------------------------------------------------------------")[1,#title+3], "'")
-    print(type(g[i]) == "function" and doc(g[i]) or "\tN/A")
+    print(type(g[i]) == "function" and doc(g[i]) or "\\tN/A")
     print()
 end
 `,
@@ -37,8 +37,10 @@ return fib(10)
 /* = = = = = = = = */
       "goto": `goto inner
 if false then
+    local a = "hello"
     ::inner::
     print("I'm in")
+    print("a=", a, ", which is not inited")
 end
 `,
 /* = = = = = = = = */
@@ -115,6 +117,18 @@ function bar() return "world", "hello" end
 
 local ...a = random() > 0.5 and foo() or bar()
 println(a)
+
+-- Return variadic results
+function bar() return 1, 2, 3 end
+
+function foo() return bar() end
+println(foo()) -- 1, 2, 3
+
+function foo() return 0, bar() end
+println(foo()) -- WRONG
+
+function foo() return bar(), 4 end
+println(foo()) -- WRONG, but working (by chance)
 `,
 /* = = = = = = = = */
       "http": `local code, headers, body = http(
@@ -235,8 +249,9 @@ function runCountdown(s)
     while true do
         local tick, ok = run(s)
         if not ok then break end
-        println(tick)
+        write(stdout(), tick, ' ')
     end
+    print()
 end
 
 println("Run 1st countdown")

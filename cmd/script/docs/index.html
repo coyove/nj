@@ -85,7 +85,7 @@
   </div>
 </body>
 
-<script src="demo.js?v=20"></script>
+<script src="demo.js?v=21"></script>
 <script>
   var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
       mode: "lua",
@@ -98,6 +98,7 @@
   function share(get) {
       var d = document.getElementById("demo").value;
       if (editor.getValue() == demos[d]) {
+	  output.innerHTML = '';
 	  output.appendChild(div("URL", true))
 	  output.appendChild(div(location.origin + "/?demo=" + d))
 	  return;
@@ -114,8 +115,7 @@
 		  editor.setValue(data.data);
 	      } else {
 		  output.appendChild(div("URL", true))
-		  output.appendChild(div(data.data.replace(/http:\/\/sprunge.us\/(\S+)$/,
-							   location.origin + "/?src=$1")));
+		  output.appendChild(div(data.data.replace(/http:\/\/sprunge.us\/(\S+)$/, location.origin + "/?src=$1")));
 	      }
 	  })
   }
@@ -139,8 +139,9 @@
 		  el.appendChild(div(data.error))
 	      } else if (data.results && data.results.length && data.results[0]) {
 		  el.appendChild(div("Results", true))
-		  for (var i = 0 ; i < data.results.length; i++) 
-		      el.appendChild(div(data.results[i]));
+		  for (var v of data.results) {
+		      el.appendChild(div(typeof v === 'object' ? JSON.stringify(v) : v));
+	          }
 	      }
 	      if (data.stdout) {
 	    	  el.appendChild(div("Stdout", true));
@@ -151,6 +152,10 @@
 	      if (data.opcode) {
 		  el.appendChild(div("Compiled", true));
 		  el.appendChild(div(data.opcode));
+	      }
+	      if (data.survey) {
+		  el.appendChild(div("Survey", true));
+		  el.appendChild(div(JSON.stringify(data.survey)));
 	      }
 	  });
   }

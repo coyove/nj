@@ -12,7 +12,6 @@ type Position struct {
 	Source string
 	Line   uint32
 	Column uint32
-	// a      []int
 }
 
 func (pos *Position) String() string {
@@ -65,7 +64,7 @@ func NewNumberFromString(v string) Node {
 	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
-		panic("invalid number format: " + v)
+		panic("invalid number format: \"" + v + "\"")
 	}
 	if float64(int64(f)) == f {
 		return Node{Type: Int, num: uint64(int64(f))}
