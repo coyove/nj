@@ -14,7 +14,7 @@ import (
 const EOF = 0xffffffff
 
 var numberChars = func() (x [256]bool) {
-	for _, r := range "0123456789abcdefABCDEF.xX" {
+	for _, r := range "0123456789abcdefABCDEF.xX_" {
 		x[byte(r)] = true
 	}
 	return

@@ -128,9 +128,9 @@ do
 end
 assert(ms == nil and ms2 == 2)
 
-assert(0x7ffffffffffffffd < 0x7fffffffffffffff)
-assert(0x7ffffffffffffffd + 2 == 0x7fffffffffffffff)
-assert(0x7ffffffffffffffe + 1 == 0x7fffffffffffffff)
+assert(0x7fff_fffffffffffd < 0x7fffffffffffffff)
+assert(0x7fff_ffff_ffff_fffd + 2 == 0x7fff_ffff_ffff_ffff)
+assert(0x7fff_fffffffffffe + 1 == 0x7fffffffffffffff)
 
 do
     scope = 1

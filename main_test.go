@@ -370,4 +370,5 @@ func TestNumberLexer(t *testing.T) {
 	assert("0x1+ 2", Int(3))
 	assert("0xE+1 ", Int(15))
 	assert(".5E+1 ", Int(5))
+	assert("0x1_2_e+1", Int(0x12f))
 }

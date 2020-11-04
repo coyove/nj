@@ -225,7 +225,7 @@ func (n Node) Dump(w io.Writer, ident string) {
 		}
 		io.WriteString(w, "]\n")
 	case Symbol:
-		io.WriteString(w, fmt.Sprintf("%s.%d", n.strSym, n.symLine))
+		io.WriteString(w, fmt.Sprintf("%s/%d", n.strSym, n.symLine))
 	default:
 		io.WriteString(w, n.String())
 	}
