@@ -12,16 +12,17 @@ import (
 )
 
 type Func struct {
-	code        packet
-	name, doc   string
-	numParams   byte
-	isVariadic  bool
-	isDebug     bool
-	stackSize   uint16
-	native      func(env *Env)
-	loadGlobal  *Program
-	params      []string
-	debugLocals []string
+	Code       packet
+	Name       string
+	DocString  string
+	NumParams  byte
+	IsVariadic bool
+	IsDebug    bool
+	StackSize  uint16
+	Native     func(env *Env)
+	loadGlobal *Program
+	Params     []string
+	Locals     []string
 }
 
 type Program struct {
@@ -31,7 +32,7 @@ type Program struct {
 	MaxCallStackSize int64
 	MaxStringSize    int64
 	Stack            *[]Value
-	Funcs            []*Func
+	Functions        []*Func
 	Stdout, Stderr   io.Writer
 	Stdin            io.Reader
 	Logger           *log.Logger
@@ -39,13 +40,22 @@ type Program struct {
 	Survey           struct {
 		Elapsed         float64
 		StringAlloc     int64
-		YieldSize       int64
 		AdjustedReturns int64
 	}
 	shadowTable *symtable
 }
 
 type Arguments map[string]Value
+
+func (a Arguments) GetStringOrJSON(name string, defaultValue string) string {
+	if a[name].Type() == VString {
+		return a[name].String()
+	}
+	if !a[name].IsNil() {
+		return a[name].JSONString()
+	}
+	return defaultValue
+}
 
 func (a Arguments) GetString(name string, defaultValue string) string {
 	if a[name].Type() == VString {
@@ -61,24 +71,24 @@ func (a Arguments) GetInt(name string, defaultValue int64) int64 {
 	return defaultValue
 }
 
-// Native creates a golang-native function
+// Native creates a golang-Native function
 func Native(name string, f func(env *Env), doc ...string) Value {
 	return Function(&Func{
-		name:    name,
-		native:  f,
-		doc:     strings.Join(doc, "\n"),
-		isDebug: strings.HasPrefix(name, "debug_"),
+		Name:      name,
+		Native:    f,
+		DocString: fixDocString(strings.Join(doc, "\n"), name, ""),
+		IsDebug:   strings.HasPrefix(name, "debug_"),
 	})
 }
 
 func NativeWithParamMap(name string, f func(*Env, Arguments), doc string, params ...string) Value {
 	return Function(&Func{
-		name:      name,
-		params:    params,
-		numParams: byte(len(params)),
-		doc:       strings.Replace(doc, "$a...a$", strings.Join(params, ","), -1),
-		isDebug:   strings.HasPrefix(name, "debug_"),
-		native: func(env *Env) {
+		Name:      name,
+		Params:    params,
+		NumParams: byte(len(params)),
+		DocString: fixDocString(doc, name, strings.Join(params, ",")),
+		IsDebug:   strings.HasPrefix(name, "debug_"),
+		Native: func(env *Env) {
 			stack := env.Stack()
 			args := make(map[string]Value, len(stack))
 			for i := range stack {
@@ -91,39 +101,31 @@ func NativeWithParamMap(name string, f func(*Env, Arguments), doc string, params
 	})
 }
 
-func (c *Func) Name() string { return c.name }
-
-func (c *Func) IsNative() bool { return c.native != nil }
-
-func (c *Func) IsDebug() bool { return c.isDebug }
-
-func (c *Func) Signature() (numParams int, isVariadic bool, stackSize int) {
-	return int(c.numParams), c.isVariadic, int(c.stackSize)
-}
+func (c *Func) IsNative() bool { return c.Native != nil }
 
 func (c *Func) String() string {
 	p := bytes.Buffer{}
-	if c.name != "" {
-		p.WriteString(c.name)
-	} else if c.native != nil {
+	if c.Name != "" {
+		p.WriteString(c.Name)
+	} else if c.Native != nil {
 		p.WriteString("native")
 	} else {
 		p.WriteString("function")
 	}
 
 	p.WriteString("(")
-	for i := 0; i < int(c.numParams); i++ {
-		if i < len(c.params) {
-			p.WriteString(c.params[i])
+	for i := 0; i < int(c.NumParams); i++ {
+		if i < len(c.Params) {
+			p.WriteString(c.Params[i])
 		} else {
 			p.WriteString("a" + strconv.Itoa(i))
 		}
 		p.WriteString(",")
 	}
-	if c.isVariadic {
+	if c.IsVariadic {
 		p.WriteString("...")
 	} else {
-		if c.numParams > 0 {
+		if c.NumParams > 0 {
 			p.Truncate(p.Len() - 1)
 		}
 	}
@@ -132,18 +134,18 @@ func (c *Func) String() string {
 }
 
 func (c *Func) PrettyCode() string {
-	if c.native != nil {
-		return "[native code]"
+	if c.Native != nil {
+		return "[Native Code]"
 	}
 	return pkPrettify(c, c.loadGlobal, false, 0)
 }
 
 func (c *Func) exec(newEnv Env) (Value, []Value) {
-	if c.native != nil {
-		c.native(&newEnv)
+	if c.Native != nil {
+		c.Native(&newEnv)
 		return newEnv.A, newEnv.V
 	}
-	return execCursorLoop(newEnv, c, 0)
+	return InternalExecCursorLoop(newEnv, c, 0)
 }
 
 func (p *Program) Run() (v1 Value, v []Value, err error) {
@@ -157,7 +159,7 @@ func (p *Program) Call() (v1 Value, v []Value, err error) {
 		Global: p,
 		stack:  p.Stack,
 	}
-	v1, v = execCursorLoop(newEnv, &p.Func, 0)
+	v1, v = InternalExecCursorLoop(newEnv, &p.Func, 0)
 	p.Survey.Elapsed = time.Since(start).Seconds()
 	return
 }
@@ -169,22 +171,22 @@ func (c *Func) Call(a ...Value) (v1 Value, v []Value, err error) {
 	newEnv := Env{
 		Global:      c.loadGlobal,
 		stack:       c.loadGlobal.Stack,
-		stackOffset: uint32(oldLen),
+		StackOffset: uint32(oldLen),
 	}
 
 	var varg []Value
 	for i := range a {
-		if i >= int(c.numParams) {
+		if i >= int(c.NumParams) {
 			varg = append(varg, a[i])
 		}
 		newEnv.Push(a[i])
 	}
 
-	if c.native == nil {
-		newEnv.growZero(int(c.stackSize))
-		if c.isVariadic {
-			// newEnv.grow(int(c.numParams) + 1)
-			newEnv._set(uint16(c.numParams), _unpackedStack(varg))
+	if c.Native == nil {
+		newEnv.growZero(int(c.StackSize))
+		if c.IsVariadic {
+			// newEnv.grow(int(c.NumParams) + 1)
+			newEnv._set(uint16(c.NumParams), _unpackedStack(varg))
 		}
 	}
 
@@ -257,4 +259,10 @@ func (p *Program) Set(k string, v Value) (err error) {
 func (p *Program) ResetSurvey() {
 	p2 := Program{}
 	p.Survey = p2.Survey
+}
+
+func fixDocString(in, name, arg string) string {
+	in = strings.Replace(in, "$a", arg, -1)
+	in = strings.Replace(in, "$f", name, -1)
+	return in
 }

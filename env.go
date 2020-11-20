@@ -9,7 +9,7 @@ import (
 )
 
 // Env is the environment for a closure to run within.
-// stack contains arguments used by the execution and is a Global shared value, local can only use stack[stackOffset:]
+// stack contains arguments used by the execution and is a Global shared value, local can only use stack[StackOffset:]
 // A and V stores the results of the execution (e.g: return a, b, c => env.A = a, env.V = []Value{b, c})
 type Env struct {
 	// Global
@@ -17,21 +17,26 @@ type Env struct {
 	stack  *[]Value
 
 	// Local
-	stackOffset uint32
+	StackOffset uint32
 	V           []Value
 	A           Value
 
-	// Used by native functions
-	nativeSource *Func // points to itself
+	// Used by Native functions
+	NativeSource *Func // points to itself
 
-	// Used by native debug function
-	debug *debugInfo
+	// Used by Native debug function
+	Debug *debugInfo
 }
 
 type debugInfo struct {
 	Caller     *Func
 	Stacktrace []stacktrace
 	Cursor     uint32
+}
+
+type DebugState struct {
+	Cursor uint32
+	Stack  []Value
 }
 
 func (env *Env) growZero(newSize int) {
@@ -44,7 +49,7 @@ func (env *Env) growZero(newSize int) {
 
 func (env *Env) grow(newSize int) {
 	s := *env.stack
-	sz := int(env.stackOffset) + newSize
+	sz := int(env.StackOffset) + newSize
 	if sz > cap(s) {
 		old := s
 		s = make([]Value, sz, sz+newSize)
@@ -65,7 +70,7 @@ func (env *Env) Set(index int, value Value) {
 
 // Clear clears the current stack
 func (env *Env) Clear() {
-	*env.stack = (*env.stack)[:env.stackOffset]
+	*env.stack = (*env.stack)[:env.StackOffset]
 	env.A, env.V = Value{}, nil
 }
 
@@ -75,7 +80,7 @@ func (env *Env) Push(v Value) {
 }
 
 func (env *Env) Size() int {
-	return len(*env.stack) - int(env.stackOffset)
+	return len(*env.stack) - int(env.StackOffset)
 }
 
 func (env *Env) _get(yx uint16) (zzz Value) {
@@ -89,7 +94,7 @@ func (env *Env) _get(yx uint16) (zzz Value) {
 	}
 
 	s := *env.stack
-	index += int(env.stackOffset)
+	index += int(env.StackOffset)
 	if index >= len(s) {
 		return Value{}
 	}
@@ -101,18 +106,18 @@ func (env *Env) _set(yx uint16, v Value) {
 		env.A = v
 	} else {
 		index := int(yx & 0xfff)
-		s := (*env.stack)
+		s := *env.stack
 		if yx>>12 == 1 {
 			(*env.Global.Stack)[index] = v
 		} else {
-			s[index+int(env.stackOffset)] = v
+			s[index+int(env.StackOffset)] = v
 		}
 	}
 }
 
-func (env *Env) Stack() []Value {
-	return (*env.stack)[env.stackOffset:]
-}
+func (env *Env) Stack() []Value { return (*env.stack)[env.StackOffset:] }
+
+func (env *Env) CopyStack() []Value { return append([]Value{}, env.Stack()...) }
 
 func (env *Env) StackInterface() []interface{} {
 	r := make([]interface{}, env.Size())
@@ -148,7 +153,7 @@ func (env *Env) InInterface(i int, allowNil bool, expectedType reflect.Type) int
 	itf := v.Interface()
 	if rt := reflect.TypeOf(itf); rt != expectedType {
 		panicf("%s: bad argument #%d, expect %v, got %v",
-			env.nativeSource.name, i+1, expectedType, rt)
+			env.NativeSource.Name, i+1, expectedType, rt)
 	}
 	return itf
 }
@@ -157,7 +162,7 @@ func (env *Env) In(i int, expectedType valueType) Value {
 	v := env.Get(i)
 	if v.Type() != expectedType {
 		panicf("%s: bad argument #%d, expect %v, got %v",
-			env.nativeSource.name, i+1, expectedType, v.Type())
+			env.NativeSource.Name, i+1, expectedType, v.Type())
 	}
 	return v
 }
@@ -189,31 +194,23 @@ func (env *Env) String() string {
 	return buf.String()
 }
 
-func (e *Env) NewString(s string) Value {
-	if e.Global.MaxStringSize > 0 {
+func (env *Env) NewString(s string) Value {
+	if env.Global.MaxStringSize > 0 {
 		// Loosely control the string size
-		if int64(len(s)) > e.Global.MaxStringSize {
-			panicf("string overflow, max: %d", e.Global.MaxStringSize)
+		if int64(len(s)) > env.Global.MaxStringSize {
+			panicf("string overflow, max: %d", env.Global.MaxStringSize)
 		}
 	}
-	e.Global.Survey.StringAlloc += int64(len(s))
-	return _str(s)
+	env.Global.Survey.StringAlloc += int64(len(s))
+	return String(s)
 }
 
-func (e *Env) NewUnlimitedString(s string) Value {
-	return _str(s)
+func (env *Env) NewStringBytes(s []byte) Value {
+	return env.NewString(*(*string)(unsafe.Pointer(&s)))
 }
 
-func (e *Env) NewStringBytes(s []byte) Value {
-	return e.NewString(*(*string)(unsafe.Pointer(&s)))
-}
-
-func (e *Env) NewUnlimitedStringBytes(s []byte) Value {
-	return e.NewUnlimitedString(*(*string)(unsafe.Pointer(&s)))
-}
-
-func (e *Env) checkRemainStackSize(sz int) {
-	if e.Global.MaxStackSize > 0 && float64(sz+len(*e.stack))*1.618 > float64(e.Global.MaxStackSize) {
-		panicf("stack overflow, max: %d", e.Global.MaxStackSize)
+func (env *Env) checkRemainStackSize(sz int) {
+	if env.Global.MaxStackSize > 0 && float64(sz+len(*env.stack))*1.618 > float64(env.Global.MaxStackSize) {
+		panicf("stack overflow, max: %d", env.Global.MaxStackSize)
 	}
 }

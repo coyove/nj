@@ -67,6 +67,7 @@
 	<option>goquery</option>
 	<option>goto</option>
 	<option>fib</option>
+	<option>dict</option>
 	<option>array-tricks</option>
 	<option>zip-strings</option>
 	<option>countdown</option>
@@ -85,7 +86,7 @@
   </div>
 </body>
 
-<script src="demo.js?v=21"></script>
+<script src="demo.js?v=23"></script>
 <script>
   var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
       mode: "lua",
@@ -135,28 +136,28 @@
 	      el.innerHTML = '';
 
 	      if (data.error) {
-		  el.appendChild(div("Error", true))
-		  el.appendChild(div(data.error))
-	      } else if (data.results && data.results.length && data.results[0]) {
-		  el.appendChild(div("Results", true))
-		  for (var v of data.results) {
-		      el.appendChild(div(typeof v === 'object' ? JSON.stringify(v) : v));
-	          }
-	      }
-	      if (data.stdout) {
-	    	  el.appendChild(div("Stdout", true));
-	    	  el.appendChild(div(data.stdout));
-		  el.appendChild(div("Elapsed", true))
-		  el.appendChild(div(data.elapsed + 's'));
-	      }
-	      if (data.opcode) {
-		  el.appendChild(div("Compiled", true));
-		  el.appendChild(div(data.opcode));
-	      }
-	      if (data.survey) {
-		  el.appendChild(div("Survey", true));
-		  el.appendChild(div(JSON.stringify(data.survey)));
-	      }
+              el.appendChild(div("Error", true))
+              el.appendChild(div(data.error))
+          } else if (data.results && data.results.length && data.results[0]) {
+              el.appendChild(div("Results", true))
+              for (var v of data.results) {
+                  el.appendChild(div(typeof v === 'object' ? JSON.stringify(v) : v));
+              }
+          }
+          if (data.stdout) {
+              el.appendChild(div("Stdout", true));
+              el.appendChild(div(data.stdout));
+              el.appendChild(div("Elapsed", true))
+              el.appendChild(div(data.elapsed + 's'));
+          }
+          if (data.opcode) {
+              el.appendChild(div("Compiled", true));
+              el.appendChild(div(data.opcode));
+          }
+          if (data.survey) {
+              el.appendChild(div("Survey", true));
+              el.appendChild(div(JSON.stringify(data.survey)));
+          }
 	  });
   }
 

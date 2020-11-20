@@ -40,7 +40,7 @@ func init() {
 				}
 			})
 			iterStringPairs(args[p+"_key"], args[p+"_val"], func(k, v string) { add(k, v) })
-			for k, v := range gjson.Parse(args.GetString(pp, "")).Map() {
+			for k, v := range gjson.Parse(args.GetStringOrJSON(pp, "")).Map() {
 				add(k, v.String())
 			}
 		}
@@ -69,7 +69,7 @@ func init() {
 		}
 		if body == "" {
 			// Check "json"
-			body = args.GetString("json", "")
+			body = args.GetStringOrJSON("json", "")
 			jsonForm = len(body) > 0
 		}
 
@@ -160,7 +160,7 @@ func init() {
 	http("POST", "...")
 	http("POST", "...", form="key=value")
 	http("POST", "...", form_key='key', form_val='value')
-	http("POST", "...", forms={key:value})
+	http("POST", "...", forms=dict(key=value))
 	http("POST", "...", multipart_key='file', multipart_val='@path/to/file')`,
 
 		"method", "url", "rawbody", "timeout", "proxy",

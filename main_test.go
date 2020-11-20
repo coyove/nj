@@ -47,23 +47,23 @@ func runFile(t *testing.T, path string) {
 				if v.IsFalse() {
 					panic("findGlobal failed")
 				}
-				env.Global.Set("G_FLAG", _str("ok"))
+				env.Global.Set("G_FLAG", String("ok"))
 				env.Global.Println("find global")
 			},
 			"mapFunc": NativeWithParamMap("mapFunc", func(env *Env, in Arguments) {
 				if !in["a"].IsNil() {
-					env.A = _str("a")
+					env.A = String("a")
 				}
 				if !in["b"].IsNil() {
 					env.A = in["b"]
 				}
 				if !in["c"].IsNil() {
-					env.A = _str(in["c"].String())
+					env.A = String(in["c"].String())
 				}
 				if !in["d"].IsNil() {
-					env.A = _str(env.A.String() + in["d"].String())
+					env.A = String(env.A.String() + in["d"].String())
 				}
-			}, "doc...", "a", "b", "c", "d"),
+			}, "DocString...", "a", "b", "c", "d"),
 			"G": "test",
 		},
 	})
@@ -79,7 +79,6 @@ func runFile(t *testing.T, path string) {
 	}
 	t.Log(i, i2, err,
 		"str alloc:", b.Survey.StringAlloc,
-		"yield count:", b.Survey.YieldSize,
 		"adj returns:", b.Survey.AdjustedReturns,
 	)
 

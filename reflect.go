@@ -1,7 +1,6 @@
 package script
 
 import (
-	"fmt"
 	"reflect"
 )
 
@@ -14,18 +13,18 @@ func reflectLen(v interface{}) int {
 	return -1
 }
 
-func reflectLoad(v interface{}, key Value) Value {
+func reflectLoad(v interface{}, key Value) (Value, []Value) {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		v := rv.MapIndex(reflect.ValueOf(key.TypedInterface(rv.Type().Elem())))
+		v := rv.MapIndex(reflect.ValueOf(key.TypedInterface(rv.Type().Key())))
 		if v.IsValid() {
-			return Interface(v.Interface())
+			return Interface2(v.Interface())
 		}
 	case reflect.Slice, reflect.Array:
 		idx := key.ExpectMsg(VNumber, "loadarray").Int() - 1
 		if idx < int64(rv.Len()) && idx >= 0 {
-			return Interface(rv.Index(int(idx)).Interface())
+			return Interface2(rv.Index(int(idx)).Interface())
 		}
 	}
 
@@ -37,12 +36,12 @@ func reflectLoad(v interface{}, key Value) Value {
 		}
 		f := rv.FieldByName(k)
 		if f.IsValid() {
-			return Interface(f.Interface())
+			return Interface2(f.Interface())
 		}
 		// panicf("%q not found in %#v", k, v)
-		return Value{}
+		return Value{}, nil
 	}
-	return Interface(f.Interface())
+	return Interface2(f.Interface())
 }
 
 func reflectSlice(v interface{}, start, end int64) interface{} {
@@ -58,25 +57,25 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		// 	rk := reflect.ValueOf(key.TypedInterface(rv.Type().Elem()))
-		// 	v := rv.MapIndex(rk)
-		// 	if !v.IsValid() {
-		panicf("store: readonly map")
-		// 	}
-		// 	if v2.IsNil() {
-		// 		rv.SetMapIndex(rk, reflect.Value{})
-		// 	} else {
-		// 		// panicf("store: readonly map")
-		// 		rv.SetMapIndex(rk, reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
-		// 	}
+		rk := reflect.ValueOf(key.TypedInterface(rv.Type().Key()))
+		v := rv.MapIndex(rk)
+		if !v.IsValid() {
+			panicf("store: readonly map")
+		}
+		if v2.IsNil() {
+			rv.SetMapIndex(rk, reflect.Value{})
+		} else {
+			// panicf("store: readonly map")
+			rv.SetMapIndex(rk, reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
+		}
 		return
 	case reflect.Slice, reflect.Array:
 		panicf("store: readonly slice")
-		// 	idx := key.ExpectMsg(VNumber, "storearray").Int() - 1
-		// 	if idx >= int64(rv.Len()) || idx < 0 {
-		// 		return
-		// 	}
-		// 	rv.Index(int(idx)).Set(reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
+		idx := key.ExpectMsg(VNumber, "storearray").Int() - 1
+		if idx >= int64(rv.Len()) || idx < 0 {
+			return
+		}
+		rv.Index(int(idx)).Set(reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
 		return
 	}
 
@@ -98,26 +97,33 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 
 // https://github.com/theothertomelliott/acyclic
 // reflectCheckCyclicStruct performs a DFS traversal over an interface to determine if it contains any cycles.
-// If there are no cycles, nil is returned.
-// If one or more cycles exist, an error will be returned. This error will contain a path to the first cycle found.
-var reflectCheckCyclicStruct = func() func(v interface{}) error {
+var reflectCheckCyclicStruct = func() func(v interface{}) bool {
 
-	checkParents := func(value reflect.Value, parents []uintptr, names []string) ([]uintptr, error) {
+	checkParents := func(value reflect.Value, parents []uintptr) ([]uintptr, bool) {
 		kind := value.Kind()
 		if kind == reflect.Map || kind == reflect.Ptr || kind == reflect.Slice {
 			address := value.Pointer()
 			for _, parent := range parents {
 				if parent == address {
-					return nil, fmt.Errorf("cycle found: %v", names)
+					return nil, false
 				}
 			}
-			return append(parents, address), nil
+			return append(parents, address), true
 		}
-		return parents, nil
+		return parents, true
 	}
 
-	var doCheck func(reflect.Value, []uintptr, []string) error
-	doCheck = func(value reflect.Value, parents []uintptr, names []string) error {
+	var doCheck func(reflect.Value, []uintptr) bool
+	doCheck = func(value reflect.Value, parents []uintptr) bool {
+		if value.IsZero() || !value.IsValid() {
+			return true
+		}
+
+		if value.Type() == reflect.TypeOf(Value{}) {
+			v := value.Interface().(Value)
+			return doCheck(reflect.ValueOf(v.Interface()), parents)
+		}
+
 		kind := value.Kind()
 
 		if kind == reflect.Interface {
@@ -125,49 +131,44 @@ var reflectCheckCyclicStruct = func() func(v interface{}) error {
 			kind = value.Kind()
 		}
 
-		newParents, err := checkParents(value, parents, names)
-		if err != nil {
-			return err
+		newParents, ok := checkParents(value, parents)
+		if !ok {
+			return ok
 		}
 
 		if kind == reflect.Map {
 			for _, key := range value.MapKeys() {
-				err := doCheck(value.MapIndex(key), newParents, append(names, key.String()))
-				if err != nil {
-					return err
+				if !doCheck(value.MapIndex(key), newParents) {
+					return false
 				}
 			}
 		}
 
 		if kind == reflect.Ptr {
-			return doCheck(value.Elem(), newParents, names)
+			return doCheck(value.Elem(), newParents)
 		}
 
 		if kind == reflect.Slice {
 			for i := 0; i < value.Len(); i++ {
-				err := doCheck(value.Index(i), newParents, append(names, fmt.Sprintf("[%d]", i)))
-				if err != nil {
-					return err
+				if !doCheck(value.Index(i), newParents) {
+					return false
 				}
 			}
 		}
 
 		if kind == reflect.Struct {
 			for i := 0; i < value.NumField(); i++ {
-				t := value.Type()
-				fieldType := t.Field(i)
-				err := doCheck(value.Field(i), newParents, append(names, fieldType.Name))
-				if err != nil {
-					return err
+				if !doCheck(value.Field(i), newParents) {
+					return false
 				}
 			}
 		}
 
-		return nil
+		return true
 	}
 
-	return func(v interface{}) error {
-		return doCheck(reflect.ValueOf(v), nil, nil)
+	return func(v interface{}) bool {
+		return doCheck(reflect.ValueOf(v), nil)
 	}
 }()
 

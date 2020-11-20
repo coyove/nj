@@ -43,12 +43,13 @@ const (
 	ACall      = "call"
 	ACallMap   = "callmap"
 	ATailCall  = "tailcall"
+	AMergeAV   = "mergeav"
 	AReturn    = "return"
-	AYield     = "yield"
 	AAdd       = "add"
 	ASub       = "sub"
 	AMul       = "mul"
 	ADiv       = "div"
+	AIDiv      = "idiv"
 	AMod       = "mod"
 	APow       = "pow"
 	AEq        = "eq"
@@ -66,7 +67,6 @@ const (
 	APopVAllA  = "popallva"
 	ALabel     = "label"
 	AGoto      = "goto"
-	AJSON      = "map"
 )
 
 func __chain(args ...Node) Node {
@@ -121,7 +121,16 @@ func __func(setOrMove Node, name Token, paramList Node, doc string, stats Node) 
 	)
 }
 
-func __call(cls, args Node) Node { return NewComplex(NewSymbol(ACall), cls, args) }
+func __call(cls, args Node) Node {
+	if len(args.Nodes) > 0 {
+		for i, n := range args.Nodes {
+			if n.Type == Complex && len(n.Nodes) > 1 && n.Nodes[0].IsCall() {
+				args.Nodes[i] = NewComplex(NewSymbol(AMergeAV), n)
+			}
+		}
+	}
+	return NewComplex(NewSymbol(ACall), cls, args)
+}
 
 func __callMap(cls, argsArray, argsMap Node) Node {
 	args := make([]Node, 0, len(argsArray.Nodes)+len(argsMap.Nodes))
@@ -129,7 +138,9 @@ func __callMap(cls, argsArray, argsMap Node) Node {
 		args = append(args, NewNumberFromInt(int64(i)), n)
 	}
 	args = append(args, argsMap.Nodes...)
-	return NewComplex(NewSymbol(ACallMap), cls, NewComplex(args...))
+	n := __call(cls, NewComplex(args...))
+	n.Nodes[0].strSym = ACallMap
+	return n
 }
 
 func __popvAll(i int, k Node) Node {

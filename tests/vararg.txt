@@ -57,15 +57,17 @@ function f (n, a, ...x)
   local b
   if n == 0 then
     local b, c, d = select(1, x)
-    return a, b, c, d, oneless(oneless(oneless(x)))
+    return a, b, c, oneless(oneless(x)) 
   else
     return f(n - 1, a, x)
   end
 end
  
-a,b,c,d,e = f(10,5,4,3,2,1)
+local a, b , c ,d ,e= f(10,5,4,3,2,1)
 assert(a==5 and b==4 and c==3 and d==2 and e==1)
 
+local _,a, b, c, d =  array(oneless(1,2,3), oneless(4,5), 6)
+assert(a==2 and b==3 and c==5 and d==6)
 
 do -- variadic functions inside and+or
     function foo() return 1, 2 end

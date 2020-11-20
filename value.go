@@ -2,6 +2,7 @@ package script
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -78,14 +79,18 @@ func _unpackedStack(m []Value) Value {
 
 // Function returns a closure value
 func Function(c *Func) Value {
-	if c.name == "" {
-		c.name = "function"
+	if c.Name == "" {
+		c.Name = "function"
 	}
 	return Value{v: VFunction, p: unsafe.Pointer(c)}
 }
 
-func _str(s string) Value {
+func String(s string) Value {
 	return Value{v: VString, p: unsafe.Pointer(&s)}
+}
+
+func Bytes(b []byte) Value {
+	return Value{v: VString, p: unsafe.Pointer(&b)}
 }
 
 func Interface(i interface{}) Value {
@@ -101,7 +106,9 @@ func Interface(i interface{}) Value {
 	case int64:
 		return Int(v)
 	case string:
-		return _str(v)
+		return String(v)
+	case []byte:
+		return Bytes(v)
 	case []Value:
 		return _unpackedStack(v)
 	case *Func:
@@ -110,6 +117,8 @@ func Interface(i interface{}) Value {
 		return v
 	case parser.CatchedError:
 		return Interface(v.Original)
+	case reflect.Value:
+		return Interface(v.Interface())
 	}
 
 	rv := reflect.ValueOf(i)
@@ -139,20 +148,28 @@ func Interface(i interface{}) Value {
 						ins = append(ins, getter(i, rt.In(rtNumIn-1).Elem()))
 					}
 				}
-				outs := rv.Call(ins)
-				if rt.NumOut() == 0 {
-					return
+				switch outs := rv.Call(ins); rt.NumOut() {
+				case 1:
+					env.A, env.V = Interface2(outs[0].Interface())
+				default:
+					a := make([]Value, len(outs))
+					for i := range outs {
+						a[i] = Interface(outs[i].Interface())
+					}
+					env.Return(a...)
 				}
-				a := make([]Value, len(outs))
-				for i := range outs {
-					a[i] = Interface(outs[i].Interface())
-				}
-				env.Return2(a[0], a[1:]...)
 			}
 		}
-		return Function(&Func{name: "<native>", native: nf})
+		return Function(&Func{Name: "<native>", Native: nf})
 	}
 	return _interface(i)
+}
+
+func Interface2(i interface{}) (Value, []Value) {
+	if s, ok := i.([]Value); ok {
+		return Int(int64(len(s))), s
+	}
+	return Interface(i), nil
 }
 
 func _interface(i interface{}) Value {
@@ -235,6 +252,10 @@ func (v Value) Interface() interface{} {
 }
 
 func (v Value) TypedInterface(t reflect.Type) interface{} {
+	if t == reflect.TypeOf(Value{}) {
+		return v
+	}
+
 	switch v.Type() {
 	case VNumber:
 		if t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
@@ -308,9 +329,13 @@ func (v Value) Less(r Value) bool {
 	return false
 }
 
-func (v Value) String() string { return v.toString(0) }
+func (v Value) String() string { return v.toString(0, false) }
 
-func (v Value) toString(lv int) string {
+func (v Value) JSONString() string { return v.toString(0, true) }
+
+func (v Value) MarshalJSON() ([]byte, error) { return []byte(v.toString(0, true)), nil }
+
+func (v Value) toString(lv int, j bool) string {
 	if lv > 32 {
 		return "<omit deep nesting>"
 	}
@@ -322,12 +347,15 @@ func (v Value) toString(lv int) string {
 		}
 		return strconv.FormatFloat(vf, 'f', -1, 64)
 	case VString:
+		if j {
+			return strconv.Quote(v._str())
+		}
 		return v._str()
 	case VStack:
 		t := v._unpackedStack()
 		p := bytes.NewBufferString("[")
 		for _, a := range t.a {
-			p.WriteString(a.toString(lv + 1))
+			p.WriteString(a.toString(lv+1, j))
 			p.WriteString(",")
 		}
 		if len(t.a) > 0 {
@@ -339,8 +367,12 @@ func (v Value) toString(lv int) string {
 		return v.Function().String()
 	case VInterface:
 		i := v.Interface()
-		if err := reflectCheckCyclicStruct(i); err != nil {
-			return fmt.Sprintf("<interface: omit deep nesting>")
+		if !reflectCheckCyclicStruct(i) {
+			i = fmt.Sprintf("<interface: omit deep nesting>")
+		}
+		if j {
+			buf, _ := json.Marshal(i)
+			return string(buf)
 		}
 		return fmt.Sprintf("%v", i)
 	}
@@ -370,9 +402,3 @@ func (t *unpacked) Get(idx int64) (v Value) {
 	}
 	return Value{}
 }
-
-type jsonQuotedString []byte
-
-func (jsq jsonQuotedString) MarshalJSON() ([]byte, error) { return []byte(jsq), nil }
-
-func (jsq jsonQuotedString) String() string { return string(jsq) }

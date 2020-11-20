@@ -93,6 +93,11 @@ func (n Node) IsNumber() bool {
 	return t == Float || t == Int
 }
 
+func (n Node) IsCall() bool {
+	t := n.Type
+	return t == Symbol && (n.SymbolValue() == ACall || n.SymbolValue() == ACallMap)
+}
+
 func (n Node) StringValue() string { return n.strSym }
 
 func (n Node) SymbolValue() string { return n.strSym }

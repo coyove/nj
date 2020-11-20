@@ -206,7 +206,6 @@ var reservedWords = map[string]uint32{
 	"repeat":   TRepeat,
 	"until":    TUntil,
 	"do":       TDo,
-	"yield":    TYield,
 	"goto":     TGoto,
 }
 
@@ -242,14 +241,12 @@ skipspaces:
 				sc.Next()
 			}
 
-			// return/yield without an arg, but with a CrLf afterward will be considered
-			// as return nil/yield nil. This rule implies the following syntax:
+			// 'return' without an arg, but with a CrLf afterward will be considered
+			// as 'return nil'. This rule implies the following syntax:
 			//   1. return end
 			//   2. return \n end
 			if tok.Str == "return" && crlf {
 				tok.Type = TReturnVoid
-			} else if tok.Str == "yield" && crlf {
-				tok.Type = TYieldVoid
 			} else {
 				tok.Type = typ
 			}
@@ -345,6 +342,14 @@ skipspaces:
 				tok.Type = [...]uint32{TAddEq, TMulEq, TDivEq, TModEq}[ii]
 				tok.Str = [...]string{"+=", "*=", "/=", "%="}[ii]
 				sc.Next()
+			case '/':
+				if ch == '/' {
+					tok.Type = TIDiv
+					tok.Str = "//"
+					sc.Next()
+					goto finally
+				}
+				fallthrough
 			default:
 				tok.Type = ch
 				tok.Str = [...]string{"+", "*", "/", "%"}[ii]

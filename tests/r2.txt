@@ -97,7 +97,7 @@ end
 function remove(el, ...arr)
     for i=1,#arr do
 	if arr[i] == el then
-	    return arr[1,i-1], arr[i+1,#arr]
+	    return arr[1:i-1], arr[i+1:#arr]
 	end
     end
     return arr

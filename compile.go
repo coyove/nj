@@ -20,12 +20,12 @@ type breaklabel struct {
 }
 
 type CompileOptions struct {
-	DisableYield      bool
-	DisableGFunc      bool
-	DisableDefineFunc bool
-	GlobalKeyValues   map[string]interface{}
-	GlobalKey         string
-	GlobalValue       interface{}
+	DisableGFunc     bool
+	DefineFuncFilter func(name string) bool
+	VarLookupFilter  func(name string) bool
+	GlobalKeyValues  map[string]interface{}
+	GlobalKey        string
+	GlobalValue      interface{}
 }
 
 // symtable is responsible for recording the state of compilation
@@ -39,7 +39,7 @@ type symtable struct {
 	// toplevel symtable
 	funcs []*Func
 
-	// variable name lookup
+	// variable Name lookup
 	sym       map[string]*symbol
 	maskedSym []map[string]*symbol
 
@@ -131,6 +131,10 @@ func (table *symtable) mustGetSymbol(name string) uint16 {
 }
 
 func (table *symtable) get(varname string) uint16 {
+	if table.options.VarLookupFilter != nil && !table.options.VarLookupFilter(varname) {
+		panicf("table: %q reference is not allowed by options", varname)
+	}
+
 	depth := uint16(0)
 	regNil := table.loadK(nil)
 
@@ -220,6 +224,7 @@ var flatOpMapping = map[string]opCode{
 	parser.ASub:       OpSub,
 	parser.AMul:       OpMul,
 	parser.ADiv:       OpDiv,
+	parser.AIDiv:      OpIDiv,
 	parser.AMod:       OpMod,
 	parser.ALess:      OpLess,
 	parser.ALessEq:    OpLessEq,
@@ -315,7 +320,7 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileChain(node)
 	case parser.ASet, parser.AMove:
 		yx = table.compileSetMove(nodes)
-	case parser.AReturn, parser.AYield:
+	case parser.AReturn:
 		yx = table.compileReturn(nodes)
 	case parser.AIf:
 		yx = table.compileIf(nodes)
@@ -325,6 +330,8 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileBreak(nodes)
 	case parser.ACall, parser.ATailCall, parser.ACallMap:
 		yx = table.compileCall(nodes)
+	case parser.AMergeAV:
+		yx = table.compileMergeAV(nodes)
 	case parser.AOr, parser.AAnd:
 		yx = table.compileAndOr(nodes)
 	case parser.AFunc:
@@ -333,8 +340,6 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileRetAddr(nodes)
 	case parser.AGoto, parser.ALabel:
 		yx = table.compileGoto(nodes)
-	case parser.AJSON:
-		yx = table.compileJSON(nodes)
 	default:
 		if _, ok := flatOpMapping[name]; ok {
 			return table.compileFlat(nodes)
@@ -387,10 +392,10 @@ func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls 
 			} else { // load
 				env.A = coreStack.Get(int(shadowTable.mustGetSymbol(env.InStr(0, ""))))
 			}
-		}, "__g(name) => value", "\tload global value by name", "__g(name, value)", "\tstore global value by name"))
+		}, "__g(Name) => value", "\tload global value by Name", "__g(Name, value)", "\tstore global value by Name"))
 
 		push("COMPILE_OPTIONS", Interface(opt))
-		push("SOURCE_CODE", _str(source))
+		push("SOURCE_CODE", String(source))
 	}
 
 	table.vp = uint16(coreStack.Size())
@@ -415,7 +420,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls 
 		case int64:
 			coreStack.Set(int(stackPos), Int(k))
 		case string:
-			coreStack.Set(int(stackPos), _str(k))
+			coreStack.Set(int(stackPos), String(k))
 		case nil:
 			coreStack.Set(int(stackPos), Value{})
 		default:
@@ -424,16 +429,16 @@ func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls 
 	}
 
 	cls = &Program{}
-	cls.name = "main"
-	cls.code = table.code
-	cls.stackSize = table.vp
+	cls.Name = "main"
+	cls.Code = table.code
+	cls.StackSize = table.vp
 	cls.Stack = coreStack.stack
-	cls.debugLocals = table.symbolsToDebugLocals()
-	cls.Funcs = table.funcs
+	cls.Locals = table.symbolsToDebugLocals()
+	cls.Functions = table.funcs
 	cls.Stdout = os.Stdout
 	cls.Stdin = os.Stdin
 	cls.Stderr = os.Stderr
-	for _, f := range cls.Funcs {
+	for _, f := range cls.Functions {
 		f.loadGlobal = cls
 	}
 	cls.loadGlobal = cls
@@ -486,8 +491,6 @@ func joinOptions(opts []CompileOptions) (opt CompileOptions) {
 			opt.GlobalKeyValues[o.GlobalKey] = o.GlobalValue
 		}
 		opt.DisableGFunc = opt.DisableGFunc || o.DisableGFunc
-		opt.DisableDefineFunc = opt.DisableDefineFunc || o.DisableDefineFunc
-		opt.DisableYield = opt.DisableYield || o.DisableYield
 	}
 	return opt
 }

@@ -15,13 +15,12 @@ func inst(op opCode, a, b uint16) uint32 {
 	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
 }
 
-func jmpInst(op opCode, a uint16, dist int) uint32 {
-	if dist < -(1<<12) || dist >= 1<<12 {
+func jmpInst(op opCode, dist int) uint32 {
+	if dist < -(1<<23) || dist >= 1<<23 {
 		panic("long jump")
 	}
-	// 6 + 13 + 13
-	b := uint16(dist + 1<<12)
-	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
+	// 6 + 26
+	return uint32(op)<<26 + uint32(dist+1<<23)
 }
 
 func splitInst(op uint32) (op1 opCode, a, b uint16) {
@@ -75,8 +74,8 @@ func (b *packet) writeInst(op opCode, opa, opb uint16) {
 	b.Code = append(b.Code, inst(op, opa, opb))
 }
 
-func (b *packet) writeJmpInst(op opCode, opa uint16, d int) {
-	b.Code = append(b.Code, jmpInst(op, opa, d))
+func (b *packet) writeJmpInst(op opCode, d int) {
+	b.Code = append(b.Code, jmpInst(op, d))
 }
 
 func (b *packet) writePos(p parser.Position) {
@@ -103,6 +102,7 @@ var singleOp = map[opCode]string{
 	OpSub:    parser.ASub,
 	OpMul:    parser.AMul,
 	OpDiv:    parser.ADiv,
+	OpIDiv:   parser.AIDiv,
 	OpMod:    parser.AMod,
 	OpEq:     parser.AEq,
 	OpNeq:    parser.ANeq,
@@ -148,23 +148,23 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 		return fmt.Sprintf("$%d", a&0xfff) + suffix
 	}
 
-	oldpos := c.code.Pos
+	oldpos := c.Code.Pos
 	lastLine := uint32(0)
 
-	for i, inst := range c.code.Code {
+	for i, inst := range c.Code.Code {
 		cursor := uint32(i) + 1
 		bop, a, b := splitInst(inst)
 		sb.WriteString(spaces)
 
-		if len(c.code.Pos) > 0 {
-			next, op, line := c.code.Pos.read(0)
+		if len(c.Code.Pos) > 0 {
+			next, op, line := c.Code.Pos.read(0)
 			// log.Println(cursor, splitInst, unsafe.Pointer(&Pos))
 			for uint32(cursor) > op {
-				c.code.Pos = c.code.Pos[next:]
-				if len(c.code.Pos) == 0 {
+				c.Code.Pos = c.Code.Pos[next:]
+				if len(c.Code.Pos) == 0 {
 					break
 				}
-				if next, op, line = c.code.Pos.read(0); uint32(cursor) <= op {
+				if next, op, line = c.Code.Pos.read(0); uint32(cursor) <= op {
 					break
 				}
 			}
@@ -176,7 +176,7 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 					lastLine = line
 				}
 				sb.WriteString(fmt.Sprintf("|%-4s % 4d| ", x, cursor-1))
-				c.code.Pos = c.code.Pos[next:]
+				c.Code.Pos = c.Code.Pos[next:]
 			} else {
 				sb.WriteString(fmt.Sprintf("|     % 4d| ", cursor-1))
 			}
@@ -201,16 +201,13 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 			sb.WriteString("pushv " + readAddr(a, true))
 		case OpPush:
 			sb.WriteString(fmt.Sprintf("push-%d %v", b, readAddr(a, true)))
-			if a == regA {
-				sb.WriteString(" $v")
-			}
+		case OpMergeAV:
+			sb.WriteString("merge-av")
 		case OpRet:
 			sb.WriteString("ret " + readAddr(a, true))
-		case OpYield:
-			sb.WriteString("yield " + readAddr(a, true))
 		case OpLoadFunc:
 			sb.WriteString("$a = function:\n")
-			cls := p.Funcs[a]
+			cls := p.Functions[a]
 			sb.WriteString(pkPrettify(cls, p, false, tab+1))
 		case OpCall:
 			if b == 1 {
@@ -220,29 +217,16 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 			}
 		case OpCallMap:
 			sb.WriteString("callmap " + readAddr(a, true))
-		case OpJSON:
-			if a == 0 && b == 0 {
-				sb.WriteString("json-array")
-			} else if a == 0 && b == 1 {
-				sb.WriteString("json-array-final")
-			} else if a == 1 && b == 0 {
-				sb.WriteString("json-object")
-			} else {
-				sb.WriteString("json-object-final")
-			}
-		case OpJmp:
-			pos := int32(b) - 1<<12
+		case OpIf, OpIfNot, OpJmp:
+			pos := int32(inst&0xffffff) - 1<<23
 			pos2 := uint32(int32(cursor) + pos)
-			sb.WriteString("jmp " + strconv.Itoa(int(pos)) + " to " + strconv.Itoa(int(pos2)))
-		case OpIf, OpIfNot:
-			addr := readAddr(a, true)
-			pos := int32(b) - 1<<12
-			pos2 := strconv.Itoa(int(int32(cursor) + pos))
-			if bop == OpIfNot {
-				sb.WriteString("if not " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
-			} else {
-				sb.WriteString("if " + addr + " jmp " + strconv.Itoa(int(pos)) + " to " + pos2)
+			switch bop {
+			case OpIfNot:
+				sb.WriteString("if not $a ")
+			case OpIf:
+				sb.WriteString("if $a ")
 			}
+			sb.WriteString(fmt.Sprintf("jmp %d to %d", pos, pos2))
 		case OpInc:
 			sb.WriteString("inc " + readAddr(a, false) + " " + readAddr(uint16(b), true))
 		case OpLen:
@@ -260,7 +244,7 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 		sb.WriteString("\n")
 	}
 
-	c.code.Pos = oldpos
+	c.Code.Pos = oldpos
 
 	sb.WriteString(spaces2 + "+ END " + c.String())
 	return sb.String()

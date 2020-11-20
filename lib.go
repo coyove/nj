@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -20,7 +21,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const Version int64 = 238
+const Version int64 = 241
 
 var (
 	g   = map[string]Value{}
@@ -66,21 +67,53 @@ func init() {
 		}
 	}, "globals() => n, g1, g2, ...", "\tlist all global values")
 	AddGlobalValue("doc", func(env *Env) {
-		env.A = _str(env.In(0, VFunction).Function().doc)
+		env.A = String(env.In(0, VFunction).Function().DocString)
 	}, "doc(function) => string", "\treturn function's documentation")
+	AddGlobalValue("debug_state", func(env *Env) {
+		code := env.Debug.Caller.Code.Code
+		c := env.Debug.Cursor
+		for ; int(c) < len(code); c++ {
+			op, _, _ := splitInst(code[c])
+			if op == OpRet {
+				c++
+				break
+			}
+		}
+		start := env.StackOffset - uint32(env.Debug.Caller.StackSize)
+		copystack := append([]Value{}, (*env.stack)[start:env.StackOffset]...)
+		env.A = Interface(&DebugState{c, copystack})
+	}, "debug_state() => state", "\tget current function's executing state")
+	AddGlobalValue("debug_resume", func(env *Env) {
+		var (
+			f      = env.In(0, VFunction).Function()
+			cursor uint32
+			newEnv = *env
+			stack  []Value
+		)
+		if state, ok := env.Get(1).Interface().(*DebugState); ok {
+			stack, cursor = state.Stack, state.Cursor
+		}
+		newEnv.StackOffset = uint32(len(*newEnv.stack))
+		*newEnv.stack = append(*newEnv.stack, stack...)
+		newEnv.grow(int(f.StackSize))
+		if cursor >= uint32(f.Code.Len()) {
+			panicf("cursor overflowed")
+		}
+		env.A, env.V = InternalExecCursorLoop(newEnv, f, cursor)
+	}, "$f(function, state) => a1, ..., an, new_state", "\texecute the function using the given state and return the new state")
 	AddGlobalValue("debug_locals", func(env *Env) {
 		var r []Value
-		start := env.stackOffset - uint32(env.debug.Caller.stackSize)
-		for i, name := range env.debug.Caller.debugLocals {
+		start := env.StackOffset - uint32(env.Debug.Caller.StackSize)
+		for i, name := range env.Debug.Caller.Locals {
 			idx := start + uint32(i)
-			r = append(r, Int(int64(idx)), _str(name), (*env.stack)[idx])
+			r = append(r, Int(int64(idx)), String(name), (*env.stack)[idx])
 		}
 		env.Return(r...)
 	}, "debug_locals() => index1, name1, value1, i2, n2, v2, i3, n3, v3, ...")
 	AddGlobalValue("debug_globals", func(env *Env) {
 		var r []Value
-		for i, name := range env.Global.Func.debugLocals {
-			r = append(r, Int(int64(i)), _str(name), (*env.Global.Stack)[i])
+		for i, name := range env.Global.Func.Locals {
+			r = append(r, Int(int64(i)), String(name), (*env.Global.Stack)[i])
 		}
 		env.Return(r...)
 	}, "debug_globals() => index1, name1, value1, i2, n2, v2, i3, n3, v3, ...")
@@ -88,16 +121,16 @@ func init() {
 		(*env.Global.Stack)[env.In(0, VNumber).Int()] = env.Get(1)
 	}, "debug_set(idx, value)")
 	AddGlobalValue("debug_stacktrace", func(env *Env) {
-		stacks := env.debug.Stacktrace
+		stacks := env.Debug.Stacktrace
 		lines := make([]Value, 0, len(stacks))
 		for i := len(stacks) - 1 - int(env.InInt(0, 0)); i >= 0; i-- {
 			r := stacks[i]
 			src := uint32(0)
-			for i := 0; i < len(r.cls.code.Pos); {
+			for i := 0; i < len(r.cls.Code.Pos); {
 				var opx uint32 = math.MaxUint32
-				ii, op, line := r.cls.code.Pos.read(i)
-				if ii < len(r.cls.code.Pos)-1 {
-					_, opx, _ = r.cls.code.Pos.read(ii)
+				ii, op, line := r.cls.Code.Pos.read(i)
+				if ii < len(r.cls.Code.Pos)-1 {
+					_, opx, _ = r.cls.Code.Pos.read(ii)
 				}
 				if r.cursor >= op && r.cursor < opx {
 					src = line
@@ -109,7 +142,7 @@ func init() {
 				}
 				i = ii
 			}
-			lines = append(lines, _str(r.cls.name), Int(int64(src)), Int(int64(r.cursor-1)))
+			lines = append(lines, String(r.cls.Name), Int(int64(src)), Int(int64(r.cursor-1)))
 		}
 		env.Return(lines...)
 	}, "debug_stacktrace(skip) => func_name1, line1, cursor1, n2, l2, c2, ...")
@@ -120,29 +153,8 @@ func init() {
 	AddGlobalValue("array", func(env *Env) {
 		env.Return2(Int(int64(env.Size())), append([]Value{}, env.Stack()...)...)
 	}, "array(a, b, c, ...) => n, a, b, c, ...", "\treturn the number of input arguments, followed by the arugments themselves")
-	AddGlobalValue("resume", func(env *Env) {
-		var (
-			f      = env.In(0, VFunction).Function()
-			cursor = env.InInt(1, 0)
-			newEnv = *env
-			stack  []Value
-		)
-		if state, ok := env.Get(2).Interface().(*Env); ok {
-			stack = state.V
-		}
-		newEnv.stackOffset = uint32(len(*newEnv.stack))
-		*newEnv.stack = append(*newEnv.stack, stack...)
-		newEnv.grow(int(f.stackSize))
-		if cursor >= int64(f.code.Len()) {
-			panicf("cursor overflowed")
-		}
-		env.A, env.V = execCursorLoop(newEnv, f, uint32(cursor))
-	},
-		"resume(function, cursor, state) => yielded_value1, y2, ..., new_cursor, new_state",
-		"\tresume executing the given function using the cursor an the state",
-	)
 	AddGlobalValue("type", func(env *Env) {
-		env.A = _str(env.Get(0).Type().String())
+		env.A = String(env.Get(0).Type().String())
 	}, "type(value) => string", "\treturn value's type")
 	AddGlobalValue("pcall", func(env *Env) {
 		a, v, err := env.In(0, VFunction).Function().Call(env.Stack()[1:]...)
@@ -160,14 +172,13 @@ func init() {
 		"\texecute the function, catch panic and return: 0, panic_as_error",
 		"\tif everything went well, return what function returned: 1, ...")
 	AddGlobalValue("select", func(env *Env) {
+		env.A = Value{}
 		switch a := env.Get(0); a.Type() {
 		case VString:
-			env.A = Float(float64(len(env.Stack()[1:])))
+			env.A = Int(int64(env.Size() - 1))
 		case VNumber:
-			if u, idx := env.Stack()[1:], int(a.Int())-1; idx < len(u) {
-				env.Return2(u[idx], u[idx+1:]...)
-			} else {
-				env.Return2(Value{})
+			if u, idx := env.CopyStack()[1:], int(a.Int())-1; idx < len(u) {
+				env.Return(u[idx:]...)
 			}
 		}
 	}, "select(n, ...)", "\tlua-style select function")
@@ -184,7 +195,9 @@ func init() {
 			panicf("%s: %v and %v", env.Get(2).String(), v, env.Get(1))
 		}
 	}, "assert(value)", "\tpanic when value is falsy",
-		"assert(value1, value2)", "\tpanic when two values are not equal")
+		"assert(value1, value2)", "\tpanic when two values are not equal",
+		"assert(value1, value2, msg)", "\tpanic message when two values are not equal",
+	)
 	AddGlobalValue("num", func(env *Env) {
 		v := env.Get(0)
 		switch v.Type() {
@@ -201,9 +214,8 @@ func init() {
 			env.A = Value{}
 		}
 	}, "num(value) => number", "\tconvert string to number")
-	AddGlobalValue("stdout", func(env *Env) {
-		env.A = _interface(env.Global.Stdout)
-	}, "stdout() => stdout", "\treturn stdout interface")
+	AddGlobalValue("stdout", func(env *Env) { env.A = _interface(env.Global.Stdout) }, "$f() => fd", "\treturn stdout fd")
+	AddGlobalValue("stdin", func(env *Env) { env.A = _interface(env.Global.Stdin) }, "$f() => fd", "\treturn stdin fd")
 	AddGlobalValue("print", func(env *Env) {
 		length := 0
 		for _, a := range env.Stack() {
@@ -249,9 +261,9 @@ func init() {
 		}
 		env.Return(results...)
 	},
-		"scanln(prompt) => string", "\tprint prompt and read user input",
-		"scanln(n) => s1, s2, ..., sn", "\tread user input n times",
-		"scanln(prompt, n) => s1, s2, ..., sn", "\tprint prompt and read user input n times",
+		"$f(prompt) => string", "\tprint prompt and read one user input",
+		"$f(n) => s1, s2, ..., sn", "\tread N user input",
+		"$f(prompt, n) => s1, s2, ..., sn", "\tprint prompt and read N user input",
 	)
 	AddGlobalValue("INF", Float(math.Inf(1)))
 	AddGlobalValue("PI", Float(math.Pi))
@@ -274,10 +286,9 @@ func init() {
 		}
 		rg.Unlock()
 	},
-		"random() => [0,1]",
-		"random(n) => [1, n]",
-		"random(a, b) => [a, b]",
-	)
+		"$f() => [0,1]",
+		"$f(n) => [1, n]",
+		"$f(a, b) => [a, b]")
 	AddGlobalValue("bitand", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() & env.In(1, VNumber).Int()) })
 	AddGlobalValue("bitor", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() | env.In(1, VNumber).Int()) })
 	AddGlobalValue("bitxor", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() ^ env.In(1, VNumber).Int()) })
@@ -286,9 +297,18 @@ func init() {
 	AddGlobalValue("sqrt", func(env *Env) { env.A = Float(math.Sqrt(env.In(0, VNumber).Float())) })
 	AddGlobalValue("floor", func(env *Env) { env.A = Float(math.Floor(env.In(0, VNumber).Float())) })
 	AddGlobalValue("ceil", func(env *Env) { env.A = Float(math.Ceil(env.In(0, VNumber).Float())) })
-	AddGlobalValue("abs", func(env *Env) { env.A = Float(math.Abs(env.In(0, VNumber).Float())) })
 	AddGlobalValue("min", func(env *Env) { mathMinMax(env, false) }, "max(a, b, ...) => number")
 	AddGlobalValue("max", func(env *Env) { mathMinMax(env, true) }, "min(a, b, ...) => number")
+	AddGlobalValue("abs", func(env *Env) {
+		switch f, i, isInt := env.In(0, VNumber).Num(); {
+		case isInt && i < 0:
+			env.A = Int(-i)
+		case isInt && i >= 0:
+			env.A = Int(i)
+		default:
+			env.A = Float(math.Abs(f))
+		}
+	})
 	AddGlobalValue("str", func(env *Env) {
 		switch v := env.Get(0); v.Type() {
 		case VString:
@@ -366,7 +386,7 @@ func init() {
 		"clock('nano'|'micro'|'milli') => int", "\t(nano|micro|milli)seconds since startup",
 		"clock() => int", "\tseconds since startup",
 	)
-	AddGlobalValue("exit", func(env *Env) { os.Exit(int(env.InInt(0, 0))) }, "exit(code)")
+	AddGlobalValue("exit", func(env *Env) { os.Exit(int(env.InInt(0, 0))) }, "exit(Code)")
 	AddGlobalValue("char", func(env *Env) {
 		env.A = env.NewString(string(rune(env.In(0, VNumber).Int())))
 	}, "char(number) => string")
@@ -374,20 +394,27 @@ func init() {
 		r, sz := utf8.DecodeRuneInString(env.In(0, VString)._str())
 		env.Return2(Int(int64(r)), Int(int64(sz)))
 	}, "unicode(one_char_string) => char_unicode")
-	AddGlobalValue("charpos", func(env *Env) {
-		index, i := env.InInt(1, 0), 1
-		for s := env.In(0, VString)._str(); ; {
+	AddGlobalValue("chars", func(env *Env) {
+		var r []Value
+		var max = env.InInt(1, 0)
+		for s := env.In(0, VString)._str(); len(s) > 0; {
 			_, sz := utf8.DecodeRuneInString(s)
 			if sz == 0 {
-				return
-			}
-			if index--; index <= 0 {
 				break
 			}
-			s, i = s[sz:], i+sz
+			r = append(r, String(s[:sz]))
+			if max > 0 && len(r) == int(max) {
+				break
+			}
+			s = s[sz:]
 		}
-		env.A = Int(int64(i))
-	}, "charpos(string, index) => int", "\tconvert char-based index to byte-based index")
+		env.Return(r...)
+	}, "chars(string) => char1, char2, ...",
+		"chars(string, max) => char1, char2, ..., char_max",
+		"\tbreak a string into (at most 'max') chars, e.g.:",
+		"\tchars('a中c') => 'a', '中', 'c'",
+		"\tchars('a中c', 1) => 'a'",
+	)
 	AddGlobalValue("match", func(env *Env) {
 		rx, err := regexp.Compile(env.In(1, VString)._str())
 		if err != nil {
@@ -395,19 +422,14 @@ func init() {
 			return
 		}
 		m := rx.FindAllStringSubmatch(env.Get(0).String(), int(env.InInt(2, -1)))
-		var mm []string
+		mm := []Value{Int(int64(len(m)))}
 		for _, m := range m {
 			for _, m := range m {
-				mm = append(mm, m)
+				mm = append(mm, String(m))
 			}
 		}
-		if len(mm) > 0 {
-			env.A = _str(mm[0])
-			for i := 1; i < len(mm); i++ {
-				env.V = append(env.V, _str(mm[i]))
-			}
-		}
-	}, "match(string, regex) => match1, match2, ...")
+		env.Return(mm...)
+	}, "match(string, regex) => n_or_err, match1, match2, ..., matchn")
 	AddGlobalValue("startswith", func(env *Env) {
 		env.A = Bool(strings.HasPrefix(env.In(0, VString)._str(), env.In(1, VString)._str()))
 	}, "startswith(text, prefix) => bool")
@@ -416,25 +438,25 @@ func init() {
 	}, "endswith(text, suffix) => bool")
 	AddGlobalValue("stricmp", func(env *Env) {
 		env.A = Bool(strings.EqualFold(env.In(0, VString)._str(), env.In(1, VString)._str()))
-	}, "stricmp(text1, text2) => bool")
+	}, "stricmp(text1, text2) => bool", "\tcompare two strings case insensitively")
 	AddGlobalValue("trim", func(env *Env) {
-		switch a, cutset := env.In(0, VString)._str(), env.InStr(1, " "); env.InStr(2, "") {
+		switch a, cutset := env.In(0, VString)._str(), env.InStr(1, " \n\t\r"); env.InStr(2, "") {
 		case "left", "l":
-			env.A = _str(strings.TrimLeft(a, cutset))
+			env.A = String(strings.TrimLeft(a, cutset))
 		case "right", "r":
-			env.A = _str(strings.TrimRight(a, cutset))
+			env.A = String(strings.TrimRight(a, cutset))
 		case "prefix", "start":
-			env.A = _str(strings.TrimPrefix(a, cutset))
+			env.A = String(strings.TrimPrefix(a, cutset))
 		case "suffix", "end":
-			env.A = _str(strings.TrimSuffix(a, cutset))
+			env.A = String(strings.TrimSuffix(a, cutset))
 		default:
-			env.A = _str(strings.Trim(a, cutset))
+			env.A = String(strings.Trim(a, cutset))
 		}
 	},
-		"trim(text) => string", "\ttrim spaces",
-		"trim(text, cutset) => string", "\ttrim chars inside 'cutset'",
-		"trim(text, cutset, 'left'|'right') => string", "\ttrim right/left chars inside 'cutset'",
-		"trim(text, pattern, 'suffix'|'prefix') => string", "\ttrim prefix/suffix",
+		"$f(text) => string", "\ttrim spaces",
+		"$f(text, cutset) => string", "\ttrim chars inside 'cutset'",
+		"$f(text, cutset, 'left'|'right') => string", "\ttrim right/left chars inside 'cutset'",
+		"$f(text, pattern, 'suffix'|'prefix') => string", "\ttrim prefix/suffix",
 	)
 	AddGlobalValue("replace", func(env *Env) {
 		a := env.In(0, VString)._str()
@@ -464,7 +486,7 @@ func init() {
 		x := strings.Split(env.In(0, VString)._str(), env.In(1, VString)._str())
 		v := make([]Value, len(x))
 		for i := range x {
-			v[i] = _str(x[i])
+			v[i] = String(x[i])
 		}
 		env.Return(v...)
 	}, "split(text, sep) => part1, part2, ...")
@@ -492,16 +514,19 @@ func init() {
 		env.A = Bool(ok)
 	}, "iserror(value)", "\ttest whether value is an error")
 	AddGlobalValue("json", func(env *Env) {
+		env.A = env.NewString(env.Get(0).JSONString())
+	}, "json(v) => json_string")
+	AddGlobalValue("json_get", func(env *Env) {
 		cv := func(r gjson.Result) Value {
 			switch r.Type {
 			case gjson.String:
-				return _str(r.Str)
+				return String(r.Str)
 			case gjson.Number:
 				return Float(r.Float())
 			case gjson.True, gjson.False:
 				return Bool(r.Bool())
 			}
-			return Value{}
+			return String(r.Raw)
 		}
 		j := strings.TrimSpace(env.In(0, VString)._str())
 		result := gjson.Get(j, env.In(1, VString)._str())
@@ -512,42 +537,38 @@ func init() {
 			}
 		}
 
-		switch result.Type {
-		case gjson.String, gjson.Number, gjson.True, gjson.False:
-			env.A = cv(result)
-		default:
-			if result.IsArray() {
-				a := result.Array()
-				if len(a) > 0 {
-					tmp := make([]Value, len(a))
-					for i := range a {
-						switch a[i].Type {
-						case gjson.String, gjson.False, gjson.Number, gjson.True:
-							tmp[i] = cv(a[i])
-						default:
-							tmp[i] = _str(a[i].Raw)
-						}
-					}
-					env.Return2(Int(int64(len(a))), tmp...)
-				}
-			} else if result.IsObject() {
-				env.A = _str(result.Raw)
+		env.A = cv(result)
+		if result.IsArray() {
+			a := result.Array()
+			tmp := make([]Value, len(a))
+			for i := range a {
+				tmp[i] = cv(a[i])
 			}
+			env.Return2(Int(int64(len(a))), tmp...)
 		}
 	},
-		"json(json_string, selector) => true|false|number|string",
-		"json(json_string, selector) => n, ...array",
-		"json(json_string, selector) => object_string",
-		"json(json_string, selector, expected_type) => value",
+		"$f(json_string, selector) => true|false|number|string",
+		"$f(json_string, selector) => n, ...array",
+		"$f(json_string, selector) => object_string",
+		"$f(json_string, selector, expected_type) => value",
 	)
-	AddGlobalValue("jsonunwrap", func(env *Env) {
-		x := env.In(0, VString)._str()
-		env.A = Interface(jsonQuotedString([]byte(x)))
-	},
-		"jsonunwrap(json_string) => unwrapped_json_value",
-		"\texample: local a = { a = 1 }",
-		`	{ b = a } will yield: '{"b":"{\"a\":1}"}'`,
-		`	{ b = jsonunwrap(a) } will yield: b == '{"b":{"a":1}}'`)
+	AddGlobalValue("dict", func(env *Env) {
+		if env.Size() > 0 {
+			env.checkRemainStackSize(env.Size())
+			env.A = _interface(env.CopyStack())
+		} else {
+			env.A = env.A
+		}
+	}, "dict(a1, a2, ..., an) => []Value{ a1, ..., an }",
+		"dict(k1 = v1, ..., kn = vn) => map[string]Value{ k1: v1, ..., kn: vn }")
+	AddGlobalValue("iter", func(env *Env) {
+		iter := reflect.ValueOf(env.Get(0).Interface()).MapRange()
+		env.A = Interface(iter)
+	}, "iter(map[string]Value) => map_iterator",
+		"\texample:",
+		"\twhile map_iter.next() do",
+		"\t\tprintln(map_iter.key(), map_iter.value())",
+		"\tend")
 }
 
 func mathMinMax(env *Env, max bool) {

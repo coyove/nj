@@ -55,7 +55,7 @@ function Index(s, substr)
     end
     h = bitand(h, 0xffffffff)
 
-    if (h == hashss and s[1,n] == substr) then
+    if (h == hashss and s[1:n] == substr) then
        return 1
     end
 
@@ -66,7 +66,7 @@ function Index(s, substr)
 	h -= pow * s[i-n]
 	h = bitand(h, 0xffffffff)
 	i += 1
-	if (h == hashss and s[i-n,i-1] == substr) then
+	if (h == hashss and s[i-n:i-1] == substr) then
 	   return i - n 
 	end
     end

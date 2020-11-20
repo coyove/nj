@@ -2,7 +2,6 @@ package script
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -27,11 +26,11 @@ func (e *ExecError) Error() string {
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
 		src := uint32(0)
-		for i := 0; i < len(r.cls.code.Pos); {
+		for i := 0; i < len(r.cls.Code.Pos); {
 			var opx uint32 = math.MaxUint32
-			ii, op, line := r.cls.code.Pos.read(i)
-			if ii < len(r.cls.code.Pos)-1 {
-				_, opx, _ = r.cls.code.Pos.read(ii)
+			ii, op, line := r.cls.Code.Pos.read(i)
+			if ii < len(r.cls.Code.Pos)-1 {
+				_, opx, _ = r.cls.Code.Pos.read(ii)
 			}
 			if r.cursor >= op && r.cursor < opx {
 				src = line
@@ -44,7 +43,7 @@ func (e *ExecError) Error() string {
 			i = ii
 		}
 		// the recorded cursor was advanced by 1 already
-		msg.WriteString(fmt.Sprintf("%s at line %d (cursor: %d)\n", r.cls.name, src, r.cursor-1))
+		msg.WriteString(fmt.Sprintf("%s at line %d (cursor: %d)\n", r.cls.Name, src, r.cursor-1))
 	}
 	msg.WriteString("root panic:\n")
 	msg.WriteString(fmt.Sprintf("%v\n", e.r))
@@ -95,12 +94,12 @@ func returnVararg(env *Env, a Value, b []Value) (Value, []Value) {
 	return b2[0], b2[1:]
 }
 
-// execCursorLoop executes 'K' under 'Env' from the given start 'cursor'
-func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Value) {
+// InternalExecCursorLoop executes 'K' under 'Env' from the given start 'cursor'
+func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Value) {
 	var stackEnv = env
 	var retStack []stacktrace
 
-	stackEnv.stackOffset = uint32(len(*env.stack))
+	stackEnv.StackOffset = uint32(len(*env.stack))
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -131,19 +130,24 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			}
 		}
 
-		v := K.code.Code[cursor]
+		v := K.Code.Code[cursor]
 		cursor++
 		bop, opa, opb := splitInst(v)
 
 		switch bop {
 		case OpSet:
 			env._set(opa, env._get(opb))
-		case OpPushV:
-			// if opb != 0 {
-			// 	env.V = make([]Value, 0, opb)
+			// if b.Type() == VString {
+			// 	b.String()
 			// }
+		case OpPushV:
 			env.V = append(env.V, env._get(opa))
 		case OpPopVClear:
+			env.V = nil
+		case OpMergeAV:
+			if len(env.V) > 0 {
+				env.A = _unpackedStack(append([]Value{env.A}, env.V...))
+			}
 			env.V = nil
 		case OpPopVAll:
 			if opa == 1 { // popv-all-with-a, e.g.: local ... = foo()
@@ -167,26 +171,6 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 				env.A = Float(vaf + vbf)
 			}
 			env._set(opa, env.A)
-		case OpJSON:
-			var buf []byte
-			switch opa {
-			case 0:
-				buf, _ = json.Marshal(stackEnv.StackInterface())
-			case 1:
-				a := make(map[string]interface{}, stackEnv.Size()/2)
-				for i := 0; i < stackEnv.Size(); i += 2 {
-					if k := stackEnv.Stack()[i]; !k.IsNil() {
-						a[k.String()] = stackEnv.Get(i + 1).Interface()
-					}
-				}
-				buf, _ = json.Marshal(a)
-			}
-			if opb == 0 {
-				env.A = Interface(jsonQuotedString(buf))
-			} else {
-				env.A = env.NewStringBytes(buf)
-			}
-			stackEnv.Clear()
 		case OpConcat:
 			var x string
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _StrStr {
@@ -264,6 +248,8 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			} else {
 				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
 			}
+		case OpIDiv:
+			env.A = Int(env._get(opa).ExpectMsg(VNumber, "idiv").Int() / env._get(opb).ExpectMsg(VNumber, "idiv").Int())
 		case OpMod:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _NumNum {
 				vaf, vai, vaIsInt := va.Num()
@@ -332,7 +318,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			case VStack:
 				env.A = Int(int64(len(v._unpackedStack().a)))
 			case VFunction:
-				env.A = Float(float64(v.Function().numParams))
+				env.A = Float(float64(v.Function().NumParams))
 			default:
 				env.A = Int(int64(reflectLen(v.Interface())))
 			}
@@ -356,7 +342,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			case VString:
 				s := subject._str()
 				start, end := sliceInRange(start, end, len(s))
-				env.A = _str(s[start:end])
+				env.A = String(s[start:end])
 			case VInterface:
 				env.A = Interface(reflectSlice(subject.Interface(), start, end))
 			default:
@@ -367,7 +353,7 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			case VStack:
 				env.A = a._unpackedStack().Get(env._get(opb).ExpectMsg(VNumber, "load").Int())
 			case VInterface:
-				env.A = reflectLoad(a.Interface(), env._get(opb))
+				env.A, env.V = reflectLoad(a.Interface(), env._get(opb))
 			case VString:
 				if idx, s := env._get(opb).ExpectMsg(VNumber, "load").Int(), a._str(); idx >= 1 && idx <= int64(len(s)) {
 					env.A = Int(int64(s[idx-1]))
@@ -381,42 +367,37 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 			} else {
 				stackEnv.Push(v)
 			}
-			if opa == regA && len(env.V) > 0 {
-				*stackEnv.stack = append(*stackEnv.stack, env.V...)
-				env.V = env.V[:0]
-			}
 			if env.Global.MaxStackSize > 0 && int64(len(*stackEnv.stack)) > env.Global.MaxStackSize {
 				panicf("stack overflow, max: %d", env.Global.MaxStackSize)
 			}
-		case OpYield:
-			env.V = append(env.V, Int(int64(cursor)))
-			env.V = append(env.V, _interface(&Env{V: append([]Value{}, env.Stack()...)}))
-			env.Global.Survey.YieldSize += int64(env.Size())
-			fallthrough
 		case OpRet:
 			v := env._get(opa)
 			if len(retStack) == 0 {
 				v, env.V = returnVararg(&env, v, env.V)
 				return v, env.V
 			}
-			// Return2 upper stack
+			// Return upper stack
 			r := retStack[len(retStack)-1]
 			cursor = r.cursor
 			K = r.cls
-			env.stackOffset = r.stackOffset
+			env.StackOffset = r.stackOffset
 			env.A, env.V = returnVararg(&env, v, env.V)
-			*env.stack = (*env.stack)[:env.stackOffset+uint32(r.cls.stackSize)]
-			stackEnv.stackOffset = uint32(len(*env.stack))
+			*env.stack = (*env.stack)[:env.StackOffset+uint32(r.cls.StackSize)]
+			stackEnv.StackOffset = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
 		case OpLoadFunc:
-			env.A = Function(env.Global.Funcs[opa])
+			env.A = Function(env.Global.Functions[opa])
 		case OpCallMap:
 			cls := env._get(opa).ExpectMsg(VFunction, "callmap").Function()
 			m := make(map[string]Value, stackEnv.Size()/2)
 			for i := 0; i < stackEnv.Size(); i += 2 {
+				a := stackEnv.Stack()[i]
+				if a.IsNil() {
+					continue
+				}
 				var name string
-				if a := stackEnv.Stack()[i]; a.Type() == VNumber && a.Int() < int64(len(cls.params)) {
-					name = cls.params[a.Int()]
+				if a.Type() == VNumber && a.Int() < int64(len(cls.Params)) {
+					name = cls.Params[a.Int()]
 				} else {
 					name = a.String()
 				}
@@ -427,58 +408,59 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 				}
 			}
 			stackEnv.Clear() // TODO: support variadic function?
-			for i := byte(0); i < cls.numParams; i++ {
-				if int(i) < len(cls.params) {
-					stackEnv.Push(m[cls.params[i]])
+			for i := byte(0); i < cls.NumParams; i++ {
+				if int(i) < len(cls.Params) {
+					stackEnv.Push(m[cls.Params[i]])
 				} else {
 					stackEnv.Push(Value{})
 				}
 			}
+			stackEnv.A = Interface(m)
 			fallthrough
 		case OpCall:
 			cls := env._get(opa).ExpectMsg(VFunction, "call").Function()
 
-			if cls.native != nil {
+			if cls.Native != nil {
 				stackEnv.Global = env.Global
-				stackEnv.nativeSource = cls
-				if cls.isDebug {
-					stackEnv.debug = &debugInfo{
+				stackEnv.NativeSource = cls
+				if cls.IsDebug {
+					stackEnv.Debug = &debugInfo{
 						Caller:     K,
 						Cursor:     cursor,
 						Stacktrace: append(retStack, stacktrace{cls: K, cursor: cursor}),
 					}
-					cls.native(&stackEnv)
-					stackEnv.debug = nil
+					cls.Native(&stackEnv)
+					stackEnv.Debug = nil
 				} else {
-					cls.native(&stackEnv)
+					cls.Native(&stackEnv)
 				}
 				env.A, env.V = returnVararg(&env, stackEnv.A, stackEnv.V)
-				stackEnv.nativeSource = nil
+				stackEnv.NativeSource = nil
 				stackEnv.Clear()
 			} else {
-				if cls.isVariadic {
+				if cls.IsVariadic {
 					var varg []Value
-					if stackEnv.Size() > int(cls.numParams) {
-						varg = append([]Value{}, stackEnv.Stack()[cls.numParams:]...)
+					if stackEnv.Size() > int(cls.NumParams) {
+						varg = append([]Value{}, stackEnv.Stack()[cls.NumParams:]...)
 					}
-					stackEnv.growZero(int(cls.stackSize))
-					stackEnv._set(uint16(cls.numParams), _unpackedStack(varg))
+					stackEnv.growZero(int(cls.StackSize))
+					stackEnv._set(uint16(cls.NumParams), _unpackedStack(varg))
 				} else {
-					stackEnv.growZero(int(cls.stackSize))
+					stackEnv.growZero(int(cls.StackSize))
 				}
 
 				last := stacktrace{
 					cls:         K,
 					cursor:      cursor,
-					stackOffset: uint32(env.stackOffset),
+					stackOffset: uint32(env.StackOffset),
 				}
 
 				// Switch 'env' to 'stackEnv' and clear 'stackEnv'
 				cursor = 0
 				K = cls
-				env.stackOffset = stackEnv.stackOffset
+				env.StackOffset = stackEnv.StackOffset
 				env.Global = cls.loadGlobal
-				env.V = env.V[:0]
+				env.A, env.V = stackEnv.A, env.V[:0]
 
 				if opb == 0 {
 					retStack = append(retStack, last)
@@ -488,17 +470,17 @@ func execCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Va
 					panicf("call stack overflow, max: %d", env.Global.MaxCallStackSize)
 				}
 
-				stackEnv.stackOffset = uint32(len(*env.stack))
+				stackEnv.StackOffset = uint32(len(*env.stack))
 			}
 		case OpJmp:
-			cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
+			cursor = uint32(int32(cursor) + int32(v&0xffffff) - 1<<23)
 		case OpIfNot:
-			if cond := env._get(opa); cond.IsFalse() {
-				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
+			if env.A.IsFalse() {
+				cursor = uint32(int32(cursor) + int32(v&0xffffff) - 1<<23)
 			}
 		case OpIf:
-			if cond := env._get(opa); !cond.IsFalse() {
-				cursor = uint32(int32(cursor) + int32(opb) - 1<<12)
+			if !env.A.IsFalse() {
+				cursor = uint32(int32(cursor) + int32(v&0xffffff) - 1<<23)
 			}
 		}
 	}

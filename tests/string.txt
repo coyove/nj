@@ -7,7 +7,7 @@ assert( "abc吱吱吱" == "abc\u5431\u5431\u5431")
 
 assert(1 + "2" == 3)
 
-local a, b, c, d = match("a\"12\" \"2\"3", [["(\d+)"]])
+local _, a, b, c, d = match("a\"12\" \"2\"3", [["(\d+)"]])
 assert(a == [["12"]] and b == "12" and c == [["2"]] and d == "2")
 
 local err = error("err")
@@ -23,14 +23,13 @@ assert("REE" == replace(err.error(), "(e|r)", cb))
 do
 	local c, r, state = 0
 	local function loop123()
-	    yield 1
-	    yield 2
+	    return 1, debug_state()
+	    return 2, debug_state()
 	    return 3
 	end
 
 	function stringcallback()
-	    r, c, ...state = resume(loop123, c, state)
-	    c = c and c or 0
+	    r, state = debug_resume(loop123, state)
 	    return r
 	end
 end
@@ -43,23 +42,23 @@ assert("x" == trim("嘻x嘻", "嘻"))
 assert("嘻x" == trim("嘻x嘻", "嘻", "right"))
 assert("x嘻" == trim("嘻x嘻", "嘻", "left"))
 
-assert(("abc")[1,2] == "ab")
-assert(("abc")[3,3] == "c")
-assert(("abc")[1,0] == "")
-assert(("cde")[unicode("b") - unicode("a"),2] == "cd")
-assert(("efg")[unicode("b") - unicode("a"), unicode("c") - unicode("a")] == "ef")
+assert(("abc")[1:2] == "ab")
+assert(("abc")[3:3] == "c")
+assert(("abc")[1:0] == "")
+assert(("cde")[unicode("b") - unicode("a"):2] == "cd")
+assert(("efg")[unicode("b") - unicode("a"): unicode("c") - unicode("a")] == "ef")
 
 -- json generator
 do
-	local j = {
+	local j = dict(
 	      a = 1,
 	      ["b-2"] = true,
-	      [("c")[1,1]] = True,
-	}
-	assert(j == [[{"a":1,"b-2":1,"c":true}]])
-	j = {1, 2, {[3] = 4}}
-	assert(j == '[1,2,{"3":4}]')
-	print(j)
+	      [("c")[1:1]] = True,
+	)
+	-- assert(j == [[{"a":1,"b-2":1,"c":true}]])
+	-- j = {1, 2, {[3] = 4}}
+	-- assert(j == '[1,2,{"3":4}]')
+	-- print(j)
 end
 
 do

@@ -24,7 +24,6 @@ package parser
 %type<expr> func
 %type<expr> func_stat
 %type<expr> func_params_list
-%type<expr> json_gen
 
 %union {
   token Token
@@ -32,11 +31,11 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TYield TYieldVoid TRepeat TUntil TNot TLabel TGoto
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
-%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&'
+%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' TIDiv
 %token<token> TAddEq TSubEq TMulEq TDivEq TModEq
 %token<token> TSquare TDotDot 
 
@@ -50,7 +49,7 @@ package parser
 %left '>' '<' TGte TLte TEqeq TNeq
 %left TDotDot
 %left '+' '-' '^'
-%left '*' '/' '%' 
+%left '*' '/' '%' TIDiv
 %right UNARY /* not # -(unary) */
 
 %% 
@@ -307,8 +306,6 @@ func_params_list:
         '(' ident_list ')'                { $$ = $2 }
 
 jmp_stat:
-        TYield expr_list                  { $$ = NewComplex(NewSymbol(AYield), $2).SetPos($1.Pos) } |
-        TYieldVoid                        { $$ = NewComplex(NewSymbol(AYield), emptyNode).SetPos($1.Pos) } |
         TBreak                            { $$ = NewComplex(NewSymbol(ABreak)).SetPos($1.Pos) } |
         TGoto TIdent                      { $$ = NewComplex(NewSymbol(AGoto), NewSymbolFromToken($2)).SetPos($1.Pos) } |
         TLabel TIdent TLabel              { $$ = NewComplex(NewSymbol(ALabel), NewSymbolFromToken($2)) } |
@@ -317,7 +314,7 @@ jmp_stat:
             if len($2.Nodes) == 1 {
                 x := $2.Nodes[0]
                 if len(x.Nodes) == 3 && x.Nodes[0].SymbolValue() == ACall { 
-		    x.Nodes[0].strSym = ATailCall
+		            x.Nodes[0].strSym = ATailCall
                 }
             }
             $$ = NewComplex(NewSymbol(AReturn), $2).SetPos($1.Pos) 
@@ -326,7 +323,7 @@ jmp_stat:
 declarator:
         TIdent                            { $$ = NewSymbolFromToken($1) } |
         prefix_expr '[' expr ']'          { $$ = __load($1, $3).SetPos($2.Pos) } |
-        prefix_expr '[' expr ',' expr ']' { $$ = NewComplex(NewSymbol(ASlice), $1, $3, $5).SetPos($2.Pos) } |
+        prefix_expr '[' expr ':' expr ']' { $$ = NewComplex(NewSymbol(ASlice), $1, $3, $5).SetPos($2.Pos) } |
         prefix_expr '.' TIdent            { $$ = __load($1, NewString($3.Str)).SetPos($2.Pos) }
 
 declarator_list:
@@ -340,8 +337,7 @@ ident_list:
 expr:
         TNumber                           { $$ = NewNumberFromString($1.Str) } |
         TString                           { $$ = NewString($1.Str) } |
-	prefix_expr                       { $$ = $1 } |
-	json_gen                          { $$ = $1 } |
+	    prefix_expr                       { $$ = $1 } |
         expr TOr expr                     { $$ = NewComplex(NewSymbol(AOr), $1,$3).SetPos($2.Pos) } |
         expr TAnd expr                    { $$ = NewComplex(NewSymbol(AAnd), $1,$3).SetPos($2.Pos) } |
         expr '>' expr                     { $$ = NewComplex(NewSymbol(ALess), $3,$1).SetPos($2.Pos) } |
@@ -355,6 +351,7 @@ expr:
         expr '-' expr                     { $$ = NewComplex(NewSymbol(ASub), $1,$3).SetPos($2.Pos) } |
         expr '*' expr                     { $$ = NewComplex(NewSymbol(AMul), $1,$3).SetPos($2.Pos) } |
         expr '/' expr                     { $$ = NewComplex(NewSymbol(ADiv), $1,$3).SetPos($2.Pos) } |
+        expr TIDiv expr                   { $$ = NewComplex(NewSymbol(AIDiv), $1,$3).SetPos($2.Pos) } |
         expr '%' expr                     { $$ = NewComplex(NewSymbol(AMod), $1,$3).SetPos($2.Pos) } |
         expr '^' expr                     { $$ = NewComplex(NewSymbol(APow), $1,$3).SetPos($2.Pos) } |
         TNot expr %prec UNARY             { $$ = NewComplex(NewSymbol(ANot), $2).SetPos($1.Pos) } |
@@ -366,10 +363,10 @@ prefix_expr:
         prefix_expr TString               { $$ = __call($1, NewComplex(NewString($2.Str))).SetPos($1.Pos()) } |
         prefix_expr expr_list_paren       { $$ = __call($1, $2).SetPos($1.Pos()) } |
         '(' expr ')'                      { $$ = $2 } | // shift/reduce conflict
-	prefix_expr '(' expr_assign_list ')'                { $$ = __callMap($1, emptyNode, $3).SetPos($1.Pos()) } |
-	prefix_expr '(' expr_assign_list',' ')'             { $$ = __callMap($1, emptyNode, $3).SetPos($1.Pos()) } |
-	prefix_expr '(' expr_list','expr_assign_list ')'    { $$ = __callMap($1, $3, $5).SetPos($1.Pos()) } |
-	prefix_expr '(' expr_list','expr_assign_list',' ')' { $$ = __callMap($1, $3, $5).SetPos($1.Pos()) }
+	    prefix_expr '(' expr_assign_list ')'                { $$ = __callMap($1, emptyNode, $3).SetPos($1.Pos()) } |
+	    prefix_expr '(' expr_assign_list',' ')'             { $$ = __callMap($1, emptyNode, $3).SetPos($1.Pos()) } |
+	    prefix_expr '(' expr_list','expr_assign_list ')'    { $$ = __callMap($1, $3, $5).SetPos($1.Pos()) } |
+	    prefix_expr '(' expr_list','expr_assign_list',' ')' { $$ = __callMap($1, $3, $5).SetPos($1.Pos()) }
 
 expr_list:
         expr                              { $$ = NewComplex($1) } |
@@ -384,12 +381,6 @@ expr_assign_list:
         '[' expr ']' '=' expr                      { $$ = NewComplex($2, $5) } |
         expr_assign_list ',' TIdent '=' expr       { $$ = $1.append(NewString($3.Str)).append($5) } |
         expr_assign_list ',' '[' expr ']' '=' expr { $$ = $1.append($4).append($7) }
-
-json_gen:
-	'{' expr_assign_list     '}'               { $$ = NewComplex(NewSymbol(AJSON), emptyNode, $2).SetPos($1.Pos) } |
-	'{' expr_assign_list ',' '}'               { $$ = NewComplex(NewSymbol(AJSON), emptyNode, $2).SetPos($1.Pos) } |
-	'{' expr_list            '}'               { $$ = NewComplex(NewSymbol(AJSON), $2, emptyNode).SetPos($1.Pos) } |
-	'{' expr_list ','        '}'               { $$ = NewComplex(NewSymbol(AJSON), $2, emptyNode).SetPos($1.Pos) }
 
 %%
 

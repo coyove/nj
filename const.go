@@ -20,6 +20,7 @@ const (
 	OpSub
 	OpMul
 	OpDiv
+	OpIDiv
 	OpInc
 	OpMod
 	OpNot
@@ -37,12 +38,11 @@ const (
 	OpPopV
 	OpPopVAll
 	OpPopVClear
+	OpMergeAV
 	OpCall
 	OpCallMap
 	OpRet
-	OpYield
 	OpLen
-	OpJSON
 )
 
 type valueType byte

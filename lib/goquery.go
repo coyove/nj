@@ -37,8 +37,12 @@ func (r qResult) Find(q string) qResult {
 	return qResult{r.sel.Find(q)}
 }
 
-func (r qResult) Attr(name string) (string, bool) {
-	return r.sel.Attr(name)
+func (r qResult) Attr(name string) script.Value {
+	text, ok := r.sel.Attr(name)
+	if !ok {
+		return script.Value{}
+	}
+	return script.Interface(text)
 }
 
 func (r qResult) Text() string {

@@ -12,13 +12,13 @@ print(format("version {}, total global values: {}\\n", VERSION, n))
 for i=1,#g do
     local name = str(g[i])
     if #name > 32 then
-        name = name[1,16] .. '...' .. name[#name-16,#name]
+        name = name[1:16] .. '...' .. name[#name-16:#name]
     end
 
     title = i .. ": " .. name
-    print((",----------------------------------------------------------------")[1,#title+3], '.')
+    print((",----------------------------------------------------------------")[1:#title+3], '.')
     print("| ", title, " |")
-    print(("'----------------------------------------------------------------")[1,#title+3], "'")
+    print(("'----------------------------------------------------------------")[1:#title+3], "'")
     print(type(g[i]) == "function" and doc(g[i]) or "\\tN/A")
     print()
 end
@@ -46,56 +46,51 @@ end
 /* = = = = = = = = */
       "yield": `function yieldable(n)
     while n > 0 do
-        yield n
+        return n, debug_state()
         n -= 1
     end
 end
 
-local c, ...state = yieldable(10)
+local c, state = yieldable(10)
 while c do
     print(c)
-    c, ...state = resume(yieldable, state)
+    c, state = debug_resume(yieldable, state)
 end
 `,
 /* = = = = = = = = */
       "time": `println("Unix timestamp:", time())
 println("Go time.Time:", Go_time().Format("2006-01-02 15:04:05"))
+println(strtime("Y-m-d H:i:s", Go_time()))
 println(doc(Go_time))
 `,
 /* = = = = = = = = */
-      "json": `local j = { a=1, b=2, array={ 1, 2, { inner="inner" } } }
---[[
-There is no table type, code above will actually generate the
-correspondent JSON STRING: '{"a":1,"b":2,"array":[1,2,{"inner":"inner"}]}'
-]]
-
-assert(json(j, "a") == 1)
-assert(json(j, "b") == 2)
-local n, a, b, c = json(j, "array")
-assert(n == 3 and a == 1 and b == 2 and json(c, "inner") == "inner")
-assert(json(j, "array.2.inner")=="inner")
-println(json(j, "array"))
+      "json": `local j = json(dict( a=1, b=2, array=dict( 1, 2, dict( inner="inner" ))))
+assert(json_get(j, "a") == 1)
+assert(json_get(j, "b") == 2)
+local n, a, b, c = json_get(j, "array")
+assert(n == 3 and a == 1 and b == 2 and json_get(c, "inner") == "inner")
+assert(json_get(j, "array.2.inner")=="inner")
+println(json_get(j, "array"))
 
 --[[
 json() uses https://github.com/tidwall/gjson
 Learn its syntax at https://github.com/tidwall/gjson/blob/master/SYNTAX.md
 ]]
 
--- Create JSON string from variables
+-- Create a true array from variables
 local _, ...arr = array(1, 2, 3)
-print({arr})
+print(dict(arr))
 
 --[[
-JSON dynamic object creation is a bit harder to write,
-first we need to trick the parser with syntax "{ [nil] = something }" so it knows this is an object,
-then we layout the key-value pairs sequentially, so it looks like:
-{ [nil] = key1, value1, key2, value2, ... }
+dynamic object (dict) creation is a bit harder to write,
+first we need to trick the parser with syntax "foo( [nil] = something )" so it knows we are feeding key-value pairs,
+then we layout pairs sequentially, so it looks like: { [nil] = key1, value1, key2, value2, ... }
 however the above sequence is misaligned: Nth key becomes Nth value and Nth value becomes (N+1)th key
 so we have to prepend the sequence with a dummy value to correct the positions:
 { [nil] = dummy, key1, value1, key2, value2, ... }
 ]]
 local n, ...kvpairs = array("key1", "value1", "key2", "value2")
-println({ [nil] = array(kvpairs, "key3", "value3") })
+println(dict( [nil] = array(kvpairs, "key3", "value3") ))
 
 `,
 /* = = = = = = = = */
@@ -117,18 +112,6 @@ function bar() return "world", "hello" end
 
 local ...a = random() > 0.5 and foo() or bar()
 println(a)
-
--- Return variadic results
-function bar() return 1, 2, 3 end
-
-function foo() return bar() end
-println(foo()) -- 1, 2, 3
-
-function foo() return 0, bar() end
-println(foo()) -- WRONG
-
-function foo() return bar(), 4 end
-println(foo()) -- WRONG, but working (by chance)
 `,
 /* = = = = = = = = */
       "http": `local code, headers, body = http(
@@ -136,17 +119,17 @@ println(foo()) -- WRONG, but working (by chance)
     url="http://httpbin.org/post",
     query="k1=v1",
     query="k2=v2",
-    json={
+    json=dict(
         name="Smith",
-    },
+    ),
 )
 println("code:", code)
 println("headers:", headers)
 
 if body then
-    local data = json(body, "data")
-    println("name:", json(data, "name"))
-    println("args:", json(body, "args"))
+    local data = json_get(body, "data")
+    println("name:", json_get(data, "name"))
+    println("args:", json_get(body, "args"))
 end`,
 
       "goquery": `local code, _, body = http("GET", "https://example.com")
@@ -157,7 +140,22 @@ end
 local el = goquery(body, "div").nodes()
 for i = 1,#el do
     println(el[i].text())
-end`,
+end
+
+local code, _, body = http(url="https://bokete.jp/boke/recent")
+if iserror(code) then
+    return "request failed: " .. code.error()
+end
+
+local list = goquery(body, ".boke-list")
+list = list.find(".boke")
+local boke = list.nodes()
+
+for i=1,#boke do
+    println("#" .. i, trim(boke[i].find('.photo-content img').attr('src'), "//", "prefix"))
+    println("  ", trim(boke[i].find('.boke-text').text()))
+end
+`,
       /* = = = = = = = = */
       "array-tricks": `--[[
 There is no support for table, array, no anything similar,
@@ -176,7 +174,7 @@ println("now there are", n, "elements:", arr)
 function remove(el, ...arr)
     for i=1,#arr do
         if arr[i] == el then
-            return arr[1,i-1], arr[i+1,#arr]
+            return arr[1:i-1], arr[i+1:#arr]
         end
     end
     return arr
@@ -222,10 +220,10 @@ end
 zip([nil] = array(kv))`,
 /* = = = = = = = = */
       "countdown": `function countdown(n)
-    yield true
+    return true, debug_state()
     while n do
        	n -= 1
-        yield n
+        return n, debug_state()
     end
 end
 
@@ -236,7 +234,7 @@ initstate1, initstate2 = state1, state2
 function run(ss)
     local result
     local ...s = __g(ss)
-    result, ...s = resume(countdown, s)
+    result, ...s = debug_resume(countdown, s)
     if s and #s then 
         __g(ss, s) 
         return result, true
@@ -293,6 +291,13 @@ end
 
 return foo(1,2)
 `,
+/* = = = = = = = = */
+      "dict": `local m = dict(a=1, b=2)
+local mi = iter(m)
+while mi.next() do
+    println(mi.key(), mi.value())
+    assert(unicode("a") - 1 + mi.value(), unicode(mi.key()))
+end`,
 /* = = = = = = = = */
       "eof": ""
   };
