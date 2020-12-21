@@ -83,6 +83,10 @@ func init() {
 		copystack := append([]Value{}, (*env.stack)[start:env.StackOffset]...)
 		env.A = Interface(&DebugState{c, copystack})
 	}, "debug_state() => state", "\tget current function's executing state")
+	AddGlobalValue("debug_isstate", func(env *Env) {
+		_, ok := env.Get(0).Interface().(*DebugState)
+		env.A = Bool(ok)
+	}, "debug_isstate(v) => v_is_state")
 	AddGlobalValue("debug_resume", func(env *Env) {
 		var (
 			f      = env.In(0, VFunction).Function()
@@ -561,14 +565,34 @@ func init() {
 		}
 	}, "dict(a1, a2, ..., an) => []Value{ a1, ..., an }",
 		"dict(k1 = v1, ..., kn = vn) => map[string]Value{ k1: v1, ..., kn: vn }")
-	AddGlobalValue("iter", func(env *Env) {
+	AddGlobalValue("pair", func(env *Env) {
 		iter := reflect.ValueOf(env.Get(0).Interface()).MapRange()
-		env.A = Interface(iter)
-	}, "iter(map[string]Value) => map_iterator",
+		env.A = Native("iter"+strconv.FormatInt(time.Now().UnixNano(), 10), func(env *Env) {
+			if iter.Next() {
+				env.Return2(Interface(iter.Key()), Interface(iter.Value()))
+			} else {
+				env.A = Value{}
+			}
+		})
+	}, "pair(map[string]Value) => map_iterator",
 		"\texample:",
-		"\twhile map_iter.next() do",
-		"\t\tprintln(map_iter.key(), map_iter.value())",
-		"\tend")
+		"\tfor k, v in pair(m)() do")
+	AddGlobalValue("range", func(env *Env) {
+		env.A = Value{}
+		if env.Size() <= 1 {
+			return
+		}
+		if env.Get(0).IsNil() {
+			env.Return(Int(1), env.Get(1))
+		} else {
+			i := env.Get(0).ExpectMsg(VNumber, "range").Int()
+			if int(i) < env.Size()-1 {
+				env.Return(Int(i+1), env.Get(int(i+1)))
+			}
+		}
+	}, "range => iterator",
+		"\texample:",
+		"\tfor i, v in range() do")
 }
 
 func mathMinMax(env *Env, max bool) {

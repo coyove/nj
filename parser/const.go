@@ -175,6 +175,72 @@ func __findTailCall(stats []Node) {
 	}
 }
 
+func __local(dest, src []Node, pos Position) Node {
+	m, n := len(dest), len(src)
+	for i, count := 0, m-n; i < count; i++ {
+		if i == count-1 {
+			src = append(src, __chain(popvNode, popvClearNode))
+		} else {
+			src = append(src, popvNode)
+		}
+	}
+	res := __chain()
+	for i, v := range dest {
+		if v.IsSymbolDotDotDot() {
+			res = res.append(__set(v, __popvAll(i, src[i])).SetPos(pos))
+		} else {
+			res = res.append(__set(v, src[i]).SetPos(pos))
+		}
+	}
+	if m == 1 && n == 1 && src[0].isCallStat() {
+		// Single call statement with single assignment, clear env.V to avoid side effects
+		res = res.append(popvClearNode)
+	}
+	return res
+}
+
+func __moveMulti(nodes, src []Node, pos Position) Node {
+	m, n := len(nodes), len(src)
+	for i, count := 0, m-n; i < count; i++ {
+		if i == count-1 {
+			src = append(src, __chain(popvNode, popvClearNode))
+		} else {
+			src = append(src, popvNode)
+		}
+	}
+
+	res := __chain()
+	if head := nodes[0]; len(nodes) == 1 && !nodes[0].IsSymbolDotDotDot() {
+		res = head.moveLoadStore(__move, src[0]).SetPos(pos)
+	} else {
+		// a0, ..., an = b0, ..., bn
+		names, retaddr := []Node{}, NewComplex(NewSymbol(ARetAddr))
+		for i := range nodes {
+			names = append(names, randomVarname())
+			retaddr = retaddr.append(names[i])
+			if nodes[i].IsSymbolDotDotDot() {
+				res = res.append(__set(names[i], __popvAll(i, src[i])).SetPos(pos))
+			} else {
+				res = res.append(__set(names[i], src[i]).SetPos(pos))
+			}
+		}
+		for i, v := range nodes {
+			res = res.append(v.moveLoadStore(__move, names[i]).SetPos(pos))
+		}
+		res = res.append(retaddr)
+	}
+	if m == 1 && n == 1 && src[0].isCallStat() {
+		// Single call statement with single assignment, clear env.V to avoid side effects
+		res = __chain(res, popvClearNode)
+	}
+	return res
+}
+
 func randomVarname() Node {
 	return NewSymbol("v" + strconv.FormatInt(rand.Int63(), 10))
+}
+
+func randomDDDVarname() (Node, Node) {
+	x := "v" + strconv.FormatInt(rand.Int63(), 10)
+	return NewSymbol("..." + x), NewSymbol(x)
 }

@@ -122,6 +122,10 @@ func (n Node) IsNegativeNumber() bool {
 	return n.IntValue() < 0
 }
 
+func (n Node) DuplicateNodes() []Node {
+	return append([]Node{}, n.Nodes...)
+}
+
 func NewComplex(args ...Node) Node {
 	if len(args) == 3 {
 		op := args[0].SymbolValue()
@@ -259,8 +263,8 @@ func (n Node) String() string {
 	}
 }
 
-func (n Node) append(n2 Node) Node {
-	n.Nodes = append(n.Nodes, n2)
+func (n Node) append(n2 ...Node) Node {
+	n.Nodes = append(n.Nodes, n2...)
 	return n
 }
 
@@ -284,7 +288,7 @@ func (n Node) append(n2 Node) Node {
 // }
 
 func (n Node) isCallStat() bool {
-	return len(n.Nodes) > 0 && n.Nodes[0].SymbolValue() == ACall
+	return len(n.Nodes) > 0 && (n.Nodes[0].SymbolValue() == ACall || n.Nodes[0].SymbolValue() == ACallMap)
 }
 
 func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {

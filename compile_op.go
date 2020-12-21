@@ -15,15 +15,16 @@ func (table *symtable) compileChain(chain parser.Node) uint16 {
 		table.addMaskedSymTable()
 	}
 
+	yx := regA
 	for _, a := range chain.Nodes {
-		table.compileNode(a)
+		yx = table.compileNode(a)
 	}
 
 	if doblock {
 		table.removeMaskedSymTable()
 	}
 
-	return regA
+	return yx
 }
 
 func (table *symtable) compileSetMove(atoms []parser.Node) uint16 {

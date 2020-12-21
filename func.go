@@ -261,6 +261,13 @@ func (p *Program) ResetSurvey() {
 	p.Survey = p2.Survey
 }
 
+func (p *Program) looseStringSizeLimit() int64 {
+	if p.MaxStackSize == 0 {
+		return p.MaxStringSize
+	}
+	return p.MaxStringSize - p.MaxStringSize*int64(len(*p.Stack))/p.MaxStackSize
+}
+
 func fixDocString(in, name, arg string) string {
 	in = strings.Replace(in, "$a", arg, -1)
 	in = strings.Replace(in, "$f", name, -1)

@@ -50,6 +50,7 @@ func main() {
 		lib.HostWhitelist["httpbin.org"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
 		lib.HostWhitelist["example.com"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
 		lib.HostWhitelist["bokete.jp"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
+		lib.HostWhitelist["cn.bing.com"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
 
 		http.Handle("/", http.FileServer(http.Dir(*apiServerStatic)))
 		http.HandleFunc("/share", func(w http.ResponseWriter, r *http.Request) {

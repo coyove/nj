@@ -98,7 +98,9 @@ func (table *symtable) returnAddress(v uint16) {
 		return
 	}
 	if v>>12 == 1 {
-		panic("DEBUG")
+		// collapse() may encounter constants, and return them if any
+		// so here we silently drop these constant addresses
+		return
 	}
 	if _, existed := table.reusableTmps[v]; existed {
 		table.reusableTmps[v] = true
@@ -202,7 +204,7 @@ func (table *symtable) removeMaskedSymTable() {
 
 func (table *symtable) loadK(v interface{}) uint16 {
 	if table.global != nil {
-		return 1<<12 | table.global.loadK(v)
+		return table.global.loadK(v)
 	}
 
 	if i, ok := table.constMap[v]; ok {
@@ -213,7 +215,7 @@ func (table *symtable) loadK(v interface{}) uint16 {
 		panicf("DEBUG: collect consts %#v", v)
 	}
 
-	idx := table.borrowAddress()
+	idx := 1<<12 | table.borrowAddress()
 	table.constMap[v] = idx
 	return idx
 }

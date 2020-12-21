@@ -112,6 +112,13 @@ function bar() return "world", "hello" end
 
 local ...a = random() > 0.5 and foo() or bar()
 println(a)
+
+function foo(a)
+    return 1 + a, 2 + a, 3 + a
+end
+println(foo(0), foo(3)) -- println(1, 2, 3, 4, 5, 6)
+println( ( foo(0) ), foo(3) ) -- println(1, 4, 5, 6)
+println( ( foo(0) ), ( foo(3) ) ) -- println(1, 4)
 `,
 /* = = = = = = = = */
       "http": `local code, headers, body = http(
@@ -293,11 +300,92 @@ return foo(1,2)
 `,
 /* = = = = = = = = */
       "dict": `local m = dict(a=1, b=2)
-local mi = iter(m)
-while mi.next() do
-    println(mi.key(), mi.value())
-    assert(unicode("a") - 1 + mi.value(), unicode(mi.key()))
+for k, v in pair(m)() do
+    assert(unicode("a") - 1 + v, unicode(k))
 end`,
+/* = = = = = = = = */
+      "bing.com": `local _, _, body = http(url="https://cn.bing.com/HPImageArchive.aspx", queries=dict(format='js', n=10))
+local n, ...items = json_get(body, "images")
+
+for i =1,n do
+    println("https://cn.bing.com/" .. json_get(items[i], "url"))
+end`,
+/* = = = = = = = = */
+      "iterator": `function range(from, to, step, __cookie)
+    step = step or 1
+    if __cookie == nil then
+        -- init
+        return range, from - step, to, step, true
+    end
+    if step > 0 then
+        if from + step <= to then
+            return from + step, to, step, true
+        end
+    else
+        if from + step >= to then
+          	return from + step, to, step, true
+        end
+    end
+end
+
+-- https://www.lua.org/pil/7.2.html
+
+for i in range(1, 10) do
+    write(stdout(), i, " ")
+end
+println()
+
+for i in range(from=10, to=1, step=-1) do
+    write(stdout(), i, " ")
+end
+println()
+
+function countdown(n)
+    while n > 0 do
+        return n, debug_state()
+        n -= 1
+    end
+end
+
+function exec(x, f, ...args)
+    if x == nil then 
+        local ...r = f(args) 
+        return r[#r], r[1:#r-1]
+    end
+    local ...r = debug_resume(f, x)
+    return r[#r], r[1:#r-1]
+end
+
+for _, i in exec(countdown,10) do
+    write(stdout(), i, " ")
+end
+println()
+
+function range2(x, ...)
+    if #... == 0 then return end
+    if x == nil then
+        return 1, ...[1]
+    end
+    if #... == x then return end
+    return x + 1, ...[x + 1]
+end
+
+local _, ...a = array(10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
+for i, e in range2(a) do
+    write(stdout(), e, " ")
+end
+println()
+
+local idx = 11
+function selfiter()
+    idx -= 1
+    return idx or nil
+end
+
+for e in selfiter do
+    write(stdout(), e, " ")
+end
+println()`,
 /* = = = = = = = = */
       "eof": ""
   };

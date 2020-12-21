@@ -172,25 +172,23 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 			}
 			env._set(opa, env.A)
 		case OpConcat:
-			var x string
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _StrStr {
-				x = va._str() + vb._str()
+				env.A = concat(env.Global, va._str(), vb._str())
 			} else if va.Type() == VString && vb.Type() == VNumber {
 				if vbf, vbi, vbIsInt := vb.Num(); vbIsInt {
-					x = va._str() + strconv.FormatInt(vbi, 10)
+					env.A = concat(env.Global, va._str(), strconv.FormatInt(vbi, 10))
 				} else {
-					x = va._str() + strconv.FormatFloat(vbf, 'f', 0, 64)
+					env.A = concat(env.Global, va._str(), strconv.FormatFloat(vbf, 'f', 0, 64))
 				}
 			} else if vb.Type() == VString && va.Type() == VNumber {
 				if vaf, vai, vaIsInt := va.Num(); vaIsInt {
-					x = strconv.FormatInt(vai, 10) + vb._str()
+					env.A = concat(env.Global, strconv.FormatInt(vai, 10), vb._str())
 				} else {
-					x = strconv.FormatFloat(vaf, 'f', 0, 64) + vb._str()
+					env.A = concat(env.Global, strconv.FormatFloat(vaf, 'f', 0, 64), vb._str())
 				}
 			} else {
 				va, vb = va.Expect(VString), vb.Expect(VString)
 			}
-			env.A = env.NewString(x)
 		case OpAdd:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _NumNum {
 				vaf, vai, vaIsInt := va.Num()
@@ -363,12 +361,12 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 			}
 		case OpPush:
 			if v := env._get(opa); v.Type() == VStack {
-				*stackEnv.stack = append(*stackEnv.stack, v._unpackedStack().a...)
+				a := v._unpackedStack().a
+				env.checkRemainStackSize(len(a))
+				*stackEnv.stack = append(*stackEnv.stack, a...)
 			} else {
+				env.checkRemainStackSize(1)
 				stackEnv.Push(v)
-			}
-			if env.Global.MaxStackSize > 0 && int64(len(*stackEnv.stack)) > env.Global.MaxStackSize {
-				panicf("stack overflow, max: %d", env.Global.MaxStackSize)
 			}
 		case OpRet:
 			v := env._get(opa)
@@ -484,4 +482,15 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 			}
 		}
 	}
+}
+
+func concat(p *Program, a, b string) Value {
+	x := int64(len(a) + len(b))
+	if p.MaxStringSize > 0 {
+		if x > p.looseStringSizeLimit() {
+			panicf("concat string overflow, require %d out of %d", x, p.looseStringSizeLimit())
+		}
+	}
+	p.Survey.StringAlloc += x
+	return String(a + b)
 }

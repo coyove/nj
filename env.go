@@ -60,7 +60,12 @@ func (env *Env) grow(newSize int) {
 
 // Get gets a value from the current stack
 func (env *Env) Get(index int) Value {
-	return env._get(uint16(index) & 0xfff)
+	s := *env.stack
+	index += int(env.StackOffset)
+	if index < len(*env.stack) {
+		return s[index]
+	}
+	return Value{}
 }
 
 // Set sets a value in the current stack
@@ -95,9 +100,6 @@ func (env *Env) _get(yx uint16) (zzz Value) {
 
 	s := *env.stack
 	index += int(env.StackOffset)
-	if index >= len(s) {
-		return Value{}
-	}
 	return s[index]
 }
 
@@ -196,9 +198,9 @@ func (env *Env) String() string {
 
 func (env *Env) NewString(s string) Value {
 	if env.Global.MaxStringSize > 0 {
-		// Loosely control the string size
-		if int64(len(s)) > env.Global.MaxStringSize {
-			panicf("string overflow, max: %d", env.Global.MaxStringSize)
+		max := env.Global.looseStringSizeLimit()
+		if int64(len(s)) > max {
+			panicf("string overflow, require %d out of %d", len(s), max)
 		}
 	}
 	env.Global.Survey.StringAlloc += int64(len(s))
@@ -210,7 +212,7 @@ func (env *Env) NewStringBytes(s []byte) Value {
 }
 
 func (env *Env) checkRemainStackSize(sz int) {
-	if env.Global.MaxStackSize > 0 && float64(sz+len(*env.stack))*1.618 > float64(env.Global.MaxStackSize) {
-		panicf("stack overflow, max: %d", env.Global.MaxStackSize)
+	if env.Global.MaxStackSize > 0 && int64(sz+len(*env.stack)) > env.Global.MaxStackSize {
+		panicf("stack overflow, require %d out of %d", sz, env.Global.MaxStackSize-int64(len(*env.stack)))
 	}
 }
