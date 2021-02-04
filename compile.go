@@ -388,7 +388,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls 
 			if env.Size() > 1 { // store
 				v := env.Get(1)
 				if env.Size() > 2 {
-					v = _unpackedStack(append([]Value{}, env.Stack()[1:]...))
+					v = Array(append([]Value{}, env.Stack()[1:]...))
 				}
 				coreStack.Set(int(shadowTable.mustGetSymbol(env.InStr(0, ""))), v)
 			} else { // load

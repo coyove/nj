@@ -21,7 +21,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const Version int64 = 241
+const Version int64 = 242
 
 var (
 	g   = map[string]Value{}

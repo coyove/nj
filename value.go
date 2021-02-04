@@ -73,8 +73,9 @@ func Int(i int64) Value {
 	return Value{v: uint64(i), p: int64Marker}
 }
 
-func _unpackedStack(m []Value) Value {
-	return Value{v: VStack, p: unsafe.Pointer(&unpacked{a: m})}
+// Array returns an array consists of 'm'
+func Array(m []Value) Value {
+	return Value{v: VArray, p: unsafe.Pointer(&Values{a: m})}
 }
 
 // Function returns a closure value
@@ -110,7 +111,7 @@ func Interface(i interface{}) Value {
 	case []byte:
 		return Bytes(v)
 	case []Value:
-		return _unpackedStack(v)
+		return Array(v)
 	case *Func:
 		return Function(v)
 	case Value:
@@ -174,8 +175,6 @@ func Interface2(i interface{}) (Value, []Value) {
 
 func _interface(i interface{}) Value {
 	return Value{v: VInterface, p: unsafe.Pointer(&i)}
-	x := *(*[2]uintptr)(unsafe.Pointer(&i))
-	return Value{v: uint64(x[0]), p: unsafe.Pointer(x[1])}
 }
 
 // _str cast value to string
@@ -204,17 +203,17 @@ func (v Value) Int() int64 { _, i, _ := v.Num(); return i }
 
 func (v Value) Float() float64 { f, _, _ := v.Num(); return f }
 
-func (v Value) _unpackedStack() *unpacked { return (*unpacked)(v.p) }
+func (v Value) Array() *Values { return (*Values)(v.p) }
 
-func (v Value) Stack() []Value { return v._unpackedStack().a }
+func (v Value) Stack() []Value { return v.Array().a }
 
 func (v Value) _append(v2 Value) Value {
-	if v.Type() == VStack {
-		s := v._unpackedStack()
+	if v.Type() == VArray {
+		s := v.Array()
 		s.a = append(s.a, v2)
-		return _unpackedStack(s.a)
+		return Array(s.a)
 	}
-	return _unpackedStack([]Value{v, v2})
+	return Array([]Value{v, v2})
 }
 
 // Function cast value to function
@@ -231,8 +230,8 @@ func (v Value) Interface() interface{} {
 		return vf
 	case VString:
 		return v._str()
-	case VStack:
-		a := v._unpackedStack().a
+	case VArray:
+		a := v.Array().a
 		x := make([]interface{}, len(a))
 		for i := range a {
 			x[i] = a[i].Interface()
@@ -242,11 +241,6 @@ func (v Value) Interface() interface{} {
 		return v.Function()
 	case VInterface:
 		return *(*interface{})(v.p)
-		var i interface{}
-		x := (*[2]uintptr)(unsafe.Pointer(&i))
-		(*x)[0] = uintptr(v.v)
-		(*x)[1] = uintptr(v.p)
-		return i
 	}
 	return nil
 }
@@ -266,8 +260,8 @@ func (v Value) TypedInterface(t reflect.Type) interface{} {
 		if t.Kind() == reflect.Bool {
 			return !v.IsFalse()
 		}
-	case VStack:
-		a := v._unpackedStack().a
+	case VArray:
+		a := v.Array().a
 		if t.Kind() == reflect.Slice {
 			e := t.Elem()
 			s := reflect.MakeSlice(t, len(a), len(a))
@@ -351,8 +345,8 @@ func (v Value) toString(lv int, j bool) string {
 			return strconv.Quote(v._str())
 		}
 		return v._str()
-	case VStack:
-		t := v._unpackedStack()
+	case VArray:
+		t := v.Array()
 		p := bytes.NewBufferString("[")
 		for _, a := range t.a {
 			p.WriteString(a.toString(lv+1, j))
@@ -379,23 +373,23 @@ func (v Value) toString(lv int, j bool) string {
 	return "nil"
 }
 
-type unpacked struct{ a []Value }
-
-func (t *unpacked) Slice(start int64, end int64) []Value {
-	{
-		start, end := sliceInRange(start, end, len(t.a))
-		return t.a[start:end]
-	}
+type Values struct {
+	a []Value
 }
 
-func (t *unpacked) Put(idx int64, v Value) {
+func (t *Values) Slice(start int64, end int64) []Value {
+	start2, end2 := sliceInRange(start, end, len(t.a))
+	return t.a[start2:end2]
+}
+
+func (t *Values) Put(idx int64, v Value) {
 	idx--
 	if idx < int64(len(t.a)) && idx >= 0 {
 		t.a[idx] = v
 	}
 }
 
-func (t *unpacked) Get(idx int64) (v Value) {
+func (t *Values) Get(idx int64) (v Value) {
 	idx--
 	if idx < int64(len(t.a)) && idx >= 0 {
 		return t.a[idx]

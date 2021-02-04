@@ -51,10 +51,10 @@ func (e *ExecError) Error() string {
 }
 
 func returnVararg(env *Env, a Value, b []Value) (Value, []Value) {
-	flag := a.Type() == VStack
+	flag := a.Type() == VArray
 	if len(b) == 0 {
 		if flag {
-			u := a._unpackedStack().a
+			u := a.Array().a
 			if len(u) == 0 {
 				return Value{}, nil
 			}
@@ -64,7 +64,7 @@ func returnVararg(env *Env, a Value, b []Value) (Value, []Value) {
 	}
 
 	for _, b := range b {
-		flag = flag || b.Type() == VStack
+		flag = flag || b.Type() == VArray
 	}
 
 	if !flag {
@@ -74,14 +74,14 @@ func returnVararg(env *Env, a Value, b []Value) (Value, []Value) {
 	}
 
 	var b2 []Value
-	if a.Type() == VStack {
-		b2 = append(b2, a._unpackedStack().a...)
+	if a.Type() == VArray {
+		b2 = append(b2, a.Array().a...)
 	} else {
 		b2 = append(b2, a)
 	}
 	for _, b := range b {
-		if b.Type() == VStack {
-			b2 = append(b2, b._unpackedStack().a...)
+		if b.Type() == VArray {
+			b2 = append(b2, b.Array().a...)
 		} else {
 			b2 = append(b2, b)
 		}
@@ -146,14 +146,14 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 			env.V = nil
 		case OpMergeAV:
 			if len(env.V) > 0 {
-				env.A = _unpackedStack(append([]Value{env.A}, env.V...))
+				env.A = Array(append([]Value{env.A}, env.V...))
 			}
 			env.V = nil
 		case OpPopVAll:
 			if opa == 1 { // popv-all-with-a, e.g.: local ... = foo()
-				env.A = _unpackedStack(append([]Value{env.A}, env.V...))
+				env.A = Array(append([]Value{env.A}, env.V...))
 			} else { // popv-all, e.g.: local a, ... = foo()
-				env.A = _unpackedStack(env.V)
+				env.A = Array(env.V)
 			}
 			env.V = nil
 		case OpPopV:
@@ -313,8 +313,8 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 			switch v := env._get(opa); v.Type() {
 			case VString:
 				env.A = Float(float64(len(v._str())))
-			case VStack:
-				env.A = Int(int64(len(v._unpackedStack().a)))
+			case VArray:
+				env.A = Int(int64(len(v.Array().a)))
 			case VFunction:
 				env.A = Float(float64(v.Function().NumParams))
 			default:
@@ -323,20 +323,20 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 		case OpStore:
 			subject, v := env._get(opa), env._get(opb)
 			switch subject.Type() {
-			case VStack:
-				subject._unpackedStack().Put(env.A.ExpectMsg(VNumber, "store").Int(), v)
+			case VArray:
+				subject.Array().Put(env.A.ExpectMsg(VNumber, "store").Int(), v)
 			case VInterface:
 				reflectStore(subject.Interface(), env.A, v)
 			default:
-				subject = subject.Expect(VStack)
+				subject = subject.Expect(VArray)
 			}
 			env.A = v
 		case OpSlice:
 			subject := env._get(opa)
 			start, end := env.A.ExpectMsg(VNumber, "slice").Int(), env._get(opb).ExpectMsg(VNumber, "slice").Int()
 			switch subject.Type() {
-			case VStack:
-				env.A = _unpackedStack(subject._unpackedStack().Slice(start, end))
+			case VArray:
+				env.A = Array(subject.Array().Slice(start, end))
 			case VString:
 				s := subject._str()
 				start, end := sliceInRange(start, end, len(s))
@@ -344,12 +344,12 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 			case VInterface:
 				env.A = Interface(reflectSlice(subject.Interface(), start, end))
 			default:
-				subject = subject.Expect(VStack)
+				subject = subject.Expect(VArray)
 			}
 		case OpLoad:
 			switch a := env._get(opa); a.Type() {
-			case VStack:
-				env.A = a._unpackedStack().Get(env._get(opb).ExpectMsg(VNumber, "load").Int())
+			case VArray:
+				env.A = a.Array().Get(env._get(opb).ExpectMsg(VNumber, "load").Int())
 			case VInterface:
 				env.A, env.V = reflectLoad(a.Interface(), env._get(opb))
 			case VString:
@@ -357,11 +357,11 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 					env.A = Int(int64(s[idx-1]))
 				}
 			default:
-				a = a.Expect(VStack)
+				a = a.Expect(VArray)
 			}
 		case OpPush:
-			if v := env._get(opa); v.Type() == VStack {
-				a := v._unpackedStack().a
+			if v := env._get(opa); v.Type() == VArray {
+				a := v.Array().a
 				env.checkRemainStackSize(len(a))
 				*stackEnv.stack = append(*stackEnv.stack, a...)
 			} else {
@@ -442,7 +442,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 						varg = append([]Value{}, stackEnv.Stack()[cls.NumParams:]...)
 					}
 					stackEnv.growZero(int(cls.StackSize))
-					stackEnv._set(uint16(cls.NumParams), _unpackedStack(varg))
+					stackEnv._set(uint16(cls.NumParams), Array(varg))
 				} else {
 					stackEnv.growZero(int(cls.StackSize))
 				}

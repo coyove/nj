@@ -186,7 +186,7 @@ func (c *Func) Call(a ...Value) (v1 Value, v []Value, err error) {
 		newEnv.growZero(int(c.StackSize))
 		if c.IsVariadic {
 			// newEnv.grow(int(c.NumParams) + 1)
-			newEnv._set(uint16(c.NumParams), _unpackedStack(varg))
+			newEnv._set(uint16(c.NumParams), Array(varg))
 		}
 	}
 

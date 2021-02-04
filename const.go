@@ -51,7 +51,7 @@ const (
 	VNil       valueType = 0  // nil
 	VNumber              = 3  // number
 	VString              = 7  // string
-	VStack               = 15 // stack
+	VArray               = 15 // array
 	VFunction            = 31 // function
 	VInterface           = 63 // interface
 	_NumNum              = VNumber * 2
@@ -70,8 +70,8 @@ func (t valueType) String() string {
 		return "function"
 	case VInterface:
 		return "interface"
-	case VStack:
-		return "stack"
+	case VArray:
+		return "array"
 	default:
 		return "corrupted$" + strconv.Itoa(int(t))
 	}

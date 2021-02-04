@@ -341,49 +341,48 @@ end
 println()
 
 function countdown(n)
+    return debug_state()
     while n > 0 do
         return n, debug_state()
         n -= 1
     end
 end
 
-function exec(x, f, ...args)
-    if x == nil then 
-        local ...r = f(args) 
-        return r[#r], r[1:#r-1]
+
+function fib(max)
+    local a, b = 0, 1
+    return debug_state()
+    while true do
+        a, b = b, a + b
+        if max and b > max then return end
+        return b, debug_state()
     end
-    local ...r = debug_resume(f, x)
-    return r[#r], r[1:#r-1]
 end
 
-for _, i in exec(countdown,10) do
+function exec(f, ...args)
+    if not debug_isstate(args[#args]) then
+        -- init
+        return exec, f, f(args)
+    end
+    local ...r = debug_resume(f, args[#args])
+    return r[#r] and f or nil, r
+end
+
+for _, i in exec(countdown, 10) do
     write(stdout(), i, " ")
 end
 println()
 
-function range2(x, ...)
-    if #... == 0 then return end
-    if x == nil then
-        return 1, ...[1]
-    end
-    if #... == x then return end
-    return x + 1, ...[x + 1]
-end
-
-local _, ...a = array(10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
-for i, e in range2(a) do
-    write(stdout(), e, " ")
+local count = 0
+for _, i in exec(fib) do
+    count += 1
+    if count > 10 then break end
+    write(stdout(), i, " ")
 end
 println()
 
-local idx = 11
-function selfiter()
-    idx -= 1
-    return idx or nil
-end
-
-for e in selfiter do
-    write(stdout(), e, " ")
+for _, i in exec(fib, 80) do
+    write(stdout(), i, " ")
 end
 println()`,
 /* = = = = = = = = */
