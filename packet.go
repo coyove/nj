@@ -110,6 +110,8 @@ var singleOp = map[opCode]string{
 	OpLessEq: parser.ALessEq,
 	OpLoad:   parser.ALoad,
 	OpStore:  parser.AStore,
+	OpGStore: parser.AGStore,
+	OpGLoad:  parser.AGLoad,
 	OpSlice:  parser.ASlice,
 	OpPow:    parser.APow,
 }
@@ -187,22 +189,10 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 		switch bop {
 		case OpSet:
 			sb.WriteString(readAddr(a, false) + " = " + readAddr(b, true))
-		case OpPopVClear:
-			sb.WriteString("clear-v")
-		case OpPopVAll:
-			if a == 0 {
-				sb.WriteString("$a = popv-all")
-			} else {
-				sb.WriteString("$a = popv-all-with-a")
-			}
-		case OpPopV:
-			sb.WriteString("$a = pop-v")
-		case OpPushV:
-			sb.WriteString("pushv " + readAddr(a, true))
+		case OpList:
+			sb.WriteString("list")
 		case OpPush:
-			sb.WriteString(fmt.Sprintf("push-%d %v", b, readAddr(a, true)))
-		case OpMergeAV:
-			sb.WriteString("merge-av")
+			sb.WriteString("push " + readAddr(a, true))
 		case OpRet:
 			sb.WriteString("ret " + readAddr(a, true))
 		case OpLoadFunc:

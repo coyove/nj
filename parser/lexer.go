@@ -314,17 +314,13 @@ skipspaces:
 				if sc.Peek() != '.' {
 					tok.Type = TDotDot
 					tok.Str = ".."
-				} else {
-					sc.Next()
-					tok.Type = TIdent
-					tok.Str = sc.scanIdent(2)
 				}
 			default:
 				tok.Type = '.'
 				tok.Str = "."
 			}
-		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|':
-			const pat = "(){}];,#^|"
+		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|', '$':
+			const pat = "(){}];,#^|$"
 			idx := strings.IndexByte(pat, byte(ch))
 			tok.Type = ch
 			tok.Str = pat[idx : idx+1]
@@ -411,6 +407,7 @@ func parse(reader string, name string) (chunk Node, lexer *Lexer, err error) {
 }
 
 func Parse(text, name string) (chunk Node, err error) {
+	yyErrorVerbose = true
 	chunk, _, err = parse(text, name)
 	if !chunk.Valid() && err == nil {
 		err = fmt.Errorf("invalid chunk")

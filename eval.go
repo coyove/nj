@@ -50,52 +50,8 @@ func (e *ExecError) Error() string {
 	return msg.String()
 }
 
-func returnVararg(env *Env, a Value, b []Value) (Value, []Value) {
-	flag := a.Type() == VArray
-	if len(b) == 0 {
-		if flag {
-			u := a.Array().a
-			if len(u) == 0 {
-				return Value{}, nil
-			}
-			return u[0], u[1:]
-		}
-		return a, nil
-	}
-
-	for _, b := range b {
-		flag = flag || b.Type() == VArray
-	}
-
-	if !flag {
-		// both 'a' and 'b' are not (neither containing) unpacked values
-		env.checkRemainStackSize(len(b))
-		return a, b
-	}
-
-	var b2 []Value
-	if a.Type() == VArray {
-		b2 = append(b2, a.Array().a...)
-	} else {
-		b2 = append(b2, a)
-	}
-	for _, b := range b {
-		if b.Type() == VArray {
-			b2 = append(b2, b.Array().a...)
-		} else {
-			b2 = append(b2, b)
-		}
-		env.checkRemainStackSize(len(b2))
-	}
-	if len(b2) == 0 {
-		return Value{}, nil
-	}
-	env.Global.Survey.AdjustedReturns += int64(len(b2))
-	return b2[0], b2[1:]
-}
-
 // InternalExecCursorLoop executes 'K' under 'Env' from the given start 'cursor'
-func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resultV []Value) {
+func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 	var stackEnv = env
 	var retStack []stacktrace
 
@@ -140,28 +96,6 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 			// if b.Type() == VString {
 			// 	b.String()
 			// }
-		case OpPushV:
-			env.V = append(env.V, env._get(opa))
-		case OpPopVClear:
-			env.V = nil
-		case OpMergeAV:
-			if len(env.V) > 0 {
-				env.A = Array(append([]Value{env.A}, env.V...))
-			}
-			env.V = nil
-		case OpPopVAll:
-			if opa == 1 { // popv-all-with-a, e.g.: local ... = foo()
-				env.A = Array(append([]Value{env.A}, env.V...))
-			} else { // popv-all, e.g.: local a, ... = foo()
-				env.A = Array(env.V)
-			}
-			env.V = nil
-		case OpPopV:
-			if len(env.V) == 0 {
-				env.A = Value{}
-			} else {
-				env.A, env.V = env.V[0], env.V[1:]
-			}
 		case OpInc:
 			vaf, vai, vaIsInt := env._get(opa).Expect(VNumber).Num()
 			vbf, vbi, vbIsInt := env._get(opb).Expect(VNumber).Num()
@@ -314,17 +248,28 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 			case VString:
 				env.A = Float(float64(len(v._str())))
 			case VArray:
-				env.A = Int(int64(len(v.Array().a)))
+				env.A = Int(int64(v.Array().Len()))
 			case VFunction:
 				env.A = Float(float64(v.Function().NumParams))
 			default:
 				env.A = Int(int64(reflectLen(v.Interface())))
 			}
+		case OpList:
+			env.Global.DecrDeadsize(int64(stackEnv.Size()) * ValueSize)
+			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
+			stackEnv.Clear()
+		case OpGStore:
+			env.A = env._get(opb)
+			env.Global.GStore(env._get(opa).ExpectMsg(VString, "gstore")._str(), env.A)
+		case OpGLoad:
+			env.A = env.Global.GLoad(env._get(opa).ExpectMsg(VString, "gload")._str())
 		case OpStore:
 			subject, v := env._get(opa), env._get(opb)
 			switch subject.Type() {
 			case VArray:
-				subject.Array().Put(env.A.ExpectMsg(VNumber, "store").Int(), v)
+				if subject.Array().Put1(env.A.ExpectMsg(VNumber, "store").Int(), v) {
+					env.Global.DecrDeadsize(ValueSize)
+				}
 			case VInterface:
 				reflectStore(subject.Interface(), env.A, v)
 			default:
@@ -336,7 +281,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 			start, end := env.A.ExpectMsg(VNumber, "slice").Int(), env._get(opb).ExpectMsg(VNumber, "slice").Int()
 			switch subject.Type() {
 			case VArray:
-				env.A = Array(subject.Array().Slice(start, end))
+				env.A = Array(subject.Array().Slice1(start, end)...)
 			case VString:
 				s := subject._str()
 				start, end := sliceInRange(start, end, len(s))
@@ -349,9 +294,9 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 		case OpLoad:
 			switch a := env._get(opa); a.Type() {
 			case VArray:
-				env.A = a.Array().Get(env._get(opb).ExpectMsg(VNumber, "load").Int())
+				env.A = a.Array().Get1(env._get(opb).ExpectMsg(VNumber, "load").Int())
 			case VInterface:
-				env.A, env.V = reflectLoad(a.Interface(), env._get(opb))
+				env.A = reflectLoad(a.Interface(), env._get(opb))
 			case VString:
 				if idx, s := env._get(opb).ExpectMsg(VNumber, "load").Int(), a._str(); idx >= 1 && idx <= int64(len(s)) {
 					env.A = Int(int64(s[idx-1]))
@@ -360,26 +305,23 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 				a = a.Expect(VArray)
 			}
 		case OpPush:
-			if v := env._get(opa); v.Type() == VArray {
-				a := v.Array().a
-				env.checkRemainStackSize(len(a))
-				*stackEnv.stack = append(*stackEnv.stack, a...)
+			v := env._get(opa)
+			if v.Type() == VArray && v.Array().Unpacked {
+				*stackEnv.stack = append(*stackEnv.stack, v.Array().Underlay()...)
 			} else {
-				env.checkRemainStackSize(1)
 				stackEnv.Push(v)
 			}
 		case OpRet:
 			v := env._get(opa)
 			if len(retStack) == 0 {
-				v, env.V = returnVararg(&env, v, env.V)
-				return v, env.V
+				return v
 			}
 			// Return upper stack
 			r := retStack[len(retStack)-1]
 			cursor = r.cursor
 			K = r.cls
 			env.StackOffset = r.stackOffset
-			env.A, env.V = returnVararg(&env, v, env.V)
+			env.A = v
 			*env.stack = (*env.stack)[:env.StackOffset+uint32(r.cls.StackSize)]
 			stackEnv.StackOffset = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
@@ -399,13 +341,12 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 				} else {
 					name = a.String()
 				}
-				if v, ok := m[name]; ok {
-					m[name] = v._append(stackEnv.Get(i + 1))
-				} else {
-					m[name] = stackEnv.Get(i + 1)
+				if _, ok := m[name]; ok {
+					panicf("call: duplicated parameter: %q", name)
 				}
+				m[name] = stackEnv.Get(i + 1)
 			}
-			stackEnv.Clear() // TODO: support variadic function?
+			stackEnv.Clear()
 			for i := byte(0); i < cls.NumParams; i++ {
 				if int(i) < len(cls.Params) {
 					stackEnv.Push(m[cls.Params[i]])
@@ -432,20 +373,11 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 				} else {
 					cls.Native(&stackEnv)
 				}
-				env.A, env.V = returnVararg(&env, stackEnv.A, stackEnv.V)
+				env.A = stackEnv.A
 				stackEnv.NativeSource = nil
 				stackEnv.Clear()
 			} else {
-				if cls.IsVariadic {
-					var varg []Value
-					if stackEnv.Size() > int(cls.NumParams) {
-						varg = append([]Value{}, stackEnv.Stack()[cls.NumParams:]...)
-					}
-					stackEnv.growZero(int(cls.StackSize))
-					stackEnv._set(uint16(cls.NumParams), Array(varg))
-				} else {
-					stackEnv.growZero(int(cls.StackSize))
-				}
+				stackEnv.growZero(int(cls.StackSize))
 
 				last := stacktrace{
 					cls:         K,
@@ -458,7 +390,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 				K = cls
 				env.StackOffset = stackEnv.StackOffset
 				env.Global = cls.loadGlobal
-				env.A, env.V = stackEnv.A, env.V[:0]
+				env.A = stackEnv.A
 
 				if opb == 0 {
 					retStack = append(retStack, last)
@@ -485,12 +417,6 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) (result Value, resu
 }
 
 func concat(p *Program, a, b string) Value {
-	x := int64(len(a) + len(b))
-	if p.MaxStringSize > 0 {
-		if x > p.looseStringSizeLimit() {
-			panicf("concat string overflow, require %d out of %d", x, p.looseStringSizeLimit())
-		}
-	}
-	p.Survey.StringAlloc += x
+	p.DecrDeadsize(int64(len(a) + len(b)))
 	return String(a + b)
 }

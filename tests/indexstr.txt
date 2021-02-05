@@ -12,7 +12,7 @@ primeRK = 16777619
 function hashStr(sep)
     local hash = 0 
     for i = 1,#(sep) do
-	hash = hash * primeRK + sep[i]
+	    hash = hash * primeRK + sep[i]
     end
     hash = bitand(hash, 0xffffffff)
     
@@ -27,7 +27,7 @@ function hashStr(sep)
 	sq *= sq
 	i = bitrsh(i, 1)
     end
-    return hash, pow
+    return {hash, pow}
 end
 
 -- Index returns the index of the first instance of substr in s,||-1 if substr is not present in s.
@@ -47,11 +47,11 @@ function Index(s, substr)
     end
 
     -- Rabin-Karp search
-    local hashss, pow = hashStr(substr) 
+    local {hashss, pow} = hashStr(substr) 
     local h = 0 
 
     for i = 1, n do
-	h = h *primeRK + s[i]
+	    h = h *primeRK + s[i]
     end
     h = bitand(h, 0xffffffff)
 
@@ -61,14 +61,14 @@ function Index(s, substr)
 
     local i = n + 1
     while i <= #(s) do
-	h *= primeRK
-	h += s[i]
-	h -= pow * s[i-n]
-	h = bitand(h, 0xffffffff)
-	i += 1
-	if (h == hashss and s[i-n:i-1] == substr) then
-	   return i - n 
-	end
+	    h *= primeRK
+	    h += s[i]
+	    h -= pow * s[i-n]
+	    h = bitand(h, 0xffffffff)
+	    i += 1
+	    if (h == hashss and s[i-n:i-1] == substr) then
+	        return i - n 
+	    end
     end
     return 0
 end

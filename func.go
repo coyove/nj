@@ -16,7 +16,6 @@ type Func struct {
 	Name       string
 	DocString  string
 	NumParams  byte
-	IsVariadic bool
 	IsDebug    bool
 	StackSize  uint16
 	Native     func(env *Env)
@@ -28,21 +27,31 @@ type Func struct {
 type Program struct {
 	Func
 	Deadline         int64
-	MaxStackSize     int64
 	MaxCallStackSize int64
-	MaxStringSize    int64
 	Stack            *[]Value
 	Functions        []*Func
 	Stdout, Stderr   io.Writer
 	Stdin            io.Reader
 	Logger           *log.Logger
 	NilIndex         uint16
-	Survey           struct {
-		Elapsed         float64
-		StringAlloc     int64
-		AdjustedReturns int64
+	GLoad            func(string) Value
+	GStore           func(string, Value)
+	shadowTable      *symtable
+	deadsize         int64
+}
+
+func (p *Program) SetDeadsize(v int64) { p.deadsize = v }
+
+func (p *Program) GetDeadsize() int64 { return p.deadsize }
+
+func (p *Program) DecrDeadsize(v int64) {
+	if p.deadsize == 0 {
+		return
 	}
-	shadowTable *symtable
+	p.deadsize -= v
+	if p.deadsize <= 0 {
+		panic("deadsize")
+	}
 }
 
 type Arguments map[string]Value
@@ -122,12 +131,8 @@ func (c *Func) String() string {
 		}
 		p.WriteString(",")
 	}
-	if c.IsVariadic {
-		p.WriteString("...")
-	} else {
-		if c.NumParams > 0 {
-			p.Truncate(p.Len() - 1)
-		}
+	if c.NumParams > 0 {
+		p.Truncate(p.Len() - 1)
 	}
 	p.WriteString(")")
 	return p.String()
@@ -140,31 +145,29 @@ func (c *Func) PrettyCode() string {
 	return pkPrettify(c, c.loadGlobal, false, 0)
 }
 
-func (c *Func) exec(newEnv Env) (Value, []Value) {
+func (c *Func) exec(newEnv Env) Value {
 	if c.Native != nil {
 		c.Native(&newEnv)
-		return newEnv.A, newEnv.V
+		return newEnv.A
 	}
 	return InternalExecCursorLoop(newEnv, c, 0)
 }
 
-func (p *Program) Run() (v1 Value, v []Value, err error) {
+func (p *Program) Run() (v1 Value, err error) {
 	return p.Call()
 }
 
-func (p *Program) Call() (v1 Value, v []Value, err error) {
+func (p *Program) Call() (v1 Value, err error) {
 	defer parser.CatchError(&err)
-	start := time.Now()
 	newEnv := Env{
 		Global: p,
 		stack:  p.Stack,
 	}
-	v1, v = InternalExecCursorLoop(newEnv, &p.Func, 0)
-	p.Survey.Elapsed = time.Since(start).Seconds()
+	v1 = InternalExecCursorLoop(newEnv, &p.Func, 0)
 	return
 }
 
-func (c *Func) Call(a ...Value) (v1 Value, v []Value, err error) {
+func (c *Func) Call(a ...Value) (v1 Value, err error) {
 	defer parser.CatchError(&err)
 
 	oldLen := len(*c.loadGlobal.Stack)
@@ -184,13 +187,9 @@ func (c *Func) Call(a ...Value) (v1 Value, v []Value, err error) {
 
 	if c.Native == nil {
 		newEnv.growZero(int(c.StackSize))
-		if c.IsVariadic {
-			// newEnv.grow(int(c.NumParams) + 1)
-			newEnv._set(uint16(c.NumParams), Array(varg))
-		}
 	}
 
-	v1, v = c.exec(newEnv)
+	v1 = c.exec(newEnv)
 	*c.loadGlobal.Stack = (*c.loadGlobal.Stack)[:oldLen]
 	return
 }
@@ -254,18 +253,6 @@ func (p *Program) Set(k string, v Value) (err error) {
 	defer parser.CatchError(&err)
 	(*p.Stack)[int(p.shadowTable.mustGetSymbol(k))] = v
 	return nil
-}
-
-func (p *Program) ResetSurvey() {
-	p2 := Program{}
-	p.Survey = p2.Survey
-}
-
-func (p *Program) looseStringSizeLimit() int64 {
-	if p.MaxStackSize == 0 {
-		return p.MaxStringSize
-	}
-	return p.MaxStringSize - p.MaxStringSize*int64(len(*p.Stack))/p.MaxStackSize
 }
 
 func fixDocString(in, name, arg string) string {

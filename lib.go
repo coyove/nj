@@ -56,55 +56,24 @@ func init() {
 	AddGlobalValue("True", _interface(true))
 	AddGlobalValue("False", _interface(false))
 	AddGlobalValue("globals", func(env *Env) {
-		env.A = Int(int64(len(g)))
 		keys := make([]string, 0, len(g))
 		for k := range g {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		for _, k := range keys {
-			env.V = append(env.V, g[k])
+		globals := make([]Value, len(keys))
+		for i, k := range keys {
+			globals[i] = g[k]
 		}
-	}, "globals() => n, g1, g2, ...", "\tlist all global values")
+		env.A = Array(globals...)
+	}, "globals() => { g1, g2, ... }", "\tlist all global values")
 	AddGlobalValue("doc", func(env *Env) {
 		env.A = String(env.In(0, VFunction).Function().DocString)
 	}, "doc(function) => string", "\treturn function's documentation")
-	AddGlobalValue("debug_state", func(env *Env) {
-		code := env.Debug.Caller.Code.Code
-		c := env.Debug.Cursor
-		for ; int(c) < len(code); c++ {
-			op, _, _ := splitInst(code[c])
-			if op == OpRet {
-				c++
-				break
-			}
-		}
-		start := env.StackOffset - uint32(env.Debug.Caller.StackSize)
-		copystack := append([]Value{}, (*env.stack)[start:env.StackOffset]...)
-		env.A = Interface(&DebugState{c, copystack})
-	}, "debug_state() => state", "\tget current function's executing state")
-	AddGlobalValue("debug_isstate", func(env *Env) {
-		_, ok := env.Get(0).Interface().(*DebugState)
-		env.A = Bool(ok)
-	}, "debug_isstate(v) => v_is_state")
-	AddGlobalValue("debug_resume", func(env *Env) {
-		var (
-			f      = env.In(0, VFunction).Function()
-			cursor uint32
-			newEnv = *env
-			stack  []Value
-		)
-		if state, ok := env.Get(1).Interface().(*DebugState); ok {
-			stack, cursor = state.Stack, state.Cursor
-		}
-		newEnv.StackOffset = uint32(len(*newEnv.stack))
-		*newEnv.stack = append(*newEnv.stack, stack...)
-		newEnv.grow(int(f.StackSize))
-		if cursor >= uint32(f.Code.Len()) {
-			panicf("cursor overflowed")
-		}
-		env.A, env.V = InternalExecCursorLoop(newEnv, f, cursor)
-	}, "$f(function, state) => a1, ..., an, new_state", "\texecute the function using the given state and return the new state")
+	AddGlobalValue("unpack", func(env *Env) {
+		env.A = Array(env.In(0, VArray).Array().a...)
+		env.A.Array().Unpacked = true
+	})
 	AddGlobalValue("debug_locals", func(env *Env) {
 		var r []Value
 		start := env.StackOffset - uint32(env.Debug.Caller.StackSize)
@@ -112,15 +81,15 @@ func init() {
 			idx := start + uint32(i)
 			r = append(r, Int(int64(idx)), String(name), (*env.stack)[idx])
 		}
-		env.Return(r...)
-	}, "debug_locals() => index1, name1, value1, i2, n2, v2, i3, n3, v3, ...")
+		env.A = Array(r...)
+	}, "debug_locals() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }")
 	AddGlobalValue("debug_globals", func(env *Env) {
 		var r []Value
 		for i, name := range env.Global.Func.Locals {
 			r = append(r, Int(int64(i)), String(name), (*env.Global.Stack)[i])
 		}
-		env.Return(r...)
-	}, "debug_globals() => index1, name1, value1, i2, n2, v2, i3, n3, v3, ...")
+		env.A = Array(r...)
+	}, "debug_globals() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }")
 	AddGlobalValue("debug_set", func(env *Env) {
 		(*env.Global.Stack)[env.In(0, VNumber).Int()] = env.Get(1)
 	}, "debug_set(idx, value)")
@@ -148,44 +117,30 @@ func init() {
 			}
 			lines = append(lines, String(r.cls.Name), Int(int64(src)), Int(int64(r.cursor-1)))
 		}
-		env.Return(lines...)
-	}, "debug_stacktrace(skip) => func_name1, line1, cursor1, n2, l2, c2, ...")
+		env.A = Array(lines...)
+	}, "debug_stacktrace(skip) => { func_name1, line1, cursor1, n2, l2, c2, ... }")
 	AddGlobalValue("narray", func(env *Env) {
 		n := env.In(0, VNumber).Int()
-		env.Return2(Int(n), make([]Value, n)...)
-	}, "narray(n) => n, ...array", "\treturn an array size of n, filled with nil")
-	AddGlobalValue("array", func(env *Env) {
-		env.Return2(Int(int64(env.Size())), append([]Value{}, env.Stack()...)...)
-	}, "array(a, b, c, ...) => n, a, b, c, ...", "\treturn the number of input arguments, followed by the arugments themselves")
+		env.Global.DecrDeadsize(n * ValueSize)
+		env.A = Array(make([]Value, n)...)
+	}, "narray(n) => { nil, ..., nil }", "\treturn an array size of n, filled with nil")
 	AddGlobalValue("type", func(env *Env) {
 		env.A = String(env.Get(0).Type().String())
 	}, "type(value) => string", "\treturn value's type")
 	AddGlobalValue("pcall", func(env *Env) {
-		a, v, err := env.In(0, VFunction).Function().Call(env.Stack()[1:]...)
+		a, err := env.In(0, VFunction).Function().Call(env.Stack()[1:]...)
 		if err == nil {
-			env.Return2(Bool(true), append([]Value{a}, v...)...)
+			env.A = a
 		} else {
 			switch err := err.(type) {
 			case *ExecError:
-				env.Return2(Bool(false), Interface(err.r))
+				env.A = Interface(err.r)
 			default:
-				env.Return2(Bool(false), Interface(err))
+				env.A = Interface(err)
 			}
 		}
-	}, "pcall(function, arg1, arg2, ...)",
-		"\texecute the function, catch panic and return: 0, panic_as_error",
-		"\tif everything went well, return what function returned: 1, ...")
-	AddGlobalValue("select", func(env *Env) {
-		env.A = Value{}
-		switch a := env.Get(0); a.Type() {
-		case VString:
-			env.A = Int(int64(env.Size() - 1))
-		case VNumber:
-			if u, idx := env.CopyStack()[1:], int(a.Int())-1; idx < len(u) {
-				env.Return(u[idx:]...)
-			}
-		}
-	}, "select(n, ...)", "\tlua-style select function")
+	}, "pcall(function, arg1, arg2, ...) => result_of_function",
+		"\texecute the function, catch panic and return")
 	AddGlobalValue("panic", func(env *Env) { panic(env.Get(0)) }, "panic(value)")
 	AddGlobalValue("assert", func(env *Env) {
 		v := env.Get(0)
@@ -253,8 +208,8 @@ func init() {
 			nIdx++
 		}
 		var r io.Reader = env.Global.Stdin
-		if env.Global.MaxStackSize > 0 {
-			r = io.LimitReader(r, (env.Global.MaxStackSize-int64(len(*env.stack)))*16)
+		if env.Global.GetDeadsize() > 0 {
+			r = io.LimitReader(r, env.Global.GetDeadsize())
 		}
 		for n := env.InInt(nIdx, 1); n > 0; n-- {
 			var s string
@@ -263,11 +218,11 @@ func init() {
 			}
 			results = append(results, env.NewString(s))
 		}
-		env.Return(results...)
+		env.A = Array(results...)
 	},
 		"$f(prompt) => string", "\tprint prompt and read one user input",
-		"$f(n) => s1, s2, ..., sn", "\tread N user input",
-		"$f(prompt, n) => s1, s2, ..., sn", "\tprint prompt and read N user input",
+		"$f(n) => { s1, s2, ..., sn }", "\tread N user input",
+		"$f(prompt, n) => { s1, s2, ..., sn }", "\tprint prompt and read N user input",
 	)
 	AddGlobalValue("INF", Float(math.Inf(1)))
 	AddGlobalValue("PI", Float(math.Pi))
@@ -329,8 +284,8 @@ func init() {
 		case VNumber:
 			env.A = Int(v.Int())
 		default:
-			v, err := strconv.ParseInt(v.String(), 0, 64)
-			env.Return2(Int(v), Interface(err))
+			v, _ := strconv.ParseInt(v.String(), 0, 64)
+			env.A = Int(v)
 		}
 	}, "int(value) => integer", "\tconvert value to integer number (int64)")
 	AddGlobalValue("time", func(env *Env) {
@@ -396,7 +351,7 @@ func init() {
 	}, "char(number) => string")
 	AddGlobalValue("unicode", func(env *Env) {
 		r, sz := utf8.DecodeRuneInString(env.In(0, VString)._str())
-		env.Return2(Int(int64(r)), Int(int64(sz)))
+		env.A = Array(Int(int64(r)), Int(int64(sz)))
 	}, "unicode(one_char_string) => char_unicode")
 	AddGlobalValue("chars", func(env *Env) {
 		var r []Value
@@ -412,9 +367,9 @@ func init() {
 			}
 			s = s[sz:]
 		}
-		env.Return(r...)
-	}, "chars(string) => char1, char2, ...",
-		"chars(string, max) => char1, char2, ..., char_max",
+		env.A = Array(r...)
+	}, "chars(string) => { char1, char2, ... }",
+		"chars(string, max) => { char1, char2, ..., char_max }",
 		"\tbreak a string into (at most 'max') chars, e.g.:",
 		"\tchars('a中c') => 'a', '中', 'c'",
 		"\tchars('a中c', 1) => 'a'",
@@ -426,14 +381,14 @@ func init() {
 			return
 		}
 		m := rx.FindAllStringSubmatch(env.Get(0).String(), int(env.InInt(2, -1)))
-		mm := []Value{Int(int64(len(m)))}
+		mm := []Value{}
 		for _, m := range m {
 			for _, m := range m {
 				mm = append(mm, String(m))
 			}
 		}
-		env.Return(mm...)
-	}, "match(string, regex) => n_or_err, match1, match2, ..., matchn")
+		env.A = Array(mm...)
+	}, "match(string, regex) => { match1, match2, ..., matchn }")
 	AddGlobalValue("startswith", func(env *Env) {
 		env.A = Bool(strings.HasPrefix(env.In(0, VString)._str(), env.In(1, VString)._str()))
 	}, "startswith(text, prefix) => bool")
@@ -474,7 +429,7 @@ func init() {
 			env.A = env.NewString(rx.ReplaceAllString(a, f._str()))
 		case VFunction:
 			env.A = env.NewString(rx.ReplaceAllStringFunc(a, func(in string) string {
-				v, _, err := f.Function().Call(env.NewString(in))
+				v, err := f.Function().Call(env.NewString(in))
 				if err != nil {
 					panic(err)
 				}
@@ -492,8 +447,8 @@ func init() {
 		for i := range x {
 			v[i] = String(x[i])
 		}
-		env.Return(v...)
-	}, "split(text, sep) => part1, part2, ...")
+		env.A = Array(v...)
+	}, "split(text, sep) => { part1, part2, ... }")
 	AddGlobalValue("strpos", func(env *Env) {
 		a, b := env.In(0, VString)._str(), env.In(1, VString)._str()
 		if env.InStr(2, "") == "last" {
@@ -548,51 +503,63 @@ func init() {
 			for i := range a {
 				tmp[i] = cv(a[i])
 			}
-			env.Return2(Int(int64(len(a))), tmp...)
+			env.A = Array(tmp...)
 		}
 	},
-		"$f(json_string, selector) => true|false|number|string",
-		"$f(json_string, selector) => n, ...array",
-		"$f(json_string, selector) => object_string",
+		"$f(json_string, selector) => true|false|number|string|array|object_string",
 		"$f(json_string, selector, expected_type) => value",
 	)
 	AddGlobalValue("dict", func(env *Env) {
-		if env.Size() > 0 {
-			env.checkRemainStackSize(env.Size())
-			env.A = _interface(env.CopyStack())
+		if a := env.Get(0); a.Type() == VArray {
+			u := a.Array().Underlay()
+			env.Global.DecrDeadsize(int64(len(u)) / 2)
+			m := make(map[string]Value, len(u)/2)
+			for i := 0; i+1 < len(u); i += 2 {
+				m[u[i].String()] = u[i+1]
+			}
+			env.A = _interface(m)
 		} else {
-			env.A = env.A
-		}
-	}, "dict(a1, a2, ..., an) => []Value{ a1, ..., an }",
-		"dict(k1 = v1, ..., kn = vn) => map[string]Value{ k1: v1, ..., kn: vn }")
-	AddGlobalValue("pair", func(env *Env) {
-		iter := reflect.ValueOf(env.Get(0).Interface()).MapRange()
-		env.A = Native("iter"+strconv.FormatInt(time.Now().UnixNano(), 10), func(env *Env) {
-			if iter.Next() {
-				env.Return2(Interface(iter.Key()), Interface(iter.Value()))
+			if env.A.IsNil() {
+				env.A = _interface((map[string]interface{})(nil))
 			} else {
-				env.A = Value{}
-			}
-		})
-	}, "pair(map[string]Value) => map_iterator",
-		"\texample:",
-		"\tfor k, v in pair(m)() do")
-	AddGlobalValue("range", func(env *Env) {
-		env.A = Value{}
-		if env.Size() <= 1 {
-			return
-		}
-		if env.Get(0).IsNil() {
-			env.Return(Int(1), env.Get(1))
-		} else {
-			i := env.Get(0).ExpectMsg(VNumber, "range").Int()
-			if int(i) < env.Size()-1 {
-				env.Return(Int(i+1), env.Get(int(i+1)))
+				env.A = env.A
 			}
 		}
-	}, "range => iterator",
-		"\texample:",
-		"\tfor i, v in range() do")
+	}, "dict(k1, v1, ..., kn, vn) => map[string]Value{ k1: v1, ..., kn: vn }",
+		"dict(k1 = v1, ..., kn = vn) => map[string]Value{ k1: v1, ..., kn: vn }")
+	AddGlobalValue("sort2", func(env *Env) {
+		u := env.Get(0).ExpectMsg(VArray, "sort2").Array().Underlay()
+		if len(u)%2 != 0 {
+			u = append(u, Value{})
+		}
+		view := [][2]Value{}
+		viewHdr := (*reflect.SliceHeader)(unsafe.Pointer(&view))
+		uHdr := (*reflect.SliceHeader)(unsafe.Pointer(&u))
+		viewHdr.Data = uHdr.Data
+		viewHdr.Len = uHdr.Len / 2
+		viewHdr.Cap = uHdr.Cap / 2
+		sort.Slice(view, func(i, j int) bool { return view[i][0].Less(view[j][0]) })
+		env.A = Array(u...)
+	}, "sort2({ k1, v1, ..., kn, vn }) => { ka, va, ..., kz, vz }",
+		"\tsort2 sorts the given array based on its odd-indexed keys (k1, ... kn)")
+	AddGlobalValue("find2", func(env *Env) {
+		u := env.Get(0).ExpectMsg(VArray, "find2").Array().Underlay()
+		if len(u)%2 != 0 {
+			u = append(u, Value{})
+		}
+		v := env.Get(1)
+		view := [][2]Value{}
+		viewHdr := (*reflect.SliceHeader)(unsafe.Pointer(&view))
+		uHdr := (*reflect.SliceHeader)(unsafe.Pointer(&u))
+		viewHdr.Data = uHdr.Data
+		viewHdr.Len = uHdr.Len / 2
+		viewHdr.Cap = uHdr.Cap / 2
+		i := sort.Search(len(view), func(i int) bool { return !view[i][0].Less(v) })
+		if i < len(view) && view[i][0].Equal(v) {
+			env.A = view[i][1]
+		}
+	}, "$f({ k1, v1, ..., kn, vn }, k) => v",
+		"\t$f performs a binary search on the given array based on 'k'")
 }
 
 func mathMinMax(env *Env, max bool) {

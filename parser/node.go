@@ -102,8 +102,6 @@ func (n Node) StringValue() string { return n.strSym }
 
 func (n Node) SymbolValue() string { return n.strSym }
 
-func (n Node) IsSymbolDotDotDot() bool { return strings.HasPrefix(n.strSym, "...") }
-
 func (n Node) IntValue() int64 { return int64(n.num) }
 
 func (n Node) FloatValue() float64 { return math.Float64frombits(n.num) }
@@ -294,6 +292,9 @@ func (n Node) isCallStat() bool {
 func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
 	if len(n.Nodes) == 3 && n.Nodes[0].SymbolValue() == ALoad {
 		return __store(n.Nodes[1], n.Nodes[2], v)
+	}
+	if len(n.Nodes) == 2 && n.Nodes[0].SymbolValue() == AGLoad {
+		return NewComplex(NewSymbol(AGStore), n.Nodes[1], v)
 	}
 	if n.Type != Symbol {
 		panic(fmt.Sprintf("%v: invalid assignment", n))

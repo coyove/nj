@@ -45,7 +45,6 @@ func main() {
 
 	if *apiServer != "" {
 		script.RemoveGlobalValue("sleep")
-		script.RemoveGlobalValue("narray")
 		script.RemoveGlobalValue("scanln")
 		lib.HostWhitelist["httpbin.org"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
 		lib.HostWhitelist["example.com"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
@@ -89,14 +88,13 @@ func main() {
 				return
 			}
 			bufOut := &limitedWriter{limit: 16 * 1024}
-			p.SetTimeout(time.Second)
+			p.SetTimeout(time.Second * 2)
 			p.MaxCallStackSize = 100
-			p.MaxStackSize = 2 * 1024
-			p.MaxStringSize = 256 * 1024
+			p.SetDeadsize(4 * 1024 * 1024)
 			p.Stdout = bufOut
 			p.Stderr = bufOut
 			code := p.PrettyCode()
-			v, v1, err := p.Run()
+			v, err := p.Run()
 			if err != nil {
 				writeJSON(w, map[string]interface{}{
 					"error":   err.Error(),
@@ -106,17 +104,11 @@ func main() {
 				})
 				return
 			}
-			results := make([]interface{}, 1+len(v1))
-			results[0] = v.Interface()
-			for i := range v1 {
-				results[1+i] = v1[i].Interface()
-			}
 			writeJSON(w, map[string]interface{}{
 				"elapsed": time.Since(start).Seconds(),
-				"results": results,
+				"result":  v.Interface(),
 				"stdout":  bufOut.String(),
 				"opcode":  code,
-				"survey":  p.Survey,
 			})
 		})
 		log.Println("listen", *apiServer)
@@ -206,12 +198,9 @@ func main() {
 		b.SetTimeout(time.Second * time.Duration(*timeout))
 	}
 
-	i, i2, err := b.Call()
+	i, err := b.Call()
 	if _ret {
 		fmt.Print(i)
-		for _, a := range i2 {
-			fmt.Print(" ", a)
-		}
 		fmt.Print(" ", err, "\n")
 	}
 }

@@ -73,14 +73,10 @@ func runFile(t *testing.T, path string) {
 
 	// log.Println(b.PrettyCode())
 
-	i, i2, err := b.Call()
+	_, err = b.Call()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log(i, i2, err,
-		"str alloc:", b.Survey.StringAlloc,
-		"adj returns:", b.Survey.AdjustedReturns,
-	)
 
 	if os.Getenv("crab") != "" {
 		fmt.Println(b.PrettyCode())
@@ -97,8 +93,6 @@ func TestFileR2(t *testing.T) { runFile(t, "tests/r2.txt") }
 
 func TestFileStringIndex(t *testing.T) { runFile(t, "tests/indexstr.txt") }
 
-func TestFileVararg(t *testing.T) { runFile(t, "tests/vararg.txt") }
-
 func TestReturnFunction(t *testing.T) {
 	{
 		cls, _ := LoadString(`
@@ -110,19 +104,19 @@ return a
 end
 return foo
 `, CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
-		v, _, _ := cls.Call()
-		if v, _, _ := v.Function().Call(Int(10)); v.Int() != 11 {
+		v, _ := cls.Call()
+		if v, _ := v.Function().Call(Int(10)); v.Int() != 11 {
 			t.Fatal(v)
 		}
 
-		if v, _, _ := v.Function().Call(Int(100)); v.Int() != 111 {
+		if v, _ := v.Function().Call(Int(100)); v.Int() != 111 {
 			t.Fatal(v)
 		}
 	}
 	{
 		cls, _ := LoadString(`
 a = 1
-function foo(...x) 
+function foo(x) 
 for i=1,#x do
 a+=x[i]
 end
@@ -130,23 +124,23 @@ return a
 end
 return foo
 `)
-		v, _, _ := cls.Call()
-		if v, _, _ := v.Function().Call(Int(1), Int(2), Int(3), Int(4)); v.Int() != 11 {
+		v, _ := cls.Call()
+		if v, _ := v.Function().Call(Array(Int(1), Int(2), Int(3), Int(4))); v.Int() != 11 {
 			t.Fatal(v)
 		}
 
-		if v, _, _ := v.Function().Call(Int(10), Int(20)); v.Int() != 41 {
+		if v, _ := v.Function().Call(Array(Int(10), Int(20))); v.Int() != 41 {
 			t.Fatal(v)
 		}
 
-		if v, _, _ := v.Function().Call(); v.Int() != 41 {
+		if v, _ := v.Function().Call(); v.Int() != 41 {
 			t.Fatal(v)
 		}
 	}
 }
 
 func TestTailCallPanic(t *testing.T) {
-	cls, _ := LoadString(`
+	cls, err := LoadString(`
 x = 0
 function foo()
 x+=1
@@ -155,11 +149,12 @@ foo()
 end
 foo()
 `)
+	fmt.Println(err)
 	if s := cls.PrettyCode(); !strings.Contains(s, "tail-call") {
 		t.Fatal(s)
 	}
 
-	_, _, err := cls.Call()
+	_, err = cls.Call()
 	if err == nil {
 		t.FailNow()
 	}
@@ -176,35 +171,22 @@ func TestArithmeticUnfold(t *testing.T) {
 		t.Error(err)
 	}
 
-	if v, _, _ := cls.Call(); v.Float() != 2.5 {
+	if v, _ := cls.Call(); v.Float() != 2.5 {
 		t.Error("exec failed")
 	}
 }
 
 func TestPCallStackSize(t *testing.T) {
 	cls, _ := LoadString(`
-function test() 
-local a, b, c = 1, 2, 3
-assert(a, b, c)
-return a
-end
-_, err = pcall(test)
-print(err)
-assert(match(err.Error(), "overflow" ))
-`)
-	cls.MaxStackSize = 7 + int64(len(g))
-	cls.Call()
-
-	cls, _ = LoadString(`
 a = ""
 for i = 1,1e3 do
 a = a .. i
 end
 return a
 `)
-	cls.MaxStringSize = (int64(len(g)) + 10) * 16 // 10: a small value
-	res, _, err := cls.Call()
-	if !strings.Contains(err.Error(), "string overflow") {
+	cls.SetDeadsize(int64(len(g)) + 10)
+	res, err := cls.Call()
+	if !strings.Contains(err.Error(), "deadsize") {
 		t.Fatal(res, err)
 	}
 }
@@ -231,7 +213,7 @@ func TestRegisterOptimzation(t *testing.T) {
 	// But after the if block, there is another c = a + b, we can't re-use the registers R0 and R1
 	// because they will not contain the value we want as the if block was not executed at all.
 
-	if n, _, _ := cls.Call(); n.Int() != 3 {
+	if n, _ := cls.Call(); n.Int() != 3 {
 		t.Error("exec failed:", n, cls)
 	}
 }
@@ -245,7 +227,7 @@ a = 0
 		t.Error(err)
 	}
 
-	if v, _, _ := cls.Call(); !math.IsNaN(v.Float()) {
+	if v, _ := cls.Call(); !math.IsNaN(v.Float()) {
 		t.Error("wrong answer")
 	}
 }
@@ -263,7 +245,7 @@ func BenchmarkCompiling(b *testing.B) {
 	}
 }
 
-func TestTooManyVariables(t *testing.T) {
+func TestBigList(t *testing.T) {
 	n := 2000 - len(g)
 
 	makeCode := func(n int) string {
@@ -271,22 +253,22 @@ func TestTooManyVariables(t *testing.T) {
 		for i := 0; i < n; i++ {
 			buf.WriteString(fmt.Sprintf("a%d = %d\n", i, i))
 		}
-		buf.WriteString("return ")
+		buf.WriteString("return {")
 		for i := 0; i < n; i++ {
 			buf.WriteString(fmt.Sprintf("a%d,", i))
 		}
 		buf.Truncate(buf.Len() - 1)
-		return buf.String()
+		return buf.String() + "}"
 	}
 
 	f, _ := LoadString(makeCode(n))
-	_, v2, err := f.Call()
+	v2, err := f.Call()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for i := 1; i < n; i++ {
-		if v2[i-1].Int() != int64(i) {
+	for i := 0; i < n; i++ {
+		if v2.Array().Underlay()[i].Int() != int64(i) {
 			t.Fatal(v2)
 		}
 	}
@@ -334,14 +316,14 @@ a+=1
 return a
 end
 return add`)
-	add, _, _ := p.Run()
+	add, _ := p.Run()
 
 	p2, _ := LoadString(`
 local a = 100
-return a + add(), a + add(), a + add()
+return {a + add(), a + add(), a + add()}
 `, CompileOptions{GlobalKey: "add", GlobalValue: add})
-	v, v1, err := p2.Run()
-	if v.Int() != 101 || v1[0].Int() != 102 || v1[1].Int() != 103 {
+	v, err := p2.Run()
+	if v1 := v.Array().Underlay(); v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())
 	}
 
@@ -350,7 +332,7 @@ return a + add(), a + add(), a + add()
 func TestNumberLexer(t *testing.T) {
 	assert := func(src string, v Value) {
 		_, fn, ln, _ := runtime.Caller(1)
-		r, _ := MustRun(LoadString("return " + src))
+		r := MustRun(LoadString("return " + src))
 		if r != v {
 			t.Fatal(fn, ln, r, v)
 		}

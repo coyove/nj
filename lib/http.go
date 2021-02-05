@@ -24,7 +24,7 @@ func init() {
 		defer func() {
 			cancel()
 			if r := recover(); r != nil {
-				env.A = script.Interface(r)
+				env.A = script.Array(script.Interface(r))
 			}
 		}()
 
@@ -137,16 +137,17 @@ func init() {
 		defer resp.Body.Close()
 
 		var r io.Reader = resp.Body
-		if env.Global.MaxStackSize > 0 {
-			r = io.LimitReader(r, env.Global.MaxStackSize*16)
+		if env.Global.GetDeadsize() > 0 {
+			r = io.LimitReader(r, env.Global.GetDeadsize())
 		}
 		buf := panicErr2(ioutil.ReadAll(r)).([]byte)
+		env.Global.DecrDeadsize(int64(len(buf)))
 
 		hdr := map[string]string{}
 		for k := range resp.Header {
 			hdr[k] = resp.Header.Get(k)
 		}
-		env.Return2(
+		env.A = script.Array(
 			script.Int(int64(resp.StatusCode)),
 			script.Interface(hdr),
 			env.NewStringBytes(buf),
@@ -196,7 +197,7 @@ func iterStrings(v script.Value, f func(string)) {
 	case script.VString:
 		f(v.String())
 	case script.VArray:
-		for _, line := range v.Stack() {
+		for _, line := range v.Array().Underlay() {
 			f(line.String())
 		}
 	}
@@ -207,9 +208,9 @@ func iterStringPairs(v1, v2 script.Value, f func(string, string)) {
 	case script.VString * 2:
 		f(v1.String(), v2.String())
 	case script.VArray * 2:
-		for i, line := range v1.Stack() {
-			if i < len(v2.Stack()) {
-				f(line.String(), v2.Stack()[i].String())
+		for i, line := range v1.Array().Underlay() {
+			if i < len(v2.Array().Underlay()) {
+				f(line.String(), v2.Array().Underlay()[i].String())
 			}
 		}
 	}

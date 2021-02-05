@@ -18,7 +18,6 @@ type Env struct {
 
 	// Local
 	StackOffset uint32
-	V           []Value
 	A           Value
 
 	// Used by Native functions
@@ -76,7 +75,7 @@ func (env *Env) Set(index int, value Value) {
 // Clear clears the current stack
 func (env *Env) Clear() {
 	*env.stack = (*env.stack)[:env.StackOffset]
-	env.A, env.V = Value{}, nil
+	env.A = Value{}
 }
 
 // Push pushes a value into the current stack
@@ -169,18 +168,8 @@ func (env *Env) In(i int, expectedType valueType) Value {
 	return v
 }
 
-func (env *Env) Return(a ...Value) {
-	if len(a) > 0 {
-		env.A, env.V = a[0], a[1:]
-	}
-}
-
-func (env *Env) Return2(a1 Value, an ...Value) {
-	env.A, env.V = a1, an
-}
-
 func (env *Env) Deadline() (context.Context, func(), time.Time) {
-	d := time.Unix(env.Global.Deadline, 0)
+	d := time.Unix(0, env.Global.Deadline)
 	ctx, cancel := context.WithDeadline(context.Background(), d)
 	return ctx, cancel, d
 }
@@ -188,31 +177,15 @@ func (env *Env) Deadline() (context.Context, func(), time.Time) {
 func (env *Env) String() string {
 	buf := bytes.NewBufferString("env(")
 	buf.WriteString(env.A.String())
-	for _, v := range env.V {
-		buf.WriteString(",")
-		buf.WriteString(v.String())
-	}
 	buf.WriteString(")")
 	return buf.String()
 }
 
 func (env *Env) NewString(s string) Value {
-	if env.Global.MaxStringSize > 0 {
-		max := env.Global.looseStringSizeLimit()
-		if int64(len(s)) > max {
-			panicf("string overflow, require %d out of %d", len(s), max)
-		}
-	}
-	env.Global.Survey.StringAlloc += int64(len(s))
+	env.Global.DecrDeadsize(int64(len(s)))
 	return String(s)
 }
 
 func (env *Env) NewStringBytes(s []byte) Value {
 	return env.NewString(*(*string)(unsafe.Pointer(&s)))
-}
-
-func (env *Env) checkRemainStackSize(sz int) {
-	if env.Global.MaxStackSize > 0 && int64(sz+len(*env.stack)) > env.Global.MaxStackSize {
-		panicf("stack overflow, require %d out of %d", sz, env.Global.MaxStackSize-int64(len(*env.stack)))
-	}
 }

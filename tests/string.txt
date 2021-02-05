@@ -7,7 +7,7 @@ assert( "abc吱吱吱" == "abc\u5431\u5431\u5431")
 
 assert(1 + "2" == 3)
 
-local _, a, b, c, d = match("a\"12\" \"2\"3", [["(\d+)"]])
+local {a, b, c, d} = match("a\"12\" \"2\"3", [["(\d+)"]])
 assert(a == [["12"]] and b == "12" and c == [["2"]] and d == "2")
 
 local err = error("err")
@@ -16,27 +16,9 @@ assert(err.error() == "err")
 assert("eerrrr" == replace(err.error(), "(e|r)", "$1$1"))
 
 function cb(s)
-		return s == "e" and "R" or "E"
+    return s == "e" and "R" or "E"
 end
 assert("REE" == replace(err.error(), "(e|r)", cb))
-
-do
-	local c, r, state = 0
-	local function loop123()
-	    return 1, debug_state()
-	    return 2, debug_state()
-	    return 3
-	end
-
-	function stringcallback()
-	    r, state = debug_resume(loop123, state)
-	    return r
-	end
-end
-
-assert(loop123 == nil)
-
-assert("1 2 3 1 2 3" == replace("a b c d e f", "(\\w)", stringcallback))
 
 assert("x" == trim("嘻x嘻", "嘻"))
 assert("嘻x" == trim("嘻x嘻", "嘻", "right"))
@@ -45,51 +27,16 @@ assert("x嘻" == trim("嘻x嘻", "嘻", "left"))
 assert(("abc")[1:2] == "ab")
 assert(("abc")[3:3] == "c")
 assert(("abc")[1:0] == "")
-assert(("cde")[unicode("b") - unicode("a"):2] == "cd")
-assert(("efg")[unicode("b") - unicode("a"): unicode("c") - unicode("a")] == "ef")
+assert(("cde")[unicode("b")[1] - unicode("a")[1]:2] == "cd")
+assert(("efg")[unicode("b")[1] - unicode("a")[1]: unicode("c")[1] - unicode("a")[1]] == "ef")
 
 -- json generator
 do
-	local j = dict(
+	local j = json(dict(
 	      a = 1,
 	      ["b-2"] = true,
 	      [("c")[1:1]] = True,
-	)
-	-- assert(j == [[{"a":1,"b-2":1,"c":true}]])
-	-- j = {1, 2, {[3] = 4}}
-	-- assert(j == '[1,2,{"3":4}]')
-	-- print(j)
-end
-
-do
-    function zip(l ,r)
-	    assert(#l, #r, "input sources sizes not matched")
-	    local _, ...z = narray(#l)
-	    for i = 1, #z do
-		z[i] = l[i] .. r[i]
-	    end
-	    return z
-    end
-    local a, b, c = (zip(
-	l='a', r='1',
-	l='b', r='2',
-	l='c', r=1+2,
-    ))
-    assert(a == "a1" and b == "b2" and c == "c3")
-
-    local _, ...kv = array()
-    for i = 0, 9 do
-    	_, ...kv = array(kv, 'l', char(unicode('a') + i), 'r', i)
-    end
-
-    -- l: a ~ i
-    -- r: 0 ~ 9
-    -- zip(l ,r): a0 ~ j9
-
-    local ...results = (zip([nil] = array(kv)))
-    for i = 1, #results do
-    	assert(results[i], char(unicode('a') + i - 1) .. (i - 1))
-    end
-    print(results[1], '...', results[#results])
+	))
+    print(j)
 end
 

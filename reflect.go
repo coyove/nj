@@ -13,18 +13,18 @@ func reflectLen(v interface{}) int {
 	return -1
 }
 
-func reflectLoad(v interface{}, key Value) (Value, []Value) {
+func reflectLoad(v interface{}, key Value) Value {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
 		v := rv.MapIndex(reflect.ValueOf(key.TypedInterface(rv.Type().Key())))
 		if v.IsValid() {
-			return Interface2(v.Interface())
+			return Interface(v.Interface())
 		}
 	case reflect.Slice, reflect.Array:
 		idx := key.ExpectMsg(VNumber, "loadarray").Int() - 1
 		if idx < int64(rv.Len()) && idx >= 0 {
-			return Interface2(rv.Index(int(idx)).Interface())
+			return Interface(rv.Index(int(idx)).Interface())
 		}
 	}
 
@@ -36,12 +36,12 @@ func reflectLoad(v interface{}, key Value) (Value, []Value) {
 		}
 		f := rv.FieldByName(k)
 		if f.IsValid() {
-			return Interface2(f.Interface())
+			return Interface(f.Interface())
 		}
 		// panicf("%q not found in %#v", k, v)
-		return Value{}, nil
+		return Value{}
 	}
-	return Interface2(f.Interface())
+	return Interface(f.Interface())
 }
 
 func reflectSlice(v interface{}, start, end int64) interface{} {

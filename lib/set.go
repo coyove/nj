@@ -8,21 +8,13 @@ import (
 )
 
 type Set struct {
-	m   map[interface{}]struct{}
-	max int64
+	m map[interface{}]struct{}
+	p *script.Program
 }
 
 func init() {
 	script.AddGlobalValue("set", func(env *script.Env) {
-		s := &Set{m: map[interface{}]struct{}{}}
-		s.max = env.Global.MaxStackSize - int64(len(*env.Global.Stack))
-		if env.Global.MaxStackSize == 0 {
-			s.max = 0
-		} else {
-			if s.max < 1 {
-				panic("restricted")
-			}
-		}
+		s := &Set{m: map[interface{}]struct{}{}, p: env.Global}
 		for _, e := range env.Stack() {
 			s.Add(e.Interface())
 		}
@@ -39,9 +31,7 @@ func init() {
 }
 
 func (s *Set) Add(v interface{}) bool {
-	if len(s.m) > int(s.max) && s.max > 0 {
-		panic("set overflow")
-	}
+	s.p.DecrDeadsize(1)
 	_, exist := s.m[v]
 	s.m[v] = struct{}{}
 	return !exist

@@ -1,8 +1,6 @@
 package script
 
 import (
-	"strings"
-
 	"github.com/coyove/script/parser"
 )
 
@@ -47,7 +45,7 @@ func (table *symtable) compileSetMove(atoms []parser.Node) uint16 {
 	} else {
 		// local a = b
 		newYX = table.borrowAddress()
-		table.put(aDest, newYX)
+		defer table.put(aDest, newYX) // execute in defer in case of: a = 1 do local a = a end
 	}
 
 	fromYX := table.compileNode(atoms[2])
@@ -57,29 +55,7 @@ func (table *symtable) compileSetMove(atoms []parser.Node) uint16 {
 }
 
 func (table *symtable) compileReturn(atoms []parser.Node) uint16 {
-	op := OpRet
-
-	values := atoms[1].Nodes
-	if len(values) == 0 { // return
-		table.code.writeInst(op, table.loadK(nil), 0)
-		return regA
-	}
-
-	// return a1, ..., an
-	for i := 1; i < len(values); i++ {
-		if len(values[i].Nodes) > 0 && values[i].Nodes[0].IsCall() {
-			values[i] = parser.NewComplex(parser.NewSymbol(parser.AMergeAV), values[i])
-		}
-	}
-
-	table.collapse(values, true)
-
-	for i := 1; i < len(values); i++ {
-		table.writeInst(OpPushV, values[i], parser.Node{})
-	}
-	table.writeInst(op, values[0], parser.Node{})
-
-	table.returnAddresses(values)
+	table.writeInst(OpRet, atoms[1], parser.Node{})
 	return regA
 }
 
@@ -137,7 +113,7 @@ func (table *symtable) writeInst3(bop opCode, atoms []parser.Node) uint16 {
 	table.collapse(atoms[1:], true)
 
 	switch bop {
-	case OpNot, OpRet, OpLen:
+	case OpNot, OpRet, OpLen, OpGLoad:
 		// unary splitInst
 		table.writeInst(bop, atoms[1], parser.Node{})
 	default:
@@ -151,21 +127,6 @@ func (table *symtable) writeInst3(bop opCode, atoms []parser.Node) uint16 {
 
 func (table *symtable) compileFlat(atoms []parser.Node) uint16 {
 	head := atoms[0].SymbolValue()
-	switch head {
-	case parser.APopV:
-		table.code.writeInst(OpPopV, 0, 0)
-		return regA
-	case parser.APopVClear:
-		table.code.writeInst(OpPopVClear, 0, 0)
-		return regA
-	case parser.APopVAll:
-		table.code.writeInst(OpPopVAll, 0, 0)
-		return regA
-	case parser.APopVAllA:
-		table.code.writeInst(OpPopVAll, 1, 0)
-		return regA
-	}
-
 	op, ok := flatOpMapping[head]
 	if !ok {
 		panicf("DEBUG compileFlat invalid symbol: %v", atoms[0])
@@ -235,9 +196,13 @@ func (table *symtable) compileIf(atoms []parser.Node) uint16 {
 	return regA
 }
 
-func (table *symtable) compileMergeAV(nodes []parser.Node) uint16 {
-	table.compileNode(nodes[1])
-	table.code.writeInst(OpMergeAV, 0, 0)
+func (table *symtable) compileList(nodes []parser.Node) uint16 {
+	// [list [a, b, c, ...]]
+	table.collapse(nodes[1].Nodes, true)
+	for _, x := range nodes[1].Nodes {
+		table.writeInst(OpPush, x, parser.Node{})
+	}
+	table.code.writeInst(OpList, 0, 0)
 	return regA
 }
 
@@ -274,7 +239,6 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 		panicf("%v: function definition is not allowed by options", atoms[1])
 	}
 
-	vararg := false
 	params := atoms[2]
 	newtable := newsymtable(table.options)
 	paramsString := []string{}
@@ -287,15 +251,6 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 
 	for i, p := range params.Nodes {
 		n := p.SymbolValue()
-		if p.IsSymbolDotDotDot() {
-			if i != len(params.Nodes)-1 {
-				panicf("%v: vararg must be the last parameter", atoms[1])
-			}
-			vararg = true
-			if n != "..." {
-				n = strings.TrimLeft(n, ".")
-			}
-		}
 		if _, ok := newtable.sym[n]; ok {
 			panicf("%v: duplicated parameter: %q", atoms[1], n)
 		}
@@ -304,9 +259,6 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 	}
 
 	ln := len(newtable.sym)
-	if vararg {
-		ln--
-	}
 	if ln > 255 {
 		panicf("%v: too many parameters, 255 at most", atoms[1])
 	}
@@ -323,7 +275,6 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 	cls.DocString = atoms[4].StringValue()
 	cls.NumParams = byte(ln)
 	cls.StackSize = newtable.vp
-	cls.IsVariadic = vararg
 	cls.Code = code
 	cls.Params = paramsString
 	cls.Locals = newtable.symbolsToDebugLocals()

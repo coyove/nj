@@ -20,7 +20,6 @@ type breaklabel struct {
 }
 
 type CompileOptions struct {
-	DisableGFunc     bool
 	DefineFuncFilter func(name string) bool
 	VarLookupFilter  func(name string) bool
 	GlobalKeyValues  map[string]interface{}
@@ -221,28 +220,26 @@ func (table *symtable) loadK(v interface{}) uint16 {
 }
 
 var flatOpMapping = map[string]opCode{
-	parser.AAdd:       OpAdd,
-	parser.AConcat:    OpConcat,
-	parser.ASub:       OpSub,
-	parser.AMul:       OpMul,
-	parser.ADiv:       OpDiv,
-	parser.AIDiv:      OpIDiv,
-	parser.AMod:       OpMod,
-	parser.ALess:      OpLess,
-	parser.ALessEq:    OpLessEq,
-	parser.AEq:        OpEq,
-	parser.ANeq:       OpNeq,
-	parser.ANot:       OpNot,
-	parser.APow:       OpPow,
-	parser.AStore:     OpStore,
-	parser.ALoad:      OpLoad,
-	parser.ASlice:     OpSlice,
-	parser.ALen:       OpLen,
-	parser.AInc:       OpInc,
-	parser.APopV:      OpRet, // special
-	parser.APopVAll:   OpRet, // special
-	parser.APopVAllA:  OpRet, // special
-	parser.APopVClear: OpRet, // special
+	parser.AAdd:    OpAdd,
+	parser.AConcat: OpConcat,
+	parser.ASub:    OpSub,
+	parser.AMul:    OpMul,
+	parser.ADiv:    OpDiv,
+	parser.AIDiv:   OpIDiv,
+	parser.AMod:    OpMod,
+	parser.ALess:   OpLess,
+	parser.ALessEq: OpLessEq,
+	parser.AEq:     OpEq,
+	parser.ANeq:    OpNeq,
+	parser.ANot:    OpNot,
+	parser.APow:    OpPow,
+	parser.AStore:  OpStore,
+	parser.ALoad:   OpLoad,
+	parser.ASlice:  OpSlice,
+	parser.ALen:    OpLen,
+	parser.AInc:    OpInc,
+	parser.AGLoad:  OpGLoad,
+	parser.AGStore: OpGStore,
 }
 
 func (table *symtable) writeInst(op opCode, n0, n1 parser.Node) {
@@ -332,8 +329,8 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileBreak(nodes)
 	case parser.ACall, parser.ATailCall, parser.ACallMap:
 		yx = table.compileCall(nodes)
-	case parser.AMergeAV:
-		yx = table.compileMergeAV(nodes)
+	case parser.AList:
+		yx = table.compileList(nodes)
 	case parser.AOr, parser.AAnd:
 		yx = table.compileAndOr(nodes)
 	case parser.AFunc:
@@ -383,22 +380,9 @@ func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls 
 	for k, v := range opt.GlobalKeyValues {
 		push(k, Interface(v))
 	}
-	if !opt.DisableGFunc {
-		push("__g", Native("__g", func(env *Env) {
-			if env.Size() > 1 { // store
-				v := env.Get(1)
-				if env.Size() > 2 {
-					v = Array(append([]Value{}, env.Stack()[1:]...))
-				}
-				coreStack.Set(int(shadowTable.mustGetSymbol(env.InStr(0, ""))), v)
-			} else { // load
-				env.A = coreStack.Get(int(shadowTable.mustGetSymbol(env.InStr(0, ""))))
-			}
-		}, "__g(Name) => value", "\tload global value by Name", "__g(Name, value)", "\tstore global value by Name"))
 
-		push("COMPILE_OPTIONS", Interface(opt))
-		push("SOURCE_CODE", String(source))
-	}
+	push("COMPILE_OPTIONS", Interface(opt))
+	push("SOURCE_CODE", String(source))
 
 	table.vp = uint16(coreStack.Size())
 
@@ -440,6 +424,17 @@ func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls 
 	cls.Stdout = os.Stdout
 	cls.Stdin = os.Stdin
 	cls.Stderr = os.Stderr
+	cls.GLoad = func(k string) Value {
+		if k == "" {
+			return Value{}
+		}
+		return coreStack.Get(int(shadowTable.mustGetSymbol(k)))
+	}
+	cls.GStore = func(k string, v Value) {
+		if k != "" {
+			coreStack.Set(int(shadowTable.mustGetSymbol(k)), v)
+		}
+	}
 	for _, f := range cls.Functions {
 		f.loadGlobal = cls
 	}
@@ -472,15 +467,15 @@ func LoadString(code string, opt ...CompileOptions) (*Program, error) {
 	return compileNodeTopLevel(code, n, joinOptions(opt))
 }
 
-func MustRun(p *Program, err error) (Value, []Value) {
+func MustRun(p *Program, err error) Value {
 	if err != nil {
 		panic(err)
 	}
-	v, v1, err := p.Run()
+	v, err := p.Run()
 	if err != nil {
 		panic(err)
 	}
-	return v, v1
+	return v
 }
 
 func joinOptions(opts []CompileOptions) (opt CompileOptions) {
@@ -492,7 +487,6 @@ func joinOptions(opts []CompileOptions) (opt CompileOptions) {
 		if o.GlobalKey != "" {
 			opt.GlobalKeyValues[o.GlobalKey] = o.GlobalValue
 		}
-		opt.DisableGFunc = opt.DisableGFunc || o.DisableGFunc
 	}
 	return opt
 }

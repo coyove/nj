@@ -13,7 +13,9 @@ const (
 	_ opCode = iota
 	OpSet
 	OpStore
+	OpGStore
 	OpLoad
+	OpGLoad
 	OpSlice
 	OpAdd
 	OpConcat
@@ -34,11 +36,7 @@ const (
 	OpJmp
 	OpLoadFunc
 	OpPush
-	OpPushV
-	OpPopV
-	OpPopVAll
-	OpPopVClear
-	OpMergeAV
+	OpList
 	OpCall
 	OpCallMap
 	OpRet

@@ -37,6 +37,6 @@ func init() {
 	})
 	script.AddGlobalValue("modf", func(env *script.Env) {
 		a, b := math.Modf(env.In(0, script.VNumber).Float())
-		env.Return2(script.Float(a), script.Float(b))
+		env.A = script.Array(script.Float(a), script.Float(b))
 	})
 }

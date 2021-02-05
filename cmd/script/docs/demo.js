@@ -1,13 +1,13 @@
   var demos = {
       "Select a demo...": `-- Author: coyove
-_, author = match(SOURCE_CODE, [[Author: (\\S+)]])
+{_, author} = match(SOURCE_CODE, [[Author: (\\S+)]])
 println("Author is:", author)
 
 -- Print all global values, mainly functions
 -- use doc(function) to view its documentation
-local n, ...g = globals()
+local g = globals()
 
-print(format("version {}, total global values: {}\\n", VERSION, n))
+print(format("version {}, total global values: {}\\n", VERSION, #g))
 
 for i=1,#g do
     local name = str(g[i])
@@ -64,11 +64,11 @@ println(strtime("Y-m-d H:i:s", Go_time()))
 println(doc(Go_time))
 `,
 /* = = = = = = = = */
-      "json": `local j = json(dict( a=1, b=2, array=dict( 1, 2, dict( inner="inner" ))))
+      "json": `local j = json(dict( a=1, b=2, array={ 1, 2, dict( inner="inner" )}))
 assert(json_get(j, "a") == 1)
 assert(json_get(j, "b") == 2)
-local n, a, b, c = json_get(j, "array")
-assert(n == 3 and a == 1 and b == 2 and json_get(c, "inner") == "inner")
+local {a, b, c} = json_get(j, "array")
+assert(a == 1 and b == 2 and json_get(c, "inner") == "inner")
 assert(json_get(j, "array.2.inner")=="inner")
 println(json_get(j, "array"))
 
@@ -77,21 +77,7 @@ json() uses https://github.com/tidwall/gjson
 Learn its syntax at https://github.com/tidwall/gjson/blob/master/SYNTAX.md
 ]]
 
--- Create a true array from variables
-local _, ...arr = array(1, 2, 3)
-print(dict(arr))
-
---[[
-dynamic object (dict) creation is a bit harder to write,
-first we need to trick the parser with syntax "foo( [nil] = something )" so it knows we are feeding key-value pairs,
-then we layout pairs sequentially, so it looks like: { [nil] = key1, value1, key2, value2, ... }
-however the above sequence is misaligned: Nth key becomes Nth value and Nth value becomes (N+1)th key
-so we have to prepend the sequence with a dummy value to correct the positions:
-{ [nil] = dummy, key1, value1, key2, value2, ... }
-]]
-local n, ...kvpairs = array("key1", "value1", "key2", "value2")
-println(dict( [nil] = array(kvpairs, "key3", "value3") ))
-
+println(dict({"key1", "value1", "key2", "value2"}))
 `,
 /* = = = = = = = = */
       "call": `function veryComplexFunction(a, b, c, d, e, f, g, H, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, Z)
@@ -102,30 +88,12 @@ end
 
 println(doc(veryComplexFunction))
 veryComplexFunction(Z="world", ["H"]="hello")
-
--- This is a trick from 'json' demo
-local _, ...args = array("Z", "世界")
-veryComplexFunction([nil] = array(args, "H", "你好"))
-
-function foo() return "hello", "world" end
-function bar() return "world", "hello" end
-
-local ...a = random() > 0.5 and foo() or bar()
-println(a)
-
-function foo(a)
-    return 1 + a, 2 + a, 3 + a
-end
-println(foo(0), foo(3)) -- println(1, 2, 3, 4, 5, 6)
-println( ( foo(0) ), foo(3) ) -- println(1, 4, 5, 6)
-println( ( foo(0) ), ( foo(3) ) ) -- println(1, 4)
 `,
 /* = = = = = = = = */
-      "http": `local code, headers, body = http(
+      "http": `local {code, headers, body} = http(
     method="POST",
     url="http://httpbin.org/post",
-    query="k1=v1",
-    query="k2=v2",
+    query={"k1=v1", "k2=v2",},
     json=dict(
         name="Smith",
     ),
@@ -139,7 +107,7 @@ if body then
     println("args:", json_get(body, "args"))
 end`,
 
-      "goquery": `local code, _, body = http("GET", "https://example.com")
+      "goquery": `local {code, _, body} = http("GET", "https://example.com")
 if iserror(code) then
     return "request failed: " .. code.error()
 end
@@ -149,7 +117,7 @@ for i = 1,#el do
     println(el[i].text())
 end
 
-local code, _, body = http(url="https://bokete.jp/boke/recent")
+local {code, _, body} = http(url="https://bokete.jp/boke/recent")
 if iserror(code) then
     return "request failed: " .. code.error()
 end
@@ -161,114 +129,9 @@ local boke = list.nodes()
 for i=1,#boke do
     println("#" .. i, trim(boke[i].find('.photo-content img').attr('src'), "//", "prefix"))
     println("  ", trim(boke[i].find('.boke-text').text()))
-end
-`,
-      /* = = = = = = = = */
-      "array-tricks": `--[[
-There is no support for table, array, no anything similar,
-but there are some tricks to simulate part of them (with performance penalty)
-]]
-
-local n, ...arr = array(1, 2, "3", 4)
-println(n, "elements:")
-for i = 1, #arr do
-    print('* ', arr[i])
-end
-
-n, ...arr = array(arr, 5)
-println("now there are", n, "elements:", arr)
-
-function remove(el, ...arr)
-    for i=1,#arr do
-        if arr[i] == el then
-            return arr[1:i-1], arr[i+1:#arr]
-        end
-    end
-    return arr
-end
-
-println("remove 3 from array:", remove("3", arr))
-println("remove nothing from array:", remove(random(), arr))
-`,
+end`,
 /* = = = = = = = = */
-      "zip-strings": `function alloc(n)
-    if n == 0 then return end
-    local _, ...r = array(nil)
-    for i = 2,n do
-        _, ...r = array(r, nil) 
-    end
-    return r
-end
-
-function zip(l ,r)
-    assert(#l, #r, "input sources sizes not matched")
-    local ...z = alloc(#l)
-
-    for i = 1, #z do
-        z[i] = l[i] .. r[i]
-    end
-
-    println("zip:", l, "+++", r, "===", z)
-    return z
-end
-
-local a, b, c = (zip(
-    l='a', r='1',
-    l='b', r='2',
-    l='c', r=1+2,
-))
-assert(a == "a1" and b == "b2" and c == "c3")
-
-local _, ...kv = array()
-for i = 0, 9 do
-    _, ...kv = array(kv, 'l', char(unicode('a') + i), 'r', i)
-end
-
-zip([nil] = array(kv))`,
-/* = = = = = = = = */
-      "countdown": `function countdown(n)
-    return true, debug_state()
-    while n do
-       	n -= 1
-        return n, debug_state()
-    end
-end
-
-local _, ...state1 = countdown(4)
-local _, ...state2 = countdown(5)
-initstate1, initstate2 = state1, state2
-
-function run(ss)
-    local result
-    local ...s = __g(ss)
-    result, ...s = debug_resume(countdown, s)
-    if s and #s then 
-        __g(ss, s) 
-        return result, true
-    end
-    __g(ss, __g("init" .. ss))
-    return result, false
-end
-
-function runCountdown(s)
-    while true do
-        local tick, ok = run(s)
-        if not ok then break end
-        write(stdout(), tick, ' ')
-    end
-    print()
-end
-
-println("Run 1st countdown")
-runCountdown("state1")
-println("Run 2nd countdown")
-runCountdown("state2")
-println("Re-run 1st countdown")
-runCountdown("state1")
-println("Re-run 1st countdown again")
-runCountdown("state1")`,
-/* = = = = = = = = */
-      "debug": `function debug_find(name, ...info) 
+      "debug": `function debug_find(name, info) 
     --[[
     debug info are laid out as such:
     0, var_name1, var_value1, 1, var_name2, var_value2, 2, var_name3, ...
@@ -299,92 +162,12 @@ end
 return foo(1,2)
 `,
 /* = = = = = = = = */
-      "dict": `local m = dict(a=1, b=2)
-for k, v in pair(m)() do
-    assert(unicode("a") - 1 + v, unicode(k))
-end`,
-/* = = = = = = = = */
-      "bing.com": `local _, _, body = http(url="https://cn.bing.com/HPImageArchive.aspx", queries=dict(format='js', n=10))
-local n, ...items = json_get(body, "images")
+      "bing.com": `local {_, _, body} = http(url="https://cn.bing.com/HPImageArchive.aspx", queries=dict(format='js', n=10))
+local items = json_get(body, "images")
 
-for i =1,n do
+for i =1,#items do
     println("https://cn.bing.com/" .. json_get(items[i], "url"))
 end`,
-/* = = = = = = = = */
-      "iterator": `function range(from, to, step, __cookie)
-    step = step or 1
-    if __cookie == nil then
-        -- init
-        return range, from - step, to, step, true
-    end
-    if step > 0 then
-        if from + step <= to then
-            return from + step, to, step, true
-        end
-    else
-        if from + step >= to then
-          	return from + step, to, step, true
-        end
-    end
-end
-
--- https://www.lua.org/pil/7.2.html
-
-for i in range(1, 10) do
-    write(stdout(), i, " ")
-end
-println()
-
-for i in range(from=10, to=1, step=-1) do
-    write(stdout(), i, " ")
-end
-println()
-
-function countdown(n)
-    return debug_state()
-    while n > 0 do
-        return n, debug_state()
-        n -= 1
-    end
-end
-
-
-function fib(max)
-    local a, b = 0, 1
-    return debug_state()
-    while true do
-        a, b = b, a + b
-        if max and b > max then return end
-        return b, debug_state()
-    end
-end
-
-function exec(f, ...args)
-    if not debug_isstate(args[#args]) then
-        -- init
-        return exec, f, f(args)
-    end
-    local ...r = debug_resume(f, args[#args])
-    return r[#r] and f or nil, r
-end
-
-for _, i in exec(countdown, 10) do
-    write(stdout(), i, " ")
-end
-println()
-
-local count = 0
-for _, i in exec(fib) do
-    count += 1
-    if count > 10 then break end
-    write(stdout(), i, " ")
-end
-println()
-
-for _, i in exec(fib, 80) do
-    write(stdout(), i, " ")
-end
-println()`,
 /* = = = = = = = = */
       "eof": ""
   };

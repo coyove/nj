@@ -10,66 +10,16 @@ do
 	-- print(json(j, "array"))
 end
 
-function yrec(x, e)
-    while true do
-	if x == e then return x end
-	return x, debug_state()
-	x += 1
-    end
-end
-
-function array(...) return ... end
-
-do
-    local ...arr = array(1,2,3,4,5)
-    local _, state = yrec(0, 5)
-
-    while true do
-        i, state = debug_resume(yrec, state)
-        assert(i == arr[i])
-	    if not c then break end
-    end
-end
 
 print("s2")
-
-local function vararg2(...) return ..., true  end
-local function vararg(...) return vararg2(...) end
-local function test(a0,b0,c0,d0,a, b, c, d)
-      assert(a0==a and b0==b and c0==c and d0==d)
-end
-
-do
-    local a, ... = vararg(1, 2, 3)
-    assert(a == 1 and ...[1] == 2 and ...[2] == 3 and ...[3])
-    local ... = vararg()
-    assert(#... == 1)
-    test(1,2,3,true,vararg(1, 2, 3))
-    test(1,2,true,3,vararg(1,2),3)
-    test(1,2,true,1,vararg(1,2),vararg(1,2))
-
-    local function vararg(n, ...) assert(n == select("#", ...)) end
-    vararg(0)
-    vararg(1, 1)
-    vararg(1, ...)
-
-    local function foo() return 1, 2, 3 end
-    local function bar()
-        local a, b = foo()
-        return true
-    end
-    local a, b = bar()
-    assert(a and b == nil)
-end
-
 
 assert(true and true or false)
 assert(false and false or true)
 
 function deepadd(v)
-if v == 1e6 then
-return v
-end
+    if v == 1e6 then
+        return v
+    end
     return deepadd(v + 1)
 end
 assert(deepadd(0) == 1e6)
@@ -88,26 +38,19 @@ do
 end
 
 do
-	local ... = array(1,2,3)
-	for i =1,#... do
-	    assert( i == ...[i])
+	local arr = {1,2,3}
+	for i =1,#arr do
+	    assert( i == arr[i])
 	end
 end
 
-function return123() return 1, 2, 3 end
-
 do
-    local a, b, c = return123()
-    assert(a == 1 and b == 2 and c == 3)
-end
-
-do
-    local function f(a, b) assert(true); return b, a end
+    local function f(a, b) assert(true); return { b, a } end
     local function g(a, b ,c)
-	b, c = f(b, c)
-	return c, b, a
+	    { b, c } = f(b, c)
+	    return {c, b, a}
     end
-    a,b,c = g(1,2,3)
+    {a,b,c} = g(1,2,3)
     assert(a == 2 and b == 3 and c == 1)
 end
 
@@ -117,16 +60,9 @@ function syntax_return_void2(en) return
 en end
 assert(syntax_return_void2(1) == nil)
 
-...ex = array(1, 2)
+ex = { 1, 2 }
 ex[1], ex[2], ex3 = ex3, ex[1], ex[2]
 assert(ex3 == 2 and ex[1] == nil and ex[2] == 1)
-
-do
-    local ...ms = array(0)
-    ms[1], ms2 = return123()
-    assert(ms[1] == 1 and ms2 == 2)
-end
-assert(ms == nil and ms2 == 2)
 
 assert(0x7fff_fffffffffffd < 0x7fffffffffffffff)
 assert(0x7fff_ffff_ffff_fffd + 2 == 0x7fff_ffff_ffff_ffff)
@@ -144,37 +80,6 @@ end
 
 assert(callstr"a" == "aa")
 
--- local iii = 3
--- t = {1, 2, (1 + iii - 1); a = "a", ["" .. "b"] = "b"}
--- for k, v in pairs(t) do
---     assert(k == v)
--- end
--- assert(k == nil and v != 3) -- k, v in the above for-loop are now dropped
--- 
--- for i = 1,3 do
---     assert(t[i] == i)
--- end
--- assert(i == nil)
--- 
--- t, step, ii = {10,8,6,4,2}, -2, 1
--- for i = 10,1,step do
---     assert(t[ii] == i)
---     ii+=1
--- end
--- 
--- function vararg(a, b, ...) 
---     local c = a * (b + a) + b
---     assert(c == 5)
---     for i =1, select("#",...) do
---         local iv = select(i, ...)
---         assert(iv == i + 2)
---     end
---     return {select("#",...), ...}
--- end
--- 
--- vararg(1, 2, 3, 4, 5);
--- result = vararg(1, 2, unpack({3, 4, 5}))
--- 
 a = 0
 assert(a == 0)
 
@@ -196,24 +101,25 @@ assert(a == 1)
 
 function add(a,b) return a + b end
 
-function fib2(a, b)
-   return "start", debug_state()
-   while true do
-       c = add(a, b)
-       a = b
-       b = c
-       return c, debug_state()
-   end
+function fib2(a, b, n)
+    x = {}
+    while n do
+        c = add(a, b)
+        a = b
+        b = c
+        x[#x+1] = c
+        n-=1
+    end
+    return x
 end
 
 do
-    ...fib_seq = array(1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418, 317811, 514229, 832040, 1346269, 2178309, 3524578, 5702887, 9227465)
+    fib_seq = { 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418, 317811, 514229, 832040, 1346269, 2178309, 3524578, 5702887, 9227465 }
 
-    local s, ...state = fib2(0, 1)
+    local s = fib2(0, 1, 33)
     for i = 0,32 do
-	s, ...state = debug_resume(fib2, state)
-	print(s)
-	assert(fib_seq[i +1] == s)
+        print(s[i+1])
+        assert(fib_seq[i +1] == s[i+1])
     end
 end
 
@@ -255,23 +161,11 @@ local _ = 1 + 1
 end
 assert(returnnil() == nil)
 
-do -- yieldable variadic function
-    function generator(...array)
-        local i = 1
-        while i <= #array do
-            return array[i], debug_state()
-            i += 1
-        end
-    end
-
-    local i, v, state = 1, generator(1, 2, 3)
-    repeat
-        assert(i, v)
-        v, ...state = debug_resume(generator, state)
-        i += 1
-    until not v
-end
-
 G_FLAG = 1
 findGlobal()
 assert(G_FLAG == 'ok')
+assert($("G_FLAG") == 'ok')
+
+flag = "G_FLA" .. "G"
+assert($flag == 'ok')
+print(flag, dict(), dict("a", 2), dict(["a"]=2))

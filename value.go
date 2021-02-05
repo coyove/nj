@@ -22,6 +22,8 @@ type Value struct {
 	p unsafe.Pointer
 }
 
+const ValueSize = int64(unsafe.Sizeof(Value{}))
+
 // Reverse-reference in 'parser' package
 func (v Value) IsValue(parser.Node) {}
 
@@ -74,7 +76,7 @@ func Int(i int64) Value {
 }
 
 // Array returns an array consists of 'm'
-func Array(m []Value) Value {
+func Array(m ...Value) Value {
 	return Value{v: VArray, p: unsafe.Pointer(&Values{a: m})}
 }
 
@@ -111,7 +113,7 @@ func Interface(i interface{}) Value {
 	case []byte:
 		return Bytes(v)
 	case []Value:
-		return Array(v)
+		return Array(v...)
 	case *Func:
 		return Function(v)
 	case Value:
@@ -151,26 +153,19 @@ func Interface(i interface{}) Value {
 				}
 				switch outs := rv.Call(ins); rt.NumOut() {
 				case 1:
-					env.A, env.V = Interface2(outs[0].Interface())
+					env.A = Interface(outs[0].Interface())
 				default:
 					a := make([]Value, len(outs))
 					for i := range outs {
 						a[i] = Interface(outs[i].Interface())
 					}
-					env.Return(a...)
+					env.A = Array(a...)
 				}
 			}
 		}
 		return Function(&Func{Name: "<native>", Native: nf})
 	}
 	return _interface(i)
-}
-
-func Interface2(i interface{}) (Value, []Value) {
-	if s, ok := i.([]Value); ok {
-		return Int(int64(len(s))), s
-	}
-	return Interface(i), nil
 }
 
 func _interface(i interface{}) Value {
@@ -204,17 +199,6 @@ func (v Value) Int() int64 { _, i, _ := v.Num(); return i }
 func (v Value) Float() float64 { f, _, _ := v.Num(); return f }
 
 func (v Value) Array() *Values { return (*Values)(v.p) }
-
-func (v Value) Stack() []Value { return v.Array().a }
-
-func (v Value) _append(v2 Value) Value {
-	if v.Type() == VArray {
-		s := v.Array()
-		s.a = append(s.a, v2)
-		return Array(s.a)
-	}
-	return Array([]Value{v, v2})
-}
 
 // Function cast value to function
 func (v Value) Function() *Func { return (*Func)(v.p) }
@@ -374,22 +358,37 @@ func (v Value) toString(lv int, j bool) string {
 }
 
 type Values struct {
-	a []Value
+	Unpacked bool
+	a        []Value
 }
 
-func (t *Values) Slice(start int64, end int64) []Value {
+func (t *Values) Len() int {
+	return len(t.a)
+}
+
+func (t *Values) Underlay() []Value {
+	return t.a
+}
+
+func (t *Values) Slice1(start int64, end int64) []Value {
 	start2, end2 := sliceInRange(start, end, len(t.a))
 	return t.a[start2:end2]
 }
 
-func (t *Values) Put(idx int64, v Value) {
+func (t *Values) Put1(idx int64, v Value) (appended bool) {
 	idx--
 	if idx < int64(len(t.a)) && idx >= 0 {
 		t.a[idx] = v
+		return false
 	}
+	if idx == int64(len(t.a)) {
+		t.a = append(t.a, v)
+		return true
+	}
+	return false
 }
 
-func (t *Values) Get(idx int64) (v Value) {
+func (t *Values) Get1(idx int64) (v Value) {
 	idx--
 	if idx < int64(len(t.a)) && idx >= 0 {
 		return t.a[idx]
