@@ -35,7 +35,7 @@ do
 	local j = json(dict(
 	      a = 1,
 	      ["b-2"] = true,
-	      [("c")[1:1]] = True,
+	      [("c")[1:1]] = true,
 	))
     print(j)
 end

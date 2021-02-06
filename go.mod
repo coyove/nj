@@ -10,4 +10,5 @@ require (
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/tidwall/gjson v1.6.1
 	golang.org/x/net v0.0.0-20201021035429-f5854403a974
+	golang.org/x/tools v0.1.0 // indirect
 )

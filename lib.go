@@ -53,8 +53,6 @@ func init() {
 	}()
 
 	AddGlobalValue("VERSION", Int(Version))
-	AddGlobalValue("True", _interface(true))
-	AddGlobalValue("False", _interface(false))
 	AddGlobalValue("globals", func(env *Env) {
 		keys := make([]string, 0, len(g))
 		for k := range g {
@@ -65,13 +63,13 @@ func init() {
 		for i, k := range keys {
 			globals[i] = g[k]
 		}
-		env.A = Array(globals...)
+		env.A = env.NewArray(globals...)
 	}, "globals() => { g1, g2, ... }", "\tlist all global values")
 	AddGlobalValue("doc", func(env *Env) {
 		env.A = String(env.In(0, VFunction).Function().DocString)
 	}, "doc(function) => string", "\treturn function's documentation")
 	AddGlobalValue("unpack", func(env *Env) {
-		env.A = Array(env.In(0, VArray).Array().a...)
+		env.A = Array(env.In(0, VArray).Array().Underlay...)
 		env.A.Array().Unpacked = true
 	})
 	AddGlobalValue("debug_locals", func(env *Env) {
@@ -81,14 +79,14 @@ func init() {
 			idx := start + uint32(i)
 			r = append(r, Int(int64(idx)), String(name), (*env.stack)[idx])
 		}
-		env.A = Array(r...)
+		env.A = env.NewArray(r...)
 	}, "debug_locals() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }")
 	AddGlobalValue("debug_globals", func(env *Env) {
 		var r []Value
 		for i, name := range env.Global.Func.Locals {
 			r = append(r, Int(int64(i)), String(name), (*env.Global.Stack)[i])
 		}
-		env.A = Array(r...)
+		env.A = env.NewArray(r...)
 	}, "debug_globals() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }")
 	AddGlobalValue("debug_set", func(env *Env) {
 		(*env.Global.Stack)[env.In(0, VNumber).Int()] = env.Get(1)
@@ -117,12 +115,11 @@ func init() {
 			}
 			lines = append(lines, String(r.cls.Name), Int(int64(src)), Int(int64(r.cursor-1)))
 		}
-		env.A = Array(lines...)
+		env.A = env.NewArray(lines...)
 	}, "debug_stacktrace(skip) => { func_name1, line1, cursor1, n2, l2, c2, ... }")
 	AddGlobalValue("narray", func(env *Env) {
 		n := env.In(0, VNumber).Int()
-		env.Global.DecrDeadsize(n * ValueSize)
-		env.A = Array(make([]Value, n)...)
+		env.A = env.NewArray(make([]Value, n)...)
 	}, "narray(n) => { nil, ..., nil }", "\treturn an array size of n, filled with nil")
 	AddGlobalValue("type", func(env *Env) {
 		env.A = String(env.Get(0).Type().String())
@@ -218,15 +215,15 @@ func init() {
 			}
 			results = append(results, env.NewString(s))
 		}
-		env.A = Array(results...)
+		env.A = env.NewArray(results...)
 	},
 		"$f(prompt) => string", "\tprint prompt and read one user input",
 		"$f(n) => { s1, s2, ..., sn }", "\tread N user input",
 		"$f(prompt, n) => { s1, s2, ..., sn }", "\tprint prompt and read N user input",
 	)
 	AddGlobalValue("INF", Float(math.Inf(1)))
-	AddGlobalValue("PI", Float(math.Pi))
-	AddGlobalValue("E", Float(math.E))
+	AddGlobalValue("PI", Float(math.Pi), "pi constant")
+	AddGlobalValue("E", Float(math.E), "e constant")
 	AddGlobalValue("randomseed", func(env *Env) {
 		rg.Lock()
 		rg.Rand.Seed(env.InInt(0, 1))
@@ -351,7 +348,7 @@ func init() {
 	}, "char(number) => string")
 	AddGlobalValue("unicode", func(env *Env) {
 		r, sz := utf8.DecodeRuneInString(env.In(0, VString)._str())
-		env.A = Array(Int(int64(r)), Int(int64(sz)))
+		env.A = env.NewArray(Int(int64(r)), Int(int64(sz)))
 	}, "unicode(one_char_string) => char_unicode")
 	AddGlobalValue("chars", func(env *Env) {
 		var r []Value
@@ -367,7 +364,7 @@ func init() {
 			}
 			s = s[sz:]
 		}
-		env.A = Array(r...)
+		env.A = env.NewArray(r...)
 	}, "chars(string) => { char1, char2, ... }",
 		"chars(string, max) => { char1, char2, ..., char_max }",
 		"\tbreak a string into (at most 'max') chars, e.g.:",
@@ -387,7 +384,7 @@ func init() {
 				mm = append(mm, String(m))
 			}
 		}
-		env.A = Array(mm...)
+		env.A = env.NewArray(mm...)
 	}, "match(string, regex) => { match1, match2, ..., matchn }")
 	AddGlobalValue("startswith", func(env *Env) {
 		env.A = Bool(strings.HasPrefix(env.In(0, VString)._str(), env.In(1, VString)._str()))
@@ -447,7 +444,7 @@ func init() {
 		for i := range x {
 			v[i] = String(x[i])
 		}
-		env.A = Array(v...)
+		env.A = env.NewArray(v...)
 	}, "split(text, sep) => { part1, part2, ... }")
 	AddGlobalValue("strpos", func(env *Env) {
 		a, b := env.In(0, VString)._str(), env.In(1, VString)._str()
@@ -503,7 +500,7 @@ func init() {
 			for i := range a {
 				tmp[i] = cv(a[i])
 			}
-			env.A = Array(tmp...)
+			env.A = env.NewArray(tmp...)
 		}
 	},
 		"$f(json_string, selector) => true|false|number|string|array|object_string",
@@ -511,8 +508,8 @@ func init() {
 	)
 	AddGlobalValue("dict", func(env *Env) {
 		if a := env.Get(0); a.Type() == VArray {
-			u := a.Array().Underlay()
-			env.Global.DecrDeadsize(int64(len(u)) / 2)
+			u := a.Array().Underlay
+			env.Global.DecrDeadsize(int64(len(u)) * ValueSize)
 			m := make(map[string]Value, len(u)/2)
 			for i := 0; i+1 < len(u); i += 2 {
 				m[u[i].String()] = u[i+1]
@@ -527,35 +524,25 @@ func init() {
 		}
 	}, "dict(k1, v1, ..., kn, vn) => map[string]Value{ k1: v1, ..., kn: vn }",
 		"dict(k1 = v1, ..., kn = vn) => map[string]Value{ k1: v1, ..., kn: vn }")
-	AddGlobalValue("sort2", func(env *Env) {
-		u := env.Get(0).ExpectMsg(VArray, "sort2").Array().Underlay()
+	AddGlobalValue("pair_sort", func(env *Env) {
+		u := env.Get(0).MustBe(VArray, "pair_sort", 0).Array().Underlay
 		if len(u)%2 != 0 {
 			u = append(u, Value{})
 		}
-		view := [][2]Value{}
-		viewHdr := (*reflect.SliceHeader)(unsafe.Pointer(&view))
-		uHdr := (*reflect.SliceHeader)(unsafe.Pointer(&u))
-		viewHdr.Data = uHdr.Data
-		viewHdr.Len = uHdr.Len / 2
-		viewHdr.Cap = uHdr.Cap / 2
+		view := createValuePairView(u)
 		sort.Slice(view, func(i, j int) bool { return view[i][0].Less(view[j][0]) })
 		env.A = Array(u...)
-	}, "sort2({ k1, v1, ..., kn, vn }) => { ka, va, ..., kz, vz }",
-		"\tsort2 sorts the given array based on its odd-indexed keys (k1, ... kn)")
-	AddGlobalValue("find2", func(env *Env) {
-		u := env.Get(0).ExpectMsg(VArray, "find2").Array().Underlay()
+	}, "$f({ k1, v1, ..., kn, vn }) => { ka, va, ..., kz, vz }",
+		"\t$f sorts the given array based on its odd-indexed keys (k1, ... kn)")
+	AddGlobalValue("pair_find", func(env *Env) {
+		u := env.Get(0).MustBe(VArray, "pair_find", 0).Array().Underlay
 		if len(u)%2 != 0 {
 			u = append(u, Value{})
 		}
-		v := env.Get(1)
-		view := [][2]Value{}
-		viewHdr := (*reflect.SliceHeader)(unsafe.Pointer(&view))
-		uHdr := (*reflect.SliceHeader)(unsafe.Pointer(&u))
-		viewHdr.Data = uHdr.Data
-		viewHdr.Len = uHdr.Len / 2
-		viewHdr.Cap = uHdr.Cap / 2
-		i := sort.Search(len(view), func(i int) bool { return !view[i][0].Less(v) })
-		if i < len(view) && view[i][0].Equal(v) {
+		k := env.Get(1)
+		view := createValuePairView(u)
+		i := sort.Search(len(view), func(i int) bool { return !view[i][0].Less(k) })
+		if i < len(view) && view[i][0].Equal(k) {
 			env.A = view[i][1]
 		}
 	}, "$f({ k1, v1, ..., kn, vn }, k) => v",
@@ -566,17 +553,17 @@ func mathMinMax(env *Env, max bool) {
 	if len(env.Stack()) <= 0 {
 		return
 	}
-	f, i, isInt := env.Get(0).Expect(VNumber).Num()
+	f, i, isInt := env.Get(0).MustBe(VNumber, "minmax #", 1).Num()
 	if isInt {
 		for ii := 1; ii < len(env.Stack()); ii++ {
-			if x := env.Get(ii).Expect(VNumber).Int(); x >= i == max {
+			if x := env.Get(ii).MustBe(VNumber, "minmax #", ii+1).Int(); x >= i == max {
 				i = x
 			}
 		}
 		env.A = Int(i)
 	} else {
 		for i := 1; i < len(env.Stack()); i++ {
-			if x, _, _ := env.Get(i).Expect(VNumber).Num(); x >= f == max {
+			if x, _, _ := env.Get(i).MustBe(VNumber, "minmax #", i+1).Num(); x >= f == max {
 				f = x
 			}
 		}
@@ -597,4 +584,14 @@ func ipow(base, exp int64) int64 {
 		base *= base
 	}
 	return result
+}
+
+func createValuePairView(in []Value) [][2]Value {
+	view := [][2]Value{}
+	viewHdr := (*reflect.SliceHeader)(unsafe.Pointer(&view))
+	uHdr := (*reflect.SliceHeader)(unsafe.Pointer(&in))
+	viewHdr.Data = uHdr.Data
+	viewHdr.Len = uHdr.Len / 2
+	viewHdr.Cap = uHdr.Cap / 2
+	return view
 }

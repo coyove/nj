@@ -197,7 +197,7 @@ func iterStrings(v script.Value, f func(string)) {
 	case script.VString:
 		f(v.String())
 	case script.VArray:
-		for _, line := range v.Array().Underlay() {
+		for _, line := range v.Array().Underlay {
 			f(line.String())
 		}
 	}
@@ -208,9 +208,9 @@ func iterStringPairs(v1, v2 script.Value, f func(string, string)) {
 	case script.VString * 2:
 		f(v1.String(), v2.String())
 	case script.VArray * 2:
-		for i, line := range v1.Array().Underlay() {
-			if i < len(v2.Array().Underlay()) {
-				f(line.String(), v2.Array().Underlay()[i].String())
+		for i, line := range v1.Array().Underlay {
+			if i < len(v2.Array().Underlay) {
+				f(line.String(), v2.Array().Underlay[i].String())
 			}
 		}
 	}

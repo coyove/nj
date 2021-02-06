@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/coyove/script/parser"
@@ -48,8 +49,7 @@ func (p *Program) DecrDeadsize(v int64) {
 	if p.deadsize == 0 {
 		return
 	}
-	p.deadsize -= v
-	if p.deadsize <= 0 {
+	if atomic.AddInt64(&p.deadsize, -v) <= 0 {
 		panic("deadsize")
 	}
 }
@@ -142,7 +142,7 @@ func (c *Func) PrettyCode() string {
 	if c.Native != nil {
 		return "[Native Code]"
 	}
-	return pkPrettify(c, c.loadGlobal, false, 0)
+	return pkPrettify(c, c.loadGlobal, false)
 }
 
 func (c *Func) exec(newEnv Env) Value {
@@ -194,7 +194,7 @@ func (c *Func) Call(a ...Value) (v1 Value, err error) {
 	return
 }
 
-func (p *Program) PrettyCode() string { return pkPrettify(&p.Func, p, true, 0) }
+func (p *Program) PrettyCode() string { return pkPrettify(&p.Func, p, true) }
 
 func (p *Program) SetTimeout(d time.Duration) { p.Deadline = time.Now().Add(d).UnixNano() }
 

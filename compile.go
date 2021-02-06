@@ -143,9 +143,9 @@ func (table *symtable) get(varname string) uint16 {
 	case "nil":
 		return regNil
 	case "true":
-		return table.loadK(int64(1))
+		return table.loadK(true)
 	case "false":
-		return table.loadK(int64(0))
+		return table.loadK(false)
 	}
 
 	calc := func(k *symbol) uint16 {
@@ -389,8 +389,8 @@ func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls 
 	// Find and fill consts
 	table.collectConstMode = true
 	table.loadK(nil)
-	table.loadK(int64(1))
-	table.loadK(int64(0))
+	table.loadK(true)
+	table.loadK(false)
 	table.collectConsts(n)
 	table.collectConstMode = false
 
@@ -407,6 +407,8 @@ func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls 
 			coreStack.Set(int(stackPos), Int(k))
 		case string:
 			coreStack.Set(int(stackPos), String(k))
+		case bool:
+			coreStack.Set(int(stackPos), Bool(k))
 		case nil:
 			coreStack.Set(int(stackPos), Value{})
 		default:

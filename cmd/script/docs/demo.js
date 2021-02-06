@@ -5,24 +5,26 @@ println("Author is:", author)
 
 -- Print all global values, mainly functions
 -- use doc(function) to view its documentation
-local g = globals()
+local _g = set(globals())
+local g = debug_globals()
 
-print(format("version {}, total global values: {}\\n", VERSION, #g))
+print(format("version {}, total global values: {}\\n", VERSION, #g/3))
 
-for i=1,#g do
-    local name = str(g[i])
-    if #name > 32 then
-        name = name[1:16] .. '...' .. name[#name-16:#name]
+for i=3,#g,3 do
+    if _g.exists(g[i]) then
+        local name = str(g[i])
+        if #name > 32 then
+            name = name[1:16] .. '...' .. name[#name-16:#name]
+        end
+
+        title = i/3 .. ": " .. name
+        print((",----------------------------------------------------------------")[1:#title+3], '.')
+        print("| ", title, " |")
+        print(("'----------------------------------------------------------------")[1:#title+3], "'")
+        print(type(g[i]) == "function" and doc(g[i]) or 'constant: ' .. g[i-1])
+        print()
     end
-
-    title = i .. ": " .. name
-    print((",----------------------------------------------------------------")[1:#title+3], '.')
-    print("| ", title, " |")
-    print(("'----------------------------------------------------------------")[1:#title+3], "'")
-    print(type(g[i]) == "function" and doc(g[i]) or "\\tN/A")
-    print()
-end
-`,
+end`,
 /* = = = = = = = = */
       "fib": `function fib(n)
     if n == 0 then

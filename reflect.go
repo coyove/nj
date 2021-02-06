@@ -22,13 +22,13 @@ func reflectLoad(v interface{}, key Value) Value {
 			return Interface(v.Interface())
 		}
 	case reflect.Slice, reflect.Array:
-		idx := key.ExpectMsg(VNumber, "loadarray").Int() - 1
+		idx := key.MustBe(VNumber, "load array", 0).Int() - 1
 		if idx < int64(rv.Len()) && idx >= 0 {
 			return Interface(rv.Index(int(idx)).Interface())
 		}
 	}
 
-	k := camelKey(key.ExpectMsg(VString, "loadstruct")._str())
+	k := camelKey(key.MustBe(VString, "load struct", 0)._str())
 	f := rv.MethodByName(k)
 	if !f.IsValid() {
 		if rv.Kind() == reflect.Ptr {
@@ -71,7 +71,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		return
 	case reflect.Slice, reflect.Array:
 		panicf("store: readonly slice")
-		idx := key.ExpectMsg(VNumber, "storearray").Int() - 1
+		idx := key.MustBe(VNumber, "store array", 0).Int() - 1
 		if idx >= int64(rv.Len()) || idx < 0 {
 			return
 		}
@@ -83,7 +83,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		rv = rv.Elem()
 	}
 
-	k := camelKey(key.ExpectMsg(VString, "storestruct")._str())
+	k := camelKey(key.MustBe(VString, "store struct", 0)._str())
 	f := rv.FieldByName(k)
 	if !f.IsValid() || !f.CanAddr() {
 		panicf("%q not assignable in %#v", k, v)

@@ -230,8 +230,8 @@ skipspaces:
 
 		if typ, ok := reservedWords[tok.Str]; ok {
 			crlf := false
-			for n := sc.Peek(); (unicode.IsSpace(rune(n)) || n == 'e') && n != EOF; n = sc.Peek() {
-				if n == '\n' {
+			for n := sc.Peek(); unicode.IsSpace(rune(n)) || n == 'e' || n == EOF; n = sc.Peek() {
+				if n == '\n' || n == EOF {
 					crlf = true
 					break
 				}
@@ -260,8 +260,7 @@ skipspaces:
 		case EOF:
 			tok.Type = EOF
 		case '-':
-			switch sc.Peek() {
-			case '-':
+			if sc.Peek() == '-' {
 				sc.Next()
 				if sc.Peek() == '[' {
 					sc.Next()
@@ -274,14 +273,9 @@ skipspaces:
 				}
 				sc.skipComments()
 				goto redo
-			case '=':
-				tok.Type = TSubEq
-				tok.Str = "-="
-				sc.Next()
-			default:
-				tok.Type = ch
-				tok.Str = "-"
 			}
+			tok.Type = ch
+			tok.Str = "-"
 		case '"', '\'':
 			tok.Type = TString
 			tok.Str, err = sc.scanString(ch)
@@ -334,20 +328,12 @@ skipspaces:
 				tok.Str = ":"
 			}
 		case '+', '*', '/', '%':
-			switch ii := strings.IndexByte("+*/%", byte(ch)); sc.Peek() {
-			case '=':
-				tok.Type = [...]uint32{TAddEq, TMulEq, TDivEq, TModEq}[ii]
-				tok.Str = [...]string{"+=", "*=", "/=", "%="}[ii]
+			ii := strings.IndexByte("+*/%", byte(ch))
+			if sc.Peek() == '/' && ch == '/' {
+				tok.Type = TIDiv
+				tok.Str = "//"
 				sc.Next()
-			case '/':
-				if ch == '/' {
-					tok.Type = TIDiv
-					tok.Str = "//"
-					sc.Next()
-					goto finally
-				}
-				fallthrough
-			default:
+			} else {
 				tok.Type = ch
 				tok.Str = [...]string{"+", "*", "/", "%"}[ii]
 			}
@@ -408,6 +394,7 @@ func parse(reader string, name string) (chunk Node, lexer *Lexer, err error) {
 
 func Parse(text, name string) (chunk Node, err error) {
 	yyErrorVerbose = true
+	yyDebug = 1
 	chunk, _, err = parse(text, name)
 	if !chunk.Valid() && err == nil {
 		err = fmt.Errorf("invalid chunk")

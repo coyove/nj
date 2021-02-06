@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	"math/rand"
 	"os"
 	"runtime"
 	"strconv"
@@ -99,7 +100,7 @@ func TestReturnFunction(t *testing.T) {
 print(init)
 a = init
 function foo(n) 
-a+=n
+a=a+n
 return a
 end
 return foo
@@ -118,7 +119,7 @@ return foo
 a = 1
 function foo(x) 
 for i=1,#x do
-a+=x[i]
+a=a+x[i]
 end
 return a
 end
@@ -143,14 +144,14 @@ func TestTailCallPanic(t *testing.T) {
 	cls, err := LoadString(`
 x = 0
 function foo()
-x+=1
+x=x+1
 if x == 1e6 then assert(false) end
 foo()
 end
 foo()
 `)
 	fmt.Println(err)
-	if s := cls.PrettyCode(); !strings.Contains(s, "tail-call") {
+	if s := cls.PrettyCode(); !strings.Contains(s, "tailcall") {
 		t.Fatal(s)
 	}
 
@@ -268,7 +269,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		if v2.Array().Underlay()[i].Int() != int64(i) {
+		if v2.Array().Underlay[i].Int() != int64(i) {
 			t.Fatal(v2)
 		}
 	}
@@ -309,10 +310,22 @@ func TestFalsyValue(t *testing.T) {
 	assert(s.IsFalse())
 }
 
+func TestPlainReturn(t *testing.T) {
+	if _, err := LoadString("return"); err != nil {
+		t.FailNow()
+	}
+	if _, err := LoadString("return "); err != nil {
+		t.FailNow()
+	}
+	if _, err := LoadString("return \n "); err != nil {
+		t.FailNow()
+	}
+}
+
 func TestFunctionClosure(t *testing.T) {
 	p, _ := LoadString(` local a = 0
 function add ()
-a+=1
+a=a+1
 return a
 end
 return add`)
@@ -323,7 +336,7 @@ local a = 100
 return {a + add(), a + add(), a + add()}
 `, CompileOptions{GlobalKey: "add", GlobalValue: add})
 	v, err := p2.Run()
-	if v1 := v.Array().Underlay(); v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
+	if v1 := v.Array().Underlay; v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())
 	}
 
@@ -352,4 +365,21 @@ func TestNumberLexer(t *testing.T) {
 	assert("0xE+1 ", Int(15))
 	assert(".5E+1 ", Int(5))
 	assert("0x1_2_e+1", Int(0x12f))
+}
+
+func TestSmallString(t *testing.T) {
+	rand.Seed(time.Now().Unix())
+	randString := func() string {
+		buf := make([]byte, rand.Intn(10))
+		for i := range buf {
+			buf[i] = byte(rand.Intn(256))
+		}
+		return string(buf)
+	}
+	for i := 0; i < 1e6; i++ {
+		v := randString()
+		if String(v)._str() != v {
+			t.Fatal(String(v).v, v)
+		}
+	}
 }

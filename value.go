@@ -7,14 +7,43 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/coyove/script/parser"
 )
 
-var int64Marker = unsafe.Pointer(new(int64))
+var (
+	int64Marker   = unsafe.Pointer(new(int64))
+	trueMarker    = unsafe.Pointer(new(int64))
+	falseMarker   = unsafe.Pointer(new(int64))
+	sStringMarker = unsafe.Pointer(new(int64))
+	falseValue    = Bool(false)
+	zeroValue     = Int(0)
+)
 
-// Value is the basic value used by the intepreter
+type ValueType byte
+
+const (
+	VNil       ValueType = 0
+	VBool                = 1
+	VNumber              = 3
+	VString              = 7
+	VArray               = 15
+	VFunction            = 17
+	VInterface           = 19
+
+	ValueSize = int64(unsafe.Sizeof(Value{}))
+)
+
+func (t ValueType) String() string {
+	if t > VInterface {
+		return "?"
+	}
+	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "array", "?", "function", "?", "interface"}[t]
+}
+
+// Value is the basic data type used by the intepreter
 // For float numbers there is one NaN which is not representable: 0xffffffff_ffffffff
 // An empty Value naturally represent nil
 type Value struct {
@@ -22,44 +51,40 @@ type Value struct {
 	p unsafe.Pointer
 }
 
-const ValueSize = int64(unsafe.Sizeof(Value{}))
-
 // Reverse-reference in 'parser' package
 func (v Value) IsValue(parser.Node) {}
 
 // Type returns the type of value, its logic should align IsFalse()
-func (v Value) Type() valueType {
-	if v.p == int64Marker {
+func (v Value) Type() ValueType {
+	switch v.p {
+	case int64Marker:
 		return VNumber
-	}
-	if v.p == nil {
+	case trueMarker, falseMarker:
+		return VBool
+	case nil:
 		if v.v == 0 {
 			return VNil
 		}
 		return VNumber
 	}
-	// if v.v&0xffff_ffff_ffff > 4096 {
-	// 	return VInterface
-	// }
-	return valueType(v.v)
+	return ValueType(v.v)
 }
 
 // IsFalse tests whether value contains a falsy value: nil or 0
 func (v Value) IsFalse() bool {
-	x := uintptr(v.p) + uintptr(v.v)
-	return x == 0 || x == uintptr(int64Marker)
+	return v == Value{} || v == zeroValue || v == falseValue
 }
 
 func (v Value) IsNil() bool {
 	return v == Value{}
 }
 
-// Bool returns a NUMBER value: true -> 1 and false -> 0
+// Bool returns a boolean value
 func Bool(v bool) Value {
 	if v {
-		return Float(1)
+		return Value{VBool, trueMarker}
 	}
-	return Float(0)
+	return Value{VBool, falseMarker}
 }
 
 // Float returns a number value
@@ -70,14 +95,14 @@ func Float(f float64) Value {
 	return Value{v: ^math.Float64bits(f)}
 }
 
-// Int returns a number value like Float does, but it preserves int64 values which may overflow float64
+// Int returns a number value like Float does, but it preserves int64 values which overflow float64
 func Int(i int64) Value {
 	return Value{v: uint64(i), p: int64Marker}
 }
 
 // Array returns an array consists of 'm'
 func Array(m ...Value) Value {
-	return Value{v: VArray, p: unsafe.Pointer(&Values{a: m})}
+	return Value{v: VArray, p: unsafe.Pointer(&Values{Underlay: m})}
 }
 
 // Function returns a closure value
@@ -89,6 +114,12 @@ func Function(c *Func) Value {
 }
 
 func String(s string) Value {
+	if len(s) <= 6 { // length 1b + payload 6b + VString type 1b = uint64
+		x := [8]byte{}
+		copy(x[1:], s)
+		u64 := uint64(len(s))<<56 | *(*uint64)(unsafe.Pointer(&x)) | uint64(VString)
+		return Value{v: u64, p: sStringMarker}
+	}
 	return Value{v: VString, p: unsafe.Pointer(&s)}
 }
 
@@ -174,6 +205,10 @@ func _interface(i interface{}) Value {
 
 // _str cast value to string
 func (v Value) _str() string {
+	if v.p == sStringMarker {
+		tmp := *(*[8]byte)(unsafe.Pointer(&v.v))
+		return string(tmp[1 : 1+v.v>>56])
+	}
 	return *(*string)(v.p)
 }
 
@@ -198,6 +233,8 @@ func (v Value) Int() int64 { _, i, _ := v.Num(); return i }
 
 func (v Value) Float() float64 { f, _, _ := v.Num(); return f }
 
+func (v Value) Bool() bool { return v.p == trueMarker }
+
 func (v Value) Array() *Values { return (*Values)(v.p) }
 
 // Function cast value to function
@@ -206,6 +243,8 @@ func (v Value) Function() *Func { return (*Func)(v.p) }
 // Interface returns the interface{}
 func (v Value) Interface() interface{} {
 	switch v.Type() {
+	case VBool:
+		return v.Bool()
 	case VNumber:
 		vf, vi, vIsInt := v.Num()
 		if vIsInt {
@@ -215,7 +254,7 @@ func (v Value) Interface() interface{} {
 	case VString:
 		return v._str()
 	case VArray:
-		a := v.Array().a
+		a := v.Array().Underlay
 		x := make([]interface{}, len(a))
 		for i := range a {
 			x[i] = a[i].Interface()
@@ -241,11 +280,8 @@ func (v Value) TypedInterface(t reflect.Type) interface{} {
 			rv = rv.Convert(t)
 			return rv.Interface()
 		}
-		if t.Kind() == reflect.Bool {
-			return !v.IsFalse()
-		}
 	case VArray:
-		a := v.Array().a
+		a := v.Array().Underlay
 		if t.Kind() == reflect.Slice {
 			e := t.Elem()
 			s := reflect.MakeSlice(t, len(a), len(a))
@@ -258,29 +294,23 @@ func (v Value) TypedInterface(t reflect.Type) interface{} {
 	return v.Interface()
 }
 
-func (v Value) Expect(t valueType) Value {
+func (v Value) MustBe(t ValueType, msg string, msgArg int) Value {
 	if v.Type() != t {
-		panicf("expect %v, got %v", t, v.Type())
-	}
-	return v
-}
-
-func (v Value) ExpectMsg(t valueType, msg string) Value {
-	if v.Type() != t {
+		if msgArg > 0 {
+			panicf("%s %d: expect %v, got %v", msg, msgArg, t, v.Type())
+		}
 		panicf("%s: expect %v, got %v", msg, t, v.Type())
 	}
 	return v
 }
 
-// Equal tests whether value is equal to another value
 func (v Value) Equal(r Value) bool {
+	if v == r {
+		return true
+	}
 	switch v.Type() + r.Type() {
-	case _NumNum, VNil * 2:
-		return v == r
-	case _StrStr:
+	case VString * 2:
 		return r._str() == v._str()
-	case VFunction * 2:
-		return v.Function() == r.Function()
 	case VInterface * 2:
 		return v.Interface() == r.Interface()
 	}
@@ -289,14 +319,14 @@ func (v Value) Equal(r Value) bool {
 
 func (v Value) Less(r Value) bool {
 	switch v.Type() + r.Type() {
-	case _NumNum:
+	case VNumber * 2:
 		vf, vi, vIsInt := v.Num()
 		rf, ri, rIsInt := r.Num()
 		if vIsInt && rIsInt {
 			return vi < ri
 		}
 		return vf < rf
-	case _StrStr:
+	case VString * 2:
 		return r._str() < v._str()
 	case VString + VNumber:
 		if v.Type() == VNumber {
@@ -305,6 +335,21 @@ func (v Value) Less(r Value) bool {
 		return false
 	}
 	return false
+}
+
+func (v Value) HashCode() [2]uint64 {
+	if v.Type() != VString {
+		return *(*[2]uint64)(unsafe.Pointer(&v))
+	}
+	code := [2]uint64{1 << 63, 5381}
+	for _, r := range v._str() {
+		old := code[1]
+		code[1] = code[1]*33 + uint64(r)
+		if code[1] < old {
+			code[0]++
+		}
+	}
+	return code
 }
 
 func (v Value) String() string { return v.toString(0, false) }
@@ -318,6 +363,8 @@ func (v Value) toString(lv int, j bool) string {
 		return "<omit deep nesting>"
 	}
 	switch v.Type() {
+	case VBool:
+		return strconv.FormatBool(v.Bool())
 	case VNumber:
 		vf, vi, vIsInt := v.Num()
 		if vIsInt {
@@ -330,17 +377,12 @@ func (v Value) toString(lv int, j bool) string {
 		}
 		return v._str()
 	case VArray:
-		t := v.Array()
 		p := bytes.NewBufferString("[")
-		for _, a := range t.a {
+		for _, a := range v.Array().Underlay {
 			p.WriteString(a.toString(lv+1, j))
 			p.WriteString(",")
 		}
-		if len(t.a) > 0 {
-			p.Truncate(p.Len() - 1)
-		}
-		p.WriteString("]")
-		return p.String()
+		return strings.TrimRight(p.String(), ", ") + "]"
 	case VFunction:
 		return v.Function().String()
 	case VInterface:
@@ -359,30 +401,26 @@ func (v Value) toString(lv int, j bool) string {
 
 type Values struct {
 	Unpacked bool
-	a        []Value
+	Underlay []Value
 }
 
 func (t *Values) Len() int {
-	return len(t.a)
-}
-
-func (t *Values) Underlay() []Value {
-	return t.a
+	return len(t.Underlay)
 }
 
 func (t *Values) Slice1(start int64, end int64) []Value {
-	start2, end2 := sliceInRange(start, end, len(t.a))
-	return t.a[start2:end2]
+	start2, end2 := sliceInRange(start, end, len(t.Underlay))
+	return t.Underlay[start2:end2]
 }
 
 func (t *Values) Put1(idx int64, v Value) (appended bool) {
 	idx--
-	if idx < int64(len(t.a)) && idx >= 0 {
-		t.a[idx] = v
+	if idx < int64(len(t.Underlay)) && idx >= 0 {
+		t.Underlay[idx] = v
 		return false
 	}
-	if idx == int64(len(t.a)) {
-		t.a = append(t.a, v)
+	if idx == int64(len(t.Underlay)) {
+		t.Underlay = append(t.Underlay, v)
 		return true
 	}
 	return false
@@ -390,8 +428,8 @@ func (t *Values) Put1(idx int64, v Value) (appended bool) {
 
 func (t *Values) Get1(idx int64) (v Value) {
 	idx--
-	if idx < int64(len(t.a)) && idx >= 0 {
-		return t.a[idx]
+	if idx < int64(len(t.Underlay)) && idx >= 0 {
+		return t.Underlay[idx]
 	}
 	return Value{}
 }

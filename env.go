@@ -159,7 +159,7 @@ func (env *Env) InInterface(i int, allowNil bool, expectedType reflect.Type) int
 	return itf
 }
 
-func (env *Env) In(i int, expectedType valueType) Value {
+func (env *Env) In(i int, expectedType ValueType) Value {
 	v := env.Get(i)
 	if v.Type() != expectedType {
 		panicf("%s: bad argument #%d, expect %v, got %v",
@@ -184,6 +184,11 @@ func (env *Env) String() string {
 func (env *Env) NewString(s string) Value {
 	env.Global.DecrDeadsize(int64(len(s)))
 	return String(s)
+}
+
+func (env *Env) NewArray(e ...Value) Value {
+	env.Global.DecrDeadsize(int64(len(e)) * ValueSize)
+	return Array(e...)
 }
 
 func (env *Env) NewStringBytes(s []byte) Value {

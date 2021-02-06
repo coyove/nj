@@ -1,68 +1,60 @@
 package lib
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/coyove/script"
 )
 
 type Set struct {
-	m map[interface{}]struct{}
+	m map[[2]uint64]struct{}
+	v []script.Value
 	p *script.Program
 }
 
 func init() {
 	script.AddGlobalValue("set", func(env *script.Env) {
-		s := &Set{m: map[interface{}]struct{}{}, p: env.Global}
-		for _, e := range env.Stack() {
-			s.Add(e.Interface())
+		s := &Set{m: map[[2]uint64]struct{}{}, p: env.Global}
+		for _, e := range env.In(0, script.VArray).Array().Underlay {
+			s.Add(e)
 		}
 		env.A = script.Interface(s)
 	},
 		"set() => unique_set",
-		"set(e1, e2, ..., en) => unique_set",
+		"set({ e1, e2, ..., en }) => unique_set",
 		"\tcreate a unique set, methods:",
-		"\t\tunique_set.add(value) => ok_or_not",
-		"\t\tunique_set.exists(value) => ok_or_not",
+		"\t\tunique_set.add(value) => added_or_not",
+		"\t\tunique_set.exists(value) => exists_or_not",
+		"\t\tunique_set.values() => { e1, e2, ... en }",
 		"\t\tunique_set.size() => int",
-		"\t\tunique_set.set() => n, e1, e2, ..., en",
 	)
 }
 
-func (s *Set) Add(v interface{}) bool {
-	s.p.DecrDeadsize(1)
-	_, exist := s.m[v]
-	s.m[v] = struct{}{}
-	return !exist
+func (s *Set) Add(v script.Value) bool {
+	s.p.DecrDeadsize(64)
+	hash := v.HashCode()
+	_, exist := s.m[hash]
+	if exist {
+		return false
+	}
+	s.m[hash] = struct{}{}
+	s.v = append(s.v, v)
+	return true
 }
 
 func (s *Set) Size() int {
 	return len(s.m)
 }
 
-func (s *Set) Exists(v interface{}) bool {
-	_, ok := s.m[v]
+func (s *Set) Exists(v script.Value) bool {
+	_, ok := s.m[v.HashCode()]
 	return ok
 }
 
-func (s *Set) Set() []script.Value {
-	x := make([]script.Value, 0, len(s.m))
-	for k := range s.m {
-		x = append(x, script.Interface(k))
-	}
-	return x
+func (s *Set) Values() []script.Value {
+	return s.v
 }
 
 func (s *Set) String() string {
-	p := bytes.NewBufferString("set(")
-	for k := range s.m {
-		p.WriteString(fmt.Sprint(k))
-		p.WriteString(",")
-	}
-	if len(s.m) > 0 {
-		p.Truncate(p.Len() - 1)
-	}
-	p.WriteString(")")
-	return p.String()
+	return fmt.Sprintf("set(%d)", s.Size())
 }

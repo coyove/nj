@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/coyove/script/parser"
 )
@@ -40,7 +39,6 @@ func (p *posVByte) append(idx uint32, line uint32) {
 	}
 	v(uint64(idx))
 	v(uint64(line))
-
 }
 
 func (p posVByte) read(i int) (next int, idx, line uint32) {
@@ -96,35 +94,38 @@ func (b *packet) Len() int {
 	return len(b.Code)
 }
 
-var singleOp = map[opCode]string{
-	OpConcat: parser.AConcat,
-	OpAdd:    parser.AAdd,
-	OpSub:    parser.ASub,
-	OpMul:    parser.AMul,
-	OpDiv:    parser.ADiv,
-	OpIDiv:   parser.AIDiv,
-	OpMod:    parser.AMod,
-	OpEq:     parser.AEq,
-	OpNeq:    parser.ANeq,
-	OpLess:   parser.ALess,
-	OpLessEq: parser.ALessEq,
-	OpLoad:   parser.ALoad,
-	OpStore:  parser.AStore,
-	OpGStore: parser.AGStore,
-	OpGLoad:  parser.AGLoad,
-	OpSlice:  parser.ASlice,
-	OpPow:    parser.APow,
-}
-
-func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
-	sb := &bytes.Buffer{}
-	spaces := strings.Repeat("        ", tab)
-	spaces2 := ""
-	if tab > 0 {
-		spaces2 = strings.Repeat("        ", tab-1) + "+-------"
+var (
+	biOp = map[opCode]string{
+		OpConcat: parser.AConcat,
+		OpAdd:    parser.AAdd,
+		OpSub:    parser.ASub,
+		OpMul:    parser.AMul,
+		OpDiv:    parser.ADiv,
+		OpIDiv:   parser.AIDiv,
+		OpMod:    parser.AMod,
+		OpEq:     parser.AEq,
+		OpNeq:    parser.ANeq,
+		OpLess:   parser.ALess,
+		OpLessEq: parser.ALessEq,
+		OpLoad:   parser.ALoad,
+		OpStore:  parser.AStore,
+		OpGStore: parser.AGStore,
+		OpSlice:  parser.ASlice,
+		OpPow:    parser.APow,
 	}
+	uOp = map[opCode]string{
+		OpGLoad:   parser.AGLoad,
+		OpLen:     parser.ALen,
+		OpNot:     parser.ANot,
+		OpCallMap: parser.ACallMap,
+		OpRet:     parser.AReturn,
+		OpPush:    "push",
+	}
+)
 
-	sb.WriteString(spaces2 + "+ START " + c.String() + "\n")
+func pkPrettify(c *Func, p *Program, toplevel bool) string {
+	sb := &bytes.Buffer{}
+	sb.WriteString("+ START " + c.String() + "\n")
 
 	readAddr := func(a uint16, rValue bool) string {
 		if a == regA {
@@ -139,7 +140,7 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 			if a>>12 == 1 || toplevel {
 				v := (*p.Stack)[a&0xfff]
 				if !v.IsNil() {
-					suffix = "`" + v.String()
+					suffix = "(" + v.JSONString() + ")"
 				}
 			}
 		}
@@ -156,7 +157,6 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 	for i, inst := range c.Code.Code {
 		cursor := uint32(i) + 1
 		bop, a, b := splitInst(inst)
-		sb.WriteString(spaces)
 
 		if len(c.Code.Pos) > 0 {
 			next, op, line := c.Code.Pos.read(0)
@@ -191,22 +191,16 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 			sb.WriteString(readAddr(a, false) + " = " + readAddr(b, true))
 		case OpList:
 			sb.WriteString("list")
-		case OpPush:
-			sb.WriteString("push " + readAddr(a, true))
-		case OpRet:
-			sb.WriteString("ret " + readAddr(a, true))
 		case OpLoadFunc:
-			sb.WriteString("$a = function:\n")
 			cls := p.Functions[a]
-			sb.WriteString(pkPrettify(cls, p, false, tab+1))
+			sb.WriteString("loadfunc " + cls.Name + "\n")
+			sb.WriteString(pkPrettify(cls, p, false))
 		case OpCall:
 			if b == 1 {
-				sb.WriteString("tail-call " + readAddr(a, true))
+				sb.WriteString("tailcall " + readAddr(a, true))
 			} else {
 				sb.WriteString("call " + readAddr(a, true))
 			}
-		case OpCallMap:
-			sb.WriteString("callmap " + readAddr(a, true))
 		case OpIf, OpIfNot, OpJmp:
 			pos := int32(inst&0xffffff) - 1<<23
 			pos2 := uint32(int32(cursor) + pos)
@@ -218,13 +212,11 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 			}
 			sb.WriteString(fmt.Sprintf("jmp %d to %d", pos, pos2))
 		case OpInc:
-			sb.WriteString("inc " + readAddr(a, false) + " " + readAddr(uint16(b), true))
-		case OpLen:
-			sb.WriteString("len " + readAddr(a, true))
-		case OpNot:
-			sb.WriteString("not " + readAddr(a, true))
+			sb.WriteString("inc " + readAddr(a, false) + " " + readAddr(b, true))
 		default:
-			if bs, ok := singleOp[bop]; ok {
+			if us, ok := uOp[bop]; ok {
+				sb.WriteString(us + " " + readAddr(a, true))
+			} else if bs, ok := biOp[bop]; ok {
 				sb.WriteString(bs + " " + readAddr(a, true) + " " + readAddr(b, true))
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))
@@ -236,6 +228,6 @@ func pkPrettify(c *Func, p *Program, toplevel bool, tab int) string {
 
 	c.Code.Pos = oldpos
 
-	sb.WriteString(spaces2 + "+ END " + c.String())
+	sb.WriteString("+ END " + c.String())
 	return sb.String()
 }

@@ -50,12 +50,12 @@ func (e *ExecError) Error() string {
 	return msg.String()
 }
 
-// InternalExecCursorLoop executes 'K' under 'Env' from the given start 'cursor'
+// InternalExecCursorLoop executes 'K' under 'env' from the given start 'cursor'
 func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
-	var stackEnv = env
-	var retStack []stacktrace
-
+	stackEnv := env
 	stackEnv.StackOffset = uint32(len(*env.stack))
+
+	var retStack []stacktrace
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -93,12 +93,9 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		switch bop {
 		case OpSet:
 			env._set(opa, env._get(opb))
-			// if b.Type() == VString {
-			// 	b.String()
-			// }
 		case OpInc:
-			vaf, vai, vaIsInt := env._get(opa).Expect(VNumber).Num()
-			vbf, vbi, vbIsInt := env._get(opb).Expect(VNumber).Num()
+			vaf, vai, vaIsInt := env._get(opa).MustBe(VNumber, "inc, read sym", 0).Num()
+			vbf, vbi, vbIsInt := env._get(opb).MustBe(VNumber, "inc, read step", 0).Num()
 			if vaIsInt && vbIsInt {
 				env.A = Int(vai + vbi)
 			} else {
@@ -106,7 +103,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			}
 			env._set(opa, env.A)
 		case OpConcat:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _StrStr {
+			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == VString+VString {
 				env.A = concat(env.Global, va._str(), vb._str())
 			} else if va.Type() == VString && vb.Type() == VNumber {
 				if vbf, vbi, vbIsInt := vb.Num(); vbIsInt {
@@ -121,10 +118,11 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = concat(env.Global, strconv.FormatFloat(vaf, 'f', 0, 64), vb._str())
 				}
 			} else {
-				va, vb = va.Expect(VString), vb.Expect(VString)
+				va.MustBe(VString, "concat", 0)
+				vb.MustBe(VString, "concat", 0)
 			}
 		case OpAdd:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _NumNum {
+			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == VNumber+VNumber {
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt {
@@ -142,10 +140,11 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(vaf + vbf)
 				}
 			} else {
-				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
+				va.MustBe(VNumber, "add", 0)
+				vb.MustBe(VNumber, "add", 0)
 			}
 		case OpSub:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _NumNum {
+			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == VNumber+VNumber {
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt {
@@ -154,10 +153,11 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(vaf - vbf)
 				}
 			} else {
-				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
+				va.MustBe(VNumber, "sub", 0)
+				vb.MustBe(VNumber, "sub", 0)
 			}
 		case OpMul:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _NumNum {
+			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == VNumber+VNumber {
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt {
@@ -166,10 +166,11 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(vaf * vbf)
 				}
 			} else {
-				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
+				va.MustBe(VNumber, "mul", 0)
+				vb.MustBe(VNumber, "mul", 0)
 			}
 		case OpDiv:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _NumNum {
+			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == VNumber+VNumber {
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt && vai%vbi == 0 {
@@ -178,12 +179,13 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(vaf / vbf)
 				}
 			} else {
-				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
+				va.MustBe(VNumber, "div", 0)
+				vb.MustBe(VNumber, "div", 0)
 			}
 		case OpIDiv:
-			env.A = Int(env._get(opa).ExpectMsg(VNumber, "idiv").Int() / env._get(opb).ExpectMsg(VNumber, "idiv").Int())
+			env.A = Int(env._get(opa).MustBe(VNumber, "idiv", 0).Int() / env._get(opb).MustBe(VNumber, "idiv", 0).Int())
 		case OpMod:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == _NumNum {
+			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == VNumber+VNumber {
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt {
@@ -192,7 +194,8 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(math.Remainder(vaf, vbf))
 				}
 			} else {
-				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
+				va.MustBe(VNumber, "mod", 0)
+				vb.MustBe(VNumber, "mod", 0)
 			}
 		case OpEq:
 			env.A = Bool(env._get(opa).Equal(env._get(opb)))
@@ -200,7 +203,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			env.A = Bool(!env._get(opa).Equal(env._get(opb)))
 		case OpLess:
 			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
-			case _NumNum:
+			case VNumber + VNumber:
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt {
@@ -208,14 +211,15 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				} else {
 					env.A = Bool(vaf < vbf)
 				}
-			case _StrStr:
+			case VString + VString:
 				env.A = Bool(va._str() < vb._str())
 			default:
-				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
+				va.MustBe(VNumber, "less", 0)
+				vb.MustBe(VNumber, "less", 0)
 			}
 		case OpLessEq:
 			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
-			case _NumNum:
+			case VNumber + VNumber:
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt {
@@ -223,16 +227,17 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				} else {
 					env.A = Bool(vaf <= vbf)
 				}
-			case _StrStr:
+			case VString + VString:
 				env.A = Bool(va._str() <= vb._str())
 			default:
-				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
+				va.MustBe(VNumber, "less", 0)
+				vb.MustBe(VNumber, "less", 0)
 			}
 		case OpNot:
 			env.A = Bool(env._get(opa).IsFalse())
 		case OpPow:
 			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
-			case _NumNum:
+			case VNumber + VNumber:
 				vaf, vai, vaIsInt := va.Num()
 				vbf, vbi, vbIsInt := vb.Num()
 				if vaIsInt && vbIsInt && vbi >= 1 {
@@ -241,7 +246,8 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(math.Pow(vaf, vbf))
 				}
 			default:
-				va, vb = va.Expect(VNumber), vb.Expect(VNumber)
+				va.MustBe(VNumber, "pow", 0)
+				vb.MustBe(VNumber, "pow", 0)
 			}
 		case OpLen:
 			switch v := env._get(opa); v.Type() {
@@ -255,30 +261,29 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				env.A = Int(int64(reflectLen(v.Interface())))
 			}
 		case OpList:
-			env.Global.DecrDeadsize(int64(stackEnv.Size()) * ValueSize)
-			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
+			env.A = env.NewArray(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
 		case OpGStore:
 			env.A = env._get(opb)
-			env.Global.GStore(env._get(opa).ExpectMsg(VString, "gstore")._str(), env.A)
+			env.Global.GStore(env._get(opa).MustBe(VString, "gstore", 0)._str(), env.A)
 		case OpGLoad:
-			env.A = env.Global.GLoad(env._get(opa).ExpectMsg(VString, "gload")._str())
+			env.A = env.Global.GLoad(env._get(opa).MustBe(VString, "gload", 0)._str())
 		case OpStore:
 			subject, v := env._get(opa), env._get(opb)
 			switch subject.Type() {
 			case VArray:
-				if subject.Array().Put1(env.A.ExpectMsg(VNumber, "store").Int(), v) {
+				if subject.Array().Put1(env.A.MustBe(VNumber, "store", 0).Int(), v) {
 					env.Global.DecrDeadsize(ValueSize)
 				}
 			case VInterface:
 				reflectStore(subject.Interface(), env.A, v)
 			default:
-				subject = subject.Expect(VArray)
+				subject = subject.MustBe(VArray, "store", 0)
 			}
 			env.A = v
 		case OpSlice:
 			subject := env._get(opa)
-			start, end := env.A.ExpectMsg(VNumber, "slice").Int(), env._get(opb).ExpectMsg(VNumber, "slice").Int()
+			start, end := env.A.MustBe(VNumber, "slice", 0).Int(), env._get(opb).MustBe(VNumber, "slice", 0).Int()
 			switch subject.Type() {
 			case VArray:
 				env.A = Array(subject.Array().Slice1(start, end)...)
@@ -289,25 +294,25 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case VInterface:
 				env.A = Interface(reflectSlice(subject.Interface(), start, end))
 			default:
-				subject = subject.Expect(VArray)
+				subject = subject.MustBe(VArray, "slice", 0)
 			}
 		case OpLoad:
 			switch a := env._get(opa); a.Type() {
 			case VArray:
-				env.A = a.Array().Get1(env._get(opb).ExpectMsg(VNumber, "load").Int())
+				env.A = a.Array().Get1(env._get(opb).MustBe(VNumber, "load", 0).Int())
 			case VInterface:
 				env.A = reflectLoad(a.Interface(), env._get(opb))
 			case VString:
-				if idx, s := env._get(opb).ExpectMsg(VNumber, "load").Int(), a._str(); idx >= 1 && idx <= int64(len(s)) {
+				if idx, s := env._get(opb).MustBe(VNumber, "load", 0).Int(), a._str(); idx >= 1 && idx <= int64(len(s)) {
 					env.A = Int(int64(s[idx-1]))
 				}
 			default:
-				a = a.Expect(VArray)
+				a = a.MustBe(VArray, "load", 0)
 			}
 		case OpPush:
 			v := env._get(opa)
 			if v.Type() == VArray && v.Array().Unpacked {
-				*stackEnv.stack = append(*stackEnv.stack, v.Array().Underlay()...)
+				*stackEnv.stack = append(*stackEnv.stack, v.Array().Underlay...)
 			} else {
 				stackEnv.Push(v)
 			}
@@ -328,7 +333,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case OpLoadFunc:
 			env.A = Function(env.Global.Functions[opa])
 		case OpCallMap:
-			cls := env._get(opa).ExpectMsg(VFunction, "callmap").Function()
+			cls := env._get(opa).MustBe(VFunction, "callmap", 0).Function()
 			m := make(map[string]Value, stackEnv.Size()/2)
 			for i := 0; i < stackEnv.Size(); i += 2 {
 				a := stackEnv.Stack()[i]
@@ -357,7 +362,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			stackEnv.A = Interface(m)
 			fallthrough
 		case OpCall:
-			cls := env._get(opa).ExpectMsg(VFunction, "call").Function()
+			cls := env._get(opa).MustBe(VFunction, "call", 0).Function()
 
 			if cls.Native != nil {
 				stackEnv.Global = env.Global

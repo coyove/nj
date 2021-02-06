@@ -12,8 +12,6 @@ package parser
 %type<expr> expr_list_paren
 %type<expr> expr_assign_list
 %type<expr> expr
-%type<expr> postfix_incdec
-%type<expr> _postfix_assign
 %type<expr> prefix_expr
 %type<expr> assign_stat
 %type<expr> for_stat
@@ -36,7 +34,6 @@ package parser
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
 %token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '$' TIDiv
-%token<token> TAddEq TSubEq TMulEq TDivEq TModEq
 %token<token> TSquare TDotDot 
 
 /* Operators */
@@ -95,20 +92,10 @@ flow_stat:
         for_stat       { $$ = $1 } |
         if_stat        { $$ = $1 }
 
-_postfix_assign:
-        TAddEq         { $$ = NewSymbol(AAdd).SetPos($1.Pos) } |
-        TSubEq         { $$ = NewSymbol(ASub).SetPos($1.Pos) } |
-        TMulEq         { $$ = NewSymbol(AMul).SetPos($1.Pos) } |
-        TDivEq         { $$ = NewSymbol(ADiv).SetPos($1.Pos) } |
-        TModEq         { $$ = NewSymbol(AMod).SetPos($1.Pos) }
-
 assign_stat:
         prefix_expr {
             $$ = $1
         } | 
-        postfix_incdec {
-            $$ = $1
-        } |
         TLocal ident_list {
             $$ = __chain()
             for _, v := range $2.Nodes {
@@ -135,28 +122,6 @@ assign_stat:
                 x := decl.moveLoadStore(__move, __load(tmp, NewNumberFromInt(int64(i + 1))).SetPos($1.Pos)).SetPos($1.Pos)
                 $$ = $$.append(__local([]Node{decl}, []Node{x}, $1.Pos))
             }
-        }
-
-postfix_incdec:
-        TIdent _postfix_assign expr %prec ASSIGN  {
-            if $2.SymbolValue() == AAdd && $3.IsNumber() {
-                $$ = __inc(NewSymbolFromToken($1), $3).SetPos($2.Pos())
-            } else if $2.SymbolValue() == ASub && $3.IsNumber() {
-                if f, i, isInt := $3.NumberValue(); isInt {
-                    $$ = __inc(NewSymbolFromToken($1), NewNumberFromInt(-i)).SetPos($2.Pos())
-                } else {
-                    $$ = __inc(NewSymbolFromToken($1), NewNumberFromFloat(-f)).SetPos($2.Pos())
-                }
-            } else {
-                $$ = __move(NewSymbolFromToken($1), NewComplex($2, NewSymbolFromToken($1), $3)).SetPos($2.Pos())
-            }
-        } |
-        prefix_expr '[' expr ']' _postfix_assign expr %prec ASSIGN {
-            $$ = __store($1, $3, NewComplex($5, __load($1, $3), $6).SetPos($5.Pos()))
-        } |
-        prefix_expr '.' TIdent _postfix_assign expr %prec ASSIGN {
-            i := NewString($3.Str) 
-            $$ = __store($1, i, NewComplex($4, __load($1, i), $5).SetPos($4.Pos()))
         }
 
 for_stat:

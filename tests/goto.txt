@@ -4,12 +4,12 @@ print("test goto")
 goto a1
 :: a2
 ::
-i+=1
+i=i+1
 goto a3
 
 ::a1::
 assert(true)
-i+=1
+i=i+1
 goto a2
 
 :: a3::
