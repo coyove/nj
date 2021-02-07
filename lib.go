@@ -21,7 +21,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const Version int64 = 242
+const Version int64 = 243
 
 var (
 	g   = map[string]Value{}
@@ -36,6 +36,12 @@ func AddGlobalValue(k string, v interface{}, doc ...string) {
 	switch v := v.(type) {
 	case func(*Env):
 		g[k] = Native(k, v, doc...)
+	case func(*Env, Value) Value:
+		g[k] = Native1(k, v, doc...)
+	case func(*Env, Value, Value) Value:
+		g[k] = Native2(k, v, doc...)
+	case func(*Env, Value, Value, Value) Value:
+		g[k] = Native3(k, v, doc...)
 	default:
 		g[k] = Interface(v)
 	}
@@ -65,12 +71,13 @@ func init() {
 		}
 		env.A = env.NewArray(globals...)
 	}, "globals() => { g1, g2, ... }", "\tlist all global values")
-	AddGlobalValue("doc", func(env *Env) {
-		env.A = String(env.In(0, VFunction).Function().DocString)
+	AddGlobalValue("doc", func(env *Env, f Value) Value {
+		return String(f.MustFunc("doc", 0).DocString)
 	}, "doc(function) => string", "\treturn function's documentation")
-	AddGlobalValue("unpack", func(env *Env) {
-		env.A = Array(env.In(0, VArray).Array().Underlay...)
+	AddGlobalValue("unpack", func(env *Env, a Value) Value {
+		env.A = Array(a.MustArray("unpack", 0).Underlay...)
 		env.A.Array().Unpacked = true
+		return env.A
 	})
 	AddGlobalValue("debug_locals", func(env *Env) {
 		var r []Value
@@ -88,13 +95,14 @@ func init() {
 		}
 		env.A = env.NewArray(r...)
 	}, "debug_globals() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }")
-	AddGlobalValue("debug_set", func(env *Env) {
-		(*env.Global.Stack)[env.In(0, VNumber).Int()] = env.Get(1)
+	AddGlobalValue("debug_set", func(env *Env, idx, value Value) Value {
+		(*env.Global.Stack)[idx.MustNumber("debug_set", 1).Int()] = value
+		return Nil
 	}, "debug_set(idx, value)")
-	AddGlobalValue("debug_stacktrace", func(env *Env) {
+	AddGlobalValue("debug_stacktrace", func(env *Env, skip Value) Value {
 		stacks := env.Debug.Stacktrace
 		lines := make([]Value, 0, len(stacks))
-		for i := len(stacks) - 1 - int(env.InInt(0, 0)); i >= 0; i-- {
+		for i := len(stacks) - 1 - int(skip.IntDefault(0)); i >= 0; i-- {
 			r := stacks[i]
 			src := uint32(0)
 			for i := 0; i < len(r.cls.Code.Pos); {
@@ -115,27 +123,23 @@ func init() {
 			}
 			lines = append(lines, String(r.cls.Name), Int(int64(src)), Int(int64(r.cursor-1)))
 		}
-		env.A = env.NewArray(lines...)
+		return env.NewArray(lines...)
 	}, "debug_stacktrace(skip) => { func_name1, line1, cursor1, n2, l2, c2, ... }")
-	AddGlobalValue("narray", func(env *Env) {
-		n := env.In(0, VNumber).Int()
-		env.A = env.NewArray(make([]Value, n)...)
+	AddGlobalValue("narray", func(env *Env, n Value) Value {
+		return env.NewArray(make([]Value, n.MustNumber("narray", 0).Int())...)
 	}, "narray(n) => { nil, ..., nil }", "\treturn an array size of n, filled with nil")
 	AddGlobalValue("type", func(env *Env) {
 		env.A = String(env.Get(0).Type().String())
 	}, "type(value) => string", "\treturn value's type")
-	AddGlobalValue("pcall", func(env *Env) {
-		a, err := env.In(0, VFunction).Function().Call(env.Stack()[1:]...)
+	AddGlobalValue("pcall", func(env *Env, f Value) Value {
+		a, err := f.MustFunc("pcall", 0).Call(env.Stack()[1:]...)
 		if err == nil {
-			env.A = a
-		} else {
-			switch err := err.(type) {
-			case *ExecError:
-				env.A = Interface(err.r)
-			default:
-				env.A = Interface(err)
-			}
+			return a
 		}
+		if err, ok := err.(*ExecError); ok {
+			return Interface(err.r)
+		}
+		return Interface(err)
 	}, "pcall(function, arg1, arg2, ...) => result_of_function",
 		"\texecute the function, catch panic and return")
 	AddGlobalValue("panic", func(env *Env) { panic(env.Get(0)) }, "panic(value)")
@@ -183,10 +187,7 @@ func init() {
 		env.A = Int(int64(length))
 	}, "print(a, b, c, ...)", "\tprint values, no space between them")
 	AddGlobalValue("write", func(env *Env) {
-		w, ok := env.In(0, VInterface).Interface().(io.Writer)
-		if !ok {
-			panicf("invalid stdout")
-		}
+		w := env.Get(0).Interface().(io.Writer)
 		for _, a := range env.Stack()[1:] {
 			fmt.Fprint(w, a.String())
 		}
@@ -197,66 +198,81 @@ func init() {
 		}
 		fmt.Fprintln(env.Global.Stdout)
 	}, "println(a, b, c, ...)", "\tprint values, insert space between each of them")
-	AddGlobalValue("scanln", func(env *Env) {
+	AddGlobalValue("scanln", func(env *Env, prompt, n Value) Value {
+		fmt.Fprint(env.Global.Stdout, prompt.StringDefault(""))
 		var results []Value
-		nIdx := 0
-		if p := env.InStr(0, ""); p != "" {
-			fmt.Fprint(env.Global.Stdout, p)
-			nIdx++
-		}
 		var r io.Reader = env.Global.Stdin
 		if env.Global.GetDeadsize() > 0 {
 			r = io.LimitReader(r, env.Global.GetDeadsize())
 		}
-		for n := env.InInt(nIdx, 1); n > 0; n-- {
+		for i := n.IntDefault(1); i > 0; i-- {
 			var s string
 			if _, err := fmt.Fscan(r, &s); err != nil {
 				break
 			}
 			results = append(results, env.NewString(s))
 		}
-		env.A = env.NewArray(results...)
+		return env.NewArray(results...)
 	},
-		"$f(prompt) => string", "\tprint prompt and read one user input",
-		"$f(n) => { s1, s2, ..., sn }", "\tread N user input",
-		"$f(prompt, n) => { s1, s2, ..., sn }", "\tprint prompt and read N user input",
+		"$f(prompt='', n=1) => { s1, s2, ..., sn }", "\tprint prompt and read N user inputs",
 	)
 	AddGlobalValue("INF", Float(math.Inf(1)))
-	AddGlobalValue("PI", Float(math.Pi), "pi constant")
-	AddGlobalValue("E", Float(math.E), "e constant")
+	AddGlobalValue("PI", Float(math.Pi))
+	AddGlobalValue("E", Float(math.E))
 	AddGlobalValue("randomseed", func(env *Env) {
 		rg.Lock()
-		rg.Rand.Seed(env.InInt(0, 1))
-		rg.Unlock()
+		defer rg.Unlock()
+		rg.Rand.Seed(env.Get(0).IntDefault(1))
 	}, "randomseed(int)")
 	AddGlobalValue("random", func(env *Env) {
 		rg.Lock()
+		defer rg.Unlock()
 		switch len(env.Stack()) {
 		case 2:
-			a, b := int(env.In(0, VNumber).Int()), int(env.In(1, VNumber).Int())
-			env.A = Float(float64(rg.Intn(b-a)+a) + 1)
+			af, ai, aIsInt := env.Get(0).MustNumber("random #", 1).Num()
+			bf, bi, bIsInt := env.Get(1).MustNumber("random #", 2).Num()
+			if aIsInt && bIsInt {
+				env.A = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
+			} else {
+				env.A = Float(rg.Float64()*(bf-af) + af)
+			}
 		case 1:
-			env.A = Float(float64(rg.Intn(int(env.In(0, VNumber).Int()))) + 1)
+			env.A = Int(int64(rg.Intn(int(env.Get(0).MustNumber("random", 0).Int()))) + 1)
 		default:
 			env.A = Float(rg.Float64())
 		}
-		rg.Unlock()
 	},
 		"$f() => [0,1]",
 		"$f(n) => [1, n]",
 		"$f(a, b) => [a, b]")
-	AddGlobalValue("bitand", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() & env.In(1, VNumber).Int()) })
-	AddGlobalValue("bitor", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() | env.In(1, VNumber).Int()) })
-	AddGlobalValue("bitxor", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() ^ env.In(1, VNumber).Int()) })
-	AddGlobalValue("bitrsh", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() >> env.In(1, VNumber).Int()) })
-	AddGlobalValue("bitlsh", func(env *Env) { env.A = Int(env.In(0, VNumber).Int() << env.In(1, VNumber).Int()) })
-	AddGlobalValue("sqrt", func(env *Env) { env.A = Float(math.Sqrt(env.In(0, VNumber).Float())) })
-	AddGlobalValue("floor", func(env *Env) { env.A = Float(math.Floor(env.In(0, VNumber).Float())) })
-	AddGlobalValue("ceil", func(env *Env) { env.A = Float(math.Ceil(env.In(0, VNumber).Float())) })
-	AddGlobalValue("min", func(env *Env) { mathMinMax(env, false) }, "max(a, b, ...) => number")
-	AddGlobalValue("max", func(env *Env) { mathMinMax(env, true) }, "min(a, b, ...) => number")
+	AddGlobalValue("bitand", func(env *Env, a, b Value) Value {
+		return Int(a.MustNumber("bitand", 1).Int() & b.MustNumber("bitand", 2).Int())
+	})
+	AddGlobalValue("bitor", func(env *Env, a, b Value) Value {
+		return Int(a.MustNumber("bitor", 1).Int() | b.MustNumber("bitor", 2).Int())
+	})
+	AddGlobalValue("bitxor", func(env *Env, a, b Value) Value {
+		return Int(a.MustNumber("bitxir", 1).Int() ^ b.MustNumber("bitxir", 2).Int())
+	})
+	AddGlobalValue("bitrsh", func(env *Env, a, b Value) Value {
+		return Int(a.MustNumber("bitrsh", 1).Int() >> b.MustNumber("bitrsh", 2).Int())
+	})
+	AddGlobalValue("bitlsh", func(env *Env, a, b Value) Value {
+		return Int(a.MustNumber("bitlsh", 1).Int() << b.MustNumber("bitlsh", 2).Int())
+	})
+	AddGlobalValue("sqrt", func(env *Env, v Value) Value {
+		return Float(math.Sqrt(v.MustNumber("sqrt", 0).Float()))
+	})
+	AddGlobalValue("floor", func(env *Env, v Value) Value {
+		return Float(math.Floor(v.MustNumber("floor", 0).Float()))
+	})
+	AddGlobalValue("ceil", func(env *Env, v Value) Value {
+		return Float(math.Ceil(v.MustNumber("ceil", 0).Float()))
+	})
+	AddGlobalValue("min", func(env *Env) { mathMinMax(env, false) }, "max(a, b, ...) => largest_number")
+	AddGlobalValue("max", func(env *Env) { mathMinMax(env, true) }, "min(a, b, ...) => smallest_number")
 	AddGlobalValue("abs", func(env *Env) {
-		switch f, i, isInt := env.In(0, VNumber).Num(); {
+		switch f, i, isInt := env.Get(0).MustNumber("abs", 0).Num(); {
 		case isInt && i < 0:
 			env.A = Int(-i)
 		case isInt && i >= 0:
@@ -265,16 +281,10 @@ func init() {
 			env.A = Float(math.Abs(f))
 		}
 	})
-	AddGlobalValue("str", func(env *Env) {
-		switch v := env.Get(0); v.Type() {
-		case VString:
-			env.A = env.NewString(fmt.Sprintf(env.InStr(1, "%s"), v.String()))
-		default:
-			env.A = env.NewString(fmt.Sprintf(env.InStr(1, "%v"), v.Interface()))
-		}
+	AddGlobalValue("str", func(env *Env, v, format Value) Value {
+		return env.NewString(fmt.Sprintf(format.StringDefault("%v"), v.Interface()))
 	},
-		"str(value) => string", "\tconvert value to string",
-		"str(value, format) => string", "\tconvert value to string using format",
+		"str(value, format='%v') => string", "\tconvert value to string using format",
 	)
 	AddGlobalValue("int", func(env *Env) {
 		switch v := env.Get(0); v.Type() {
@@ -285,75 +295,68 @@ func init() {
 			env.A = Int(v)
 		}
 	}, "int(value) => integer", "\tconvert value to integer number (int64)")
-	AddGlobalValue("time", func(env *Env) {
-		switch env.InStr(0, "") {
+	AddGlobalValue("time", func(env *Env, prefix Value) Value {
+		switch prefix.StringDefault("") {
 		case "nano":
-			env.A = Int(time.Now().UnixNano())
+			return Int(time.Now().UnixNano())
 		case "micro":
-			env.A = Int(time.Now().UnixNano() / 1e3)
+			return Int(time.Now().UnixNano() / 1e3)
 		case "milli":
-			env.A = Int(time.Now().UnixNano() / 1e6)
-		default:
-			env.A = Int(time.Now().Unix())
+			return Int(time.Now().UnixNano() / 1e6)
 		}
-	},
-		"time('nano'|'micro'|'milli') => int", "\tunix timestamp in (nano|micro|milli)seconds",
-		"time() => int", "\tunix timestamp in seconds",
-	)
-	AddGlobalValue("sleep", func(env *Env) {
-		if env.Get(0).Type() == VString {
-			d, _ := time.ParseDuration(env.InStr(0, ""))
-			time.Sleep(d)
-		} else {
-			time.Sleep(time.Duration(env.In(0, VNumber).Int()) * time.Millisecond)
-		}
-	}, "sleep(milliseconds|duration_string)")
+		return Int(time.Now().Unix())
+	}, "time(nil|'nano'|'micro'|'milli') => int", "\tunix timestamp in (nano|micro|milli)seconds")
+	AddGlobalValue("sleep", func(env *Env, milli Value) {
+		time.Sleep(time.Duration(milli.IntDefault(0)) * time.Millisecond)
+	}, "sleep(milliseconds)")
 	AddGlobalValue("Go_time", func(env *Env) {
 		if env.Size() > 0 {
 			loc := time.UTC
-			if env.InStr(7, "") == "local" {
+			if env.Get(7).StringDefault("") == "local" {
 				loc = time.Local
 			}
 			env.A = Interface(time.Date(
-				int(env.InInt(0, 1970)), time.Month(env.InInt(1, 1)), int(env.InInt(2, 1)),
-				int(env.InInt(3, 0)), int(env.InInt(4, 0)), int(env.InInt(5, 0)),
-				int(env.InInt(6, 0)), loc,
+				int(env.Get(0).IntDefault(1970)), time.Month(env.Get(1).IntDefault(1)), int(env.Get(2).IntDefault(1)),
+				int(env.Get(3).IntDefault(0)), int(env.Get(4).IntDefault(0)), int(env.Get(5).IntDefault(0)),
+				int(env.Get(6).IntDefault(0)), loc,
 			))
 		} else {
 			env.A = Interface(time.Now())
 		}
 	},
 		"Go_time() => time.Time",
-		"Go_time(year, month, day, h, m, s, nanoseconds, 'local'|'utc') => time.Time")
-	AddGlobalValue("clock", func(env *Env) {
+		"\treturns time.Time struct of current time",
+		"Go_time(year, month, day, h, m, s, nanoseconds, 'local'|'utc') => time.Time",
+		"\treturns time.Time struct constructed by the given arguments",
+	)
+	AddGlobalValue("clock", func(env *Env, prefix Value) Value {
 		x := time.Now()
 		s := *(*[2]int64)(unsafe.Pointer(&x))
-		switch env.InStr(0, "") {
+		switch prefix.StringDefault("") {
 		case "nano":
-			env.A = Int(s[1])
+			return Int(s[1])
 		case "micro":
-			env.A = Int(s[1] / 1e3)
+			return Int(s[1] / 1e3)
 		case "milli":
-			env.A = Int(s[1] / 1e6)
-		default:
-			env.A = Int(s[1] / 1e9)
+			return Int(s[1] / 1e6)
 		}
-	},
-		"clock('nano'|'micro'|'milli') => int", "\t(nano|micro|milli)seconds since startup",
-		"clock() => int", "\tseconds since startup",
-	)
-	AddGlobalValue("exit", func(env *Env) { os.Exit(int(env.InInt(0, 0))) }, "exit(Code)")
+		return Int(s[1] / 1e9)
+	}, "clock(nil|'nano'|'micro'|'milli') => int", "\t(nano|micro|milli)seconds since startup")
+	AddGlobalValue("exit", func(env *Env, code Value) Value {
+		os.Exit(int(code.MustNumber("exit", 0).Int()))
+		return Nil
+	}, "exit(code)")
 	AddGlobalValue("char", func(env *Env) {
-		env.A = env.NewString(string(rune(env.In(0, VNumber).Int())))
+		env.A = env.NewString(string(rune(env.Get(0).MustNumber("char", 0).Int())))
 	}, "char(number) => string")
 	AddGlobalValue("unicode", func(env *Env) {
-		r, sz := utf8.DecodeRuneInString(env.In(0, VString)._str())
+		r, sz := utf8.DecodeRuneInString(env.Get(0).MustString("unicode", 0))
 		env.A = env.NewArray(Int(int64(r)), Int(int64(sz)))
-	}, "unicode(one_char_string) => char_unicode")
-	AddGlobalValue("chars", func(env *Env) {
+	}, "unicode(one_char_string) => { char_unicode, width_in_bytes }")
+	AddGlobalValue("chars", func(env *Env, s, n Value) Value {
 		var r []Value
-		var max = env.InInt(1, 0)
-		for s := env.In(0, VString)._str(); len(s) > 0; {
+		max := n.IntDefault(0)
+		for s := s.MustString("chars", 0); len(s) > 0; {
 			_, sz := utf8.DecodeRuneInString(s)
 			if sz == 0 {
 				break
@@ -364,49 +367,47 @@ func init() {
 			}
 			s = s[sz:]
 		}
-		env.A = env.NewArray(r...)
-	}, "chars(string) => { char1, char2, ... }",
-		"chars(string, max) => { char1, char2, ..., char_max }",
+		return env.NewArray(r...)
+	}, "chars(string) => { char1, char2, ... }", "chars(string, max) => { char1, char2, ..., char_max }",
 		"\tbreak a string into (at most 'max') chars, e.g.:",
 		"\tchars('a中c') => 'a', '中', 'c'",
 		"\tchars('a中c', 1) => 'a'",
 	)
-	AddGlobalValue("match", func(env *Env) {
-		rx, err := regexp.Compile(env.In(1, VString)._str())
+	AddGlobalValue("match", func(env *Env, in, r, n Value) Value {
+		rx, err := regexp.Compile(r.MustString("match #", 2))
 		if err != nil {
-			env.A = Interface(err)
-			return
+			return env.NewArray(Interface(err))
 		}
-		m := rx.FindAllStringSubmatch(env.Get(0).String(), int(env.InInt(2, -1)))
+		m := rx.FindAllStringSubmatch(in.MustString("match #", 1), int(n.IntDefault(-1)))
 		mm := []Value{}
 		for _, m := range m {
 			for _, m := range m {
 				mm = append(mm, String(m))
 			}
 		}
-		env.A = env.NewArray(mm...)
-	}, "match(string, regex) => { match1, match2, ..., matchn }")
-	AddGlobalValue("startswith", func(env *Env) {
-		env.A = Bool(strings.HasPrefix(env.In(0, VString)._str(), env.In(1, VString)._str()))
+		return env.NewArray(mm...)
+	}, "match(string, regex, n=-1) => { match1, match2, ..., matchn }")
+	AddGlobalValue("startswith", func(env *Env, t, p Value) Value {
+		return Bool(strings.HasPrefix(t.MustString("startswith", 0), p.MustString("startswith prefix", 0)))
 	}, "startswith(text, prefix) => bool")
-	AddGlobalValue("endswith", func(env *Env) {
-		env.A = Bool(strings.HasSuffix(env.In(0, VString)._str(), env.In(1, VString)._str()))
+	AddGlobalValue("endswith", func(env *Env, t, s Value) Value {
+		return Bool(strings.HasSuffix(t.MustString("endswith", 0), s.MustString("endswith suffix", 0)))
 	}, "endswith(text, suffix) => bool")
-	AddGlobalValue("stricmp", func(env *Env) {
-		env.A = Bool(strings.EqualFold(env.In(0, VString)._str(), env.In(1, VString)._str()))
+	AddGlobalValue("stricmp", func(env *Env, a, b Value) Value {
+		return Bool(strings.EqualFold(a.MustString("stricmp #", 1), b.MustString("stricmp #", 2)))
 	}, "stricmp(text1, text2) => bool", "\tcompare two strings case insensitively")
-	AddGlobalValue("trim", func(env *Env) {
-		switch a, cutset := env.In(0, VString)._str(), env.InStr(1, " \n\t\r"); env.InStr(2, "") {
+	AddGlobalValue("trim", func(env *Env, txt, p, t Value) Value {
+		switch a, cutset := txt.MustString("trim", 0), p.StringDefault(" \n\t\r"); t.StringDefault("") {
 		case "left", "l":
-			env.A = String(strings.TrimLeft(a, cutset))
+			return String(strings.TrimLeft(a, cutset))
 		case "right", "r":
-			env.A = String(strings.TrimRight(a, cutset))
+			return String(strings.TrimRight(a, cutset))
 		case "prefix", "start":
-			env.A = String(strings.TrimPrefix(a, cutset))
+			return String(strings.TrimPrefix(a, cutset))
 		case "suffix", "end":
-			env.A = String(strings.TrimSuffix(a, cutset))
+			return String(strings.TrimSuffix(a, cutset))
 		default:
-			env.A = String(strings.Trim(a, cutset))
+			return String(strings.Trim(a, cutset))
 		}
 	},
 		"$f(text) => string", "\ttrim spaces",
@@ -414,56 +415,54 @@ func init() {
 		"$f(text, cutset, 'left'|'right') => string", "\ttrim right/left chars inside 'cutset'",
 		"$f(text, pattern, 'suffix'|'prefix') => string", "\ttrim prefix/suffix",
 	)
-	AddGlobalValue("replace", func(env *Env) {
-		a := env.In(0, VString)._str()
-		rx, err := regexp.Compile(env.In(1, VString)._str())
+	AddGlobalValue("replace", func(env *Env, text, src, dst Value) Value {
+		a := text.MustString("replace text", 0)
+		rx, err := regexp.Compile(src.MustString("replace source", 0))
 		if err != nil {
-			env.A = Interface(err)
-			return
+			return Interface(err)
 		}
 		switch f := env.Get(2); f.Type() {
 		case VString:
-			env.A = env.NewString(rx.ReplaceAllString(a, f._str()))
+			return env.NewString(rx.ReplaceAllString(a, f._str()))
 		case VFunction:
-			env.A = env.NewString(rx.ReplaceAllStringFunc(a, func(in string) string {
-				v, err := f.Function().Call(env.NewString(in))
+			return env.NewString(rx.ReplaceAllStringFunc(a, func(in string) string {
+				v, err := f.Function().Call(String(in))
 				if err != nil {
 					panic(err)
 				}
 				return v.String()
 			}))
 		}
+		return Nil
 	},
-		"replace(text, regex, newtext) => string",
-		"replace(text, regex, callback) => string",
+		"replace(text, regex, newtext|callback) => string",
 		"\tcallback will be called in such way: new_string = f(captured_string)",
 	)
-	AddGlobalValue("split", func(env *Env) {
-		x := strings.Split(env.In(0, VString)._str(), env.In(1, VString)._str())
+	AddGlobalValue("split", func(env *Env, text, sep Value) Value {
+		x := strings.Split(text.MustString("split", 0), sep.MustString("split sep", 0))
 		v := make([]Value, len(x))
 		for i := range x {
 			v[i] = String(x[i])
 		}
-		env.A = env.NewArray(v...)
+		return env.NewArray(v...)
 	}, "split(text, sep) => { part1, part2, ... }")
-	AddGlobalValue("strpos", func(env *Env) {
-		a, b := env.In(0, VString)._str(), env.In(1, VString)._str()
-		if env.InStr(2, "") == "last" {
-			env.A = Int(int64(strings.LastIndex(a, b)) + 1)
-		} else {
-			env.A = Int(int64(strings.Index(a, b)) + 1)
+	AddGlobalValue("strpos", func(env *Env, txt, n, t Value) Value {
+		a, b := txt.MustString("strpos #", 1), n.MustString("strpos #", 2)
+		if t.StringDefault("") == "last" {
+			return Int(int64(strings.LastIndex(a, b)) + 1)
 		}
+		return Int(int64(strings.Index(a, b)) + 1)
 	},
 		"strpos(text, needle) => int", "\tfirst occurrence of needle in text, or 0 if not found",
 		"strpos(text, needle, 'last') => int", "\tlast occurrence of needle in text",
 	)
-	AddGlobalValue("format", func(env *Env) {
-		f := strings.Replace(env.In(0, VString)._str(), "%", "%%", -1)
+	AddGlobalValue("format", func(env *Env, p Value) Value {
+		f := strings.Replace(p.MustString("format text", 0), "%", "%%", -1)
 		f = strings.Replace(f, "{}", "%v", -1)
-		env.A = env.NewString(fmt.Sprintf(f, env.StackInterface()[1:]...))
+		return env.NewString(fmt.Sprintf(f, env.StackInterface()[1:]...))
 	}, "format(pattern, a1, a2, ...)", "\t'{}' is the placeholder, no need to escape '%'")
-	AddGlobalValue("error", func(env *Env) {
-		env.A = Interface(errors.New(env.InStr(0, "")))
+	AddGlobalValue("error", func(env *Env, msg Value) Value {
+		return Interface(errors.New(msg.MustString("error", 0)))
 	}, "error(text)", "\tcreate an error")
 	AddGlobalValue("iserror", func(env *Env) {
 		_, ok := env.Get(0).Interface().(error)
@@ -472,7 +471,7 @@ func init() {
 	AddGlobalValue("json", func(env *Env) {
 		env.A = env.NewString(env.Get(0).JSONString())
 	}, "json(v) => json_string")
-	AddGlobalValue("json_get", func(env *Env) {
+	AddGlobalValue("json_get", func(env *Env, js, path, et Value) Value {
 		cv := func(r gjson.Result) Value {
 			switch r.Type {
 			case gjson.String:
@@ -484,28 +483,25 @@ func init() {
 			}
 			return String(r.Raw)
 		}
-		j := strings.TrimSpace(env.In(0, VString)._str())
-		result := gjson.Get(j, env.In(1, VString)._str())
+		j := strings.TrimSpace(js.MustString("json_get #", 1))
+		result := gjson.Get(j, path.MustString("json_get #", 2))
 
-		if expectedType := env.InStr(2, ""); expectedType != "" {
+		if expectedType := et.StringDefault(""); expectedType != "" {
 			if !strings.EqualFold(result.Type.String(), expectedType) {
-				return
+				return Nil
 			}
 		}
 
-		env.A = cv(result)
 		if result.IsArray() {
 			a := result.Array()
 			tmp := make([]Value, len(a))
 			for i := range a {
 				tmp[i] = cv(a[i])
 			}
-			env.A = env.NewArray(tmp...)
+			return env.NewArray(tmp...)
 		}
-	},
-		"$f(json_string, selector) => true|false|number|string|array|object_string",
-		"$f(json_string, selector, expected_type) => value",
-	)
+		return cv(result)
+	}, "$f(json_string, selector, nil|expected_type) => true|false|number|string|array|object_string")
 	AddGlobalValue("dict", func(env *Env) {
 		if a := env.Get(0); a.Type() == VArray {
 			u := a.Array().Underlay
@@ -524,8 +520,12 @@ func init() {
 		}
 	}, "dict(k1, v1, ..., kn, vn) => map[string]Value{ k1: v1, ..., kn: vn }",
 		"dict(k1 = v1, ..., kn = vn) => map[string]Value{ k1: v1, ..., kn: vn }")
+	AddGlobalValue("dict_iter", func(env *Env) {
+		m := env.Get(0).Interface().(map[string]Value)
+		env.A = Interface(reflect.ValueOf(m).MapRange())
+	})
 	AddGlobalValue("pair_sort", func(env *Env) {
-		u := env.Get(0).MustBe(VArray, "pair_sort", 0).Array().Underlay
+		u := env.Get(0).MustArray("pair_sort", 0).Underlay
 		if len(u)%2 != 0 {
 			u = append(u, Value{})
 		}
@@ -534,8 +534,8 @@ func init() {
 		env.A = Array(u...)
 	}, "$f({ k1, v1, ..., kn, vn }) => { ka, va, ..., kz, vz }",
 		"\t$f sorts the given array based on its odd-indexed keys (k1, ... kn)")
-	AddGlobalValue("pair_find", func(env *Env) {
-		u := env.Get(0).MustBe(VArray, "pair_find", 0).Array().Underlay
+	AddGlobalValue("pair_getset", func(env *Env) {
+		u := env.Get(0).MustArray("pair_getset", 0).Underlay
 		if len(u)%2 != 0 {
 			u = append(u, Value{})
 		}
@@ -543,27 +543,35 @@ func init() {
 		view := createValuePairView(u)
 		i := sort.Search(len(view), func(i int) bool { return !view[i][0].Less(k) })
 		if i < len(view) && view[i][0].Equal(k) {
-			env.A = view[i][1]
+			if env.Size() == 3 {
+				view[i][1] = env.Get(2)
+			} else {
+				env.A = view[i][1]
+			}
 		}
-	}, "$f({ k1, v1, ..., kn, vn }, k) => v",
-		"\t$f performs a binary search on the given array based on 'k'")
+	},
+		"$f({ k1, v1, ..., kn, vn }, k) => v",
+		"\t$f performs a binary search on the given array based on 'k'",
+		"$f({ k1, v1, ..., kn, vn }, k, v)",
+		"\t$f sets the value based on key",
+	)
 }
 
 func mathMinMax(env *Env, max bool) {
 	if len(env.Stack()) <= 0 {
 		return
 	}
-	f, i, isInt := env.Get(0).MustBe(VNumber, "minmax #", 1).Num()
+	f, i, isInt := env.Get(0).MustNumber("minmax #", 1).Num()
 	if isInt {
 		for ii := 1; ii < len(env.Stack()); ii++ {
-			if x := env.Get(ii).MustBe(VNumber, "minmax #", ii+1).Int(); x >= i == max {
+			if x := env.Get(ii).MustNumber("minmax #", ii+1).Int(); x >= i == max {
 				i = x
 			}
 		}
 		env.A = Int(i)
 	} else {
 		for i := 1; i < len(env.Stack()); i++ {
-			if x, _, _ := env.Get(i).MustBe(VNumber, "minmax #", i+1).Num(); x >= f == max {
+			if x, _, _ := env.Get(i).MustNumber("minmax #", i+1).Num(); x >= f == max {
 				f = x
 			}
 		}

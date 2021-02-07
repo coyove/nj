@@ -11,7 +11,7 @@ import (
 
 func init() {
 	script.AddGlobalValue("strtime", func(env *script.Env) {
-		f := env.InStr(0, "")
+		f := env.Get(0).StringDefault("")
 		switch strings.ToLower(f) {
 		case "ansic":
 			f = time.ANSIC
@@ -113,7 +113,7 @@ func init() {
 
 		tt, ok := env.Get(1).Interface().(time.Time)
 		if !ok {
-			ts := env.InInt(1, 0)
+			ts := env.Get(1).IntDefault(0)
 			if ts > 0 {
 				if ts < 1<<33 {
 					tt = time.Unix(ts, 0)

@@ -10,12 +10,12 @@ import (
 
 func init() {
 	script.AddGlobalValue("goquery", func(env *script.Env) {
-		doc, err := goquery.NewDocumentFromReader(strings.NewReader(env.In(0, script.VString).String()))
+		doc, err := goquery.NewDocumentFromReader(strings.NewReader(env.Get(0).MustString("goquery", 0)))
 		if err != nil {
 			env.A = script.Interface(err)
 			return
 		}
-		r := qResult{doc.Find(env.InStr(1, ""))}
+		r := qResult{doc.Find(env.Get(1).StringDefault(""))}
 		env.A = script.Interface(r)
 	})
 }

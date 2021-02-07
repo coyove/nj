@@ -20,6 +20,7 @@ var (
 	sStringMarker = unsafe.Pointer(new(int64))
 	falseValue    = Bool(false)
 	zeroValue     = Int(0)
+	Nil           = Value{}
 )
 
 type ValueType byte
@@ -40,7 +41,7 @@ func (t ValueType) String() string {
 	if t > VInterface {
 		return "?"
 	}
-	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "array", "?", "function", "?", "interface"}[t]
+	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "array", "?", "function", "?", "native"}[t]
 }
 
 // Value is the basic data type used by the intepreter
@@ -70,7 +71,7 @@ func (v Value) Type() ValueType {
 	return ValueType(v.v)
 }
 
-// IsFalse tests whether value contains a falsy value: nil or 0
+// IsFalse tests whether value contains a falsy value: nil, false or 0
 func (v Value) IsFalse() bool {
 	return v == Value{} || v == zeroValue || v == falseValue
 }
@@ -124,7 +125,7 @@ func String(s string) Value {
 }
 
 func Bytes(b []byte) Value {
-	return Value{v: VString, p: unsafe.Pointer(&b)}
+	return String(*(*string)(unsafe.Pointer(&b)))
 }
 
 func Interface(i interface{}) Value {
@@ -294,7 +295,17 @@ func (v Value) TypedInterface(t reflect.Type) interface{} {
 	return v.Interface()
 }
 
-func (v Value) MustBe(t ValueType, msg string, msgArg int) Value {
+func (v Value) MustBool(msg string, a int) bool { return v.mustBe(VBool, msg, a).Bool() }
+
+func (v Value) MustString(msg string, a int) string { return v.mustBe(VString, msg, a).String() }
+
+func (v Value) MustNumber(msg string, a int) Value { return v.mustBe(VNumber, msg, a) }
+
+func (v Value) MustArray(msg string, a int) *Values { return v.mustBe(VArray, msg, a).Array() }
+
+func (v Value) MustFunc(msg string, a int) *Func { return v.mustBe(VFunction, msg, a).Function() }
+
+func (v Value) mustBe(t ValueType, msg string, msgArg int) Value {
 	if v.Type() != t {
 		if msgArg > 0 {
 			panicf("%s %d: expect %v, got %v", msg, msgArg, t, v.Type())
@@ -327,7 +338,7 @@ func (v Value) Less(r Value) bool {
 		}
 		return vf < rf
 	case VString * 2:
-		return r._str() < v._str()
+		return v._str() < r._str()
 	case VString + VNumber:
 		if v.Type() == VNumber {
 			return true
@@ -397,6 +408,21 @@ func (v Value) toString(lv int, j bool) string {
 		return fmt.Sprintf("%v", i)
 	}
 	return "nil"
+}
+
+func (v Value) StringDefault(d string) string {
+	if v.Type() == VString {
+		return v._str()
+	}
+	return d
+}
+
+func (v Value) IntDefault(d int64) int64 {
+	if v.Type() == VNumber {
+		_, i, _ := v.Num()
+		return i
+	}
+	return d
 }
 
 type Values struct {

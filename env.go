@@ -3,7 +3,6 @@ package script
 import (
 	"bytes"
 	"context"
-	"reflect"
 	"time"
 	"unsafe"
 )
@@ -129,44 +128,6 @@ func (env *Env) StackInterface() []interface{} {
 }
 
 // Some useful helper functions
-
-func (env *Env) InInt(i int, defaultValue int64) int64 {
-	v := env.Get(i)
-	if v.Type() != VNumber {
-		return defaultValue
-	}
-	return v.Int()
-}
-
-func (env *Env) InStr(i int, defaultValue string) string {
-	v := env.Get(i)
-	if v.Type() != VString {
-		return defaultValue
-	}
-	return v._str()
-}
-
-func (env *Env) InInterface(i int, allowNil bool, expectedType reflect.Type) interface{} {
-	v := env.Get(i)
-	if v.Type() == VNil && allowNil {
-		return nil
-	}
-	itf := v.Interface()
-	if rt := reflect.TypeOf(itf); rt != expectedType {
-		panicf("%s: bad argument #%d, expect %v, got %v",
-			env.NativeSource.Name, i+1, expectedType, rt)
-	}
-	return itf
-}
-
-func (env *Env) In(i int, expectedType ValueType) Value {
-	v := env.Get(i)
-	if v.Type() != expectedType {
-		panicf("%s: bad argument #%d, expect %v, got %v",
-			env.NativeSource.Name, i+1, expectedType, v.Type())
-	}
-	return v
-}
 
 func (env *Env) Deadline() (context.Context, func(), time.Time) {
 	d := time.Unix(0, env.Global.Deadline)

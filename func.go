@@ -90,6 +90,18 @@ func Native(name string, f func(env *Env), doc ...string) Value {
 	})
 }
 
+func Native1(name string, f func(*Env, Value) Value, doc ...string) Value {
+	return Native(name, func(env *Env) { env.A = f(env, env.Get(0)) }, doc...)
+}
+
+func Native2(name string, f func(*Env, Value, Value) Value, doc ...string) Value {
+	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1)) }, doc...)
+}
+
+func Native3(name string, f func(*Env, Value, Value, Value) Value, doc ...string) Value {
+	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1), env.Get(2)) }, doc...)
+}
+
 func NativeWithParamMap(name string, f func(*Env, Arguments), doc string, params ...string) Value {
 	return Function(&Func{
 		Name:      name,

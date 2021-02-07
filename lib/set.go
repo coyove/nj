@@ -15,7 +15,7 @@ type Set struct {
 func init() {
 	script.AddGlobalValue("set", func(env *script.Env) {
 		s := &Set{m: map[[2]uint64]struct{}{}, p: env.Global}
-		for _, e := range env.In(0, script.VArray).Array().Underlay {
+		for _, e := range env.Get(0).MustArray("set", 0).Underlay {
 			s.Add(e)
 		}
 		env.A = script.Interface(s)
