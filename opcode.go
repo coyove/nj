@@ -17,7 +17,6 @@ const (
 	OpGLoad
 	OpSlice
 	OpAdd
-	OpConcat
 	OpSub
 	OpMul
 	OpDiv
@@ -35,7 +34,8 @@ const (
 	OpJmp
 	OpLoadFunc
 	OpPush
-	OpList
+	OpMapArray
+	OpMap
 	OpCall
 	OpCallMap
 	OpRet

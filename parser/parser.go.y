@@ -8,10 +8,9 @@ package parser
 %type<expr> declarator
 %type<expr> declarator_list
 %type<expr> ident_list
-%type<expr> expr_list
-%type<expr> expr_list_paren
-%type<expr> expr_assign_list
 %type<expr> expr
+%type<expr> expr_list
+%type<expr> expr_assign_list
 %type<expr> prefix_expr
 %type<expr> assign_stat
 %type<expr> for_stat
@@ -19,13 +18,12 @@ package parser
 %type<expr> elseif_stat
 %type<expr> jmp_stat
 %type<expr> flow_stat
-%type<expr> func
 %type<expr> func_stat
-%type<expr> func_params_list
+%type<expr> comma_or_paren
 
 %union {
-  token Token
-  expr  Node
+    token Token
+    expr  Node
 }
 
 /* Reserved words */
@@ -34,7 +32,6 @@ package parser
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
 %token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '$' TIDiv
-%token<token> TSquare TDotDot 
 
 /* Operators */
 %right 'T'
@@ -44,7 +41,6 @@ package parser
 %left TOr
 %left TAnd
 %left '>' '<' TGte TLte TEqeq TNeq
-%left TDotDot
 %left '+' '-' '^'
 %left '*' '/' '%' TIDiv
 %right UNARY /* not # -(unary) */
@@ -78,7 +74,7 @@ prog_stat:
         flow_stat      { $$ = $1 } |
         assign_stat    { $$ = $1 } |
         func_stat      { $$ = $1 } |
-        TDo prog TEnd  { $$ = __do($2) } |
+        TDo stats TEnd { $$ = __do($2) } |
         ';'            { $$ = emptyNode }
 
 stat:
@@ -109,7 +105,7 @@ assign_stat:
             tmp := randomVarname()
             $$ = __chain(__local([]Node{tmp}, []Node{$6}, $1.Pos))
             for i, ident := range $3.Nodes {
-                $$ = $$.append(__local([]Node{ident}, []Node{__load(tmp, NewNumberFromInt(int64(i + 1))).SetPos($1.Pos)}, $1.Pos))
+                $$ = $$.append(__local([]Node{ident}, []Node{__load(tmp, NewNumberFromInt(int64(i))).SetPos($1.Pos)}, $1.Pos))
             }
         } |
         declarator_list '=' expr_list {
@@ -119,7 +115,7 @@ assign_stat:
             tmp := randomVarname()
             $$ = __chain(__local([]Node{tmp}, []Node{$5}, $1.Pos))
             for i, decl := range $2.Nodes {
-                x := decl.moveLoadStore(__move, __load(tmp, NewNumberFromInt(int64(i + 1))).SetPos($1.Pos)).SetPos($1.Pos)
+                x := decl.moveLoadStore(__move, __load(tmp, NewNumberFromInt(int64(i ))).SetPos($1.Pos)).SetPos($1.Pos)
                 $$ = $$.append(__local([]Node{decl}, []Node{x}, $1.Pos))
             }
         }
@@ -143,7 +139,7 @@ for_stat:
                     __set(forEnd, $6).SetPos($1.Pos),
                     __loop(
                         __if(
-                            __lessEq(forVar, forEnd),
+                            __less(forVar, forEnd),
                             __chain($8, __inc(forVar, oneNode).SetPos($1.Pos)),
                             breakNode,
                         ).SetPos($1.Pos),
@@ -155,9 +151,9 @@ for_stat:
             if $8.IsNumber() { // step is a static number, easy case
                 var cond Node
                 if $8.IsNegativeNumber() {
-                    cond = __lessEq(forEnd, forVar)
+                    cond = __less(forEnd, forVar)
                 } else {
-                    cond = __lessEq(forVar, forEnd)
+                    cond = __less(forVar, forEnd)
                 }
                 $$ = __do(
                     __set(forVar, $4).SetPos($1.Pos),
@@ -183,9 +179,9 @@ for_stat:
                             __if(
                                 __less(zeroNode, forStep).SetPos($1.Pos),
                                 // +step
-                                __if(__less(forEnd, forVar), breakNode, emptyNode).SetPos($1.Pos),
+                                __if(__lessEq(forEnd, forVar), breakNode, emptyNode).SetPos($1.Pos),
                                 // -step
-                                __if(__less(forVar, forEnd), breakNode, emptyNode).SetPos($1.Pos),
+                                __if(__lessEq(forVar, forEnd), breakNode, emptyNode).SetPos($1.Pos),
                             ).SetPos($1.Pos),
                             $10,
                             __inc(forVar, forStep),
@@ -212,24 +208,34 @@ elseif_stat:
             $$ = __if($2, $4, $5).SetPos($1.Pos)
         }
 
-func:
-        TFunc        { $$ = NewSymbol(AMove).SetPos($1.Pos) } |
-        TLocal TFunc { $$ = NewSymbol(ASet).SetPos($1.Pos) }
-
 func_stat:
-        func TIdent func_params_list stats TEnd         { $$ = __func($1, $2, $3, "", $4) } | 
-        func TIdent func_params_list TString stats TEnd { $$ = __func($1, $2, $3, $4.Str, $5) }
-
-func_params_list:
-        '(' ')'                           { $$ = NewComplex() } |
-        '(' ident_list ')'                { $$ = $2 }
+        TFunc TIdent '(' ')' stats TEnd                    {
+            $$ = __func($2, emptyNode, "", $5)
+        } | 
+        TFunc TIdent '(' ident_list ')' stats TEnd {
+            $$ = __func($2, $4, "", $6) 
+        } | 
+        TFunc TIdent '(' ')' TString stats TEnd {
+            $$ = __func($2, emptyNode, $5.Str, $6) 
+        } |
+        TFunc TIdent '(' ident_list ')' TString stats TEnd {
+            $$ = __func($2, $4, $6.Str, $7) 
+        }
 
 jmp_stat:
-        TBreak                            { $$ = NewComplex(NewSymbol(ABreak)).SetPos($1.Pos) } |
-        TGoto TIdent                      { $$ = NewComplex(NewSymbol(AGoto), NewSymbolFromToken($2)).SetPos($1.Pos) } |
-        TLabel TIdent TLabel              { $$ = NewComplex(NewSymbol(ALabel), NewSymbolFromToken($2)) } |
-        TReturnVoid                       { $$ = NewComplex(NewSymbol(AReturn), NewSymbol(ANil)).SetPos($1.Pos) } |
-        TReturn expr                      {
+        TBreak {
+            $$ = NewComplex(NewSymbol(ABreak)).SetPos($1.Pos) 
+        } |
+        TGoto TIdent {
+            $$ = NewComplex(NewSymbol(AGoto), NewSymbolFromToken($2)).SetPos($1.Pos) 
+        } |
+        TLabel TIdent TLabel {
+            $$ = NewComplex(NewSymbol(ALabel), NewSymbolFromToken($2)) 
+        } |
+        TReturnVoid {
+            $$ = NewComplex(NewSymbol(AReturn), NewSymbol(ANil)).SetPos($1.Pos) 
+        } |
+        TReturn expr {
             if len($2.Nodes) == 3 && $2.Nodes[0].SymbolValue() == ACall { 
                 // return call(...) -> return tailcall(...)
                 $2.Nodes[0].strSym = ATailCall
@@ -238,27 +244,48 @@ jmp_stat:
         }
 
 declarator:
-        TIdent                            { $$ = NewSymbolFromToken($1) } |
-        prefix_expr '[' expr ']'          { $$ = __load($1, $3).SetPos($2.Pos) } |
-        prefix_expr '.' TIdent            { $$ = __load($1, NewString($3.Str)).SetPos($2.Pos) }
+        TIdent {
+            $$ = NewSymbolFromToken($1) 
+        } |
+        prefix_expr '[' expr ']' {
+            $$ = __load($1, $3).SetPos($2.Pos) 
+        } |
+        prefix_expr '.' TIdent {
+            $$ = __load($1, NewString($3.Str)).SetPos($2.Pos) 
+        }
 
 declarator_list:
-        declarator                        { $$ = NewComplex($1) } |
-        '$' prefix_expr                   { $$ = NewComplex(__gload($2).SetPos($1.Pos)) } |
-        declarator_list ',' declarator    { $$ = $1.append($3) } |
-        declarator_list ',''$' prefix_expr{ $$ = $1.append(__gload($4).SetPos($3.Pos)) }
+        declarator {
+            $$ = NewComplex($1) 
+        } |
+        '$' prefix_expr {
+            $$ = NewComplex(__gload($2).SetPos($1.Pos)) 
+        } |
+        declarator_list ',' declarator {
+            $$ = $1.append($3) 
+        } |
+        declarator_list ',' '$' prefix_expr {
+            $$ = $1.append(__gload($4).SetPos($3.Pos)) 
+        }
 
 ident_list:
-        TIdent                            { $$ = NewComplex(NewSymbolFromToken($1)) } | 
-        ident_list ',' TIdent             { $$ = $1.append(NewSymbolFromToken($3)) }
+        TIdent {
+            $$ = NewComplex(NewSymbolFromToken($1)) 
+        } | 
+        ident_list ',' TIdent {
+            $$ = $1.append(NewSymbolFromToken($3)) 
+        }
 
 expr:
+        prefix_expr                       { $$ = $1 } |
+        '(' expr ')'                      { $$ = __chain($2) } | 
         TNumber                           { $$ = NewNumberFromString($1.Str) } |
         TString                           { $$ = NewString($1.Str) } |
-        '{' expr_list '}'                 { $$ = NewComplex(NewSymbol(AList), $2).SetPos($1.Pos) } |
-        '{' expr_list ',' '}'             { $$ = NewComplex(NewSymbol(AList), $2).SetPos($1.Pos) } |
-        '{' '}'                           { $$ = NewComplex(NewSymbol(AList), emptyNode).SetPos($1.Pos) } |
-        prefix_expr                       { $$ = $1 } |
+        '{' expr_list '}'                 { $$ = NewComplex(NewSymbol(AMapArray), $2).SetPos($1.Pos) } |
+        '{' expr_list ',' '}'             { $$ = NewComplex(NewSymbol(AMapArray), $2).SetPos($1.Pos) } |
+        '{' '}'                           { $$ = NewComplex(NewSymbol(AMap), emptyNode).SetPos($1.Pos) } |
+        '{' expr_assign_list '}'          { $$ = NewComplex(NewSymbol(AMap), $2).SetPos($1.Pos) } |
+        '{' expr_assign_list ',' '}'      { $$ = NewComplex(NewSymbol(AMap), $2).SetPos($1.Pos) } |
         expr TOr expr                     { $$ = NewComplex(NewSymbol(AOr), $1,$3).SetPos($2.Pos) } |
         expr TAnd expr                    { $$ = NewComplex(NewSymbol(AAnd), $1,$3).SetPos($2.Pos) } |
         expr '>' expr                     { $$ = NewComplex(NewSymbol(ALess), $3,$1).SetPos($2.Pos) } |
@@ -268,7 +295,6 @@ expr:
         expr TEqeq expr                   { $$ = NewComplex(NewSymbol(AEq), $1,$3).SetPos($2.Pos) } |
         expr TNeq expr                    { $$ = NewComplex(NewSymbol(ANeq), $1,$3).SetPos($2.Pos) } |
         expr '+' expr                     { $$ = NewComplex(NewSymbol(AAdd), $1,$3).SetPos($2.Pos) } |
-        expr TDotDot expr                 { $$ = NewComplex(NewSymbol(AConcat), $1,$3).SetPos($2.Pos) } |
         expr '-' expr                     { $$ = NewComplex(NewSymbol(ASub), $1,$3).SetPos($2.Pos) } |
         expr '*' expr                     { $$ = NewComplex(NewSymbol(AMul), $1,$3).SetPos($2.Pos) } |
         expr '/' expr                     { $$ = NewComplex(NewSymbol(ADiv), $1,$3).SetPos($2.Pos) } |
@@ -281,29 +307,57 @@ expr:
         '$' expr %prec UNARY              { $$ = NewComplex(NewSymbol(AGLoad), $2).SetPos($1.Pos) }
 
 prefix_expr:
-        declarator                        { $$ = $1 } |
-        prefix_expr '[' expr ':' expr ']' { $$ = NewComplex(NewSymbol(ASlice), $1, $3, $5).SetPos($2.Pos) } |
-        prefix_expr TString               { $$ = __call($1, NewComplex(NewString($2.Str))).SetPos($1.Pos()) } |
-        prefix_expr expr_list_paren       { $$ = __call($1, $2).SetPos($1.Pos()) } |
-        '(' expr ')'                      { $$ = __chain($2) } | // shift/reduce conflict
-        prefix_expr '(' expr_assign_list ')'                { $$ = __callMap($1, emptyNode, $3).SetPos($1.Pos()) } |
-        prefix_expr '(' expr_assign_list',' ')'             { $$ = __callMap($1, emptyNode, $3).SetPos($1.Pos()) } |
-        prefix_expr '(' expr_list','expr_assign_list ')'    { $$ = __callMap($1, $3, $5).SetPos($1.Pos()) } |
-        prefix_expr '(' expr_list','expr_assign_list',' ')' { $$ = __callMap($1, $3, $5).SetPos($1.Pos()) }
+        declarator {
+            $$ = $1 
+        } |
+        prefix_expr '[' expr ':' expr ']' {
+            $$ = NewComplex(NewSymbol(ASlice), $1, $3, $5).SetPos($2.Pos) 
+        } |
+        prefix_expr '[' ':' expr ']' {
+            $$ = NewComplex(NewSymbol(ASlice), $1, zeroNode, $4).SetPos($2.Pos) 
+        } |
+        prefix_expr '[' expr ':' ']' {
+            $$ = NewComplex(NewSymbol(ASlice), $1, $3, NewNumberFromInt(-1)).SetPos($2.Pos) 
+        } |
+        prefix_expr TString {
+            $$ = __call($1, NewComplex(NewString($2.Str))).SetPos($1.Pos()) 
+        } |
+        prefix_expr '(' ')' {
+            $$ = __call($1, emptyNode).SetPos($1.Pos()) 
+        } |
+        prefix_expr '(' expr_list comma_or_paren {
+            $$ = __call($1, $3).SetPos($1.Pos()) 
+        } |
+        prefix_expr '(' expr_assign_list comma_or_paren {
+            $$ = __callMap($1, emptyNode, $3).SetPos($1.Pos()) 
+        } |
+        prefix_expr '(' expr_list ',' expr_assign_list comma_or_paren {
+            $$ = __callMap($1, $3, $5).SetPos($1.Pos()) 
+        }
 
 expr_list:
-        expr                                       { $$ = NewComplex($1) } |
-        expr_list ',' expr                         { $$ = $1.append($3) }
-
-expr_list_paren:
-        '(' ')'                                    { $$ = NewComplex() } |
-        '(' expr_list ')'                          { $$ = $2 }
+        expr {
+            $$ = NewComplex($1) 
+        } |
+        expr_list ',' expr {
+            $$ = $1.append($3) 
+        }
 
 expr_assign_list:
-        TIdent '=' expr                            { $$ = NewComplex(NewString($1.Str), $3) } |
-        '[' expr ']' '=' expr                      { $$ = NewComplex($2, $5) } |
-        expr_assign_list ',' TIdent '=' expr       { $$ = $1.append(NewString($3.Str)).append($5) } |
-        expr_assign_list ',' '[' expr ']' '=' expr { $$ = $1.append($4).append($7) }
+        TIdent '=' expr {
+            $$ = NewComplex(NewString($1.Str), $3) 
+        } |
+        '[' expr ']' '=' expr {
+            $$ = NewComplex($2, $5) 
+        } |
+        expr_assign_list ',' TIdent '=' expr {
+            $$ = $1.append(NewString($3.Str)).append($5) 
+        } |
+        expr_assign_list ',' '[' expr ']' '=' expr {
+            $$ = $1.append($4).append($7) 
+        }
+
+comma_or_paren: ',' ')' { $$ = emptyNode } | ')' { $$ = emptyNode }
 
 %%
 

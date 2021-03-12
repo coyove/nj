@@ -10,7 +10,10 @@ local g = debug_globals()
 
 print(format("version {}, total global values: {}\\n", VERSION, #g/3))
 
-for i=3,#g,3 do
+local sep1, sep2 = ",----------------------------------------------------------------",
+("'----------------------------------------------------------------")
+
+for i=2,#g,3 do
     if _g.exists(g[i]) then
         local name = str(g[i])
         if #name > 32 then
@@ -18,9 +21,9 @@ for i=3,#g,3 do
         end
 
         title = i/3 .. ": " .. name
-        print((",----------------------------------------------------------------")[1:#title+3], '.')
+        print(sep1[1:#title+3], '.')
         print("| ", title, " |")
-        print(("'----------------------------------------------------------------")[1:#title+3], "'")
+        print(sep2[1:#title+3], "'")
         print(type(g[i]) == "function" and doc(g[i]) or 'constant: ' .. g[i-1])
         print()
     end
@@ -115,7 +118,7 @@ if iserror(code) then
 end
 
 local el = goquery(body, "div").nodes()
-for i = 1,#el do
+for i = 0,#el do
     println(el[i].text())
 end
 
@@ -128,7 +131,7 @@ local list = goquery(body, ".boke-list")
 list = list.find(".boke")
 local boke = list.nodes()
 
-for i=1,#boke do
+for i=0,#boke do
     println("#" .. i, trim(boke[i].find('.photo-content img').attr('src'), "//", "prefix"))
     println("  ", trim(boke[i].find('.boke-text').text()))
 end`,
@@ -137,9 +140,8 @@ end`,
     --[[
     debug info are laid out as such:
     0, var_name1, var_value1, 1, var_name2, var_value2, 2, var_name3, ...
-    index starts from 0 to align with the internal logic
     ]]
-    for i=1,#info,3 do
+    for i=0,#info,3 do
         if info[i+1] == name then return info[i] end
     end
     return -1
@@ -167,7 +169,7 @@ return foo(1,2)
       "bing.com": `local {_, _, body} = http(url="https://cn.bing.com/HPImageArchive.aspx", queries=dict(format='js', n=10))
 local items = json_get(body, "images")
 
-for i =1,#items do
+for i =0,#items do
     println("https://cn.bing.com/" .. json_get(items[i], "url"))
 end`,
 /* = = = = = = = = */

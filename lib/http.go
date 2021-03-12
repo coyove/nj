@@ -116,7 +116,7 @@ func init() {
 		if to := args.GetInt("timeout", 0); to > 0 {
 			client.Timeout = time.Duration(to) * time.Millisecond
 		}
-		if !args["jar"].IsNil() {
+		if args["jar"] == script.Nil {
 			client.Jar = args["jar"].Interface().(http.CookieJar)
 		}
 		if !args["no_redirect"].IsFalse() {
@@ -196,8 +196,8 @@ func iterStrings(v script.Value, f func(string)) {
 	switch v.Type() {
 	case script.VString:
 		f(v.String())
-	case script.VArray:
-		for _, line := range v.Array().Underlay {
+	case script.VMap:
+		for _, line := range v.Map().Array() {
 			f(line.String())
 		}
 	}
@@ -207,10 +207,10 @@ func iterStringPairs(v1, v2 script.Value, f func(string, string)) {
 	switch v1.Type() + v2.Type() {
 	case script.VString * 2:
 		f(v1.String(), v2.String())
-	case script.VArray * 2:
-		for i, line := range v1.Array().Underlay {
-			if i < len(v2.Array().Underlay) {
-				f(line.String(), v2.Array().Underlay[i].String())
+	case script.VMap * 2:
+		for i, line := range v1.Map().Array() {
+			if i < len(v2.Map().Array()) {
+				f(line.String(), v2.Map().Array()[i].String())
 			}
 		}
 	}

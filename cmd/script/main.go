@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"strings"
@@ -28,7 +30,6 @@ var (
 	version         = flag.Bool("v", false, "print version and usage")
 	timeout         = flag.Int("t", 0, "max execution time in ms")
 	apiServer       = flag.String("serve", "", "start as language playground")
-	apiServerStatic = flag.String("serve-static", "./docs", "start as language playground, static files")
 )
 
 func main() {
@@ -51,7 +52,11 @@ func main() {
 		lib.HostWhitelist["bokete.jp"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
 		lib.HostWhitelist["cn.bing.com"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
 
-		http.Handle("/", http.FileServer(http.Dir(*apiServerStatic)))
+		apiServerStatic := func() string {
+			buf, _ := exec.Command("go", "env", "GOPATH").Output()
+			return filepath.Join(strings.TrimSpace(string(buf)), "/src/github.com/coyove/script/cmd/script/docs")
+		}()
+		http.Handle("/", http.FileServer(http.Dir(apiServerStatic)))
 		http.HandleFunc("/share", func(w http.ResponseWriter, r *http.Request) {
 			defer func() { recover() }()
 			read := func(resp *http.Response, err error) ([]byte, error) {

@@ -96,7 +96,6 @@ func (b *packet) Len() int {
 
 var (
 	biOp = map[opCode]string{
-		OpConcat: parser.AConcat,
 		OpAdd:    parser.AAdd,
 		OpSub:    parser.ASub,
 		OpMul:    parser.AMul,
@@ -139,7 +138,7 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 			}
 			if a>>12 == 1 || toplevel {
 				v := (*p.Stack)[a&0xfff]
-				if !v.IsNil() {
+				if v != Nil {
 					suffix = "(" + v.JSONString() + ")"
 				}
 			}
@@ -189,8 +188,10 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 		switch bop {
 		case OpSet:
 			sb.WriteString(readAddr(a, false) + " = " + readAddr(b, true))
-		case OpList:
-			sb.WriteString("list")
+		case OpMapArray:
+			sb.WriteString("maparray")
+		case OpMap:
+			sb.WriteString("map")
 		case OpLoadFunc:
 			cls := p.Functions[a]
 			sb.WriteString("loadfunc " + cls.Name + "\n")

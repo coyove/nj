@@ -3,6 +3,7 @@ module github.com/coyove/script
 go 1.13
 
 require (
+	code.byted.org/aweme/rpc_gen v0.0.0-20210318075250-7075870dd9a8 // indirect
 	github.com/PuerkitoBio/goquery v1.6.0
 	github.com/coyove/common v0.0.0-20200714073322-5d32ad16e471 // indirect
 	github.com/coyove/iis v0.0.0-20210108114747-9cf388bee15d // indirect

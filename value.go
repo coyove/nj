@@ -2,6 +2,7 @@ package script
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -14,13 +15,14 @@ import (
 )
 
 var (
-	int64Marker   = unsafe.Pointer(new(int64))
-	trueMarker    = unsafe.Pointer(new(int64))
-	falseMarker   = unsafe.Pointer(new(int64))
-	sStringMarker = unsafe.Pointer(new(int64))
-	falseValue    = Bool(false)
-	zeroValue     = Int(0)
-	Nil           = Value{}
+	int64Marker       = unsafe.Pointer(new(int64))
+	trueMarker        = unsafe.Pointer(new(int64))
+	falseMarker       = unsafe.Pointer(new(int64))
+	smallStringMarker = unsafe.Pointer(new(int64))
+	falseValue        = Bool(false)
+	zeroValue         = Int(0)
+
+	Nil = Value{}
 )
 
 type ValueType byte
@@ -30,7 +32,7 @@ const (
 	VBool                = 1
 	VNumber              = 3
 	VString              = 7
-	VArray               = 15
+	VMap                 = 15
 	VFunction            = 17
 	VInterface           = 19
 
@@ -62,6 +64,8 @@ func (v Value) Type() ValueType {
 		return VNumber
 	case trueMarker, falseMarker:
 		return VBool
+	case smallStringMarker:
+		return VString
 	case nil:
 		if v.v == 0 {
 			return VNil
@@ -72,13 +76,9 @@ func (v Value) Type() ValueType {
 }
 
 // IsFalse tests whether value contains a falsy value: nil, false or 0
-func (v Value) IsFalse() bool {
-	return v == Value{} || v == zeroValue || v == falseValue
-}
+func (v Value) IsFalse() bool { return v == Nil || v == zeroValue || v == falseValue }
 
-func (v Value) IsNil() bool {
-	return v == Value{}
-}
+func (v Value) IsInt() bool { return v.p == int64Marker }
 
 // Bool returns a boolean value
 func Bool(v bool) Value {
@@ -103,7 +103,15 @@ func Int(i int64) Value {
 
 // Array returns an array consists of 'm'
 func Array(m ...Value) Value {
-	return Value{v: VArray, p: unsafe.Pointer(&Values{Underlay: m})}
+	return (&Map{items: m, count: uint32(len(m))}).Value()
+}
+
+func Dict(kvs ...Value) Value {
+	t := &Map{}
+	for i := 0; i < len(kvs)/2*2; i += 2 {
+		t.Set(kvs[i], kvs[i+1])
+	}
+	return Value{v: VMap, p: unsafe.Pointer(t)}
 }
 
 // Function returns a closure value
@@ -115,11 +123,10 @@ func Function(c *Func) Value {
 }
 
 func String(s string) Value {
-	if len(s) <= 6 { // length 1b + payload 6b + VString type 1b = uint64
-		x := [8]byte{}
+	if len(s) <= 7 { // length 1b + payload 7b
+		x := [8]byte{byte(len(s))}
 		copy(x[1:], s)
-		u64 := uint64(len(s))<<56 | *(*uint64)(unsafe.Pointer(&x)) | uint64(VString)
-		return Value{v: u64, p: sStringMarker}
+		return Value{v: binary.BigEndian.Uint64(x[:]), p: smallStringMarker}
 	}
 	return Value{v: VString, p: unsafe.Pointer(&s)}
 }
@@ -144,6 +151,8 @@ func Interface(i interface{}) Value {
 		return String(v)
 	case []byte:
 		return Bytes(v)
+	case *Map:
+		return v.Value()
 	case []Value:
 		return Array(v...)
 	case *Func:
@@ -184,6 +193,7 @@ func Interface(i interface{}) Value {
 					}
 				}
 				switch outs := rv.Call(ins); rt.NumOut() {
+				case 0:
 				case 1:
 					env.A = Interface(outs[0].Interface())
 				default:
@@ -204,22 +214,15 @@ func _interface(i interface{}) Value {
 	return Value{v: VInterface, p: unsafe.Pointer(&i)}
 }
 
-// _str cast value to string
-func (v Value) _str() string {
-	if v.p == sStringMarker {
-		tmp := *(*[8]byte)(unsafe.Pointer(&v.v))
-		return string(tmp[1 : 1+v.v>>56])
+// rawStr cast value to string
+func (v Value) rawStr() string {
+	if v.p == smallStringMarker {
+		buf := make([]byte, 8)
+		binary.BigEndian.PutUint64(buf, v.v)
+		buf = buf[1 : 1+buf[0]]
+		return *(*string)(unsafe.Pointer(&buf))
 	}
 	return *(*string)(v.p)
-}
-
-func (v Value) _unsafeBytes() []byte {
-	var ss []byte
-	b := (*[3]uintptr)(unsafe.Pointer(&ss))
-	vpp := *(*[2]uintptr)(v.p)
-	(*b)[0] = vpp[0]
-	(*b)[1], (*b)[2] = vpp[1], vpp[1]
-	return ss
 }
 
 func (v Value) Num() (floatValue float64, intValue int64, isInt bool) {
@@ -236,7 +239,7 @@ func (v Value) Float() float64 { f, _, _ := v.Num(); return f }
 
 func (v Value) Bool() bool { return v.p == trueMarker }
 
-func (v Value) Array() *Values { return (*Values)(v.p) }
+func (v Value) Map() *Map { return (*Map)(v.p) }
 
 // Function cast value to function
 func (v Value) Function() *Func { return (*Func)(v.p) }
@@ -253,14 +256,9 @@ func (v Value) Interface() interface{} {
 		}
 		return vf
 	case VString:
-		return v._str()
-	case VArray:
-		a := v.Array().Underlay
-		x := make([]interface{}, len(a))
-		for i := range a {
-			x[i] = a[i].Interface()
-		}
-		return x
+		return v.rawStr()
+	case VMap:
+		return v.Map()
 	case VFunction:
 		return v.Function()
 	case VInterface:
@@ -281,13 +279,13 @@ func (v Value) TypedInterface(t reflect.Type) interface{} {
 			rv = rv.Convert(t)
 			return rv.Interface()
 		}
-	case VArray:
-		a := v.Array().Underlay
+	case VMap:
+		a := v.Map()
 		if t.Kind() == reflect.Slice {
 			e := t.Elem()
-			s := reflect.MakeSlice(t, len(a), len(a))
-			for i := range a {
-				s.Index(i).Set(reflect.ValueOf(a[i].TypedInterface(e)))
+			s := reflect.MakeSlice(t, len(a.Array()), len(a.Array()))
+			for i, a := range a.Array() {
+				s.Index(i).Set(reflect.ValueOf(a.TypedInterface(e)))
 			}
 			return s.Interface()
 		}
@@ -301,7 +299,7 @@ func (v Value) MustString(msg string, a int) string { return v.mustBe(VString, m
 
 func (v Value) MustNumber(msg string, a int) Value { return v.mustBe(VNumber, msg, a) }
 
-func (v Value) MustArray(msg string, a int) *Values { return v.mustBe(VArray, msg, a).Array() }
+func (v Value) MustMap(msg string, a int) *Map { return v.mustBe(VMap, msg, a).Map() }
 
 func (v Value) MustFunc(msg string, a int) *Func { return v.mustBe(VFunction, msg, a).Function() }
 
@@ -321,7 +319,7 @@ func (v Value) Equal(r Value) bool {
 	}
 	switch v.Type() + r.Type() {
 	case VString * 2:
-		return r._str() == v._str()
+		return r.rawStr() == v.rawStr()
 	case VInterface * 2:
 		return v.Interface() == r.Interface()
 	}
@@ -338,7 +336,7 @@ func (v Value) Less(r Value) bool {
 		}
 		return vf < rf
 	case VString * 2:
-		return v._str() < r._str()
+		return v.rawStr() < r.rawStr()
 	case VString + VNumber:
 		if v.Type() == VNumber {
 			return true
@@ -348,16 +346,15 @@ func (v Value) Less(r Value) bool {
 	return false
 }
 
-func (v Value) HashCode() [2]uint64 {
-	if v.Type() != VString {
-		return *(*[2]uint64)(unsafe.Pointer(&v))
-	}
-	code := [2]uint64{1 << 63, 5381}
-	for _, r := range v._str() {
-		old := code[1]
-		code[1] = code[1]*33 + uint64(r)
-		if code[1] < old {
-			code[0]++
+func (v Value) HashCode() uint64 {
+	code := uint64(5381)
+	if v.Type() != VString || v.p == smallStringMarker {
+		for _, r := range *(*[ValueSize]byte)(unsafe.Pointer(&v)) {
+			code = code*33 + uint64(r)
+		}
+	} else {
+		for _, r := range v.rawStr() {
+			code = code*33 + uint64(r)
 		}
 	}
 	return code
@@ -384,16 +381,27 @@ func (v Value) toString(lv int, j bool) string {
 		return strconv.FormatFloat(vf, 'f', -1, 64)
 	case VString:
 		if j {
-			return strconv.Quote(v._str())
+			return strconv.Quote(v.rawStr())
 		}
-		return v._str()
-	case VArray:
-		p := bytes.NewBufferString("[")
-		for _, a := range v.Array().Underlay {
-			p.WriteString(a.toString(lv+1, j))
+		return v.rawStr()
+	case VMap:
+		m := v.Map()
+		if len(m.hashItems) == 0 {
+			p := bytes.NewBufferString("[")
+			for _, a := range m.Array() {
+				p.WriteString(a.toString(lv+1, j))
+				p.WriteString(",")
+			}
+			return strings.TrimRight(p.String(), ", ") + "]"
+		}
+		p := bytes.NewBufferString("{")
+		for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
+			p.WriteString(k.toString(lv+1, j))
+			p.WriteString(":")
+			p.WriteString(v.toString(lv+1, j))
 			p.WriteString(",")
 		}
-		return strings.TrimRight(p.String(), ", ") + "]"
+		return strings.TrimRight(p.String(), ", ") + "}"
 	case VFunction:
 		return v.Function().String()
 	case VInterface:
@@ -412,7 +420,7 @@ func (v Value) toString(lv int, j bool) string {
 
 func (v Value) StringDefault(d string) string {
 	if v.Type() == VString {
-		return v._str()
+		return v.rawStr()
 	}
 	return d
 }
@@ -426,7 +434,6 @@ func (v Value) IntDefault(d int64) int64 {
 }
 
 type Values struct {
-	Unpacked bool
 	Underlay []Value
 }
 
@@ -434,13 +441,12 @@ func (t *Values) Len() int {
 	return len(t.Underlay)
 }
 
-func (t *Values) Slice1(start int64, end int64) []Value {
-	start2, end2 := sliceInRange(start, end, len(t.Underlay))
-	return t.Underlay[start2:end2]
+func (t *Values) Slice(start int64, end int64) []Value {
+	start, end = sliceInRange(start, end, int64(len(t.Underlay)))
+	return t.Underlay[start:end]
 }
 
-func (t *Values) Put1(idx int64, v Value) (appended bool) {
-	idx--
+func (t *Values) Put(idx int64, v Value) (appended bool) {
 	if idx < int64(len(t.Underlay)) && idx >= 0 {
 		t.Underlay[idx] = v
 		return false
@@ -452,8 +458,7 @@ func (t *Values) Put1(idx int64, v Value) (appended bool) {
 	return false
 }
 
-func (t *Values) Get1(idx int64) (v Value) {
-	idx--
+func (t *Values) Get(idx int64) (v Value) {
 	if idx < int64(len(t.Underlay)) && idx >= 0 {
 		return t.Underlay[idx]
 	}

@@ -7,15 +7,15 @@ import (
 )
 
 type Set struct {
-	m map[[2]uint64]struct{}
+	m map[uint64]struct{}
 	v []script.Value
 	p *script.Program
 }
 
 func init() {
 	script.AddGlobalValue("set", func(env *script.Env) {
-		s := &Set{m: map[[2]uint64]struct{}{}, p: env.Global}
-		for _, e := range env.Get(0).MustArray("set", 0).Underlay {
+		s := &Set{m: map[uint64]struct{}{}, p: env.Global}
+		for _, e := range env.Get(0).MustMap("set", 0).Array() {
 			s.Add(e)
 		}
 		env.A = script.Interface(s)

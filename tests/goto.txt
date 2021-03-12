@@ -26,7 +26,7 @@ goto iflabel ::iflabel2::
 
 assert(i == 10)
 
-local function a()
+function a()
 ::innerlabel::
 assert(false)
 end

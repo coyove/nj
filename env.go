@@ -143,13 +143,20 @@ func (env *Env) String() string {
 }
 
 func (env *Env) NewString(s string) Value {
-	env.Global.DecrDeadsize(int64(len(s)))
+	if len(s) > 7 {
+		env.Global.DecrDeadsize(int64(len(s)))
+	}
 	return String(s)
 }
 
 func (env *Env) NewArray(e ...Value) Value {
 	env.Global.DecrDeadsize(int64(len(e)) * ValueSize)
 	return Array(e...)
+}
+
+func (env *Env) NewMap(kvs ...Value) Value {
+	env.Global.DecrDeadsize(int64(len(kvs)) * ValueSize)
+	return Dict(kvs...)
 }
 
 func (env *Env) NewStringBytes(s []byte) Value {

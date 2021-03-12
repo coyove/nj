@@ -221,7 +221,6 @@ func (table *symtable) loadK(v interface{}) uint16 {
 
 var flatOpMapping = map[string]opCode{
 	parser.AAdd:    OpAdd,
-	parser.AConcat: OpConcat,
 	parser.ASub:    OpSub,
 	parser.AMul:    OpMul,
 	parser.ADiv:    OpDiv,
@@ -329,14 +328,14 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileBreak(nodes)
 	case parser.ACall, parser.ATailCall, parser.ACallMap:
 		yx = table.compileCall(nodes)
-	case parser.AList:
+	case parser.AMap, parser.AMapArray:
 		yx = table.compileList(nodes)
 	case parser.AOr, parser.AAnd:
 		yx = table.compileAndOr(nodes)
 	case parser.AFunc:
 		yx = table.compileFunction(nodes)
-	case parser.ARetAddr:
-		yx = table.compileRetAddr(nodes)
+	case parser.AFreeAddr:
+		yx = table.compileFreeAddr(nodes)
 	case parser.AGoto, parser.ALabel:
 		yx = table.compileGoto(nodes)
 	default:
@@ -440,9 +439,9 @@ func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls 
 	for _, f := range cls.Functions {
 		f.loadGlobal = cls
 	}
-	cls.loadGlobal = cls
 	cls.NilIndex = table.loadK(nil)
 	cls.shadowTable = shadowTable
+	cls.loadGlobal = cls
 	return cls, err
 }
 

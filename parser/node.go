@@ -128,7 +128,7 @@ func NewComplex(args ...Node) Node {
 	if len(args) == 3 {
 		op := args[0].SymbolValue()
 		a, b := args[1], args[2]
-		if op == AConcat && a.Type == String && b.Type == String {
+		if op == AAdd && a.Type == String && b.Type == String {
 			return NewString(a.StringValue() + b.StringValue())
 		}
 		if a.IsNumber() && b.IsNumber() {

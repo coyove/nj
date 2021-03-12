@@ -132,7 +132,7 @@ func (table *symtable) compileFlat(atoms []parser.Node) uint16 {
 		panicf("DEBUG compileFlat invalid symbol: %v", atoms[0])
 	}
 	yx := table.writeInst3(op, atoms)
-	if p := atoms[0].Pos(); p.Source != "" {
+	if p := atoms[0].Pos(); p.Line > 0 {
 		table.code.writePos(p)
 	}
 	return yx
@@ -199,10 +199,19 @@ func (table *symtable) compileIf(atoms []parser.Node) uint16 {
 func (table *symtable) compileList(nodes []parser.Node) uint16 {
 	// [list [a, b, c, ...]]
 	table.collapse(nodes[1].Nodes, true)
-	for _, x := range nodes[1].Nodes {
-		table.writeInst(OpPush, x, parser.Node{})
+	if nodes[0].SymbolValue() == parser.AMapArray {
+		for _, x := range nodes[1].Nodes {
+			table.writeInst(OpPush, x, parser.Node{})
+		}
+		table.code.writeInst(OpMapArray, 0, 0)
+	} else {
+		n := nodes[1].Nodes
+		for i := 0; i < len(n); i += 2 {
+			table.writeInst(OpPush, n[i], parser.Node{})
+			table.writeInst(OpPush, n[i+1], parser.Node{})
+		}
+		table.code.writeInst(OpMap, 0, 0)
 	}
-	table.code.writeInst(OpList, 0, 0)
 	return regA
 }
 
@@ -273,7 +282,6 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 	cls := &Func{}
 	cls.Name = atoms[1].SymbolValue()
 	cls.DocString = atoms[4].StringValue()
-	cls.NumParams = byte(ln)
 	cls.StackSize = newtable.vp
 	cls.Code = code
 	cls.Params = paramsString
@@ -339,7 +347,7 @@ func (table *symtable) patchGoto() {
 	}
 }
 
-func (table *symtable) compileRetAddr(atoms []parser.Node) uint16 {
+func (table *symtable) compileFreeAddr(atoms []parser.Node) uint16 {
 	for i := 1; i < len(atoms); i++ {
 		s := atoms[i].SymbolValue()
 		yx := table.get(s)

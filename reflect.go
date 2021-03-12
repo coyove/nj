@@ -48,7 +48,8 @@ func reflectSlice(v interface{}, start, end int64) interface{} {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Slice, reflect.Array, reflect.String:
-		return rv.Slice(sliceInRange(start, end, rv.Len())).Interface()
+		start, end := sliceInRange(int64(start), int64(end), int64(rv.Len()))
+		return rv.Slice(int(start), int(end)).Interface()
 	}
 	return nil
 }
@@ -62,7 +63,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		if !v.IsValid() {
 			panicf("store: readonly map")
 		}
-		if v2.IsNil() {
+		if v2 == Nil {
 			rv.SetMapIndex(rk, reflect.Value{})
 		} else {
 			// panicf("store: readonly map")
@@ -71,7 +72,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		return
 	case reflect.Slice, reflect.Array:
 		panicf("store: readonly slice")
-		idx := key.MustNumber("store array", 0).Int() - 1
+		idx := key.MustNumber("store array", 0).Int()
 		if idx >= int64(rv.Len()) || idx < 0 {
 			return
 		}
@@ -182,14 +183,13 @@ func camelKey(k string) string {
 	return k
 }
 
-func sliceInRange(start, end int64, length int) (int, int) {
-	{
-		start := int(start - 1)
-		end := int(end - 1 + 1)
-		if start >= 0 && start <= length && end >= 0 && end <= length && start <= end {
-			return start, int(end)
-		}
+func sliceInRange(start, end int64, length int64) (int64, int64) {
+	if end == -1 {
+		end = length
 	}
-	panicf("slice [%d,%d] overflows [1,%d]", start, end, length)
+	if start >= 0 && start <= length && end >= 0 && end <= length && start <= end {
+		return start, end
+	}
+	panicf("slice [%d:%d] overflows %d", start, end, length)
 	return 0, 0
 }

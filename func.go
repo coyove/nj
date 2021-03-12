@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"log"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -16,7 +15,6 @@ type Func struct {
 	Code       packet
 	Name       string
 	DocString  string
-	NumParams  byte
 	IsDebug    bool
 	StackSize  uint16
 	Native     func(env *Env)
@@ -54,32 +52,6 @@ func (p *Program) DecrDeadsize(v int64) {
 	}
 }
 
-type Arguments map[string]Value
-
-func (a Arguments) GetStringOrJSON(name string, defaultValue string) string {
-	if a[name].Type() == VString {
-		return a[name].String()
-	}
-	if !a[name].IsNil() {
-		return a[name].JSONString()
-	}
-	return defaultValue
-}
-
-func (a Arguments) GetString(name string, defaultValue string) string {
-	if a[name].Type() == VString {
-		return a[name].String()
-	}
-	return defaultValue
-}
-
-func (a Arguments) GetInt(name string, defaultValue int64) int64 {
-	if a[name].Type() == VNumber {
-		return a[name].Int()
-	}
-	return defaultValue
-}
-
 // Native creates a golang-Native function
 func Native(name string, f func(env *Env), doc ...string) Value {
 	return Function(&Func{
@@ -102,24 +74,29 @@ func Native3(name string, f func(*Env, Value, Value, Value) Value, doc ...string
 	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1), env.Get(2)) }, doc...)
 }
 
-func NativeWithParamMap(name string, f func(*Env, Arguments), doc string, params ...string) Value {
+func NativeWithParamMap(name string, f func(*Env), doc string, params ...string) Value {
 	return Function(&Func{
 		Name:      name,
 		Params:    params,
-		NumParams: byte(len(params)),
 		DocString: fixDocString(doc, name, strings.Join(params, ",")),
 		IsDebug:   strings.HasPrefix(name, "debug_"),
 		Native: func(env *Env) {
-			stack := env.Stack()
-			args := make(map[string]Value, len(stack))
-			for i := range stack {
-				if i < len(params) {
-					args[params[i]] = stack[i]
+			if env.A.Type() != VMap {
+				args := NewSizedMap(env.Size())
+				for i := range env.Stack() {
+					if i < len(params) {
+						args.Set(String(params[i]), env.Stack()[i])
+					}
 				}
+				env.A = args.Value()
 			}
-			f(env, Arguments(args))
+			f(env)
 		},
 	})
+}
+
+func (c *Func) NumParams() int {
+	return len(c.Params)
 }
 
 func (c *Func) IsNative() bool { return c.Native != nil }
@@ -135,15 +112,11 @@ func (c *Func) String() string {
 	}
 
 	p.WriteString("(")
-	for i := 0; i < int(c.NumParams); i++ {
-		if i < len(c.Params) {
-			p.WriteString(c.Params[i])
-		} else {
-			p.WriteString("a" + strconv.Itoa(i))
-		}
+	for _, pa := range c.Params {
+		p.WriteString(pa)
 		p.WriteString(",")
 	}
-	if c.NumParams > 0 {
+	if c.NumParams() > 0 {
 		p.Truncate(p.Len() - 1)
 	}
 	p.WriteString(")")
@@ -182,27 +155,62 @@ func (p *Program) Call() (v1 Value, err error) {
 func (c *Func) Call(a ...Value) (v1 Value, err error) {
 	defer parser.CatchError(&err)
 
-	oldLen := len(*c.loadGlobal.Stack)
-	newEnv := Env{
-		Global:      c.loadGlobal,
-		stack:       c.loadGlobal.Stack,
-		StackOffset: uint32(oldLen),
-	}
-
-	var varg []Value
-	for i := range a {
-		if i >= int(c.NumParams) {
-			varg = append(varg, a[i])
+	if c.Native != nil {
+		newEnv := Env{
+			stack: &a,
 		}
-		newEnv.Push(a[i])
-	}
-
-	if c.Native == nil {
 		newEnv.growZero(int(c.StackSize))
-	}
+		v1 = c.exec(newEnv)
+	} else {
+		oldLen := len(*c.loadGlobal.Stack)
+		newEnv := Env{
+			Global:      c.loadGlobal,
+			stack:       c.loadGlobal.Stack,
+			StackOffset: uint32(oldLen),
+		}
 
-	v1 = c.exec(newEnv)
-	*c.loadGlobal.Stack = (*c.loadGlobal.Stack)[:oldLen]
+		for _, a := range a {
+			newEnv.Push(a)
+		}
+		newEnv.growZero(int(c.StackSize))
+
+		v1 = c.exec(newEnv)
+		*c.loadGlobal.Stack = (*c.loadGlobal.Stack)[:oldLen]
+	}
+	return
+}
+
+func (c *Func) CallMap(a *Map) (v1 Value, err error) {
+	defer parser.CatchError(&err)
+
+	if c.Native != nil {
+		s := []Value{}
+		newEnv := Env{
+			stack: &s,
+			A:     Interface(a),
+		}
+		for _, pa := range c.Params {
+			newEnv.Push(a.Get(String(pa)))
+		}
+		newEnv.growZero(int(c.StackSize))
+		v1 = c.exec(newEnv)
+	} else {
+		oldLen := len(*c.loadGlobal.Stack)
+		newEnv := Env{
+			Global:      c.loadGlobal,
+			stack:       c.loadGlobal.Stack,
+			StackOffset: uint32(oldLen),
+			A:           Interface(a),
+		}
+
+		for _, pa := range c.Params {
+			newEnv.Push(a.Get(String(pa)))
+		}
+		newEnv.growZero(int(c.StackSize))
+
+		v1 = c.exec(newEnv)
+		*c.loadGlobal.Stack = (*c.loadGlobal.Stack)[:oldLen]
+	}
 	return
 }
 

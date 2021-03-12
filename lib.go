@@ -7,7 +7,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -74,10 +73,23 @@ func init() {
 	AddGlobalValue("doc", func(env *Env, f Value) Value {
 		return String(f.MustFunc("doc", 0).DocString)
 	}, "doc(function) => string", "\treturn function's documentation")
-	AddGlobalValue("unpack", func(env *Env, a Value) Value {
-		env.A = Array(a.MustArray("unpack", 0).Underlay...)
-		env.A.Array().Unpacked = true
-		return env.A
+	AddGlobalValue("acall", func(env *Env, f, a Value) Value {
+		return Nil
+		// res, err := f.MustFunc("acall", 0).Call(a.MustMap("acall", 1).Underlay...)
+		// if err != nil {
+		// 	panic(err)
+		// }
+		// return res
+	})
+	AddGlobalValue("mcall", func(env *Env, f, a Value) Value {
+		return Nil
+		// fn := f.MustFunc("mcall", 0)
+		// m := buildCallMap(fn, Env{stack: &a.MustMap("mcall", 1).Underlay})
+		// res, err := fn.CallMap(m)
+		// if err != nil {
+		// 	panic(err)
+		// }
+		// return res
 	})
 	AddGlobalValue("debug_locals", func(env *Env) {
 		var r []Value
@@ -141,7 +153,7 @@ func init() {
 		}
 		return Interface(err)
 	}, "pcall(function, arg1, arg2, ...) => result_of_function",
-		"\texecute the function, catch panic and return")
+		"\texecute the function, catch panic and return as error")
 	AddGlobalValue("panic", func(env *Env) { panic(env.Get(0)) }, "panic(value)")
 	AddGlobalValue("assert", func(env *Env) {
 		v := env.Get(0)
@@ -164,7 +176,7 @@ func init() {
 		case VNumber:
 			env.A = v
 		case VString:
-			switch v := parser.NewNumberFromString(v._str()); v.Type {
+			switch v := parser.NewNumberFromString(v.rawStr()); v.Type {
 			case parser.Float:
 				env.A = Float(v.FloatValue())
 			case parser.Int:
@@ -370,8 +382,8 @@ func init() {
 		return env.NewArray(r...)
 	}, "chars(string) => { char1, char2, ... }", "chars(string, max) => { char1, char2, ..., char_max }",
 		"\tbreak a string into (at most 'max') chars, e.g.:",
-		"\tchars('a中c') => 'a', '中', 'c'",
-		"\tchars('a中c', 1) => 'a'",
+		"\tchars('a中c') => { 'a', '中', 'c' }",
+		"\tchars('a中c', 1) => { 'a' }",
 	)
 	AddGlobalValue("match", func(env *Env, in, r, n Value) Value {
 		rx, err := regexp.Compile(r.MustString("match #", 2))
@@ -396,6 +408,9 @@ func init() {
 	AddGlobalValue("stricmp", func(env *Env, a, b Value) Value {
 		return Bool(strings.EqualFold(a.MustString("stricmp #", 1), b.MustString("stricmp #", 2)))
 	}, "stricmp(text1, text2) => bool", "\tcompare two strings case insensitively")
+	AddGlobalValue("trimspace", func(env *Env, txt Value) Value {
+		return String(strings.TrimSpace(txt.MustString("trimspace", 0)))
+	})
 	AddGlobalValue("trim", func(env *Env, txt, p, t Value) Value {
 		switch a, cutset := txt.MustString("trim", 0), p.StringDefault(" \n\t\r"); t.StringDefault("") {
 		case "left", "l":
@@ -423,7 +438,7 @@ func init() {
 		}
 		switch f := env.Get(2); f.Type() {
 		case VString:
-			return env.NewString(rx.ReplaceAllString(a, f._str()))
+			return env.NewString(rx.ReplaceAllString(a, f.rawStr()))
 		case VFunction:
 			return env.NewString(rx.ReplaceAllStringFunc(a, func(in string) string {
 				v, err := f.Function().Call(String(in))
@@ -502,59 +517,10 @@ func init() {
 		}
 		return cv(result)
 	}, "$f(json_string, selector, nil|expected_type) => true|false|number|string|array|object_string")
-	AddGlobalValue("dict", func(env *Env) {
-		if a := env.Get(0); a.Type() == VArray {
-			u := a.Array().Underlay
-			env.Global.DecrDeadsize(int64(len(u)) * ValueSize)
-			m := make(map[string]Value, len(u)/2)
-			for i := 0; i+1 < len(u); i += 2 {
-				m[u[i].String()] = u[i+1]
-			}
-			env.A = _interface(m)
-		} else {
-			if env.A.IsNil() {
-				env.A = _interface((map[string]interface{})(nil))
-			} else {
-				env.A = env.A
-			}
-		}
-	}, "dict(k1, v1, ..., kn, vn) => map[string]Value{ k1: v1, ..., kn: vn }",
-		"dict(k1 = v1, ..., kn = vn) => map[string]Value{ k1: v1, ..., kn: vn }")
-	AddGlobalValue("dict_iter", func(env *Env) {
-		m := env.Get(0).Interface().(map[string]Value)
-		env.A = Interface(reflect.ValueOf(m).MapRange())
+	AddGlobalValue("next", func(env *Env, k Value) Value {
+		nk, nv := env.Get(0).Map().Next(k)
+		return Array(nk, nv)
 	})
-	AddGlobalValue("pair_sort", func(env *Env) {
-		u := env.Get(0).MustArray("pair_sort", 0).Underlay
-		if len(u)%2 != 0 {
-			u = append(u, Value{})
-		}
-		view := createValuePairView(u)
-		sort.Slice(view, func(i, j int) bool { return view[i][0].Less(view[j][0]) })
-		env.A = Array(u...)
-	}, "$f({ k1, v1, ..., kn, vn }) => { ka, va, ..., kz, vz }",
-		"\t$f sorts the given array based on its odd-indexed keys (k1, ... kn)")
-	AddGlobalValue("pair_getset", func(env *Env) {
-		u := env.Get(0).MustArray("pair_getset", 0).Underlay
-		if len(u)%2 != 0 {
-			u = append(u, Value{})
-		}
-		k := env.Get(1)
-		view := createValuePairView(u)
-		i := sort.Search(len(view), func(i int) bool { return !view[i][0].Less(k) })
-		if i < len(view) && view[i][0].Equal(k) {
-			if env.Size() == 3 {
-				view[i][1] = env.Get(2)
-			} else {
-				env.A = view[i][1]
-			}
-		}
-	},
-		"$f({ k1, v1, ..., kn, vn }, k) => v",
-		"\t$f performs a binary search on the given array based on 'k'",
-		"$f({ k1, v1, ..., kn, vn }, k, v)",
-		"\t$f sets the value based on key",
-	)
 }
 
 func mathMinMax(env *Env, max bool) {
@@ -592,14 +558,4 @@ func ipow(base, exp int64) int64 {
 		base *= base
 	}
 	return result
-}
-
-func createValuePairView(in []Value) [][2]Value {
-	view := [][2]Value{}
-	viewHdr := (*reflect.SliceHeader)(unsafe.Pointer(&view))
-	uHdr := (*reflect.SliceHeader)(unsafe.Pointer(&in))
-	viewHdr.Data = uHdr.Data
-	viewHdr.Len = uHdr.Len / 2
-	viewHdr.Cap = uHdr.Cap / 2
-	return view
 }

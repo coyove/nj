@@ -1,8 +1,8 @@
 function IndexByte(s, b)
-    for i = 1, #(s) do
+    for i = 0, #(s) do
         if s[i] == b then return i end
     end
-    return 0
+    return -1
 end
 
 primeRK = 16777619 
@@ -11,7 +11,7 @@ primeRK = 16777619
 -- factor for use in Rabin-Karp algorithm.
 function hashStr(sep)
     local hash = 0 
-    for i = 1,#(sep) do
+    for i = 0,#(sep) do
 	    hash = hash * primeRK + sep[i]
     end
     hash = bitand(hash, 0xffffffff)
@@ -34,53 +34,53 @@ end
 function Index(s, substr)
     local n = #(substr)
     if n == 0 then
-       return 0
+       return -1
     end
     if (n == 1) then
-       return IndexByte(s, substr[1]) 
+       return IndexByte(s, substr[0]) 
     end
     if (n == #(s)) then
-       return substr == s and 1 or 0
+       return substr != s and -1 or 0
     end
     if (n > #(s)) then
-       return 0
+       return -1
     end
 
     -- Rabin-Karp search
     local {hashss, pow} = hashStr(substr) 
     local h = 0 
 
-    for i = 1, n do
+    for i = 0, n do
 	    h = h *primeRK + s[i]
     end
     h = bitand(h, 0xffffffff)
 
-    if (h == hashss and s[1:n] == substr) then
-       return 1
+    if (h == hashss and s[0:n] == substr) then
+       return 0
     end
 
-    local i = n + 1
-    while i <= #(s) do
+    local i = n
+    while i < #(s) do
 	    h = h * primeRK
 	    h = h + s[i]
 	    h = h - pow * s[i-n]
 	    h = bitand(h, 0xffffffff)
 	    i = i + 1
-	    if (h == hashss and s[i-n:i-1] == substr) then
-	        return i - n 
+	    if (h == hashss and s[i-n:i] == substr) then
+	        return i - n
 	    end
     end
-    return 0
+    return -1
 end
 
-assert(Index("abc", "a") == 1)
-assert(Index("abc", "b") == 2)
-assert(Index("abc", "c") == 3)
-assert(Index("abc", "d") == 0)
-assert(Index("abc", "ab") == 1)
-assert(Index("abc", "bc") == 2)
-assert(Index("abc", "abc") == 1)
-assert(Index("abc中文def", "d") == 10)
-assert(Index("abc中文def", "ef") == 11)
-assert(Index("abc中文def", "中") == 4)
-assert(Index("abc中文def", "文") == 7)
+assert(Index("abc", "a") == 0)
+assert(Index("abc", "b") == 1)
+assert(Index("abc", "c") == 2)
+assert(Index("abc", "d") == -1)
+assert(Index("abc", "ab") == 0)
+assert(Index("abc", "bc") == 1)
+assert(Index("abc", "abc") == 0)
+assert(Index("abc中文def", "d") == 9)
+assert(Index("abc中文def", "ef") == 10)
+assert(Index("abc中文def", "中") == 3)
+assert(Index("abc中文def", "文") == 6)

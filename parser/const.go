@@ -3,7 +3,6 @@ package parser
 import (
 	"math/rand"
 	"strconv"
-	"strings"
 )
 
 const (
@@ -23,9 +22,7 @@ var (
 )
 
 const (
-	ANop      = "nop"
 	ADoBlock  = "do"
-	AConcat   = "concat"
 	ANil      = "nil"
 	ASet      = "set"
 	AInc      = "incr"
@@ -38,7 +35,8 @@ const (
 	ALoad     = "load"
 	AStore    = "store"
 	ASlice    = "slice"
-	AList     = "list"
+	AMapArray = "maparray"
+	AMap      = "map"
 	ACall     = "call"
 	ACallMap  = "callmap"
 	ATailCall = "tailcall"
@@ -58,33 +56,20 @@ const (
 	ALess     = "lt"
 	ALessEq   = "le"
 	ALen      = "len"
-	ARetAddr  = "retaddr"
+	AFreeAddr = "freeaddr"
 	ALabel    = "label"
 	AGoto     = "goto"
 	AGStore   = "gstore"
 	AGLoad    = "gload"
 )
 
-func __chain(args ...Node) Node {
-	return NewComplex(append([]Node{NewSymbol(ABegin)}, args...)...)
-}
+func __chain(args ...Node) Node { return NewComplex(append([]Node{NewSymbol(ABegin)}, args...)...) }
 
-func __do(args ...Node) Node {
-	return NewComplex(append([]Node{NewSymbol(ADoBlock)}, args...)...)
-}
+func __do(args ...Node) Node { return NewComplex(append([]Node{NewSymbol(ADoBlock)}, args...)...) }
 
-func RemoveDDD(dest Node) Node {
-	sym := dest.strSym
-	if sym != "..." {
-		sym = strings.TrimLeft(sym, ".")
-		dest.strSym = sym
-	}
-	return dest
-}
+func __move(dest, src Node) Node { return NewComplex(NewSymbol(AMove), dest, src) }
 
-func __move(dest, src Node) Node { return NewComplex(NewSymbol(AMove), RemoveDDD(dest), src) }
-
-func __set(dest, src Node) Node { return NewComplex(NewSymbol(ASet), RemoveDDD(dest), src) }
+func __set(dest, src Node) Node { return NewComplex(NewSymbol(ASet), dest, src) }
 
 func __less(lhs, rhs Node) Node { return NewComplex(NewSymbol(ALess), lhs, rhs) }
 
@@ -98,30 +83,22 @@ func __store(subject, key, value Node) Node { return NewComplex(NewSymbol(AStore
 
 func __gload(key Node) Node { return NewComplex(NewSymbol(AGLoad), key) }
 
-func __if(cond, truebody, falsebody Node) Node {
-	return NewComplex(NewSymbol(AIf), cond, truebody, falsebody)
-}
+func __if(cond, t, f Node) Node { return NewComplex(NewSymbol(AIf), cond, t, f) }
 
 func __loop(body Node) Node { return NewComplex(NewSymbol(AFor), body) }
 
-func __func(setOrMove Node, name Token, paramList Node, doc string, stats Node) Node {
+func __func(name Token, paramList Node, doc string, stats Node) Node {
 	__findTailCall(stats.Nodes)
 	funcname := NewSymbolFromToken(name)
-	x := __move
-	if setOrMove.SymbolValue() == ASet {
-		x = __set
-	}
-	p := setOrMove.Pos()
+	p := name.Pos
 	return __chain(
-		x(funcname, NewSymbol(ANil)).SetPos(p),
+		__set(funcname, NewSymbol(ANil)).SetPos(p),
 		__move(funcname,
 			NewComplex(NewSymbol(AFunc), funcname, paramList, stats, NewString(doc)).SetPos(p)).SetPos(p),
 	)
 }
 
-func __call(cls, args Node) Node {
-	return NewComplex(NewSymbol(ACall), cls, args)
-}
+func __call(cls, args Node) Node { return NewComplex(NewSymbol(ACall), cls, args) }
 
 func __callMap(cls, argsArray, argsMap Node) Node {
 	args := make([]Node, 0, len(argsArray.Nodes)+len(argsMap.Nodes))
@@ -177,7 +154,7 @@ func __moveMulti(nodes, src []Node, pos Position) Node {
 		res = head.moveLoadStore(__move, src[0]).SetPos(pos)
 	} else {
 		// a0, ..., an = b0, ..., bn
-		names, retaddr := []Node{}, NewComplex(NewSymbol(ARetAddr))
+		names, retaddr := []Node{}, NewComplex(NewSymbol(AFreeAddr))
 		for i := range nodes {
 			names = append(names, randomVarname())
 			retaddr = retaddr.append(names[i])

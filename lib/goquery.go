@@ -93,12 +93,12 @@ func (r qResult) PrevFilteredUntil(s, s2 string) qResult {
 	return qResult{r.sel.PrevFilteredUntil(s, s2)}
 }
 
-func (r qResult) Nodes() []qResult {
-	x := make([]qResult, len(r.sel.Nodes))
+func (r qResult) Nodes() []script.Value {
+	x := make([]script.Value, len(r.sel.Nodes))
 	for i, n := range r.sel.Nodes {
 		s := *r.sel
 		s.Nodes = []*html.Node{n}
-		x[i] = qResult{&s}
+		x[i] = script.Interface(qResult{&s})
 	}
 	return x
 }

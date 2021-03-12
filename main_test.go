@@ -51,18 +51,19 @@ func runFile(t *testing.T, path string) {
 				env.Global.Set("G_FLAG", String("ok"))
 				env.Global.Println("find global")
 			},
-			"mapFunc": NativeWithParamMap("mapFunc", func(env *Env, in Arguments) {
-				if !in["a"].IsNil() {
+			"mapFunc": NativeWithParamMap("mapFunc", func(env *Env) {
+				m := env.A.Map()
+				if m.Get(String("a")) != Nil {
 					env.A = String("a")
 				}
-				if !in["b"].IsNil() {
-					env.A = in["b"]
+				if m.Get(String("b")) != Nil {
+					env.A = m.Get(String("b"))
 				}
-				if !in["c"].IsNil() {
-					env.A = String(in["c"].String())
+				if m.Get(String("c")) != Nil {
+					env.A = String(m.Get(String("c")).String())
 				}
-				if !in["d"].IsNil() {
-					env.A = String(env.A.String() + in["d"].String())
+				if m.Get(String("d")) != Nil {
+					env.A = String(env.A.String() + m.Get(String("d")).String())
 				}
 			}, "DocString...", "a", "b", "c", "d"),
 			"G": "test",
@@ -118,7 +119,7 @@ return foo
 		cls, _ := LoadString(`
 a = 1
 function foo(x) 
-for i=1,#x do
+for i=0,#x do
 a=a+x[i]
 end
 return a
@@ -181,7 +182,7 @@ func TestPCallStackSize(t *testing.T) {
 	cls, _ := LoadString(`
 a = ""
 for i = 1,1e3 do
-a = a .. i
+a = a + i
 end
 return a
 `)
@@ -269,7 +270,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		if v2.Array().Underlay[i].Int() != int64(i) {
+		if v2.Map().Get(Int(int64(i))).Int() != int64(i) {
 			t.Fatal(v2)
 		}
 	}
@@ -336,7 +337,7 @@ local a = 100
 return {a + add(), a + add(), a + add()}
 `, CompileOptions{GlobalKey: "add", GlobalValue: add})
 	v, err := p2.Run()
-	if v1 := v.Array().Underlay; v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
+	if v1 := v.Map().Array(); v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())
 	}
 
@@ -378,8 +379,72 @@ func TestSmallString(t *testing.T) {
 	}
 	for i := 0; i < 1e6; i++ {
 		v := randString()
-		if String(v)._str() != v {
+		if String(v).rawStr() != v {
 			t.Fatal(String(v).v, v)
 		}
+	}
+}
+
+func TestRHMap(t *testing.T) {
+	rand.Seed(time.Now().Unix())
+	m := Map{}
+	m2 := map[int64]int64{}
+	counter := int64(0)
+	for i := 0; i < 1e6; i++ {
+		x := rand.Int63()
+		if x%2 == 0 {
+			x = counter
+			counter++
+		}
+		_, memSpace := m.Set(Int(int64(x)), Int(int64(x)))
+		_ = memSpace
+		m2[x] = x
+	}
+	for k := range m2 {
+		delete(m2, k)
+		m.Set(Int(k), Nil)
+		if rand.Intn(10000) == 0 {
+			break
+		}
+	}
+
+	fmt.Println(m.count, len(m.hashItems), len(m2))
+
+	for k, v := range m2 {
+		if m.Get(Int(k)).Int() != v {
+			for _, e := range m.hashItems {
+				if e.Key.Int() == k {
+					t.Log(e)
+				}
+			}
+			t.Fatal(m.Get(Int(k)), k, v)
+		}
+	}
+
+	if m.Len() != len(m2) {
+		t.Fatal(m.Len(), len(m2))
+	}
+
+	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
+		if _, ok := m2[k.Int()]; !ok {
+			t.Fatal(k, v, len(m2))
+		}
+		delete(m2, k.Int())
+	}
+	if len(m2) != 0 {
+		t.Fatal(len(m2))
+	}
+
+	m.Clear()
+	m.Set(Int(0), Int(0))
+	m.Set(Int(1), Int(1))
+	m.Set(Int(2), Int(2))
+
+	for i := 4; i < 9; i++ {
+		m.Set(Int(int64(i*i)), Int(0))
+	}
+
+	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
+		fmt.Println(k, v)
 	}
 }
