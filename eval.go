@@ -258,21 +258,6 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				subject.MustMap("set index", 0)
 			}
 			env.A = v
-		case OpSlice:
-			subject := env._get(opa)
-			start, end := env.A.MustNumber("slice", 0).Int(), env._get(opb).MustNumber("slice", 0).Int()
-			switch subject.Type() {
-			// case VMap:
-			// env.A = Array(subject.Map().SliceArray(int(start), int(end))...)
-			case VString:
-				s := subject.rawStr()
-				start, end := sliceInRange(start, end, int64(len(s)))
-				env.A = String(s[start:end])
-			case VInterface:
-				env.A = Interface(reflectSlice(subject.Interface(), start, end))
-			default:
-				subject.MustMap("slice", 0)
-			}
 		case OpLoad:
 			switch a := env._get(opa); a.Type() {
 			case VMap:

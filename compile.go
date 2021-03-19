@@ -234,7 +234,6 @@ var flatOpMapping = map[string]opCode{
 	parser.APow:    OpPow,
 	parser.AStore:  OpStore,
 	parser.ALoad:   OpLoad,
-	parser.ASlice:  OpSlice,
 	parser.ALen:    OpLen,
 	parser.AInc:    OpInc,
 	parser.AGLoad:  OpGLoad,

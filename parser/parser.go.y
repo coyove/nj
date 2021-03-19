@@ -310,15 +310,6 @@ prefix_expr:
         declarator {
             $$ = $1 
         } |
-        prefix_expr '[' expr ':' expr ']' {
-            $$ = NewComplex(NewSymbol(ASlice), $1, $3, $5).SetPos($2.Pos) 
-        } |
-        prefix_expr '[' ':' expr ']' {
-            $$ = NewComplex(NewSymbol(ASlice), $1, zeroNode, $4).SetPos($2.Pos) 
-        } |
-        prefix_expr '[' expr ':' ']' {
-            $$ = NewComplex(NewSymbol(ASlice), $1, $3, NewNumberFromInt(-1)).SetPos($2.Pos) 
-        } |
         prefix_expr TString {
             $$ = __call($1, NewComplex(NewString($2.Str))).SetPos($1.Pos()) 
         } |

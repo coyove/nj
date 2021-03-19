@@ -89,27 +89,6 @@ func (table *symtable) writeInst3(bop opCode, atoms []parser.Node) uint16 {
 		return regA
 	}
 
-	if bop == OpSlice {
-		table.collapse(atoms[1:], true)
-
-		// (atoms    1      2    3 )
-		// (slice subject start end) subject => opa, start => $a, end => opb
-
-		for i := 1; i <= 3; i += 2 { // subject and end shouldn't use regA
-			if atoms[i].Type == parser.Address && atoms[i].Addr == regA {
-				n := parser.NewAddress(table.borrowAddress())
-				table.writeInst(OpSet, n, _nodeRegA)
-				atoms[i] = n
-			}
-		}
-
-		// We would love to see 'start' using regA, in this case writeInst will just omit it
-		table.writeInst(OpSet, _nodeRegA, atoms[2])
-		table.writeInst(OpSlice, atoms[1], atoms[3])
-		table.returnAddresses(atoms[1:])
-		return regA
-	}
-
 	table.collapse(atoms[1:], true)
 
 	switch bop {

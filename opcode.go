@@ -15,7 +15,6 @@ const (
 	OpGStore
 	OpLoad
 	OpGLoad
-	OpSlice
 	OpAdd
 	OpSub
 	OpMul

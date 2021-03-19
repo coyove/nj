@@ -365,6 +365,10 @@ func init() {
 		r, sz := utf8.DecodeRuneInString(env.Get(0).MustString("unicode", 0))
 		env.A = env.NewArray(Int(int64(r)), Int(int64(sz)))
 	}, "unicode(one_char_string) => { char_unicode, width_in_bytes }")
+	AddGlobalValue("substr", func(env *Env, s, i, j Value) Value {
+		ss := s.MustString("substr", 0)
+		return String(ss[i.MustNumber("substr start", 0).Int():j.IntDefault(int64(len(ss)))])
+	})
 	AddGlobalValue("chars", func(env *Env, s, n Value) Value {
 		var r []Value
 		max := n.IntDefault(0)

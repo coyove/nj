@@ -109,7 +109,6 @@ var (
 		OpLoad:   parser.ALoad,
 		OpStore:  parser.AStore,
 		OpGStore: parser.AGStore,
-		OpSlice:  parser.ASlice,
 		OpPow:    parser.APow,
 	}
 	uOp = map[opCode]string{

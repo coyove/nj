@@ -34,7 +34,6 @@ const (
 	ABegin    = "prog"
 	ALoad     = "load"
 	AStore    = "store"
-	ASlice    = "slice"
 	AMapArray = "maparray"
 	AMap      = "map"
 	ACall     = "call"

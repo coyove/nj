@@ -17,14 +17,14 @@ for i=2,#g,3 do
     if _g.exists(g[i]) then
         local name = str(g[i])
         if #name > 32 then
-            name = name[1:16] .. '...' .. name[#name-16:#name]
+            name = substr(name,0,16) + '...' + substr(name,#name-16,#name)
         end
 
-        title = i/3 .. ": " .. name
-        print(sep1[1:#title+3], '.')
+        title = i//3 + ": " + name
+        print(substr(sep1,0,#title+3), '.')
         print("| ", title, " |")
-        print(sep2[1:#title+3], "'")
-        print(type(g[i]) == "function" and doc(g[i]) or 'constant: ' .. g[i-1])
+        print(substr(sep2,0,#title+3), "'")
+        print(type(g[i]) == "function" and doc(g[i]) or 'constant: ' + g[i-1])
         print()
     end
 end`,
@@ -69,7 +69,7 @@ println(strtime("Y-m-d H:i:s", Go_time()))
 println(doc(Go_time))
 `,
 /* = = = = = = = = */
-      "json": `local j = json(dict( a=1, b=2, array={ 1, 2, dict( inner="inner" )}))
+      "json": `local j = json({ a=1, b=2, array={ 1, 2, { inner="inner" }}})
 assert(json_get(j, "a") == 1)
 assert(json_get(j, "b") == 2)
 local {a, b, c} = json_get(j, "array")
@@ -82,7 +82,7 @@ json() uses https://github.com/tidwall/gjson
 Learn its syntax at https://github.com/tidwall/gjson/blob/master/SYNTAX.md
 ]]
 
-println(dict({"key1", "value1", "key2", "value2"}))
+println({["key1"]="value1", key2="value2"})
 `,
 /* = = = = = = = = */
       "call": `function veryComplexFunction(a, b, c, d, e, f, g, H, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, Z)
@@ -98,10 +98,10 @@ veryComplexFunction(Z="world", ["H"]="hello")
       "http": `local {code, headers, body} = http(
     method="POST",
     url="http://httpbin.org/post",
-    query={"k1=v1", "k2=v2",},
-    json=dict(
+    query={k1="v1", k2="v2",},
+    json={
         name="Smith",
-    ),
+    },
 )
 println("code:", code)
 println("headers:", headers)
@@ -114,7 +114,7 @@ end`,
 
       "goquery": `local {code, _, body} = http("GET", "https://example.com")
 if iserror(code) then
-    return "request failed: " .. code.error()
+    return "request failed: " + code.error()
 end
 
 local el = goquery(body, "div").nodes()
@@ -124,7 +124,7 @@ end
 
 local {code, _, body} = http(url="https://bokete.jp/boke/recent")
 if iserror(code) then
-    return "request failed: " .. code.error()
+    return "request failed: " + code.error()
 end
 
 local list = goquery(body, ".boke-list")
@@ -132,7 +132,7 @@ list = list.find(".boke")
 local boke = list.nodes()
 
 for i=0,#boke do
-    println("#" .. i, trim(boke[i].find('.photo-content img').attr('src'), "//", "prefix"))
+    println("#" + i, trim(boke[i].find('.photo-content img').attr('src'), "//", "prefix"))
     println("  ", trim(boke[i].find('.boke-text').text()))
 end`,
 /* = = = = = = = = */

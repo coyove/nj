@@ -13,13 +13,14 @@ import (
 	"time"
 
 	"github.com/coyove/script"
-	"github.com/tidwall/gjson"
 )
 
 var HostWhitelist = map[string][]string{}
 
 func init() {
-	script.AddGlobalValue("http", script.NativeWithParamMap("http", func(env *script.Env, args script.Arguments) {
+	script.AddGlobalValue("http", script.NativeWithParamMap("http", func(env *script.Env) {
+		args := env.A.Map()
+
 		ctx, cancel, _ := env.Deadline()
 		defer func() {
 			cancel()
@@ -28,20 +29,18 @@ func init() {
 			}
 		}()
 
-		method := strings.ToUpper(args.GetString("method", "GET"))
+		method := strings.ToUpper(args.Get(script.String("method")).StringDefault("GET"))
 
-		u, err := url.Parse(args.GetString("url", "bad://%url%"))
+		u, err := url.Parse(args.Get(script.String("url")).StringDefault("bad://%url%"))
 		panicErr(err)
 
-		addKV := func(p, pp string, add func(k, v string)) {
-			iterStrings(args[p], func(line string) {
-				if k, v, ok := splitKV(line); ok {
-					add(k, v)
+		addKV := func(k string, add func(k, v string)) {
+			x := args.Get(script.String(k))
+			if x.Type() == script.VMap {
+				p := x.MustMap("http "+k, 0)
+				for k, v := p.Next(script.Nil); k != script.Nil; k, v = p.Next(k) {
+					add(k.String(), v.String())
 				}
-			})
-			iterStringPairs(args[p+"_key"], args[p+"_val"], func(k, v string) { add(k, v) })
-			for k, v := range gjson.Parse(args.GetStringOrJSON(pp, "")).Map() {
-				add(k, v.String())
 			}
 		}
 
@@ -56,20 +55,20 @@ func init() {
 		}
 
 		additionalQueries := u.Query()
-		addKV("query", "queries", additionalQueries.Add) // append queries to url
+		addKV("query", additionalQueries.Add) // append queries to url
 		u.RawQuery = additionalQueries.Encode()
 
-		body := args.GetString("rawbody", "")
+		body := args.Get(script.String("rawbody")).StringDefault("")
 		dataFrom, urlForm, jsonForm := (*multipart.Writer)(nil), false, false
 		if body == "" {
 			form := url.Values{}
-			addKV("form", "forms", form.Add) // check "form"
+			addKV("form", form.Add) // check "form"
 			body = form.Encode()
 			urlForm = len(form) > 0
 		}
 		if body == "" {
 			// Check "json"
-			body = args.GetStringOrJSON("json", "")
+			body = args.Get(script.String("json")).JSONString()
 			jsonForm = len(body) > 0
 		}
 
@@ -79,7 +78,7 @@ func init() {
 			// Check form-data
 			payload := bytes.Buffer{}
 			writer := multipart.NewWriter(&payload)
-			addKV("multipart", "multiparts", func(k, v string) {
+			addKV("multipart", func(k, v string) {
 				if strings.HasPrefix(v, "@") {
 					path := v[1:]
 					buf := panicErr2(ioutil.ReadFile(path)).([]byte)
@@ -109,22 +108,22 @@ func init() {
 			req.Header.Add("Content-Type", dataFrom.FormDataContentType())
 		}
 
-		addKV("header", "headers", req.Header.Add) // append headers
+		addKV("header", req.Header.Add) // append headers
 
 		// Construct HTTP client
 		client := &http.Client{}
-		if to := args.GetInt("timeout", 0); to > 0 {
+		if to := args.Get(script.String("timeout")).IntDefault(0); to > 0 {
 			client.Timeout = time.Duration(to) * time.Millisecond
 		}
-		if args["jar"] == script.Nil {
-			client.Jar = args["jar"].Interface().(http.CookieJar)
+		if v := args.Get(script.String("jar")); v.Type() == script.VInterface {
+			client.Jar, _ = v.Interface().(http.CookieJar)
 		}
-		if !args["no_redirect"].IsFalse() {
+		if !args.Get(script.String("no_redirect")).IsFalse() {
 			client.CheckRedirect = func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse
 			}
 		}
-		if p := args.GetString("proxy", ""); p != "" {
+		if p := args.Get(script.String("proxy")).StringDefault(""); p != "" {
 			client.Transport = &http.Transport{
 				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
 			}
@@ -147,28 +146,22 @@ func init() {
 		for k := range resp.Header {
 			hdr[k] = resp.Header.Get(k)
 		}
-		env.A = script.Array(
+		env.A = env.NewArray(
 			script.Int(int64(resp.StatusCode)),
 			script.Interface(hdr),
 			env.NewStringBytes(buf),
 			script.Interface(client.Jar),
 		)
 	}, `http($a...a$) => code, body, headers, cookie_jar
-	'url' is a mandatory parameter, others are optional and pretty self explanatory,
-	some parameters share the same prefix, like X, (X_key, X_val) and Xs, which are just different ways of doing the same thing:
+    'url' is a mandatory parameter, others are optional and pretty self explanatory:
 	http(url="...") -- GET req
 	http(url="...", no_redirect=true)
 	http("POST", "...")
-	http("POST", "...", form="key=value")
-	http("POST", "...", form_key='key', form_val='value')
-	http("POST", "...", forms=dict(key=value))
-	http("POST", "...", multipart_key='file', multipart_val='@path/to/file')`,
+	http("POST", "...", form={key=value})
+    http("POST", "...", multipart={file='@path/to/file'})`,
 
 		"method", "url", "rawbody", "timeout", "proxy",
-		"header", "header_key", "header_val", "headers",
-		"query", "query_key", "query_val", "queries",
-		"form", "form_key", "form_val", "forms",
-		"multipart", "multipart_key", "multipart_val", "multiparts",
+		"header", "query", "form", "multipart",
 		"json", "jar", "no_redirect"))
 }
 

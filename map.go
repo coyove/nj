@@ -245,19 +245,6 @@ func (m *Map) Array() []Value {
 	return m.items
 }
 
-func (m *Map) SliceArray(start, end int) *Map {
-	if start > end {
-		return nil
-	}
-	if start >= 0 && end <= len(m.items) {
-		return &Map{items: m.items[start:end]}
-	}
-	if start >= 0 && start <= len(m.items) {
-		return &Map{items: m.items[start:len(m.items)]}
-	}
-	return nil
-}
-
 func (m *Map) String() string {
 	return m.Value().String()
 }

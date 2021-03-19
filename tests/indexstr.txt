@@ -30,6 +30,7 @@ function hashStr(sep)
     return {hash, pow}
 end
 
+ss = substr
 -- Index returns the index of the first instance of substr in s,||-1 if substr is not present in s.
 function Index(s, substr)
     local n = #(substr)
@@ -55,7 +56,7 @@ function Index(s, substr)
     end
     h = bitand(h, 0xffffffff)
 
-    if (h == hashss and s[0:n] == substr) then
+    if (h == hashss and ss(s,0,n) == substr) then
        return 0
     end
 
@@ -66,7 +67,7 @@ function Index(s, substr)
 	    h = h - pow * s[i-n]
 	    h = bitand(h, 0xffffffff)
 	    i = i + 1
-	    if (h == hashss and s[i-n:i] == substr) then
+	    if (h == hashss and ss(s,i-n,i) == substr) then
 	        return i - n
 	    end
     end
