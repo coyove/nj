@@ -307,8 +307,8 @@ skipspaces:
 				tok.Type = '.'
 				tok.Str = "."
 			}
-		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|', '$':
-			const pat = "(){}];,#^|$"
+		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|', '@':
+			const pat = "(){}];,#^|@"
 			idx := strings.IndexByte(pat, byte(ch))
 			tok.Type = ch
 			tok.Str = pat[idx : idx+1]

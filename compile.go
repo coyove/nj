@@ -146,6 +146,8 @@ func (table *symtable) get(varname string) uint16 {
 		return table.loadK(true)
 	case "false":
 		return table.loadK(false)
+	case "@":
+		return regA
 	}
 
 	calc := func(k *symbol) uint16 {
@@ -236,8 +238,6 @@ var flatOpMapping = map[string]opCode{
 	parser.ALoad:   OpLoad,
 	parser.ALen:    OpLen,
 	parser.AInc:    OpInc,
-	parser.AGLoad:  OpGLoad,
-	parser.AGStore: OpGStore,
 }
 
 func (table *symtable) writeInst(op opCode, n0, n1 parser.Node) {

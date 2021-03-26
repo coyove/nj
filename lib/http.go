@@ -37,7 +37,7 @@ func init() {
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Get(script.String(k))
 			if x.Type() == script.VMap {
-				p := x.MustMap("http "+k, 0)
+				p := x.Map()
 				for k, v := p.Next(script.Nil); k != script.Nil; k, v = p.Next(k) {
 					add(k.String(), v.String())
 				}
@@ -68,8 +68,10 @@ func init() {
 		}
 		if body == "" {
 			// Check "json"
-			body = args.Get(script.String("json")).JSONString()
-			jsonForm = len(body) > 0
+			if j := args.GetString("json"); j != script.Nil {
+				body = j.JSONString()
+				jsonForm = true
+			}
 		}
 
 		var bodyReader io.Reader = strings.NewReader(body)

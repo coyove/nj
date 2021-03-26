@@ -293,9 +293,6 @@ func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
 	if len(n.Nodes) == 3 && n.Nodes[0].SymbolValue() == ALoad {
 		return __store(n.Nodes[1], n.Nodes[2], v)
 	}
-	if len(n.Nodes) == 2 && n.Nodes[0].SymbolValue() == AGLoad {
-		return NewComplex(NewSymbol(AGStore), n.Nodes[1], v)
-	}
 	if n.Type != Symbol {
 		panic(fmt.Sprintf("%v: invalid assignment", n))
 	}

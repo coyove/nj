@@ -58,8 +58,6 @@ const (
 	AFreeAddr = "freeaddr"
 	ALabel    = "label"
 	AGoto     = "goto"
-	AGStore   = "gstore"
-	AGLoad    = "gload"
 )
 
 func __chain(args ...Node) Node { return NewComplex(append([]Node{NewSymbol(ABegin)}, args...)...) }
@@ -79,8 +77,6 @@ func __inc(subject, step Node) Node { return NewComplex(NewSymbol(AInc), subject
 func __load(subject, key Node) Node { return NewComplex(NewSymbol(ALoad), subject, key) }
 
 func __store(subject, key, value Node) Node { return NewComplex(NewSymbol(AStore), subject, value, key) }
-
-func __gload(key Node) Node { return NewComplex(NewSymbol(AGLoad), key) }
 
 func __if(cond, t, f Node) Node { return NewComplex(NewSymbol(AIf), cond, t, f) }
 

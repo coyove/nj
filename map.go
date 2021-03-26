@@ -45,6 +45,10 @@ func (m *Map) Clear() {
 	m.items = m.items[:0]
 }
 
+func (m *Map) GetString(k string) (v Value) {
+	return m.Get(String(k))
+}
+
 // Get retrieves the val for a given key.
 func (m *Map) Get(k Value) (v Value) {
 	if k == Nil {

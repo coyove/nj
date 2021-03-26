@@ -521,8 +521,8 @@ func init() {
 		}
 		return cv(result)
 	}, "$f(json_string, selector, nil|expected_type) => true|false|number|string|array|object_string")
-	AddGlobalValue("next", func(env *Env, k Value) Value {
-		nk, nv := env.Get(0).Map().Next(k)
+	AddGlobalValue("next", func(env *Env, m, k Value) Value {
+		nk, nv := m.MustMap("next", 0).Next(k)
 		return Array(nk, nv)
 	})
 }

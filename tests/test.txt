@@ -166,8 +166,6 @@ assert(returnnil() == nil)
 G_FLAG = 1
 findGlobal()
 assert(G_FLAG == 'ok')
-assert($("G_FLAG") == 'ok')
 
 flag = "G_FLA" + "G"
-assert($flag == 'ok')
 print(flag, {}, {a=2}, {["a"]=2})
