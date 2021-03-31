@@ -31,7 +31,7 @@ func (e *Error) Error() string {
 	if pos.Line == EOF {
 		return fmt.Sprintf("%s\n", e.Message)
 	} else {
-		return fmt.Sprintf("%v at line %d: %s\n", e.Token, pos.Line, e.Message)
+		return fmt.Sprintf("%q at line %d: %s\n", e.Token, pos.Line, e.Message)
 	}
 }
 

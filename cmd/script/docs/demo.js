@@ -66,7 +66,7 @@ end
       "time": `println("Unix timestamp:", time())
 println("Go time.Time:", Go_time().Format("2006-01-02 15:04:05"))
 println(strtime("Y-m-d H:i:s", Go_time()))
-println(doc(Go_time))
+println(Go_time:doc())
 `,
 /* = = = = = = = = */
       "json": `local j = json({ a=1, b=2, array={ 1, 2, { inner="inner" }}})
@@ -91,7 +91,7 @@ it will only print H and Z's values]]
     println(H, Z)
 end
 
-println(doc(veryComplexFunction))
+veryComplexFunction:doc():println()
 veryComplexFunction(Z="world", ["H"]="hello")
 `,
 /* = = = = = = = = */
@@ -166,11 +166,11 @@ end
 return foo(1,2)
 `,
 /* = = = = = = = = */
-      "bing.com": `local {_, _, body} = http(url="https://cn.bing.com/HPImageArchive.aspx", queries=dict(format='js', n=10))
+      "bing.com": `local {_, _, body} = http(url="https://cn.bing.com/HPImageArchive.aspx", query={format='js', n=10})
 local items = json_get(body, "images")
 
 for i =0,#items do
-    println("https://cn.bing.com/" .. json_get(items[i], "url"))
+    println("https://cn.bing.com/" + json_get(items[i], "url"))
 end`,
 /* = = = = = = = = */
       "eof": ""

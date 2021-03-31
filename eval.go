@@ -113,9 +113,9 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(vaf + vbf)
 				}
 			case VString + VString:
-				env.A = env.NewString(va.rawStr() + vb.rawStr())
+				env.A = env.NewString2(va.rawStr(), vb.rawStr())
 			default:
-				env.A = env.NewString(va.String() + vb.String())
+				env.A = env.NewString2(va.String(), vb.String())
 			}
 		case OpSub:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == VNumber+VNumber {
@@ -250,14 +250,15 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			switch subject.Type() {
 			case VMap:
 				m := subject.Map()
-				_, memSpace := m.Set(env.A, v)
+				var memSpace int64
+				env.A, memSpace = m.Set(env.A, v)
 				env.Global.DecrDeadsize(memSpace)
 			case VInterface:
 				reflectStore(subject.Interface(), env.A, v)
+				env.A = v
 			default:
 				subject.MustMap("set index", 0)
 			}
-			env.A = v
 		case OpLoad:
 			switch a := env._get(opa); a.Type() {
 			case VMap:

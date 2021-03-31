@@ -12,6 +12,7 @@ package parser
 %type<expr> expr_list
 %type<expr> expr_assign_list
 %type<expr> prefix_expr
+%type<expr> call_expr
 %type<expr> assign_stat
 %type<expr> for_stat
 %type<expr> if_stat
@@ -31,7 +32,7 @@ package parser
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
-%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '@' TIDiv
+%token<token> ':' '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '@' TIDiv
 
 /* Operators */
 %right 'T'
@@ -288,18 +289,28 @@ prefix_expr:
         prefix_expr TString {
             $$ = __call($1, NewComplex(NewString($2.Str))).SetPos($1.Pos()) 
         } |
-        prefix_expr '(' ')' {
-            $$ = __call($1, emptyNode).SetPos($1.Pos()) 
+        prefix_expr call_expr {
+            $2.Nodes[1] = $1
+            $$ = $2
         } |
-        prefix_expr '(' expr_list comma ')' {
-            $$ = __call($1, $3).SetPos($1.Pos()) 
-        } |
-        prefix_expr '(' expr_assign_list comma ')' {
-            $$ = __callMap($1, emptyNode, $3).SetPos($1.Pos()) 
-        } |
-        prefix_expr '(' expr_list ',' expr_assign_list comma ')' {
-            $$ = __callMap($1, $3, $5).SetPos($1.Pos()) 
+        prefix_expr ':' TIdent call_expr {
+            $4.Nodes[1] = NewSymbolFromToken($3)
+            $$ = __callPatch($4, $1)
         }
+
+call_expr:
+        '(' ')' {
+            $$ = __call(emptyNode, emptyNode).SetPos($1.Pos) 
+        } |
+        '(' expr_list comma ')' {
+            $$ = __call(emptyNode, $2).SetPos($1.Pos) 
+        } |
+        '(' expr_assign_list comma ')' {
+            $$ = __callMap(emptyNode, emptyNode, $2).SetPos($1.Pos) 
+        } |
+        '(' expr_list ',' expr_assign_list comma ')' {
+            $$ = __callMap(emptyNode, $2, $4).SetPos($1.Pos) 
+        } 
 
 expr_list:
         expr {

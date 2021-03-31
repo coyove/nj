@@ -93,7 +93,9 @@ func __func(name Token, paramList Node, doc string, stats Node) Node {
 	)
 }
 
-func __call(cls, args Node) Node { return NewComplex(NewSymbol(ACall), cls, args) }
+func __call(cls, args Node) Node {
+	return NewComplex(NewSymbol(ACall), cls, args)
+}
 
 func __callMap(cls, argsArray, argsMap Node) Node {
 	args := make([]Node, 0, len(argsArray.Nodes)+len(argsMap.Nodes))
@@ -104,6 +106,23 @@ func __callMap(cls, argsArray, argsMap Node) Node {
 	n := __call(cls, NewComplex(args...))
 	n.Nodes[0].strSym = ACallMap
 	return n
+}
+
+func __callPatch(original, self Node) Node {
+	if original.Nodes[0].SymbolValue() == ACall {
+		original.Nodes[2].Nodes = append([]Node{self}, original.Nodes[2].Nodes...)
+	} else {
+		n := original.Nodes[2].Nodes
+		n = append([]Node{zeroNode, self}, n...)
+		for i := 2; i < len(n); i += 2 {
+			if n[i].Type != Int {
+				break
+			}
+			n[i] = NewNumberFromInt(n[i].IntValue() + 1)
+		}
+		original.Nodes[2].Nodes = n
+	}
+	return original
 }
 
 func __findTailCall(stats []Node) {

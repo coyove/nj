@@ -149,6 +149,13 @@ func (env *Env) NewString(s string) Value {
 	return String(s)
 }
 
+func (env *Env) NewString2(a, b string) Value {
+	if len(a)+len(b) > 7 {
+		env.Global.DecrDeadsize(int64(len(a) + len(b)))
+	}
+	return String(a + b)
+}
+
 func (env *Env) NewArray(e ...Value) Value {
 	env.Global.DecrDeadsize(int64(len(e)) * ValueSize)
 	return Array(e...)
