@@ -294,6 +294,17 @@ skipspaces:
 				tok.Type = [...]uint32{TEqeq, TNeq, TNeq, TLte, TGte}[idx]
 				tok.Str = [...]string{"==", "!=", "~=", "<=", ">="}[idx]
 				sc.Next()
+			} else if p == ch && ch == '<' {
+				tok.Type, tok.Str = TLsh, "<<"
+				sc.Next()
+			} else if p == ch && ch == '>' {
+				sc.Next()
+				if sc.Peek() == '>' {
+					tok.Type, tok.Str = TURsh, ">>>"
+					sc.Next()
+				} else {
+					tok.Type, tok.Str = TRsh, ">>"
+				}
 			} else {
 				tok.Type = ch
 				tok.Str = [...]string{"=", "!", "~", "<", ">"}[idx]
@@ -307,8 +318,8 @@ skipspaces:
 				tok.Type = '.'
 				tok.Str = "."
 			}
-		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|', '@':
-			const pat = "(){}];,#^|@"
+		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|', '@', '&':
+			const pat = "(){}];,#^|@&"
 			idx := strings.IndexByte(pat, byte(ch))
 			tok.Type = ch
 			tok.Str = pat[idx : idx+1]

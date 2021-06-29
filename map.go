@@ -254,7 +254,7 @@ func (m *Map) String() string {
 }
 
 func (m *Map) Value() Value {
-	return Value{v: VMap, p: unsafe.Pointer(m)}
+	return Value{v: uint64(VMap), p: unsafe.Pointer(m)}
 }
 
 func (m *Map) grow(newSize int) {

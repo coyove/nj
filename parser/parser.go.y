@@ -28,11 +28,11 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn 
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TLsh TRsh TURsh
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
-%token<token> ':' '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '@' TIDiv
+%token<token> ':' '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '@' '|' TIDiv
 
 /* Operators */
 %right 'T'
@@ -42,7 +42,9 @@ package parser
 %left TOr
 %left TAnd
 %left '>' '<' TGte TLte TEqeq TNeq
-%left '+' '-' '^'
+%left TLsh TRsh TURsh 
+%left '&' '|' '~' '^'
+%left '+' '-' 
 %left '*' '/' '%' TIDiv
 %right UNARY /* not # -(unary) */
 
@@ -277,7 +279,9 @@ expr:
         expr '/' expr                     { $$ = NewComplex(NewSymbol(ADiv), $1,$3).SetPos($2.Pos) } |
         expr TIDiv expr                   { $$ = NewComplex(NewSymbol(AIDiv), $1,$3).SetPos($2.Pos) } |
         expr '%' expr                     { $$ = NewComplex(NewSymbol(AMod), $1,$3).SetPos($2.Pos) } |
-        expr '^' expr                     { $$ = NewComplex(NewSymbol(APow), $1,$3).SetPos($2.Pos) } |
+        expr '&' expr                     { $$ = NewComplex(NewSymbol(ABitAnd), $1,$3).SetPos($2.Pos) } |
+        expr '|' expr                     { $$ = NewComplex(NewSymbol(ABitOr), $1,$3).SetPos($2.Pos) } |
+        expr '^' expr                     { $$ = NewComplex(NewSymbol(ABitXor), $1,$3).SetPos($2.Pos) } |
         TNot expr %prec UNARY             { $$ = NewComplex(NewSymbol(ANot), $2).SetPos($1.Pos) } |
         '-' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ASub), zeroNode, $2).SetPos($1.Pos) } |
         '#' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ALen), $2).SetPos($1.Pos) }

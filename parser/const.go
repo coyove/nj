@@ -46,7 +46,13 @@ const (
 	ADiv      = "div"
 	AIDiv     = "idiv"
 	AMod      = "mod"
-	APow      = "pow"
+	ABitAnd   = "bitand"
+	ABitOr    = "bitor"
+	ABitXor   = "bitxor"
+	ABitNot   = "bitnot"
+	ABitLsh   = "bitlsh"
+	ABitRsh   = "bitrsh"
+	ABitURsh  = "bitursh"
 	AEq       = "eq"
 	ANeq      = "neq"
 	AAnd      = "and"
@@ -54,7 +60,6 @@ const (
 	ANot      = "not"
 	ALess     = "lt"
 	ALessEq   = "le"
-	ALen      = "len"
 	AFreeAddr = "freeaddr"
 	ALabel    = "label"
 	AGoto     = "goto"
@@ -76,7 +81,9 @@ func __inc(subject, step Node) Node { return NewComplex(NewSymbol(AInc), subject
 
 func __load(subject, key Node) Node { return NewComplex(NewSymbol(ALoad), subject, key) }
 
-func __store(subject, key, value Node) Node { return NewComplex(NewSymbol(AStore), subject, value, key) }
+func __store(subject, key, value Node) Node {
+	return NewComplex(NewSymbol(AStore), subject, value, key)
+}
 
 func __if(cond, t, f Node) Node { return NewComplex(NewSymbol(AIf), cond, t, f) }
 

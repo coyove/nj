@@ -29,12 +29,12 @@ type ValueType byte
 
 const (
 	VNil       ValueType = 0
-	VBool                = 1
-	VNumber              = 3
-	VString              = 7
-	VMap                 = 15
-	VFunction            = 17
-	VInterface           = 19
+	VBool      ValueType = 1
+	VNumber    ValueType = 3
+	VString    ValueType = 7
+	VMap       ValueType = 15
+	VFunction  ValueType = 17
+	VInterface ValueType = 19
 
 	ValueSize = int64(unsafe.Sizeof(Value{}))
 )
@@ -83,9 +83,9 @@ func (v Value) IsInt() bool { return v.p == int64Marker }
 // Bool returns a boolean value
 func Bool(v bool) Value {
 	if v {
-		return Value{VBool, trueMarker}
+		return Value{uint64(VBool), trueMarker}
 	}
-	return Value{VBool, falseMarker}
+	return Value{uint64(VBool), falseMarker}
 }
 
 // Float returns a number value
@@ -111,7 +111,7 @@ func Dict(kvs ...Value) Value {
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		t.Set(kvs[i], kvs[i+1])
 	}
-	return Value{v: VMap, p: unsafe.Pointer(t)}
+	return Value{v: uint64(VMap), p: unsafe.Pointer(t)}
 }
 
 // Function returns a closure value
@@ -119,7 +119,7 @@ func Function(c *Func) Value {
 	if c.Name == "" {
 		c.Name = "function"
 	}
-	return Value{v: VFunction, p: unsafe.Pointer(c)}
+	return Value{v: uint64(VFunction), p: unsafe.Pointer(c)}
 }
 
 func String(s string) Value {
@@ -128,7 +128,7 @@ func String(s string) Value {
 		copy(x[1:], s)
 		return Value{v: binary.BigEndian.Uint64(x[:]), p: smallStringMarker}
 	}
-	return Value{v: VString, p: unsafe.Pointer(&s)}
+	return Value{v: uint64(VString), p: unsafe.Pointer(&s)}
 }
 
 func Bytes(b []byte) Value {
@@ -211,7 +211,7 @@ func Interface(i interface{}) Value {
 }
 
 func _interface(i interface{}) Value {
-	return Value{v: VInterface, p: unsafe.Pointer(&i)}
+	return Value{v: uint64(VInterface), p: unsafe.Pointer(&i)}
 }
 
 // rawStr cast value to string
