@@ -12,9 +12,7 @@ const (
 	_ opCode = iota
 	OpSet
 	OpStore
-	OpGStore
 	OpLoad
-	OpGLoad
 	OpAdd
 	OpSub
 	OpMul
@@ -27,7 +25,13 @@ const (
 	OpNeq
 	OpLess
 	OpLessEq
-	OpPow
+	OpBitAnd
+	OpBitOr
+	OpBitXor
+	OpBitNot
+	OpBitLsh
+	OpBitRsh
+	OpBitURsh
 	OpIf
 	OpIfNot
 	OpJmp
@@ -38,7 +42,6 @@ const (
 	OpCall
 	OpCallMap
 	OpRet
-	OpLen
 )
 
 func panicf(msg string, args ...interface{}) {

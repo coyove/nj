@@ -73,6 +73,18 @@ func init() {
 	AddGlobalValue("doc", func(env *Env, f Value) Value {
 		return String(f.MustFunc("doc", 0).DocString)
 	}, "doc(function) => string", "\treturn function's documentation")
+	AddGlobalValue("len", func(env *Env, v Value) Value {
+		switch v.Type() {
+		case VString:
+			return Float(float64(len(v.rawStr())))
+		case VMap:
+			return Int(int64(v.Map().Len()))
+		case VFunction:
+			return Float(float64(v.Function().NumParams()))
+		default:
+			return Int(int64(reflectLen(v.Interface())))
+		}
+	})
 	AddGlobalValue("acall", func(env *Env, f, a Value) Value {
 		return Nil
 		// res, err := f.MustFunc("acall", 0).Call(a.MustMap("acall", 1).Underlay...)

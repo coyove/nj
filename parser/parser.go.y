@@ -32,7 +32,7 @@ package parser
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
-%token<token> ':' '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '@' '|' TIDiv
+%token<token> ':' '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '@' '|' '~' TIDiv
 
 /* Operators */
 %right 'T'
@@ -41,9 +41,9 @@ package parser
 %right FUNC
 %left TOr
 %left TAnd
+%left '&' '|' '^'
 %left '>' '<' TGte TLte TEqeq TNeq
 %left TLsh TRsh TURsh 
-%left '&' '|' '~' '^'
 %left '+' '-' 
 %left '*' '/' '%' TIDiv
 %right UNARY /* not # -(unary) */
@@ -282,9 +282,12 @@ expr:
         expr '&' expr                     { $$ = NewComplex(NewSymbol(ABitAnd), $1,$3).SetPos($2.Pos) } |
         expr '|' expr                     { $$ = NewComplex(NewSymbol(ABitOr), $1,$3).SetPos($2.Pos) } |
         expr '^' expr                     { $$ = NewComplex(NewSymbol(ABitXor), $1,$3).SetPos($2.Pos) } |
+        expr TLsh expr                    { $$ = NewComplex(NewSymbol(ABitLsh), $1,$3).SetPos($2.Pos) } |
+        expr TRsh expr                    { $$ = NewComplex(NewSymbol(ABitRsh), $1,$3).SetPos($2.Pos) } |
+        expr TURsh expr                   { $$ = NewComplex(NewSymbol(ABitURsh), $1,$3).SetPos($2.Pos) } |
+        '~' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ABitNot), $2).SetPos($1.Pos) } |
         TNot expr %prec UNARY             { $$ = NewComplex(NewSymbol(ANot), $2).SetPos($1.Pos) } |
-        '-' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ASub), zeroNode, $2).SetPos($1.Pos) } |
-        '#' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ALen), $2).SetPos($1.Pos) }
+        '-' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ASub), zeroNode, $2).SetPos($1.Pos) }
 
 prefix_expr:
         declarator {

@@ -209,42 +209,26 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			}
 		case OpNot:
 			env.A = Bool(env._get(opa).IsFalse())
-		case OpPow:
-			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
-			case VNumber + VNumber:
-				vaf, vai, vaIsInt := va.Num()
-				vbf, vbi, vbIsInt := vb.Num()
-				if vaIsInt && vbIsInt && vbi >= 1 {
-					env.A = Int(ipow(vai, vbi))
-				} else {
-					env.A = Float(math.Pow(vaf, vbf))
-				}
-			default:
-				va.MustNumber("pow", 0)
-				vb.MustNumber("pow", 0)
-			}
-		case OpLen:
-			switch v := env._get(opa); v.Type() {
-			case VString:
-				env.A = Float(float64(len(v.rawStr())))
-			case VMap:
-				env.A = Int(int64(v.Map().Len()))
-			case VFunction:
-				env.A = Float(float64(v.Function().NumParams()))
-			default:
-				env.A = Int(int64(reflectLen(v.Interface())))
-			}
+		case OpBitAnd:
+			env.A = Int(env._get(opa).MustNumber("bitwise and", 0).Int() & env._get(opb).MustNumber("bitwise and", 0).Int())
+		case OpBitOr:
+			env.A = Int(env._get(opa).MustNumber("bitwise or", 0).Int() | env._get(opb).MustNumber("bitwise or", 0).Int())
+		case OpBitXor:
+			env.A = Int(env._get(opa).MustNumber("bitwise xor", 0).Int() ^ env._get(opb).MustNumber("bitwise xor", 0).Int())
+		case OpBitLsh:
+			env.A = Int(env._get(opa).MustNumber("bitwise lsh", 0).Int() << env._get(opb).MustNumber("bitwise lsh", 0).Int())
+		case OpBitRsh:
+			env.A = Int(env._get(opa).MustNumber("bitwise rsh", 0).Int() >> env._get(opb).MustNumber("bitwise rsh", 0).Int())
+		case OpBitURsh:
+			a := env._get(opa).MustNumber("bitwise unsigned rsh", 0).Int()
+			b := env._get(opb).MustNumber("bitwise unsigned rsh", 0).Int()
+			env.A = Int(int64(uint64(a) >> b))
 		case OpMapArray:
 			env.A = env.NewArray(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
 		case OpMap:
 			env.A = env.NewMap(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
-		case OpGStore:
-			env.A = env._get(opb)
-			env.Global.GStore(env._get(opa).MustString("gstore", 0), env.A)
-		case OpGLoad:
-			env.A = env.Global.GLoad(env._get(opa).MustString("gload", 0))
 		case OpStore:
 			subject, v := env._get(opa), env._get(opb)
 			switch subject.Type() {
