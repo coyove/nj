@@ -39,7 +39,7 @@ end
 
 do
 	local arr = {1,2,3}
-	for i =0,#arr do
+	for i =0,len(arr) do
 	    assert( i+1 == arr[i])
 	end
 end
@@ -109,7 +109,7 @@ function fib2(a, b, n)
         c = add(a, b)
         a = b
         b = c
-        x[#x] = c
+        x[len(x)] = c
         n=n-1
     end
     return x
@@ -169,3 +169,33 @@ assert(G_FLAG == 'ok')
 
 flag = "G_FLA" + "G"
 print(flag, {}, {a=2}, {["a"]=2})
+
+function double()
+    args = dbg_dumpstack()
+    for i=0,len(args) do
+        args[i] = args[i] * 2
+    end
+    return args
+end
+
+x = double()
+assert(len(x) == 0)
+x = double(1)
+assert(x[0] == 2)
+x = double(1, 2, 3)
+assert(x[0] + x[1] + x[2] == 12)
+print(x)
+
+function double(scale)
+    args = dbg_kwargs()
+    args["scale"] = nil
+    print(args)
+    {k, v} = next(args)
+    while k do
+        args[k] = v * scale
+        {k, v} = next(args, k)
+    end
+    return args
+end
+r = (double(scale=3, a=10, b=-1))
+assert(r.a == 30 and r.b == -3)

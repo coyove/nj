@@ -103,10 +103,39 @@ func init() {
 		// }
 		// return res
 	})
+	AddGlobalValue("dbg_dumpstack", func(env *Env) {
+		start := env.Size()
+		for _, s := range env.DebugStacktrace {
+			start += int(s.cls.StackSize)
+		}
+		var r []Value
+		stack := (*env.stack)[start:]
+		for _, el := range stack[:cap(stack)] {
+			if el == watermark {
+				break
+			}
+			r = append(r, el)
+		}
+		env.A = Array(r...)
+	}, "dbg_dumpstack() => { v1, v2, v3, ... }")
+	AddGlobalValue("dbg_kwargs", func(env *Env) {
+		start := env.Size()
+		for _, s := range env.DebugStacktrace {
+			start += int(s.cls.StackSize)
+		}
+		stack := (*env.stack)[start:]
+		stack = stack[:cap(stack)]
+		for i, el := range stack {
+			if el == watermark {
+				env.A = stack[i+1]
+				break
+			}
+		}
+	}, "dbg_kwargs() => { key1: value, key2: value2, ... }")
 	AddGlobalValue("debug_locals", func(env *Env) {
 		var r []Value
-		start := env.StackOffset - uint32(env.Debug.Caller.StackSize)
-		for i, name := range env.Debug.Caller.Locals {
+		start := env.StackOffset - uint32(env.DebugCaller.StackSize)
+		for i, name := range env.DebugCaller.Locals {
 			idx := start + uint32(i)
 			r = append(r, Int(int64(idx)), String(name), (*env.stack)[idx])
 		}
@@ -124,7 +153,7 @@ func init() {
 		return Nil
 	}, "debug_set(idx, value)")
 	AddGlobalValue("debug_stacktrace", func(env *Env, skip Value) Value {
-		stacks := env.Debug.Stacktrace
+		stacks := append(env.DebugStacktrace, stacktrace{cls: env.DebugCaller, cursor: env.DebugCursor})
 		lines := make([]Value, 0, len(stacks))
 		for i := len(stacks) - 1 - int(skip.IntDefault(0)); i >= 0; i-- {
 			r := stacks[i]
@@ -293,8 +322,16 @@ func init() {
 	AddGlobalValue("ceil", func(env *Env, v Value) Value {
 		return Float(math.Ceil(v.MustNumber("ceil", 0).Float()))
 	})
-	AddGlobalValue("min", func(env *Env) { mathMinMax(env, false) }, "max(a, b, ...) => largest_number")
-	AddGlobalValue("max", func(env *Env) { mathMinMax(env, true) }, "min(a, b, ...) => smallest_number")
+	AddGlobalValue("min", func(env *Env) { mathMinMax(env, "min #", false) }, "max(a, b, ...) => largest_number")
+	AddGlobalValue("max", func(env *Env) { mathMinMax(env, "max #", true) }, "min(a, b, ...) => smallest_number")
+	AddGlobalValue("pow", func(env *Env, a, b Value) Value {
+		af, ai, aIsInt := a.MustNumber("pow", 1).Num()
+		bf, bi, bIsInt := b.MustNumber("pow", 2).Num()
+		if aIsInt && bIsInt {
+			return Int(ipow(ai, bi))
+		}
+		return Float(math.Pow(af, bf))
+	}, "min(a, b, ...) => smallest_number")
 	AddGlobalValue("abs", func(env *Env) {
 		switch f, i, isInt := env.Get(0).MustNumber("abs", 0).Num(); {
 		case isInt && i < 0:
@@ -539,21 +576,21 @@ func init() {
 	})
 }
 
-func mathMinMax(env *Env, max bool) {
+func mathMinMax(env *Env, msg string, max bool) {
 	if len(env.Stack()) <= 0 {
 		return
 	}
-	f, i, isInt := env.Get(0).MustNumber("minmax #", 1).Num()
+	f, i, isInt := env.Get(0).MustNumber(msg, 1).Num()
 	if isInt {
 		for ii := 1; ii < len(env.Stack()); ii++ {
-			if x := env.Get(ii).MustNumber("minmax #", ii+1).Int(); x >= i == max {
+			if x := env.Get(ii).MustNumber(msg, ii+1).Int(); x >= i == max {
 				i = x
 			}
 		}
 		env.A = Int(i)
 	} else {
 		for i := 1; i < len(env.Stack()); i++ {
-			if x, _, _ := env.Get(i).MustNumber("minmax #", i+1).Num(); x >= f == max {
+			if x, _, _ := env.Get(i).MustNumber(msg, i+1).Num(); x >= f == max {
 				f = x
 			}
 		}

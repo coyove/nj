@@ -20,6 +20,7 @@ package parser
 %type<expr> jmp_stat
 %type<expr> flow_stat
 %type<expr> func_stat
+%type<expr> struct_stat
 %type<expr> comma
 
 %union {
@@ -28,11 +29,11 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TLsh TRsh TURsh
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TLsh TRsh TURsh TStruct
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
-%token<token> ':' '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '@' '|' '~' TIDiv
+%token<token> ':' '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' TIDiv
 
 /* Operators */
 %right 'T'
@@ -90,6 +91,13 @@ stat:
 flow_stat:
         for_stat       { $$ = $1 } |
         if_stat        { $$ = $1 }
+
+struct_stat:
+        TStruct TIdent stats TEnd {
+
+        } |
+        TStruct TIdent stats TEnd {
+        }
 
 assign_stat:
         prefix_expr {
@@ -229,9 +237,6 @@ jmp_stat:
 
 declarator:
         TIdent {
-            $$ = NewSymbolFromToken($1) 
-        } |
-        '@' {
             $$ = NewSymbolFromToken($1) 
         } |
         prefix_expr '[' expr ']' {

@@ -11,30 +11,15 @@ import (
 // stack contains arguments used by the execution and is a Global shared value, local can only use stack[StackOffset:]
 // A and V stores the results of the execution (e.g: return a, b, c => env.A = a, env.V = []Value{b, c})
 type Env struct {
-	// Global
-	Global *Program
-	stack  *[]Value
-
-	// Local
-	StackOffset uint32
+	Global      *Program
+	stack       *[]Value
 	A           Value
+	StackOffset uint32
 
-	// Used by Native functions
-	NativeSource *Func // points to itself
-
-	// Used by Native debug function
-	Debug *debugInfo
-}
-
-type debugInfo struct {
-	Caller     *Func
-	Stacktrace []stacktrace
-	Cursor     uint32
-}
-
-type DebugState struct {
-	Cursor uint32
-	Stack  []Value
+	// Debug info for native functions to read
+	DebugCursor     uint32
+	DebugCaller     *Func
+	DebugStacktrace []stacktrace
 }
 
 func (env *Env) growZero(newSize int) {
@@ -50,7 +35,7 @@ func (env *Env) grow(newSize int) {
 	sz := int(env.StackOffset) + newSize
 	if sz > cap(s) {
 		old := s
-		s = make([]Value, sz, sz+newSize)
+		s = make([]Value, sz+newSize)
 		copy(s, old)
 	}
 	*env.stack = s[:sz]

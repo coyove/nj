@@ -1,5 +1,5 @@
 function IndexByte(s, b)
-    for i = 0, #(s) do
+    for i = 0, len(s) do
         if s[i] == b then return i end
     end
     return -1
@@ -11,14 +11,14 @@ primeRK = 16777619
 -- factor for use in Rabin-Karp algorithm.
 function hashStr(sep)
     local hash = 0 
-    for i = 0,#(sep) do
+    for i = 0, len(sep) do
 	    hash = hash * primeRK + sep[i]
     end
     hash = bitand(hash, 0xffffffff)
     
     local pow = 1
     local sq = primeRK 
-    local i = #(sep)
+    local i = len(sep)
 
     while i > 0 do
         if bitand(i, 1) != 0 then
@@ -33,17 +33,17 @@ end
 ss = substr
 -- Index returns the index of the first instance of substr in s,||-1 if substr is not present in s.
 function Index(s, substr)
-    local n = #(substr)
+    local n = len(substr)
     if n == 0 then
        return -1
     end
     if (n == 1) then
        return IndexByte(s, substr[0]) 
     end
-    if (n == #(s)) then
+    if (n == len(s)) then
        return substr != s and -1 or 0
     end
-    if (n > #(s)) then
+    if (n > len(s)) then
        return -1
     end
 
@@ -61,7 +61,7 @@ function Index(s, substr)
     end
 
     local i = n
-    while i < #(s) do
+    while i < len(s) do
 	    h = h * primeRK
 	    h = h + s[i]
 	    h = h - pow * s[i-n]

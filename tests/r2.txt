@@ -23,7 +23,7 @@ assert( 1 + (1 + (1 + (1 + a))) == 6)
 assert( "sep6")
 
 c = { 1,2,3,4 }
-assert( 1 + (1 + (1 + (1 + a))) + # c == 10)
+assert( 1 + (1 + (1 + (1 + a))) + len(c) == 10)
 assert( "sep7")
 
  a = 10
@@ -40,7 +40,7 @@ assert(a==nil and c == 10 and b == "a")
 
 function foo1(a, b, c, x)
     local tmp = {a, b, c}
-    for i = 0, #x do tmp[#tmp] = x[i]  end
+    for i = 0, len(x) do tmp[len(tmp)] = x[i]  end
     return tmp
 end
 
@@ -59,12 +59,12 @@ do
 end
 
 function remove(el, arr)
-    for i=0,#arr do
+    for i=0, len(arr) do
 	    if arr[i] == el then
-            for i=i,#arr-1 do
+            for i=i,len(arr)-1 do
                 arr[i] = arr[i+1]
             end
-            arr[#arr - 1] = nil
+            arr[len(arr) - 1] = nil
 	        return arr
 	    end
     end

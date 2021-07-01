@@ -212,7 +212,16 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case OpBitAnd:
 			env.A = Int(env._get(opa).MustNumber("bitwise and", 0).Int() & env._get(opb).MustNumber("bitwise and", 0).Int())
 		case OpBitOr:
-			env.A = Int(env._get(opa).MustNumber("bitwise or", 0).Int() | env._get(opb).MustNumber("bitwise or", 0).Int())
+			a, b := env._get(opa), env._get(opb)
+			if t := a.Type() + b.Type(); t == VNumber*2 {
+				env.A = Int(a.Int() | b.Int())
+			} else if t == VMap*2 {
+				a.Map().Parent = b.Map()
+				env.A = a
+			} else {
+				a.MustNumber("bitwise or", 0)
+				b.MustNumber("bitwise or", 0)
+			}
 		case OpBitXor:
 			env.A = Int(env._get(opa).MustNumber("bitwise xor", 0).Int() ^ env._get(opb).MustNumber("bitwise xor", 0).Int())
 		case OpBitLsh:
@@ -288,22 +297,17 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 
 			if cls.Native != nil {
 				stackEnv.Global = env.Global
-				stackEnv.NativeSource = cls
-				if cls.IsDebug {
-					stackEnv.Debug = &debugInfo{
-						Caller:     K,
-						Cursor:     cursor,
-						Stacktrace: append(retStack, stacktrace{cls: K, cursor: cursor}),
-					}
-					cls.Native(&stackEnv)
-					stackEnv.Debug = nil
-				} else {
-					cls.Native(&stackEnv)
-				}
+				stackEnv.DebugCaller = K
+				stackEnv.DebugCursor = cursor
+				stackEnv.DebugStacktrace = retStack
+				cls.Native(&stackEnv)
 				env.A = stackEnv.A
-				stackEnv.NativeSource = nil
 				stackEnv.Clear()
 			} else {
+				stackEnv.Push(watermark) // Used by dbg_dumpstack to determine the top of stack
+				if bop == OpCallMap {
+					stackEnv.Push(stackEnv.A)
+				}
 				stackEnv.growZero(int(cls.StackSize))
 
 				last := stacktrace{

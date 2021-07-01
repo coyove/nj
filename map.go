@@ -18,6 +18,7 @@ import (
 const growRate = 1.25
 
 type Map struct {
+	Parent    *Map
 	hashItems []mapItem
 	count     uint32
 	items     []Value
@@ -61,6 +62,9 @@ func (m *Map) Get(k Value) (v Value) {
 	}
 	if idx := m.findHash(k); idx >= 0 {
 		return m.hashItems[idx].Val
+	}
+	if m.Parent != nil {
+		return m.Parent.Get(k)
 	}
 	return Nil
 }

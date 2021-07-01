@@ -119,7 +119,7 @@ return foo
 		cls, _ := LoadString(`
 a = 1
 function foo(x) 
-for i=0,#x do
+for i=0,len(x) do
 a=a+x[i]
 end
 return a

@@ -15,7 +15,6 @@ type Func struct {
 	Code       packet
 	Name       string
 	DocString  string
-	IsDebug    bool
 	StackSize  uint16
 	Native     func(env *Env)
 	loadGlobal *Program
@@ -58,7 +57,6 @@ func Native(name string, f func(env *Env), doc ...string) Value {
 		Name:      name,
 		Native:    f,
 		DocString: fixDocString(strings.Join(doc, "\n"), name, ""),
-		IsDebug:   strings.HasPrefix(name, "debug_"),
 	})
 }
 
@@ -79,7 +77,6 @@ func NativeWithParamMap(name string, f func(*Env), doc string, params ...string)
 		Name:      name,
 		Params:    params,
 		DocString: fixDocString(doc, name, strings.Join(params, ",")),
-		IsDebug:   strings.HasPrefix(name, "debug_"),
 		Native: func(env *Env) {
 			if env.A.Type() != VMap {
 				args := NewSizedMap(env.Size())

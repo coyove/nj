@@ -21,6 +21,7 @@ var (
 	smallStringMarker = unsafe.Pointer(new(int64))
 	falseValue        = Bool(false)
 	zeroValue         = Int(0)
+	watermark         = Interface(new(int))
 
 	Nil = Value{}
 )
@@ -407,7 +408,7 @@ func (v Value) toString(lv int, j bool) string {
 	case VInterface:
 		i := v.Interface()
 		if !reflectCheckCyclicStruct(i) {
-			i = fmt.Sprintf("<interface: omit deep nesting>")
+			i = "<interface: omit deep nesting>"
 		}
 		if j {
 			buf, _ := json.Marshal(i)
