@@ -20,7 +20,6 @@ package parser
 %type<expr> jmp_stat
 %type<expr> flow_stat
 %type<expr> func_stat
-%type<expr> struct_stat
 %type<expr> comma
 
 %union {
@@ -29,7 +28,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TLsh TRsh TURsh TStruct
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TLsh TRsh TURsh TNew
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
@@ -40,6 +39,7 @@ package parser
 %right TElse
 %left ASSIGN
 %right FUNC
+%left TNew
 %left TOr
 %left TAnd
 %left '&' '|' '^'
@@ -91,13 +91,6 @@ stat:
 flow_stat:
         for_stat       { $$ = $1 } |
         if_stat        { $$ = $1 }
-
-struct_stat:
-        TStruct TIdent stats TEnd {
-
-        } |
-        TStruct TIdent stats TEnd {
-        }
 
 assign_stat:
         prefix_expr {
@@ -201,17 +194,21 @@ elseif_stat:
         }
 
 func_stat:
-        TFunc TIdent '(' ')' stats TEnd {
-            $$ = __func($2, emptyNode, "", $5)
+        TFunc TIdent '(' ')' stats TEnd                               { $$ = __func($2, emptyNode, "", $5) } | 
+        TFunc TIdent '(' ident_list ')' stats TEnd                    { $$ = __func($2, $4, "", $6) } | 
+        TFunc TIdent '(' ')' TString stats TEnd                       { $$ = __func($2, emptyNode, $5.Str, $6) } |
+        TFunc TIdent '(' ident_list ')' TString stats TEnd            { $$ = __func($2, $4, $6.Str, $7) } |
+        TFunc TIdent '.' TIdent '(' ')' stats TEnd                    {
+            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func($4, emptyNode, "", $7)) 
         } | 
-        TFunc TIdent '(' ident_list ')' stats TEnd {
-            $$ = __func($2, $4, "", $6) 
+        TFunc TIdent '.' TIdent '(' ident_list ')' stats TEnd         {
+            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func($4, $6, "", $8)) 
         } | 
-        TFunc TIdent '(' ')' TString stats TEnd {
-            $$ = __func($2, emptyNode, $5.Str, $6) 
+        TFunc TIdent '.' TIdent '(' ')' TString stats TEnd            {
+            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func($4, emptyNode, $7.Str, $8)) 
         } |
-        TFunc TIdent '(' ident_list ')' TString stats TEnd {
-            $$ = __func($2, $4, $6.Str, $7) 
+        TFunc TIdent '.' TIdent '(' ident_list ')' TString stats TEnd {
+            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func($4, $6, $8.Str, $9)) 
         }
 
 jmp_stat:
@@ -290,6 +287,7 @@ expr:
         expr TLsh expr                    { $$ = NewComplex(NewSymbol(ABitLsh), $1,$3).SetPos($2.Pos) } |
         expr TRsh expr                    { $$ = NewComplex(NewSymbol(ABitRsh), $1,$3).SetPos($2.Pos) } |
         expr TURsh expr                   { $$ = NewComplex(NewSymbol(ABitURsh), $1,$3).SetPos($2.Pos) } |
+        TNew TIdent                       { $$ = NewComplex(NewSymbol(ABitOr), NewComplex(NewSymbol(AMap), emptyNode).SetPos($1.Pos), NewSymbolFromToken($2)).SetPos($1.Pos) } |
         '~' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ABitNot), $2).SetPos($1.Pos) } |
         TNot expr %prec UNARY             { $$ = NewComplex(NewSymbol(ANot), $2).SetPos($1.Pos) } |
         '-' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ASub), zeroNode, $2).SetPos($1.Pos) }

@@ -98,10 +98,44 @@ func (m *Map) findHash(k Value) int {
 	}
 }
 
+func (m *Map) Contains(k Value) bool {
+	if k == Nil {
+		return false
+	}
+	if k.IsInt() {
+		if idx := k.Int(); idx >= 0 && idx < int64(len(m.items)) {
+			return true
+		}
+	}
+	return m.findHash(k) >= 0
+}
+
+func (m *Map) ParentContains(k Value) *Map {
+	if k == Nil {
+		return nil
+	}
+	if m.Parent != nil {
+		p := m.Parent.ParentContains(k)
+		if p != nil {
+			return p
+		}
+	}
+	if m.Contains(k) {
+		return m
+	}
+	return nil
+}
+
 // Set inserts or updates a key/val into the Map.
 func (m *Map) Set(k, v Value) (prev Value, memSpace int64) {
 	if k == Nil {
 		panicf("table set with nil key")
+	}
+
+	if m.Parent != nil && v.Type() != VFunction {
+		if x := m.ParentContains(k); x != nil {
+			return x.Set(k, v)
+		}
 	}
 
 	if k.IsInt() {
@@ -216,6 +250,14 @@ func (m *Map) delHash(k Value) (prev Value) {
 	return prev
 }
 
+func (m *Map) Foreach(f func(k, v Value) bool) {
+	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
+		if !f(k, v) {
+			return
+		}
+	}
+}
+
 func (m *Map) Next(k Value) (Value, Value) {
 	nextHashPair := func(start int) (Value, Value) {
 		for i := start; i < len(m.hashItems); i++ {
@@ -258,6 +300,9 @@ func (m *Map) String() string {
 }
 
 func (m *Map) Value() Value {
+	if m == nil {
+		return Nil
+	}
 	return Value{v: uint64(VMap), p: unsafe.Pointer(m)}
 }
 

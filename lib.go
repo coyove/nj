@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 	"unsafe"
 
@@ -574,6 +575,9 @@ func init() {
 		nk, nv := m.MustMap("next", 0).Next(k)
 		return Array(nk, nv)
 	})
+	AddGlobalValue("parent", func(env *Env, m Value) Value {
+		return m.MustMap("parent", 0).Parent.Value()
+	})
 }
 
 func mathMinMax(env *Env, msg string, max bool) {
@@ -611,4 +615,12 @@ func ipow(base, exp int64) int64 {
 		base *= base
 	}
 	return result
+}
+
+func isFirstUpper(v string) bool {
+	if len(v) == 0 {
+		return false
+	}
+	r, _ := utf8.DecodeRuneInString(v)
+	return unicode.IsUpper(r)
 }

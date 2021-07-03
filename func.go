@@ -20,6 +20,7 @@ type Func struct {
 	loadGlobal *Program
 	Params     []string
 	Locals     []string
+	MethodSrc  *Map
 }
 
 type Program struct {

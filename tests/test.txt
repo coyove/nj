@@ -199,3 +199,4 @@ function double(scale)
 end
 r = (double(scale=3, a=10, b=-1))
 assert(r.a == 30 and r.b == -3)
+

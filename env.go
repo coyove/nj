@@ -67,6 +67,12 @@ func (env *Env) Push(v Value) {
 	*env.stack = append(*env.stack, v)
 }
 
+func (env *Env) Prepend(v Value) {
+	*env.stack = append(*env.stack, Nil)
+	copy((*env.stack)[env.StackOffset+1:], (*env.stack)[env.StackOffset:])
+	(*env.stack)[env.StackOffset] = v
+}
+
 func (env *Env) Size() int {
 	return len(*env.stack) - int(env.StackOffset)
 }

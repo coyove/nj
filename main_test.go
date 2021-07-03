@@ -87,6 +87,8 @@ func runFile(t *testing.T, path string) {
 
 func TestFileTest(t *testing.T) { runFile(t, "tests/test.txt") }
 
+func TestFileStruct(t *testing.T) { runFile(t, "tests/struct.txt") }
+
 func TestFileString(t *testing.T) { runFile(t, "tests/string.txt") }
 
 func TestFileGoto(t *testing.T) { runFile(t, "tests/goto.txt") }

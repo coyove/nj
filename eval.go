@@ -216,7 +216,10 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			if t := a.Type() + b.Type(); t == VNumber*2 {
 				env.A = Int(a.Int() | b.Int())
 			} else if t == VMap*2 {
-				a.Map().Parent = b.Map()
+				m := *b.Map()
+				m.hashItems = append([]mapItem{}, m.hashItems...)
+				m.items = append([]Value{}, m.items...)
+				a.Map().Parent = &m
 				env.A = a
 			} else {
 				a.MustNumber("bitwise or", 0)
@@ -256,6 +259,11 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			switch a := env._get(opa); a.Type() {
 			case VMap:
 				env.A = a.Map().Get(env._get(opb))
+				if env.A.Type() == VFunction && a.Map().Parent != nil {
+					f := *env.A.Function()
+					f.MethodSrc = a.Map()
+					env.A = Function(&f)
+				}
 			case VInterface:
 				env.A = reflectLoad(a.Interface(), env._get(opb))
 			case VString:
@@ -294,7 +302,9 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			fallthrough
 		case OpCall:
 			cls := env._get(opa).MustFunc("call", 0)
-
+			if cls.MethodSrc != nil {
+				stackEnv.Prepend(cls.MethodSrc.Value())
+			}
 			if cls.Native != nil {
 				stackEnv.Global = env.Global
 				stackEnv.DebugCaller = K
