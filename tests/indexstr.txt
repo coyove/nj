@@ -7,25 +7,25 @@ end
 
 primeRK = 16777619 
 
--- hashStr returns the hash&&the appropriate multiplicative
+-- hashStr returns the hash and the appropriate multiplicative
 -- factor for use in Rabin-Karp algorithm.
 function hashStr(sep)
     local hash = 0 
     for i = 0, len(sep) do
 	    hash = hash * primeRK + sep[i]
     end
-    hash = bitand(hash, 0xffffffff)
+    hash = hash & 0xffffffff
     
     local pow = 1
     local sq = primeRK 
     local i = len(sep)
 
     while i > 0 do
-        if bitand(i, 1) != 0 then
+        if i & 1 != 0 then
             pow = pow * sq
         end
         sq = sq * sq
-        i = bitrsh(i, 1)
+        i = i >> 1
     end
     return {hash, pow}
 end
@@ -54,7 +54,7 @@ function Index(s, substr)
     for i = 0, n do
 	    h = h *primeRK + s[i]
     end
-    h = bitand(h, 0xffffffff)
+    h = h & 0xffffffff
 
     if (h == hashss and ss(s,0,n) == substr) then
        return 0
@@ -65,7 +65,7 @@ function Index(s, substr)
 	    h = h * primeRK
 	    h = h + s[i]
 	    h = h - pow * s[i-n]
-	    h = bitand(h, 0xffffffff)
+        h = h & 0xffffffff
 	    i = i + 1
 	    if (h == hashss and ss(s,i-n,i) == substr) then
 	        return i - n

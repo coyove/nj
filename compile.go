@@ -20,16 +20,12 @@ type breaklabel struct {
 }
 
 type CompileOptions struct {
-	DefineFuncFilter func(name string) bool
-	VarLookupFilter  func(name string) bool
-	GlobalKeyValues  map[string]interface{}
-	GlobalKey        string
-	GlobalValue      interface{}
+	GlobalKeyValues map[string]interface{}
 }
 
 // symtable is responsible for recording the state of compilation
 type symtable struct {
-	options CompileOptions
+	options *CompileOptions
 
 	global *symtable
 
@@ -57,7 +53,7 @@ type symtable struct {
 	labelPos    map[string]int
 }
 
-func newsymtable(opt CompileOptions) *symtable {
+func newsymtable(opt *CompileOptions) *symtable {
 	t := &symtable{
 		sym:          make(map[string]*symbol),
 		constMap:     make(map[interface{}]uint16),
@@ -132,10 +128,6 @@ func (table *symtable) mustGetSymbol(name string) uint16 {
 }
 
 func (table *symtable) get(varname string) uint16 {
-	if table.options.VarLookupFilter != nil && !table.options.VarLookupFilter(varname) {
-		panicf("table: %q reference is not allowed by options", varname)
-	}
-
 	depth := uint16(0)
 	regNil := table.loadK(nil)
 
@@ -146,8 +138,6 @@ func (table *symtable) get(varname string) uint16 {
 		return table.loadK(true)
 	case "false":
 		return table.loadK(false)
-	case "@":
-		return regA
 	}
 
 	calc := func(k *symbol) uint16 {
@@ -332,7 +322,7 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileBreak(nodes)
 	case parser.ACall, parser.ATailCall, parser.ACallMap:
 		yx = table.compileCall(nodes)
-	case parser.AMap, parser.AMapArray:
+	case parser.AArray, parser.AArrayMap:
 		yx = table.compileList(nodes)
 	case parser.AOr, parser.AAnd:
 		yx = table.compileAndOr(nodes)
@@ -366,7 +356,7 @@ func (table *symtable) collectConsts(node parser.Node) {
 	}
 }
 
-func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls *Program, err error) {
+func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls *Program, err error) {
 	defer parser.CatchError(&err)
 
 	table := newsymtable(opt)
@@ -380,8 +370,10 @@ func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls 
 	for k, v := range g {
 		push(k, v)
 	}
-	for k, v := range opt.GlobalKeyValues {
-		push(k, Interface(v))
+	if opt != nil {
+		for k, v := range opt.GlobalKeyValues {
+			push(k, Interface(v))
+		}
 	}
 
 	push("COMPILE_OPTIONS", Interface(opt))
@@ -449,7 +441,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt CompileOptions) (cls 
 	return cls, err
 }
 
-func LoadFile(path string, opt ...CompileOptions) (*Program, error) {
+func LoadFile(path string, opt *CompileOptions) (*Program, error) {
 	code, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -460,16 +452,16 @@ func LoadFile(path string, opt ...CompileOptions) (*Program, error) {
 		return nil, err
 	}
 	// n.Dump(os.Stderr, "  ")
-	return compileNodeTopLevel(*(*string)(unsafe.Pointer(&code)), n, joinOptions(opt))
+	return compileNodeTopLevel(*(*string)(unsafe.Pointer(&code)), n, opt)
 }
 
-func LoadString(code string, opt ...CompileOptions) (*Program, error) {
+func LoadString(code string, opt *CompileOptions) (*Program, error) {
 	n, err := parser.Parse(code, "")
 	if err != nil {
 		return nil, err
 	}
 	// n.Dump(os.Stderr, "  ")
-	return compileNodeTopLevel(code, n, joinOptions(opt))
+	return compileNodeTopLevel(code, n, opt)
 }
 
 func MustRun(p *Program, err error) Value {
@@ -481,17 +473,4 @@ func MustRun(p *Program, err error) Value {
 		panic(err)
 	}
 	return v
-}
-
-func joinOptions(opts []CompileOptions) (opt CompileOptions) {
-	opt.GlobalKeyValues = map[string]interface{}{}
-	for _, o := range opts {
-		for k, v := range o.GlobalKeyValues {
-			opt.GlobalKeyValues[k] = v
-		}
-		if o.GlobalKey != "" {
-			opt.GlobalKeyValues[o.GlobalKey] = o.GlobalValue
-		}
-	}
-	return opt
 }

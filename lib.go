@@ -21,7 +21,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const Version int64 = 243
+const Version int64 = 301
 
 var (
 	g   = map[string]Value{}
@@ -74,6 +74,13 @@ func init() {
 	AddGlobalValue("doc", func(env *Env, f Value) Value {
 		return String(f.MustFunc("doc", 0).DocString)
 	}, "doc(function) => string", "\treturn function's documentation")
+	AddGlobalValue("new", func(env *Env, v Value) Value {
+		m := *v.MustMap("new", 0)
+		m.hashItems = append([]mapItem{}, m.hashItems...)
+		m.items = append([]Value{}, m.items...)
+		a := &Map{Parent: &m}
+		return a.Value()
+	})
 	AddGlobalValue("len", func(env *Env, v Value) Value {
 		switch v.Type() {
 		case VString:
@@ -104,81 +111,83 @@ func init() {
 		// }
 		// return res
 	})
-	AddGlobalValue("dbg_dumpstack", func(env *Env) {
-		start := env.Size()
-		for _, s := range env.DebugStacktrace {
-			start += int(s.cls.StackSize)
-		}
-		var r []Value
-		stack := (*env.stack)[start:]
-		for _, el := range stack[:cap(stack)] {
-			if el == watermark {
-				break
+	AddGlobalValue("debug", ArrayMap(
+		String("dumpstk"), Native("dumpstk", func(env *Env) {
+			start := env.Size()
+			for _, s := range env.DebugStacktrace {
+				start += int(s.cls.StackSize)
 			}
-			r = append(r, el)
-		}
-		env.A = Array(r...)
-	}, "dbg_dumpstack() => { v1, v2, v3, ... }")
-	AddGlobalValue("dbg_kwargs", func(env *Env) {
-		start := env.Size()
-		for _, s := range env.DebugStacktrace {
-			start += int(s.cls.StackSize)
-		}
-		stack := (*env.stack)[start:]
-		stack = stack[:cap(stack)]
-		for i, el := range stack {
-			if el == watermark {
-				env.A = stack[i+1]
-				break
-			}
-		}
-	}, "dbg_kwargs() => { key1: value, key2: value2, ... }")
-	AddGlobalValue("debug_locals", func(env *Env) {
-		var r []Value
-		start := env.StackOffset - uint32(env.DebugCaller.StackSize)
-		for i, name := range env.DebugCaller.Locals {
-			idx := start + uint32(i)
-			r = append(r, Int(int64(idx)), String(name), (*env.stack)[idx])
-		}
-		env.A = env.NewArray(r...)
-	}, "debug_locals() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }")
-	AddGlobalValue("debug_globals", func(env *Env) {
-		var r []Value
-		for i, name := range env.Global.Func.Locals {
-			r = append(r, Int(int64(i)), String(name), (*env.Global.Stack)[i])
-		}
-		env.A = env.NewArray(r...)
-	}, "debug_globals() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }")
-	AddGlobalValue("debug_set", func(env *Env, idx, value Value) Value {
-		(*env.Global.Stack)[idx.MustNumber("debug_set", 1).Int()] = value
-		return Nil
-	}, "debug_set(idx, value)")
-	AddGlobalValue("debug_stacktrace", func(env *Env, skip Value) Value {
-		stacks := append(env.DebugStacktrace, stacktrace{cls: env.DebugCaller, cursor: env.DebugCursor})
-		lines := make([]Value, 0, len(stacks))
-		for i := len(stacks) - 1 - int(skip.IntDefault(0)); i >= 0; i-- {
-			r := stacks[i]
-			src := uint32(0)
-			for i := 0; i < len(r.cls.Code.Pos); {
-				var opx uint32 = math.MaxUint32
-				ii, op, line := r.cls.Code.Pos.read(i)
-				if ii < len(r.cls.Code.Pos)-1 {
-					_, opx, _ = r.cls.Code.Pos.read(ii)
-				}
-				if r.cursor >= op && r.cursor < opx {
-					src = line
+			var r []Value
+			stack := (*env.stack)[start:]
+			for _, el := range stack[:cap(stack)] {
+				if el == watermark {
 					break
 				}
-				if r.cursor < op && i == 0 {
-					src = line
+				r = append(r, el)
+			}
+			env.A = Array(r...)
+		}, "$f() => { v1, v2, v3, ... }"),
+		String("kwargs"), Native("kwargs", func(env *Env) {
+			start := env.Size()
+			for _, s := range env.DebugStacktrace {
+				start += int(s.cls.StackSize)
+			}
+			stack := (*env.stack)[start:]
+			stack = stack[:cap(stack)]
+			for i, el := range stack {
+				if el == watermark {
+					env.A = stack[i+1]
 					break
 				}
-				i = ii
 			}
-			lines = append(lines, String(r.cls.Name), Int(int64(src)), Int(int64(r.cursor-1)))
-		}
-		return env.NewArray(lines...)
-	}, "debug_stacktrace(skip) => { func_name1, line1, cursor1, n2, l2, c2, ... }")
+		}, "$f() => { key1: value, key2: value2, ... }"),
+		String("locals"), Native("locals", func(env *Env) {
+			var r []Value
+			start := env.StackOffset - uint32(env.DebugCaller.StackSize)
+			for i, name := range env.DebugCaller.Locals {
+				idx := start + uint32(i)
+				r = append(r, Int(int64(idx)), String(name), (*env.stack)[idx])
+			}
+			env.A = env.NewArray(r...)
+		}, "$f() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
+		String("globals"), Native("globals", func(env *Env) {
+			var r []Value
+			for i, name := range env.Global.Func.Locals {
+				r = append(r, Int(int64(i)), String(name), (*env.Global.Stack)[i])
+			}
+			env.A = env.NewArray(r...)
+		}, "$f() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
+		String("set"), Native2("set", func(env *Env, idx, value Value) Value {
+			(*env.Global.Stack)[idx.MustNumber("set", 1).Int()] = value
+			return Nil
+		}, "$f(idx, value)"),
+		String("trace"), Native1("trace", func(env *Env, skip Value) Value {
+			stacks := append(env.DebugStacktrace, stacktrace{cls: env.DebugCaller, cursor: env.DebugCursor})
+			lines := make([]Value, 0, len(stacks))
+			for i := len(stacks) - 1 - int(skip.IntDefault(0)); i >= 0; i-- {
+				r := stacks[i]
+				src := uint32(0)
+				for i := 0; i < len(r.cls.Code.Pos); {
+					var opx uint32 = math.MaxUint32
+					ii, op, line := r.cls.Code.Pos.read(i)
+					if ii < len(r.cls.Code.Pos)-1 {
+						_, opx, _ = r.cls.Code.Pos.read(ii)
+					}
+					if r.cursor >= op && r.cursor < opx {
+						src = line
+						break
+					}
+					if r.cursor < op && i == 0 {
+						src = line
+						break
+					}
+					i = ii
+				}
+				lines = append(lines, String(r.cls.Name), Int(int64(src)), Int(int64(r.cursor-1)))
+			}
+			return env.NewArray(lines...)
+		}, "$f(skip) => { func_name1, line1, cursor1, n2, l2, c2, ... }"),
+	))
 	AddGlobalValue("narray", func(env *Env, n Value) Value {
 		return env.NewArray(make([]Value, n.MustNumber("narray", 0).Int())...)
 	}, "narray(n) => { nil, ..., nil }", "\treturn an array size of n, filled with nil")
@@ -270,79 +279,61 @@ func init() {
 	},
 		"$f(prompt='', n=1) => { s1, s2, ..., sn }", "\tprint prompt and read N user inputs",
 	)
-	AddGlobalValue("INF", Float(math.Inf(1)))
-	AddGlobalValue("PI", Float(math.Pi))
-	AddGlobalValue("E", Float(math.E))
-	AddGlobalValue("randomseed", func(env *Env) {
-		rg.Lock()
-		defer rg.Unlock()
-		rg.Rand.Seed(env.Get(0).IntDefault(1))
-	}, "randomseed(int)")
-	AddGlobalValue("random", func(env *Env) {
-		rg.Lock()
-		defer rg.Unlock()
-		switch len(env.Stack()) {
-		case 2:
-			af, ai, aIsInt := env.Get(0).MustNumber("random #", 1).Num()
-			bf, bi, bIsInt := env.Get(1).MustNumber("random #", 2).Num()
-			if aIsInt && bIsInt {
-				env.A = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
-			} else {
-				env.A = Float(rg.Float64()*(bf-af) + af)
+	AddGlobalValue("math", ArrayMap(
+		String("INF"), Float(math.Inf(1)),
+		String("NEG_INF"), Float(math.Inf(-1)),
+		String("PI"), Float(math.Pi),
+		String("E"), Float(math.E),
+		String("randomseed"), Native("randomseed", func(env *Env) {
+			rg.Lock()
+			defer rg.Unlock()
+			rg.Rand.Seed(env.Get(0).IntDefault(1))
+		}, "randomseed(int)"),
+		String("random"), Native("random", func(env *Env) {
+			rg.Lock()
+			defer rg.Unlock()
+			switch len(env.Stack()) {
+			case 2:
+				af, ai, aIsInt := env.Get(0).MustNumber("random #", 1).Num()
+				bf, bi, bIsInt := env.Get(1).MustNumber("random #", 2).Num()
+				if aIsInt && bIsInt {
+					env.A = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
+				} else {
+					env.A = Float(rg.Float64()*(bf-af) + af)
+				}
+			case 1:
+				env.A = Int(int64(rg.Intn(int(env.Get(0).MustNumber("random", 0).Int()))))
+			default:
+				env.A = Float(rg.Float64())
 			}
-		case 1:
-			env.A = Int(int64(rg.Intn(int(env.Get(0).MustNumber("random", 0).Int()))) + 1)
-		default:
-			env.A = Float(rg.Float64())
-		}
-	},
-		"$f() => [0,1]",
-		"$f(n) => [1, n]",
-		"$f(a, b) => [a, b]")
-	AddGlobalValue("bitand", func(env *Env, a, b Value) Value {
-		return Int(a.MustNumber("bitand", 1).Int() & b.MustNumber("bitand", 2).Int())
-	})
-	AddGlobalValue("bitor", func(env *Env, a, b Value) Value {
-		return Int(a.MustNumber("bitor", 1).Int() | b.MustNumber("bitor", 2).Int())
-	})
-	AddGlobalValue("bitxor", func(env *Env, a, b Value) Value {
-		return Int(a.MustNumber("bitxir", 1).Int() ^ b.MustNumber("bitxir", 2).Int())
-	})
-	AddGlobalValue("bitrsh", func(env *Env, a, b Value) Value {
-		return Int(a.MustNumber("bitrsh", 1).Int() >> b.MustNumber("bitrsh", 2).Int())
-	})
-	AddGlobalValue("bitlsh", func(env *Env, a, b Value) Value {
-		return Int(a.MustNumber("bitlsh", 1).Int() << b.MustNumber("bitlsh", 2).Int())
-	})
-	AddGlobalValue("sqrt", func(env *Env, v Value) Value {
-		return Float(math.Sqrt(v.MustNumber("sqrt", 0).Float()))
-	})
-	AddGlobalValue("floor", func(env *Env, v Value) Value {
-		return Float(math.Floor(v.MustNumber("floor", 0).Float()))
-	})
-	AddGlobalValue("ceil", func(env *Env, v Value) Value {
-		return Float(math.Ceil(v.MustNumber("ceil", 0).Float()))
-	})
-	AddGlobalValue("min", func(env *Env) { mathMinMax(env, "min #", false) }, "max(a, b, ...) => largest_number")
-	AddGlobalValue("max", func(env *Env) { mathMinMax(env, "max #", true) }, "min(a, b, ...) => smallest_number")
-	AddGlobalValue("pow", func(env *Env, a, b Value) Value {
-		af, ai, aIsInt := a.MustNumber("pow", 1).Num()
-		bf, bi, bIsInt := b.MustNumber("pow", 2).Num()
-		if aIsInt && bIsInt {
-			return Int(ipow(ai, bi))
-		}
-		return Float(math.Pow(af, bf))
-	}, "min(a, b, ...) => smallest_number")
-	AddGlobalValue("abs", func(env *Env) {
-		switch f, i, isInt := env.Get(0).MustNumber("abs", 0).Num(); {
-		case isInt && i < 0:
-			env.A = Int(-i)
-		case isInt && i >= 0:
-			env.A = Int(i)
-		default:
-			env.A = Float(math.Abs(f))
-		}
-	})
+		},
+			"$f() => [0, 1)",
+			"$f(n) => [0, n)",
+			"$f(a, b) => [a, b]"),
+		String("sqrt"), Native1("sqrt", func(env *Env, v Value) Value { return Float(math.Sqrt(v.MustNumber("sqrt", 0).Float())) }),
+		String("floor"), Native1("floor", func(env *Env, v Value) Value { return Float(math.Floor(v.MustNumber("floor", 0).Float())) }),
+		String("ceil"), Native1("ceil", func(env *Env, v Value) Value { return Float(math.Ceil(v.MustNumber("ceil", 0).Float())) }),
+		String("min"), Native("min", func(env *Env) { mathMinMax(env, "min #", false) }, "max(a, b, ...) => largest_number"),
+		String("max"), Native("max", func(env *Env) { mathMinMax(env, "max #", true) }, "min(a, b, ...) => smallest_number"),
+		String("pow"), Native2("pow", func(env *Env, a, b Value) Value {
+			af, ai, aIsInt := a.MustNumber("pow", 1).Num()
+			bf, bi, bIsInt := b.MustNumber("pow", 2).Num()
+			if aIsInt && bIsInt {
+				return Int(ipow(ai, bi))
+			}
+			return Float(math.Pow(af, bf))
+		}, "pow(a, b) => a to the power of b"),
+		String("abs"), Native("abs", func(env *Env) {
+			switch f, i, isInt := env.Get(0).MustNumber("abs", 0).Num(); {
+			case isInt && i < 0:
+				env.A = Int(-i)
+			case isInt && i >= 0:
+				env.A = Int(i)
+			default:
+				env.A = Float(math.Abs(f))
+			}
+		}),
+	))
 	AddGlobalValue("str", func(env *Env, v, format Value) Value {
 		return env.NewString(fmt.Sprintf(format.StringDefault("%v"), v.Interface()))
 	},

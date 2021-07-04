@@ -5,7 +5,7 @@ end
 function timer.add(self, v)
     self.c = self.c + v + self.X
 end
-T1, T2 = new timer, new timer
+T1, T2 = new(timer), new(timer)
 T1.add(2)
 T2.add(3)
 assert(T1.c == 12 and T2.c == 13)
@@ -29,23 +29,23 @@ function A.foo(v)
     out[len(out)] = "A:" + v.a
 end
 
-B1 = new A
+B1 = new(A)
 
-B2 = new A 
+B2 = new(A)
 function B2.foo(v)
     print("B2:", v.a)
     out[len(out)] = "B2:" + v.a
 end
 
-C1 = new B1
+C1 = new(B1)
 C1.a = "C1"
 C1.foo()
 
-C2 = new B2
+C2 = new(B2)
 C2.a = "C2"
 C2.foo()
 
-C3 = new B2
+C3 = new(B2)
 function C3.foo(v)
     print("C3:", v.a)
     out[len(out)] = "C3:" + v.a
@@ -54,13 +54,16 @@ end
 C3.a = "C3"
 C3.foo()
 
-D4 = new C3
+D4 = new(C3)
 function D4.foo(v)
     print("D4:", v.a)
     out[len(out)] = "D4:" + v.a
     parent(D4).foo()
 end
 D4.a = "D4"
+D4.b = 'z'
+D4.b = 'zz' -- repeat setting
+assert(D4.b == 'zz')
 D4.foo()
 
 assert(out[0] == 'A:C1')

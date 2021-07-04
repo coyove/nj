@@ -178,7 +178,7 @@ func (table *symtable) compileIf(atoms []parser.Node) uint16 {
 func (table *symtable) compileList(nodes []parser.Node) uint16 {
 	// [list [a, b, c, ...]]
 	table.collapse(nodes[1].Nodes, true)
-	if nodes[0].SymbolValue() == parser.AMapArray {
+	if nodes[0].SymbolValue() == parser.AArray {
 		for _, x := range nodes[1].Nodes {
 			table.writeInst(OpPush, x, parser.Node{})
 		}
@@ -212,10 +212,6 @@ func (table *symtable) compileCall(nodes []parser.Node) uint16 {
 		table.writeInst(OpCall, tmp[0], parser.NewAddress(1))
 	}
 
-	if _, opa, _ := splitInst(table.code.Code[table.code.Len()-1]); opa == table.loadK(nil) {
-		panicf("function %s not found", nodes[1])
-	}
-
 	table.code.writePos(nodes[0].Pos())
 	table.returnAddresses(tmp)
 	return regA
@@ -223,10 +219,6 @@ func (table *symtable) compileCall(nodes []parser.Node) uint16 {
 
 // [function Name [paramlist] [chain ...] docstring]
 func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
-	if table.options.DefineFuncFilter != nil && !table.options.DefineFuncFilter(atoms[1].SymbolValue()) {
-		panicf("%v: function definition is not allowed by options", atoms[1])
-	}
-
 	params := atoms[2]
 	newtable := newsymtable(table.options)
 	paramsString := []string{}

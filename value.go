@@ -107,7 +107,7 @@ func Array(m ...Value) Value {
 	return (&Map{items: m, count: uint32(len(m))}).Value()
 }
 
-func Dict(kvs ...Value) Value {
+func ArrayMap(kvs ...Value) Value {
 	t := &Map{}
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		t.Set(kvs[i], kvs[i+1])

@@ -27,7 +27,7 @@ func runFile(t *testing.T, path string) {
 		flag.Parse()
 	}
 
-	b, err := LoadFile(path, CompileOptions{
+	b, err := LoadFile(path, &CompileOptions{
 		GlobalKeyValues: map[string]interface{}{
 			"nativeVarargTest": func(a ...int) int {
 				return len(a)
@@ -107,7 +107,7 @@ a=a+n
 return a
 end
 return foo
-`, CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
+`, &CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
 		v, _ := cls.Call()
 		if v, _ := v.Function().Call(Int(10)); v.Int() != 11 {
 			t.Fatal(v)
@@ -127,7 +127,7 @@ end
 return a
 end
 return foo
-`)
+`, nil)
 		v, _ := cls.Call()
 		if v, _ := v.Function().Call(Array(Int(1), Int(2), Int(3), Int(4))); v.Int() != 11 {
 			t.Fatal(v)
@@ -152,7 +152,7 @@ if x == 1e6 then assert(false) end
 foo()
 end
 foo()
-`)
+`, nil)
 	fmt.Println(err)
 	if s := cls.PrettyCode(); !strings.Contains(s, "tailcall") {
 		t.Fatal(s)
@@ -170,7 +170,7 @@ foo()
 func TestArithmeticUnfold(t *testing.T) {
 	cls, err := LoadString(`
 		return 1 + 2 * 3 / 4
-`)
+`, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -187,7 +187,7 @@ for i = 1,1e3 do
 a = a + i
 end
 return a
-`)
+`, nil)
 	cls.SetDeadsize(int64(len(g)) + 10)
 	res, err := cls.Call()
 	if !strings.Contains(err.Error(), "deadsize") {
@@ -207,7 +207,7 @@ func TestRegisterOptimzation(t *testing.T) {
 	end
 		c = a + b
 		return c
-`)
+`, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -226,7 +226,7 @@ func TestArithmeticNAN(t *testing.T) {
 	cls, err := LoadString(`
 a = 0 
 		return (1 / a + 1) * a
-`)
+`, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -240,7 +240,7 @@ func BenchmarkCompiling(b *testing.B) {
 	buf, _ := ioutil.ReadFile("tests/string.txt")
 	y := string(bytes.Repeat(buf, 100))
 	for i := 0; i < b.N; i++ {
-		p, err := LoadString(string(y))
+		p, err := LoadString(string(y), nil)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -265,7 +265,7 @@ func TestBigList(t *testing.T) {
 		return buf.String() + "}"
 	}
 
-	f, _ := LoadString(makeCode(n))
+	f, _ := LoadString(makeCode(n), nil)
 	v2, err := f.Call()
 	if err != nil {
 		t.Fatal(err)
@@ -277,7 +277,7 @@ func TestBigList(t *testing.T) {
 		}
 	}
 
-	_, err = LoadString(makeCode(2000))
+	_, err = LoadString(makeCode(2000), nil)
 	if !strings.Contains(err.Error(), "too many") {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestBigList(t *testing.T) {
 			buf.WriteString(fmt.Sprintf("a%d,", i))
 		}
 		buf.WriteString("x) end")
-		_, err = LoadString(buf.String())
+		_, err = LoadString(buf.String(), nil)
 		if !strings.Contains(err.Error(), "too many") {
 			t.Fatal(err)
 		}
@@ -314,13 +314,13 @@ func TestFalsyValue(t *testing.T) {
 }
 
 func TestPlainReturn(t *testing.T) {
-	if _, err := LoadString("return"); err != nil {
+	if _, err := LoadString("return", nil); err != nil {
 		t.FailNow()
 	}
-	if _, err := LoadString("return "); err != nil {
+	if _, err := LoadString("return ", nil); err != nil {
 		t.FailNow()
 	}
-	if _, err := LoadString("return \n "); err != nil {
+	if _, err := LoadString("return \n ", nil); err != nil {
 		t.FailNow()
 	}
 }
@@ -331,13 +331,13 @@ function add ()
 a=a+1
 return a
 end
-return add`)
+return add`, nil)
 	add, _ := p.Run()
 
 	p2, _ := LoadString(`
 local a = 100
 return {a + add(), a + add(), a + add()}
-`, CompileOptions{GlobalKey: "add", GlobalValue: add})
+`, &CompileOptions{GlobalKeyValues: map[string]interface{}{"add": add}})
 	v, err := p2.Run()
 	if v1 := v.Map().Array(); v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())
@@ -348,7 +348,7 @@ return {a + add(), a + add(), a + add()}
 func TestNumberLexer(t *testing.T) {
 	assert := func(src string, v Value) {
 		_, fn, ln, _ := runtime.Caller(1)
-		r := MustRun(LoadString("return " + src))
+		r := MustRun(LoadString("return "+src, nil))
 		if r != v {
 			t.Fatal(fn, ln, r, v)
 		}

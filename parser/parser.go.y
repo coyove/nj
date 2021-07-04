@@ -28,22 +28,21 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TLsh TRsh TURsh TNew
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TLsh TRsh TURsh 
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
-%token<token> ':' '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' TIDiv
+%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' TIDiv
 
 /* Operators */
 %right 'T'
 %right TElse
 %left ASSIGN
 %right FUNC
-%left TNew
 %left TOr
 %left TAnd
-%left '&' '|' '^'
 %left '>' '<' TGte TLte TEqeq TNeq
+%left '&' '|' '^'
 %left TLsh TRsh TURsh 
 %left '+' '-' 
 %left '*' '/' '%' TIDiv
@@ -264,9 +263,9 @@ expr:
         '(' expr ')'                      { $$ = $2 } | 
         TNumber                           { $$ = NewNumberFromString($1.Str) } |
         TString                           { $$ = NewString($1.Str) } |
-        '{' '}'                           { $$ = NewComplex(NewSymbol(AMap), emptyNode).SetPos($1.Pos) } |
-        '{' expr_list comma '}'           { $$ = NewComplex(NewSymbol(AMapArray), $2).SetPos($1.Pos) } |
-        '{' expr_assign_list comma'}'     { $$ = NewComplex(NewSymbol(AMap), $2).SetPos($1.Pos) } |
+        '{' '}'                           { $$ = NewComplex(NewSymbol(AArrayMap), emptyNode).SetPos($1.Pos) } |
+        '{' expr_list comma '}'           { $$ = NewComplex(NewSymbol(AArray), $2).SetPos($1.Pos) } |
+        '{' expr_assign_list comma'}'     { $$ = NewComplex(NewSymbol(AArrayMap), $2).SetPos($1.Pos) } |
         expr TOr expr                     { $$ = NewComplex(NewSymbol(AOr), $1,$3).SetPos($2.Pos) } |
         expr TAnd expr                    { $$ = NewComplex(NewSymbol(AAnd), $1,$3).SetPos($2.Pos) } |
         expr '>' expr                     { $$ = NewComplex(NewSymbol(ALess), $3,$1).SetPos($2.Pos) } |
@@ -287,7 +286,6 @@ expr:
         expr TLsh expr                    { $$ = NewComplex(NewSymbol(ABitLsh), $1,$3).SetPos($2.Pos) } |
         expr TRsh expr                    { $$ = NewComplex(NewSymbol(ABitRsh), $1,$3).SetPos($2.Pos) } |
         expr TURsh expr                   { $$ = NewComplex(NewSymbol(ABitURsh), $1,$3).SetPos($2.Pos) } |
-        TNew TIdent                       { $$ = NewComplex(NewSymbol(ABitOr), NewComplex(NewSymbol(AMap), emptyNode).SetPos($1.Pos), NewSymbolFromToken($2)).SetPos($1.Pos) } |
         '~' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ABitNot), $2).SetPos($1.Pos) } |
         TNot expr %prec UNARY             { $$ = NewComplex(NewSymbol(ANot), $2).SetPos($1.Pos) } |
         '-' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ASub), zeroNode, $2).SetPos($1.Pos) }
@@ -302,10 +300,6 @@ prefix_expr:
         prefix_expr call_expr {
             $2.Nodes[1] = $1
             $$ = $2
-        } |
-        prefix_expr ':' TIdent call_expr {
-            $4.Nodes[1] = NewSymbolFromToken($3)
-            $$ = __callPatch($4, $1)
         }
 
 call_expr:

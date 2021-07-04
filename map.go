@@ -133,7 +133,7 @@ func (m *Map) Set(k, v Value) (prev Value, memSpace int64) {
 	}
 
 	if m.Parent != nil && v.Type() != VFunction {
-		if x := m.ParentContains(k); x != nil {
+		if x := m.ParentContains(k); x != nil && x != m {
 			return x.Set(k, v)
 		}
 	}

@@ -212,19 +212,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case OpBitAnd:
 			env.A = Int(env._get(opa).MustNumber("bitwise and", 0).Int() & env._get(opb).MustNumber("bitwise and", 0).Int())
 		case OpBitOr:
-			a, b := env._get(opa), env._get(opb)
-			if t := a.Type() + b.Type(); t == VNumber*2 {
-				env.A = Int(a.Int() | b.Int())
-			} else if t == VMap*2 {
-				m := *b.Map()
-				m.hashItems = append([]mapItem{}, m.hashItems...)
-				m.items = append([]Value{}, m.items...)
-				a.Map().Parent = &m
-				env.A = a
-			} else {
-				a.MustNumber("bitwise or", 0)
-				b.MustNumber("bitwise or", 0)
-			}
+			env.A = Int(env._get(opa).MustNumber("bitwise or", 0).Int() | env._get(opb).MustNumber("bitwise or", 0).Int())
 		case OpBitXor:
 			env.A = Int(env._get(opa).MustNumber("bitwise xor", 0).Int() ^ env._get(opb).MustNumber("bitwise xor", 0).Int())
 		case OpBitLsh:
@@ -239,7 +227,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			env.A = env.NewArray(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
 		case OpMap:
-			env.A = env.NewMap(append([]Value{}, stackEnv.Stack()...)...)
+			env.A = ArrayMap(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
 		case OpStore:
 			subject, v := env._get(opa), env._get(opb)

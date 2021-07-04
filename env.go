@@ -152,11 +152,6 @@ func (env *Env) NewArray(e ...Value) Value {
 	return Array(e...)
 }
 
-func (env *Env) NewMap(kvs ...Value) Value {
-	env.Global.DecrDeadsize(int64(len(kvs)) * ValueSize)
-	return Dict(kvs...)
-}
-
 func (env *Env) NewStringBytes(s []byte) Value {
 	return env.NewString(*(*string)(unsafe.Pointer(&s)))
 }
