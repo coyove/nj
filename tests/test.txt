@@ -46,13 +46,13 @@ end
 
 function f(a, b) assert(true); return { b, a } end
     function g(a, b ,c)
-{ b, c } = f(b, c)
+    b, c = f(b, c)
     return {c, b, a}
     end
 
 do
     
-    {a,b,c} = g(1,2,3)
+    a,b,c = g(1,2,3)
     assert(a == 2 and b == 3 and c == 1)
 end
 
@@ -190,10 +190,10 @@ function double(scale)
     args = debug.kwargs()
     args["scale"] = nil
     print(args)
-    {k, v} = next(args)
+    k, v = next(args)
     while k do
         args[k] = v * scale
-        {k, v} = next(args, k)
+        k, v = next(args, k)
     end
     return args
 end

@@ -100,6 +100,11 @@ func __func(name Token, paramList Node, doc string, stats Node) Node {
 	)
 }
 
+func __markupFuncName(name Token) Token {
+	name.Str += "_" + strconv.Itoa(rand.Int())
+	return name
+}
+
 func __call(cls, args Node) Node {
 	return NewComplex(NewSymbol(ACall), cls, args)
 }

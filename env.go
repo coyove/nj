@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"time"
-	"unsafe"
 )
 
 // Env is the environment for a closure to run within.
@@ -131,27 +130,4 @@ func (env *Env) String() string {
 	buf.WriteString(env.A.String())
 	buf.WriteString(")")
 	return buf.String()
-}
-
-func (env *Env) NewString(s string) Value {
-	if len(s) > 7 {
-		env.Global.DecrDeadsize(int64(len(s)))
-	}
-	return String(s)
-}
-
-func (env *Env) NewString2(a, b string) Value {
-	if len(a)+len(b) > 7 {
-		env.Global.DecrDeadsize(int64(len(a) + len(b)))
-	}
-	return String(a + b)
-}
-
-func (env *Env) NewArray(e ...Value) Value {
-	env.Global.DecrDeadsize(int64(len(e)) * ValueSize)
-	return Array(e...)
-}
-
-func (env *Env) NewStringBytes(s []byte) Value {
-	return env.NewString(*(*string)(unsafe.Pointer(&s)))
 }

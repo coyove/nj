@@ -31,7 +31,6 @@ func init() {
 }
 
 func (s *Set) Add(v script.Value) bool {
-	s.p.DecrDeadsize(64)
 	hash := v.HashCode()
 	_, exist := s.m[hash]
 	if exist {

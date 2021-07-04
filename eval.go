@@ -113,9 +113,9 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(vaf + vbf)
 				}
 			case VString + VString:
-				env.A = env.NewString2(va.rawStr(), vb.rawStr())
+				env.A = String(va.rawStr() + vb.rawStr())
 			default:
-				env.A = env.NewString2(va.String(), vb.String())
+				env.A = String(va.String() + vb.String())
 			}
 		case OpSub:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == VNumber+VNumber {
@@ -224,7 +224,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			b := env._get(opb).MustNumber("bitwise unsigned rsh", 0).Int()
 			env.A = Int(int64(uint64(a) >> b))
 		case OpMapArray:
-			env.A = env.NewArray(append([]Value{}, stackEnv.Stack()...)...)
+			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
 		case OpMap:
 			env.A = ArrayMap(append([]Value{}, stackEnv.Stack()...)...)
@@ -234,9 +234,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			switch subject.Type() {
 			case VMap:
 				m := subject.Map()
-				var memSpace int64
-				env.A, memSpace = m.Set(env.A, v)
-				env.Global.DecrDeadsize(memSpace)
+				env.A = m.Set(env.A, v)
 			case VInterface:
 				reflectStore(subject.Interface(), env.A, v)
 				env.A = v

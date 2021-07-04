@@ -87,7 +87,7 @@ func main() {
 			start := time.Now()
 			c := getCode(r)
 
-			p, err := script.LoadString(c)
+			p, err := script.LoadString(c, nil)
 			if err != nil {
 				writeJSON(w, map[string]interface{}{"error": err.Error()})
 				return
@@ -95,7 +95,6 @@ func main() {
 			bufOut := &limitedWriter{limit: 16 * 1024}
 			p.SetTimeout(time.Second * 2)
 			p.MaxCallStackSize = 100
-			p.SetDeadsize(4 * 1024 * 1024)
 			p.Stdout = bufOut
 			p.Stderr = bufOut
 			code := p.PrettyCode()
@@ -188,9 +187,9 @@ func main() {
 	}()
 
 	if *input == "f" {
-		b, err = script.LoadFile(source)
+		b, err = script.LoadFile(source, nil)
 	} else {
-		b, err = script.LoadString(source)
+		b, err = script.LoadString(source, nil)
 	}
 	if err != nil {
 		log.Fatalln(err)

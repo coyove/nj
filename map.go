@@ -127,7 +127,7 @@ func (m *Map) ParentContains(k Value) *Map {
 }
 
 // Set inserts or updates a key/val into the Map.
-func (m *Map) Set(k, v Value) (prev Value, memSpace int64) {
+func (m *Map) Set(k, v Value) (prev Value) {
 	if k == Nil {
 		panicf("table set with nil key")
 	}
@@ -149,33 +149,28 @@ func (m *Map) Set(k, v Value) (prev Value, memSpace int64) {
 					m.count++
 				}
 			}
-			return prev, 0
+			return prev
 		}
 		if idx == int64(len(m.items)) {
 			m.delHash(k)
 			if v != Nil {
 				m.items = append(m.items, v)
 				m.count++
-				return Nil, ValueSize
+				return Nil
 			}
-			return Nil, 0
+			return Nil
 		}
 	}
 
 	if v == Nil {
-		return m.delHash(k), 0
+		return m.delHash(k)
 	}
 
 	if len(m.hashItems) <= 0 {
 		m.hashItems = make([]mapItem, 8)
-		memSpace = int64(len(m.hashItems)) * ValueSize
 	}
 
-	growed := false
-	prev, growed = m.setHash(mapItem{Key: k, Val: v, Distance: 0})
-	if growed {
-		memSpace += int64(float64(len(m.hashItems))*(1-1/growRate)) * ValueSize
-	}
+	prev, _ = m.setHash(mapItem{Key: k, Val: v, Distance: 0})
 	return
 }
 

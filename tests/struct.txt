@@ -73,3 +73,33 @@ assert(out[3] == 'B2:C3')
 assert(out[4] == 'D4:D4')
 assert(out[5] == 'C3:D4')
 assert(out[6] == 'B2:D4')
+
+dict={_iter=undefined}
+function dict.next(self)
+    local k, v
+    if self._iter == undefined then
+        k, v = next(self)
+    else
+        k, v = next(self, self._iter)
+    end
+    if k == nil then
+        self._iter = undefined
+    else
+        self._iter = k
+    end
+    return k, v
+end
+
+m = new(dict)
+m[0] = 0
+m[true] = false
+m.zz = 'zz'
+while true do
+    k, v = m.next()
+    print(k ,v)
+    if k == nil then
+        break
+    end
+    assert(m[k] == v)
+    println(k ,v)
+end

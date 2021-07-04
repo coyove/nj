@@ -27,7 +27,7 @@ function hashStr(sep)
         sq = sq * sq
         i = i >> 1
     end
-    return {hash, pow}
+    return hash, pow
 end
 
 ss = substr
@@ -48,7 +48,7 @@ function Index(s, substr)
     end
 
     -- Rabin-Karp search
-    local {hashss, pow} = hashStr(substr) 
+    local hashss, pow = hashStr(substr) 
     local h = 0 
 
     for i = 0, n do

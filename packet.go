@@ -191,9 +191,9 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 		case OpSet:
 			sb.WriteString(readAddr(a, false) + " = " + readAddr(b, true))
 		case OpMapArray:
-			sb.WriteString("maparray")
+			sb.WriteString("array")
 		case OpMap:
-			sb.WriteString("map")
+			sb.WriteString("arraymap")
 		case OpLoadFunc:
 			cls := p.Functions[a]
 			sb.WriteString("loadfunc " + cls.Name + "\n")

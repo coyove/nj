@@ -59,6 +59,7 @@ func init() {
 	}()
 
 	AddGlobalValue("VERSION", Int(Version))
+	AddGlobalValue("undefined", Interface(new(int)))
 	AddGlobalValue("globals", func(env *Env) {
 		keys := make([]string, 0, len(g))
 		for k := range g {
@@ -69,7 +70,7 @@ func init() {
 		for i, k := range keys {
 			globals[i] = g[k]
 		}
-		env.A = env.NewArray(globals...)
+		env.A = Array(globals...)
 	}, "globals() => { g1, g2, ... }", "\tlist all global values")
 	AddGlobalValue("doc", func(env *Env, f Value) Value {
 		return String(f.MustFunc("doc", 0).DocString)
@@ -148,14 +149,14 @@ func init() {
 				idx := start + uint32(i)
 				r = append(r, Int(int64(idx)), String(name), (*env.stack)[idx])
 			}
-			env.A = env.NewArray(r...)
+			env.A = Array(r...)
 		}, "$f() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
 		String("globals"), Native("globals", func(env *Env) {
 			var r []Value
 			for i, name := range env.Global.Func.Locals {
 				r = append(r, Int(int64(i)), String(name), (*env.Global.Stack)[i])
 			}
-			env.A = env.NewArray(r...)
+			env.A = Array(r...)
 		}, "$f() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
 		String("set"), Native2("set", func(env *Env, idx, value Value) Value {
 			(*env.Global.Stack)[idx.MustNumber("set", 1).Int()] = value
@@ -185,11 +186,11 @@ func init() {
 				}
 				lines = append(lines, String(r.cls.Name), Int(int64(src)), Int(int64(r.cursor-1)))
 			}
-			return env.NewArray(lines...)
+			return Array(lines...)
 		}, "$f(skip) => { func_name1, line1, cursor1, n2, l2, c2, ... }"),
 	))
 	AddGlobalValue("narray", func(env *Env, n Value) Value {
-		return env.NewArray(make([]Value, n.MustNumber("narray", 0).Int())...)
+		return Array(make([]Value, n.MustNumber("narray", 0).Int())...)
 	}, "narray(n) => { nil, ..., nil }", "\treturn an array size of n, filled with nil")
 	AddGlobalValue("type", func(env *Env) {
 		env.A = String(env.Get(0).Type().String())
@@ -265,17 +266,14 @@ func init() {
 		fmt.Fprint(env.Global.Stdout, prompt.StringDefault(""))
 		var results []Value
 		var r io.Reader = env.Global.Stdin
-		if env.Global.GetDeadsize() > 0 {
-			r = io.LimitReader(r, env.Global.GetDeadsize())
-		}
 		for i := n.IntDefault(1); i > 0; i-- {
 			var s string
 			if _, err := fmt.Fscan(r, &s); err != nil {
 				break
 			}
-			results = append(results, env.NewString(s))
+			results = append(results, String(s))
 		}
-		return env.NewArray(results...)
+		return Array(results...)
 	},
 		"$f(prompt='', n=1) => { s1, s2, ..., sn }", "\tprint prompt and read N user inputs",
 	)
@@ -335,7 +333,7 @@ func init() {
 		}),
 	))
 	AddGlobalValue("str", func(env *Env, v, format Value) Value {
-		return env.NewString(fmt.Sprintf(format.StringDefault("%v"), v.Interface()))
+		return String(fmt.Sprintf(format.StringDefault("%v"), v.Interface()))
 	},
 		"str(value, format='%v') => string", "\tconvert value to string using format",
 	)
@@ -400,11 +398,11 @@ func init() {
 		return Nil
 	}, "exit(code)")
 	AddGlobalValue("char", func(env *Env) {
-		env.A = env.NewString(string(rune(env.Get(0).MustNumber("char", 0).Int())))
+		env.A = String(string(rune(env.Get(0).MustNumber("char", 0).Int())))
 	}, "char(number) => string")
 	AddGlobalValue("unicode", func(env *Env) {
 		r, sz := utf8.DecodeRuneInString(env.Get(0).MustString("unicode", 0))
-		env.A = env.NewArray(Int(int64(r)), Int(int64(sz)))
+		env.A = Array(Int(int64(r)), Int(int64(sz)))
 	}, "unicode(one_char_string) => { char_unicode, width_in_bytes }")
 	AddGlobalValue("substr", func(env *Env, s, i, j Value) Value {
 		ss := s.MustString("substr", 0)
@@ -424,7 +422,7 @@ func init() {
 			}
 			s = s[sz:]
 		}
-		return env.NewArray(r...)
+		return Array(r...)
 	}, "chars(string) => { char1, char2, ... }", "chars(string, max) => { char1, char2, ..., char_max }",
 		"\tbreak a string into (at most 'max') chars, e.g.:",
 		"\tchars('a中c') => { 'a', '中', 'c' }",
@@ -433,7 +431,7 @@ func init() {
 	AddGlobalValue("match", func(env *Env, in, r, n Value) Value {
 		rx, err := regexp.Compile(r.MustString("match #", 2))
 		if err != nil {
-			return env.NewArray(Interface(err))
+			return Array(Interface(err))
 		}
 		m := rx.FindAllStringSubmatch(in.MustString("match #", 1), int(n.IntDefault(-1)))
 		mm := []Value{}
@@ -442,7 +440,7 @@ func init() {
 				mm = append(mm, String(m))
 			}
 		}
-		return env.NewArray(mm...)
+		return Array(mm...)
 	}, "match(string, regex, n=-1) => { match1, match2, ..., matchn }")
 	AddGlobalValue("startswith", func(env *Env, t, p Value) Value {
 		return Bool(strings.HasPrefix(t.MustString("startswith", 0), p.MustString("startswith prefix", 0)))
@@ -483,9 +481,9 @@ func init() {
 		}
 		switch f := env.Get(2); f.Type() {
 		case VString:
-			return env.NewString(rx.ReplaceAllString(a, f.rawStr()))
+			return String(rx.ReplaceAllString(a, f.rawStr()))
 		case VFunction:
-			return env.NewString(rx.ReplaceAllStringFunc(a, func(in string) string {
+			return String(rx.ReplaceAllStringFunc(a, func(in string) string {
 				v, err := f.Function().Call(String(in))
 				if err != nil {
 					panic(err)
@@ -504,7 +502,7 @@ func init() {
 		for i := range x {
 			v[i] = String(x[i])
 		}
-		return env.NewArray(v...)
+		return Array(v...)
 	}, "split(text, sep) => { part1, part2, ... }")
 	AddGlobalValue("strpos", func(env *Env, txt, n, t Value) Value {
 		a, b := txt.MustString("strpos #", 1), n.MustString("strpos #", 2)
@@ -519,7 +517,7 @@ func init() {
 	AddGlobalValue("format", func(env *Env, p Value) Value {
 		f := strings.Replace(p.MustString("format text", 0), "%", "%%", -1)
 		f = strings.Replace(f, "{}", "%v", -1)
-		return env.NewString(fmt.Sprintf(f, env.StackInterface()[1:]...))
+		return String(fmt.Sprintf(f, env.StackInterface()[1:]...))
 	}, "format(pattern, a1, a2, ...)", "\t'{}' is the placeholder, no need to escape '%'")
 	AddGlobalValue("error", func(env *Env, msg Value) Value {
 		return Interface(errors.New(msg.MustString("error", 0)))
@@ -529,7 +527,7 @@ func init() {
 		env.A = Bool(ok)
 	}, "iserror(value)", "\ttest whether value is an error")
 	AddGlobalValue("json", func(env *Env) {
-		env.A = env.NewString(env.Get(0).JSONString())
+		env.A = String(env.Get(0).JSONString())
 	}, "json(v) => json_string")
 	AddGlobalValue("json_get", func(env *Env, js, path, et Value) Value {
 		cv := func(r gjson.Result) Value {
@@ -558,7 +556,7 @@ func init() {
 			for i := range a {
 				tmp[i] = cv(a[i])
 			}
-			return env.NewArray(tmp...)
+			return Array(tmp...)
 		}
 		return cv(result)
 	}, "$f(json_string, selector, nil|expected_type) => true|false|number|string|array|object_string")
@@ -568,6 +566,14 @@ func init() {
 	})
 	AddGlobalValue("parent", func(env *Env, m Value) Value {
 		return m.MustMap("parent", 0).Parent.Value()
+	})
+	AddGlobalValue("keys", func(env *Env, m Value) Value {
+		a := make([]Value, 0)
+		m.MustMap("parent", 0).Foreach(func(k, v Value) bool {
+			a = append(a, k)
+			return true
+		})
+		return Array(a...)
 	})
 }
 

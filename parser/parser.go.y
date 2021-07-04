@@ -102,24 +102,26 @@ assign_stat:
             }
         } |
         TLocal ident_list '=' expr_list {
-            $$ = __local($2.Nodes, $4.Nodes, $1.Pos)
-        } |
-        TLocal '{' ident_list '}' '=' expr {
-            tmp := randomVarname()
-            $$ = __chain(__local([]Node{tmp}, []Node{$6}, $1.Pos))
-            for i, ident := range $3.Nodes {
-                $$ = $$.append(__local([]Node{ident}, []Node{__load(tmp, NewNumberFromInt(int64(i))).SetPos($1.Pos)}, $1.Pos))
+            if len($4.Nodes) == 1 && len($2.Nodes) > 1 {
+                tmp := randomVarname()
+                $$ = __chain(__local([]Node{tmp}, $4.Nodes, $1.Pos))
+                for i, ident := range $2.Nodes {
+                    $$ = $$.append(__local([]Node{ident}, []Node{__load(tmp, NewNumberFromInt(int64(i))).SetPos($1.Pos)}, $1.Pos))
+                }
+            } else {
+                $$ = __local($2.Nodes, $4.Nodes, $1.Pos)
             }
         } |
         declarator_list '=' expr_list {
-            $$ = __moveMulti($1.Nodes, $3.Nodes, $2.Pos)
-        } | 
-        '{' declarator_list '}' '=' expr {
-            tmp := randomVarname()
-            $$ = __chain(__local([]Node{tmp}, []Node{$5}, $1.Pos))
-            for i, decl := range $2.Nodes {
-                x := decl.moveLoadStore(__move, __load(tmp, NewNumberFromInt(int64(i ))).SetPos($1.Pos)).SetPos($1.Pos)
-                $$ = $$.append(__local([]Node{decl}, []Node{x}, $1.Pos))
+            if len($3.Nodes) == 1 && len($1.Nodes) > 1 {
+                tmp := randomVarname()
+                $$ = __chain(__local([]Node{tmp}, $3.Nodes, $2.Pos))
+                for i, decl := range $1.Nodes {
+                    x := decl.moveLoadStore(__move, __load(tmp, NewNumberFromInt(int64(i ))).SetPos($2.Pos)).SetPos($2.Pos)
+                    $$ = $$.append(x)
+                }
+            } else {
+                $$ = __moveMulti($1.Nodes, $3.Nodes, $2.Pos)
             }
         }
 
@@ -198,16 +200,16 @@ func_stat:
         TFunc TIdent '(' ')' TString stats TEnd                       { $$ = __func($2, emptyNode, $5.Str, $6) } |
         TFunc TIdent '(' ident_list ')' TString stats TEnd            { $$ = __func($2, $4, $6.Str, $7) } |
         TFunc TIdent '.' TIdent '(' ')' stats TEnd                    {
-            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func($4, emptyNode, "", $7)) 
+            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($4), emptyNode, "", $7)) 
         } | 
         TFunc TIdent '.' TIdent '(' ident_list ')' stats TEnd         {
-            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func($4, $6, "", $8)) 
+            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($4), $6, "", $8)) 
         } | 
         TFunc TIdent '.' TIdent '(' ')' TString stats TEnd            {
-            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func($4, emptyNode, $7.Str, $8)) 
+            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($4), emptyNode, $7.Str, $8)) 
         } |
         TFunc TIdent '.' TIdent '(' ident_list ')' TString stats TEnd {
-            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func($4, $6, $8.Str, $9)) 
+            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($4), $6, $8.Str, $9)) 
         }
 
 jmp_stat:
@@ -223,12 +225,17 @@ jmp_stat:
         TReturnVoid {
             $$ = NewComplex(NewSymbol(AReturn), NewSymbol(ANil)).SetPos($1.Pos) 
         } |
-        TReturn expr {
-            if len($2.Nodes) == 3 && $2.Nodes[0].SymbolValue() == ACall { 
-                // return call(...) -> return tailcall(...)
-                $2.Nodes[0].strSym = ATailCall
+        TReturn expr_list {
+            if len($2.Nodes) == 1 {
+                a := $2.Nodes[0]
+                if len(a.Nodes) == 3 && a.Nodes[0].SymbolValue() == ACall { 
+                    // return call(...) -> return tailcall(...)
+                    a.Nodes[0].strSym = ATailCall
+                }
+                $$ = NewComplex(NewSymbol(AReturn), a).SetPos($1.Pos) 
+            } else {
+                $$ = NewComplex(NewSymbol(AReturn), NewComplex(NewSymbol(AArray), $2)).SetPos($1.Pos) 
             }
-            $$ = NewComplex(NewSymbol(AReturn), $2).SetPos($1.Pos) 
         }
 
 declarator:

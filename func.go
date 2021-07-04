@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/coyove/script/parser"
@@ -36,20 +35,6 @@ type Program struct {
 	GLoad            func(string) Value
 	GStore           func(string, Value)
 	shadowTable      *symtable
-	deadsize         int64
-}
-
-func (p *Program) SetDeadsize(v int64) { p.deadsize = v }
-
-func (p *Program) GetDeadsize() int64 { return p.deadsize }
-
-func (p *Program) DecrDeadsize(v int64) {
-	if p.deadsize == 0 {
-		return
-	}
-	if atomic.AddInt64(&p.deadsize, -v) <= 0 {
-		panic("deadsize")
-	}
 }
 
 // Native creates a golang-Native function
@@ -93,9 +78,7 @@ func NativeWithParamMap(name string, f func(*Env), doc string, params ...string)
 	})
 }
 
-func (c *Func) NumParams() int {
-	return len(c.Params)
-}
+func (c *Func) NumParams() int { return len(c.Params) }
 
 func (c *Func) IsNative() bool { return c.Native != nil }
 

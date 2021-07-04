@@ -180,21 +180,6 @@ func TestArithmeticUnfold(t *testing.T) {
 	}
 }
 
-func TestPCallStackSize(t *testing.T) {
-	cls, _ := LoadString(`
-a = ""
-for i = 1,1e3 do
-a = a + i
-end
-return a
-`, nil)
-	cls.SetDeadsize(int64(len(g)) + 10)
-	res, err := cls.Call()
-	if !strings.Contains(err.Error(), "deadsize") {
-		t.Fatal(res, err)
-	}
-}
-
 func TestRegisterOptimzation(t *testing.T) {
 	cls, err := LoadString(`
 		a = 1
@@ -398,8 +383,7 @@ func TestRHMap(t *testing.T) {
 			x = counter
 			counter++
 		}
-		_, memSpace := m.Set(Int(int64(x)), Int(int64(x)))
-		_ = memSpace
+		m.Set(Int(int64(x)), Int(int64(x)))
 		m2[x] = x
 	}
 	for k := range m2 {

@@ -138,20 +138,16 @@ func init() {
 		defer resp.Body.Close()
 
 		var r io.Reader = resp.Body
-		if env.Global.GetDeadsize() > 0 {
-			r = io.LimitReader(r, env.Global.GetDeadsize())
-		}
 		buf := panicErr2(ioutil.ReadAll(r)).([]byte)
-		env.Global.DecrDeadsize(int64(len(buf)))
 
 		hdr := map[string]string{}
 		for k := range resp.Header {
 			hdr[k] = resp.Header.Get(k)
 		}
-		env.A = env.NewArray(
+		env.A = script.Array(
 			script.Int(int64(resp.StatusCode)),
 			script.Interface(hdr),
-			env.NewStringBytes(buf),
+			script.Bytes(buf),
 			script.Interface(client.Jar),
 		)
 	}, `http($a...a$) => code, body, headers, cookie_jar
