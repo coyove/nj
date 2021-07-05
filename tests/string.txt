@@ -7,28 +7,23 @@ assert( "abc吱吱吱" == "abc\u5431\u5431\u5431")
 
 assert(1 + "2" == "12")
 
-local a, b, c, d = match("a\"12\" \"2\"3", [["(\d+)"]])
+local a, b, c, d = re([["(\d+)"]]).findall("a\"12\" \"2\"3")
 assert(a == [["12"]] and b == "12" and c == [["2"]] and d == "2")
 
 local err = error("err")
 print("reflectLoad: ", err.error())
 assert(err.error() == "err")
-assert("eerrrr" == replace(err.error(), "(e|r)", "$1$1"))
+assert("eerrrr" == re("(e|r)").replace(err.error(), "$1$1"))
 
-function cb(s)
-    return s == "e" and "R" or "E"
-end
-assert("REE" == replace(err.error(), "(e|r)", cb))
-
-assert("x" == trim("嘻x嘻", "嘻"))
-assert("嘻x" == trim("嘻x嘻", "嘻", "right"))
-assert("x嘻" == trim("嘻x嘻", "嘻", "left"))
+assert("x" == str.from("嘻x嘻").trim("嘻"))
+assert("嘻x" == str.from("嘻x嘻").rtrim("嘻"))
+assert("x嘻" == str.from("嘻x嘻").ltrim("嘻"))
 
 -- assert(("abc")[1:2] == "ab")
 -- assert(("abc")[3:3] == "c")
 -- assert(("abc")[1:0] == "")
--- assert(("cde")[unicode("b")[1] - unicode("a")[1]:2] == "cd")
--- assert(("efg")[unicode("b")[1] - unicode("a")[1]: unicode("c")[1] - unicode("a")[1]] == "ef")
+-- assert(("cde")[str.decode_utf8("b")[1] - str.decode_utf8("a")[1]:2] == "cd")
+-- assert(("efg")[str.decode_utf8("b")[1] - str.decode_utf8("a")[1]: str.decode_utf8("c")[1] - str.decode_utf8("a")[1]] == "ef")
 
 -- json generator
 do
@@ -39,3 +34,15 @@ do
     print(j)
 end
 
+
+function str.reverse(s)
+	x = str.buffer()
+	s = s.chars()
+	for i=len(s)-1,-1,-1 do
+		x.write(s[i])
+	end
+	print (parent(x))
+	return x.value()
+end
+assert("abc", str.from("cba").reverse())
+assert("あbc", str.from("cbあ").reverse())

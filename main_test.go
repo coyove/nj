@@ -52,7 +52,7 @@ func runFile(t *testing.T, path string) {
 				env.Global.Println("find global")
 			},
 			"mapFunc": NativeWithParamMap("mapFunc", func(env *Env) {
-				m := env.A.Map()
+				m := env.A.Array()
 				if m.Get(String("a")) != Nil {
 					env.A = String("a")
 				}
@@ -257,7 +257,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		if v2.Map().Get(Int(int64(i))).Int() != int64(i) {
+		if v2.Array().Get(Int(int64(i))).Int() != int64(i) {
 			t.Fatal(v2)
 		}
 	}
@@ -324,7 +324,7 @@ local a = 100
 return {a + add(), a + add(), a + add()}
 `, &CompileOptions{GlobalKeyValues: map[string]interface{}{"add": add}})
 	v, err := p2.Run()
-	if v1 := v.Map().Array(); v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
+	if v1 := v.Array().Array(); v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())
 	}
 
@@ -374,7 +374,7 @@ func TestSmallString(t *testing.T) {
 
 func TestRHMap(t *testing.T) {
 	rand.Seed(time.Now().Unix())
-	m := Map{}
+	m := RHMap{}
 	m2 := map[int64]int64{}
 	counter := int64(0)
 	for i := 0; i < 1e6; i++ {
@@ -438,19 +438,34 @@ func TestRHMap(t *testing.T) {
 func TestACall(t *testing.T) {
 	foo := MustRun(LoadString(`function foo(one, two)
     assert(one == 1 and two == 2)
+	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	_, err := foo.Function().CallMap(ArrayMap(String("one"), Int(1), String("two"), Int(2)).Map())
+	_, err := foo.Function().CallMap(ArrayMap(String("one"), Int(1), String("two"), Int(2)).Array())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	foo = MustRun(LoadString(`function foo()
     m = debug.kwargs()
+	print("inner", m)
     assert(m.one == 1 and m.two == 2)
+	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	_, err = foo.Function().CallMap(ArrayMap(String("one"), Int(1), String("two"), Int(2)).Map())
+	_, err = foo.Function().CallMap(ArrayMap(String("one"), Int(1), String("two"), Int(2)).Array())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	foo = MustRun(LoadString(`function foo()
+    m = debug.dumpstk()
+	print(m)
+    assert(m[1] == 1 and m[2] == 2)
+	a0 = 0 a1 = 1 a2 = 2 a3 = 3
+    end
+    return foo`, nil))
+	_, err = foo.Function().Call(Nil, Int(1), Int(2))
 	if err != nil {
 		t.Fatal(err)
 	}

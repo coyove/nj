@@ -19,7 +19,7 @@ var HostWhitelist = map[string][]string{}
 
 func init() {
 	script.AddGlobalValue("http", script.NativeWithParamMap("http", func(env *script.Env) {
-		args := env.A.Map()
+		args := env.A.Array()
 
 		ctx, cancel, _ := env.Deadline()
 		defer func() {
@@ -36,8 +36,8 @@ func init() {
 
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Get(script.String(k))
-			if x.Type() == script.VMap {
-				p := x.Map()
+			if x.Type() == script.VArray {
+				p := x.Array()
 				for k, v := p.Next(script.Nil); k != script.Nil; k, v = p.Next(k) {
 					add(k.String(), v.String())
 				}
@@ -187,8 +187,8 @@ func iterStrings(v script.Value, f func(string)) {
 	switch v.Type() {
 	case script.VString:
 		f(v.String())
-	case script.VMap:
-		for _, line := range v.Map().Array() {
+	case script.VArray:
+		for _, line := range v.Array().Array() {
 			f(line.String())
 		}
 	}
@@ -198,10 +198,10 @@ func iterStringPairs(v1, v2 script.Value, f func(string, string)) {
 	switch v1.Type() + v2.Type() {
 	case script.VString * 2:
 		f(v1.String(), v2.String())
-	case script.VMap * 2:
-		for i, line := range v1.Map().Array() {
-			if i < len(v2.Map().Array()) {
-				f(line.String(), v2.Map().Array()[i].String())
+	case script.VArray * 2:
+		for i, line := range v1.Array().Array() {
+			if i < len(v2.Array().Array()) {
+				f(line.String(), v2.Array().Array()[i].String())
 			}
 		}
 	}

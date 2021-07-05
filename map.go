@@ -17,41 +17,41 @@ import (
 
 const growRate = 1.25
 
-type Map struct {
-	Parent    *Map
-	hashItems []mapItem
+type RHMap struct {
+	Parent    *RHMap
+	hashItems []hashItem
 	count     uint32
 	items     []Value
 }
 
-// mapItem represents an entry in the Map.
-type mapItem struct {
+// hashItem represents an entry in the Map.
+type hashItem struct {
 	Key      Value
 	Val      Value
 	Distance int // How far item is from its best position.
 }
 
-func NewSizedMap(size int) *Map {
-	return &Map{hashItems: make([]mapItem, int64(size)*int64(growRate*16)/16+1)}
+func NewArrayMap(size int) *RHMap {
+	return &RHMap{hashItems: make([]hashItem, int64(size)*int64(growRate*16)/16+1)}
 }
 
-func (m *Map) Len() int {
+func (m *RHMap) Len() int {
 	return int(m.count)
 }
 
 // Clear clears Map, where already allocated memory will be reused.
-func (m *Map) Clear() {
+func (m *RHMap) Clear() {
 	m.hashItems = m.hashItems[:0]
 	m.count = 0
 	m.items = m.items[:0]
 }
 
-func (m *Map) GetString(k string) (v Value) {
+func (m *RHMap) GetString(k string) (v Value) {
 	return m.Get(String(k))
 }
 
 // Get retrieves the val for a given key.
-func (m *Map) Get(k Value) (v Value) {
+func (m *RHMap) Get(k Value) (v Value) {
 	if k == Nil {
 		return Nil
 	}
@@ -69,7 +69,7 @@ func (m *Map) Get(k Value) (v Value) {
 	return Nil
 }
 
-func (m *Map) findHash(k Value) int {
+func (m *RHMap) findHash(k Value) int {
 	num := len(m.hashItems)
 	if num <= 0 {
 		return -1
@@ -98,7 +98,7 @@ func (m *Map) findHash(k Value) int {
 	}
 }
 
-func (m *Map) Contains(k Value) bool {
+func (m *RHMap) Contains(k Value) bool {
 	if k == Nil {
 		return false
 	}
@@ -110,7 +110,7 @@ func (m *Map) Contains(k Value) bool {
 	return m.findHash(k) >= 0
 }
 
-func (m *Map) ParentContains(k Value) *Map {
+func (m *RHMap) ParentContains(k Value) *RHMap {
 	if k == Nil {
 		return nil
 	}
@@ -127,7 +127,7 @@ func (m *Map) ParentContains(k Value) *Map {
 }
 
 // Set inserts or updates a key/val into the Map.
-func (m *Map) Set(k, v Value) (prev Value) {
+func (m *RHMap) Set(k, v Value) (prev Value) {
 	if k == Nil {
 		panicf("table set with nil key")
 	}
@@ -167,14 +167,14 @@ func (m *Map) Set(k, v Value) (prev Value) {
 	}
 
 	if len(m.hashItems) <= 0 {
-		m.hashItems = make([]mapItem, 8)
+		m.hashItems = make([]hashItem, 8)
 	}
 
-	prev, _ = m.setHash(mapItem{Key: k, Val: v, Distance: 0})
+	prev, _ = m.setHash(hashItem{Key: k, Val: v, Distance: 0})
 	return
 }
 
-func (m *Map) setHash(incoming mapItem) (prev Value, growed bool) {
+func (m *RHMap) setHash(incoming hashItem) (prev Value, growed bool) {
 	num := len(m.hashItems)
 	idx := int(incoming.Key.HashCode() % uint64(num))
 
@@ -210,7 +210,7 @@ func (m *Map) setHash(incoming mapItem) (prev Value, growed bool) {
 	}
 }
 
-func (m *Map) delHash(k Value) (prev Value) {
+func (m *RHMap) delHash(k Value) (prev Value) {
 	idx := m.findHash(k)
 	if idx < 0 {
 		return Nil
@@ -240,12 +240,12 @@ func (m *Map) delHash(k Value) (prev Value) {
 		idx = next
 	}
 
-	m.hashItems[idx] = mapItem{}
+	m.hashItems[idx] = hashItem{}
 	m.count--
 	return prev
 }
 
-func (m *Map) Foreach(f func(k, v Value) bool) {
+func (m *RHMap) Foreach(f func(k, v Value) bool) {
 	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
 		if !f(k, v) {
 			return
@@ -253,7 +253,7 @@ func (m *Map) Foreach(f func(k, v Value) bool) {
 	}
 }
 
-func (m *Map) Next(k Value) (Value, Value) {
+func (m *RHMap) Next(k Value) (Value, Value) {
 	nextHashPair := func(start int) (Value, Value) {
 		for i := start; i < len(m.hashItems); i++ {
 			if i := &m.hashItems[i]; i.Key != Nil {
@@ -286,23 +286,23 @@ func (m *Map) Next(k Value) (Value, Value) {
 	return nextHashPair(idx + 1)
 }
 
-func (m *Map) Array() []Value {
+func (m *RHMap) Array() []Value {
 	return m.items
 }
 
-func (m *Map) String() string {
+func (m *RHMap) String() string {
 	return m.Value().String()
 }
 
-func (m *Map) Value() Value {
+func (m *RHMap) Value() Value {
 	if m == nil {
 		return Nil
 	}
-	return Value{v: uint64(VMap), p: unsafe.Pointer(m)}
+	return Value{v: uint64(VArray), p: unsafe.Pointer(m)}
 }
 
-func (m *Map) grow(newSize int) {
-	tmp := Map{hashItems: make([]mapItem, newSize)}
+func (m *RHMap) grow(newSize int) {
+	tmp := RHMap{hashItems: make([]hashItem, newSize)}
 	for _, e := range m.hashItems {
 		if e.Key != Nil {
 			e.Distance = 0

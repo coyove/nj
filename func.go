@@ -19,7 +19,7 @@ type Func struct {
 	loadGlobal *Program
 	Params     []string
 	Locals     []string
-	MethodSrc  *Map
+	MethodSrc  Value
 }
 
 type Program struct {
@@ -58,14 +58,18 @@ func Native3(name string, f func(*Env, Value, Value, Value) Value, doc ...string
 	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1), env.Get(2)) }, doc...)
 }
 
+func Native4(name string, f func(*Env, Value, Value, Value, Value) Value, doc ...string) Value {
+	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1), env.Get(2), env.Get(3)) }, doc...)
+}
+
 func NativeWithParamMap(name string, f func(*Env), doc string, params ...string) Value {
 	return Function(&Func{
 		Name:      name,
 		Params:    params,
 		DocString: fixDocString(doc, name, strings.Join(params, ",")),
 		Native: func(env *Env) {
-			if env.A.Type() != VMap {
-				args := NewSizedMap(env.Size())
+			if env.A.Type() != VArray {
+				args := NewArrayMap(env.Size())
 				for i := range env.Stack() {
 					if i < len(params) {
 						args.Set(String(params[i]), env.Stack()[i])
@@ -141,31 +145,31 @@ func (c *Func) Call(a ...Value) (v1 Value, err error) {
 			stack: &a,
 		}
 		newEnv.growZero(int(c.StackSize))
-		v1 = c.exec(newEnv)
+		c.Native(&newEnv)
+		v1 = newEnv.A
 	} else {
-		oldLen := len(*c.loadGlobal.Stack)
+		s := []Value{}
 		newEnv := Env{
-			Global:      c.loadGlobal,
-			stack:       c.loadGlobal.Stack,
-			StackOffset: uint32(oldLen),
+			Global: c.loadGlobal,
+			stack:  &s,
 		}
 
 		for _, a := range a {
 			newEnv.Push(a)
 		}
+		newEnv.Push(watermark)
 		newEnv.growZero(int(c.StackSize))
 
-		v1 = c.exec(newEnv)
-		*c.loadGlobal.Stack = (*c.loadGlobal.Stack)[:oldLen]
+		v1 = InternalExecCursorLoop(newEnv, c, 0)
 	}
 	return
 }
 
-func (c *Func) CallMap(a *Map) (v1 Value, err error) {
+func (c *Func) CallMap(a *RHMap) (v1 Value, err error) {
 	defer parser.CatchError(&err)
 
+	s := []Value{}
 	if c.Native != nil {
-		s := []Value{}
 		newEnv := Env{
 			stack: &s,
 			A:     Interface(a),
@@ -174,23 +178,23 @@ func (c *Func) CallMap(a *Map) (v1 Value, err error) {
 			newEnv.Push(a.Get(String(pa)))
 		}
 		newEnv.growZero(int(c.StackSize))
-		v1 = c.exec(newEnv)
+		c.Native(&newEnv)
+		v1 = newEnv.A
 	} else {
-		oldLen := len(*c.loadGlobal.Stack)
 		newEnv := Env{
-			Global:      c.loadGlobal,
-			stack:       c.loadGlobal.Stack,
-			StackOffset: uint32(oldLen),
-			A:           Interface(a),
+			Global: c.loadGlobal,
+			stack:  &s,
+			A:      Interface(a),
 		}
 
 		for _, pa := range c.Params {
 			newEnv.Push(a.Get(String(pa)))
 		}
+		newEnv.Push(watermark)
+		newEnv.Push(a.Value())
 		newEnv.growZero(int(c.StackSize))
 
-		v1 = c.exec(newEnv)
-		*c.loadGlobal.Stack = (*c.loadGlobal.Stack)[:oldLen]
+		v1 = InternalExecCursorLoop(newEnv, c, 0)
 	}
 	return
 }

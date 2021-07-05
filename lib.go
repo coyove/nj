@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 	"unicode/utf8"
 	"unsafe"
 
@@ -60,6 +59,7 @@ func init() {
 
 	AddGlobalValue("VERSION", Int(Version))
 	AddGlobalValue("undefined", Interface(new(int)))
+	AddGlobalValue("_", func(env *Env) { env.A = env.Get(0) }, "nop()")
 	AddGlobalValue("globals", func(env *Env) {
 		keys := make([]string, 0, len(g))
 		for k := range g {
@@ -76,18 +76,18 @@ func init() {
 		return String(f.MustFunc("doc", 0).DocString)
 	}, "doc(function) => string", "\treturn function's documentation")
 	AddGlobalValue("new", func(env *Env, v Value) Value {
-		m := *v.MustMap("new", 0)
-		m.hashItems = append([]mapItem{}, m.hashItems...)
+		m := *v.MustArray("new", 0)
+		m.hashItems = append([]hashItem{}, m.hashItems...)
 		m.items = append([]Value{}, m.items...)
-		a := &Map{Parent: &m}
+		a := &RHMap{Parent: &m}
 		return a.Value()
 	})
 	AddGlobalValue("len", func(env *Env, v Value) Value {
 		switch v.Type() {
 		case VString:
 			return Float(float64(len(v.rawStr())))
-		case VMap:
-			return Int(int64(v.Map().Len()))
+		case VArray:
+			return Int(int64(v.Array().Len()))
 		case VFunction:
 			return Float(float64(v.Function().NumParams()))
 		default:
@@ -222,7 +222,7 @@ func init() {
 		"assert(value1, value2)", "\tpanic when two values are not equal",
 		"assert(value1, value2, msg)", "\tpanic message when two values are not equal",
 	)
-	AddGlobalValue("num", func(env *Env) {
+	AddGlobalValue("float", func(env *Env) {
 		v := env.Get(0)
 		switch v.Type() {
 		case VNumber:
@@ -237,7 +237,7 @@ func init() {
 		default:
 			env.A = Value{}
 		}
-	}, "num(value) => number", "\tconvert string to number")
+	}, "$f(value) => number", "\tconvert string to number")
 	AddGlobalValue("stdout", func(env *Env) { env.A = _interface(env.Global.Stdout) }, "$f() => fd", "\treturn stdout fd")
 	AddGlobalValue("stdin", func(env *Env) { env.A = _interface(env.Global.Stdin) }, "$f() => fd", "\treturn stdin fd")
 	AddGlobalValue("print", func(env *Env) {
@@ -332,11 +332,7 @@ func init() {
 			}
 		}),
 	))
-	AddGlobalValue("str", func(env *Env, v, format Value) Value {
-		return String(fmt.Sprintf(format.StringDefault("%v"), v.Interface()))
-	},
-		"str(value, format='%v') => string", "\tconvert value to string using format",
-	)
+	AddGlobalValue("str", StringMethods)
 	AddGlobalValue("int", func(env *Env) {
 		switch v := env.Get(0); v.Type() {
 		case VNumber:
@@ -397,130 +393,50 @@ func init() {
 		os.Exit(int(code.MustNumber("exit", 0).Int()))
 		return Nil
 	}, "exit(code)")
-	AddGlobalValue("char", func(env *Env) {
-		env.A = String(string(rune(env.Get(0).MustNumber("char", 0).Int())))
-	}, "char(number) => string")
-	AddGlobalValue("unicode", func(env *Env) {
-		r, sz := utf8.DecodeRuneInString(env.Get(0).MustString("unicode", 0))
-		env.A = Array(Int(int64(r)), Int(int64(sz)))
-	}, "unicode(one_char_string) => { char_unicode, width_in_bytes }")
-	AddGlobalValue("substr", func(env *Env, s, i, j Value) Value {
-		ss := s.MustString("substr", 0)
-		return String(ss[i.MustNumber("substr start", 0).Int():j.IntDefault(int64(len(ss)))])
-	})
-	AddGlobalValue("chars", func(env *Env, s, n Value) Value {
-		var r []Value
-		max := n.IntDefault(0)
-		for s := s.MustString("chars", 0); len(s) > 0; {
-			_, sz := utf8.DecodeRuneInString(s)
-			if sz == 0 {
-				break
-			}
-			r = append(r, String(s[:sz]))
-			if max > 0 && len(r) == int(max) {
-				break
-			}
-			s = s[sz:]
-		}
-		return Array(r...)
-	}, "chars(string) => { char1, char2, ... }", "chars(string, max) => { char1, char2, ..., char_max }",
-		"\tbreak a string into (at most 'max') chars, e.g.:",
-		"\tchars('a中c') => { 'a', '中', 'c' }",
-		"\tchars('a中c', 1) => { 'a' }",
-	)
-	AddGlobalValue("match", func(env *Env, in, r, n Value) Value {
-		rx, err := regexp.Compile(r.MustString("match #", 2))
+	AddGlobalValue("chr", func(env *Env) { env.A = String(string(rune(env.Get(0).MustNumber("chr()", 0).Int()))) }, "chr(unicode) => string")
+	AddGlobalValue("ord", func(env *Env) {
+		r, _ := utf8.DecodeRuneInString(env.Get(0).MustString("ord()", 0))
+		env.A = Int(int64(r))
+	}, "$f(string) => unicode")
+	AddGlobalValue("re", func(env *Env, r Value) Value {
+		rx, err := regexp.Compile(r.MustString("build regexp", 0))
 		if err != nil {
-			return Array(Interface(err))
+			panic(err)
 		}
-		m := rx.FindAllStringSubmatch(in.MustString("match #", 1), int(n.IntDefault(-1)))
-		mm := []Value{}
-		for _, m := range m {
-			for _, m := range m {
-				mm = append(mm, String(m))
-			}
-		}
-		return Array(mm...)
-	}, "match(string, regex, n=-1) => { match1, match2, ..., matchn }")
-	AddGlobalValue("startswith", func(env *Env, t, p Value) Value {
-		return Bool(strings.HasPrefix(t.MustString("startswith", 0), p.MustString("startswith prefix", 0)))
-	}, "startswith(text, prefix) => bool")
-	AddGlobalValue("endswith", func(env *Env, t, s Value) Value {
-		return Bool(strings.HasSuffix(t.MustString("endswith", 0), s.MustString("endswith suffix", 0)))
-	}, "endswith(text, suffix) => bool")
-	AddGlobalValue("stricmp", func(env *Env, a, b Value) Value {
-		return Bool(strings.EqualFold(a.MustString("stricmp #", 1), b.MustString("stricmp #", 2)))
-	}, "stricmp(text1, text2) => bool", "\tcompare two strings case insensitively")
-	AddGlobalValue("trimspace", func(env *Env, txt Value) Value {
-		return String(strings.TrimSpace(txt.MustString("trimspace", 0)))
-	})
-	AddGlobalValue("trim", func(env *Env, txt, p, t Value) Value {
-		switch a, cutset := txt.MustString("trim", 0), p.StringDefault(" \n\t\r"); t.StringDefault("") {
-		case "left", "l":
-			return String(strings.TrimLeft(a, cutset))
-		case "right", "r":
-			return String(strings.TrimRight(a, cutset))
-		case "prefix", "start":
-			return String(strings.TrimPrefix(a, cutset))
-		case "suffix", "end":
-			return String(strings.TrimSuffix(a, cutset))
-		default:
-			return String(strings.Trim(a, cutset))
-		}
-	},
-		"$f(text) => string", "\ttrim spaces",
-		"$f(text, cutset) => string", "\ttrim chars inside 'cutset'",
-		"$f(text, cutset, 'left'|'right') => string", "\ttrim right/left chars inside 'cutset'",
-		"$f(text, pattern, 'suffix'|'prefix') => string", "\ttrim prefix/suffix",
-	)
-	AddGlobalValue("replace", func(env *Env, text, src, dst Value) Value {
-		a := text.MustString("replace text", 0)
-		rx, err := regexp.Compile(src.MustString("replace source", 0))
-		if err != nil {
-			return Interface(err)
-		}
-		switch f := env.Get(2); f.Type() {
-		case VString:
-			return String(rx.ReplaceAllString(a, f.rawStr()))
-		case VFunction:
-			return String(rx.ReplaceAllStringFunc(a, func(in string) string {
-				v, err := f.Function().Call(String(in))
-				if err != nil {
-					panic(err)
+		a := ArrayMap(
+			String("_rx"), Interface(rx),
+			String("match"), Native2("match", func(e *Env, rx, text Value) Value {
+				return Bool(rx.Array().GetString("_rx").Interface().(*regexp.Regexp).MatchString(text.MustString("match text", 0)))
+			}, ""),
+			String("find"), Native2("find", func(e *Env, rx, text Value) Value {
+				m := rx.Array().GetString("_rx").Interface().(*regexp.Regexp).FindStringSubmatch(text.MustString("find text", 0))
+				mm := []Value{}
+				for _, m := range m {
+					mm = append(mm, String(m))
 				}
-				return v.String()
-			}))
-		}
-		return Nil
-	},
-		"replace(text, regex, newtext|callback) => string",
-		"\tcallback will be called in such way: new_string = f(captured_string)",
-	)
-	AddGlobalValue("split", func(env *Env, text, sep Value) Value {
-		x := strings.Split(text.MustString("split", 0), sep.MustString("split sep", 0))
-		v := make([]Value, len(x))
-		for i := range x {
-			v[i] = String(x[i])
-		}
-		return Array(v...)
-	}, "split(text, sep) => { part1, part2, ... }")
-	AddGlobalValue("strpos", func(env *Env, txt, n, t Value) Value {
-		a, b := txt.MustString("strpos #", 1), n.MustString("strpos #", 2)
-		if t.StringDefault("") == "last" {
-			return Int(int64(strings.LastIndex(a, b)) + 1)
-		}
-		return Int(int64(strings.Index(a, b)) + 1)
-	},
-		"strpos(text, needle) => int", "\tfirst occurrence of needle in text, or 0 if not found",
-		"strpos(text, needle, 'last') => int", "\tlast occurrence of needle in text",
-	)
-	AddGlobalValue("format", func(env *Env, p Value) Value {
-		f := strings.Replace(p.MustString("format text", 0), "%", "%%", -1)
-		f = strings.Replace(f, "{}", "%v", -1)
-		return String(fmt.Sprintf(f, env.StackInterface()[1:]...))
-	}, "format(pattern, a1, a2, ...)", "\t'{}' is the placeholder, no need to escape '%'")
+				return Array(mm...)
+			}, ""),
+			String("findall"), Native3("findall", func(e *Env, rx, text, n Value) Value {
+				m := rx.Array().GetString("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(text.MustString("findall text", 0), int(n.IntDefault(-1)))
+				mm := []Value{}
+				for _, m := range m {
+					for _, m := range m {
+						mm = append(mm, String(m))
+					}
+				}
+				return Array(mm...)
+			}, ""),
+			String("replace"), Native3("replace", func(e *Env, rx, text, newtext Value) Value {
+				m := rx.Array().GetString("_rx").Interface().(*regexp.Regexp).ReplaceAllString(text.MustString("replace text", 0), newtext.MustString("replace text new", 0))
+				return String(m)
+			}, ""),
+		)
+		b := ArrayMap()
+		b.Array().Parent = a.Array()
+		return b
+	}, "re(string) => creates a regular expression object")
 	AddGlobalValue("error", func(env *Env, msg Value) Value {
-		return Interface(errors.New(msg.MustString("error", 0)))
+		return Interface(errors.New(msg.MustString("error() message", 0)))
 	}, "error(text)", "\tcreate an error")
 	AddGlobalValue("iserror", func(env *Env) {
 		_, ok := env.Get(0).Interface().(error)
@@ -561,15 +477,15 @@ func init() {
 		return cv(result)
 	}, "$f(json_string, selector, nil|expected_type) => true|false|number|string|array|object_string")
 	AddGlobalValue("next", func(env *Env, m, k Value) Value {
-		nk, nv := m.MustMap("next", 0).Next(k)
+		nk, nv := m.MustArray("next()", 0).Next(k)
 		return Array(nk, nv)
 	})
 	AddGlobalValue("parent", func(env *Env, m Value) Value {
-		return m.MustMap("parent", 0).Parent.Value()
+		return m.MustArray("parent()", 0).Parent.Value()
 	})
 	AddGlobalValue("keys", func(env *Env, m Value) Value {
 		a := make([]Value, 0)
-		m.MustMap("parent", 0).Foreach(func(k, v Value) bool {
+		m.MustArray("keys()", 0).Foreach(func(k, v Value) bool {
 			a = append(a, k)
 			return true
 		})
@@ -612,12 +528,4 @@ func ipow(base, exp int64) int64 {
 		base *= base
 	}
 	return result
-}
-
-func isFirstUpper(v string) bool {
-	if len(v) == 0 {
-		return false
-	}
-	r, _ := utf8.DecodeRuneInString(v)
-	return unicode.IsUpper(r)
 }

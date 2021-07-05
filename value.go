@@ -18,7 +18,7 @@ var (
 	int64Marker       = unsafe.Pointer(new(int64))
 	trueMarker        = unsafe.Pointer(new(int64))
 	falseMarker       = unsafe.Pointer(new(int64))
-	smallStringMarker = unsafe.Pointer(new(int64))
+	smallStringMarker = unsafe.Pointer(new([9]int64))
 	falseValue        = Bool(false)
 	zeroValue         = Int(0)
 	watermark         = Interface(new(int))
@@ -33,7 +33,7 @@ const (
 	VBool      ValueType = 1
 	VNumber    ValueType = 3
 	VString    ValueType = 7
-	VMap       ValueType = 15
+	VArray     ValueType = 15
 	VFunction  ValueType = 17
 	VInterface ValueType = 19
 
@@ -65,13 +65,14 @@ func (v Value) Type() ValueType {
 		return VNumber
 	case trueMarker, falseMarker:
 		return VBool
-	case smallStringMarker:
-		return VString
 	case nil:
 		if v.v == 0 {
 			return VNil
 		}
 		return VNumber
+	}
+	if uintptr(v.p) >= uintptr(smallStringMarker) && uintptr(v.p) <= uintptr(smallStringMarker)+8*8 {
+		return VString
 	}
 	return ValueType(v.v)
 }
@@ -104,15 +105,15 @@ func Int(i int64) Value {
 
 // Array returns an array consists of 'm'
 func Array(m ...Value) Value {
-	return (&Map{items: m, count: uint32(len(m))}).Value()
+	return (&RHMap{items: m, count: uint32(len(m))}).Value()
 }
 
 func ArrayMap(kvs ...Value) Value {
-	t := &Map{}
+	t := &RHMap{}
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		t.Set(kvs[i], kvs[i+1])
 	}
-	return Value{v: uint64(VMap), p: unsafe.Pointer(t)}
+	return Value{v: uint64(VArray), p: unsafe.Pointer(t)}
 }
 
 // Function returns a closure value
@@ -124,10 +125,13 @@ func Function(c *Func) Value {
 }
 
 func String(s string) Value {
-	if len(s) <= 7 { // length 1b + payload 7b
+	if len(s) <= 8 { // payload 7b
 		x := [8]byte{byte(len(s))}
-		copy(x[1:], s)
-		return Value{v: binary.BigEndian.Uint64(x[:]), p: smallStringMarker}
+		copy(x[:], s)
+		return Value{
+			v: binary.BigEndian.Uint64(x[:]),
+			p: unsafe.Pointer(uintptr(smallStringMarker) + uintptr(len(s))*8),
+		}
 	}
 	return Value{v: uint64(VString), p: unsafe.Pointer(&s)}
 }
@@ -152,7 +156,7 @@ func Interface(i interface{}) Value {
 		return String(v)
 	case []byte:
 		return Bytes(v)
-	case *Map:
+	case *RHMap:
 		return v.Value()
 	case []Value:
 		return Array(v...)
@@ -215,12 +219,16 @@ func _interface(i interface{}) Value {
 	return Value{v: uint64(VInterface), p: unsafe.Pointer(&i)}
 }
 
+func (v Value) IsSmallString() bool {
+	return uintptr(v.p) >= uintptr(smallStringMarker) && uintptr(v.p) <= uintptr(smallStringMarker)+8*8
+}
+
 // rawStr cast value to string
 func (v Value) rawStr() string {
-	if v.p == smallStringMarker {
+	if v.IsSmallString() {
 		buf := make([]byte, 8)
 		binary.BigEndian.PutUint64(buf, v.v)
-		buf = buf[1 : 1+buf[0]]
+		buf = buf[:(uintptr(v.p)-uintptr(smallStringMarker))/8]
 		return *(*string)(unsafe.Pointer(&buf))
 	}
 	return *(*string)(v.p)
@@ -240,7 +248,7 @@ func (v Value) Float() float64 { f, _, _ := v.Num(); return f }
 
 func (v Value) Bool() bool { return v.p == trueMarker }
 
-func (v Value) Map() *Map { return (*Map)(v.p) }
+func (v Value) Array() *RHMap { return (*RHMap)(v.p) }
 
 // Function cast value to function
 func (v Value) Function() *Func { return (*Func)(v.p) }
@@ -258,8 +266,8 @@ func (v Value) Interface() interface{} {
 		return vf
 	case VString:
 		return v.rawStr()
-	case VMap:
-		return v.Map()
+	case VArray:
+		return v.Array()
 	case VFunction:
 		return v.Function()
 	case VInterface:
@@ -280,8 +288,8 @@ func (v Value) TypedInterface(t reflect.Type) interface{} {
 			rv = rv.Convert(t)
 			return rv.Interface()
 		}
-	case VMap:
-		a := v.Map()
+	case VArray:
+		a := v.Array()
 		if t.Kind() == reflect.Slice {
 			e := t.Elem()
 			s := reflect.MakeSlice(t, len(a.Array()), len(a.Array()))
@@ -300,7 +308,7 @@ func (v Value) MustString(msg string, a int) string { return v.mustBe(VString, m
 
 func (v Value) MustNumber(msg string, a int) Value { return v.mustBe(VNumber, msg, a) }
 
-func (v Value) MustMap(msg string, a int) *Map { return v.mustBe(VMap, msg, a).Map() }
+func (v Value) MustArray(msg string, a int) *RHMap { return v.mustBe(VArray, msg, a).Array() }
 
 func (v Value) MustFunc(msg string, a int) *Func { return v.mustBe(VFunction, msg, a).Function() }
 
@@ -349,7 +357,7 @@ func (v Value) Less(r Value) bool {
 
 func (v Value) HashCode() uint64 {
 	code := uint64(5381)
-	if v.Type() != VString || v.p == smallStringMarker {
+	if v.Type() != VString || v.IsSmallString() {
 		for _, r := range *(*[ValueSize]byte)(unsafe.Pointer(&v)) {
 			code = code*33 + uint64(r)
 		}
@@ -385,8 +393,8 @@ func (v Value) toString(lv int, j bool) string {
 			return strconv.Quote(v.rawStr())
 		}
 		return v.rawStr()
-	case VMap:
-		m := v.Map()
+	case VArray:
+		m := v.Array()
 		if len(m.hashItems) == 0 {
 			p := bytes.NewBufferString("[")
 			for _, a := range m.Array() {

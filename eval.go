@@ -232,32 +232,51 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case OpStore:
 			subject, v := env._get(opa), env._get(opb)
 			switch subject.Type() {
-			case VMap:
-				m := subject.Map()
+			case VArray:
+				m := subject.Array()
 				env.A = m.Set(env.A, v)
 			case VInterface:
 				reflectStore(subject.Interface(), env.A, v)
 				env.A = v
 			default:
-				subject.MustMap("set index", 0)
+				panicf("require array or interface to store into")
 			}
 		case OpLoad:
 			switch a := env._get(opa); a.Type() {
-			case VMap:
-				env.A = a.Map().Get(env._get(opb))
-				if env.A.Type() == VFunction && a.Map().Parent != nil {
+			case VArray:
+				env.A = a.Array().Get(env._get(opb))
+				if env.A.Type() == VFunction && a.Array().Parent != nil {
 					f := *env.A.Function()
-					f.MethodSrc = a.Map()
+					f.MethodSrc = a
 					env.A = Function(&f)
 				}
 			case VInterface:
 				env.A = reflectLoad(a.Interface(), env._get(opb))
 			case VString:
-				if idx, s := env._get(opb).MustNumber("get index", 0).Int(), a.rawStr(); idx >= 0 && idx < int64(len(s)) {
-					env.A = Int(int64(s[idx]))
+				idx := env._get(opb)
+				if idx.Type() == VNumber {
+					if s := a.rawStr(); idx.Int() >= 0 && idx.Int() < int64(len(s)) {
+						env.A = Int(int64(s[idx.Int()]))
+					} else {
+						env.A = Nil
+					}
+					break
+				} else if idx.Type() == VString {
+					if f := StringMethods.Array().GetString(idx.rawStr()); f != Nil {
+						if f.Type() == VFunction {
+							f2 := *f.Function()
+							f2.MethodSrc = a
+							env.A = Function(&f2)
+						} else {
+							env.A = f
+						}
+						break
+					}
+					panicf("string method %q not found", idx.rawStr())
 				}
+				fallthrough
 			default:
-				a.MustMap("get index", 0)
+				panicf("require array, string or interface to load from")
 			}
 		case OpPush:
 			stackEnv.Push(env._get(opa))
@@ -288,8 +307,8 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			fallthrough
 		case OpCall:
 			cls := env._get(opa).MustFunc("call", 0)
-			if cls.MethodSrc != nil {
-				stackEnv.Prepend(cls.MethodSrc.Value())
+			if cls.MethodSrc != Nil {
+				stackEnv.Prepend(cls.MethodSrc)
 			}
 			if cls.Native != nil {
 				stackEnv.Global = env.Global
@@ -300,7 +319,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				env.A = stackEnv.A
 				stackEnv.Clear()
 			} else {
-				stackEnv.Push(watermark) // Used by dbg_dumpstack to determine the top of stack
+				stackEnv.Push(watermark) // Used by debug.dumpstk to determine the top of stack
 				if bop == OpCallMap {
 					stackEnv.Push(stackEnv.A)
 				}
@@ -343,8 +362,8 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 	}
 }
 
-func buildCallMap(f *Func, stackEnv Env) *Map {
-	m := NewSizedMap(stackEnv.Size() / 2)
+func buildCallMap(f *Func, stackEnv Env) *RHMap {
+	m := NewArrayMap(stackEnv.Size() / 2)
 	for i := 0; i < stackEnv.Size(); i += 2 {
 		a := stackEnv.Stack()[i]
 		if a == Nil {
