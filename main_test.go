@@ -434,3 +434,24 @@ func TestRHMap(t *testing.T) {
 		fmt.Println(k, v)
 	}
 }
+
+func TestACall(t *testing.T) {
+	foo := MustRun(LoadString(`function foo(one, two)
+    assert(one == 1 and two == 2)
+    end
+    return foo`, nil))
+	_, err := foo.Function().CallMap(ArrayMap(String("one"), Int(1), String("two"), Int(2)).Map())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	foo = MustRun(LoadString(`function foo()
+    m = debug.kwargs()
+    assert(m.one == 1 and m.two == 2)
+    end
+    return foo`, nil))
+	_, err = foo.Function().CallMap(ArrayMap(String("one"), Int(1), String("two"), Int(2)).Map())
+	if err != nil {
+		t.Fatal(err)
+	}
+}
