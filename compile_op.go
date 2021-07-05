@@ -363,6 +363,4 @@ func (table *symtable) collapse(atoms []parser.Node, optLast bool) {
 			atoms[lastCompound.i] = parser.NewAddress(opb)
 		}
 	}
-
-	return
 }

@@ -57,17 +57,6 @@ type packet struct {
 	Pos  posVByte
 }
 
-func (b *packet) write(buf packet) {
-	datalen := len(b.Code)
-	b.Code = append(b.Code, buf.Code...)
-	i := 0
-	for i < len(buf.Pos) {
-		var idx, line uint32
-		i, idx, line = buf.Pos.read(i)
-		b.Pos.append(idx+uint32(datalen), line)
-	}
-}
-
 func (b *packet) writeInst(op opCode, opa, opb uint16) {
 	b.Code = append(b.Code, inst(op, opa, opb))
 }

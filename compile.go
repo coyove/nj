@@ -42,8 +42,6 @@ type symtable struct {
 
 	vp uint16
 
-	insideJSONGenerator bool
-
 	collectConstMode bool
 	constMap         map[interface{}]uint16
 

@@ -115,14 +115,6 @@ func (c *Func) PrettyCode() string {
 	return pkPrettify(c, c.loadGlobal, false)
 }
 
-func (c *Func) exec(newEnv Env) Value {
-	if c.Native != nil {
-		c.Native(&newEnv)
-		return newEnv.A
-	}
-	return InternalExecCursorLoop(newEnv, c, 0)
-}
-
 func (p *Program) Run() (v1 Value, err error) {
 	return p.Call()
 }
