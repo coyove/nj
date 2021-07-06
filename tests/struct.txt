@@ -103,3 +103,11 @@ while true do
     assert(m[k] == v)
     println(k ,v)
 end
+
+cnt = 0
+i = iter(m)
+while i.next() do
+cnt = cnt + 1
+    assert(m[i.key] == i.value)
+end
+assert(cnt == 3)

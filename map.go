@@ -39,6 +39,10 @@ func (m *RHMap) Len() int {
 	return int(m.count)
 }
 
+func (m *RHMap) HashLen() int {
+	return int(m.count) - len(m.items)
+}
+
 // Clear clears Map, where already allocated memory will be reused.
 func (m *RHMap) Clear() {
 	m.hashItems = m.hashItems[:0]

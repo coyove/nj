@@ -27,13 +27,13 @@ assert("x嘻" == str.from("嘻x嘻").ltrim("嘻"))
 
 -- json generator
 do
-	local j = json({
-	      a = 1,
+	str.json_get = json.get
+	local j = json.stringify({
+	      a = 'A',
 	      ["b-2"] = true,
 	})
-    print(j)
+    assert(j.json_get('a'), 'A')
 end
-
 
 function str.reverse(s)
 	x = str.buffer()

@@ -23,7 +23,8 @@ var (
 	zeroValue         = Int(0)
 	watermark         = Interface(new(int))
 
-	Nil = Value{}
+	Nil   = Value{}
+	Undef = Interface(new(int))
 )
 
 type ValueType byte

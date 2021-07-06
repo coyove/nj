@@ -58,7 +58,7 @@ func init() {
 	}()
 
 	AddGlobalValue("VERSION", Int(Version))
-	AddGlobalValue("undefined", Interface(new(int)))
+	AddGlobalValue("undefined", Undef)
 	AddGlobalValue("_", func(env *Env) { env.A = env.Get(0) }, "nop()")
 	AddGlobalValue("globals", func(env *Env) {
 		keys := make([]string, 0, len(g))
@@ -94,24 +94,23 @@ func init() {
 			return Int(int64(reflectLen(v.Interface())))
 		}
 	})
-	AddGlobalValue("acall", func(env *Env, f, a Value) Value {
-		return Nil
-		// res, err := f.MustFunc("acall", 0).Call(a.MustMap("acall", 1).Underlay...)
-		// if err != nil {
-		// 	panic(err)
-		// }
-		// return res
-	})
-	AddGlobalValue("mcall", func(env *Env, f, a Value) Value {
-		return Nil
-		// fn := f.MustFunc("mcall", 0)
-		// m := buildCallMap(fn, Env{stack: &a.MustMap("mcall", 1).Underlay})
-		// res, err := fn.CallMap(m)
-		// if err != nil {
-		// 	panic(err)
-		// }
-		// return res
-	})
+	AddGlobalValue("apply", func(env *Env, f, a Value) (res Value) {
+		var err error
+		if a == Nil {
+			res, err = f.MustFunc("apply()", 0).Call()
+		} else {
+			args := a.MustArray("apply() arguments", 0)
+			if args.HashLen() == 0 {
+				res, err = f.MustFunc("apply()", 0).Call(args.Array()...)
+			} else {
+				res, err = f.MustFunc("apply()", 0).CallMap(args)
+			}
+		}
+		if err != nil {
+			panic(err)
+		}
+		return
+	}, "apply(function, array) => call function using arguments in array")
 	AddGlobalValue("debug", ArrayMap(
 		String("dumpstk"), Native("dumpstk", func(env *Env) {
 			start := env.Size()
@@ -442,40 +441,37 @@ func init() {
 		_, ok := env.Get(0).Interface().(error)
 		env.A = Bool(ok)
 	}, "iserror(value)", "\ttest whether value is an error")
-	AddGlobalValue("json", func(env *Env) {
-		env.A = String(env.Get(0).JSONString())
-	}, "json(v) => json_string")
-	AddGlobalValue("json_get", func(env *Env, js, path, et Value) Value {
-		cv := func(r gjson.Result) Value {
-			switch r.Type {
-			case gjson.String:
-				return String(r.Str)
-			case gjson.Number:
-				return Float(r.Float())
-			case gjson.True, gjson.False:
-				return Bool(r.Bool())
+	AddGlobalValue("json", ArrayMap(
+		String("stringify"), Native("stringify", func(env *Env) {
+			env.A = String(env.Get(0).JSONString())
+		}, "$f(value) => json_string"),
+		String("parse"), Native1("parse", func(env *Env, js Value) Value {
+			j := strings.TrimSpace(js.MustString("json.parse() json string", 0))
+			return gjsonConvert(gjson.Parse(j))
+		}, "$f(json_string) => array"),
+		String("get"), Native3("get", func(env *Env, js, path, et Value) Value {
+			j := strings.TrimSpace(js.MustString("json.get() json string", 0))
+			result := gjson.Get(j, path.MustString("json.get() path", 0))
+			if !result.Exists() {
+				return et
 			}
-			return String(r.Raw)
-		}
-		j := strings.TrimSpace(js.MustString("json_get #", 1))
-		result := gjson.Get(j, path.MustString("json_get #", 2))
+			return gjsonConvert(result)
+		}, "$f(json_string, selector, default?) => bool|number|string|array"),
+	))
 
-		if expectedType := et.StringDefault(""); expectedType != "" {
-			if !strings.EqualFold(result.Type.String(), expectedType) {
-				return Nil
-			}
+	// Array related functions
+	AddGlobalValue("append", func(env *Env, m, v Value) Value {
+		a := m.MustArray("append()", 0)
+		a.Set(Int(int64(a.Len())), v)
+		return m
+	}, "append(array, value) => append value to array")
+	AddGlobalValue("concat", func(env *Env, a, b Value) Value {
+		ma, mb := a.MustArray("concat()", 1), b.MustArray("concat()", 2)
+		for _, b := range mb.Array() {
+			ma.Set(Int(int64(ma.Len())), b)
 		}
-
-		if result.IsArray() {
-			a := result.Array()
-			tmp := make([]Value, len(a))
-			for i := range a {
-				tmp[i] = cv(a[i])
-			}
-			return Array(tmp...)
-		}
-		return cv(result)
-	}, "$f(json_string, selector, nil|expected_type) => true|false|number|string|array|object_string")
+		return ma.Value()
+	}, "append(array, value) => append value to array")
 	AddGlobalValue("next", func(env *Env, m, k Value) Value {
 		nk, nv := m.MustArray("next()", 0).Next(k)
 		return Array(nk, nv)
@@ -490,6 +486,31 @@ func init() {
 			return true
 		})
 		return Array(a...)
+	})
+	AddGlobalValue("iter", func(env *Env, m Value) Value {
+		a := ArrayMap(
+			String("key"), Undef,
+			String("value"), Undef,
+			String("_src"), m.MustArray("iter()", 0).Value(),
+			String("next"), Native1("next", func(env *Env, self Value) Value {
+				m := self.Array()
+				var k, v Value
+				if pk := m.GetString("key"); pk == Undef {
+					k, v = m.GetString("_src").Array().Next(Nil)
+				} else {
+					k, v = m.GetString("_src").Array().Next(pk)
+				}
+				if k == Nil {
+					return Bool(false)
+				}
+				m.Set(String("key"), k)
+				m.Set(String("value"), v)
+				return Bool(true)
+			}),
+		)
+		b := ArrayMap()
+		b.Array().Parent = a.Array()
+		return b
 	})
 }
 
@@ -528,4 +549,32 @@ func ipow(base, exp int64) int64 {
 		base *= base
 	}
 	return result
+}
+
+func gjsonConvert(r gjson.Result) Value {
+	switch r.Type {
+	case gjson.String:
+		return String(r.Str)
+	case gjson.Number:
+		return Float(r.Float())
+	case gjson.True, gjson.False:
+		return Bool(r.Bool())
+	}
+	if r.IsArray() {
+		a := r.Array()
+		x := make([]Value, len(a))
+		for i, a := range a {
+			x[i] = gjsonConvert(a)
+		}
+		return Array(x...)
+	}
+	if r.IsObject() {
+		m := r.Map()
+		x := NewArrayMap(len(m))
+		for k, v := range m {
+			x.Set(String(k), gjsonConvert(v))
+		}
+		return x.Value()
+	}
+	return Nil
 }
