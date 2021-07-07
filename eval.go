@@ -297,7 +297,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case OpLoadFunc:
 			env.A = Function(env.Global.Functions[opa])
 		case OpCallMap:
-			cls := env._get(opa).MustFunc("callmap", 0)
+			cls := env._get(opa).MustFunc("kwargs invoke operator", 0)
 			m := buildCallMap(cls, stackEnv)
 			stackEnv.Clear()
 			for _, pa := range cls.Params {
@@ -306,7 +306,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			stackEnv.A = m.Value()
 			fallthrough
 		case OpCall:
-			cls := env._get(opa).MustFunc("call", 0)
+			cls := env._get(opa).MustFunc("invoke operator:", 0)
 			if cls.MethodSrc != Nil {
 				stackEnv.Prepend(cls.MethodSrc)
 			}

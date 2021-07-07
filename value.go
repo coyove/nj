@@ -442,35 +442,3 @@ func (v Value) IntDefault(d int64) int64 {
 	}
 	return d
 }
-
-type Values struct {
-	Underlay []Value
-}
-
-func (t *Values) Len() int {
-	return len(t.Underlay)
-}
-
-func (t *Values) Slice(start int64, end int64) []Value {
-	start, end = sliceInRange(start, end, int64(len(t.Underlay)))
-	return t.Underlay[start:end]
-}
-
-func (t *Values) Put(idx int64, v Value) (appended bool) {
-	if idx < int64(len(t.Underlay)) && idx >= 0 {
-		t.Underlay[idx] = v
-		return false
-	}
-	if idx == int64(len(t.Underlay)) {
-		t.Underlay = append(t.Underlay, v)
-		return true
-	}
-	return false
-}
-
-func (t *Values) Get(idx int64) (v Value) {
-	if idx < int64(len(t.Underlay)) && idx >= 0 {
-		return t.Underlay[idx]
-	}
-	return Value{}
-}

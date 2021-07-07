@@ -9,6 +9,8 @@ func reflectLen(v interface{}) int {
 	switch rv.Kind() {
 	case reflect.Map, reflect.Slice, reflect.Array:
 		return rv.Len()
+	default:
+		panicf("reflect: can't measure length of %T", v)
 	}
 	return -1
 }
@@ -22,13 +24,13 @@ func reflectLoad(v interface{}, key Value) Value {
 			return Interface(v.Interface())
 		}
 	case reflect.Slice, reflect.Array:
-		idx := key.MustNumber("load array", 0).Int() - 1
+		idx := key.MustNumber("reflect: load from Go array/slice", 0).Int() - 1
 		if idx < int64(rv.Len()) && idx >= 0 {
 			return Interface(rv.Index(int(idx)).Interface())
 		}
 	}
 
-	k := camelKey(key.MustString("load struct", 0))
+	k := (key.MustString("reflect: load from Go struct", 0))
 	f := rv.MethodByName(k)
 	if !f.IsValid() {
 		if rv.Kind() == reflect.Ptr {
@@ -44,35 +46,19 @@ func reflectLoad(v interface{}, key Value) Value {
 	return Interface(f.Interface())
 }
 
-func reflectSlice(v interface{}, start, end int64) interface{} {
-	rv := reflect.ValueOf(v)
-	switch rv.Kind() {
-	case reflect.Slice, reflect.Array, reflect.String:
-		start, end := sliceInRange(int64(start), int64(end), int64(rv.Len()))
-		return rv.Slice(int(start), int(end)).Interface()
-	}
-	return nil
-}
-
 func reflectStore(v interface{}, key Value, v2 Value) {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
 		rk := reflect.ValueOf(key.TypedInterface(rv.Type().Key()))
-		v := rv.MapIndex(rk)
-		if !v.IsValid() {
-			panicf("store: readonly map")
-		}
 		if v2 == Nil {
 			rv.SetMapIndex(rk, reflect.Value{})
 		} else {
-			// panicf("store: readonly map")
 			rv.SetMapIndex(rk, reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
 		}
 		return
 	case reflect.Slice, reflect.Array:
-		panicf("store: readonly slice")
-		idx := key.MustNumber("store array", 0).Int()
+		idx := key.MustNumber("reflect: store into Go array/slice", 0).Int()
 		if idx >= int64(rv.Len()) || idx < 0 {
 			return
 		}
@@ -84,10 +70,10 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		rv = rv.Elem()
 	}
 
-	k := camelKey(key.MustString("store struct", 0))
+	k := (key.MustString("reflect: store into Go struct", 0))
 	f := rv.FieldByName(k)
 	if !f.IsValid() || !f.CanAddr() {
-		panicf("%q not assignable in %#v", k, v)
+		panicf("reflect: %q not assignable in %#v", k, v)
 	}
 	if f.Type() == reflect.TypeOf(Value{}) {
 		f.Set(reflect.ValueOf(v2))
@@ -172,24 +158,3 @@ var reflectCheckCyclicStruct = func() func(v interface{}) bool {
 		return doCheck(reflect.ValueOf(v), nil)
 	}
 }()
-
-func camelKey(k string) string {
-	if k == "" {
-		return k
-	}
-	if k[0] >= 'a' && k[0] <= 'z' {
-		return string(k[0]-'a'+'A') + k[1:]
-	}
-	return k
-}
-
-func sliceInRange(start, end int64, length int64) (int64, int64) {
-	if end == -1 {
-		end = length
-	}
-	if start >= 0 && start <= length && end >= 0 && end <= length && start <= end {
-		return start, end
-	}
-	panicf("slice [%d:%d] overflows %d", start, end, length)
-	return 0, 0
-}

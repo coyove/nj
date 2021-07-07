@@ -99,6 +99,12 @@ var StringMethods = ArrayMap(
 	String("endswith"), Native2("endswith", func(env *Env, t, s Value) Value {
 		return Bool(strings.HasSuffix(t.MustString("endswith()", 0), s.MustString("endswith() suffix", 0)))
 	}, "endswith(text, suffix) => bool"),
+	String("upper"), Native1("upper", func(env *Env, t Value) Value {
+		return String(strings.ToUpper(t.MustString("upper()", 0)))
+	}, "$f(text) => TEXT"),
+	String("lower"), Native1("lower", func(env *Env, t Value) Value {
+		return String(strings.ToLower(t.MustString("lower()", 0)))
+	}, "$f(TEXT) => text"),
 	String("chars"), Native2("chars", func(env *Env, s, n Value) Value {
 		var r []Value
 		max := n.IntDefault(0)

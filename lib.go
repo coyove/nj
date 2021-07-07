@@ -189,7 +189,7 @@ func init() {
 		}, "$f(skip) => { func_name1, line1, cursor1, n2, l2, c2, ... }"),
 	))
 	AddGlobalValue("narray", func(env *Env, n Value) Value {
-		return Array(make([]Value, n.MustNumber("narray", 0).Int())...)
+		return Array(make([]Value, n.MustNumber("narray()", 0).Int())...)
 	}, "narray(n) => { nil, ..., nil }", "\treturn an array size of n, filled with nil")
 	AddGlobalValue("type", func(env *Env) {
 		env.A = String(env.Get(0).Type().String())
