@@ -48,22 +48,22 @@ func runFile(t *testing.T, path string) {
 				if v.IsFalse() {
 					panic("findGlobal failed")
 				}
-				env.Global.Set("G_FLAG", String("ok"))
+				env.Global.Set("G_FLAG", Str("ok"))
 				env.Global.Println("find global")
 			},
 			"mapFunc": NativeWithParamMap("mapFunc", func(env *Env) {
-				m := env.A.Array()
-				if m.Get(String("a")) != Nil {
-					env.A = String("a")
+				m := env.A.Map()
+				if m.Get(Str("a")) != Nil {
+					env.A = Str("a")
 				}
-				if m.Get(String("b")) != Nil {
-					env.A = m.Get(String("b"))
+				if m.Get(Str("b")) != Nil {
+					env.A = m.Get(Str("b"))
 				}
-				if m.Get(String("c")) != Nil {
-					env.A = String(m.Get(String("c")).String())
+				if m.Get(Str("c")) != Nil {
+					env.A = Str(m.Get(Str("c")).String())
 				}
-				if m.Get(String("d")) != Nil {
-					env.A = String(env.A.String() + m.Get(String("d")).String())
+				if m.Get(Str("d")) != Nil {
+					env.A = Str(env.A.String() + m.Get(Str("d")).String())
 				}
 			}, "DocString...", "a", "b", "c", "d"),
 			"G": "test",
@@ -109,11 +109,11 @@ end
 return foo
 `, &CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
 		v, _ := cls.Call()
-		if v, _ := v.Function().Call(Int(10)); v.Int() != 11 {
+		if v, _ := v.Func().CallSimple(Int(10)); v.Int() != 11 {
 			t.Fatal(v)
 		}
 
-		if v, _ := v.Function().Call(Int(100)); v.Int() != 111 {
+		if v, _ := v.Func().CallSimple(Int(100)); v.Int() != 111 {
 			t.Fatal(v)
 		}
 	}
@@ -121,6 +121,7 @@ return foo
 		cls, _ := LoadString(`
 a = 1
 function foo(x) 
+if not x then return a end
 for i=0,len(x) do
 a=a+x[i]
 end
@@ -129,15 +130,15 @@ end
 return foo
 `, nil)
 		v, _ := cls.Call()
-		if v, _ := v.Function().Call(Array(Int(1), Int(2), Int(3), Int(4))); v.Int() != 11 {
+		if v, _ := v.Func().CallSimple(Array(Int(1), Int(2), Int(3), Int(4))); v.Int() != 11 {
 			t.Fatal(v)
 		}
 
-		if v, _ := v.Function().Call(Array(Int(10), Int(20))); v.Int() != 41 {
+		if v, _ := v.Func().CallSimple(Array(Int(10), Int(20))); v.Int() != 41 {
 			t.Fatal(v)
 		}
 
-		if v, _ := v.Function().Call(); v.Int() != 41 {
+		if v, _ := v.Func().CallSimple(); v.Int() != 41 {
 			t.Fatal(v)
 		}
 	}
@@ -257,7 +258,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		if v2.Array().Get(Int(int64(i))).Int() != int64(i) {
+		if v2.Map().Get(Int(int64(i))).Int() != int64(i) {
 			t.Fatal(v2)
 		}
 	}
@@ -324,7 +325,7 @@ local a = 100
 return {a + add(), a + add(), a + add()}
 `, &CompileOptions{GlobalKeyValues: map[string]interface{}{"add": add}})
 	v, err := p2.Run()
-	if v1 := v.Array().Array(); v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
+	if v1 := v.Map().Array(); v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())
 	}
 
@@ -366,8 +367,8 @@ func TestSmallString(t *testing.T) {
 	}
 	for i := 0; i < 1e6; i++ {
 		v := randString()
-		if String(v).rawStr() != v {
-			t.Fatal(String(v).v, v)
+		if Str(v).Str() != v {
+			t.Fatal(Str(v).v, v)
 		}
 	}
 }
@@ -441,7 +442,7 @@ func TestACall(t *testing.T) {
 	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	_, err := foo.Function().CallMap(ArrayMap(String("one"), Int(1), String("two"), Int(2)).Array())
+	_, err := foo.Func().Call(Map(Str("one"), Int(1), Str("two"), Int(2)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,7 +454,7 @@ func TestACall(t *testing.T) {
 	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	_, err = foo.Function().CallMap(ArrayMap(String("one"), Int(1), String("two"), Int(2)).Array())
+	_, err = foo.Func().Call(Map(Str("one"), Int(1), Str("two"), Int(2)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -465,7 +466,7 @@ func TestACall(t *testing.T) {
 	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	_, err = foo.Function().Call(Nil, Int(1), Int(2))
+	_, err = foo.Func().CallSimple(Nil, Int(1), Int(2))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -40,7 +40,9 @@ assert(a==nil and c == 10 and b == "a")
 
 function foo1(a, b, c, x)
     local tmp = {a, b, c}
-    for i = 0, len(x) do tmp[len(tmp)] = x[i]  end
+	if x then
+		for i = 0, len(x) do tmp[len(tmp)] = x[i]  end
+	end
     return tmp
 end
 
@@ -83,6 +85,6 @@ end
 
 function bad(n) panic("bad" + n) end
 do
-	local err = pcall(bad, "boy")
+	local err = pcall(bad, {"boy"})
 	assert(err == "badboy")
 end

@@ -2,10 +2,12 @@ package script
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/coyove/script/parser"
 )
@@ -39,11 +41,11 @@ type Program struct {
 
 // Native creates a golang-Native function
 func Native(name string, f func(env *Env), doc ...string) Value {
-	return Function(&Func{
+	return (&Func{
 		Name:      name,
 		Native:    f,
 		DocString: fixDocString(strings.Join(doc, "\n"), name, ""),
-	})
+	}).Value()
 }
 
 func Native1(name string, f func(*Env, Value) Value, doc ...string) Value {
@@ -63,28 +65,30 @@ func Native4(name string, f func(*Env, Value, Value, Value, Value) Value, doc ..
 }
 
 func NativeWithParamMap(name string, f func(*Env), doc string, params ...string) Value {
-	return Function(&Func{
+	return (&Func{
 		Name:      name,
 		Params:    params,
 		DocString: fixDocString(doc, name, strings.Join(params, ",")),
 		Native: func(env *Env) {
-			if env.A.Type() != VArray {
-				args := NewArrayMap(env.Size())
+			if env.A.Type() != MAP {
+				args := NewMap(env.Size())
 				for i := range env.Stack() {
 					if i < len(params) {
-						args.Set(String(params[i]), env.Stack()[i])
+						args.Set(Str(params[i]), env.Stack()[i])
 					}
 				}
 				env.A = args.Value()
 			}
 			f(env)
 		},
-	})
+	}).Value()
 }
 
 func (c *Func) NumParams() int { return len(c.Params) }
 
 func (c *Func) IsNative() bool { return c.Native != nil }
+
+func (c *Func) Value() Value { return Value{v: uint64(FUNC), p: unsafe.Pointer(c)} }
 
 func (c *Func) String() string {
 	p := bytes.Buffer{}
@@ -129,63 +133,41 @@ func (p *Program) Call() (v1 Value, err error) {
 	return
 }
 
-func (c *Func) Call(a ...Value) (v1 Value, err error) {
-	defer parser.CatchError(&err)
-
-	if c.Native != nil {
-		newEnv := Env{
-			stack: &a,
-		}
-		newEnv.growZero(int(c.StackSize))
-		c.Native(&newEnv)
-		v1 = newEnv.A
-	} else {
-		s := []Value{}
-		newEnv := Env{
-			Global: c.loadGlobal,
-			stack:  &s,
-		}
-
-		for _, a := range a {
-			newEnv.Push(a)
-		}
-		newEnv.Push(watermark)
-		newEnv.growZero(int(c.StackSize))
-
-		v1 = InternalExecCursorLoop(newEnv, c, 0)
-	}
-	return
+func (c *Func) CallSimple(args ...Value) (v1 Value, err error) {
+	return c.Call(Array(args...))
 }
 
-func (c *Func) CallMap(a *RHMap) (v1 Value, err error) {
+func (c *Func) Call(args Value) (v1 Value, err error) {
+	if t := args.Type(); t != MAP && t != NIL {
+		return v1, fmt.Errorf("call() requires a map of arguments")
+	}
 	defer parser.CatchError(&err)
 
-	s := []Value{}
-	if c.Native != nil {
-		newEnv := Env{
-			stack: &s,
-			A:     Interface(a),
-		}
-		for _, pa := range c.Params {
-			newEnv.Push(a.Get(String(pa)))
-		}
-		newEnv.growZero(int(c.StackSize))
-		c.Native(&newEnv)
-		v1 = newEnv.A
-	} else {
-		newEnv := Env{
-			Global: c.loadGlobal,
-			stack:  &s,
-			A:      Interface(a),
-		}
+	var s []Value
+	newEnv := Env{
+		Global: c.loadGlobal,
+		stack:  &s,
+	}
 
+	if args == Nil {
+		newEnv.Push(watermark)
+	} else if a := args.Map(); a.MapLen() == 0 {
+		// Call by an array of arguments
+		newEnv.stack = &a.items
+		newEnv.Push(watermark)
+	} else {
 		for _, pa := range c.Params {
-			newEnv.Push(a.Get(String(pa)))
+			newEnv.Push(a.Get(Str(pa)))
 		}
 		newEnv.Push(watermark)
 		newEnv.Push(a.Value())
-		newEnv.growZero(int(c.StackSize))
+	}
+	newEnv.growZero(int(c.StackSize))
 
+	if c.Native != nil {
+		c.Native(&newEnv)
+		v1 = newEnv.A
+	} else {
 		v1 = InternalExecCursorLoop(newEnv, c, 0)
 	}
 	return

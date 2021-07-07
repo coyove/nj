@@ -19,18 +19,18 @@ func reflectLoad(v interface{}, key Value) Value {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		v := rv.MapIndex(reflect.ValueOf(key.TypedInterface(rv.Type().Key())))
+		v := rv.MapIndex(reflect.ValueOf(key.ReflectedAny(rv.Type().Key())))
 		if v.IsValid() {
-			return Interface(v.Interface())
+			return Any(v.Interface())
 		}
 	case reflect.Slice, reflect.Array:
-		idx := key.MustNumber("reflect: load from Go array/slice", 0).Int() - 1
+		idx := key.MustNum("reflect: load from Go array/slice", 0).Int() - 1
 		if idx < int64(rv.Len()) && idx >= 0 {
-			return Interface(rv.Index(int(idx)).Interface())
+			return Any(rv.Index(int(idx)).Interface())
 		}
 	}
 
-	k := (key.MustString("reflect: load from Go struct", 0))
+	k := (key.MustStr("reflect: load from Go struct", 0))
 	f := rv.MethodByName(k)
 	if !f.IsValid() {
 		if rv.Kind() == reflect.Ptr {
@@ -38,31 +38,31 @@ func reflectLoad(v interface{}, key Value) Value {
 		}
 		f := rv.FieldByName(k)
 		if f.IsValid() {
-			return Interface(f.Interface())
+			return Any(f.Interface())
 		}
 		// panicf("%q not found in %#v", k, v)
 		return Value{}
 	}
-	return Interface(f.Interface())
+	return Any(f.Interface())
 }
 
 func reflectStore(v interface{}, key Value, v2 Value) {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		rk := reflect.ValueOf(key.TypedInterface(rv.Type().Key()))
+		rk := reflect.ValueOf(key.ReflectedAny(rv.Type().Key()))
 		if v2 == Nil {
 			rv.SetMapIndex(rk, reflect.Value{})
 		} else {
-			rv.SetMapIndex(rk, reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
+			rv.SetMapIndex(rk, reflect.ValueOf(v2.ReflectedAny(rv.Type().Elem())))
 		}
 		return
 	case reflect.Slice, reflect.Array:
-		idx := key.MustNumber("reflect: store into Go array/slice", 0).Int()
+		idx := key.MustNum("reflect: store into Go array/slice", 0).Int()
 		if idx >= int64(rv.Len()) || idx < 0 {
 			return
 		}
-		rv.Index(int(idx)).Set(reflect.ValueOf(v2.TypedInterface(rv.Type().Elem())))
+		rv.Index(int(idx)).Set(reflect.ValueOf(v2.ReflectedAny(rv.Type().Elem())))
 		return
 	}
 
@@ -70,7 +70,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		rv = rv.Elem()
 	}
 
-	k := (key.MustString("reflect: store into Go struct", 0))
+	k := (key.MustStr("reflect: store into Go struct", 0))
 	f := rv.FieldByName(k)
 	if !f.IsValid() || !f.CanAddr() {
 		panicf("reflect: %q not assignable in %#v", k, v)
@@ -78,7 +78,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 	if f.Type() == reflect.TypeOf(Value{}) {
 		f.Set(reflect.ValueOf(v2))
 	} else {
-		f.Set(reflect.ValueOf(v2.TypedInterface(f.Type())))
+		f.Set(reflect.ValueOf(v2.ReflectedAny(f.Type())))
 	}
 }
 
@@ -108,7 +108,7 @@ var reflectCheckCyclicStruct = func() func(v interface{}) bool {
 
 		if value.Type() == reflect.TypeOf(Value{}) {
 			v := value.Interface().(Value)
-			return doCheck(reflect.ValueOf(v.Interface()), parents)
+			return doCheck(reflect.ValueOf(v.Any()), parents)
 		}
 
 		kind := value.Kind()

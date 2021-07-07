@@ -44,6 +44,6 @@ const (
 	OpRet
 )
 
-func panicf(msg string, args ...interface{}) {
+func panicf(msg string, args ...interface{}) Value {
 	panic(fmt.Errorf(msg, args...))
 }

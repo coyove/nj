@@ -31,7 +31,7 @@ type hashItem struct {
 	Distance int // How far item is from its best position.
 }
 
-func NewArrayMap(size int) *RHMap {
+func NewMap(size int) *RHMap {
 	return &RHMap{hashItems: make([]hashItem, int64(size)*int64(growRate*16)/16+1)}
 }
 
@@ -39,7 +39,7 @@ func (m *RHMap) Len() int {
 	return int(m.count)
 }
 
-func (m *RHMap) HashLen() int {
+func (m *RHMap) MapLen() int {
 	return int(m.count) - len(m.items)
 }
 
@@ -51,7 +51,7 @@ func (m *RHMap) Clear() {
 }
 
 func (m *RHMap) GetString(k string) (v Value) {
-	return m.Get(String(k))
+	return m.Get(Str(k))
 }
 
 // Get retrieves the val for a given key.
@@ -136,7 +136,7 @@ func (m *RHMap) Set(k, v Value) (prev Value) {
 		panicf("table set with nil key")
 	}
 
-	if m.Parent != nil && v.Type() != VFunction {
+	if m.Parent != nil && v.Type() != FUNC {
 		if x := m.ParentContains(k); x != nil && x != m {
 			return x.Set(k, v)
 		}
@@ -302,7 +302,7 @@ func (m *RHMap) Value() Value {
 	if m == nil {
 		return Nil
 	}
-	return Value{v: uint64(VArray), p: unsafe.Pointer(m)}
+	return Value{v: uint64(MAP), p: unsafe.Pointer(m)}
 }
 
 func (m *RHMap) grow(newSize int) {

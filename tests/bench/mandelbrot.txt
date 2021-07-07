@@ -5,9 +5,9 @@ bytesPerRow = 0
 initial_r = 0 
 initial_i = 0 
 
-func renderRow (y0) {
-     row = "" 
-     for xByte = 0, bytesPerRow {
+function renderRow(y0)
+    row = "" 
+    for xByte = 0, bytesPerRow do
         res = 0 
         Ci = initial_i[y0] 
 

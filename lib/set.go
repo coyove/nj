@@ -15,10 +15,10 @@ type Set struct {
 func init() {
 	script.AddGlobalValue("set", func(env *script.Env) {
 		s := &Set{m: map[uint64]struct{}{}, p: env.Global}
-		for _, e := range env.Get(0).MustArray("set", 0).Array() {
+		for _, e := range env.Get(0).MustMap("set", 0).Array() {
 			s.Add(e)
 		}
-		env.A = script.Interface(s)
+		env.A = script.Any(s)
 	},
 		"set() => unique_set",
 		"set({ e1, e2, ..., en }) => unique_set",

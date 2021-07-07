@@ -19,38 +19,40 @@ var (
 	trueMarker        = unsafe.Pointer(new(int64))
 	falseMarker       = unsafe.Pointer(new(int64))
 	smallStringMarker = unsafe.Pointer(new([9]int64))
-	falseValue        = Bool(false)
-	zeroValue         = Int(0)
-	watermark         = Interface(new(int))
+	watermark         = Any(new(int))
 
 	Nil   = Value{}
-	Undef = Interface(new(int))
+	Undef = Any(new(int))
+	Zero  = Int(0)
+	False = Bool(false)
+	True  = Bool(true)
 )
 
 type ValueType byte
 
 const (
-	VNil       ValueType = 0
-	VBool      ValueType = 1
-	VNumber    ValueType = 3
-	VString    ValueType = 7
-	VArray     ValueType = 15
-	VFunction  ValueType = 17
-	VInterface ValueType = 19
+	NIL  ValueType = 0
+	BOOL ValueType = 1
+	NUM  ValueType = 3
+	STR  ValueType = 7
+	MAP  ValueType = 15
+	FUNC ValueType = 17
+	ANY  ValueType = 19
 
 	ValueSize = int64(unsafe.Sizeof(Value{}))
+
+	errNeedNumbers          = "operator requires numbers"
+	errNeedNumbersOrStrings = "operator requires numbers or strings"
 )
 
 func (t ValueType) String() string {
-	if t > VInterface {
+	if t > ANY {
 		return "?"
 	}
-	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "array", "?", "function", "?", "native"}[t]
+	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "map", "?", "function", "?", "any"}[t]
 }
 
-// Value is the basic data type used by the intepreter
-// For float numbers there is one NaN which is not representable: 0xffffffff_ffffffff
-// An empty Value naturally represent nil
+// Value is the basic data type used by the intepreter, an empty Value naturally represent nil
 type Value struct {
 	v uint64
 	p unsafe.Pointer
@@ -63,32 +65,34 @@ func (v Value) IsValue(parser.Node) {}
 func (v Value) Type() ValueType {
 	switch v.p {
 	case int64Marker:
-		return VNumber
+		return NUM
 	case trueMarker, falseMarker:
-		return VBool
+		return BOOL
 	case nil:
 		if v.v == 0 {
-			return VNil
+			return NIL
 		}
-		return VNumber
+		return NUM
 	}
 	if uintptr(v.p) >= uintptr(smallStringMarker) && uintptr(v.p) <= uintptr(smallStringMarker)+8*8 {
-		return VString
+		return STR
 	}
 	return ValueType(v.v)
 }
 
-// IsFalse tests whether value contains a falsy value: nil, false or 0
-func (v Value) IsFalse() bool { return v == Nil || v == zeroValue || v == falseValue }
+// IsFalse tests whether value contains a falsy value: nil, false or 0 (or watermark internally)
+func (v Value) IsFalse() bool {
+	return v == Nil || v == Zero || v == False || v == watermark
+}
 
 func (v Value) IsInt() bool { return v.p == int64Marker }
 
 // Bool returns a boolean value
 func Bool(v bool) Value {
 	if v {
-		return Value{uint64(VBool), trueMarker}
+		return Value{uint64(BOOL), trueMarker}
 	}
-	return Value{uint64(VBool), falseMarker}
+	return Value{uint64(BOOL), falseMarker}
 }
 
 // Float returns a number value
@@ -109,23 +113,15 @@ func Array(m ...Value) Value {
 	return (&RHMap{items: m, count: uint32(len(m))}).Value()
 }
 
-func ArrayMap(kvs ...Value) Value {
+func Map(kvs ...Value) Value {
 	t := &RHMap{}
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		t.Set(kvs[i], kvs[i+1])
 	}
-	return Value{v: uint64(VArray), p: unsafe.Pointer(t)}
+	return Value{v: uint64(MAP), p: unsafe.Pointer(t)}
 }
 
-// Function returns a closure value
-func Function(c *Func) Value {
-	if c.Name == "" {
-		c.Name = "function"
-	}
-	return Value{v: uint64(VFunction), p: unsafe.Pointer(c)}
-}
-
-func String(s string) Value {
+func Str(s string) Value {
 	if len(s) <= 8 { // payload 7b
 		x := [8]byte{byte(len(s))}
 		copy(x[:], s)
@@ -134,14 +130,14 @@ func String(s string) Value {
 			p: unsafe.Pointer(uintptr(smallStringMarker) + uintptr(len(s))*8),
 		}
 	}
-	return Value{v: uint64(VString), p: unsafe.Pointer(&s)}
+	return Value{v: uint64(STR), p: unsafe.Pointer(&s)}
 }
 
 func Bytes(b []byte) Value {
-	return String(*(*string)(unsafe.Pointer(&b)))
+	return Str(*(*string)(unsafe.Pointer(&b)))
 }
 
-func Interface(i interface{}) Value {
+func Any(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
 		return Value{}
@@ -154,7 +150,7 @@ func Interface(i interface{}) Value {
 	case int64:
 		return Int(v)
 	case string:
-		return String(v)
+		return Str(v)
 	case []byte:
 		return Bytes(v)
 	case *RHMap:
@@ -162,13 +158,13 @@ func Interface(i interface{}) Value {
 	case []Value:
 		return Array(v...)
 	case *Func:
-		return Function(v)
+		return v.Value()
 	case Value:
 		return v
 	case parser.CatchedError:
-		return Interface(v.Original)
+		return Any(v.Original)
 	case reflect.Value:
-		return Interface(v.Interface())
+		return Any(v.Interface())
 	}
 
 	rv := reflect.ValueOf(i)
@@ -183,7 +179,7 @@ func Interface(i interface{}) Value {
 			rtNumIn := rt.NumIn()
 			nf = func(env *Env) {
 				getter := func(i int, t reflect.Type) reflect.Value {
-					return reflect.ValueOf(env.Get(i).TypedInterface(t))
+					return reflect.ValueOf(env.Get(i).ReflectedAny(t))
 				}
 				ins := make([]reflect.Value, 0, rtNumIn)
 				if !rt.IsVariadic() {
@@ -201,31 +197,30 @@ func Interface(i interface{}) Value {
 				switch outs := rv.Call(ins); rt.NumOut() {
 				case 0:
 				case 1:
-					env.A = Interface(outs[0].Interface())
+					env.A = Any(outs[0].Interface())
 				default:
 					a := make([]Value, len(outs))
 					for i := range outs {
-						a[i] = Interface(outs[i].Interface())
+						a[i] = Any(outs[i].Interface())
 					}
 					env.A = Array(a...)
 				}
 			}
 		}
-		return Function(&Func{Name: "<native>", Native: nf})
+		return (&Func{Name: "<native>", Native: nf}).Value()
 	}
 	return _interface(i)
 }
 
 func _interface(i interface{}) Value {
-	return Value{v: uint64(VInterface), p: unsafe.Pointer(&i)}
+	return Value{v: uint64(ANY), p: unsafe.Pointer(&i)}
 }
 
 func (v Value) IsSmallString() bool {
 	return uintptr(v.p) >= uintptr(smallStringMarker) && uintptr(v.p) <= uintptr(smallStringMarker)+8*8
 }
 
-// rawStr cast value to string
-func (v Value) rawStr() string {
+func (v Value) Str() string {
 	if v.IsSmallString() {
 		buf := make([]byte, 8)
 		binary.BigEndian.PutUint64(buf, v.v)
@@ -249,69 +244,69 @@ func (v Value) Float() float64 { f, _, _ := v.Num(); return f }
 
 func (v Value) Bool() bool { return v.p == trueMarker }
 
-func (v Value) Array() *RHMap { return (*RHMap)(v.p) }
+func (v Value) Map() *RHMap { return (*RHMap)(v.p) }
 
-// Function cast value to function
-func (v Value) Function() *Func { return (*Func)(v.p) }
+// Func cast value to function
+func (v Value) Func() *Func { return (*Func)(v.p) }
 
-// Interface returns the interface{}
-func (v Value) Interface() interface{} {
+// Any returns the interface{}
+func (v Value) Any() interface{} {
 	switch v.Type() {
-	case VBool:
+	case BOOL:
 		return v.Bool()
-	case VNumber:
+	case NUM:
 		vf, vi, vIsInt := v.Num()
 		if vIsInt {
 			return vi
 		}
 		return vf
-	case VString:
-		return v.rawStr()
-	case VArray:
-		return v.Array()
-	case VFunction:
-		return v.Function()
-	case VInterface:
+	case STR:
+		return v.Str()
+	case MAP:
+		return v.Map()
+	case FUNC:
+		return v.Func()
+	case ANY:
 		return *(*interface{})(v.p)
 	}
 	return nil
 }
 
-func (v Value) TypedInterface(t reflect.Type) interface{} {
+func (v Value) ReflectedAny(t reflect.Type) interface{} {
 	if t == reflect.TypeOf(Value{}) {
 		return v
 	}
 
 	switch v.Type() {
-	case VNumber:
+	case NUM:
 		if t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
-			rv := reflect.ValueOf(v.Interface())
+			rv := reflect.ValueOf(v.Any())
 			rv = rv.Convert(t)
 			return rv.Interface()
 		}
-	case VArray:
-		a := v.Array()
+	case MAP:
+		a := v.Map()
 		if t.Kind() == reflect.Slice {
 			e := t.Elem()
 			s := reflect.MakeSlice(t, len(a.Array()), len(a.Array()))
 			for i, a := range a.Array() {
-				s.Index(i).Set(reflect.ValueOf(a.TypedInterface(e)))
+				s.Index(i).Set(reflect.ValueOf(a.ReflectedAny(e)))
 			}
 			return s.Interface()
 		}
 	}
-	return v.Interface()
+	return v.Any()
 }
 
-func (v Value) MustBool(msg string, a int) bool { return v.mustBe(VBool, msg, a).Bool() }
+func (v Value) MustBool(msg string, a int) bool { return v.mustBe(BOOL, msg, a).Bool() }
 
-func (v Value) MustString(msg string, a int) string { return v.mustBe(VString, msg, a).String() }
+func (v Value) MustStr(msg string, a int) string { return v.mustBe(STR, msg, a).String() }
 
-func (v Value) MustNumber(msg string, a int) Value { return v.mustBe(VNumber, msg, a) }
+func (v Value) MustNum(msg string, a int) Value { return v.mustBe(NUM, msg, a) }
 
-func (v Value) MustArray(msg string, a int) *RHMap { return v.mustBe(VArray, msg, a).Array() }
+func (v Value) MustMap(msg string, a int) *RHMap { return v.mustBe(MAP, msg, a).Map() }
 
-func (v Value) MustFunc(msg string, a int) *Func { return v.mustBe(VFunction, msg, a).Function() }
+func (v Value) MustFunc(msg string, a int) *Func { return v.mustBe(FUNC, msg, a).Func() }
 
 func (v Value) mustBe(t ValueType, msg string, msgArg int) Value {
 	if v.Type() != t {
@@ -328,42 +323,22 @@ func (v Value) Equal(r Value) bool {
 		return true
 	}
 	switch v.Type() + r.Type() {
-	case VString * 2:
-		return r.rawStr() == v.rawStr()
-	case VInterface * 2:
-		return v.Interface() == r.Interface()
-	}
-	return false
-}
-
-func (v Value) Less(r Value) bool {
-	switch v.Type() + r.Type() {
-	case VNumber * 2:
-		vf, vi, vIsInt := v.Num()
-		rf, ri, rIsInt := r.Num()
-		if vIsInt && rIsInt {
-			return vi < ri
-		}
-		return vf < rf
-	case VString * 2:
-		return v.rawStr() < r.rawStr()
-	case VString + VNumber:
-		if v.Type() == VNumber {
-			return true
-		}
-		return false
+	case STR * 2:
+		return r.Str() == v.Str()
+	case ANY * 2:
+		return v.Any() == r.Any()
 	}
 	return false
 }
 
 func (v Value) HashCode() uint64 {
 	code := uint64(5381)
-	if v.Type() != VString || v.IsSmallString() {
+	if v.Type() != STR || v.IsSmallString() {
 		for _, r := range *(*[ValueSize]byte)(unsafe.Pointer(&v)) {
 			code = code*33 + uint64(r)
 		}
 	} else {
-		for _, r := range v.rawStr() {
+		for _, r := range v.Str() {
 			code = code*33 + uint64(r)
 		}
 	}
@@ -381,21 +356,21 @@ func (v Value) toString(lv int, j bool) string {
 		return "<omit deep nesting>"
 	}
 	switch v.Type() {
-	case VBool:
+	case BOOL:
 		return strconv.FormatBool(v.Bool())
-	case VNumber:
+	case NUM:
 		vf, vi, vIsInt := v.Num()
 		if vIsInt {
 			return strconv.FormatInt(vi, 10)
 		}
 		return strconv.FormatFloat(vf, 'f', -1, 64)
-	case VString:
+	case STR:
 		if j {
-			return strconv.Quote(v.rawStr())
+			return strconv.Quote(v.Str())
 		}
-		return v.rawStr()
-	case VArray:
-		m := v.Array()
+		return v.Str()
+	case MAP:
+		m := v.Map()
 		if len(m.hashItems) == 0 {
 			p := bytes.NewBufferString("[")
 			for _, a := range m.Array() {
@@ -412,10 +387,10 @@ func (v Value) toString(lv int, j bool) string {
 			p.WriteString(",")
 		}
 		return strings.TrimRight(p.String(), ", ") + "}"
-	case VFunction:
-		return v.Function().String()
-	case VInterface:
-		i := v.Interface()
+	case FUNC:
+		return v.Func().String()
+	case ANY:
+		i := v.Any()
 		if !reflectCheckCyclicStruct(i) {
 			i = "<interface: omit deep nesting>"
 		}
@@ -429,16 +404,19 @@ func (v Value) toString(lv int, j bool) string {
 }
 
 func (v Value) StringDefault(d string) string {
-	if v.Type() == VString {
-		return v.rawStr()
+	if v.Type() == STR {
+		if s := v.Str(); s != "" {
+			return s
+		}
 	}
 	return d
 }
 
 func (v Value) IntDefault(d int64) int64 {
-	if v.Type() == VNumber {
-		_, i, _ := v.Num()
-		return i
+	if v.Type() == NUM {
+		if _, i, _ := v.Num(); i != 0 {
+			return i
+		}
 	}
 	return d
 }

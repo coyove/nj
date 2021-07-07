@@ -116,7 +116,7 @@ func (env *Env) CopyStack() []Value { return append([]Value{}, env.Stack()...) }
 func (env *Env) StackInterface() []interface{} {
 	r := make([]interface{}, env.Size())
 	for i := range r {
-		r[i] = env.Stack()[i].Interface()
+		r[i] = env.Stack()[i].Any()
 	}
 	return r
 }

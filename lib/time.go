@@ -111,7 +111,7 @@ func init() {
 			f = buf.String()
 		}
 
-		tt, ok := env.Get(1).Interface().(time.Time)
+		tt, ok := env.Get(1).Any().(time.Time)
 		if !ok {
 			ts := env.Get(1).IntDefault(0)
 			if ts > 0 {
@@ -130,7 +130,7 @@ func init() {
 		}
 
 		r := tt.Format(f)
-		env.A = script.String(r)
+		env.A = script.Str(r)
 	},
 		"strtime(format_string) => string",
 		"strtime(format_string, time.Time) => string",

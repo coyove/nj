@@ -19,25 +19,25 @@ var HostWhitelist = map[string][]string{}
 
 func init() {
 	script.AddGlobalValue("http", script.NativeWithParamMap("http", func(env *script.Env) {
-		args := env.A.Array()
+		args := env.A.Map()
 
 		ctx, cancel, _ := env.Deadline()
 		defer func() {
 			cancel()
 			if r := recover(); r != nil {
-				env.A = script.Array(script.Interface(r))
+				env.A = script.Array(script.Any(r))
 			}
 		}()
 
-		method := strings.ToUpper(args.Get(script.String("method")).StringDefault("GET"))
+		method := strings.ToUpper(args.Get(script.Str("method")).StringDefault("GET"))
 
-		u, err := url.Parse(args.Get(script.String("url")).StringDefault("bad://%url%"))
+		u, err := url.Parse(args.Get(script.Str("url")).StringDefault("bad://%url%"))
 		panicErr(err)
 
 		addKV := func(k string, add func(k, v string)) {
-			x := args.Get(script.String(k))
-			if x.Type() == script.VArray {
-				p := x.Array()
+			x := args.Get(script.Str(k))
+			if x.Type() == script.MAP {
+				p := x.Map()
 				for k, v := p.Next(script.Nil); k != script.Nil; k, v = p.Next(k) {
 					add(k.String(), v.String())
 				}
@@ -58,7 +58,7 @@ func init() {
 		addKV("query", additionalQueries.Add) // append queries to url
 		u.RawQuery = additionalQueries.Encode()
 
-		body := args.Get(script.String("rawbody")).StringDefault("")
+		body := args.Get(script.Str("rawbody")).StringDefault("")
 		dataFrom, urlForm, jsonForm := (*multipart.Writer)(nil), false, false
 		if body == "" {
 			form := url.Values{}
@@ -114,18 +114,18 @@ func init() {
 
 		// Construct HTTP client
 		client := &http.Client{}
-		if to := args.Get(script.String("timeout")).IntDefault(0); to > 0 {
+		if to := args.Get(script.Str("timeout")).IntDefault(0); to > 0 {
 			client.Timeout = time.Duration(to) * time.Millisecond
 		}
-		if v := args.Get(script.String("jar")); v.Type() == script.VInterface {
-			client.Jar, _ = v.Interface().(http.CookieJar)
+		if v := args.Get(script.Str("jar")); v.Type() == script.ANY {
+			client.Jar, _ = v.Any().(http.CookieJar)
 		}
-		if !args.Get(script.String("no_redirect")).IsFalse() {
+		if !args.Get(script.Str("no_redirect")).IsFalse() {
 			client.CheckRedirect = func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse
 			}
 		}
-		if p := args.Get(script.String("proxy")).StringDefault(""); p != "" {
+		if p := args.Get(script.Str("proxy")).StringDefault(""); p != "" {
 			client.Transport = &http.Transport{
 				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
 			}
@@ -146,9 +146,9 @@ func init() {
 		}
 		env.A = script.Array(
 			script.Int(int64(resp.StatusCode)),
-			script.Interface(hdr),
+			script.Any(hdr),
 			script.Bytes(buf),
-			script.Interface(client.Jar),
+			script.Any(client.Jar),
 		)
 	}, `http($a...a$) => code, body, headers, cookie_jar
     'url' is a mandatory parameter, others are optional and pretty self explanatory:
@@ -185,10 +185,10 @@ func splitKV(line string) (k string, v string, ok bool) {
 
 func iterStrings(v script.Value, f func(string)) {
 	switch v.Type() {
-	case script.VString:
+	case script.STR:
 		f(v.String())
-	case script.VArray:
-		for _, line := range v.Array().Array() {
+	case script.MAP:
+		for _, line := range v.Map().Array() {
 			f(line.String())
 		}
 	}
@@ -196,12 +196,12 @@ func iterStrings(v script.Value, f func(string)) {
 
 func iterStringPairs(v1, v2 script.Value, f func(string, string)) {
 	switch v1.Type() + v2.Type() {
-	case script.VString * 2:
+	case script.STR * 2:
 		f(v1.String(), v2.String())
-	case script.VArray * 2:
-		for i, line := range v1.Array().Array() {
-			if i < len(v2.Array().Array()) {
-				f(line.String(), v2.Array().Array()[i].String())
+	case script.MAP * 2:
+		for i, line := range v1.Map().Array() {
+			if i < len(v2.Map().Array()) {
+				f(line.String(), v2.Map().Array()[i].String())
 			}
 		}
 	}
