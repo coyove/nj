@@ -10,8 +10,11 @@ T1.add(2)
 T2.add(3)
 assert(T1.c == 12 and T2.c == 13)
 
+println(T1.c, T2.c)
 T1.X = 100
+println(T1.c, T2.c)
 T1.add(20)
+println(T1.c, T2.c)
 T2.add(30)
 assert(T1.c == 132 and T2.c == 53)
 

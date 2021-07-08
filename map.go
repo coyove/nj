@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	growRate = 1.25
-	errRace  = "concurrent map read and map write"
+	errRace = "concurrent map read and map write"
 )
 
 type RHMap struct {
@@ -37,7 +36,7 @@ type hashItem struct {
 }
 
 func NewMap(size int) *RHMap {
-	return &RHMap{hashItems: make([]hashItem, int64(size)*int64(growRate*16)/16+1)}
+	return &RHMap{hashItems: make([]hashItem, int64(size))}
 }
 
 func (m *RHMap) Len() int {
@@ -227,8 +226,12 @@ func (m *RHMap) setHash(incoming hashItem) (prev Value, growed bool) {
 		idx = (idx + 1) % num
 
 		// Grow if distances become big or we went all the way around.
-		if float64(num)/float64(m.count) < growRate || idx == idxStart {
-			m.grow(num * int(growRate*16) / 16)
+		if int(m.count) >= num || idx == idxStart {
+			if num < 8 {
+				m.grow(num + 1)
+			} else {
+				m.grow(num * 3 / 2)
+			}
 			prev, _ = m.setHash(incoming)
 			return prev, true
 		}

@@ -111,13 +111,20 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			va, vb := env._get(opa), env._get(opb)
 			switch va.Type() + vb.Type() {
 			case NUM + NUM:
-				vaf, vai, vaIsInt := va.Num()
-				vbf, vbi, vbIsInt := vb.Num()
-				if vaIsInt && vbIsInt {
-					env.A = Int(vai + vbi)
+				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
+					env.A = Int(va.unsafeint() + vb.unsafeint())
+				} else if sum == 0 {
+					env.A = Float(va.unsafefloat() + vb.unsafefloat())
 				} else {
-					env.A = Float(vaf + vbf)
+					env.A = Float(va.Float() + vb.Float())
 				}
+				// vaf, vai, vaIsInt := va.Num()
+				// vbf, vbi, vbIsInt := vb.Num()
+				// if vaIsInt && vbIsInt {
+				// 	env.A = Int(vai + vbi)
+				// } else {
+				// 	env.A = Float(vaf + vbf)
+				// }
 			case STR + STR:
 				env.A = Str(va.Str() + vb.Str())
 			case STR + NUM:
@@ -127,37 +134,31 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			}
 		case OpSub:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == NUM+NUM {
-				vaf, vai, vaIsInt := va.Num()
-				vbf, vbi, vbIsInt := vb.Num()
-				if vaIsInt && vbIsInt {
-					env.A = Int(vai - vbi)
+				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
+					env.A = Int(va.unsafeint() - vb.unsafeint())
+				} else if sum == 0 {
+					env.A = Float(va.unsafefloat() - vb.unsafefloat())
 				} else {
-					env.A = Float(vaf - vbf)
+					env.A = Float(va.Float() - vb.Float())
 				}
 			} else {
 				panicf(errNeedNumbers)
 			}
 		case OpMul:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == NUM+NUM {
-				vaf, vai, vaIsInt := va.Num()
-				vbf, vbi, vbIsInt := vb.Num()
-				if vaIsInt && vbIsInt {
-					env.A = Int(vai * vbi)
+				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
+					env.A = Int(va.unsafeint() * vb.unsafeint())
+				} else if sum == 0 {
+					env.A = Float(va.unsafefloat() * vb.unsafefloat())
 				} else {
-					env.A = Float(vaf * vbf)
+					env.A = Float(va.Float() * vb.Float())
 				}
 			} else {
 				panicf(errNeedNumbers)
 			}
 		case OpDiv:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == NUM+NUM {
-				vaf, vai, vaIsInt := va.Num()
-				vbf, vbi, vbIsInt := vb.Num()
-				if vaIsInt && vbIsInt && vai%vbi == 0 {
-					env.A = Int(vai / vbi)
-				} else {
-					env.A = Float(vaf / vbf)
-				}
+				env.A = Float(va.Float() / vb.Float())
 			} else {
 				panicf(errNeedNumbers)
 			}
@@ -186,12 +187,12 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case OpLess:
 			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
 			case NUM + NUM:
-				vaf, vai, vaIsInt := va.Num()
-				vbf, vbi, vbIsInt := vb.Num()
-				if vaIsInt && vbIsInt {
-					env.A = Bool(vai < vbi)
+				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
+					env.A = Bool(va.unsafeint() < vb.unsafeint())
+				} else if sum == 0 {
+					env.A = Bool(va.unsafefloat() < vb.unsafefloat())
 				} else {
-					env.A = Bool(vaf < vbf)
+					env.A = Bool(va.Float() < vb.Float())
 				}
 			case STR + STR:
 				env.A = Bool(va.Str() < vb.Str())
@@ -201,12 +202,12 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case OpLessEq:
 			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
 			case NUM + NUM:
-				vaf, vai, vaIsInt := va.Num()
-				vbf, vbi, vbIsInt := vb.Num()
-				if vaIsInt && vbIsInt {
-					env.A = Bool(vai <= vbi)
+				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
+					env.A = Bool(va.unsafeint() <= vb.unsafeint())
+				} else if sum == 0 {
+					env.A = Bool(va.unsafefloat() <= vb.unsafefloat())
 				} else {
-					env.A = Bool(vaf <= vbf)
+					env.A = Bool(va.Float() <= vb.Float())
 				}
 			case STR + STR:
 				env.A = Bool(va.Str() <= vb.Str())

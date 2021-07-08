@@ -18,6 +18,7 @@ import (
 
 var (
 	int64Marker       = unsafe.Pointer(new(int64))
+	int64Marker2      = uintptr(int64Marker) * 2
 	trueMarker        = unsafe.Pointer(new(int64))
 	falseMarker       = unsafe.Pointer(new(int64))
 	smallStringMarker = unsafe.Pointer(new([9]int64))
@@ -113,19 +114,25 @@ func Int(i int64) Value {
 
 // Array returns an array consists of 'm'
 func Array(m ...Value) Value {
-	return (&RHMap{items: m, count: uint32(len(m))}).Value()
+	x := &RHMap{items: m}
+	for _, i := range x.items {
+		if i != Nil {
+			x.count++
+		}
+	}
+	return x.Value()
 }
 
 // Map returns a map, kvs should be laid out as: key1, value1, key2, value2, ...
 func Map(kvs ...Value) Value {
-	t := &RHMap{}
+	t := NewMap(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		t.Set(kvs[i], kvs[i+1])
 	}
 	return Value{v: uint64(MAP), p: unsafe.Pointer(t)}
 }
 
-// MapWithParent returns a map whose parent is p
+// MapWithParent returns a map whose parent will be p
 func MapWithParent(p *RHMap, kvs ...Value) Value {
 	m := Map(kvs...)
 	m.Map().Parent = p
@@ -163,7 +170,9 @@ func Bytes(b []byte) Value {
 	return Str(*(*string)(unsafe.Pointer(&b)))
 }
 
-// Any returns an any value
+// Any returns an ANY value
+// []Type (except []byte/Value) and map[Type]Type will be left as is,
+// to convert them recursively, use DeepAny instead
 func Any(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
@@ -232,7 +241,7 @@ func Any(i interface{}) Value {
 			rtNumIn := rt.NumIn()
 			nf = func(env *Env) {
 				getter := func(i int, t reflect.Type) reflect.Value {
-					return reflect.ValueOf(env.Get(i).ReflectedAny(t))
+					return reflect.ValueOf(env.Get(i).DeepAny(t))
 				}
 				ins := make([]reflect.Value, 0, rtNumIn)
 				if !rt.IsVariadic() {
@@ -265,6 +274,27 @@ func Any(i interface{}) Value {
 	return _interface(i)
 }
 
+func DeepAny(v interface{}) Value {
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Map:
+		m := NewMap(rv.Len() + 1)
+		iter := rv.MapRange()
+		for iter.Next() {
+			m.Set(DeepAny(iter.Key()), Any(iter.Value()))
+		}
+		return m.Value()
+	case reflect.Array, reflect.Slice:
+		a := make([]Value, rv.Len())
+		for i := range a {
+			a[i] = DeepAny(rv.Index(i))
+		}
+		return Array(a...)
+	default:
+		return Any(v)
+	}
+}
+
 func _interface(i interface{}) Value {
 	return Value{v: uint64(ANY), p: unsafe.Pointer(&i)}
 }
@@ -283,6 +313,7 @@ func (v Value) Str() string {
 	return *(*string)(v.p)
 }
 
+// When isInt == true, use intValue, otherwise floatValue
 func (v Value) Num() (floatValue float64, intValue int64, isInt bool) {
 	if v.p == int64Marker {
 		return float64(int64(v.v)), int64(v.v), true
@@ -325,7 +356,17 @@ func (v Value) Any() interface{} {
 	return nil
 }
 
-func (v Value) ReflectedAny(t reflect.Type) interface{} {
+func (v Value) puintptr() uintptr { return uintptr(v.p) }
+
+func (v Value) unsafeint() int64 { return int64(v.v) }
+
+func (v Value) unsafefloat() float64 { return math.Float64frombits(^v.v) }
+
+// DeepAny returns the interface{} representation of Value which will be converted to t if needed
+func (v Value) DeepAny(t reflect.Type) interface{} {
+	if t == nil {
+		return v.Any()
+	}
 	if t == reflect.TypeOf(Value{}) {
 		return v
 	}
@@ -343,20 +384,20 @@ func (v Value) ReflectedAny(t reflect.Type) interface{} {
 		case reflect.Slice:
 			s := reflect.MakeSlice(t, len(a.Array()), len(a.Array()))
 			for i, a := range a.Array() {
-				s.Index(i).Set(reflect.ValueOf(a.ReflectedAny(t.Elem())))
+				s.Index(i).Set(reflect.ValueOf(a.DeepAny(t.Elem())))
 			}
 			return s.Interface()
 		case reflect.Array:
 			s := reflect.New(t).Elem()
 			for i, a := range a.Array() {
-				s.Index(i).Set(reflect.ValueOf(a.ReflectedAny(t.Elem())))
+				s.Index(i).Set(reflect.ValueOf(a.DeepAny(t.Elem())))
 			}
 			return s.Interface()
 		case reflect.Map:
 			s := reflect.MakeMap(t)
 			kt, vt := t.Key(), t.Elem()
 			a.Foreach(func(k, v Value) bool {
-				s.SetMapIndex(reflect.ValueOf(k.ReflectedAny(kt)), reflect.ValueOf(v.ReflectedAny(vt)))
+				s.SetMapIndex(reflect.ValueOf(k.DeepAny(kt)), reflect.ValueOf(v.DeepAny(vt)))
 				return true
 			})
 			return s.Interface()
@@ -472,18 +513,14 @@ func (v Value) toString(lv int, j bool) string {
 
 func (v Value) StringDefault(d string) string {
 	if v.Type() == STR {
-		if s := v.Str(); s != "" {
-			return s
-		}
+		return v.Str()
 	}
 	return d
 }
 
 func (v Value) IntDefault(d int64) int64 {
 	if v.Type() == NUM {
-		if _, i, _ := v.Num(); i != 0 {
-			return i
-		}
+		return v.Int()
 	}
 	return d
 }
