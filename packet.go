@@ -193,14 +193,12 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 			} else {
 				sb.WriteString("call " + readAddr(a, true))
 			}
-		case OpIf, OpIfNot, OpJmp:
+		case OpIfNot, OpJmp:
 			pos := int32(inst&0xffffff) - 1<<23
 			pos2 := uint32(int32(cursor) + pos)
 			switch bop {
 			case OpIfNot:
 				sb.WriteString("if not $a ")
-			case OpIf:
-				sb.WriteString("if $a ")
 			}
 			sb.WriteString(fmt.Sprintf("jmp %d to %d", pos, pos2))
 		case OpInc:

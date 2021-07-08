@@ -32,7 +32,6 @@ const (
 	OpBitLsh
 	OpBitRsh
 	OpBitURsh
-	OpIf
 	OpIfNot
 	OpJmp
 	OpLoadFunc

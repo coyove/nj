@@ -385,10 +385,6 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			if env.A.IsFalse() {
 				cursor = uint32(int32(cursor) + int32(v&0xffffff) - 1<<23)
 			}
-		case OpIf:
-			if !env.A.IsFalse() {
-				cursor = uint32(int32(cursor) + int32(v&0xffffff) - 1<<23)
-			}
 		}
 	}
 }

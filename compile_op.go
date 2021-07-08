@@ -113,21 +113,28 @@ func (table *symtable) compileFlat(atoms []parser.Node) uint16 {
 }
 
 // [and a b] => $a = a if not a then return else $a = b end
-// [or a b]  => $a = a if a then do nothing else $a = b end
+// [or a b]  => $a = a if not a then $a = b end
 func (table *symtable) compileAndOr(atoms []parser.Node) uint16 {
-	bop := OpIfNot
-	if atoms[0].SymbolValue() == (parser.AOr) {
-		bop = OpIf
-	}
-
 	table.writeInst(OpSet, _nodeRegA, atoms[1])
-	table.code.writeInst(bop, regA, 0)
-	part1 := table.code.Len()
 
-	table.writeInst(OpSet, _nodeRegA, atoms[2])
-	part2 := table.code.Len()
+	if atoms[0].SymbolValue() == (parser.AOr) {
+		table.code.writeJmpInst(OpIfNot, 1)
+		table.code.writeJmpInst(OpJmp, 0)
+		part1 := table.code.Len()
 
-	table.code.Code[part1-1] = jmpInst(bop, part2-part1)
+		table.writeInst(OpSet, _nodeRegA, atoms[2])
+		part2 := table.code.Len()
+
+		table.code.Code[part1-1] = jmpInst(OpJmp, part2-part1)
+	} else {
+		table.code.writeJmpInst(OpIfNot, 0)
+		part1 := table.code.Len()
+
+		table.writeInst(OpSet, _nodeRegA, atoms[2])
+		part2 := table.code.Len()
+
+		table.code.Code[part1-1] = jmpInst(OpIfNot, part2-part1)
+	}
 	table.code.writePos(atoms[0].Pos())
 	return regA
 }
