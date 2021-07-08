@@ -9,9 +9,11 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 	"unsafe"
 
 	"github.com/coyove/script/parser"
+	"github.com/tidwall/gjson"
 )
 
 var (
@@ -85,6 +87,7 @@ func (v Value) IsFalse() bool {
 	return v == Nil || v == Zero || v == False || v == watermark
 }
 
+// IsInt tests whether value contains an integer (int64)
 func (v Value) IsInt() bool { return v.p == int64Marker }
 
 // Bool returns a boolean value
@@ -113,6 +116,7 @@ func Array(m ...Value) Value {
 	return (&RHMap{items: m, count: uint32(len(m))}).Value()
 }
 
+// Map returns a map, kvs should be laid out as: key1, value1, key2, value2, ...
 func Map(kvs ...Value) Value {
 	t := &RHMap{}
 	for i := 0; i < len(kvs)/2*2; i += 2 {
@@ -121,12 +125,14 @@ func Map(kvs ...Value) Value {
 	return Value{v: uint64(MAP), p: unsafe.Pointer(t)}
 }
 
+// MapWithParent returns a map whose parent is p
 func MapWithParent(p *RHMap, kvs ...Value) Value {
 	m := Map(kvs...)
 	m.Map().Parent = p
 	return m
 }
 
+// Str returns a string value
 func Str(s string) Value {
 	if len(s) <= 8 { // payload 7b
 		x := [8]byte{byte(len(s))}
@@ -139,10 +145,25 @@ func Str(s string) Value {
 	return Value{v: uint64(STR), p: unsafe.Pointer(&s)}
 }
 
+// Byte returns a one-byte string value
+func Byte(s byte) Value {
+	x := [8]byte{s}
+	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStringMarker) + 8)}
+}
+
+// Rune returns a one-rune string value
+func Rune(r rune) Value {
+	x := [8]byte{}
+	n := utf8.EncodeRune(x[:], r)
+	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStringMarker) + uintptr(n)*8)}
+}
+
+// Bytes returns an alterable string value
 func Bytes(b []byte) Value {
 	return Str(*(*string)(unsafe.Pointer(&b)))
 }
 
+// Any returns an any value
 func Any(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
@@ -171,6 +192,32 @@ func Any(i interface{}) Value {
 		return Any(v.Original)
 	case reflect.Value:
 		return Any(v.Interface())
+	case gjson.Result:
+		switch v.Type {
+		case gjson.String:
+			return Str(v.Str)
+		case gjson.Number:
+			return Float(v.Float())
+		case gjson.True, gjson.False:
+			return Bool(v.Bool())
+		}
+		if v.IsArray() {
+			a := v.Array()
+			x := make([]Value, len(a))
+			for i, a := range a {
+				x[i] = Any(a)
+			}
+			return Array(x...)
+		}
+		if v.IsObject() {
+			m := v.Map()
+			x := NewMap(len(m))
+			for k, v := range m {
+				x.Set(Str(k), Any(v))
+			}
+			return x.Value()
+		}
+		return Nil
 	}
 
 	rv := reflect.ValueOf(i)
@@ -255,7 +302,7 @@ func (v Value) Map() *RHMap { return (*RHMap)(v.p) }
 // Func cast value to function
 func (v Value) Func() *Func { return (*Func)(v.p) }
 
-// Any returns the interface{}
+// Any returns the interface{} representation of Value
 func (v Value) Any() interface{} {
 	switch v.Type() {
 	case BOOL:
@@ -292,12 +339,26 @@ func (v Value) ReflectedAny(t reflect.Type) interface{} {
 		}
 	case MAP:
 		a := v.Map()
-		if t.Kind() == reflect.Slice {
-			e := t.Elem()
+		switch t.Kind() {
+		case reflect.Slice:
 			s := reflect.MakeSlice(t, len(a.Array()), len(a.Array()))
 			for i, a := range a.Array() {
-				s.Index(i).Set(reflect.ValueOf(a.ReflectedAny(e)))
+				s.Index(i).Set(reflect.ValueOf(a.ReflectedAny(t.Elem())))
 			}
+			return s.Interface()
+		case reflect.Array:
+			s := reflect.New(t).Elem()
+			for i, a := range a.Array() {
+				s.Index(i).Set(reflect.ValueOf(a.ReflectedAny(t.Elem())))
+			}
+			return s.Interface()
+		case reflect.Map:
+			s := reflect.MakeMap(t)
+			kt, vt := t.Key(), t.Elem()
+			a.Foreach(func(k, v Value) bool {
+				s.SetMapIndex(reflect.ValueOf(k.ReflectedAny(kt)), reflect.ValueOf(v.ReflectedAny(vt)))
+				return true
+			})
 			return s.Interface()
 		}
 	}

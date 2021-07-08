@@ -120,3 +120,16 @@ end
 g = go.new(worker)
 g.start()
 assert(g.wait() == 'finished')
+
+Car = {_brand=''}
+function Car.get_brand(this)
+	if this._brand then return str.from('a %s car #%d').format(this._brand, this.index) end
+	return 'a normal car'
+end
+Benz = new(Car, {_brand='benz'})
+Honda = new(Car, {_brand='honda'})
+
+b1 = new(Benz, {index=1})
+b2 = new(Benz, {index=2})
+b3 = new(Honda, {index=3})
+print(b1.get_brand(), b2.get_brand(), b3.get_brand())

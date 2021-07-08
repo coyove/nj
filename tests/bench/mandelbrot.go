@@ -127,7 +127,6 @@ func main() {
 
 	/* wait for the file workers to finish, then write */
 	wg.Wait()
-	return
 
 	out := bufio.NewWriter(os.Stdout)
 	defer out.Flush()

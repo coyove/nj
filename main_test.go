@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -504,5 +505,18 @@ func TestACall(t *testing.T) {
 	_, err = foo.Func().CallSimple(Nil, Int(1), Int(2))
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReflectedValue(t *testing.T) {
+	v := Array(True, False)
+	x := v.ReflectedAny(reflect.TypeOf([2]bool{})).([2]bool)
+	if x[0] != true || x[1] != false {
+		t.Fatal(x)
+	}
+	v = Map(Str("a"), Int(1), Str("b"), Int(2))
+	y := v.ReflectedAny(reflect.TypeOf(map[string]byte{})).(map[string]byte)
+	if y["a"] != 1 || y["b"] != 2 {
+		t.Fatal(x)
 	}
 }

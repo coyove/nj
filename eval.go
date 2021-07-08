@@ -44,8 +44,10 @@ func (e *ExecError) Error() string {
 		// the recorded cursor was advanced by 1 already
 		msg.WriteString(fmt.Sprintf("%s at line %d (cursor: %d)\n", r.cls.Name, src, r.cursor-1))
 	}
-	msg.WriteString("root panic:\n")
-	msg.WriteString(fmt.Sprintf("%v\n", e.r))
+	if e.r != nil {
+		msg.WriteString("root panic:\n")
+		msg.WriteString(fmt.Sprintf("%v\n", e.r))
+	}
 	return msg.String()
 }
 

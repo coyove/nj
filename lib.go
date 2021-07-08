@@ -75,12 +75,15 @@ func init() {
 	AddGlobalValue("doc", func(env *Env, f Value) Value {
 		return Str(f.MustFunc("doc", 0).DocString)
 	}, "doc(function) => string", "\treturn function's documentation")
-	AddGlobalValue("new", func(env *Env, v Value) Value {
+	AddGlobalValue("new", func(env *Env, v, a Value) Value {
 		m := *v.MustMap("new", 0)
 		m.hashItems = append([]hashItem{}, m.hashItems...)
 		m.items = append([]Value{}, m.items...)
-		a := &RHMap{Parent: &m}
-		return a.Value()
+		if a.Type() != MAP {
+			return (&RHMap{Parent: &m}).Value()
+		}
+		a.Map().Parent = &m
+		return a
 	})
 	AddGlobalValue("len", func(env *Env, v Value) Value {
 		switch v.Type() {
@@ -96,6 +99,26 @@ func init() {
 			return Int(int64(reflectLen(v.Any())))
 		}
 	})
+	AddGlobalValue("eval", func(env *Env, s, g Value) Value {
+		var m map[string]interface{}
+		if g.Type() == MAP {
+			m = map[string]interface{}{}
+			g.Map().Foreach(func(k, v Value) bool {
+				m[k.String()] = v.Any()
+				return true
+			})
+		}
+		wrap := func(err error) error { return fmt.Errorf("panic inside eval(): %v", err) }
+		f, err := LoadString(s.MustStr("eval()", 0), &CompileOptions{GlobalKeyValues: m})
+		if err != nil {
+			panic(wrap(err))
+		}
+		v, err := f.Run()
+		if err != nil {
+			panic(wrap(err))
+		}
+		return v
+	}, "eval(string, globals) => evaluate the string")
 	AddGlobalValue("apply", func(env *Env, f, a Value) Value {
 		res, err := f.MustFunc("apply()", 0).Call(a)
 		if err != nil {
@@ -369,9 +392,6 @@ func init() {
 			env.A = Int(v)
 		}
 	}, "int(value) => integer", "\tconvert value to integer number (int64)")
-	AddGlobalValue("byte", func(env *Env, a Value) Value {
-		return Str(string([]byte{byte(a.MustNum("byte()", 0).Int())}))
-	})
 	AddGlobalValue("time", func(env *Env, prefix Value) Value {
 		switch prefix.StringDefault("") {
 		case "nano":
@@ -424,7 +444,8 @@ func init() {
 		os.Exit(int(code.MustNum("exit", 0).Int()))
 		return Nil
 	}, "exit(code)")
-	AddGlobalValue("chr", func(env *Env) { env.A = Str(string(rune(env.Get(0).MustNum("chr()", 0).Int()))) }, "chr(unicode) => string")
+	AddGlobalValue("chr", func(env *Env) { env.A = Rune(rune(env.Get(0).MustNum("chr()", 0).Int())) }, "chr(unicode) => string")
+	AddGlobalValue("byte", func(env *Env, a Value) Value { return Byte(byte(a.MustNum("byte()", 0).Int())) }, "byte(int) => one byte string")
 	AddGlobalValue("ord", func(env *Env) {
 		r, _ := utf8.DecodeRuneInString(env.Get(0).MustStr("ord()", 0))
 		env.A = Int(int64(r))
@@ -480,7 +501,7 @@ func init() {
 		}, "$f(value) => json_string"),
 		Str("parse"), Native1("parse", func(env *Env, js Value) Value {
 			j := strings.TrimSpace(js.MustStr("json.parse() json string", 0))
-			return gjsonConvert(gjson.Parse(j))
+			return Any(gjson.Parse(j))
 		}, "$f(json_string) => array"),
 		Str("get"), Native3("get", func(env *Env, js, path, et Value) Value {
 			j := strings.TrimSpace(js.MustStr("json.get() json string", 0))
@@ -488,7 +509,7 @@ func init() {
 			if !result.Exists() {
 				return et
 			}
-			return gjsonConvert(result)
+			return Any(result)
 		}, "$f(json_string, selector, default?) => bool|number|string|array"),
 	))
 
@@ -588,32 +609,4 @@ func ipow(base, exp int64) int64 {
 		base *= base
 	}
 	return result
-}
-
-func gjsonConvert(r gjson.Result) Value {
-	switch r.Type {
-	case gjson.String:
-		return Str(r.Str)
-	case gjson.Number:
-		return Float(r.Float())
-	case gjson.True, gjson.False:
-		return Bool(r.Bool())
-	}
-	if r.IsArray() {
-		a := r.Array()
-		x := make([]Value, len(a))
-		for i, a := range a {
-			x[i] = gjsonConvert(a)
-		}
-		return Array(x...)
-	}
-	if r.IsObject() {
-		m := r.Map()
-		x := NewMap(len(m))
-		for k, v := range m {
-			x.Set(Str(k), gjsonConvert(v))
-		}
-		return x.Value()
-	}
-	return Nil
 }
