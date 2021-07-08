@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 )
 
-const limit = 4.0        // abs(z) < 2
-const maxIter = 50       // number of iterations
-const defaultSize = 1600 // bitmap size if not given as command-line argument
+const limit = 4.0      // abs(z) < 2
+const maxIter = 50     // number of iterations
+const defaultSize = 16 // bitmap size if not given as command-line argument
 
 var rows [][]byte
 var bytesPerRow int
@@ -75,6 +75,7 @@ func renderRow(y0 *int32) []byte {
 		}
 		row[xByte] = ^res
 	}
+	fmt.Printf("%02x\n", row)
 	return row
 }
 
@@ -126,6 +127,7 @@ func main() {
 
 	/* wait for the file workers to finish, then write */
 	wg.Wait()
+	return
 
 	out := bufio.NewWriter(os.Stdout)
 	defer out.Flush()

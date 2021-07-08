@@ -31,16 +31,11 @@ func (table *symtable) compileSetMove(atoms []parser.Node) uint16 {
 	if atoms[0].SymbolValue() == (parser.AMove) {
 		// a = b
 		if newYX == table.loadK(nil) {
-			t, h := table, 0
-			if t.global != nil {
-				t, h = t.global, 1
-			}
-			yx := t.borrowAddress()
+			newYX = table.borrowAddress()
 
 			// Do not use t.put() because it may put the symbol into masked tables
 			// e.g.: do a = 1 end
-			t.sym[aDest] = &symbol{addr: yx}
-			newYX = uint16(h)<<12 | yx
+			table.sym[aDest] = &symbol{addr: newYX}
 		}
 	} else {
 		// local a = b

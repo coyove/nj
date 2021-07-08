@@ -12,15 +12,20 @@
 package script
 
 import (
+	"sync/atomic"
 	"unsafe"
 )
 
-const growRate = 1.25
+const (
+	growRate = 1.25
+	errRace  = "concurrent map read and map write"
+)
 
 type RHMap struct {
 	Parent    *RHMap
-	hashItems []hashItem
+	rwlock    int32
 	count     uint32
+	hashItems []hashItem
 	items     []Value
 }
 
@@ -45,6 +50,9 @@ func (m *RHMap) MapLen() int {
 
 // Clear clears Map, where already allocated memory will be reused.
 func (m *RHMap) Clear() {
+	if atomic.LoadInt32(&m.rwlock) > 0 {
+		panicf(errRace)
+	}
 	m.hashItems = m.hashItems[:0]
 	m.count = 0
 	m.items = m.items[:0]
@@ -59,6 +67,9 @@ func (m *RHMap) Get(k Value) (v Value) {
 	if k == Nil {
 		return Nil
 	}
+	atomic.AddInt32(&m.rwlock, 1)
+	defer atomic.AddInt32(&m.rwlock, -1)
+
 	if k.IsInt() {
 		if idx := k.Int(); idx >= 0 && idx < int64(len(m.items)) {
 			return m.items[idx]
@@ -103,6 +114,8 @@ func (m *RHMap) findHash(k Value) int {
 }
 
 func (m *RHMap) Contains(k Value) bool {
+	atomic.AddInt32(&m.rwlock, 1)
+	defer atomic.AddInt32(&m.rwlock, -1)
 	if k == Nil {
 		return false
 	}
@@ -130,12 +143,22 @@ func (m *RHMap) ParentContains(k Value) *RHMap {
 	return nil
 }
 
-// Set inserts or updates a key/val into the Map.
+func (m *RHMap) SetString(k string, v Value) (prev Value) {
+	return m.Set(Str(k), v)
+}
+
+// Set inserts or updates a key/val pair into the Map. If val == Nil, then key will get deleted
 func (m *RHMap) Set(k, v Value) (prev Value) {
 	if k == Nil {
 		panicf("table set with nil key")
 	}
+	if atomic.LoadInt32(&m.rwlock) > 0 {
+		panicf(errRace)
+	}
+	return m.unsafeSet(k, v)
+}
 
+func (m *RHMap) unsafeSet(k, v Value) (prev Value) {
 	if m.Parent != nil && v.Type() != FUNC {
 		if x := m.ParentContains(k); x != nil && x != m {
 			return x.Set(k, v)
@@ -146,12 +169,10 @@ func (m *RHMap) Set(k, v Value) (prev Value) {
 		idx := k.Int()
 		if idx >= 0 && idx < int64(len(m.items)) {
 			prev, m.items[idx] = m.items[idx], v
-			if !v.Equal(prev) {
-				if v == Nil {
-					m.count--
-				} else {
-					m.count++
-				}
+			if v == Nil && prev != Nil {
+				m.count--
+			} else if v != Nil && prev == Nil {
+				m.count++
 			}
 			return prev
 		}
@@ -258,6 +279,8 @@ func (m *RHMap) Foreach(f func(k, v Value) bool) {
 }
 
 func (m *RHMap) Next(k Value) (Value, Value) {
+	atomic.AddInt32(&m.rwlock, 1)
+	defer atomic.AddInt32(&m.rwlock, -1)
 	nextHashPair := func(start int) (Value, Value) {
 		for i := start; i < len(m.hashItems); i++ {
 			if i := &m.hashItems[i]; i.Key != Nil {

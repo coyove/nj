@@ -111,3 +111,12 @@ cnt = cnt + 1
     assert(m[i.key] == i.value)
 end
 assert(cnt == 3)
+
+function worker()
+    sleep(1000)
+    print("worker after 1s")
+    return 'finished'
+end
+g = go.new(worker)
+g.start()
+assert(g.wait() == 'finished')

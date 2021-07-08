@@ -235,6 +235,41 @@ func BenchmarkCompiling(b *testing.B) {
 	}
 }
 
+func BenchmarkRHMap10(b *testing.B) { benchmarkRHMap(b, 10) }
+func BenchmarkGoMap10(b *testing.B) { benchmarkGoMap(b, 10) }
+func BenchmarkRHMap20(b *testing.B) { benchmarkRHMap(b, 20) }
+func BenchmarkGoMap20(b *testing.B) { benchmarkGoMap(b, 20) }
+func BenchmarkRHMap50(b *testing.B) { benchmarkRHMap(b, 50) }
+func BenchmarkGoMap50(b *testing.B) { benchmarkGoMap(b, 50) }
+
+func benchmarkRHMap(b *testing.B, n int) {
+	rand.Seed(time.Now().Unix())
+	m := NewMap(n)
+	for i := 0; i < n; i++ {
+		m.Set(Int(int64(i)), Int(int64(i)))
+	}
+	for i := 0; i < b.N; i++ {
+		idx := rand.Intn(n)
+		if m.Get(Int(int64(idx))) != Int(int64(idx)) {
+			b.Fatal(idx, m)
+		}
+	}
+}
+
+func benchmarkGoMap(b *testing.B, n int) {
+	rand.Seed(time.Now().Unix())
+	m := map[int]int{}
+	for i := 0; i < n; i++ {
+		m[i] = i
+	}
+	for i := 0; i < b.N; i++ {
+		idx := rand.Intn(n)
+		if m[idx] == -1 {
+			b.Fatal(idx, m)
+		}
+	}
+}
+
 func TestBigList(t *testing.T) {
 	n := 2000 - len(g)
 

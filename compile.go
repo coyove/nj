@@ -368,6 +368,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	for k, v := range g {
 		push(k, v)
 	}
+
 	if opt != nil {
 		for k, v := range opt.GlobalKeyValues {
 			push(k, Any(v))

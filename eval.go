@@ -250,7 +250,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				panicf(errNeedNumbers)
 			}
 		case OpBitNot:
-			env.A = Int(int64(^env._get(opa).MustNum(errNeedNumbers, 0).Int()))
+			env.A = Int(^env._get(opa).MustNum(errNeedNumbers, 0).Int())
 		case OpMapArray:
 			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()

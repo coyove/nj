@@ -103,9 +103,38 @@ func init() {
 		}
 		return res
 	}, "apply(function, array) => call function using arguments in array")
-	AddGlobalValue("go", func(env *Env, f, a Value) (res Value) {
-		return a
-	}, "$f(function, array) => call function in new goroutine using arguments in array")
+
+	AddGlobalValue("go", Map(
+		Str("new"), Native1("new", func(env *Env, f Value) Value {
+			wg := &sync.WaitGroup{}
+			b := Map(
+				Str("_f"), f.MustFunc("new()", 0).Value(),
+				Str("_r"), Undef,
+				Str("_wg"), Any(wg),
+				Str("start"), Native2("start", func(env *Env, t, a Value) Value {
+					m := t.Map()
+					wg := m.GetString("_wg").Any().(*sync.WaitGroup)
+					wg.Add(1)
+					go func() {
+						defer func() {
+							wg.Done()
+						}()
+						res, err := m.GetString("_f").Func().Call(a)
+						if err != nil {
+							panic(err)
+						}
+						m.unsafeSet(Str("_r"), res)
+					}()
+					return Nil
+				}),
+				Str("wait"), Native1("wait", func(env *Env, t Value) Value {
+					t.Map().GetString("_wg").Any().(*sync.WaitGroup).Wait()
+					return t.Map().GetString("_r")
+				}),
+			)
+			return MapWithParent(b.Map())
+		}),
+	))
 
 	// Debug libraries
 	AddGlobalValue("debug", Map(
@@ -186,7 +215,9 @@ func init() {
 		}, "$f(skip) => { func_name1, line1, cursor1, n2, l2, c2, ... }"),
 	))
 	AddGlobalValue("narray", func(env *Env, n Value) Value {
-		return Array(make([]Value, n.MustNum("narray()", 0).Int())...)
+		a := Array(make([]Value, n.MustNum("narray()", 0).Int())...)
+		a.Map().count = 0
+		return a
 	}, "narray(n) => { nil, ..., nil }", "\treturn an array size of n, filled with nil")
 	AddGlobalValue("type", func(env *Env) {
 		env.A = Str(env.Get(0).Type().String())
@@ -338,6 +369,9 @@ func init() {
 			env.A = Int(v)
 		}
 	}, "int(value) => integer", "\tconvert value to integer number (int64)")
+	AddGlobalValue("byte", func(env *Env, a Value) Value {
+		return Str(string([]byte{byte(a.MustNum("byte()", 0).Int())}))
+	})
 	AddGlobalValue("time", func(env *Env, prefix Value) Value {
 		switch prefix.StringDefault("") {
 		case "nano":
@@ -349,8 +383,9 @@ func init() {
 		}
 		return Int(time.Now().Unix())
 	}, "time(nil|'nano'|'micro'|'milli') => int", "\tunix timestamp in (nano|micro|milli)seconds")
-	AddGlobalValue("sleep", func(env *Env, milli Value) {
+	AddGlobalValue("sleep", func(env *Env, milli Value) Value {
 		time.Sleep(time.Duration(milli.IntDefault(0)) * time.Millisecond)
+		return Nil
 	}, "sleep(milliseconds)")
 	AddGlobalValue("Go_time", func(env *Env) {
 		if env.Size() > 0 {

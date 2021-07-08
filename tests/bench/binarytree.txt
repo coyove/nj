@@ -1,48 +1,46 @@
-n = 23
+n = 21
 
-func bottomUpTree(depth) {
-   if (depth <= 0) {
-      return { } 
-   }
-   return { left: bottomUpTree(depth-1), right: bottomUpTree(depth-1) } 
-}
+function bottomUpTree(depth)
+   if (depth <= 0) then return {} end
+   return { left=bottomUpTree(depth-1), right=bottomUpTree(depth-1) } 
+end
 
- func itemCheck(n) {
-    if (len(n) == 0) return 1 
+function itemCheck(n)
+    if (len(n) == 0) then return 1 end
     return itemCheck(n.left) + itemCheck(n.right) + 1
-}
+end
 
- minDepth = 4 
- maxDepth = n 
-if (minDepth + 2 > n) maxDepth = minDepth + 2 
- stretchDepth = maxDepth + 1 
+minDepth = 4 
+maxDepth = n 
+if (minDepth + 2 > n) then maxDepth = minDepth + 2 end
+stretchDepth = maxDepth + 1 
 
 check_l = itemCheck(bottomUpTree(stretchDepth)) 
-io.printf("stretch tree of depth {}\t check: {}\n", stretchDepth, check_l) 
+print(str.from("stretch tree of depth %d\t check: %v").format(stretchDepth, check_l) )
 
-//longLivedTree = bottomUpTree(maxDepth) 
-//wg = std.sync.waitgroup() 
-//result = std.genlist(maxDepth+1) 
-//
-//func worker( depth, check) {
-//    iterations = 1 << (maxDepth - depth + minDepth) 
-//    check = 0 
-//
-//    for i = 0,iterations {
-//        check = check + itemCheck(bottomUpTree(depth)) 
-//    }
-//    result[depth] = std.sprintf("{}\t trees of depth %s\t check: {}", iterations, depth, check) 
-//    wg.done()
-//}
-//
-//for depth_l = minDepth,2,maxDepth  {
-//    wg.add(1)
-//    std.sync.run(worker, depth_l, check_l)
-//}
-//
-//wg.wait()
-//
-//for depth = minDepth,2,maxDepth  {
-//    io.println( result[depth]) 
-//}
-//io.printf("long lived tree of depth {}\t check: {}\n", maxDepth, itemCheck(longLivedTree)) 
+longLivedTree = bottomUpTree(maxDepth) 
+wg = sync.waitgroup() 
+result = narray(maxDepth+1) 
+
+function worker( depth, check)
+    iterations = 1 << (maxDepth - depth + minDepth) 
+    check = 0 
+
+    for i = 0,iterations do
+        check = check + itemCheck(bottomUpTree(depth)) 
+    end
+    result[depth] = str.from("%d\t trees of depth %d\t check: %v").format(iterations, depth, check)
+    wg.Done()
+end
+
+for depth_l = minDepth,maxDepth,2 do
+    wg.Add(1)
+    go.new(worker).start({depth_l, check_l})
+end
+wg.Wait()
+
+for depth = minDepth,maxDepth,2 do
+    print(result[depth]) 
+end
+
+print(str.from("long lived tree of depth %d\t check: %v\n").format(maxDepth, itemCheck(longLivedTree)))

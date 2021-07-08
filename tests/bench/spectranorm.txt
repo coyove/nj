@@ -1,89 +1,71 @@
 n = 0 
-nCPU = 8
+nCPU = 4
 
-func A(i, j) {
+function A(i, j)
     return ((i+j)*(i+j+1)/2 + i + 1) 
-}
+end
 
-// func A0(i, j) {
-//     $r0(i)
-//     $r1(j)
-//     $add0()
-//     $r1(1)
-//     $add1()
-//     $mul0()
-//     $r1(2)
-//     $div0()
-//     $r1(i)
-//     $add0()
-//     $r1(1)
-//     $add()
-//     $ret($a)
-// }
-// 
-// assert(  A0(1,2) == A(1,2))
-
-func TimesVec(v, s, n, u, wg) {
-     ul = len(u) 
-    for i = range s ,n - 1 {
+function TimesVec(v, s, n, u, wg)
+    ul = len(u) 
+    for i = s, n do
         vi = 0 
-        for j = range 0,ul - 1 {
+        for j = 0,ul do
             vi = vi + u[j] / A(i, j) 
-        }
+        end
         v[i] = vi 
-    }
-    wg.done() 
-}
+    end
+    wg.Done() 
+end
 
-func TimesTranspVec(v, s, n, u, wg) {
-     ul = len(u) 
-    for i = range s, n - 1  {
+function TimesTranspVec(v, s, n, u, wg) 
+    ul = len(u) 
+    for i = s, n do
         vi = 0 
-        for j =  range 0, ul - 1  {
+        for j = 0,ul do
             vi = vi + u[j] / A(j, i) 
-        }
+        end
         v[i] = vi 
-    }
-    wg.done() 
-}
+    end
+    wg.Done() 
+end
 
-func ATimesTransp(v, u) {
-    x = make(len(u)) 
-    wg = std.sync.waitgroup() 
+function ATimesTransp(v, u)
+    x = narray(len(u)) 
+    wg = sync.waitgroup() 
 
-    for i = range 0, nCPU - 1 {
-        wg.add(1) 
-        go(TimesVec, x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u, wg) 
-    }
-    wg.wait() 
+    for i = 0, nCPU do
+        wg.Add(1) 
+        go.new(TimesVec).start({x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u, wg})
+    end
+    wg.Wait() 
 
-    for i = range 0, nCPU - 1 {
-        wg.add(1) 
-        go(TimesTranspVec, v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x, wg) 
-    }
-    wg.wait() 
-}
+    for i = 0, nCPU do
+        wg.Add(1) 
+        go.new(TimesTranspVec).start({v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x, wg})
+    end
+    wg.Wait() 
+end
 
-n = 2000
+n = 5500
 u = {} 
 v = {} 
  
-for idx = range 0, n - 1 {
+for idx = 0, n do
     u[idx] = 1 
     v[idx] = 0 
-}
+end
 
-for i = range 0, 9 {
+for i = 0, 9 do
     ATimesTransp(v, u) 
     ATimesTransp(u, v) 
-}
+end
 
 vBv = 0
 vv = 0 
-for i = range v {
+for i = 0, len(v) do
     vBv = vBv + u[i] * v[i]
     vv = vv + v[i] * v[i]
-}
+end
 
-fmt.Println(math.Sqrt(vBv/vv)) 
+println(math.sqrt(vBv/vv)) 
     

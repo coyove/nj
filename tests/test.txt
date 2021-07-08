@@ -200,3 +200,8 @@ end
 r = (double(scale=3, a=10, b=-1))
 assert(r.a == 30 and r.b == -3)
 
+function foo()
+    _u_ = 10
+end
+foo()
+assert(_u_ == nil)

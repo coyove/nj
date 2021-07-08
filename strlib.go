@@ -138,6 +138,7 @@ var StringMethods = Map(
 			} else if idx == len(f)-1 {
 				panicf("format(): unexpected '%%' at end")
 			}
+			p.WriteString(f[:idx])
 			if f[idx+1] == '%' {
 				p.WriteString("%")
 				f = f[idx+2:]
@@ -148,10 +149,12 @@ var StringMethods = Map(
 			expecting := NIL
 			for f = f[idx+1:]; len(f) > 0 && expecting == NIL; {
 				switch f[0] {
-				case 'b', 'd', 'o', 'O', 'x', 'X', 'c', 'e', 'E', 'f', 'F', 'g', 'G':
+				case 'b', 'd', 'o', 'O', 'c', 'e', 'E', 'f', 'F', 'g', 'G':
 					expecting = NUM
 				case 's', 'q', 'U':
 					expecting = STR
+				case 'x', 'X':
+					expecting = STR + NUM
 				case 'v':
 					expecting = ANY
 				case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
@@ -167,12 +170,24 @@ var StringMethods = Map(
 			case NUM:
 				f, i, isInt := pop().Num()
 				if isInt {
-					p.Write([]byte(fmt.Sprintf(tmp.String(), i)))
+					fmt.Fprintf(&p, tmp.String(), i)
 				} else {
-					p.Write([]byte(fmt.Sprintf(tmp.String(), f)))
+					fmt.Fprintf(&p, tmp.String(), f)
+				}
+			case NUM + STR:
+				v := pop()
+				if v.Type() == STR {
+					fmt.Fprintf(&p, tmp.String(), v.Str())
+				} else {
+					f, i, isInt := pop().Num()
+					if isInt {
+						fmt.Fprintf(&p, tmp.String(), i)
+					} else {
+						fmt.Fprintf(&p, tmp.String(), f)
+					}
 				}
 			case ANY:
-				p.Write([]byte(fmt.Sprint(pop())))
+				fmt.Fprint(&p, pop())
 			}
 		}
 		env.A = Str(p.String())

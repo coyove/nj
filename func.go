@@ -148,12 +148,11 @@ func (c *Func) Call(args Value) (v1 Value, err error) {
 		Global: c.loadGlobal,
 		stack:  &s,
 	}
-
 	if args == Nil {
 		newEnv.Push(watermark)
 	} else if a := args.Map(); a.MapLen() == 0 {
 		// Call by an array of arguments
-		newEnv.stack = &a.items
+		*newEnv.stack = append(*newEnv.stack, a.items...)
 		newEnv.Push(watermark)
 	} else {
 		for _, pa := range c.Params {

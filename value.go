@@ -121,6 +121,12 @@ func Map(kvs ...Value) Value {
 	return Value{v: uint64(MAP), p: unsafe.Pointer(t)}
 }
 
+func MapWithParent(p *RHMap, kvs ...Value) Value {
+	m := Map(kvs...)
+	m.Map().Parent = p
+	return m
+}
+
 func Str(s string) Value {
 	if len(s) <= 8 { // payload 7b
 		x := [8]byte{byte(len(s))}
