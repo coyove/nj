@@ -35,7 +35,7 @@ end
 
 for depth_l = minDepth,maxDepth,2 do
     wg.Add(1)
-    go.new(worker).start({depth_l, check_l})
+    go.new(worker).start(depth_l, check_l)
 end
 wg.Wait()
 

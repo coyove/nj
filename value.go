@@ -22,7 +22,6 @@ var (
 	trueMarker        = unsafe.Pointer(new(int64))
 	falseMarker       = unsafe.Pointer(new(int64))
 	smallStringMarker = unsafe.Pointer(new([9]int64))
-	watermark         = Go(new(int))
 
 	Nil   = Value{}
 	Undef = Go(new(int))
@@ -83,9 +82,9 @@ func (v Value) Type() ValueType {
 	return ValueType(v.v)
 }
 
-// IsFalse tests whether value contains a falsy value: nil, false or 0 (or watermark internally)
+// IsFalse tests whether value contains a falsy value: nil, false or 0
 func (v Value) IsFalse() bool {
-	return v == Nil || v == Zero || v == False || v == watermark
+	return v == Nil || v == Zero || v == False
 }
 
 // IsInt tests whether value contains an integer (int64)

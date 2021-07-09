@@ -28,7 +28,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TLsh TRsh TURsh 
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TLsh TRsh TURsh TDotDotDot
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
@@ -197,19 +197,15 @@ elseif_stat:
 func_stat:
         TFunc TIdent '(' ')' stats TEnd                               { $$ = __func($2, emptyNode, "", $5) } | 
         TFunc TIdent '(' ident_list ')' stats TEnd                    { $$ = __func($2, $4, "", $6) } | 
-        TFunc TIdent '(' ')' TString stats TEnd                       { $$ = __func($2, emptyNode, $5.Str, $6) } |
-        TFunc TIdent '(' ident_list ')' TString stats TEnd            { $$ = __func($2, $4, $6.Str, $7) } |
+        TFunc TIdent '(' ident_list TDotDotDot ')' stats TEnd         { $$ = __func($2, __dotdotdot($4), "", $7) } | 
         TFunc TIdent '.' TIdent '(' ')' stats TEnd                    {
-            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($4), emptyNode, "", $7)) 
+            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($2, $4), emptyNode, "", $7)) 
         } | 
         TFunc TIdent '.' TIdent '(' ident_list ')' stats TEnd         {
-            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($4), $6, "", $8)) 
+            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($2, $4), $6, "", $8)) 
         } | 
-        TFunc TIdent '.' TIdent '(' ')' TString stats TEnd            {
-            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($4), emptyNode, $7.Str, $8)) 
-        } |
-        TFunc TIdent '.' TIdent '(' ident_list ')' TString stats TEnd {
-            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($4), $6, $8.Str, $9)) 
+        TFunc TIdent '.' TIdent '(' ident_list TDotDotDot ')' stats TEnd         {
+            $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($2, $4), __dotdotdot($6), "", $9)) 
         }
 
 jmp_stat:
@@ -316,12 +312,9 @@ call_expr:
         '(' expr_list comma ')' {
             $$ = __call(emptyNode, $2).SetPos($1.Pos) 
         } |
-        '(' expr_assign_list comma ')' {
-            $$ = __callMap(emptyNode, emptyNode, $2).SetPos($1.Pos) 
-        } |
-        '(' expr_list ',' expr_assign_list comma ')' {
-            $$ = __callMap(emptyNode, $2, $4).SetPos($1.Pos) 
-        } 
+        '(' expr_list TDotDotDot comma ')' {
+            $$ = __call(emptyNode, __dotdotdot($2)).SetPos($1.Pos) 
+        }
 
 expr_list:
         expr {

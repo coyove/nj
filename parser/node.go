@@ -95,7 +95,7 @@ func (n Node) IsNumber() bool {
 
 func (n Node) IsCall() bool {
 	t := n.Type
-	return t == Symbol && (n.SymbolValue() == ACall || n.SymbolValue() == ACallMap)
+	return t == Symbol && n.SymbolValue() == ACall
 }
 
 func (n Node) StringValue() string { return n.strSym }
@@ -286,7 +286,7 @@ func (n Node) append(n2 ...Node) Node {
 // }
 
 func (n Node) isCallStat() bool {
-	return len(n.Nodes) > 0 && (n.Nodes[0].SymbolValue() == ACall || n.Nodes[0].SymbolValue() == ACallMap)
+	return len(n.Nodes) > 0 && n.Nodes[0].SymbolValue() == ACall
 }
 
 func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {

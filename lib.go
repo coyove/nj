@@ -67,9 +67,16 @@ func init() {
 		}
 		env.A = Array(globals...)
 	}, "globals() => { g1, g2, ... }", "\tlist all global values")
-	AddGlobalValue("doc", func(env *Env, f Value) Value {
-		return Str(f.MustFunc("doc", 0).DocString)
-	}, "doc(function) => string", "\treturn function's documentation")
+	AddGlobalValue("doc", func(env *Env, f, doc Value) Value {
+		if doc == Nil {
+			return Str(f.MustFunc("doc()", 0).DocString)
+		}
+		f.MustFunc("doc()", 0).DocString = doc.String()
+		return doc
+	},
+		"doc(function) => string", "\treturn function's documentation",
+		"doc(function, docstring)", "\tupdate function's documentation",
+	)
 	AddGlobalValue("new", func(env *Env, v, a Value) Value {
 		m := *v.MustMap("new", 0)
 		m.hashItems = append([]hashItem{}, m.hashItems...)
@@ -83,17 +90,19 @@ func init() {
 	AddGlobalValue("len", func(env *Env, v Value) Value {
 		switch v.Type() {
 		case STR:
-			return Float(float64(len(v.Str())))
+			return Int(int64(len(v.Str())))
 		case MAP:
 			return Int(int64(v.Map().Len()))
 		case FUNC:
-			return Float(float64(v.Func().NumParams()))
+			return Int(int64(v.Func().NumParams))
 		case NUM, NIL, BOOL:
 			return panicf("can't measure length of %v", v.Type())
 		default:
 			return Int(int64(reflectLen(v.Go())))
 		}
 	})
+	AddGlobalValue("alen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("alen()", 0).items))) })
+	AddGlobalValue("hlen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("hlen()", 0).hashItems))) })
 	AddGlobalValue("eval", func(env *Env, s, g Value) Value {
 		var m map[string]interface{}
 		if g.Type() == MAP {
@@ -114,8 +123,8 @@ func init() {
 		}
 		return v
 	}, "eval(string, globals) => evaluate the string")
-	AddGlobalValue("apply", func(env *Env, f, a Value) Value {
-		res, err := f.MustFunc("apply()", 0).Call(a)
+	AddGlobalValue("apply", func(env *Env, f Value) Value {
+		res, err := f.MustFunc("apply()", 0).Call(env.Stack()[1:]...)
 		if err != nil {
 			panic(err)
 		}
@@ -129,13 +138,14 @@ func init() {
 				Str("_f"), f.MustFunc("new()", 0).Value(),
 				Str("_r"), Undef,
 				Str("_wg"), Go(wg),
-				Str("start"), Native2("start", func(env *Env, t, a Value) Value {
+				Str("start"), Native1("start", func(env *Env, t Value) Value {
 					m := t.Map()
 					wg := m.GetString("_wg").Go().(*sync.WaitGroup)
 					wg.Add(1)
+					args := append([]Value{}, env.Stack()[1:]...)
 					go func() {
 						defer wg.Done()
-						res, err := m.GetString("_f").Func().Call(a)
+						res, err := m.GetString("_f").Func().Call(args...)
 						if err != nil {
 							panic(err)
 						}
@@ -154,35 +164,6 @@ func init() {
 
 	// Debug libraries
 	AddGlobalValue("debug", Map(
-		Str("dumpstk"), Native("dumpstk", func(env *Env) {
-			start := env.Size()
-			for _, s := range env.DebugStacktrace {
-				start += int(s.cls.StackSize)
-			}
-			var r []Value
-			stack := (*env.stack)[start:]
-			for _, el := range stack[:cap(stack)] {
-				if el == watermark {
-					break
-				}
-				r = append(r, el)
-			}
-			env.A = Array(r...)
-		}, "$f() => { v1, v2, v3, ... }"),
-		Str("kwargs"), Native("kwargs", func(env *Env) {
-			start := env.Size()
-			for _, s := range env.DebugStacktrace {
-				start += int(s.cls.StackSize)
-			}
-			stack := (*env.stack)[start:]
-			stack = stack[:cap(stack)]
-			for i, el := range stack {
-				if el == watermark {
-					env.A = stack[i+1]
-					break
-				}
-			}
-		}, "$f() => { key1: value, key2: value2, ... }"),
 		Str("locals"), Native("locals", func(env *Env) {
 			var r []Value
 			start := env.StackOffset - uint32(env.DebugCaller.StackSize)
@@ -238,8 +219,8 @@ func init() {
 	AddGlobalValue("type", func(env *Env) {
 		env.A = Str(env.Get(0).Type().String())
 	}, "type(value) => string", "\treturn value's type")
-	AddGlobalValue("pcall", func(env *Env, f, a Value) Value {
-		a, err := f.MustFunc("pcall", 0).Call(a)
+	AddGlobalValue("pcall", func(env *Env, f Value) Value {
+		a, err := f.MustFunc("pcall", 0).Call(env.Stack()[1:]...)
 		if err == nil {
 			return a
 		}

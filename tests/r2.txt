@@ -35,8 +35,6 @@ end
 
 local a, b, c = foo1(1, 2, 3)
 assert(a == 1 and b + c == 5)
-a,b,c = foo1(c=10,b="a")
-assert(a==nil and c == 10 and b == "a")
 
 function foo1(a, b, c, x)
     local tmp = {a, b, c}
@@ -48,17 +46,6 @@ end
 
 local _, _, _, x,y = foo1(1,2,3,{"4",5})
 assert(x == "4" and y == 5)
-
-_, b, _, x = foo1(["b"]=2)
-assert(b == 2 and x == nil)
-
-do
-	assert("a" == mapFunc(a=1))
-	assert("[1,2,3]" == mapFunc(c={1,2,3}))
-	assert("1" == mapFunc(c=1))
-	assert(mapFunc(b=1,d=2) == "12")
-	assert(mapFunc(nil, "b", d="d") == "bd")
-end
 
 function remove(el, arr)
     for i=0, len(arr) do
@@ -85,6 +72,6 @@ end
 
 function bad(n) panic("bad" + n) end
 do
-	local err = pcall(bad, {"boy"})
+	local err = pcall(bad, "boy")
 	assert(err == "badboy")
 end

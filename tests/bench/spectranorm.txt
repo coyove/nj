@@ -35,13 +35,13 @@ function ATimesTransp(v, u)
 
     for i = 0, nCPU do
         wg.Add(1) 
-        go.new(TimesVec).start({x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u, wg})
+        go.new(TimesVec).start(x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u, wg)
     end
     wg.Wait() 
 
     for i = 0, nCPU do
         wg.Add(1) 
-        go.new(TimesTranspVec).start({v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x, wg})
+        go.new(TimesTranspVec).start(v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x, wg)
     end
     wg.Wait() 
 end

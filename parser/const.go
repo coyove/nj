@@ -34,10 +34,9 @@ const (
 	ABegin    = "prog"
 	ALoad     = "load"
 	AStore    = "store"
-	AArray    = "maparray"
+	AArray    = "array"
 	AArrayMap = "map"
 	ACall     = "call"
-	ACallMap  = "callmap"
 	ATailCall = "tailcall"
 	AReturn   = "return"
 	AAdd      = "add"
@@ -63,6 +62,7 @@ const (
 	AFreeAddr = "freeaddr"
 	ALabel    = "label"
 	AGoto     = "goto"
+	AUnpack   = "unpack"
 )
 
 func __chain(args ...Node) Node { return NewComplex(append([]Node{NewSymbol(ABegin)}, args...)...) }
@@ -100,24 +100,13 @@ func __func(name Token, paramList Node, doc string, stats Node) Node {
 	)
 }
 
-func __markupFuncName(name Token) Token {
-	name.Str += "_" + strconv.Itoa(rand.Int())
+func __markupFuncName(recv, name Token) Token {
+	name.Str = recv.Str + "_" + name.Str
 	return name
 }
 
 func __call(cls, args Node) Node {
 	return NewComplex(NewSymbol(ACall), cls, args)
-}
-
-func __callMap(cls, argsArray, argsMap Node) Node {
-	args := make([]Node, 0, len(argsArray.Nodes)+len(argsMap.Nodes))
-	for i, n := range argsArray.Nodes {
-		args = append(args, NewNumberFromInt(int64(i)), n)
-	}
-	args = append(args, argsMap.Nodes...)
-	n := __call(cls, NewComplex(args...))
-	n.Nodes[0].strSym = ACallMap
-	return n
 }
 
 func __callPatch(original, self Node) Node {
@@ -194,6 +183,11 @@ func __moveMulti(nodes, src []Node, pos Position) Node {
 	return res
 }
 
+func __dotdotdot(expr Node) Node {
+	expr.Nodes[len(expr.Nodes)-1] = NewComplex(NewSymbol(AUnpack), expr.Nodes[len(expr.Nodes)-1])
+	return expr
+}
+
 func randomVarname() Node {
-	return NewSymbol("v" + strconv.FormatInt(rand.Int63(), 10))
+	return NewSymbol("v" + strconv.FormatInt(rand.Int63(), 10)[:6])
 }

@@ -199,15 +199,21 @@ func (table *symtable) compileList(nodes []parser.Node) uint16 {
 // [call callee [args ...]]
 func (table *symtable) compileCall(nodes []parser.Node) uint16 {
 	tmp := append([]parser.Node{nodes[1]}, nodes[2].Nodes...)
-	table.collapse(tmp, true)
-
-	for i := 1; i < len(tmp); i++ {
-		table.writeInst(OpPush, tmp[i], parser.NewAddress(uint16(i-1)))
+	if last := &tmp[len(tmp)-1]; len(last.Nodes) == 2 && last.Nodes[0].SymbolValue() == parser.AUnpack {
+		*last = last.Nodes[1]
+		table.collapse(tmp, true)
+		for i := 1; i < len(tmp)-1; i++ {
+			table.writeInst(OpPush, tmp[i], parser.NewAddress(0))
+		}
+		table.writeInst(OpPushVararg, tmp[len(tmp)-1], parser.NewAddress(0))
+	} else {
+		table.collapse(tmp, true)
+		for i := 1; i < len(tmp); i++ {
+			table.writeInst(OpPush, tmp[i], parser.NewAddress(0))
+		}
 	}
 
 	switch nodes[0].SymbolValue() {
-	case parser.ACallMap:
-		table.writeInst(OpCall, tmp[0], parser.NewAddress(callMap))
 	case parser.ACall:
 		table.writeInst(OpCall, tmp[0], parser.NewAddress(callNormal))
 	case parser.ATailCall:
@@ -223,7 +229,6 @@ func (table *symtable) compileCall(nodes []parser.Node) uint16 {
 func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 	params := atoms[2]
 	newtable := newsymtable(table.options)
-	paramsString := []string{}
 
 	if table.global == nil {
 		newtable.global = table
@@ -231,13 +236,17 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 		newtable.global = table.global
 	}
 
+	varargIdx := -1
 	for i, p := range params.Nodes {
 		n := p.SymbolValue()
+		if len(p.Nodes) == 2 && p.Nodes[0].SymbolValue() == parser.AUnpack {
+			n = p.Nodes[1].SymbolValue()
+			varargIdx = i
+		}
 		if _, ok := newtable.sym[n]; ok {
 			panicf("%v: duplicated parameter: %q", atoms[1], n)
 		}
 		newtable.put(n, uint16(i))
-		paramsString = append(paramsString, n)
 	}
 
 	ln := len(newtable.sym)
@@ -253,11 +262,12 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 	code.writeInst(OpRet, table.loadK(nil), 0)
 
 	cls := &Func{}
+	cls.Variadic = varargIdx >= 0
+	cls.NumParams = uint16(len(params.Nodes))
 	cls.Name = atoms[1].SymbolValue()
 	cls.DocString = atoms[4].StringValue()
 	cls.StackSize = newtable.vp
 	cls.Code = code
-	cls.Params = paramsString
 	cls.Locals = newtable.symbolsToDebugLocals()
 
 	table.funcs = append(table.funcs, cls)

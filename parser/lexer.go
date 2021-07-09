@@ -314,6 +314,16 @@ skipspaces:
 			case ch2 >= '0' && ch2 <= '9':
 				tok.Type = TNumber
 				tok.Str = sc.scanNumber()
+			case ch2 == '.':
+				sc.Next()
+				if sc.Peek() == '.' {
+					sc.Next()
+					tok.Type = TDotDotDot
+					tok.Str = "..."
+				} else {
+					err = sc.Error(string(rune(ch)), "unexpected dots")
+					goto finally
+				}
 			default:
 				tok.Type = '.'
 				tok.Str = "."

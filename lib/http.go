@@ -18,8 +18,8 @@ import (
 var HostWhitelist = map[string][]string{}
 
 func init() {
-	script.AddGlobalValue("http", script.NativeWithParamMap("http", func(env *script.Env) {
-		args := env.A.Map()
+	script.AddGlobalValue("http", script.Native("http", func(env *script.Env) {
+		args := env.Get(0).Map()
 
 		ctx, cancel, _ := env.Deadline()
 		defer func() {
@@ -161,50 +161,6 @@ func init() {
 		"method", "url", "rawbody", "timeout", "proxy",
 		"header", "query", "form", "multipart",
 		"json", "jar", "no_redirect"))
-}
-
-func splitKV(line string) (k string, v string, ok bool) {
-	if idx := strings.Index(line, ":"); idx > -1 {
-		k, v, ok = strings.TrimSpace(line[:idx]), strings.TrimSpace(line[idx+1:]), true
-	}
-	if idx := strings.Index(line, "="); idx > -1 {
-		k, v, ok = strings.TrimSpace(line[:idx]), strings.TrimSpace(line[idx+1:]), true
-	}
-	if idx := strings.Index(line, " "); idx > -1 {
-		k, v, ok = strings.TrimSpace(line[:idx]), strings.TrimSpace(line[idx+1:]), true
-	}
-	if idx := strings.Index(line, ","); idx > -1 {
-		k, v, ok = strings.TrimSpace(line[:idx]), strings.TrimSpace(line[idx+1:]), true
-	}
-	tmp, err := url.QueryUnescape(v)
-	if err == nil {
-		v = tmp
-	}
-	return
-}
-
-func iterStrings(v script.Value, f func(string)) {
-	switch v.Type() {
-	case script.STR:
-		f(v.String())
-	case script.MAP:
-		for _, line := range v.Map().Array() {
-			f(line.String())
-		}
-	}
-}
-
-func iterStringPairs(v1, v2 script.Value, f func(string, string)) {
-	switch v1.Type() + v2.Type() {
-	case script.STR * 2:
-		f(v1.String(), v2.String())
-	case script.MAP * 2:
-		for i, line := range v1.Map().Array() {
-			if i < len(v2.Map().Array()) {
-				f(line.String(), v2.Map().Array()[i].String())
-			}
-		}
-	}
 }
 
 func panicErr(err error) {

@@ -52,21 +52,6 @@ func runFile(t *testing.T, path string) {
 				env.Global.Set("G_FLAG", Str("ok"))
 				env.Global.Println("find global")
 			},
-			"mapFunc": NativeWithParamMap("mapFunc", func(env *Env) {
-				m := env.A.Map()
-				if m.Get(Str("a")) != Nil {
-					env.A = Str("a")
-				}
-				if m.Get(Str("b")) != Nil {
-					env.A = m.Get(Str("b"))
-				}
-				if m.Get(Str("c")) != Nil {
-					env.A = Str(m.Get(Str("c")).String())
-				}
-				if m.Get(Str("d")) != Nil {
-					env.A = Str(env.A.String() + m.Get(Str("d")).String())
-				}
-			}, "DocString...", "a", "b", "c", "d"),
 			"G": "test",
 		},
 	})
@@ -110,11 +95,11 @@ end
 return foo
 `, &CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
 		v, _ := cls.Call()
-		if v, _ := v.Func().CallSimple(Int(10)); v.Int() != 11 {
+		if v, _ := v.Func().Call(Int(10)); v.Int() != 11 {
 			t.Fatal(v)
 		}
 
-		if v, _ := v.Func().CallSimple(Int(100)); v.Int() != 111 {
+		if v, _ := v.Func().Call(Int(100)); v.Int() != 111 {
 			t.Fatal(v)
 		}
 	}
@@ -131,15 +116,15 @@ end
 return foo
 `, nil)
 		v, _ := cls.Call()
-		if v, _ := v.Func().CallSimple(Array(Int(1), Int(2), Int(3), Int(4))); v.Int() != 11 {
+		if v, _ := v.Func().Call(Array(Int(1), Int(2), Int(3), Int(4))); v.Int() != 11 {
 			t.Fatal(v)
 		}
 
-		if v, _ := v.Func().CallSimple(Array(Int(10), Int(20))); v.Int() != 41 {
+		if v, _ := v.Func().Call(Array(Int(10), Int(20))); v.Int() != 41 {
 			t.Fatal(v)
 		}
 
-		if v, _ := v.Func().CallSimple(); v.Int() != 41 {
+		if v, _ := v.Func().Call(); v.Int() != 41 {
 			t.Fatal(v)
 		}
 	}
@@ -473,43 +458,19 @@ func TestRHMap(t *testing.T) {
 }
 
 func TestACall(t *testing.T) {
-	foo := MustRun(LoadString(`function foo(one, two)
-    assert(one == 1 and two == 2)
-	a0 = 0 a1 = 1 a2 = 2 a3 = 3
-    end
-    return foo`, nil))
-	_, err := foo.Func().Call(Map(Str("one"), Int(1), Str("two"), Int(2)))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	foo = MustRun(LoadString(`function foo()
-    m = debug.kwargs()
-	print("inner", m)
-    assert(m.one == 1 and m.two == 2)
-	a0 = 0 a1 = 1 a2 = 2 a3 = 3
-    end
-    return foo`, nil))
-	_, err = foo.Func().Call(Map(Str("one"), Int(1), Str("two"), Int(2)))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	foo = MustRun(LoadString(`function foo()
-    m = debug.dumpstk()
+	foo := MustRun(LoadString(`function foo(m...)
 	print(m)
     assert(m[1] == 1 and m[2] == 2)
 	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	_, err = foo.Func().CallSimple(Nil, Int(1), Int(2))
+	_, err := foo.Func().Call(Nil, Int(1), Int(2))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	foo = MustRun(LoadString(`function foo()
-    m = debug.dumpstk()
-	return apply(sum, concat(m, m))
+	foo = MustRun(LoadString(`function foo(m...)
+	return apply(sum, concat(m, m)...) + sum2(m...)
     end
     return foo`, &CompileOptions{
 		GlobalKeyValues: map[string]interface{}{
@@ -520,13 +481,16 @@ func TestACall(t *testing.T) {
 				}
 				return s
 			},
+			"sum2": func(a, b int) int {
+				return a + b
+			},
 		},
 	}))
-	v, err := foo.Func().CallSimple(Int(1), Int(2), Int(3))
+	v, err := foo.Func().Call(Int(1), Int(2), Int(3))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Int() != 12 {
+	if v.Int() != 15 {
 		t.Fatal(v)
 	}
 }

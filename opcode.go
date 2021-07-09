@@ -9,7 +9,6 @@ const (
 
 	callNormal = 0
 	callTail   = 1
-	callMap    = 2
 )
 
 const (
@@ -40,6 +39,7 @@ const (
 	OpJmp
 	OpLoadFunc
 	OpPush
+	OpPushVararg
 	OpArray
 	OpMap
 	OpCall

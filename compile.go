@@ -318,7 +318,7 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileWhile(nodes)
 	case parser.ABreak:
 		yx = table.compileBreak(nodes)
-	case parser.ACall, parser.ATailCall, parser.ACallMap:
+	case parser.ACall, parser.ATailCall:
 		yx = table.compileCall(nodes)
 	case parser.AArray, parser.AArrayMap:
 		yx = table.compileList(nodes)

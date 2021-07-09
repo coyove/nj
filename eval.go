@@ -311,6 +311,8 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			}
 		case OpPush:
 			stackEnv.Push(env._get(opa))
+		case OpPushVararg:
+			*stackEnv.stack = append(*stackEnv.stack, env._get(opa).MustMap("unpack arguments", 0).Array()...)
 		case OpRet:
 			v := env._get(opa)
 			if len(retStack) == 0 {
@@ -328,17 +330,18 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case OpLoadFunc:
 			env.A = env.Global.Functions[opa].Value()
 		case OpCall:
-			cls := env._get(opa).MustFunc("invoke function", 0)
-			if opb == callMap {
-				m := buildCallMap(cls, stackEnv)
-				stackEnv.Clear()
-				for _, pa := range cls.Params {
-					stackEnv.Push(m.Get(Str(pa)))
-				}
-				stackEnv.A = m.Value()
-			}
+			cls := env._get(opa).MustFunc("invoke function", -1)
 			if cls.MethodSrc != Nil {
 				stackEnv.Prepend(cls.MethodSrc)
+			}
+			if cls.Variadic {
+				s, w := stackEnv.Stack(), int(cls.NumParams)-1
+				if len(s) > w {
+					s[w] = Array(append([]Value{}, s[w:]...)...)
+				} else {
+					stackEnv.grow(w + 1)
+					stackEnv._set(uint16(w), Array())
+				}
 			}
 			if cls.Native != nil {
 				stackEnv.Global = env.Global
@@ -349,10 +352,6 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				env.A = stackEnv.A
 				stackEnv.Clear()
 			} else {
-				stackEnv.Push(watermark) // Used by debug.dumpstk to determine the top of stack
-				if opb == callMap {
-					stackEnv.Push(stackEnv.A)
-				}
 				stackEnv.growZero(int(cls.StackSize))
 
 				last := stacktrace{
@@ -386,26 +385,4 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			}
 		}
 	}
-}
-
-func buildCallMap(f *Func, stackEnv Env) *RHMap {
-	m := NewMap(stackEnv.Size() / 2)
-	for i := 0; i < stackEnv.Size(); i += 2 {
-		a := stackEnv.Stack()[i]
-		if a == Nil {
-			continue
-		}
-		var name string
-		if a.Type() == NUM && a.Int() < int64(len(f.Params)) {
-			name = f.Params[a.Int()]
-		} else {
-			name = a.String()
-		}
-		nv := Str(name)
-		if m.findHash(nv) >= 0 {
-			panicf("invoke function with duplicated parameter: %q", name)
-		}
-		m.Set(nv, stackEnv.Get(i+1))
-	}
-	return m
 }

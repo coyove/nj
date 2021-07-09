@@ -105,10 +105,11 @@ var (
 		OpBitURsh: parser.ABitURsh,
 	}
 	uOp = map[byte]string{
-		OpBitNot: parser.ABitNot,
-		OpNot:    parser.ANot,
-		OpRet:    parser.AReturn,
-		OpPush:   "push",
+		OpBitNot:     parser.ABitNot,
+		OpNot:        parser.ANot,
+		OpRet:        parser.AReturn,
+		OpPush:       "push",
+		OpPushVararg: "pushvararg",
 	}
 )
 
@@ -189,8 +190,6 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 		case OpCall:
 			if b == callTail {
 				sb.WriteString("tailcall " + readAddr(a, true))
-			} else if b == callMap {
-				sb.WriteString("callmap " + readAddr(a, true))
 			} else {
 				sb.WriteString("call " + readAddr(a, true))
 			}

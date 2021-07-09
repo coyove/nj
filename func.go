@@ -17,9 +17,10 @@ type Func struct {
 	Name       string
 	DocString  string
 	StackSize  uint16
+	NumParams  uint16
+	Variadic   bool
 	Native     func(env *Env)
 	loadGlobal *Program
-	Params     []string
 	Locals     []string
 	MethodSrc  Value
 }
@@ -65,28 +66,6 @@ func Native4(name string, f func(*Env, Value, Value, Value, Value) Value, doc ..
 	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1), env.Get(2), env.Get(3)) }, doc...)
 }
 
-func NativeWithParamMap(name string, f func(*Env), doc string, params ...string) Value {
-	return (&Func{
-		Name:      name,
-		Params:    params,
-		DocString: fixDocString(doc, name, strings.Join(params, ",")),
-		Native: func(env *Env) {
-			if env.A.Type() != MAP {
-				args := NewMap(env.Size())
-				for i := range env.Stack() {
-					if i < len(params) {
-						args.Set(Str(params[i]), env.Stack()[i])
-					}
-				}
-				env.A = args.Value()
-			}
-			f(env)
-		},
-	}).Value()
-}
-
-func (c *Func) NumParams() int { return len(c.Params) }
-
 func (c *Func) IsNative() bool { return c.Native != nil }
 
 func (c *Func) Value() Value { return Value{v: uint64(FUNC), p: unsafe.Pointer(c)} }
@@ -100,13 +79,14 @@ func (c *Func) String() string {
 	} else {
 		p.WriteString("function")
 	}
-
 	p.WriteString("(")
-	for _, pa := range c.Params {
-		p.WriteString(pa)
-		p.WriteString(",")
+	for i := 0; i < int(c.NumParams); i++ {
+		fmt.Fprintf(&p, "a%d,", i)
 	}
-	if c.NumParams() > 0 {
+	if c.Variadic {
+		p.Truncate(p.Len() - 1)
+		p.WriteString("...")
+	} else if c.NumParams > 0 {
 		p.Truncate(p.Len() - 1)
 	}
 	p.WriteString(")")
@@ -134,40 +114,28 @@ func (p *Program) Call() (v1 Value, err error) {
 	return
 }
 
-func (c *Func) CallSimple(args ...Value) (v1 Value, err error) {
-	return c.Call(Array(args...))
-}
-
-func (c *Func) Call(args Value) (v1 Value, err error) {
-	if t := args.Type(); t != MAP && t != NIL {
-		return v1, fmt.Errorf("call() requires a map of arguments")
-	}
+func (c *Func) Call(args ...Value) (v1 Value, err error) {
 	defer parser.CatchError(&err)
 
-	var s []Value
 	newEnv := Env{
 		Global: c.loadGlobal,
-		stack:  &s,
+		stack:  &args,
 	}
-	if args == Nil {
-		newEnv.Push(watermark)
-	} else if a := args.Map(); a.MapLen() == 0 {
-		// Call by an array of arguments
-		*newEnv.stack = append(*newEnv.stack, a.items...)
-		newEnv.Push(watermark)
-	} else {
-		for _, pa := range c.Params {
-			newEnv.Push(a.Get(Str(pa)))
-		}
-		newEnv.Push(watermark)
-		newEnv.Push(a.Value())
-	}
-	newEnv.growZero(int(c.StackSize))
 
 	if c.Native != nil {
 		c.Native(&newEnv)
 		v1 = newEnv.A
 	} else {
+		if c.Variadic {
+			s := *newEnv.stack
+			if len(s) > int(c.NumParams)-1 {
+				s[c.NumParams-1] = Array(append([]Value{}, s[c.NumParams-1:]...)...)
+			} else {
+				newEnv.grow(int(c.NumParams))
+				newEnv._set(c.NumParams-1, Array())
+			}
+		}
+		newEnv.growZero(int(c.StackSize))
 		v1 = InternalExecCursorLoop(newEnv, c, 0)
 	}
 	return
