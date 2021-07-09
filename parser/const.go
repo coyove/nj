@@ -101,7 +101,7 @@ func __func(name Token, paramList Node, doc string, stats Node) Node {
 }
 
 func __markupFuncName(recv, name Token) Token {
-	name.Str = recv.Str + "_" + name.Str
+	name.Str = recv.Str + "." + name.Str
 	return name
 }
 

@@ -23,11 +23,12 @@ var (
 	falseMarker       = unsafe.Pointer(new(int64))
 	smallStringMarker = unsafe.Pointer(new([9]int64))
 
-	Nil   = Value{}
-	Undef = Go(new(int))
-	Zero  = Int(0)
-	False = Bool(false)
-	True  = Bool(true)
+	Nil     = Value{}
+	Undef   = Go(new(int))
+	Zero    = Int(0)
+	NullStr = Str("")
+	False   = Bool(false)
+	True    = Bool(true)
 )
 
 type ValueType byte
@@ -82,9 +83,10 @@ func (v Value) Type() ValueType {
 	return ValueType(v.v)
 }
 
-// IsFalse tests whether value contains a falsy value: nil, false or 0
+// IsFalse tests whether value contains a falsy value: nil, false, empty string or 0
+// Note that empty list and nil pointer in golang are considered as 'true'
 func (v Value) IsFalse() bool {
-	return v == Nil || v == Zero || v == False
+	return v == Nil || v == Zero || v == False || v == NullStr
 }
 
 // IsInt tests whether value contains an integer (int64)
@@ -171,7 +173,7 @@ func Bytes(b []byte) Value {
 
 // Go creates Value from golang interface{}
 // []Type (except []byte/[]Value), [..]Type and map[Type]Type will be left as is,
-// to convert them recursively, use DeepAny instead
+// to convert them recursively, use DeepGo instead
 func Go(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
@@ -240,7 +242,7 @@ func Go(i interface{}) Value {
 			rtNumIn := rt.NumIn()
 			nf = func(env *Env) {
 				getter := func(i int, t reflect.Type) reflect.Value {
-					return reflect.ValueOf(env.Get(i).DeepGo(t))
+					return reflect.ValueOf(env.Get(i).GoType(t))
 				}
 				ins := make([]reflect.Value, 0, rtNumIn)
 				if !rt.IsVariadic() {
@@ -361,8 +363,8 @@ func (v Value) unsafeint() int64 { return int64(v.v) }
 
 func (v Value) unsafefloat() float64 { return math.Float64frombits(^v.v) }
 
-// DeepGo returns the interface{} representation of Value which will be converted to t if needed
-func (v Value) DeepGo(t reflect.Type) interface{} {
+// GoType returns the interface{} representation of Value which will be converted to t if needed
+func (v Value) GoType(t reflect.Type) interface{} {
 	if t == nil {
 		return v.Go()
 	}
@@ -383,20 +385,20 @@ func (v Value) DeepGo(t reflect.Type) interface{} {
 		case reflect.Slice:
 			s := reflect.MakeSlice(t, len(a.Array()), len(a.Array()))
 			for i, a := range a.Array() {
-				s.Index(i).Set(reflect.ValueOf(a.DeepGo(t.Elem())))
+				s.Index(i).Set(reflect.ValueOf(a.GoType(t.Elem())))
 			}
 			return s.Interface()
 		case reflect.Array:
 			s := reflect.New(t).Elem()
 			for i, a := range a.Array() {
-				s.Index(i).Set(reflect.ValueOf(a.DeepGo(t.Elem())))
+				s.Index(i).Set(reflect.ValueOf(a.GoType(t.Elem())))
 			}
 			return s.Interface()
 		case reflect.Map:
 			s := reflect.MakeMap(t)
 			kt, vt := t.Key(), t.Elem()
 			a.Foreach(func(k, v Value) bool {
-				s.SetMapIndex(reflect.ValueOf(k.DeepGo(kt)), reflect.ValueOf(v.DeepGo(vt)))
+				s.SetMapIndex(reflect.ValueOf(k.GoType(kt)), reflect.ValueOf(v.GoType(vt)))
 				return true
 			})
 			return s.Interface()

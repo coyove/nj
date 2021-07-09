@@ -87,6 +87,7 @@ func init() {
 		a.Map().Parent = &m
 		return a
 	})
+	AddGlobalValue("prototype", g["new"])
 	AddGlobalValue("len", func(env *Env, v Value) Value {
 		switch v.Type() {
 		case STR:
@@ -438,13 +439,13 @@ func init() {
 	// Array related functions
 	AddGlobalValue("append", func(env *Env, m, v Value) Value {
 		a := m.MustMap("append()", 0)
-		a.Set(Int(int64(a.Len())), v)
+		a.Set(Int(int64(len(a.items))), v)
 		return m
 	}, "append(array, value) => append value to array")
 	AddGlobalValue("concat", func(env *Env, a, b Value) Value {
 		ma, mb := a.MustMap("concat() first arg", 0), b.MustMap("concat() second arg", 0)
 		for _, b := range mb.Array() {
-			ma.Set(Int(int64(ma.Len())), b)
+			ma.Set(Int(int64(len(ma.items))), b)
 		}
 		return ma.Value()
 	}, "append(array, value) => append value to array")

@@ -469,6 +469,15 @@ func TestACall(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	foo = MustRun(LoadString(`function foo(a, b, m...)
+	assert(a == 1 and len(m) == 0)
+    end
+    return foo`, nil))
+	_, err = foo.Func().Call(Int(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	foo = MustRun(LoadString(`function foo(m...)
 	return apply(sum, concat(m, m)...) + sum2(m...)
     end
@@ -497,12 +506,12 @@ func TestACall(t *testing.T) {
 
 func TestReflectedValue(t *testing.T) {
 	v := Array(True, False)
-	x := v.DeepGo(reflect.TypeOf([2]bool{})).([2]bool)
+	x := v.GoType(reflect.TypeOf([2]bool{})).([2]bool)
 	if x[0] != true || x[1] != false {
 		t.Fatal(x)
 	}
 	v = Map(Str("a"), Int(1), Str("b"), Int(2))
-	y := v.DeepGo(reflect.TypeOf(map[string]byte{})).(map[string]byte)
+	y := v.GoType(reflect.TypeOf(map[string]byte{})).(map[string]byte)
 	if y["a"] != 1 || y["b"] != 2 {
 		t.Fatal(x)
 	}

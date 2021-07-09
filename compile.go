@@ -432,11 +432,11 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		}
 	}
 	for _, f := range cls.Functions {
-		f.loadGlobal = cls
+		f.LoadGlobal = cls
 	}
 	cls.NilIndex = table.loadK(nil)
 	cls.shadowTable = shadowTable
-	cls.loadGlobal = cls
+	cls.LoadGlobal = cls
 	return cls, err
 }
 

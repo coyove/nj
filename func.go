@@ -20,7 +20,7 @@ type Func struct {
 	NumParams  uint16
 	Variadic   bool
 	Native     func(env *Env)
-	loadGlobal *Program
+	LoadGlobal *Program
 	Locals     []string
 	MethodSrc  Value
 }
@@ -97,7 +97,7 @@ func (c *Func) PrettyCode() string {
 	if c.Native != nil {
 		return "[Native Code]"
 	}
-	return pkPrettify(c, c.loadGlobal, false)
+	return pkPrettify(c, c.LoadGlobal, false)
 }
 
 func (p *Program) Run() (v1 Value, err error) {
@@ -118,7 +118,7 @@ func (c *Func) Call(args ...Value) (v1 Value, err error) {
 	defer parser.CatchError(&err)
 
 	newEnv := Env{
-		Global: c.loadGlobal,
+		Global: c.LoadGlobal,
 		stack:  &args,
 	}
 

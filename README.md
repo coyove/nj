@@ -45,8 +45,8 @@ function Car.get_brand(this)
 	if this._brand then return str.from('a %s car #%d').format(this._brand, this.index) end
 	return 'a car'
 end
-Benz = new(Car, {_brand='benz'})
-Honda = new(Car, {_brand='honda'})
+Benz = prototype(Car, {_brand='benz'})
+Honda = prototype(Car, {_brand='honda'})
 
 b0 = new(Car)
 b1 = new(Benz, {index=1})

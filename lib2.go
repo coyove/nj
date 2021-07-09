@@ -17,7 +17,7 @@ var StringMethods = Map(
 	}, ""),
 	Str("iequal"), Native2("iequal", func(env *Env, src, a Value) Value {
 		s := src.MustStr("index", 0)
-		return Bool(strings.EqualFold(s, a.MustStr("iequal", 0)))
+		return Bool(strings.EqualFold(s, a.MustStr("iequal()", 0)))
 	}, ""),
 	Str("contains"), Native2("contains", func(env *Env, src, a Value) Value {
 		s := src.MustStr("", 0)
@@ -28,8 +28,8 @@ var StringMethods = Map(
 		return Bool(strings.ContainsAny(s, a.MustStr("containsany()", 0)))
 	}, ""),
 	Str("split"), Native3("split", func(env *Env, src, delim, n Value) Value {
-		s := src.MustStr("split", 0)
-		d := delim.MustStr("split delimeter", 0)
+		s := src.MustStr("split() text", 0)
+		d := delim.MustStr("split() delimeter", 0)
 		r := []Value{}
 		if n := n.IntDefault(0); n == 0 {
 			for _, p := range strings.Split(s, d) {
@@ -43,25 +43,25 @@ var StringMethods = Map(
 		return Array(r...)
 	}, "split(text, delim) => {part1, part2, ...}", "split(text, delim, n) => {part1, ..., partN}"),
 	Str("replace"), Native("replace", func(env *Env) {
-		src := env.Get(0).MustStr("replace", 0)
-		from := env.Get(1).MustStr("replace from text", 0)
-		to := env.Get(2).MustStr("replace to text", 0)
+		src := env.Get(0).MustStr("replace() text", 0)
+		from := env.Get(1).MustStr("replace() from old text", 0)
+		to := env.Get(2).MustStr("replace() to new text", 0)
 		n := env.Get(3).IntDefault(-1)
 		env.A = Str(strings.Replace(src, from, to, int(n)))
 	}, ""),
-	Str("find"), Native2("index", func(env *Env, src, substr Value) Value {
-		s := src.MustStr("index", 0)
-		return Int(int64(strings.Index(s, substr.MustStr("index", 0))))
+	Str("find"), Native2("find", func(env *Env, src, substr Value) Value {
+		s := src.MustStr("", 0)
+		return Int(int64(strings.Index(s, substr.MustStr("find()", 0))))
 	}, ""),
-	Str("findany"), Native2("index_any", func(env *Env, src, substr Value) Value {
-		s := src.MustStr("index", 0)
-		return Int(int64(strings.IndexAny(s, substr.MustStr("index_any", 0))))
+	Str("findany"), Native2("findany", func(env *Env, src, substr Value) Value {
+		s := src.MustStr("", 0)
+		return Int(int64(strings.IndexAny(s, substr.MustStr("findany()", 0))))
 	}, ""),
-	Str("rfind"), Native2("last_index", func(env *Env, src, substr Value) Value {
+	Str("rfind"), Native2("rfind", func(env *Env, src, substr Value) Value {
 		s := src.MustStr("last_index", 0)
 		return Int(int64(strings.LastIndex(s, substr.MustStr("last_index", 0))))
 	}, ""),
-	Str("rfindany"), Native2("last_index_any", func(env *Env, src, substr Value) Value {
+	Str("rfindany"), Native2("rfindany", func(env *Env, src, substr Value) Value {
 		s := src.MustStr("last_index", 0)
 		return Int(int64(strings.LastIndexAny(s, substr.MustStr("last_index_any", 0))))
 	}, ""),
@@ -79,24 +79,24 @@ var StringMethods = Map(
 	}, ""),
 	Str("trim"), Native2("trim", func(env *Env, src, cutset Value) Value {
 		if cutset == Nil {
-			return Str(strings.TrimSpace(src.MustStr("trim_space", 0)))
+			return Str(strings.TrimSpace(src.MustStr("trim()", 0)))
 		}
-		c := cutset.MustStr("trim cutset", 0)
-		return Str(strings.Trim(src.MustStr("trim", 0), c))
+		c := cutset.MustStr("trim() cutset", 0)
+		return Str(strings.Trim(src.MustStr("trim()", 0), c))
 	}, ""),
-	Str("ltrim"), Native2("trim_left", func(env *Env, src, cutset Value) Value {
+	Str("ltrim"), Native2("ltrim", func(env *Env, src, cutset Value) Value {
 		c := cutset.MustStr("trim_left cutset", 0)
 		return Str(strings.TrimLeft(src.MustStr("trim_left", 0), c))
 	}, ""),
-	Str("rtrim"), Native2("trim_right", func(env *Env, src, cutset Value) Value {
+	Str("rtrim"), Native2("rtrim", func(env *Env, src, cutset Value) Value {
 		c := cutset.MustStr("trim_right cutset", 0)
 		return Str(strings.TrimRight(src.MustStr("trim_right", 0), c))
 	}, ""),
-	Str("ptrim"), Native2("trim_prefix", func(env *Env, src, cutset Value) Value {
+	Str("ptrim"), Native2("ptrim", func(env *Env, src, cutset Value) Value {
 		c := cutset.MustStr("trim_prefix", 0)
 		return Str(strings.TrimPrefix(src.MustStr("trim_prefix", 0), c))
 	}, ""),
-	Str("strim"), Native2("trim_suffix", func(env *Env, src, cutset Value) Value {
+	Str("strim"), Native2("strim", func(env *Env, src, cutset Value) Value {
 		c := cutset.MustStr("trim_suffix", 0)
 		return Str(strings.TrimSuffix(src.MustStr("trim_suffix", 0), c))
 	}, ""),

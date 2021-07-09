@@ -19,7 +19,7 @@ func reflectLoad(v interface{}, key Value) Value {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		v := rv.MapIndex(reflect.ValueOf(key.DeepGo(rv.Type().Key())))
+		v := rv.MapIndex(reflect.ValueOf(key.GoType(rv.Type().Key())))
 		if v.IsValid() {
 			return Go(v.Interface())
 		}
@@ -50,11 +50,11 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		rk := reflect.ValueOf(key.DeepGo(rv.Type().Key()))
+		rk := reflect.ValueOf(key.GoType(rv.Type().Key()))
 		if v2 == Nil {
 			rv.SetMapIndex(rk, reflect.Value{})
 		} else {
-			rv.SetMapIndex(rk, reflect.ValueOf(v2.DeepGo(rv.Type().Elem())))
+			rv.SetMapIndex(rk, reflect.ValueOf(v2.GoType(rv.Type().Elem())))
 		}
 		return
 	case reflect.Slice, reflect.Array:
@@ -62,7 +62,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		if idx >= int64(rv.Len()) || idx < 0 {
 			return
 		}
-		rv.Index(int(idx)).Set(reflect.ValueOf(v2.DeepGo(rv.Type().Elem())))
+		rv.Index(int(idx)).Set(reflect.ValueOf(v2.GoType(rv.Type().Elem())))
 		return
 	}
 
@@ -78,7 +78,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 	if f.Type() == reflect.TypeOf(Value{}) {
 		f.Set(reflect.ValueOf(v2))
 	} else {
-		f.Set(reflect.ValueOf(v2.DeepGo(f.Type())))
+		f.Set(reflect.ValueOf(v2.GoType(f.Type())))
 	}
 }
 
