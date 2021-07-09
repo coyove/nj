@@ -4,12 +4,16 @@ import (
 	"fmt"
 )
 
-const regA uint16 = 0x1fff // full 13 bits
+const (
+	regA uint16 = 0x1fff // full 13 bits
 
-type opCode byte
+	callNormal = 0
+	callTail   = 1
+	callMap    = 2
+)
 
 const (
-	_ opCode = iota
+	_ = iota
 	OpSet
 	OpStore
 	OpLoad
@@ -36,10 +40,9 @@ const (
 	OpJmp
 	OpLoadFunc
 	OpPush
-	OpMapArray
+	OpArray
 	OpMap
 	OpCall
-	OpCallMap
 	OpRet
 )
 

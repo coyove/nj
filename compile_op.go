@@ -55,7 +55,7 @@ func (table *symtable) compileReturn(atoms []parser.Node) uint16 {
 }
 
 // writeInst3 accepts 3 arguments at most, 2 arguments will be encoded into opCode itself, the 3rd one will be in regA
-func (table *symtable) writeInst3(bop opCode, atoms []parser.Node) uint16 {
+func (table *symtable) writeInst3(bop byte, atoms []parser.Node) uint16 {
 	// first atom: the splitInst Name, tail atoms: the args
 	if len(atoms) > 4 {
 		panic("DEBUG: too many arguments")
@@ -184,7 +184,7 @@ func (table *symtable) compileList(nodes []parser.Node) uint16 {
 		for _, x := range nodes[1].Nodes {
 			table.writeInst(OpPush, x, parser.Node{})
 		}
-		table.code.writeInst(OpMapArray, 0, 0)
+		table.code.writeInst(OpArray, 0, 0)
 	} else {
 		n := nodes[1].Nodes
 		for i := 0; i < len(n); i += 2 {
@@ -207,11 +207,11 @@ func (table *symtable) compileCall(nodes []parser.Node) uint16 {
 
 	switch nodes[0].SymbolValue() {
 	case parser.ACallMap:
-		table.writeInst(OpCallMap, tmp[0], parser.Node{})
+		table.writeInst(OpCall, tmp[0], parser.NewAddress(callMap))
 	case parser.ACall:
-		table.writeInst(OpCall, tmp[0], parser.NewAddress(0))
+		table.writeInst(OpCall, tmp[0], parser.NewAddress(callNormal))
 	case parser.ATailCall:
-		table.writeInst(OpCall, tmp[0], parser.NewAddress(1))
+		table.writeInst(OpCall, tmp[0], parser.NewAddress(callTail))
 	}
 
 	table.code.writePos(nodes[0].Pos())

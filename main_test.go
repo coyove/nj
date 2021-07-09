@@ -502,20 +502,43 @@ func TestACall(t *testing.T) {
 	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	_, err = foo.Func().CallSimple(Int(0), Int(1), Int(2))
+	_, err = foo.Func().CallSimple(Nil, Int(1), Int(2))
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	foo = MustRun(LoadString(`function foo()
+    m = debug.dumpstk()
+	return apply(sum, concat(m, m))
+    end
+    return foo`, &CompileOptions{
+		GlobalKeyValues: map[string]interface{}{
+			"sum": func(a ...int) int {
+				s := 0
+				for _, a := range a {
+					s += a
+				}
+				return s
+			},
+		},
+	}))
+	v, err := foo.Func().CallSimple(Int(1), Int(2), Int(3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Int() != 12 {
+		t.Fatal(v)
 	}
 }
 
 func TestReflectedValue(t *testing.T) {
 	v := Array(True, False)
-	x := v.DeepAny(reflect.TypeOf([2]bool{})).([2]bool)
+	x := v.DeepGo(reflect.TypeOf([2]bool{})).([2]bool)
 	if x[0] != true || x[1] != false {
 		t.Fatal(x)
 	}
 	v = Map(Str("a"), Int(1), Str("b"), Int(2))
-	y := v.DeepAny(reflect.TypeOf(map[string]byte{})).(map[string]byte)
+	y := v.DeepGo(reflect.TypeOf(map[string]byte{})).(map[string]byte)
 	if y["a"] != 1 || y["b"] != 2 {
 		t.Fatal(x)
 	}

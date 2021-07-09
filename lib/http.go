@@ -25,7 +25,7 @@ func init() {
 		defer func() {
 			cancel()
 			if r := recover(); r != nil {
-				env.A = script.Array(script.Any(r))
+				env.A = script.Array(script.Go(r))
 			}
 		}()
 
@@ -117,8 +117,8 @@ func init() {
 		if to := args.Get(script.Str("timeout")).IntDefault(0); to > 0 {
 			client.Timeout = time.Duration(to) * time.Millisecond
 		}
-		if v := args.Get(script.Str("jar")); v.Type() == script.ANY {
-			client.Jar, _ = v.Any().(http.CookieJar)
+		if v := args.Get(script.Str("jar")); v.Type() == script.GO {
+			client.Jar, _ = v.Go().(http.CookieJar)
 		}
 		if !args.Get(script.Str("no_redirect")).IsFalse() {
 			client.CheckRedirect = func(*http.Request, []*http.Request) error {
@@ -146,9 +146,9 @@ func init() {
 		}
 		env.A = script.Array(
 			script.Int(int64(resp.StatusCode)),
-			script.Any(hdr),
+			script.Go(hdr),
 			script.Bytes(buf),
-			script.Any(client.Jar),
+			script.Go(client.Jar),
 		)
 	}, `http($a...a$) => code, body, headers, cookie_jar
     'url' is a mandatory parameter, others are optional and pretty self explanatory:

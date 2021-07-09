@@ -4,17 +4,28 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
+	"math/rand"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
 var StringMethods = Map(
 	Str("from"), Native1("from", func(env *Env, src Value) Value {
-		return Str(fmt.Sprint(src.Any()))
+		return Str(fmt.Sprint(src.Go()))
 	}, ""),
 	Str("iequal"), Native2("iequal", func(env *Env, src, a Value) Value {
 		s := src.MustStr("index", 0)
 		return Bool(strings.EqualFold(s, a.MustStr("iequal", 0)))
+	}, ""),
+	Str("contains"), Native2("contains", func(env *Env, src, a Value) Value {
+		s := src.MustStr("", 0)
+		return Bool(strings.Contains(s, a.MustStr("contains()", 0)))
+	}, ""),
+	Str("containsany"), Native2("containsany", func(env *Env, src, a Value) Value {
+		s := src.MustStr("", 0)
+		return Bool(strings.ContainsAny(s, a.MustStr("containsany()", 0)))
 	}, ""),
 	Str("split"), Native3("split", func(env *Env, src, delim, n Value) Value {
 		s := src.MustStr("split", 0)
@@ -156,7 +167,7 @@ var StringMethods = Map(
 				case 'x', 'X':
 					expecting = STR + NUM
 				case 'v':
-					expecting = ANY
+					expecting = GO
 				case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
 				default:
 					panicf("format(): unexpected verb: '%c'", f[0])
@@ -186,7 +197,7 @@ var StringMethods = Map(
 						fmt.Fprintf(&p, tmp.String(), f)
 					}
 				}
-			case ANY:
+			case GO:
 				fmt.Fprint(&p, pop())
 			}
 		}
@@ -198,16 +209,16 @@ var StringMethods = Map(
 			b.WriteString(v.String())
 		}
 		p := Map(
-			Str("_buf"), Any(b),
+			Str("_buf"), Go(b),
 			Str("value"), Native1("value", func(env *Env, a Value) Value {
-				return Bytes(a.MustMap("", 0).GetString("_buf").Any().(*bytes.Buffer).Bytes())
+				return Bytes(a.MustMap("", 0).GetString("_buf").Go().(*bytes.Buffer).Bytes())
 			}),
 			Str("write"), Native2("write", func(env *Env, a, b Value) Value {
-				a.MustMap("", 0).GetString("_buf").Any().(*bytes.Buffer).WriteString(b.String())
+				a.MustMap("", 0).GetString("_buf").Go().(*bytes.Buffer).WriteString(b.String())
 				return Nil
 			}),
 			Str("read"), Native2("read", func(env *Env, a, n Value) Value {
-				rd := a.MustMap("", 0).GetString("_buf").Any().(*bytes.Buffer)
+				rd := a.MustMap("", 0).GetString("_buf").Go().(*bytes.Buffer)
 				if n := n.IntDefault(0); n > 0 {
 					a := make([]byte, n)
 					n, err := rd.Read(a)
@@ -225,3 +236,132 @@ var StringMethods = Map(
 		return a
 	}),
 )
+
+var rg = struct {
+	sync.Mutex
+	*rand.Rand
+}{Rand: rand.New(rand.NewSource(1))}
+
+var MathLib = Map(
+	Str("INF"), Float(math.Inf(1)),
+	Str("NEG_INF"), Float(math.Inf(-1)),
+	Str("PI"), Float(math.Pi),
+	Str("E"), Float(math.E),
+	Str("randomseed"), Native("randomseed", func(env *Env) {
+		rg.Lock()
+		defer rg.Unlock()
+		rg.Rand.Seed(env.Get(0).IntDefault(1))
+	}, "randomseed(int)"),
+	Str("random"), Native("random", func(env *Env) {
+		rg.Lock()
+		defer rg.Unlock()
+		switch len(env.Stack()) {
+		case 2:
+			af, ai, aIsInt := env.Get(0).MustNum("random() start value", 0).Num()
+			bf, bi, bIsInt := env.Get(1).MustNum("random() end (exclusively) value", 0).Num()
+			if aIsInt && bIsInt {
+				env.A = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
+			} else {
+				env.A = Float(rg.Float64()*(bf-af) + af)
+			}
+		case 1:
+			env.A = Int(int64(rg.Intn(int(env.Get(0).MustNum("random()", 0).Int()))))
+		default:
+			env.A = Float(rg.Float64())
+		}
+	},
+		"$f() => [0, 1)",
+		"$f(n) => [0, n)",
+		"$f(a, b) => [a, b]"),
+	Str("sqrt"), Native1("sqrt", func(env *Env, v Value) Value { return Float(math.Sqrt(v.MustNum("sqrt()", 0).Float())) }),
+	Str("floor"), Native1("floor", func(env *Env, v Value) Value { return Float(math.Floor(v.MustNum("floor()", 0).Float())) }),
+	Str("ceil"), Native1("ceil", func(env *Env, v Value) Value { return Float(math.Ceil(v.MustNum("ceil()", 0).Float())) }),
+	Str("min"), Native("min", func(env *Env) { mathMinMax(env, "min() #%d arg", false) }, "max(a, b, ...) => largest_number"),
+	Str("max"), Native("max", func(env *Env) { mathMinMax(env, "max() #%d arg", true) }, "min(a, b, ...) => smallest_number"),
+	Str("pow"), Native2("pow", func(env *Env, a, b Value) Value {
+		af, ai, aIsInt := a.MustNum("pow() base", 0).Num()
+		bf, bi, bIsInt := b.MustNum("pow() power", 0).Num()
+		if aIsInt && bIsInt {
+			return Int(ipow(ai, bi))
+		}
+		return Float(math.Pow(af, bf))
+	}, "pow(a, b) => a to the power of b"),
+	Str("abs"), Native("abs", func(env *Env) {
+		switch f, i, isInt := env.Get(0).MustNum("abs", 0).Num(); {
+		case isInt && i < 0:
+			env.A = Int(-i)
+		case isInt && i >= 0:
+			env.A = Int(i)
+		default:
+			env.A = Float(math.Abs(f))
+		}
+	}),
+	Str("mod"), Native("mod", func(env *Env) {
+		env.A = Float(math.Mod(env.Get(0).MustNum("mod()", 1).Float(), env.Get(1).MustNum("mod()", 2).Float()))
+	}),
+	Str("cos"), Native("cos", func(env *Env) {
+		env.A = Float(math.Cos(env.Get(0).MustNum("cos()", 0).Float()))
+	}),
+	Str("sin"), Native("sin", func(env *Env) {
+		env.A = Float(math.Sin(env.Get(0).MustNum("sin()", 0).Float()))
+	}),
+	Str("tan"), Native("tan", func(env *Env) {
+		env.A = Float(math.Tan(env.Get(0).MustNum("tan()", 0).Float()))
+	}),
+	Str("acos"), Native("acos", func(env *Env) {
+		env.A = Float(math.Acos(env.Get(0).MustNum("acos()", 0).Float()))
+	}),
+	Str("asin"), Native("asin", func(env *Env) {
+		env.A = Float(math.Asin(env.Get(0).MustNum("asin()", 0).Float()))
+	}),
+	Str("atan"), Native("atan", func(env *Env) {
+		env.A = Float(math.Atan(env.Get(0).MustNum("atan()", 0).Float()))
+	}),
+	Str("atan2"), Native("atan2", func(env *Env) {
+		env.A = Float(math.Atan2(env.Get(0).MustNum("atan2()", 1).Float(), env.Get(1).MustNum("atan()", 2).Float()))
+	}),
+	Str("ldexp"), Native("ldexp", func(env *Env) {
+		env.A = Float(math.Ldexp(env.Get(0).MustNum("ldexp()", 0).Float(), int(env.Get(1).IntDefault(0))))
+	}),
+	Str("modf"), Native("modf", func(env *Env) {
+		a, b := math.Modf(env.Get(0).MustNum("modf()", 0).Float())
+		env.A = Array(Float(a), Float(b))
+	}),
+)
+
+func mathMinMax(env *Env, msg string, max bool) {
+	if len(env.Stack()) <= 0 {
+		return
+	}
+	f, i, isInt := env.Get(0).MustNum(msg, 1).Num()
+	if isInt {
+		for ii := 1; ii < len(env.Stack()); ii++ {
+			if x := env.Get(ii).MustNum(msg, ii+1).Int(); x >= i == max {
+				i = x
+			}
+		}
+		env.A = Int(i)
+	} else {
+		for i := 1; i < len(env.Stack()); i++ {
+			if x, _, _ := env.Get(i).MustNum(msg, i+1).Num(); x >= f == max {
+				f = x
+			}
+		}
+		env.A = Float(f)
+	}
+}
+
+func ipow(base, exp int64) int64 {
+	var result int64 = 1
+	for {
+		if exp&1 == 1 {
+			result *= base
+		}
+		exp >>= 1
+		if exp == 0 {
+			break
+		}
+		base *= base
+	}
+	return result
+}

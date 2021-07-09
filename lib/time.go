@@ -111,7 +111,7 @@ func init() {
 			f = buf.String()
 		}
 
-		tt, ok := env.Get(1).Any().(time.Time)
+		tt, ok := env.Get(1).Go().(time.Time)
 		if !ok {
 			ts := env.Get(1).IntDefault(0)
 			if ts > 0 {

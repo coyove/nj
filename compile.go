@@ -209,7 +209,7 @@ func (table *symtable) loadK(v interface{}) uint16 {
 	return idx
 }
 
-var flatOpMapping = map[string]opCode{
+var flatOpMapping = map[string]byte{
 	parser.AAdd:     OpAdd,
 	parser.ASub:     OpSub,
 	parser.AMul:     OpMul,
@@ -233,7 +233,7 @@ var flatOpMapping = map[string]opCode{
 	parser.AInc:     OpInc,
 }
 
-func (table *symtable) writeInst(op opCode, n0, n1 parser.Node) {
+func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
 	var tmp []uint16
 	getAddr := func(n parser.Node) uint16 {
 		switch n.Type {
@@ -371,11 +371,11 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 
 	if opt != nil {
 		for k, v := range opt.GlobalKeyValues {
-			push(k, Any(v))
+			push(k, Go(v))
 		}
 	}
 
-	push("COMPILE_OPTIONS", Any(opt))
+	push("COMPILE_OPTIONS", Go(opt))
 	push("SOURCE_CODE", Str(source))
 
 	table.vp = uint16(coreStack.Size())

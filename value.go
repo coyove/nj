@@ -22,10 +22,10 @@ var (
 	trueMarker        = unsafe.Pointer(new(int64))
 	falseMarker       = unsafe.Pointer(new(int64))
 	smallStringMarker = unsafe.Pointer(new([9]int64))
-	watermark         = Any(new(int))
+	watermark         = Go(new(int))
 
 	Nil   = Value{}
-	Undef = Any(new(int))
+	Undef = Go(new(int))
 	Zero  = Int(0)
 	False = Bool(false)
 	True  = Bool(true)
@@ -40,7 +40,7 @@ const (
 	STR  ValueType = 7
 	MAP  ValueType = 15
 	FUNC ValueType = 17
-	ANY  ValueType = 19
+	GO   ValueType = 19
 
 	ValueSize = int64(unsafe.Sizeof(Value{}))
 
@@ -49,10 +49,10 @@ const (
 )
 
 func (t ValueType) String() string {
-	if t > ANY {
+	if t > GO {
 		return "?"
 	}
-	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "map", "?", "function", "?", "any"}[t]
+	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "map", "?", "function", "?", "golang"}[t]
 }
 
 // Value is the basic data type used by the intepreter, an empty Value naturally represent nil
@@ -170,10 +170,10 @@ func Bytes(b []byte) Value {
 	return Str(*(*string)(unsafe.Pointer(&b)))
 }
 
-// Any returns an ANY value
-// []Type (except []byte/Value) and map[Type]Type will be left as is,
+// Go creates Value from golang interface{}
+// []Type (except []byte/[]Value), [..]Type and map[Type]Type will be left as is,
 // to convert them recursively, use DeepAny instead
-func Any(i interface{}) Value {
+func Go(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
 		return Value{}
@@ -198,9 +198,9 @@ func Any(i interface{}) Value {
 	case Value:
 		return v
 	case parser.CatchedError:
-		return Any(v.Original)
+		return Go(v.Original)
 	case reflect.Value:
-		return Any(v.Interface())
+		return Go(v.Interface())
 	case gjson.Result:
 		switch v.Type {
 		case gjson.String:
@@ -214,7 +214,7 @@ func Any(i interface{}) Value {
 			a := v.Array()
 			x := make([]Value, len(a))
 			for i, a := range a {
-				x[i] = Any(a)
+				x[i] = Go(a)
 			}
 			return Array(x...)
 		}
@@ -222,7 +222,7 @@ func Any(i interface{}) Value {
 			m := v.Map()
 			x := NewMap(len(m))
 			for k, v := range m {
-				x.Set(Str(k), Any(v))
+				x.Set(Str(k), Go(v))
 			}
 			return x.Value()
 		}
@@ -241,7 +241,7 @@ func Any(i interface{}) Value {
 			rtNumIn := rt.NumIn()
 			nf = func(env *Env) {
 				getter := func(i int, t reflect.Type) reflect.Value {
-					return reflect.ValueOf(env.Get(i).DeepAny(t))
+					return reflect.ValueOf(env.Get(i).DeepGo(t))
 				}
 				ins := make([]reflect.Value, 0, rtNumIn)
 				if !rt.IsVariadic() {
@@ -259,11 +259,11 @@ func Any(i interface{}) Value {
 				switch outs := rv.Call(ins); rt.NumOut() {
 				case 0:
 				case 1:
-					env.A = Any(outs[0].Interface())
+					env.A = Go(outs[0].Interface())
 				default:
 					a := make([]Value, len(outs))
 					for i := range outs {
-						a[i] = Any(outs[i].Interface())
+						a[i] = Go(outs[i].Interface())
 					}
 					env.A = Array(a...)
 				}
@@ -274,29 +274,29 @@ func Any(i interface{}) Value {
 	return _interface(i)
 }
 
-func DeepAny(v interface{}) Value {
+func DeepGo(v interface{}) Value {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
 		m := NewMap(rv.Len() + 1)
 		iter := rv.MapRange()
 		for iter.Next() {
-			m.Set(DeepAny(iter.Key()), Any(iter.Value()))
+			m.Set(DeepGo(iter.Key()), Go(iter.Value()))
 		}
 		return m.Value()
 	case reflect.Array, reflect.Slice:
 		a := make([]Value, rv.Len())
 		for i := range a {
-			a[i] = DeepAny(rv.Index(i))
+			a[i] = DeepGo(rv.Index(i))
 		}
 		return Array(a...)
 	default:
-		return Any(v)
+		return Go(v)
 	}
 }
 
 func _interface(i interface{}) Value {
-	return Value{v: uint64(ANY), p: unsafe.Pointer(&i)}
+	return Value{v: uint64(GO), p: unsafe.Pointer(&i)}
 }
 
 func (v Value) IsSmallString() bool {
@@ -333,8 +333,8 @@ func (v Value) Map() *RHMap { return (*RHMap)(v.p) }
 // Func cast value to function
 func (v Value) Func() *Func { return (*Func)(v.p) }
 
-// Any returns the interface{} representation of Value
-func (v Value) Any() interface{} {
+// Go returns the interface{} representation of Value
+func (v Value) Go() interface{} {
 	switch v.Type() {
 	case BOOL:
 		return v.Bool()
@@ -350,7 +350,7 @@ func (v Value) Any() interface{} {
 		return v.Map()
 	case FUNC:
 		return v.Func()
-	case ANY:
+	case GO:
 		return *(*interface{})(v.p)
 	}
 	return nil
@@ -362,10 +362,10 @@ func (v Value) unsafeint() int64 { return int64(v.v) }
 
 func (v Value) unsafefloat() float64 { return math.Float64frombits(^v.v) }
 
-// DeepAny returns the interface{} representation of Value which will be converted to t if needed
-func (v Value) DeepAny(t reflect.Type) interface{} {
+// DeepGo returns the interface{} representation of Value which will be converted to t if needed
+func (v Value) DeepGo(t reflect.Type) interface{} {
 	if t == nil {
-		return v.Any()
+		return v.Go()
 	}
 	if t == reflect.TypeOf(Value{}) {
 		return v
@@ -374,7 +374,7 @@ func (v Value) DeepAny(t reflect.Type) interface{} {
 	switch v.Type() {
 	case NUM:
 		if t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
-			rv := reflect.ValueOf(v.Any())
+			rv := reflect.ValueOf(v.Go())
 			rv = rv.Convert(t)
 			return rv.Interface()
 		}
@@ -384,26 +384,26 @@ func (v Value) DeepAny(t reflect.Type) interface{} {
 		case reflect.Slice:
 			s := reflect.MakeSlice(t, len(a.Array()), len(a.Array()))
 			for i, a := range a.Array() {
-				s.Index(i).Set(reflect.ValueOf(a.DeepAny(t.Elem())))
+				s.Index(i).Set(reflect.ValueOf(a.DeepGo(t.Elem())))
 			}
 			return s.Interface()
 		case reflect.Array:
 			s := reflect.New(t).Elem()
 			for i, a := range a.Array() {
-				s.Index(i).Set(reflect.ValueOf(a.DeepAny(t.Elem())))
+				s.Index(i).Set(reflect.ValueOf(a.DeepGo(t.Elem())))
 			}
 			return s.Interface()
 		case reflect.Map:
 			s := reflect.MakeMap(t)
 			kt, vt := t.Key(), t.Elem()
 			a.Foreach(func(k, v Value) bool {
-				s.SetMapIndex(reflect.ValueOf(k.DeepAny(kt)), reflect.ValueOf(v.DeepAny(vt)))
+				s.SetMapIndex(reflect.ValueOf(k.DeepGo(kt)), reflect.ValueOf(v.DeepGo(vt)))
 				return true
 			})
 			return s.Interface()
 		}
 	}
-	return v.Any()
+	return v.Go()
 }
 
 func (v Value) MustBool(msg string, a int) bool { return v.mustBe(BOOL, msg, a).Bool() }
@@ -418,8 +418,8 @@ func (v Value) MustFunc(msg string, a int) *Func { return v.mustBe(FUNC, msg, a)
 
 func (v Value) mustBe(t ValueType, msg string, msgArg int) Value {
 	if v.Type() != t {
-		if msgArg > 0 {
-			panicf("%s %d: expect %v, got %v", msg, msgArg, t, v.Type())
+		if strings.Contains(msg, "%d") {
+			msg = fmt.Sprintf(msg, msgArg)
 		}
 		panicf("%s: expect %v, got %v", msg, t, v.Type())
 	}
@@ -433,8 +433,8 @@ func (v Value) Equal(r Value) bool {
 	switch v.Type() + r.Type() {
 	case STR * 2:
 		return r.Str() == v.Str()
-	case ANY * 2:
-		return v.Any() == r.Any()
+	case GO * 2:
+		return v.Go() == r.Go()
 	}
 	return false
 }
@@ -497,8 +497,8 @@ func (v Value) toString(lv int, j bool) string {
 		return strings.TrimRight(p.String(), ", ") + "}"
 	case FUNC:
 		return v.Func().String()
-	case ANY:
-		i := v.Any()
+	case GO:
+		i := v.Go()
 		if !reflectCheckCyclicStruct(i) {
 			i = "<interface: omit deep nesting>"
 		}

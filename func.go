@@ -30,7 +30,8 @@ type Program struct {
 	MaxCallStackSize int64
 	Stack            *[]Value
 	Functions        []*Func
-	Stdout, Stderr   io.Writer
+	Stdout           io.Writer
+	Stderr           io.Writer
 	Stdin            io.Reader
 	Logger           *log.Logger
 	NilIndex         uint16

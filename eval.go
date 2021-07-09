@@ -254,7 +254,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			}
 		case OpBitNot:
 			env.A = Int(^env._get(opa).MustNum(errNeedNumbers, 0).Int())
-		case OpMapArray:
+		case OpArray:
 			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
 		case OpMap:
@@ -266,8 +266,8 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case MAP:
 				m := subject.Map()
 				env.A = m.Set(env.A, v)
-			case ANY:
-				reflectStore(subject.Any(), env.A, v)
+			case GO:
+				reflectStore(subject.Go(), env.A, v)
 				env.A = v
 			default:
 				panicf("operator requires map or interface to store into")
@@ -281,8 +281,8 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					f.MethodSrc = a
 					env.A = f.Value()
 				}
-			case ANY:
-				env.A = reflectLoad(a.Any(), env._get(opb))
+			case GO:
+				env.A = reflectLoad(a.Go(), env._get(opb))
 			case STR:
 				idx := env._get(opb)
 				if idx.Type() == NUM {
@@ -327,17 +327,16 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			retStack = retStack[:len(retStack)-1]
 		case OpLoadFunc:
 			env.A = env.Global.Functions[opa].Value()
-		case OpCallMap:
-			cls := env._get(opa).MustFunc("invoke keyworded function", 0)
-			m := buildCallMap(cls, stackEnv)
-			stackEnv.Clear()
-			for _, pa := range cls.Params {
-				stackEnv.Push(m.Get(Str(pa)))
-			}
-			stackEnv.A = m.Value()
-			fallthrough
 		case OpCall:
 			cls := env._get(opa).MustFunc("invoke function", 0)
+			if opb == callMap {
+				m := buildCallMap(cls, stackEnv)
+				stackEnv.Clear()
+				for _, pa := range cls.Params {
+					stackEnv.Push(m.Get(Str(pa)))
+				}
+				stackEnv.A = m.Value()
+			}
 			if cls.MethodSrc != Nil {
 				stackEnv.Prepend(cls.MethodSrc)
 			}
@@ -351,7 +350,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				stackEnv.Clear()
 			} else {
 				stackEnv.Push(watermark) // Used by debug.dumpstk to determine the top of stack
-				if bop == OpCallMap {
+				if opb == callMap {
 					stackEnv.Push(stackEnv.A)
 				}
 				stackEnv.growZero(int(cls.StackSize))
@@ -369,7 +368,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				env.Global = cls.loadGlobal
 				env.A = stackEnv.A
 
-				if opb == 0 {
+				if opb != callTail {
 					retStack = append(retStack, last)
 				}
 

@@ -9,12 +9,12 @@ import (
 	"github.com/coyove/script/parser"
 )
 
-func inst(op opCode, a, b uint16) uint32 {
+func inst(op byte, a, b uint16) uint32 {
 	// 6 + 13 + 13
 	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
 }
 
-func jmpInst(op opCode, dist int) uint32 {
+func jmpInst(op byte, dist int) uint32 {
 	if dist < -(1<<23) || dist >= 1<<23 {
 		panic("long jump")
 	}
@@ -22,8 +22,8 @@ func jmpInst(op opCode, dist int) uint32 {
 	return uint32(op)<<26 + uint32(dist+1<<23)
 }
 
-func splitInst(op uint32) (op1 opCode, a, b uint16) {
-	op1 = opCode(op >> 26)
+func splitInst(op uint32) (op1 byte, a, b uint16) {
+	op1 = byte(op >> 26)
 	a = uint16(op>>13) & 0x1fff
 	b = uint16(op) & 0x1fff
 	return
@@ -57,11 +57,11 @@ type packet struct {
 	Pos  posVByte
 }
 
-func (b *packet) writeInst(op opCode, opa, opb uint16) {
+func (b *packet) writeInst(op byte, opa, opb uint16) {
 	b.Code = append(b.Code, inst(op, opa, opb))
 }
 
-func (b *packet) writeJmpInst(op opCode, d int) {
+func (b *packet) writeJmpInst(op byte, d int) {
 	b.Code = append(b.Code, jmpInst(op, d))
 }
 
@@ -84,7 +84,7 @@ func (b *packet) Len() int {
 }
 
 var (
-	biOp = map[opCode]string{
+	biOp = map[byte]string{
 		OpAdd:     parser.AAdd,
 		OpSub:     parser.ASub,
 		OpMul:     parser.AMul,
@@ -104,12 +104,11 @@ var (
 		OpBitRsh:  parser.ABitRsh,
 		OpBitURsh: parser.ABitURsh,
 	}
-	uOp = map[opCode]string{
-		OpBitNot:  parser.ABitNot,
-		OpNot:     parser.ANot,
-		OpCallMap: parser.ACallMap,
-		OpRet:     parser.AReturn,
-		OpPush:    "push",
+	uOp = map[byte]string{
+		OpBitNot: parser.ABitNot,
+		OpNot:    parser.ANot,
+		OpRet:    parser.AReturn,
+		OpPush:   "push",
 	}
 )
 
@@ -179,25 +178,26 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 		switch bop {
 		case OpSet:
 			sb.WriteString(readAddr(a, false) + " = " + readAddr(b, true))
-		case OpMapArray:
+		case OpArray:
 			sb.WriteString("array")
 		case OpMap:
-			sb.WriteString("arraymap")
+			sb.WriteString("map")
 		case OpLoadFunc:
 			cls := p.Functions[a]
 			sb.WriteString("loadfunc " + cls.Name + "\n")
 			sb.WriteString(pkPrettify(cls, p, false))
 		case OpCall:
-			if b == 1 {
+			if b == callTail {
 				sb.WriteString("tailcall " + readAddr(a, true))
+			} else if b == callMap {
+				sb.WriteString("callmap " + readAddr(a, true))
 			} else {
 				sb.WriteString("call " + readAddr(a, true))
 			}
 		case OpIfNot, OpJmp:
 			pos := int32(inst&0xffffff) - 1<<23
 			pos2 := uint32(int32(cursor) + pos)
-			switch bop {
-			case OpIfNot:
+			if bop == OpIfNot {
 				sb.WriteString("if not $a ")
 			}
 			sb.WriteString(fmt.Sprintf("jmp %d to %d", pos, pos2))

@@ -19,14 +19,14 @@ func reflectLoad(v interface{}, key Value) Value {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		v := rv.MapIndex(reflect.ValueOf(key.DeepAny(rv.Type().Key())))
+		v := rv.MapIndex(reflect.ValueOf(key.DeepGo(rv.Type().Key())))
 		if v.IsValid() {
-			return Any(v.Interface())
+			return Go(v.Interface())
 		}
 	case reflect.Slice, reflect.Array:
 		idx := key.MustNum("reflect: load from Go array/slice", 0).Int() - 1
 		if idx < int64(rv.Len()) && idx >= 0 {
-			return Any(rv.Index(int(idx)).Interface())
+			return Go(rv.Index(int(idx)).Interface())
 		}
 	}
 
@@ -38,23 +38,23 @@ func reflectLoad(v interface{}, key Value) Value {
 		}
 		f := rv.FieldByName(k)
 		if f.IsValid() {
-			return Any(f.Interface())
+			return Go(f.Interface())
 		}
 		// panicf("%q not found in %#v", k, v)
 		return Value{}
 	}
-	return Any(f.Interface())
+	return Go(f.Interface())
 }
 
 func reflectStore(v interface{}, key Value, v2 Value) {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		rk := reflect.ValueOf(key.DeepAny(rv.Type().Key()))
+		rk := reflect.ValueOf(key.DeepGo(rv.Type().Key()))
 		if v2 == Nil {
 			rv.SetMapIndex(rk, reflect.Value{})
 		} else {
-			rv.SetMapIndex(rk, reflect.ValueOf(v2.DeepAny(rv.Type().Elem())))
+			rv.SetMapIndex(rk, reflect.ValueOf(v2.DeepGo(rv.Type().Elem())))
 		}
 		return
 	case reflect.Slice, reflect.Array:
@@ -62,7 +62,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		if idx >= int64(rv.Len()) || idx < 0 {
 			return
 		}
-		rv.Index(int(idx)).Set(reflect.ValueOf(v2.DeepAny(rv.Type().Elem())))
+		rv.Index(int(idx)).Set(reflect.ValueOf(v2.DeepGo(rv.Type().Elem())))
 		return
 	}
 
@@ -78,7 +78,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 	if f.Type() == reflect.TypeOf(Value{}) {
 		f.Set(reflect.ValueOf(v2))
 	} else {
-		f.Set(reflect.ValueOf(v2.DeepAny(f.Type())))
+		f.Set(reflect.ValueOf(v2.DeepGo(f.Type())))
 	}
 }
 
@@ -108,7 +108,7 @@ var reflectCheckCyclicStruct = func() func(v interface{}) bool {
 
 		if value.Type() == reflect.TypeOf(Value{}) {
 			v := value.Interface().(Value)
-			return doCheck(reflect.ValueOf(v.Any()), parents)
+			return doCheck(reflect.ValueOf(v.Go()), parents)
 		}
 
 		kind := value.Kind()

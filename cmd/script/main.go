@@ -110,7 +110,7 @@ func main() {
 			}
 			writeJSON(w, map[string]interface{}{
 				"elapsed": time.Since(start).Seconds(),
-				"result":  v.Any(),
+				"result":  v.Go(),
 				"stdout":  bufOut.String(),
 				"opcode":  code,
 			})

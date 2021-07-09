@@ -12,17 +12,12 @@
 package script
 
 import (
-	"sync/atomic"
 	"unsafe"
-)
-
-const (
-	errRace = "concurrent map read and map write"
 )
 
 type RHMap struct {
 	Parent    *RHMap
-	rwlock    int32
+	hashCount uint32
 	count     uint32
 	hashItems []hashItem
 	items     []Value
@@ -39,22 +34,17 @@ func NewMap(size int) *RHMap {
 	return &RHMap{hashItems: make([]hashItem, int64(size))}
 }
 
-func (m *RHMap) Len() int {
-	return int(m.count)
-}
+func (m *RHMap) Len() int { return int(m.count) + int(m.hashCount) }
 
-func (m *RHMap) MapLen() int {
-	return int(m.count) - len(m.items)
-}
+func (m *RHMap) MapLen() int { return int(m.hashCount) }
+
+func (m *RHMap) ArrayLen() int { return int(m.count) }
 
 // Clear clears Map, where already allocated memory will be reused.
 func (m *RHMap) Clear() {
-	if atomic.LoadInt32(&m.rwlock) > 0 {
-		panicf(errRace)
-	}
 	m.hashItems = m.hashItems[:0]
-	m.count = 0
 	m.items = m.items[:0]
+	m.count, m.hashCount = 0, 0
 }
 
 func (m *RHMap) GetString(k string) (v Value) {
@@ -66,9 +56,6 @@ func (m *RHMap) Get(k Value) (v Value) {
 	if k == Nil {
 		return Nil
 	}
-	atomic.AddInt32(&m.rwlock, 1)
-	defer atomic.AddInt32(&m.rwlock, -1)
-
 	if k.IsInt() {
 		if idx := k.Int(); idx >= 0 && idx < int64(len(m.items)) {
 			return m.items[idx]
@@ -113,8 +100,6 @@ func (m *RHMap) findHash(k Value) int {
 }
 
 func (m *RHMap) Contains(k Value) bool {
-	atomic.AddInt32(&m.rwlock, 1)
-	defer atomic.AddInt32(&m.rwlock, -1)
 	if k == Nil {
 		return false
 	}
@@ -151,13 +136,7 @@ func (m *RHMap) Set(k, v Value) (prev Value) {
 	if k == Nil {
 		panicf("table set with nil key")
 	}
-	if atomic.LoadInt32(&m.rwlock) > 0 {
-		panicf(errRace)
-	}
-	return m.unsafeSet(k, v)
-}
 
-func (m *RHMap) unsafeSet(k, v Value) (prev Value) {
 	if m.Parent != nil && v.Type() != FUNC {
 		if x := m.ParentContains(k); x != nil && x != m {
 			return x.Set(k, v)
@@ -207,7 +186,7 @@ func (m *RHMap) setHash(incoming hashItem) (prev Value, growed bool) {
 		e := &m.hashItems[idx]
 		if e.Key == Nil {
 			m.hashItems[idx] = incoming
-			m.count++
+			m.hashCount++
 			return Nil, false
 		}
 
@@ -226,14 +205,18 @@ func (m *RHMap) setHash(incoming hashItem) (prev Value, growed bool) {
 		idx = (idx + 1) % num
 
 		// Grow if distances become big or we went all the way around.
-		if int(m.count) >= num || idx == idxStart {
-			if num < 8 {
-				m.grow(num + 1)
-			} else {
-				m.grow(num * 3 / 2)
+		if num < 8 {
+			if idx == idxStart {
+				m.resize(num + 1)
+				prev, _ = m.setHash(incoming)
+				return prev, true
 			}
-			prev, _ = m.setHash(incoming)
-			return prev, true
+		} else {
+			if int(m.hashCount) >= num/2 || idx == idxStart {
+				m.resize(num*2 + 1)
+				prev, _ = m.setHash(incoming)
+				return prev, true
+			}
 		}
 	}
 }
@@ -269,7 +252,7 @@ func (m *RHMap) delHash(k Value) (prev Value) {
 	}
 
 	m.hashItems[idx] = hashItem{}
-	m.count--
+	m.hashCount--
 	return prev
 }
 
@@ -282,8 +265,6 @@ func (m *RHMap) Foreach(f func(k, v Value) bool) {
 }
 
 func (m *RHMap) Next(k Value) (Value, Value) {
-	atomic.AddInt32(&m.rwlock, 1)
-	defer atomic.AddInt32(&m.rwlock, -1)
 	nextHashPair := func(start int) (Value, Value) {
 		for i := start; i < len(m.hashItems); i++ {
 			if i := &m.hashItems[i]; i.Key != Nil {
@@ -331,7 +312,7 @@ func (m *RHMap) Value() Value {
 	return Value{v: uint64(MAP), p: unsafe.Pointer(m)}
 }
 
-func (m *RHMap) grow(newSize int) {
+func (m *RHMap) resize(newSize int) {
 	tmp := RHMap{hashItems: make([]hashItem, newSize)}
 	for _, e := range m.hashItems {
 		if e.Key != Nil {

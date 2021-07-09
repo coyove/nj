@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"os"
 	"regexp"
 	"sort"
@@ -25,10 +24,6 @@ const Version int64 = 301
 var (
 	g   = map[string]Value{}
 	now int64
-	rg  = struct {
-		sync.Mutex
-		*rand.Rand
-	}{Rand: rand.New(rand.NewSource(1))}
 )
 
 func AddGlobalValue(k string, v interface{}, doc ...string) {
@@ -42,7 +37,7 @@ func AddGlobalValue(k string, v interface{}, doc ...string) {
 	case func(*Env, Value, Value, Value) Value:
 		g[k] = Native3(k, v, doc...)
 	default:
-		g[k] = Any(v)
+		g[k] = Go(v)
 	}
 }
 
@@ -96,7 +91,7 @@ func init() {
 		case NUM, NIL, BOOL:
 			return panicf("can't measure length of %v", v.Type())
 		default:
-			return Int(int64(reflectLen(v.Any())))
+			return Int(int64(reflectLen(v.Go())))
 		}
 	})
 	AddGlobalValue("eval", func(env *Env, s, g Value) Value {
@@ -104,7 +99,7 @@ func init() {
 		if g.Type() == MAP {
 			m = map[string]interface{}{}
 			g.Map().Foreach(func(k, v Value) bool {
-				m[k.String()] = v.Any()
+				m[k.String()] = v.Go()
 				return true
 			})
 		}
@@ -133,25 +128,23 @@ func init() {
 			b := Map(
 				Str("_f"), f.MustFunc("new()", 0).Value(),
 				Str("_r"), Undef,
-				Str("_wg"), Any(wg),
+				Str("_wg"), Go(wg),
 				Str("start"), Native2("start", func(env *Env, t, a Value) Value {
 					m := t.Map()
-					wg := m.GetString("_wg").Any().(*sync.WaitGroup)
+					wg := m.GetString("_wg").Go().(*sync.WaitGroup)
 					wg.Add(1)
 					go func() {
-						defer func() {
-							wg.Done()
-						}()
+						defer wg.Done()
 						res, err := m.GetString("_f").Func().Call(a)
 						if err != nil {
 							panic(err)
 						}
-						m.unsafeSet(Str("_r"), res)
+						m.SetString("_r", res)
 					}()
 					return Nil
 				}),
 				Str("wait"), Native1("wait", func(env *Env, t Value) Value {
-					t.Map().GetString("_wg").Any().(*sync.WaitGroup).Wait()
+					t.Map().GetString("_wg").Go().(*sync.WaitGroup).Wait()
 					return t.Map().GetString("_r")
 				}),
 			)
@@ -207,7 +200,7 @@ func init() {
 			env.A = Array(r...)
 		}, "$f() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
 		Str("set"), Native2("set", func(env *Env, idx, value Value) Value {
-			(*env.Global.Stack)[idx.MustNum("set", 1).Int()] = value
+			(*env.Global.Stack)[idx.MustNum("set() index", 0).Int()] = value
 			return Nil
 		}, "$f(idx, value)"),
 		Str("trace"), Native1("trace", func(env *Env, skip Value) Value {
@@ -238,10 +231,10 @@ func init() {
 		}, "$f(skip) => { func_name1, line1, cursor1, n2, l2, c2, ... }"),
 	))
 	AddGlobalValue("narray", func(env *Env, n Value) Value {
-		a := Array(make([]Value, n.MustNum("narray()", 0).Int())...)
+		a := Array(make([]Value, n.MustNum("narray() length", 0).Int())...)
 		a.Map().count = 0
 		return a
-	}, "narray(n) => { nil, ..., nil }", "\treturn an array size of n, filled with nil")
+	}, "narray(n) => { nil, ..., nil }", "\treturn an array, preallocate space for n values")
 	AddGlobalValue("type", func(env *Env) {
 		env.A = Str(env.Get(0).Type().String())
 	}, "type(value) => string", "\treturn value's type")
@@ -251,9 +244,9 @@ func init() {
 			return a
 		}
 		if err, ok := err.(*ExecError); ok {
-			return Any(err.r)
+			return Go(err.r)
 		}
-		return Any(err)
+		return Go(err)
 	}, "pcall(function, arg1, arg2, ...) => result_of_function",
 		"\texecute the function, catch panic and return as error")
 	AddGlobalValue("panic", func(env *Env) { panic(env.Get(0)) }, "panic(value)")
@@ -291,21 +284,17 @@ func init() {
 	AddGlobalValue("stdout", func(env *Env) { env.A = _interface(env.Global.Stdout) }, "$f() => fd", "\treturn stdout fd")
 	AddGlobalValue("stdin", func(env *Env) { env.A = _interface(env.Global.Stdin) }, "$f() => fd", "\treturn stdin fd")
 	AddGlobalValue("print", func(env *Env) {
-		length := 0
 		for _, a := range env.Stack() {
-			s := a.String()
-			length += len(s)
-			fmt.Fprint(env.Global.Stdout, s)
+			fmt.Fprint(env.Global.Stdout, a.String())
 		}
 		fmt.Fprintln(env.Global.Stdout)
-		env.A = Int(int64(length))
 	}, "print(a, b, c, ...)", "\tprint values, no space between them")
 	AddGlobalValue("write", func(env *Env) {
-		w := env.Get(0).Any().(io.Writer)
+		w := env.Get(0).Go().(io.Writer)
 		for _, a := range env.Stack()[1:] {
 			fmt.Fprint(w, a.String())
 		}
-	}, "write(stdout, a, b, c, ...)", "\twrite raw values to stdout")
+	}, "write(writer, a, b, c, ...)", "\twrite raw values to writer")
 	AddGlobalValue("println", func(env *Env) {
 		for _, a := range env.Stack() {
 			fmt.Fprint(env.Global.Stdout, a.String(), " ")
@@ -327,61 +316,7 @@ func init() {
 	},
 		"$f(prompt='', n=1) => { s1, s2, ..., sn }", "\tprint prompt and read N user inputs",
 	)
-	AddGlobalValue("math", Map(
-		Str("INF"), Float(math.Inf(1)),
-		Str("NEG_INF"), Float(math.Inf(-1)),
-		Str("PI"), Float(math.Pi),
-		Str("E"), Float(math.E),
-		Str("randomseed"), Native("randomseed", func(env *Env) {
-			rg.Lock()
-			defer rg.Unlock()
-			rg.Rand.Seed(env.Get(0).IntDefault(1))
-		}, "randomseed(int)"),
-		Str("random"), Native("random", func(env *Env) {
-			rg.Lock()
-			defer rg.Unlock()
-			switch len(env.Stack()) {
-			case 2:
-				af, ai, aIsInt := env.Get(0).MustNum("random #", 1).Num()
-				bf, bi, bIsInt := env.Get(1).MustNum("random #", 2).Num()
-				if aIsInt && bIsInt {
-					env.A = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
-				} else {
-					env.A = Float(rg.Float64()*(bf-af) + af)
-				}
-			case 1:
-				env.A = Int(int64(rg.Intn(int(env.Get(0).MustNum("random", 0).Int()))))
-			default:
-				env.A = Float(rg.Float64())
-			}
-		},
-			"$f() => [0, 1)",
-			"$f(n) => [0, n)",
-			"$f(a, b) => [a, b]"),
-		Str("sqrt"), Native1("sqrt", func(env *Env, v Value) Value { return Float(math.Sqrt(v.MustNum("sqrt", 0).Float())) }),
-		Str("floor"), Native1("floor", func(env *Env, v Value) Value { return Float(math.Floor(v.MustNum("floor", 0).Float())) }),
-		Str("ceil"), Native1("ceil", func(env *Env, v Value) Value { return Float(math.Ceil(v.MustNum("ceil", 0).Float())) }),
-		Str("min"), Native("min", func(env *Env) { mathMinMax(env, "min #", false) }, "max(a, b, ...) => largest_number"),
-		Str("max"), Native("max", func(env *Env) { mathMinMax(env, "max #", true) }, "min(a, b, ...) => smallest_number"),
-		Str("pow"), Native2("pow", func(env *Env, a, b Value) Value {
-			af, ai, aIsInt := a.MustNum("pow", 1).Num()
-			bf, bi, bIsInt := b.MustNum("pow", 2).Num()
-			if aIsInt && bIsInt {
-				return Int(ipow(ai, bi))
-			}
-			return Float(math.Pow(af, bf))
-		}, "pow(a, b) => a to the power of b"),
-		Str("abs"), Native("abs", func(env *Env) {
-			switch f, i, isInt := env.Get(0).MustNum("abs", 0).Num(); {
-			case isInt && i < 0:
-				env.A = Int(-i)
-			case isInt && i >= 0:
-				env.A = Int(i)
-			default:
-				env.A = Float(math.Abs(f))
-			}
-		}),
-	))
+	AddGlobalValue("math", MathLib)
 	AddGlobalValue("str", StringMethods)
 	AddGlobalValue("int", func(env *Env) {
 		switch v := env.Get(0); v.Type() {
@@ -413,13 +348,13 @@ func init() {
 			if env.Get(7).StringDefault("") == "local" {
 				loc = time.Local
 			}
-			env.A = Any(time.Date(
+			env.A = Go(time.Date(
 				int(env.Get(0).IntDefault(1970)), time.Month(env.Get(1).IntDefault(1)), int(env.Get(2).IntDefault(1)),
 				int(env.Get(3).IntDefault(0)), int(env.Get(4).IntDefault(0)), int(env.Get(5).IntDefault(0)),
 				int(env.Get(6).IntDefault(0)), loc,
 			))
 		} else {
-			env.A = Any(time.Now())
+			env.A = Go(time.Now())
 		}
 	},
 		"Go_time() => time.Time",
@@ -456,12 +391,12 @@ func init() {
 			panic(err)
 		}
 		a := Map(
-			Str("_rx"), Any(rx),
+			Str("_rx"), Go(rx),
 			Str("match"), Native2("match", func(e *Env, rx, text Value) Value {
-				return Bool(rx.Map().GetString("_rx").Any().(*regexp.Regexp).MatchString(text.MustStr("match text", 0)))
+				return Bool(rx.Map().GetString("_rx").Go().(*regexp.Regexp).MatchString(text.MustStr("match()", 0)))
 			}, ""),
 			Str("find"), Native2("find", func(e *Env, rx, text Value) Value {
-				m := rx.Map().GetString("_rx").Any().(*regexp.Regexp).FindStringSubmatch(text.MustStr("find text", 0))
+				m := rx.Map().GetString("_rx").Go().(*regexp.Regexp).FindStringSubmatch(text.MustStr("find()", 0))
 				mm := []Value{}
 				for _, m := range m {
 					mm = append(mm, Str(m))
@@ -469,7 +404,7 @@ func init() {
 				return Array(mm...)
 			}, ""),
 			Str("findall"), Native3("findall", func(e *Env, rx, text, n Value) Value {
-				m := rx.Map().GetString("_rx").Any().(*regexp.Regexp).FindAllStringSubmatch(text.MustStr("findall text", 0), int(n.IntDefault(-1)))
+				m := rx.Map().GetString("_rx").Go().(*regexp.Regexp).FindAllStringSubmatch(text.MustStr("findall()", 0), int(n.IntDefault(-1)))
 				mm := []Value{}
 				for _, m := range m {
 					for _, m := range m {
@@ -479,7 +414,7 @@ func init() {
 				return Array(mm...)
 			}, ""),
 			Str("replace"), Native3("replace", func(e *Env, rx, text, newtext Value) Value {
-				m := rx.Map().GetString("_rx").Any().(*regexp.Regexp).ReplaceAllString(text.MustStr("replace text", 0), newtext.MustStr("replace text new", 0))
+				m := rx.Map().GetString("_rx").Go().(*regexp.Regexp).ReplaceAllString(text.MustStr("replace() old text", 0), newtext.MustStr("replace() new text", 0))
 				return Str(m)
 			}, ""),
 		)
@@ -488,10 +423,10 @@ func init() {
 		return b
 	}, "re(string) => creates a regular expression object")
 	AddGlobalValue("error", func(env *Env, msg Value) Value {
-		return Any(errors.New(msg.MustStr("error() message", 0)))
+		return Go(errors.New(msg.MustStr("error()", 0)))
 	}, "error(text)", "\tcreate an error")
 	AddGlobalValue("iserror", func(env *Env) {
-		_, ok := env.Get(0).Any().(error)
+		_, ok := env.Get(0).Go().(error)
 		env.A = Bool(ok)
 	}, "iserror(value)", "\ttest whether value is an error")
 
@@ -501,7 +436,7 @@ func init() {
 		}, "$f(value) => json_string"),
 		Str("parse"), Native1("parse", func(env *Env, js Value) Value {
 			j := strings.TrimSpace(js.MustStr("json.parse() json string", 0))
-			return Any(gjson.Parse(j))
+			return Go(gjson.Parse(j))
 		}, "$f(json_string) => array"),
 		Str("get"), Native3("get", func(env *Env, js, path, et Value) Value {
 			j := strings.TrimSpace(js.MustStr("json.get() json string", 0))
@@ -509,14 +444,14 @@ func init() {
 			if !result.Exists() {
 				return et
 			}
-			return Any(result)
+			return Go(result)
 		}, "$f(json_string, selector, default?) => bool|number|string|array"),
 	))
 
 	AddGlobalValue("sync", Map(
-		Str("mutex"), Native("mutex", func(env *Env) { env.A = Any(&sync.Mutex{}) }, "$f() => creates a mutex"),
-		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Any(&sync.RWMutex{}) }, "$f() => creates a read-write mutex"),
-		Str("waitgroup"), Native("rwmutex", func(env *Env) { env.A = Any(&sync.WaitGroup{}) }, "$f() => creates a wait group"),
+		Str("mutex"), Native("mutex", func(env *Env) { env.A = Go(&sync.Mutex{}) }, "$f() => creates a mutex"),
+		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Go(&sync.RWMutex{}) }, "$f() => creates a read-write mutex"),
+		Str("waitgroup"), Native("rwmutex", func(env *Env) { env.A = Go(&sync.WaitGroup{}) }, "$f() => creates a wait group"),
 	))
 
 	// Array related functions
@@ -526,7 +461,7 @@ func init() {
 		return m
 	}, "append(array, value) => append value to array")
 	AddGlobalValue("concat", func(env *Env, a, b Value) Value {
-		ma, mb := a.MustMap("concat()", 1), b.MustMap("concat()", 2)
+		ma, mb := a.MustMap("concat() first arg", 0), b.MustMap("concat() second arg", 0)
 		for _, b := range mb.Array() {
 			ma.Set(Int(int64(ma.Len())), b)
 		}
@@ -572,41 +507,4 @@ func init() {
 		b.Map().Parent = a.Map()
 		return b
 	})
-}
-
-func mathMinMax(env *Env, msg string, max bool) {
-	if len(env.Stack()) <= 0 {
-		return
-	}
-	f, i, isInt := env.Get(0).MustNum(msg, 1).Num()
-	if isInt {
-		for ii := 1; ii < len(env.Stack()); ii++ {
-			if x := env.Get(ii).MustNum(msg, ii+1).Int(); x >= i == max {
-				i = x
-			}
-		}
-		env.A = Int(i)
-	} else {
-		for i := 1; i < len(env.Stack()); i++ {
-			if x, _, _ := env.Get(i).MustNum(msg, i+1).Num(); x >= f == max {
-				f = x
-			}
-		}
-		env.A = Float(f)
-	}
-}
-
-func ipow(base, exp int64) int64 {
-	var result int64 = 1
-	for {
-		if exp&1 == 1 {
-			result *= base
-		}
-		exp >>= 1
-		if exp == 0 {
-			break
-		}
-		base *= base
-	}
-	return result
 }
