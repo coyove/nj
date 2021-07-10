@@ -113,18 +113,11 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case NUM + NUM:
 				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
 					env.A = Int(va.unsafeint() + vb.unsafeint())
-				} else if sum == 0 {
+				} else if sum == float64Marker2 {
 					env.A = Float(va.unsafefloat() + vb.unsafefloat())
 				} else {
 					env.A = Float(va.Float() + vb.Float())
 				}
-				// vaf, vai, vaIsInt := va.Num()
-				// vbf, vbi, vbIsInt := vb.Num()
-				// if vaIsInt && vbIsInt {
-				// 	env.A = Int(vai + vbi)
-				// } else {
-				// 	env.A = Float(vaf + vbf)
-				// }
 			case STR + STR:
 				env.A = Str(va.Str() + vb.Str())
 			case STR + NUM:
@@ -136,7 +129,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == NUM+NUM {
 				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
 					env.A = Int(va.unsafeint() - vb.unsafeint())
-				} else if sum == 0 {
+				} else if sum == float64Marker2 {
 					env.A = Float(va.unsafefloat() - vb.unsafefloat())
 				} else {
 					env.A = Float(va.Float() - vb.Float())
@@ -148,7 +141,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == NUM+NUM {
 				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
 					env.A = Int(va.unsafeint() * vb.unsafeint())
-				} else if sum == 0 {
+				} else if sum == float64Marker2 {
 					env.A = Float(va.unsafefloat() * vb.unsafefloat())
 				} else {
 					env.A = Float(va.Float() * vb.Float())
@@ -170,12 +163,10 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			}
 		case OpMod:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == NUM+NUM {
-				vaf, vai, vaIsInt := va.Num()
-				vbf, vbi, vbIsInt := vb.Num()
-				if vaIsInt && vbIsInt {
-					env.A = Int(vai % vbi)
+				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
+					env.A = Int(va.unsafeint() % vb.unsafeint())
 				} else {
-					env.A = Float(math.Remainder(vaf, vbf))
+					panicf("modulating floating numbers is ambiguous, use math.mod/math.remainder instead")
 				}
 			} else {
 				panicf(errNeedNumbers)
@@ -189,7 +180,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case NUM + NUM:
 				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
 					env.A = Bool(va.unsafeint() < vb.unsafeint())
-				} else if sum == 0 {
+				} else if sum == float64Marker2 {
 					env.A = Bool(va.unsafefloat() < vb.unsafefloat())
 				} else {
 					env.A = Bool(va.Float() < vb.Float())
@@ -204,7 +195,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case NUM + NUM:
 				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
 					env.A = Bool(va.unsafeint() <= vb.unsafeint())
-				} else if sum == 0 {
+				} else if sum == float64Marker2 {
 					env.A = Bool(va.unsafefloat() <= vb.unsafefloat())
 				} else {
 					env.A = Bool(va.Float() <= vb.Float())
@@ -276,11 +267,6 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			switch a := env._get(opa); a.Type() {
 			case MAP:
 				env.A = a.Map().Get(env._get(opb))
-				if env.A.Type() == FUNC && a.Map().Parent != nil {
-					f := *env.A.Func()
-					f.MethodSrc = a
-					env.A = f.Value()
-				}
 			case GO:
 				env.A = reflectLoad(a.Go(), env._get(opb))
 			case STR:

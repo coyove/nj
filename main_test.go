@@ -478,6 +478,36 @@ func TestACall(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	foo = MustRun(LoadString(`m = {a=1}
+	function m.pow2(self)
+		return self.a * self.a
+	end
+	a = new(m, {a=10})
+    return a`, nil))
+	v, err := foo.Map().GetString("pow2").Func().Call()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Int() != 100 {
+		t.Fatal(v)
+	}
+
+	foo = MustRun(LoadString(`m.a = 11
+    return m.pow2()`, &CompileOptions{
+		GlobalKeyValues: map[string]interface{}{
+			"m": MapWithParent(Map(
+				Str("a"), Int(0),
+				Str("pow2"), Native1("pow2", func(env *Env, self Value) Value {
+					i := self.Map().GetString("a").Int()
+					return Int(i * i)
+				}),
+			).Map()),
+		},
+	}))
+	if foo.Int() != 121 {
+		t.Fatal(foo)
+	}
+
 	foo = MustRun(LoadString(`function foo(m...)
 	return apply(sum, concat(m, m)...) + sum2(m...)
     end
@@ -495,7 +525,7 @@ func TestACall(t *testing.T) {
 			},
 		},
 	}))
-	v, err := foo.Func().Call(Int(1), Int(2), Int(3))
+	v, err = foo.Func().Call(Int(1), Int(2), Int(3))
 	if err != nil {
 		t.Fatal(err)
 	}

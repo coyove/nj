@@ -296,6 +296,9 @@ var MathLib = Map(
 			env.A = Float(math.Abs(f))
 		}
 	}),
+	Str("remainder"), Native("remainder", func(env *Env) {
+		env.A = Float(math.Remainder(env.Get(0).MustNum("remainder()", 1).Float(), env.Get(1).MustNum("remainder()", 2).Float()))
+	}),
 	Str("mod"), Native("mod", func(env *Env) {
 		env.A = Float(math.Mod(env.Get(0).MustNum("mod()", 1).Float(), env.Get(1).MustNum("mod()", 2).Float()))
 	}),

@@ -51,23 +51,29 @@ func (m *RHMap) GetString(k string) (v Value) {
 	return m.Get(Str(k))
 }
 
-// Get retrieves the val for a given key.
+// Get retrieves the value for a given key.
 func (m *RHMap) Get(k Value) (v Value) {
 	if k == Nil {
 		return Nil
 	}
 	if k.IsInt() {
 		if idx := k.Int(); idx >= 0 && idx < int64(len(m.items)) {
-			return m.items[idx]
+			v = m.items[idx]
+			goto FINAL
 		}
 	}
 	if idx := m.findHash(k); idx >= 0 {
-		return m.hashItems[idx].Val
+		v = m.hashItems[idx].Val
+	} else if m.Parent != nil {
+		v = m.Parent.Get(k)
 	}
-	if m.Parent != nil {
-		return m.Parent.Get(k)
+FINAL:
+	if m.Parent != nil && v.Type() == FUNC {
+		f := *v.Func()
+		f.MethodSrc = m.Value()
+		v = f.Value()
 	}
-	return Nil
+	return v
 }
 
 func (m *RHMap) findHash(k Value) int {

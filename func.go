@@ -114,12 +114,23 @@ func (p *Program) Call() (v1 Value, err error) {
 	return
 }
 
+func (c *Func) CallSimple(args ...interface{}) (v1 interface{}, err error) {
+	x := make([]Value, len(args))
+	for i := range args {
+		x[i] = Go(args[i])
+	}
+	return c.Call(x...)
+}
+
 func (c *Func) Call(args ...Value) (v1 Value, err error) {
 	defer parser.CatchError(&err)
 
 	newEnv := Env{
 		Global: c.LoadGlobal,
 		stack:  &args,
+	}
+	if c.MethodSrc != Nil {
+		newEnv.Prepend(c.MethodSrc)
 	}
 
 	if c.Native != nil {

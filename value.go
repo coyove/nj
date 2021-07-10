@@ -19,6 +19,8 @@ import (
 var (
 	int64Marker       = unsafe.Pointer(new(int64))
 	int64Marker2      = uintptr(int64Marker) * 2
+	float64Marker     = unsafe.Pointer(new(int64))
+	float64Marker2    = uintptr(float64Marker) * 2
 	trueMarker        = unsafe.Pointer(new(int64))
 	falseMarker       = unsafe.Pointer(new(int64))
 	smallStringMarker = unsafe.Pointer(new([9]int64))
@@ -67,15 +69,12 @@ func (v Value) IsValue(parser.Node) {}
 // Type returns the type of value, its logic should align IsFalse()
 func (v Value) Type() ValueType {
 	switch v.p {
-	case int64Marker:
+	case int64Marker, float64Marker:
 		return NUM
 	case trueMarker, falseMarker:
 		return BOOL
 	case nil:
-		if v.v == 0 {
-			return NIL
-		}
-		return NUM
+		return NIL
 	}
 	if uintptr(v.p) >= uintptr(smallStringMarker) && uintptr(v.p) <= uintptr(smallStringMarker)+8*8 {
 		return STR
@@ -105,7 +104,7 @@ func Float(f float64) Value {
 	if float64(int64(f)) == f {
 		return Value{v: uint64(int64(f)), p: int64Marker}
 	}
-	return Value{v: ^math.Float64bits(f)}
+	return Value{v: math.Float64bits(f), p: float64Marker}
 }
 
 // Int returns a number value like Float does, but it preserves int64 values which overflow float64
@@ -319,7 +318,7 @@ func (v Value) Num() (floatValue float64, intValue int64, isInt bool) {
 	if v.p == int64Marker {
 		return float64(int64(v.v)), int64(v.v), true
 	}
-	x := math.Float64frombits(^v.v)
+	x := math.Float64frombits(v.v)
 	return x, int64(x), false
 }
 
@@ -361,7 +360,7 @@ func (v Value) puintptr() uintptr { return uintptr(v.p) }
 
 func (v Value) unsafeint() int64 { return int64(v.v) }
 
-func (v Value) unsafefloat() float64 { return math.Float64frombits(^v.v) }
+func (v Value) unsafefloat() float64 { return math.Float64frombits(v.v) }
 
 // GoType returns the interface{} representation of Value which will be converted to t if needed
 func (v Value) GoType(t reflect.Type) interface{} {
