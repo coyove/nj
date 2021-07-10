@@ -130,7 +130,11 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 			if a>>12 == 1 || toplevel {
 				v := (*p.Stack)[a&0xfff]
 				if v != Nil {
-					suffix = "(" + v.JSONString() + ")"
+					text := v.JSONString()
+					if len(text) > 120 {
+						text = text[:60] + "..." + text[len(text)-60:]
+					}
+					suffix = "(" + text + ")"
 				}
 			}
 		}
@@ -187,12 +191,14 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 			cls := p.Functions[a]
 			sb.WriteString("loadfunc " + cls.Name + "\n")
 			sb.WriteString(pkPrettify(cls, p, false))
-		case OpCall:
-			if b == callTail {
-				sb.WriteString("tailcall " + readAddr(a, true))
-			} else {
-				sb.WriteString("call " + readAddr(a, true))
+		case OpTailCall, OpCall:
+			if b != regPhantom {
+				sb.WriteString("push " + readAddr(b, true) + " -> ")
 			}
+			if bop == OpTailCall {
+				sb.WriteString("tail")
+			}
+			sb.WriteString("call " + readAddr(a, true))
 		case OpIfNot, OpJmp:
 			pos := int32(inst&0xffffff) - 1<<23
 			pos2 := uint32(int32(cursor) + pos)

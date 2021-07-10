@@ -315,8 +315,11 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			retStack = retStack[:len(retStack)-1]
 		case OpLoadFunc:
 			env.A = env.Global.Functions[opa].Value()
-		case OpCall:
+		case OpCall, OpTailCall:
 			cls := env._get(opa).MustFunc("invoke function", 0)
+			if opb != regPhantom {
+				stackEnv.Push(env._get(opb))
+			}
 			if cls.MethodSrc != Nil {
 				stackEnv.Prepend(cls.MethodSrc)
 			}
@@ -353,7 +356,7 @@ func InternalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				env.Global = cls.LoadGlobal
 				env.A = stackEnv.A
 
-				if opb != callTail {
+				if bop == OpCall {
 					retStack = append(retStack, last)
 				}
 

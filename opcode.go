@@ -5,10 +5,8 @@ import (
 )
 
 const (
-	regA uint16 = 0x1fff // full 13 bits
-
-	callNormal = 0
-	callTail   = 1
+	regA       uint16 = 0x1fff // full 13 bits
+	regPhantom uint16 = 0x1ffe // full 13 bits
 )
 
 const (
@@ -43,6 +41,7 @@ const (
 	OpArray
 	OpMap
 	OpCall
+	OpTailCall
 	OpRet
 )
 

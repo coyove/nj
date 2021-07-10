@@ -333,6 +333,8 @@ func (v Value) Map() *RHMap { return (*RHMap)(v.p) }
 // Func cast value to function
 func (v Value) Func() *Func { return (*Func)(v.p) }
 
+func (v Value) WrappedFunc() *Func { return v.Go().(*WrappedFunc).Func }
+
 // Go returns the interface{} representation of Value
 func (v Value) Go() interface{} {
 	switch v.Type() {

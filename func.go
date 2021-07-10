@@ -41,6 +41,10 @@ type Program struct {
 	shadowTable      *symtable
 }
 
+type WrappedFunc struct {
+	*Func
+}
+
 // Native creates a golang-Native function
 func Native(name string, f func(env *Env), doc ...string) Value {
 	return (&Func{
@@ -69,6 +73,8 @@ func Native4(name string, f func(*Env, Value, Value, Value, Value) Value, doc ..
 func (c *Func) IsNative() bool { return c.Native != nil }
 
 func (c *Func) Value() Value { return Value{v: uint64(FUNC), p: unsafe.Pointer(c)} }
+
+func (c *Func) WrappedValue() Value { return _interface(&WrappedFunc{c}) }
 
 func (c *Func) String() string {
 	p := bytes.Buffer{}

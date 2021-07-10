@@ -46,7 +46,7 @@ function ATimesTransp(v, u)
     wg.Wait() 
 end
 
-n = 2000
+n = 5500
 u = {} 
 v = {} 
  

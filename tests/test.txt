@@ -189,6 +189,18 @@ x = double(1, 2, 3)
 assert(x[0] + x[1] + x[2] == 12)
 print(x)
 
+function double(k, args...)
+    for i=0,len(args) do
+        args[i] = args[i] * k
+    end
+    return args
+end
+
+x = double(3, 1)
+assert(x[0] == 3)
+x = double(4, 1, 2, 3)
+assert(x[0] + x[1] + x[2] == 24)
+
 function foo()
     _u_ = 10
 end

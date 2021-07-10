@@ -199,6 +199,7 @@ func (table *symtable) compileList(nodes []parser.Node) uint16 {
 // [call callee [args ...]]
 func (table *symtable) compileCall(nodes []parser.Node) uint16 {
 	tmp := append([]parser.Node{nodes[1]}, nodes[2].Nodes...)
+	isVariadic := false
 	if last := &tmp[len(tmp)-1]; len(last.Nodes) == 2 && last.Nodes[0].SymbolValue() == parser.AUnpack {
 		*last = last.Nodes[1]
 		table.collapse(tmp, true)
@@ -206,18 +207,22 @@ func (table *symtable) compileCall(nodes []parser.Node) uint16 {
 			table.writeInst(OpPush, tmp[i], parser.NewAddress(0))
 		}
 		table.writeInst(OpPushVararg, tmp[len(tmp)-1], parser.NewAddress(0))
+		isVariadic = true
 	} else {
 		table.collapse(tmp, true)
-		for i := 1; i < len(tmp); i++ {
+		for i := 1; i < len(tmp)-1; i++ {
 			table.writeInst(OpPush, tmp[i], parser.NewAddress(0))
 		}
 	}
 
-	switch nodes[0].SymbolValue() {
-	case parser.ACall:
-		table.writeInst(OpCall, tmp[0], parser.NewAddress(callNormal))
-	case parser.ATailCall:
-		table.writeInst(OpCall, tmp[0], parser.NewAddress(callTail))
+	op := byte(OpCall)
+	if nodes[0].SymbolValue() == parser.ATailCall {
+		op = OpTailCall
+	}
+	if len(tmp) == 1 || isVariadic {
+		table.writeInst(op, tmp[0], parser.NewAddress(regPhantom))
+	} else {
+		table.writeInst(op, tmp[0], tmp[len(tmp)-1])
 	}
 
 	table.code.writePos(nodes[0].Pos())

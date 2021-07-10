@@ -136,7 +136,7 @@ func init() {
 		Str("new"), Native1("new", func(env *Env, f Value) Value {
 			wg := &sync.WaitGroup{}
 			b := Map(
-				Str("_f"), f.MustFunc("new()", 0).Value(),
+				Str("_f"), f.MustFunc("new()", 0).WrappedValue(),
 				Str("_r"), Undef,
 				Str("_wg"), Go(wg),
 				Str("start"), Native1("start", func(env *Env, t Value) Value {
@@ -146,7 +146,7 @@ func init() {
 					args := append([]Value{}, env.Stack()[1:]...)
 					go func() {
 						defer wg.Done()
-						res, err := m.GetString("_f").Func().Call(args...)
+						res, err := m.GetString("_f").WrappedFunc().Call(args...)
 						if err != nil {
 							panic(err)
 						}
@@ -433,7 +433,7 @@ func init() {
 	AddGlobalValue("sync", Map(
 		Str("mutex"), Native("mutex", func(env *Env) { env.A = Go(&sync.Mutex{}) }, "$f() => creates a mutex"),
 		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Go(&sync.RWMutex{}) }, "$f() => creates a read-write mutex"),
-		Str("waitgroup"), Native("rwmutex", func(env *Env) { env.A = Go(&sync.WaitGroup{}) }, "$f() => creates a wait group"),
+		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Go(&sync.WaitGroup{}) }, "$f() => creates a wait group"),
 	))
 
 	// Array related functions
@@ -448,14 +448,14 @@ func init() {
 			ma.Set(Int(int64(len(ma.items))), b)
 		}
 		return ma.Value()
-	}, "append(array, value) => append value to array")
+	}, "concat(array1, array2) => concat two arrays")
 	AddGlobalValue("next", func(env *Env, m, k Value) Value {
 		nk, nv := m.MustMap("next()", 0).Next(k)
 		return Array(nk, nv)
-	})
+	}, "next(map, start_key) => {next_key, next_value}", "\tfind next key-value pair in the map")
 	AddGlobalValue("parent", func(env *Env, m Value) Value {
 		return m.MustMap("parent()", 0).Parent.Value()
-	})
+	}, "parent(map) => map", "\tfind given map's parent map, or nil if not existed")
 	AddGlobalValue("keys", func(env *Env, m Value) Value {
 		a := make([]Value, 0)
 		m.MustMap("keys()", 0).Foreach(func(k, v Value) bool {
