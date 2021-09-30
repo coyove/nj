@@ -98,7 +98,7 @@ func Int(i int64) Value {
 
 // Array returns an array consists of 'm'
 func Array(m ...Value) Value {
-	x := &RHMap{items: m}
+	x := &HashMap{items: m}
 	for _, i := range x.items {
 		if i != Nil {
 			x.count++
@@ -109,15 +109,24 @@ func Array(m ...Value) Value {
 
 // Map returns a map, kvs should be laid out as: key1, value1, key2, value2, ...
 func Map(kvs ...Value) Value {
-	t := NewRHMap(len(kvs) / 2)
+	t := NewHashMap(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		t.Set(kvs[i], kvs[i+1])
 	}
 	return Value{v: uint64(typ.Map), p: unsafe.Pointer(t)}
 }
 
-// MapWithParent returns a map whose parent will be p
-func MapWithParent(p *RHMap, kvs ...Value) Value {
+// MapVal returns a map, kvs should be laid out as: key1, value1, key2, value2, ...
+func MapVal(kvs ...interface{}) Value {
+	t := NewHashMap(len(kvs) / 2)
+	for i := 0; i < len(kvs)/2*2; i += 2 {
+		t.Set(Val(kvs[i]), Val(kvs[i+1]))
+	}
+	return Value{v: uint64(typ.Map), p: unsafe.Pointer(t)}
+}
+
+// MapWithParent returns a map whose parent will be set to p
+func MapWithParent(p *HashMap, kvs ...Value) Value {
 	m := Map(kvs...)
 	m.Map().Parent = p
 	return m
@@ -173,7 +182,7 @@ func Val(i interface{}) Value {
 		return Str(v)
 	case []byte:
 		return Bytes(v)
-	case *RHMap:
+	case *HashMap:
 		return v.Value()
 	case []Value:
 		return Array(v...)
@@ -204,7 +213,7 @@ func Val(i interface{}) Value {
 		}
 		if v.IsObject() {
 			m := v.Map()
-			x := NewRHMap(len(m))
+			x := NewHashMap(len(m))
 			for k, v := range m {
 				x.Set(Str(k), Val(v))
 			}
@@ -262,7 +271,7 @@ func ValRec(v interface{}) Value {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		m := NewRHMap(rv.Len() + 1)
+		m := NewHashMap(rv.Len() + 1)
 		iter := rv.MapRange()
 		for iter.Next() {
 			m.Set(ValRec(iter.Key()), Val(iter.Value()))
@@ -312,7 +321,7 @@ func (v Value) Float() float64 { f, _, _ := v.Num(); return f }
 
 func (v Value) Bool() bool { return v.p == trueMarker }
 
-func (v Value) Map() *RHMap { return (*RHMap)(v.p) }
+func (v Value) Map() *HashMap { return (*HashMap)(v.p) }
 
 // Func cast value to function
 func (v Value) Func() *Func { return (*Func)(v.p) }
@@ -397,7 +406,7 @@ func (v Value) MustStr(msg string, a int) string { return v.mustBe(typ.String, m
 
 func (v Value) MustNum(msg string, a int) Value { return v.mustBe(typ.Number, msg, a) }
 
-func (v Value) MustMap(msg string, a int) *RHMap { return v.mustBe(typ.Map, msg, a).Map() }
+func (v Value) MustMap(msg string, a int) *HashMap { return v.mustBe(typ.Map, msg, a).Map() }
 
 func (v Value) MustFunc(msg string, a int) *Func { return v.mustBe(typ.Func, msg, a).Func() }
 

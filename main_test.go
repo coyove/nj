@@ -231,7 +231,7 @@ func BenchmarkGoMap50(b *testing.B) { benchmarkGoMap(b, 50) }
 
 func benchmarkRHMap(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
-	m := NewRHMap(n)
+	m := NewHashMap(n)
 	for i := 0; i < n; i++ {
 		m.Set(Int(int64(i)), Int(int64(i)))
 	}
@@ -397,7 +397,7 @@ func TestSmallString(t *testing.T) {
 
 func TestRHMap(t *testing.T) {
 	rand.Seed(time.Now().Unix())
-	m := RHMap{}
+	m := HashMap{}
 	m2 := map[int64]int64{}
 	counter := int64(0)
 	for i := 0; i < 1e6; i++ {

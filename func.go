@@ -75,6 +75,7 @@ func (c *Func) IsNative() bool { return c.Native != nil }
 
 func (c *Func) Value() Value { return Value{v: uint64(typ.Func), p: unsafe.Pointer(c)} }
 
+// WrappedFunc is needed when you want to store a raw (non-method) function inside a map
 func (c *Func) WrappedValue() Value { return _interface(&WrappedFunc{c}) }
 
 func (c *Func) String() string {

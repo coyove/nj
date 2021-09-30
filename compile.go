@@ -473,6 +473,13 @@ func LoadString(code string, opt *CompileOptions) (*Program, error) {
 	return compileNodeTopLevel(code, n, opt)
 }
 
+func Run(p *Program, err error) (Value, error) {
+	if err != nil {
+		return Nil, err
+	}
+	return p.Run()
+}
+
 func MustRun(p *Program, err error) Value {
 	if err != nil {
 		panic(err)

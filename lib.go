@@ -83,7 +83,7 @@ func init() {
 		m.hashItems = append([]hashItem{}, m.hashItems...)
 		m.items = append([]Value{}, m.items...)
 		if a.Type() != typ.Map {
-			return (&RHMap{Parent: &m}).Value()
+			return (&HashMap{Parent: &m}).Value()
 		}
 		a.Map().Parent = &m
 		return a
