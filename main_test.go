@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"go/parser"
 	"log"
 	"math"
 	"math/rand"
@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	_parser "github.com/coyove/script/parser"
 )
 
 func init() {
@@ -209,15 +211,14 @@ a = 0
 }
 
 func BenchmarkCompiling(b *testing.B) {
-	buf, _ := ioutil.ReadFile("tests/string.txt")
-	y := string(bytes.Repeat(buf, 100))
 	for i := 0; i < b.N; i++ {
-		p, err := LoadString(string(y), nil)
-		if err != nil {
-			b.Fatal(err)
-		}
-		p.Stdout = ioutil.Discard
-		// p.Run()
+		_parser.Parse("return a+1", "")
+	}
+}
+
+func BenchmarkGoCompiling(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		parser.ParseExpr("a+1")
 	}
 }
 

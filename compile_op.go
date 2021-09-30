@@ -265,6 +265,7 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 
 	code := newtable.code
 	code.writeInst(OpRet, table.loadK(nil), 0)
+	// code.writeInst(OpRet, regA, 0)
 
 	cls := &Func{}
 	cls.Variadic = varargIdx >= 0

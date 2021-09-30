@@ -389,7 +389,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	table.collectConstMode = false
 
 	table.compileNode(n)
-	table.code.writeInst(OpRet, table.loadK(nil), 0)
+	table.code.writeInst(OpRet, regA, 0)
 	table.patchGoto()
 
 	coreStack.grow(int(table.vp))
