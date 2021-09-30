@@ -18,7 +18,7 @@ func init() {
 		for _, e := range env.Get(0).MustMap("set", 0).Array() {
 			s.Add(e)
 		}
-		env.A = script.Go(s)
+		env.A = script.Val(s)
 	},
 		"set() => unique_set",
 		"set({ e1, e2, ..., en }) => unique_set",

@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/coyove/script/parser"
+	"github.com/coyove/script/typ"
 )
 
 type Func struct {
@@ -72,7 +73,7 @@ func Native4(name string, f func(*Env, Value, Value, Value, Value) Value, doc ..
 
 func (c *Func) IsNative() bool { return c.Native != nil }
 
-func (c *Func) Value() Value { return Value{v: uint64(FUNC), p: unsafe.Pointer(c)} }
+func (c *Func) Value() Value { return Value{v: uint64(typ.Func), p: unsafe.Pointer(c)} }
 
 func (c *Func) WrappedValue() Value { return _interface(&WrappedFunc{c}) }
 
@@ -116,14 +117,14 @@ func (p *Program) Call() (v1 Value, err error) {
 		Global: p,
 		stack:  p.Stack,
 	}
-	v1 = InternalExecCursorLoop(newEnv, &p.Func, 0)
+	v1 = internalExecCursorLoop(newEnv, &p.Func, 0)
 	return
 }
 
 func (c *Func) CallSimple(args ...interface{}) (v1 interface{}, err error) {
 	x := make([]Value, len(args))
 	for i := range args {
-		x[i] = Go(args[i])
+		x[i] = Val(args[i])
 	}
 	return c.Call(x...)
 }
@@ -153,7 +154,7 @@ func (c *Func) Call(args ...Value) (v1 Value, err error) {
 			}
 		}
 		newEnv.growZero(int(c.StackSize))
-		v1 = InternalExecCursorLoop(newEnv, c, 0)
+		v1 = internalExecCursorLoop(newEnv, c, 0)
 	}
 	return
 }

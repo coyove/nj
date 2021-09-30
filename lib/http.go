@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/coyove/script"
+	"github.com/coyove/script/typ"
 )
 
 var HostWhitelist = map[string][]string{}
@@ -25,7 +26,7 @@ func init() {
 		defer func() {
 			cancel()
 			if r := recover(); r != nil {
-				env.A = script.Array(script.Go(r))
+				env.A = script.Array(script.Val(r))
 			}
 		}()
 
@@ -36,7 +37,7 @@ func init() {
 
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Get(script.Str(k))
-			if x.Type() == script.MAP {
+			if x.Type() == typ.Map {
 				p := x.Map()
 				for k, v := p.Next(script.Nil); k != script.Nil; k, v = p.Next(k) {
 					add(k.String(), v.String())
@@ -117,8 +118,8 @@ func init() {
 		if to := args.Get(script.Str("timeout")).IntDefault(0); to > 0 {
 			client.Timeout = time.Duration(to) * time.Millisecond
 		}
-		if v := args.Get(script.Str("jar")); v.Type() == script.GO {
-			client.Jar, _ = v.Go().(http.CookieJar)
+		if v := args.Get(script.Str("jar")); v.Type() == typ.Interface {
+			client.Jar, _ = v.Interface().(http.CookieJar)
 		}
 		if !args.Get(script.Str("no_redirect")).IsFalse() {
 			client.CheckRedirect = func(*http.Request, []*http.Request) error {
@@ -146,9 +147,9 @@ func init() {
 		}
 		env.A = script.Array(
 			script.Int(int64(resp.StatusCode)),
-			script.Go(hdr),
+			script.Val(hdr),
 			script.Bytes(buf),
-			script.Go(client.Jar),
+			script.Val(client.Jar),
 		)
 	}, `http($a...a$) => code, body, headers, cookie_jar
     'url' is a mandatory parameter, others are optional and pretty self explanatory:

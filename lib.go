@@ -16,6 +16,7 @@ import (
 	"unsafe"
 
 	"github.com/coyove/script/parser"
+	"github.com/coyove/script/typ"
 	"github.com/tidwall/gjson"
 )
 
@@ -37,7 +38,7 @@ func AddGlobalValue(k string, v interface{}, doc ...string) {
 	case func(*Env, Value, Value, Value) Value:
 		g[k] = Native3(k, v, doc...)
 	default:
-		g[k] = Go(v)
+		g[k] = Val(v)
 	}
 }
 
@@ -81,7 +82,7 @@ func init() {
 		m := *v.MustMap("new", 0)
 		m.hashItems = append([]hashItem{}, m.hashItems...)
 		m.items = append([]Value{}, m.items...)
-		if a.Type() != MAP {
+		if a.Type() != typ.Map {
 			return (&RHMap{Parent: &m}).Value()
 		}
 		a.Map().Parent = &m
@@ -90,26 +91,26 @@ func init() {
 	AddGlobalValue("prototype", g["new"])
 	AddGlobalValue("len", func(env *Env, v Value) Value {
 		switch v.Type() {
-		case STR:
+		case typ.String:
 			return Int(int64(len(v.Str())))
-		case MAP:
+		case typ.Map:
 			return Int(int64(v.Map().Len()))
-		case FUNC:
+		case typ.Func:
 			return Int(int64(v.Func().NumParams))
-		case NUM, NIL, BOOL:
+		case typ.Number, typ.Nil, typ.Bool:
 			return panicf("can't measure length of %v", v.Type())
 		default:
-			return Int(int64(reflectLen(v.Go())))
+			return Int(int64(reflectLen(v.Interface())))
 		}
 	})
 	AddGlobalValue("alen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("alen()", 0).items))) })
 	AddGlobalValue("hlen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("hlen()", 0).hashItems))) })
 	AddGlobalValue("eval", func(env *Env, s, g Value) Value {
 		var m map[string]interface{}
-		if g.Type() == MAP {
+		if g.Type() == typ.Map {
 			m = map[string]interface{}{}
 			g.Map().Foreach(func(k, v Value) bool {
-				m[k.String()] = v.Go()
+				m[k.String()] = v.Interface()
 				return true
 			})
 		}
@@ -138,10 +139,10 @@ func init() {
 			b := Map(
 				Str("_f"), f.MustFunc("new()", 0).WrappedValue(),
 				Str("_r"), Undef,
-				Str("_wg"), Go(wg),
+				Str("_wg"), Val(wg),
 				Str("start"), Native1("start", func(env *Env, t Value) Value {
 					m := t.Map()
-					wg := m.GetString("_wg").Go().(*sync.WaitGroup)
+					wg := m.GetString("_wg").Interface().(*sync.WaitGroup)
 					wg.Add(1)
 					args := append([]Value{}, env.Stack()[1:]...)
 					go func() {
@@ -155,7 +156,7 @@ func init() {
 					return Nil
 				}),
 				Str("wait"), Native1("wait", func(env *Env, t Value) Value {
-					t.Map().GetString("_wg").Go().(*sync.WaitGroup).Wait()
+					t.Map().GetString("_wg").Interface().(*sync.WaitGroup).Wait()
 					return t.Map().GetString("_r")
 				}),
 			)
@@ -226,9 +227,9 @@ func init() {
 			return a
 		}
 		if err, ok := err.(*ExecError); ok {
-			return Go(err.r)
+			return Val(err.r)
 		}
-		return Go(err)
+		return Val(err)
 	}, "pcall(function, arg1, arg2, ...) => result_of_function",
 		"\texecute the function, catch panic and return as error")
 	AddGlobalValue("panic", func(env *Env) { panic(env.Get(0)) }, "panic(value)")
@@ -250,9 +251,9 @@ func init() {
 	AddGlobalValue("float", func(env *Env) {
 		v := env.Get(0)
 		switch v.Type() {
-		case NUM:
+		case typ.Number:
 			env.A = v
-		case STR:
+		case typ.String:
 			switch v := parser.NewNumberFromString(v.Str()); v.Type {
 			case parser.Float:
 				env.A = Float(v.FloatValue())
@@ -272,7 +273,7 @@ func init() {
 		fmt.Fprintln(env.Global.Stdout)
 	}, "print(a, b, c, ...)", "\tprint values, no space between them")
 	AddGlobalValue("write", func(env *Env) {
-		w := env.Get(0).Go().(io.Writer)
+		w := env.Get(0).Interface().(io.Writer)
 		for _, a := range env.Stack()[1:] {
 			fmt.Fprint(w, a.String())
 		}
@@ -302,7 +303,7 @@ func init() {
 	AddGlobalValue("str", StringMethods)
 	AddGlobalValue("int", func(env *Env) {
 		switch v := env.Get(0); v.Type() {
-		case NUM:
+		case typ.Number:
 			env.A = Int(v.Int())
 		default:
 			v, _ := strconv.ParseInt(v.String(), 0, 64)
@@ -330,13 +331,13 @@ func init() {
 			if env.Get(7).StringDefault("") == "local" {
 				loc = time.Local
 			}
-			env.A = Go(time.Date(
+			env.A = Val(time.Date(
 				int(env.Get(0).IntDefault(1970)), time.Month(env.Get(1).IntDefault(1)), int(env.Get(2).IntDefault(1)),
 				int(env.Get(3).IntDefault(0)), int(env.Get(4).IntDefault(0)), int(env.Get(5).IntDefault(0)),
 				int(env.Get(6).IntDefault(0)), loc,
 			))
 		} else {
-			env.A = Go(time.Now())
+			env.A = Val(time.Now())
 		}
 	},
 		"Go_time() => time.Time",
@@ -373,12 +374,12 @@ func init() {
 			panic(err)
 		}
 		a := Map(
-			Str("_rx"), Go(rx),
+			Str("_rx"), Val(rx),
 			Str("match"), Native2("match", func(e *Env, rx, text Value) Value {
-				return Bool(rx.Map().GetString("_rx").Go().(*regexp.Regexp).MatchString(text.MustStr("match()", 0)))
+				return Bool(rx.Map().GetString("_rx").Interface().(*regexp.Regexp).MatchString(text.MustStr("match()", 0)))
 			}, ""),
 			Str("find"), Native2("find", func(e *Env, rx, text Value) Value {
-				m := rx.Map().GetString("_rx").Go().(*regexp.Regexp).FindStringSubmatch(text.MustStr("find()", 0))
+				m := rx.Map().GetString("_rx").Interface().(*regexp.Regexp).FindStringSubmatch(text.MustStr("find()", 0))
 				mm := []Value{}
 				for _, m := range m {
 					mm = append(mm, Str(m))
@@ -386,7 +387,7 @@ func init() {
 				return Array(mm...)
 			}, ""),
 			Str("findall"), Native3("findall", func(e *Env, rx, text, n Value) Value {
-				m := rx.Map().GetString("_rx").Go().(*regexp.Regexp).FindAllStringSubmatch(text.MustStr("findall()", 0), int(n.IntDefault(-1)))
+				m := rx.Map().GetString("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(text.MustStr("findall()", 0), int(n.IntDefault(-1)))
 				mm := []Value{}
 				for _, m := range m {
 					for _, m := range m {
@@ -396,7 +397,7 @@ func init() {
 				return Array(mm...)
 			}, ""),
 			Str("replace"), Native3("replace", func(e *Env, rx, text, newtext Value) Value {
-				m := rx.Map().GetString("_rx").Go().(*regexp.Regexp).ReplaceAllString(text.MustStr("replace() old text", 0), newtext.MustStr("replace() new text", 0))
+				m := rx.Map().GetString("_rx").Interface().(*regexp.Regexp).ReplaceAllString(text.MustStr("replace() old text", 0), newtext.MustStr("replace() new text", 0))
 				return Str(m)
 			}, ""),
 		)
@@ -405,10 +406,10 @@ func init() {
 		return b
 	}, "re(string) => creates a regular expression object")
 	AddGlobalValue("error", func(env *Env, msg Value) Value {
-		return Go(errors.New(msg.MustStr("error()", 0)))
+		return Val(errors.New(msg.MustStr("error()", 0)))
 	}, "error(text)", "\tcreate an error")
 	AddGlobalValue("iserror", func(env *Env) {
-		_, ok := env.Get(0).Go().(error)
+		_, ok := env.Get(0).Interface().(error)
 		env.A = Bool(ok)
 	}, "iserror(value)", "\ttest whether value is an error")
 
@@ -418,7 +419,7 @@ func init() {
 		}, "$f(value) => json_string"),
 		Str("parse"), Native1("parse", func(env *Env, js Value) Value {
 			j := strings.TrimSpace(js.MustStr("json.parse() json string", 0))
-			return Go(gjson.Parse(j))
+			return Val(gjson.Parse(j))
 		}, "$f(json_string) => array"),
 		Str("get"), Native3("get", func(env *Env, js, path, et Value) Value {
 			j := strings.TrimSpace(js.MustStr("json.get() json string", 0))
@@ -426,14 +427,14 @@ func init() {
 			if !result.Exists() {
 				return et
 			}
-			return Go(result)
+			return Val(result)
 		}, "$f(json_string, selector, default?) => bool|number|string|array"),
 	))
 
 	AddGlobalValue("sync", Map(
-		Str("mutex"), Native("mutex", func(env *Env) { env.A = Go(&sync.Mutex{}) }, "$f() => creates a mutex"),
-		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Go(&sync.RWMutex{}) }, "$f() => creates a read-write mutex"),
-		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Go(&sync.WaitGroup{}) }, "$f() => creates a wait group"),
+		Str("mutex"), Native("mutex", func(env *Env) { env.A = Val(&sync.Mutex{}) }, "$f() => creates a mutex"),
+		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() => creates a read-write mutex"),
+		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() => creates a wait group"),
 	))
 
 	// Array related functions

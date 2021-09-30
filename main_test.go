@@ -231,7 +231,7 @@ func BenchmarkGoMap50(b *testing.B) { benchmarkGoMap(b, 50) }
 
 func benchmarkRHMap(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
-	m := NewMap(n)
+	m := NewRHMap(n)
 	for i := 0; i < n; i++ {
 		m.Set(Int(int64(i)), Int(int64(i)))
 	}
@@ -537,12 +537,12 @@ func TestACall(t *testing.T) {
 
 func TestReflectedValue(t *testing.T) {
 	v := Array(True, False)
-	x := v.GoType(reflect.TypeOf([2]bool{})).([2]bool)
+	x := v.ReflectValue(reflect.TypeOf([2]bool{})).Interface().([2]bool)
 	if x[0] != true || x[1] != false {
 		t.Fatal(x)
 	}
 	v = Map(Str("a"), Int(1), Str("b"), Int(2))
-	y := v.GoType(reflect.TypeOf(map[string]byte{})).(map[string]byte)
+	y := v.ReflectValue(reflect.TypeOf(map[string]byte{})).Interface().(map[string]byte)
 	if y["a"] != 1 || y["b"] != 2 {
 		t.Fatal(x)
 	}

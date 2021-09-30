@@ -2,6 +2,7 @@ package script
 
 import (
 	"github.com/coyove/script/parser"
+	"github.com/coyove/script/typ"
 )
 
 var _nodeRegA = parser.NewAddress(regA)
@@ -44,13 +45,13 @@ func (table *symtable) compileSetMove(atoms []parser.Node) uint16 {
 	}
 
 	fromYX := table.compileNode(atoms[2])
-	table.code.writeInst(OpSet, newYX, fromYX)
+	table.code.writeInst(typ.OpSet, newYX, fromYX)
 	table.code.writePos(atoms[0].Pos())
 	return newYX
 }
 
 func (table *symtable) compileReturn(atoms []parser.Node) uint16 {
-	table.writeInst(OpRet, atoms[1], parser.Node{})
+	table.writeInst(typ.OpRet, atoms[1], parser.Node{})
 	return regA
 }
 
@@ -63,7 +64,7 @@ func (table *symtable) writeInst3(bop byte, atoms []parser.Node) uint16 {
 
 	atoms = append([]parser.Node{}, atoms...) // duplicate
 
-	if bop == OpStore {
+	if bop == typ.OpStore {
 		table.collapse(atoms[1:], true)
 
 		// (atoms    1      2    3 )
@@ -72,14 +73,14 @@ func (table *symtable) writeInst3(bop byte, atoms []parser.Node) uint16 {
 		for i := 1; i <= 2; i++ { // subject and value shouldn't use regA
 			if atoms[i].Type == parser.Address && atoms[i].Addr == regA {
 				n := parser.NewAddress(table.borrowAddress())
-				table.writeInst(OpSet, n, _nodeRegA)
+				table.writeInst(typ.OpSet, n, _nodeRegA)
 				atoms[i] = n
 			}
 		}
 
 		// We would love to see 'key' using regA, in this case writeInst will just omit it
-		table.writeInst(OpSet, _nodeRegA, atoms[3])
-		table.writeInst(OpStore, atoms[1], atoms[2])
+		table.writeInst(typ.OpSet, _nodeRegA, atoms[3])
+		table.writeInst(typ.OpStore, atoms[1], atoms[2])
 		table.returnAddresses(atoms[1:])
 		return regA
 	}
@@ -87,7 +88,7 @@ func (table *symtable) writeInst3(bop byte, atoms []parser.Node) uint16 {
 	table.collapse(atoms[1:], true)
 
 	switch bop {
-	case OpNot, OpRet, OpBitNot:
+	case typ.OpNot, typ.OpRet, typ.OpBitNot:
 		// unary splitInst
 		table.writeInst(bop, atoms[1], parser.Node{})
 	default:
@@ -115,25 +116,25 @@ func (table *symtable) compileFlat(atoms []parser.Node) uint16 {
 // [and a b] => $a = a if not a then return else $a = b end
 // [or a b]  => $a = a if not a then $a = b end
 func (table *symtable) compileAndOr(atoms []parser.Node) uint16 {
-	table.writeInst(OpSet, _nodeRegA, atoms[1])
+	table.writeInst(typ.OpSet, _nodeRegA, atoms[1])
 
 	if atoms[0].SymbolValue() == (parser.AOr) {
-		table.code.writeJmpInst(OpIfNot, 1)
-		table.code.writeJmpInst(OpJmp, 0)
+		table.code.writeJmpInst(typ.OpIfNot, 1)
+		table.code.writeJmpInst(typ.OpJmp, 0)
 		part1 := table.code.Len()
 
-		table.writeInst(OpSet, _nodeRegA, atoms[2])
+		table.writeInst(typ.OpSet, _nodeRegA, atoms[2])
 		part2 := table.code.Len()
 
-		table.code.Code[part1-1] = jmpInst(OpJmp, part2-part1)
+		table.code.Code[part1-1] = jmpInst(typ.OpJmp, part2-part1)
 	} else {
-		table.code.writeJmpInst(OpIfNot, 0)
+		table.code.writeJmpInst(typ.OpIfNot, 0)
 		part1 := table.code.Len()
 
-		table.writeInst(OpSet, _nodeRegA, atoms[2])
+		table.writeInst(typ.OpSet, _nodeRegA, atoms[2])
 		part2 := table.code.Len()
 
-		table.code.Code[part1-1] = jmpInst(OpIfNot, part2-part1)
+		table.code.Code[part1-1] = jmpInst(typ.OpIfNot, part2-part1)
 	}
 	table.code.writePos(atoms[0].Pos())
 	return regA
@@ -149,17 +150,17 @@ func (table *symtable) compileIf(atoms []parser.Node) uint16 {
 	table.addMaskedSymTable()
 
 	if condyx != regA {
-		table.code.writeInst(OpSet, regA, condyx)
+		table.code.writeInst(typ.OpSet, regA, condyx)
 	}
 
-	table.code.writeJmpInst(OpIfNot, 0)
+	table.code.writeJmpInst(typ.OpIfNot, 0)
 	table.code.writePos(atoms[0].Pos())
 	init := table.code.Len()
 
 	table.compileNode(trueBranch)
 	part1 := table.code.Len()
 
-	table.code.writeJmpInst(OpJmp, 0)
+	table.code.writeJmpInst(typ.OpJmp, 0)
 
 	table.compileNode(falseBranch)
 	part2 := table.code.Len()
@@ -167,12 +168,12 @@ func (table *symtable) compileIf(atoms []parser.Node) uint16 {
 	table.removeMaskedSymTable()
 
 	if len(falseBranch.Nodes) > 0 {
-		table.code.Code[init-1] = jmpInst(OpIfNot, part1-init+1)
-		table.code.Code[part1] = jmpInst(OpJmp, part2-part1-1)
+		table.code.Code[init-1] = jmpInst(typ.OpIfNot, part1-init+1)
+		table.code.Code[part1] = jmpInst(typ.OpJmp, part2-part1-1)
 	} else {
 		// The last inst is used to skip the false branch, since we don't have one, we don't need this jmp
 		table.code.truncateLast()
-		table.code.Code[init-1] = jmpInst(OpIfNot, part1-init)
+		table.code.Code[init-1] = jmpInst(typ.OpIfNot, part1-init)
 	}
 	return regA
 }
@@ -182,16 +183,16 @@ func (table *symtable) compileList(nodes []parser.Node) uint16 {
 	table.collapse(nodes[1].Nodes, true)
 	if nodes[0].SymbolValue() == parser.AArray {
 		for _, x := range nodes[1].Nodes {
-			table.writeInst(OpPush, x, parser.Node{})
+			table.writeInst(typ.OpPush, x, parser.Node{})
 		}
-		table.code.writeInst(OpArray, 0, 0)
+		table.code.writeInst(typ.OpArray, 0, 0)
 	} else {
 		n := nodes[1].Nodes
 		for i := 0; i < len(n); i += 2 {
-			table.writeInst(OpPush, n[i], parser.Node{})
-			table.writeInst(OpPush, n[i+1], parser.Node{})
+			table.writeInst(typ.OpPush, n[i], parser.Node{})
+			table.writeInst(typ.OpPush, n[i+1], parser.Node{})
 		}
-		table.code.writeInst(OpMap, 0, 0)
+		table.code.writeInst(typ.OpMap, 0, 0)
 	}
 	return regA
 }
@@ -204,20 +205,20 @@ func (table *symtable) compileCall(nodes []parser.Node) uint16 {
 		*last = last.Nodes[1]
 		table.collapse(tmp, true)
 		for i := 1; i < len(tmp)-1; i++ {
-			table.writeInst(OpPush, tmp[i], parser.NewAddress(0))
+			table.writeInst(typ.OpPush, tmp[i], parser.NewAddress(0))
 		}
-		table.writeInst(OpPushVararg, tmp[len(tmp)-1], parser.NewAddress(0))
+		table.writeInst(typ.OpPushVararg, tmp[len(tmp)-1], parser.NewAddress(0))
 		isVariadic = true
 	} else {
 		table.collapse(tmp, true)
 		for i := 1; i < len(tmp)-1; i++ {
-			table.writeInst(OpPush, tmp[i], parser.NewAddress(0))
+			table.writeInst(typ.OpPush, tmp[i], parser.NewAddress(0))
 		}
 	}
 
-	op := byte(OpCall)
+	op := byte(typ.OpCall)
 	if nodes[0].SymbolValue() == parser.ATailCall {
-		op = OpTailCall
+		op = typ.OpTailCall
 	}
 	if len(tmp) == 1 || isVariadic {
 		table.writeInst(op, tmp[0], parser.NewAddress(regPhantom))
@@ -264,8 +265,8 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 	newtable.patchGoto()
 
 	code := newtable.code
-	code.writeInst(OpRet, table.loadK(nil), 0)
-	// code.writeInst(OpRet, regA, 0)
+	code.writeInst(typ.OpRet, table.loadK(nil), 0)
+	// code.writeInst(typ.OpRet, regA, 0)
 
 	cls := &Func{}
 	cls.Variadic = varargIdx >= 0
@@ -277,7 +278,7 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 	cls.Locals = newtable.symbolsToDebugLocals()
 
 	table.funcs = append(table.funcs, cls)
-	table.code.writeInst(OpLoadFunc, uint16(len(table.funcs))-1, 0)
+	table.code.writeInst(typ.OpLoadFunc, uint16(len(table.funcs))-1, 0)
 	table.code.writePos(atoms[0].Pos())
 	return regA
 }
@@ -288,7 +289,7 @@ func (table *symtable) compileBreak(atoms []parser.Node) uint16 {
 		panicf("break outside loop")
 	}
 	table.forLoops[len(table.forLoops)-1].labelPos = append(table.forLoops[len(table.forLoops)-1].labelPos, table.code.Len())
-	table.code.writeJmpInst(OpJmp, 0)
+	table.code.writeJmpInst(typ.OpJmp, 0)
 	return regA
 }
 
@@ -303,9 +304,9 @@ func (table *symtable) compileWhile(atoms []parser.Node) uint16 {
 	table.removeMaskedSymTable()
 	table.forLoops = table.forLoops[:len(table.forLoops)-1]
 
-	table.code.writeJmpInst(OpJmp, -(table.code.Len()-init)-1)
+	table.code.writeJmpInst(typ.OpJmp, -(table.code.Len()-init)-1)
 	for _, idx := range breaks.labelPos {
-		table.code.Code[idx] = jmpInst(OpJmp, table.code.Len()-idx-1)
+		table.code.Code[idx] = jmpInst(typ.OpJmp, table.code.Len()-idx-1)
 	}
 	return regA
 }
@@ -316,9 +317,9 @@ func (table *symtable) compileGoto(atoms []parser.Node) uint16 {
 		table.labelPos[label] = table.code.Len()
 	} else { // goto label
 		if pos, ok := table.labelPos[label]; ok {
-			table.code.writeJmpInst(OpJmp, pos-(table.code.Len()+1))
+			table.code.writeJmpInst(typ.OpJmp, pos-(table.code.Len()+1))
 		} else {
-			table.code.writeJmpInst(OpJmp, 0)
+			table.code.writeJmpInst(typ.OpJmp, 0)
 			table.forwardGoto[table.code.Len()-1] = label
 		}
 	}
@@ -332,7 +333,7 @@ func (table *symtable) patchGoto() {
 		if !ok {
 			panicf("label %q not found", l)
 		}
-		code[i] = jmpInst(OpJmp, pos-(i+1))
+		code[i] = jmpInst(typ.OpJmp, pos-(i+1))
 	}
 }
 

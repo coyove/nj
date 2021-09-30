@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/coyove/script/parser"
+	"github.com/coyove/script/typ"
 	"github.com/tidwall/gjson"
 )
 
@@ -26,36 +27,19 @@ var (
 	smallStringMarker = unsafe.Pointer(new([9]int64))
 
 	Nil     = Value{}
-	Undef   = Go(new(int))
+	Undef   = Val(new(int))
 	Zero    = Int(0)
 	NullStr = Str("")
 	False   = Bool(false)
 	True    = Bool(true)
 )
 
-type ValueType byte
-
 const (
-	NIL  ValueType = 0
-	BOOL ValueType = 1
-	NUM  ValueType = 3
-	STR  ValueType = 7
-	MAP  ValueType = 15
-	FUNC ValueType = 17
-	GO   ValueType = 19
-
 	ValueSize = int64(unsafe.Sizeof(Value{}))
 
 	errNeedNumbers          = "operator requires numbers"
 	errNeedNumbersOrStrings = "operator requires numbers or strings"
 )
-
-func (t ValueType) String() string {
-	if t > GO {
-		return "?"
-	}
-	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "map", "?", "function", "?", "golang"}[t]
-}
 
 // Value is the basic data type used by the intepreter, an empty Value naturally represent nil
 type Value struct {
@@ -67,19 +51,19 @@ type Value struct {
 func (v Value) IsValue(parser.Node) {}
 
 // Type returns the type of value, its logic should align IsFalse()
-func (v Value) Type() ValueType {
+func (v Value) Type() typ.ValueType {
 	switch v.p {
 	case int64Marker, float64Marker:
-		return NUM
+		return typ.Number
 	case trueMarker, falseMarker:
-		return BOOL
+		return typ.Bool
 	case nil:
-		return NIL
+		return typ.Nil
 	}
 	if uintptr(v.p) >= uintptr(smallStringMarker) && uintptr(v.p) <= uintptr(smallStringMarker)+8*8 {
-		return STR
+		return typ.String
 	}
-	return ValueType(v.v)
+	return typ.ValueType(v.v)
 }
 
 // IsFalse tests whether value contains a falsy value: nil, false, empty string or 0
@@ -94,9 +78,9 @@ func (v Value) IsInt() bool { return v.p == int64Marker }
 // Bool returns a boolean value
 func Bool(v bool) Value {
 	if v {
-		return Value{uint64(BOOL), trueMarker}
+		return Value{uint64(typ.Bool), trueMarker}
 	}
-	return Value{uint64(BOOL), falseMarker}
+	return Value{uint64(typ.Bool), falseMarker}
 }
 
 // Float returns a number value
@@ -125,11 +109,11 @@ func Array(m ...Value) Value {
 
 // Map returns a map, kvs should be laid out as: key1, value1, key2, value2, ...
 func Map(kvs ...Value) Value {
-	t := NewMap(len(kvs) / 2)
+	t := NewRHMap(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		t.Set(kvs[i], kvs[i+1])
 	}
-	return Value{v: uint64(MAP), p: unsafe.Pointer(t)}
+	return Value{v: uint64(typ.Map), p: unsafe.Pointer(t)}
 }
 
 // MapWithParent returns a map whose parent will be p
@@ -149,7 +133,7 @@ func Str(s string) Value {
 			p: unsafe.Pointer(uintptr(smallStringMarker) + uintptr(len(s))*8),
 		}
 	}
-	return Value{v: uint64(STR), p: unsafe.Pointer(&s)}
+	return Value{v: uint64(typ.String), p: unsafe.Pointer(&s)}
 }
 
 // Byte returns a one-byte string value
@@ -170,10 +154,10 @@ func Bytes(b []byte) Value {
 	return Str(*(*string)(unsafe.Pointer(&b)))
 }
 
-// Go creates Value from golang interface{}
-// []Type (except []byte/[]Value), [..]Type and map[Type]Type will be left as is,
-// to convert them recursively, use DeepGo instead
-func Go(i interface{}) Value {
+// Val creates a Value from golang interface{}
+// []Type, [..]Type and map[Type]Type will be left as is (except []byte and []Value),
+// to convert them recursively, use ValRec instead
+func Val(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
 		return Value{}
@@ -198,9 +182,9 @@ func Go(i interface{}) Value {
 	case Value:
 		return v
 	case parser.CatchedError:
-		return Go(v.Original)
+		return Val(v.Original)
 	case reflect.Value:
-		return Go(v.Interface())
+		return Val(v.Interface())
 	case gjson.Result:
 		switch v.Type {
 		case gjson.String:
@@ -214,15 +198,15 @@ func Go(i interface{}) Value {
 			a := v.Array()
 			x := make([]Value, len(a))
 			for i, a := range a {
-				x[i] = Go(a)
+				x[i] = Val(a)
 			}
 			return Array(x...)
 		}
 		if v.IsObject() {
 			m := v.Map()
-			x := NewMap(len(m))
+			x := NewRHMap(len(m))
 			for k, v := range m {
-				x.Set(Str(k), Go(v))
+				x.Set(Str(k), Val(v))
 			}
 			return x.Value()
 		}
@@ -241,7 +225,7 @@ func Go(i interface{}) Value {
 			rtNumIn := rt.NumIn()
 			nf = func(env *Env) {
 				getter := func(i int, t reflect.Type) reflect.Value {
-					return reflect.ValueOf(env.Get(i).GoType(t))
+					return env.Get(i).ReflectValue(t)
 				}
 				ins := make([]reflect.Value, 0, rtNumIn)
 				if !rt.IsVariadic() {
@@ -259,11 +243,11 @@ func Go(i interface{}) Value {
 				switch outs := rv.Call(ins); rt.NumOut() {
 				case 0:
 				case 1:
-					env.A = Go(outs[0].Interface())
+					env.A = Val(outs[0].Interface())
 				default:
 					a := make([]Value, len(outs))
 					for i := range outs {
-						a[i] = Go(outs[i].Interface())
+						a[i] = Val(outs[i].Interface())
 					}
 					env.A = Array(a...)
 				}
@@ -274,29 +258,29 @@ func Go(i interface{}) Value {
 	return _interface(i)
 }
 
-func DeepGo(v interface{}) Value {
+func ValRec(v interface{}) Value {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		m := NewMap(rv.Len() + 1)
+		m := NewRHMap(rv.Len() + 1)
 		iter := rv.MapRange()
 		for iter.Next() {
-			m.Set(DeepGo(iter.Key()), Go(iter.Value()))
+			m.Set(ValRec(iter.Key()), Val(iter.Value()))
 		}
 		return m.Value()
 	case reflect.Array, reflect.Slice:
 		a := make([]Value, rv.Len())
 		for i := range a {
-			a[i] = DeepGo(rv.Index(i))
+			a[i] = ValRec(rv.Index(i))
 		}
 		return Array(a...)
 	default:
-		return Go(v)
+		return Val(v)
 	}
 }
 
 func _interface(i interface{}) Value {
-	return Value{v: uint64(GO), p: unsafe.Pointer(&i)}
+	return Value{v: uint64(typ.Interface), p: unsafe.Pointer(&i)}
 }
 
 func (v Value) IsSmallString() bool {
@@ -333,26 +317,26 @@ func (v Value) Map() *RHMap { return (*RHMap)(v.p) }
 // Func cast value to function
 func (v Value) Func() *Func { return (*Func)(v.p) }
 
-func (v Value) WrappedFunc() *Func { return v.Go().(*WrappedFunc).Func }
+func (v Value) WrappedFunc() *Func { return v.Interface().(*WrappedFunc).Func }
 
-// Go returns the interface{} representation of Value
-func (v Value) Go() interface{} {
+// Interface returns the interface{} representation of Value
+func (v Value) Interface() interface{} {
 	switch v.Type() {
-	case BOOL:
+	case typ.Bool:
 		return v.Bool()
-	case NUM:
+	case typ.Number:
 		vf, vi, vIsInt := v.Num()
 		if vIsInt {
 			return vi
 		}
 		return vf
-	case STR:
+	case typ.String:
 		return v.Str()
-	case MAP:
+	case typ.Map:
 		return v.Map()
-	case FUNC:
+	case typ.Func:
 		return v.Func()
-	case GO:
+	case typ.Interface:
 		return *(*interface{})(v.p)
 	}
 	return nil
@@ -364,61 +348,60 @@ func (v Value) unsafeint() int64 { return int64(v.v) }
 
 func (v Value) unsafefloat() float64 { return math.Float64frombits(v.v) }
 
-// GoType returns the interface{} representation of Value which will be converted to t if needed
-func (v Value) GoType(t reflect.Type) interface{} {
+// ReflectValue returns the interface{} representation of Value which will be converted to t if needed
+func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	if t == nil {
-		return v.Go()
+		return reflect.ValueOf(v.Interface())
 	}
 	if t == reflect.TypeOf(Value{}) {
-		return v
+		return reflect.ValueOf(v)
 	}
 
 	switch v.Type() {
-	case NUM:
+	case typ.Number:
 		if t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
-			rv := reflect.ValueOf(v.Go())
-			rv = rv.Convert(t)
-			return rv.Interface()
+			rv := reflect.ValueOf(v.Interface())
+			return rv.Convert(t)
 		}
-	case MAP:
+	case typ.Map:
 		a := v.Map()
 		switch t.Kind() {
 		case reflect.Slice:
 			s := reflect.MakeSlice(t, len(a.Array()), len(a.Array()))
 			for i, a := range a.Array() {
-				s.Index(i).Set(reflect.ValueOf(a.GoType(t.Elem())))
+				s.Index(i).Set(a.ReflectValue(t.Elem()))
 			}
-			return s.Interface()
+			return s
 		case reflect.Array:
 			s := reflect.New(t).Elem()
 			for i, a := range a.Array() {
-				s.Index(i).Set(reflect.ValueOf(a.GoType(t.Elem())))
+				s.Index(i).Set(a.ReflectValue(t.Elem()))
 			}
-			return s.Interface()
+			return s
 		case reflect.Map:
 			s := reflect.MakeMap(t)
 			kt, vt := t.Key(), t.Elem()
 			a.Foreach(func(k, v Value) bool {
-				s.SetMapIndex(reflect.ValueOf(k.GoType(kt)), reflect.ValueOf(v.GoType(vt)))
+				s.SetMapIndex(k.ReflectValue(kt), v.ReflectValue(vt))
 				return true
 			})
-			return s.Interface()
+			return s
 		}
 	}
-	return v.Go()
+	return reflect.ValueOf(v.Interface())
 }
 
-func (v Value) MustBool(msg string, a int) bool { return v.mustBe(BOOL, msg, a).Bool() }
+func (v Value) MustBool(msg string, a int) bool { return v.mustBe(typ.Bool, msg, a).Bool() }
 
-func (v Value) MustStr(msg string, a int) string { return v.mustBe(STR, msg, a).String() }
+func (v Value) MustStr(msg string, a int) string { return v.mustBe(typ.String, msg, a).String() }
 
-func (v Value) MustNum(msg string, a int) Value { return v.mustBe(NUM, msg, a) }
+func (v Value) MustNum(msg string, a int) Value { return v.mustBe(typ.Number, msg, a) }
 
-func (v Value) MustMap(msg string, a int) *RHMap { return v.mustBe(MAP, msg, a).Map() }
+func (v Value) MustMap(msg string, a int) *RHMap { return v.mustBe(typ.Map, msg, a).Map() }
 
-func (v Value) MustFunc(msg string, a int) *Func { return v.mustBe(FUNC, msg, a).Func() }
+func (v Value) MustFunc(msg string, a int) *Func { return v.mustBe(typ.Func, msg, a).Func() }
 
-func (v Value) mustBe(t ValueType, msg string, msgArg int) Value {
+func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
 	if v.Type() != t {
 		if strings.Contains(msg, "%d") {
 			msg = fmt.Sprintf(msg, msgArg)
@@ -433,17 +416,17 @@ func (v Value) Equal(r Value) bool {
 		return true
 	}
 	switch v.Type() + r.Type() {
-	case STR * 2:
+	case typ.String * 2:
 		return r.Str() == v.Str()
-	case GO * 2:
-		return v.Go() == r.Go()
+	case typ.Interface * 2:
+		return v.Interface() == r.Interface()
 	}
 	return false
 }
 
 func (v Value) HashCode() uint64 {
 	code := uint64(5381)
-	if v.Type() != STR || v.IsSmallString() {
+	if v.Type() != typ.String || v.IsSmallString() {
 		for _, r := range *(*[ValueSize]byte)(unsafe.Pointer(&v)) {
 			code = code*33 + uint64(r)
 		}
@@ -466,20 +449,20 @@ func (v Value) toString(lv int, j bool) string {
 		return "<omit deep nesting>"
 	}
 	switch v.Type() {
-	case BOOL:
+	case typ.Bool:
 		return strconv.FormatBool(v.Bool())
-	case NUM:
+	case typ.Number:
 		vf, vi, vIsInt := v.Num()
 		if vIsInt {
 			return strconv.FormatInt(vi, 10)
 		}
 		return strconv.FormatFloat(vf, 'f', -1, 64)
-	case STR:
+	case typ.String:
 		if j {
 			return strconv.Quote(v.Str())
 		}
 		return v.Str()
-	case MAP:
+	case typ.Map:
 		m := v.Map()
 		if len(m.hashItems) == 0 {
 			p := bytes.NewBufferString("[")
@@ -497,10 +480,10 @@ func (v Value) toString(lv int, j bool) string {
 			p.WriteString(",")
 		}
 		return strings.TrimRight(p.String(), ", ") + "}"
-	case FUNC:
+	case typ.Func:
 		return v.Func().String()
-	case GO:
-		i := v.Go()
+	case typ.Interface:
+		i := v.Interface()
 		if !reflectCheckCyclicStruct(i) {
 			i = "<interface: omit deep nesting>"
 		}
@@ -514,14 +497,14 @@ func (v Value) toString(lv int, j bool) string {
 }
 
 func (v Value) StringDefault(d string) string {
-	if v.Type() == STR {
+	if v.Type() == typ.String {
 		return v.Str()
 	}
 	return d
 }
 
 func (v Value) IntDefault(d int64) int64 {
-	if v.Type() == NUM {
+	if v.Type() == typ.Number {
 		return v.Int()
 	}
 	return d

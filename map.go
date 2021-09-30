@@ -13,6 +13,8 @@ package script
 
 import (
 	"unsafe"
+
+	"github.com/coyove/script/typ"
 )
 
 type RHMap struct {
@@ -30,7 +32,7 @@ type hashItem struct {
 	Distance int // How far item is from its best position.
 }
 
-func NewMap(size int) *RHMap {
+func NewRHMap(size int) *RHMap {
 	return &RHMap{hashItems: make([]hashItem, int64(size))}
 }
 
@@ -68,7 +70,7 @@ func (m *RHMap) Get(k Value) (v Value) {
 		v = m.Parent.Get(k)
 	}
 FINAL:
-	if m.Parent != nil && v.Type() == FUNC {
+	if m.Parent != nil && v.Type() == typ.Func {
 		f := *v.Func()
 		f.MethodSrc = m.Value()
 		v = f.Value()
@@ -143,7 +145,7 @@ func (m *RHMap) Set(k, v Value) (prev Value) {
 		panicf("table set with nil key")
 	}
 
-	if m.Parent != nil && v.Type() != FUNC {
+	if m.Parent != nil && v.Type() != typ.Func {
 		if x := m.ParentContains(k); x != nil && x != m {
 			return x.Set(k, v)
 		}
@@ -315,7 +317,7 @@ func (m *RHMap) Value() Value {
 	if m == nil {
 		return Nil
 	}
-	return Value{v: uint64(MAP), p: unsafe.Pointer(m)}
+	return Value{v: uint64(typ.Map), p: unsafe.Pointer(m)}
 }
 
 func (m *RHMap) resize(newSize int) {

@@ -9,11 +9,13 @@ import (
 	"strings"
 	"sync"
 	"unicode/utf8"
+
+	"github.com/coyove/script/typ"
 )
 
 var StringMethods = Map(
 	Str("from"), Native1("from", func(env *Env, src Value) Value {
-		return Str(fmt.Sprint(src.Go()))
+		return Str(fmt.Sprint(src.Interface()))
 	}, ""),
 	Str("iequal"), Native2("iequal", func(env *Env, src, a Value) Value {
 		s := src.MustStr("index", 0)
@@ -157,17 +159,17 @@ var StringMethods = Map(
 			}
 			tmp.Reset()
 			tmp.WriteByte('%')
-			expecting := NIL
-			for f = f[idx+1:]; len(f) > 0 && expecting == NIL; {
+			expecting := typ.Nil
+			for f = f[idx+1:]; len(f) > 0 && expecting == typ.Nil; {
 				switch f[0] {
 				case 'b', 'd', 'o', 'O', 'c', 'e', 'E', 'f', 'F', 'g', 'G':
-					expecting = NUM
+					expecting = typ.Number
 				case 's', 'q', 'U':
-					expecting = STR
+					expecting = typ.String
 				case 'x', 'X':
-					expecting = STR + NUM
+					expecting = typ.String + typ.Number
 				case 'v':
-					expecting = GO
+					expecting = typ.Interface
 				case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
 				default:
 					panicf("format(): unexpected verb: '%c'", f[0])
@@ -176,18 +178,18 @@ var StringMethods = Map(
 				f = f[1:]
 			}
 			switch expecting {
-			case STR:
+			case typ.String:
 				p.WriteString(fmt.Sprintf(tmp.String(), pop().String()))
-			case NUM:
+			case typ.Number:
 				f, i, isInt := pop().Num()
 				if isInt {
 					fmt.Fprintf(&p, tmp.String(), i)
 				} else {
 					fmt.Fprintf(&p, tmp.String(), f)
 				}
-			case NUM + STR:
+			case typ.Number + typ.String:
 				v := pop()
-				if v.Type() == STR {
+				if v.Type() == typ.String {
 					fmt.Fprintf(&p, tmp.String(), v.Str())
 				} else {
 					f, i, isInt := pop().Num()
@@ -197,7 +199,7 @@ var StringMethods = Map(
 						fmt.Fprintf(&p, tmp.String(), f)
 					}
 				}
-			case GO:
+			case typ.Interface:
 				fmt.Fprint(&p, pop())
 			}
 		}
@@ -209,16 +211,16 @@ var StringMethods = Map(
 			b.WriteString(v.String())
 		}
 		p := Map(
-			Str("_buf"), Go(b),
+			Str("_buf"), Val(b),
 			Str("value"), Native1("value", func(env *Env, a Value) Value {
-				return Bytes(a.MustMap("", 0).GetString("_buf").Go().(*bytes.Buffer).Bytes())
+				return Bytes(a.MustMap("", 0).GetString("_buf").Interface().(*bytes.Buffer).Bytes())
 			}),
 			Str("write"), Native2("write", func(env *Env, a, b Value) Value {
-				a.MustMap("", 0).GetString("_buf").Go().(*bytes.Buffer).WriteString(b.String())
+				a.MustMap("", 0).GetString("_buf").Interface().(*bytes.Buffer).WriteString(b.String())
 				return Nil
 			}),
 			Str("read"), Native2("read", func(env *Env, a, n Value) Value {
-				rd := a.MustMap("", 0).GetString("_buf").Go().(*bytes.Buffer)
+				rd := a.MustMap("", 0).GetString("_buf").Interface().(*bytes.Buffer)
 				if n := n.IntDefault(0); n > 0 {
 					a := make([]byte, n)
 					n, err := rd.Read(a)

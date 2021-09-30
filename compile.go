@@ -7,7 +7,17 @@ import (
 	"unsafe"
 
 	"github.com/coyove/script/parser"
+	"github.com/coyove/script/typ"
 )
+
+const (
+	regA       uint16 = 0x1fff // full 13 bits
+	regPhantom uint16 = 0x1ffe // full 13 bits
+)
+
+func panicf(msg string, args ...interface{}) Value {
+	panic(fmt.Errorf(msg, args...))
+}
 
 type symbol struct {
 	addr uint16
@@ -210,27 +220,27 @@ func (table *symtable) loadK(v interface{}) uint16 {
 }
 
 var flatOpMapping = map[string]byte{
-	parser.AAdd:     OpAdd,
-	parser.ASub:     OpSub,
-	parser.AMul:     OpMul,
-	parser.ADiv:     OpDiv,
-	parser.AIDiv:    OpIDiv,
-	parser.AMod:     OpMod,
-	parser.ALess:    OpLess,
-	parser.ALessEq:  OpLessEq,
-	parser.AEq:      OpEq,
-	parser.ANeq:     OpNeq,
-	parser.ANot:     OpNot,
-	parser.ABitAnd:  OpBitAnd,
-	parser.ABitOr:   OpBitOr,
-	parser.ABitXor:  OpBitXor,
-	parser.ABitNot:  OpBitNot,
-	parser.ABitLsh:  OpBitLsh,
-	parser.ABitRsh:  OpBitRsh,
-	parser.ABitURsh: OpBitURsh,
-	parser.AStore:   OpStore,
-	parser.ALoad:    OpLoad,
-	parser.AInc:     OpInc,
+	parser.AAdd:     typ.OpAdd,
+	parser.ASub:     typ.OpSub,
+	parser.AMul:     typ.OpMul,
+	parser.ADiv:     typ.OpDiv,
+	parser.AIDiv:    typ.OpIDiv,
+	parser.AMod:     typ.OpMod,
+	parser.ALess:    typ.OpLess,
+	parser.ALessEq:  typ.OpLessEq,
+	parser.AEq:      typ.OpEq,
+	parser.ANeq:     typ.OpNeq,
+	parser.ANot:     typ.OpNot,
+	parser.ABitAnd:  typ.OpBitAnd,
+	parser.ABitOr:   typ.OpBitOr,
+	parser.ABitXor:  typ.OpBitXor,
+	parser.ABitNot:  typ.OpBitNot,
+	parser.ABitLsh:  typ.OpBitLsh,
+	parser.ABitRsh:  typ.OpBitRsh,
+	parser.ABitURsh: typ.OpBitURsh,
+	parser.AStore:   typ.OpStore,
+	parser.ALoad:    typ.OpLoad,
+	parser.AInc:     typ.OpInc,
 }
 
 func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
@@ -262,7 +272,7 @@ func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
 	}
 
 	n1a := getAddr(n1)
-	if op == OpSet && n0a == n1a {
+	if op == typ.OpSet && n0a == n1a {
 		// No need to set, mostly n0a and n1a are both $a
 	} else {
 		table.code.writeInst(op, n0a, n1a)
@@ -280,7 +290,7 @@ func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existe
 		yx = existedVar
 	}
 
-	table.code.writeInst(OpSet, yx, newYX)
+	table.code.writeInst(typ.OpSet, yx, newYX)
 	return yx
 }
 
@@ -371,11 +381,11 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 
 	if opt != nil {
 		for k, v := range opt.GlobalKeyValues {
-			push(k, Go(v))
+			push(k, Val(v))
 		}
 	}
 
-	push("COMPILE_OPTIONS", Go(opt))
+	push("COMPILE_OPTIONS", Val(opt))
 	push("SOURCE_CODE", Str(source))
 
 	table.vp = uint16(coreStack.Size())
@@ -389,7 +399,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	table.collectConstMode = false
 
 	table.compileNode(n)
-	table.code.writeInst(OpRet, regA, 0)
+	table.code.writeInst(typ.OpRet, regA, 0)
 	table.patchGoto()
 
 	coreStack.grow(int(table.vp))

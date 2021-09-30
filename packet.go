@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/coyove/script/parser"
+	"github.com/coyove/script/typ"
 )
 
 func inst(op byte, a, b uint16) uint32 {
@@ -85,31 +86,31 @@ func (b *packet) Len() int {
 
 var (
 	biOp = map[byte]string{
-		OpAdd:     parser.AAdd,
-		OpSub:     parser.ASub,
-		OpMul:     parser.AMul,
-		OpDiv:     parser.ADiv,
-		OpIDiv:    parser.AIDiv,
-		OpMod:     parser.AMod,
-		OpEq:      parser.AEq,
-		OpNeq:     parser.ANeq,
-		OpLess:    parser.ALess,
-		OpLessEq:  parser.ALessEq,
-		OpLoad:    parser.ALoad,
-		OpStore:   parser.AStore,
-		OpBitAnd:  parser.ABitAnd,
-		OpBitOr:   parser.ABitOr,
-		OpBitXor:  parser.ABitXor,
-		OpBitLsh:  parser.ABitLsh,
-		OpBitRsh:  parser.ABitRsh,
-		OpBitURsh: parser.ABitURsh,
+		typ.OpAdd:     parser.AAdd,
+		typ.OpSub:     parser.ASub,
+		typ.OpMul:     parser.AMul,
+		typ.OpDiv:     parser.ADiv,
+		typ.OpIDiv:    parser.AIDiv,
+		typ.OpMod:     parser.AMod,
+		typ.OpEq:      parser.AEq,
+		typ.OpNeq:     parser.ANeq,
+		typ.OpLess:    parser.ALess,
+		typ.OpLessEq:  parser.ALessEq,
+		typ.OpLoad:    parser.ALoad,
+		typ.OpStore:   parser.AStore,
+		typ.OpBitAnd:  parser.ABitAnd,
+		typ.OpBitOr:   parser.ABitOr,
+		typ.OpBitXor:  parser.ABitXor,
+		typ.OpBitLsh:  parser.ABitLsh,
+		typ.OpBitRsh:  parser.ABitRsh,
+		typ.OpBitURsh: parser.ABitURsh,
 	}
 	uOp = map[byte]string{
-		OpBitNot:     parser.ABitNot,
-		OpNot:        parser.ANot,
-		OpRet:        parser.AReturn,
-		OpPush:       "push",
-		OpPushVararg: "pushvararg",
+		typ.OpBitNot:     parser.ABitNot,
+		typ.OpNot:        parser.ANot,
+		typ.OpRet:        parser.AReturn,
+		typ.OpPush:       "push",
+		typ.OpPushVararg: "pushvararg",
 	}
 )
 
@@ -181,32 +182,32 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 		}
 
 		switch bop {
-		case OpSet:
+		case typ.OpSet:
 			sb.WriteString(readAddr(a, false) + " = " + readAddr(b, true))
-		case OpArray:
+		case typ.OpArray:
 			sb.WriteString("array")
-		case OpMap:
+		case typ.OpMap:
 			sb.WriteString("map")
-		case OpLoadFunc:
+		case typ.OpLoadFunc:
 			cls := p.Functions[a]
 			sb.WriteString("loadfunc " + cls.Name + "\n")
 			sb.WriteString(pkPrettify(cls, p, false))
-		case OpTailCall, OpCall:
+		case typ.OpTailCall, typ.OpCall:
 			if b != regPhantom {
 				sb.WriteString("push " + readAddr(b, true) + " -> ")
 			}
-			if bop == OpTailCall {
+			if bop == typ.OpTailCall {
 				sb.WriteString("tail")
 			}
 			sb.WriteString("call " + readAddr(a, true))
-		case OpIfNot, OpJmp:
+		case typ.OpIfNot, typ.OpJmp:
 			pos := int32(inst&0xffffff) - 1<<23
 			pos2 := uint32(int32(cursor) + pos)
-			if bop == OpIfNot {
+			if bop == typ.OpIfNot {
 				sb.WriteString("if not $a ")
 			}
 			sb.WriteString(fmt.Sprintf("jmp %d to %d", pos, pos2))
-		case OpInc:
+		case typ.OpInc:
 			sb.WriteString("inc " + readAddr(a, false) + " " + readAddr(b, true))
 		default:
 			if us, ok := uOp[bop]; ok {
