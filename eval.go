@@ -106,6 +106,9 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(vaf + vbf)
 				}
 				env._set(opa, env.A)
+			} else if va.Type() == typ.Map {
+				k, v := va.Map().Next(vb)
+				env.A = Array(k, v)
 			} else {
 				panicf(errNeedNumbers)
 			}

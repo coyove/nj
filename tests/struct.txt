@@ -108,12 +108,13 @@ while true do
 end
 
 cnt = 0
-i = iter(m)
-while i.next() do
-cnt = cnt + 1
-    assert(m[i.key] == i.value)
+k = 99
+for k, v in m do
+    cnt = cnt + 1
+    assert(m[k] == v)
 end
 assert(cnt == 3)
+assert(k == 99) -- k shouldn't be altered
 
 function worker()
     sleep(1000)

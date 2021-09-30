@@ -28,7 +28,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TLsh TRsh TURsh TDotDotDot
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
@@ -176,7 +176,14 @@ for_stat:
                     ).SetPos($1.Pos),
                 ).SetPos($1.Pos))
             }
+        } |
+        TFor TIdent ',' TIdent TIn expr TDo stats TEnd {
+            $$ = __forIn($2, $4, $6, $8, $1.Pos)
+        } |
+        TFor TIdent TIn expr TDo stats TEnd {
+            $$ = __forIn($2, $1, $4, $6, $1.Pos)
         }
+
 
 if_stat:
         TIf expr TThen stats elseif_stat TEnd %prec 'T' {

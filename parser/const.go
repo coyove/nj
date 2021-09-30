@@ -188,6 +188,30 @@ func __dotdotdot(expr Node) Node {
 	return expr
 }
 
+func __forIn(key, value Token, expr, body Node, pos Position) Node {
+	k, v, e, tmp := NewSymbolFromToken(key), NewSymbolFromToken(value), randomVarname(), randomVarname()
+	next := NewComplex(NewSymbol(AInc), e, k).SetPos(pos)
+	return __do(
+		__set(e, expr).SetPos(pos),
+		__set(k, NewSymbol(ANil)).SetPos(pos),
+		__set(tmp, next).SetPos(pos),
+		__move(k, __load(tmp, NewNumberFromInt(0)).SetPos(pos)).SetPos(pos),
+		__set(v, __load(tmp, NewNumberFromInt(1)).SetPos(pos)).SetPos(pos),
+		__loop(__chain(
+			__if(
+				NewComplex(NewSymbol(AEq), k, NewSymbol(ANil)).SetPos(pos),
+				breakNode,
+				__chain(
+					body,
+					__move(tmp, next).SetPos(pos),
+					__move(k, __load(tmp, NewNumberFromInt(0)).SetPos(pos)).SetPos(pos),
+					__move(v, __load(tmp, NewNumberFromInt(1)).SetPos(pos)).SetPos(pos),
+				),
+			).SetPos(pos),
+		)).SetPos(pos),
+	)
+}
+
 func randomVarname() Node {
 	return NewSymbol("v" + strconv.FormatInt(rand.Int63(), 10)[:6])
 }

@@ -465,29 +465,4 @@ func init() {
 		})
 		return Array(a...)
 	})
-	AddGlobalValue("iter", func(env *Env, m Value) Value {
-		a := Map(
-			Str("key"), Undef,
-			Str("value"), Undef,
-			Str("_src"), m.MustMap("iter()", 0).Value(),
-			Str("next"), Native1("next", func(env *Env, self Value) Value {
-				m := self.Map()
-				var k, v Value
-				if pk := m.GetString("key"); pk == Undef {
-					k, v = m.GetString("_src").Map().Next(Nil)
-				} else {
-					k, v = m.GetString("_src").Map().Next(pk)
-				}
-				if k == Nil {
-					return Bool(false)
-				}
-				m.Set(Str("key"), k)
-				m.Set(Str("value"), v)
-				return Bool(true)
-			}),
-		)
-		b := Map()
-		b.Map().Parent = a.Map()
-		return b
-	})
 }
