@@ -32,7 +32,7 @@ package parser
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
-%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' TIDiv
+%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' '@' TIDiv
 
 /* Operators */
 %right 'T'
@@ -88,6 +88,9 @@ flow_stat:
         if_stat        { $$ = $1 }
 
 assign_stat:
+        '@' expr {
+            $$ = __move(NewSymbol("$a"), $2).SetPos($1.Pos)
+        } |
         prefix_expr {
             $$ = $1
         } | 

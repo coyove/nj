@@ -146,6 +146,8 @@ func (table *symtable) get(varname string) uint16 {
 		return table.loadK(true)
 	case "false":
 		return table.loadK(false)
+	case "$a":
+		return regA
 	}
 
 	calc := func(k *symbol) uint16 {

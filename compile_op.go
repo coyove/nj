@@ -29,7 +29,7 @@ func (table *symtable) compileChain(chain parser.Node) uint16 {
 func (table *symtable) compileSetMove(atoms []parser.Node) uint16 {
 	aDest := atoms[1].SymbolValue()
 	newYX := table.get(aDest)
-	if atoms[0].SymbolValue() == (parser.AMove) {
+	if atoms[0].SymbolValue() == parser.AMove {
 		// a = b
 		if newYX == table.loadK(nil) {
 			newYX = table.borrowAddress()
@@ -45,8 +45,10 @@ func (table *symtable) compileSetMove(atoms []parser.Node) uint16 {
 	}
 
 	fromYX := table.compileNode(atoms[2])
-	table.code.writeInst(typ.OpSet, newYX, fromYX)
-	table.code.writePos(atoms[0].Pos())
+	if newYX != fromYX {
+		table.code.writeInst(typ.OpSet, newYX, fromYX)
+		table.code.writePos(atoms[0].Pos())
+	}
 	return newYX
 }
 
