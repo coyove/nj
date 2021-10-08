@@ -53,15 +53,11 @@ package parser
 prog: 
         {
             $$ = __chain()
-            if l, ok := yylex.(*Lexer); ok {
-                l.Stmts = $$
-            }
+            yylex.(*Lexer).Stmts = $$
         } |
         prog prog_stat {
             $$ = $1.append($2)
-            if l, ok := yylex.(*Lexer); ok {
-                l.Stmts = $$
-            }
+            yylex.(*Lexer).Stmts = $$
         }
 
 stats: 

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"time"
+
+	"github.com/coyove/script/typ"
 )
 
 // Env is the environment for a closure to run within.
@@ -134,4 +136,11 @@ func (env *Env) String() string {
 	buf.WriteString(env.A.String())
 	buf.WriteString(")")
 	return buf.String()
+}
+
+func (env *Env) MustVal(v Value, t typ.ValueType, arg string) Value {
+	if v.Type() != t {
+		panicf("%s(%s): expects %s, got %s", env.DebugCaller.Name, arg, t, v.Type())
+	}
+	return v
 }

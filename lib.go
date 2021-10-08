@@ -74,10 +74,8 @@ func init() {
 		}
 		f.MustFunc("doc()", 0).DocString = doc.String()
 		return doc
-	},
-		"doc(function) => string", "\treturn function's documentation",
-		"doc(function, docstring)", "\tupdate function's documentation",
-	)
+	}, "doc(function) => string", "\treturn function's documentation",
+		"doc(function, docstring)", "\tupdate function's documentation")
 	AddGlobalValue("new", func(env *Env, v, a Value) Value {
 		m := *v.MustMap("new", 0)
 		m.hashItems = append([]hashItem{}, m.hashItems...)
@@ -404,7 +402,7 @@ func init() {
 		b := Map()
 		b.Map().Parent = a.Map()
 		return b
-	}, "re(string) => creates a regular expression object")
+	}, "re(string) => create a regular expression object")
 	AddGlobalValue("error", func(env *Env, msg Value) Value {
 		return Val(errors.New(msg.MustStr("error()", 0)))
 	}, "error(text)", "\tcreate an error")
@@ -420,7 +418,7 @@ func init() {
 		Str("parse"), Native1("parse", func(env *Env, js Value) Value {
 			j := strings.TrimSpace(js.MustStr("json.parse() json string", 0))
 			return Val(gjson.Parse(j))
-		}, "$f(json_string) => array"),
+		}, "$f(json_string) => object"),
 		Str("get"), Native3("get", func(env *Env, js, path, et Value) Value {
 			j := strings.TrimSpace(js.MustStr("json.get() json string", 0))
 			result := gjson.Get(j, path.MustStr("json.get() path", 0))
@@ -428,13 +426,13 @@ func init() {
 				return et
 			}
 			return Val(result)
-		}, "$f(json_string, selector, default?) => bool|number|string|array"),
+		}, "$f(json_string, selector, default?) => object"),
 	))
 
 	AddGlobalValue("sync", Map(
-		Str("mutex"), Native("mutex", func(env *Env) { env.A = Val(&sync.Mutex{}) }, "$f() => creates a mutex"),
-		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() => creates a read-write mutex"),
-		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() => creates a wait group"),
+		Str("mutex"), Native("mutex", func(env *Env) { env.A = Val(&sync.Mutex{}) }, "$f() => create a mutex"),
+		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() => create a read-write mutex"),
+		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() => create a wait group"),
 	))
 
 	// Array related functions
@@ -444,12 +442,12 @@ func init() {
 		return m
 	}, "append(array, value) => append value to array")
 	AddGlobalValue("concat", func(env *Env, a, b Value) Value {
-		ma, mb := a.MustMap("concat() first arg", 0), b.MustMap("concat() second arg", 0)
+		ma, mb := a.MustMap("concat() first array", 0), b.MustMap("concat() second array", 0)
 		for _, b := range mb.Array() {
 			ma.Set(Int(int64(len(ma.items))), b)
 		}
 		return ma.Value()
-	}, "concat(array1, array2) => concat two arrays")
+	}, "concat(array1, array2) => put elements from array2 to array1's end")
 	AddGlobalValue("next", func(env *Env, m, k Value) Value {
 		nk, nv := m.MustMap("next()", 0).Next(k)
 		return Array(nk, nv)
