@@ -7,6 +7,7 @@ import (
 
 var _nodeRegA = parser.NewAddress(regA)
 
+// [prog expr1 expr2 ...]
 func (table *symtable) compileChain(chain parser.Node) uint16 {
 	doblock := chain.Nodes[0].SymbolValue() == (parser.ADoBlock)
 
@@ -15,8 +16,19 @@ func (table *symtable) compileChain(chain parser.Node) uint16 {
 	}
 
 	yx := regA
-	for _, a := range chain.Nodes {
+	for i, a := range chain.Nodes {
+		if i == 0 {
+			continue
+		}
+		_, isStatic := table.compileStaticNode(a)
 		yx = table.compileNode(a)
+		if isStatic {
+			// e.g.: [prog "a string"], we will transform it into:
+			//       [prog [set $a "a string"]]
+			if yx != regA {
+				table.code.writeInst(typ.OpSet, regA, yx)
+			}
+		}
 	}
 
 	if doblock {

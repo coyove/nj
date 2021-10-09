@@ -29,9 +29,13 @@ type Error struct {
 func (e *Error) Error() string {
 	pos := e.Pos
 	if pos.Line == EOF {
-		return fmt.Sprintf("%s\n", e.Message)
+		return e.Message
 	} else {
-		return fmt.Sprintf("%q at line %d: %s\n", e.Token, pos.Line, e.Message)
+		msg := fmt.Sprintf("%q at line %d: %s", e.Token, pos.Line, e.Message)
+		if e.Message == "syntax error: unexpected TLParen" {
+			msg += ", is there any space(' ') or newline('\\n') before it?"
+		}
+		return msg
 	}
 }
 
@@ -40,10 +44,11 @@ func isIdent(ch uint32, pos int) bool {
 }
 
 type Scanner struct {
-	Pos    Position
-	buffer bytes.Buffer
-	offset int64
-	text   string
+	Pos       Position
+	buffer    bytes.Buffer
+	offset    int64
+	text      string
+	lastToken Token
 }
 
 func NewScanner(text string, source string) *Scanner {
@@ -214,10 +219,12 @@ func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
 redo:
 	var err error
 	var tok Token
+	var metSpaces bool
 
 skipspaces:
 	ch := sc.Next()
 	if unicode.IsSpace(rune(ch)) {
+		metSpaces = true
 		goto skipspaces
 	}
 
@@ -230,25 +237,31 @@ skipspaces:
 
 		if typ, ok := reservedWords[tok.Str]; ok {
 			crlf := false
+			oldOffset := sc.offset
 			for n := sc.Peek(); unicode.IsSpace(rune(n)) || n == 'e' || n == EOF; n = sc.Peek() {
 				if n == '\n' || n == EOF {
 					crlf = true
 					break
 				}
 				if n == 'e' {
-					crlf = strings.HasPrefix(sc.text[sc.offset:], "end")
+					if strings.HasPrefix(sc.text[sc.offset:], "end") {
+						if tail := sc.text[sc.offset+3:]; tail == "" || unicode.IsSpace(rune(tail[0])) {
+							crlf = true
+						}
+					}
 					break
 				}
 				sc.Next()
 			}
 
 			// 'return' without an arg, but with a CrLf afterward will be considered
-			// as 'return nil'. This rule implies the following syntax:
+			// as 'return nil'. This rule realizes the following syntax:
 			//   1. return end
 			//   2. return \n end
 			if tok.Str == "return" && crlf {
 				tok.Type = TReturnVoid
 			} else {
+				sc.offset = oldOffset
 				tok.Type = typ
 			}
 		}
@@ -329,10 +342,18 @@ skipspaces:
 				tok.Str = "."
 			}
 		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|', '@', '&':
-			const pat = "(){}];,#^|@&"
-			idx := strings.IndexByte(pat, byte(ch))
-			tok.Type = ch
-			tok.Str = pat[idx : idx+1]
+			if ch == '(' &&
+				sc.lastToken.Str != "(" && // e.g.: foo((1))
+				sc.offset > 1 && // e.g.: <Begin of File>({a=1}).a
+				!metSpaces {
+				tok.Type = TLParen
+				tok.Str = "("
+			} else {
+				const pat = "(){}];,#^|@&"
+				idx := strings.IndexByte(pat, byte(ch))
+				tok.Type = ch
+				tok.Str = pat[idx : idx+1]
+			}
 		case ':':
 			if sc.Peek() == ':' {
 				tok.Type = TLabel
@@ -359,6 +380,7 @@ skipspaces:
 	}
 
 finally:
+	sc.lastToken = tok
 	return tok, err
 }
 

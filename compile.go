@@ -253,11 +253,12 @@ func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
 			addr := table.compileNodeInto(n, true, 0)
 			tmp = append(tmp, addr)
 			return addr
-		case parser.Symbol, parser.String, parser.Float, parser.Int, parser.Address:
-			return table.compileNode(n)
 		default:
-			panicf("DEBUG writeInst unknown type: %#v", n)
-			return 0
+			addr, ok := table.compileStaticNode(n)
+			if !ok {
+				panicf("DEBUG writeInst unknown type: %#v", n)
+			}
+			return addr
 		}
 	}
 
@@ -296,18 +297,25 @@ func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existe
 	return yx
 }
 
-func (table *symtable) compileNode(node parser.Node) uint16 {
+func (table *symtable) compileStaticNode(node parser.Node) (uint16, bool) {
 	switch node.Type {
 	case parser.Address:
-		return node.Addr
+		return node.Addr, true
 	case parser.String:
-		return table.loadK(node.StringValue())
+		return table.loadK(node.StringValue()), true
 	case parser.Float:
-		return table.loadK(node.FloatValue())
+		return table.loadK(node.FloatValue()), true
 	case parser.Int:
-		return table.loadK(node.IntValue())
+		return table.loadK(node.IntValue()), true
 	case parser.Symbol:
-		return table.get(node.SymbolValue())
+		return table.get(node.SymbolValue()), true
+	}
+	return 0, false
+}
+
+func (table *symtable) compileNode(node parser.Node) uint16 {
+	if addr, ok := table.compileStaticNode(node); ok {
+		return addr
 	}
 
 	nodes := node.Nodes
@@ -462,7 +470,9 @@ func LoadFile(path string, opt *CompileOptions) (*Program, error) {
 	if err != nil {
 		return nil, err
 	}
-	// n.Dump(os.Stderr, "  ")
+	if parser.IsDebug() {
+		n.Dump(os.Stderr, "  ")
+	}
 	return compileNodeTopLevel(*(*string)(unsafe.Pointer(&code)), n, opt)
 }
 
@@ -471,7 +481,9 @@ func LoadString(code string, opt *CompileOptions) (*Program, error) {
 	if err != nil {
 		return nil, err
 	}
-	// n.Dump(os.Stderr, "  ")
+	if parser.IsDebug() {
+		n.Dump(os.Stderr, "  ")
+	}
 	return compileNodeTopLevel(code, n, opt)
 }
 

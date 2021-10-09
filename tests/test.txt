@@ -206,3 +206,18 @@ function foo()
 end
 foo()
 assert(_u_ == nil)
+
+function test_return(a)
+end_ = 10+a
+return end_
+end
+assert(test_return((1)),11)
+assert(test_return(((2))),12)
+
+
+function bar() return 2 end
+function foo() return bar end
+assert(foo()(), 2)
+
+foo()
+({a=1}).a  -- should run flawlessly

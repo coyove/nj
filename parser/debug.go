@@ -15,9 +15,13 @@ func (e CatchedError) Error() string {
 	return fmt.Sprint(e.Original)
 }
 
+func IsDebug() bool {
+	return os.Getenv("crab_stack") != ""
+}
+
 func CatchError(err *error) {
 	if r := recover(); r != nil {
-		if os.Getenv("crab_stack") != "" {
+		if IsDebug() {
 			log.Println(string(debug.Stack()))
 		}
 

@@ -21,6 +21,7 @@ package parser
 %type<expr> flow_stat
 %type<expr> func_stat
 %type<expr> comma
+%type<token> lparen
 
 %union {
     token Token
@@ -28,7 +29,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot TLParen
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
@@ -88,9 +89,6 @@ flow_stat:
         if_stat        { $$ = $1 }
 
 assign_stat:
-        '@' expr {
-            $$ = __move(NewSymbol("$a"), $2).SetPos($1.Pos)
-        } |
         prefix_expr {
             $$ = $1
         } | 
@@ -201,16 +199,16 @@ elseif_stat:
         }
 
 func_stat:
-        TFunc TIdent '(' ')' stats TEnd                               { $$ = __func($2, emptyNode, "", $5) } | 
-        TFunc TIdent '(' ident_list ')' stats TEnd                    { $$ = __func($2, $4, "", $6) } | 
-        TFunc TIdent '(' ident_list TDotDotDot ')' stats TEnd         { $$ = __func($2, __dotdotdot($4), "", $7) } | 
-        TFunc TIdent '.' TIdent '(' ')' stats TEnd                    {
+        TFunc TIdent lparen ')' stats TEnd                               { $$ = __func($2, emptyNode, "", $5) } | 
+        TFunc TIdent lparen ident_list ')' stats TEnd                    { $$ = __func($2, $4, "", $6) } | 
+        TFunc TIdent lparen ident_list TDotDotDot ')' stats TEnd         { $$ = __func($2, __dotdotdot($4), "", $7) } | 
+        TFunc TIdent lparen TIdent lparen ')' stats TEnd                    {
             $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($2, $4), emptyNode, "", $7)) 
         } | 
-        TFunc TIdent '.' TIdent '(' ident_list ')' stats TEnd         {
+        TFunc TIdent '.' TIdent lparen ident_list ')' stats TEnd         {
             $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($2, $4), $6, "", $8)) 
         } | 
-        TFunc TIdent '.' TIdent '(' ident_list TDotDotDot ')' stats TEnd         {
+        TFunc TIdent '.' TIdent lparen ident_list TDotDotDot ')' stats TEnd         {
             $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($2, $4), __dotdotdot($6), "", $9)) 
         }
 
@@ -269,7 +267,6 @@ ident_list:
 
 expr:
         prefix_expr                       { $$ = $1 } |
-        '(' expr ')'                      { $$ = $2 } | 
         TNumber                           { $$ = NewNumberFromString($1.Str) } |
         TString                           { $$ = NewString($1.Str) } |
         '{' '}'                           { $$ = NewComplex(NewSymbol(AArrayMap), emptyNode).SetPos($1.Pos) } |
@@ -297,9 +294,11 @@ expr:
         expr TURsh expr                   { $$ = NewComplex(NewSymbol(ABitURsh), $1,$3).SetPos($2.Pos) } |
         '~' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ABitNot), $2).SetPos($1.Pos) } |
         TNot expr %prec UNARY             { $$ = NewComplex(NewSymbol(ANot), $2).SetPos($1.Pos) } |
-        '-' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ASub), zeroNode, $2).SetPos($1.Pos) }
+        '-' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ASub), zeroNode, $2).SetPos($1.Pos) } |
+        '+' expr %prec UNARY              { $$ = NewComplex(NewSymbol(AAdd), zeroNode, $2).SetPos($1.Pos) }
 
 prefix_expr:
+        '(' expr ')'                      { $$ = $2 } |
         declarator {
             $$ = $1 
         } |
@@ -312,13 +311,13 @@ prefix_expr:
         }
 
 call_expr:
-        '(' ')' {
+        TLParen ')' {
             $$ = __call(emptyNode, emptyNode).SetPos($1.Pos) 
         } |
-        '(' expr_list comma ')' {
+        TLParen expr_list comma ')' {
             $$ = __call(emptyNode, $2).SetPos($1.Pos) 
         } |
-        '(' expr_list TDotDotDot comma ')' {
+        TLParen expr_list TDotDotDot comma ')' {
             $$ = __call(emptyNode, __dotdotdot($2)).SetPos($1.Pos) 
         }
 
@@ -345,6 +344,9 @@ expr_assign_list:
         }
 
 comma: { $$ = emptyNode } | ',' { $$ = emptyNode }
+lparen:
+        TLParen { $$ = $1 } |
+        '(' { $$ = $1 }
 
 %%
 
