@@ -126,6 +126,9 @@ func (env *Env) StackInterface() []interface{} {
 // Some useful helper functions
 
 func (env *Env) Deadline() (context.Context, func(), time.Time) {
+	if env.Global.Deadline == 0 {
+		return context.TODO(), func() {}, time.Time{}
+	}
 	d := time.Unix(0, env.Global.Deadline)
 	ctx, cancel := context.WithDeadline(context.Background(), d)
 	return ctx, cancel, d
