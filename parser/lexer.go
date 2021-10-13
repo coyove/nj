@@ -216,10 +216,11 @@ var reservedWords = map[string]uint32{
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
+	var metSpaces bool
+
 redo:
 	var err error
 	var tok Token
-	var metSpaces bool
 
 skipspaces:
 	ch := sc.Next()
@@ -342,10 +343,9 @@ skipspaces:
 				tok.Str = "."
 			}
 		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|', '@', '&':
-			if ch == '(' &&
-				sc.lastToken.Str != "(" && // e.g.: foo((1))
-				sc.offset > 1 && // e.g.: <Begin of File>({a=1}).a
-				!metSpaces {
+			last := sc.lastToken
+			call := last.Type == TIdent || last.Type == ')' || last.Type == ']' // 3 cases: foo(... foo()(... foo[bar](...
+			if ch == '(' && call && !metSpaces {
 				tok.Type = TLParen
 				tok.Str = "("
 			} else {

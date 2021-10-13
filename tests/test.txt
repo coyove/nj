@@ -219,5 +219,7 @@ function bar() return 2 end
 function foo() return bar end
 assert(foo()(), 2)
 
+-- test TLParen parsing
 foo()
 ({a=1}).a  -- should run flawlessly
+({a=(1+bar())}).a
