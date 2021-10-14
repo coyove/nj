@@ -19,6 +19,16 @@ import (
 var HostWhitelist = map[string][]string{}
 
 func init() {
+	script.AddGlobalValue("url", script.Map(
+		script.Str("escape"), script.Native1("escape", func(env *script.Env, a script.Value) script.Value {
+			return script.Str(url.QueryEscape(a.MustStr("escape", 0)))
+		}),
+		script.Str("unescape"), script.Native1("unescape", func(env *script.Env, a script.Value) script.Value {
+			v, err := url.QueryUnescape(a.MustStr("unescape", 0))
+			panicErr(err)
+			return script.Str(v)
+		}),
+	))
 	script.AddGlobalValue("http", script.Native("http", func(env *script.Env) {
 		args := env.Get(0).Map()
 

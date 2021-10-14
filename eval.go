@@ -110,7 +110,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				k, v := va.Map().Next(vb)
 				env.A = Array(k, v)
 			} else {
-				panicf(errNeedNumbers)
+				panicf("inc " + errNeedNumbers)
 			}
 		case typ.OpAdd:
 			va, vb := env._get(opa), env._get(opb)
@@ -128,7 +128,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case typ.String + typ.Number:
 				env.A = Str(va.String() + vb.String())
 			default:
-				panicf(errNeedNumbersOrStrings)
+				panicf("add " + errNeedNumbersOrStrings)
 			}
 		case typ.OpSub:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
@@ -140,7 +140,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(va.Float() - vb.Float())
 				}
 			} else {
-				panicf(errNeedNumbers)
+				panicf("sub " + errNeedNumbers)
 			}
 		case typ.OpMul:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
@@ -152,19 +152,19 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(va.Float() * vb.Float())
 				}
 			} else {
-				panicf(errNeedNumbers)
+				panicf("mul " + errNeedNumbers)
 			}
 		case typ.OpDiv:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Float(va.Float() / vb.Float())
 			} else {
-				panicf(errNeedNumbers)
+				panicf("div " + errNeedNumbers)
 			}
 		case typ.OpIDiv:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(va.Int() / vb.Int())
 			} else {
-				panicf(errNeedNumbers)
+				panicf("idiv " + errNeedNumbers)
 			}
 		case typ.OpMod:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
@@ -174,7 +174,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					panicf("modulating floating numbers is ambiguous, use math.mod/math.remainder instead")
 				}
 			} else {
-				panicf(errNeedNumbers)
+				panicf("mod " + errNeedNumbers)
 			}
 		case typ.OpEq:
 			env.A = Bool(env._get(opa).Equal(env._get(opb)))
@@ -193,7 +193,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case typ.String + typ.String:
 				env.A = Bool(va.Str() < vb.Str())
 			default:
-				panicf(errNeedNumbersOrStrings)
+				panicf("comparison " + errNeedNumbersOrStrings)
 			}
 		case typ.OpLessEq:
 			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
@@ -208,7 +208,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case typ.String + typ.String:
 				env.A = Bool(va.Str() <= vb.Str())
 			default:
-				panicf(errNeedNumbersOrStrings)
+				panicf("comparison " + errNeedNumbersOrStrings)
 			}
 		case typ.OpNot:
 			env.A = Bool(env._get(opa).IsFalse())
@@ -216,40 +216,40 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(va.Int() & vb.Int())
 			} else {
-				panicf(errNeedNumbers)
+				panicf("bitwise and " + errNeedNumbers)
 			}
 		case typ.OpBitOr:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(va.Int() | vb.Int())
 			} else {
-				panicf(errNeedNumbers)
+				panicf("bitwise or " + errNeedNumbers)
 			}
 		case typ.OpBitXor:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(va.Int() ^ vb.Int())
 			} else {
-				panicf(errNeedNumbers)
+				panicf("bitwise xor " + errNeedNumbers)
 			}
 		case typ.OpBitLsh:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(va.Int() << vb.Int())
 			} else {
-				panicf(errNeedNumbers)
+				panicf("bitwise lsh " + errNeedNumbers)
 			}
 		case typ.OpBitRsh:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(va.Int() >> vb.Int())
 			} else {
-				panicf(errNeedNumbers)
+				panicf("bitwise rsh " + errNeedNumbers)
 			}
 		case typ.OpBitURsh:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(int64(uint64(va.Int()) >> vb.Int()))
 			} else {
-				panicf(errNeedNumbers)
+				panicf("bitwise ursh " + errNeedNumbers)
 			}
 		case typ.OpBitNot:
-			env.A = Int(^env._get(opa).MustNum(errNeedNumbers, 0).Int())
+			env.A = Int(^env._get(opa).MustNum("bitwise not "+errNeedNumbers, 0).Int())
 		case typ.OpArray:
 			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
@@ -266,7 +266,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				reflectStore(subject.Interface(), env.A, v)
 				env.A = v
 			default:
-				panicf("operator requires map or interface to store into")
+				panicf("cannot store %v into (%v)[%v]", v.Type(), subject.Type(), env.A.Type())
 			}
 		case typ.OpLoad:
 			switch a := env._get(opa); a.Type() {
@@ -298,7 +298,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				}
 				fallthrough
 			default:
-				panicf("operator requires map, string or interface to load from")
+				panicf("cannot load (%v)[%v]", a.Type(), env._get(opb).Type())
 			}
 		case typ.OpPush:
 			stackEnv.Push(env._get(opa))

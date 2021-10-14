@@ -546,4 +546,21 @@ func TestReflectedValue(t *testing.T) {
 	if y["a"] != 1 || y["b"] != 2 {
 		t.Fatal(x)
 	}
+
+	p, _ := LoadString(`function foo(v)
+	return v, v + 1, nil
+	end
+	bar(foo)`, &CompileOptions{GlobalKeyValues: map[string]interface{}{
+		"bar": func(cb func(a int) (int, int, error)) {
+			a, b, _ := cb(10)
+			fmt.Println(a, b)
+			if a != 10 || b != 11 {
+				t.Fatal(a, b)
+			}
+		},
+	}})
+	_, err := p.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
 }

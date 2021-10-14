@@ -38,7 +38,7 @@ const (
 	ValueSize = int64(unsafe.Sizeof(Value{}))
 
 	errNeedNumbers          = "operator requires numbers"
-	errNeedNumbersOrStrings = "operator requires numbers or strings"
+	errNeedNumbersOrStrings = "operator requires number-to-number or string-to-string"
 )
 
 // Value is the basic data type used by the intepreter, an empty Value naturally represent nil
@@ -357,13 +357,40 @@ func (v Value) unsafeint() int64 { return int64(v.v) }
 
 func (v Value) unsafefloat() float64 { return math.Float64frombits(v.v) }
 
-// ReflectValue returns the interface{} representation of Value which will be converted to t if needed
+// ReflectValue returns reflect.Value based on reflect.Type
 func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	if t == nil {
 		return reflect.ValueOf(v.Interface())
 	}
 	if t == reflect.TypeOf(Value{}) {
 		return reflect.ValueOf(v)
+	}
+	if v.Type() == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
+		return reflect.Zero(t)
+	}
+	if v.Type() == typ.Func && t.Kind() == reflect.Func {
+		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
+			in := make([]Value, len(args))
+			for i := range in {
+				in[i] = Val(args[i].Interface())
+			}
+			out, err := v.Func().Call(in...)
+			if err != nil {
+				panic(err)
+			}
+			switch t.NumOut() {
+			case 0:
+			case 1:
+				results = []reflect.Value{out.ReflectValue(t.Out(0))}
+			default:
+				out.MustMap("expecting multiple returned arguments", 0)
+				results = make([]reflect.Value, t.NumOut())
+				for i := range results {
+					results[i] = out.Map().Get(Int(int64(i))).ReflectValue(t.Out(i))
+				}
+			}
+			return
+		})
 	}
 
 	switch v.Type() {

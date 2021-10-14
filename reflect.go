@@ -24,24 +24,22 @@ func reflectLoad(v interface{}, key Value) Value {
 			return Val(v.Interface())
 		}
 	case reflect.Slice, reflect.Array:
-		idx := key.MustNum("reflect: load from Go array/slice", 0).Int() - 1
+		idx := key.MustNum("index key", 0).Int() - 1
 		if idx < int64(rv.Len()) && idx >= 0 {
 			return Val(rv.Index(int(idx)).Interface())
 		}
 	}
 
-	k := (key.MustStr("reflect: load from Go struct", 0))
+	k := key.MustStr("index key", 0)
 	f := rv.MethodByName(k)
 	if !f.IsValid() {
 		if rv.Kind() == reflect.Ptr {
 			rv = rv.Elem()
 		}
-		f := rv.FieldByName(k)
-		if f.IsValid() {
-			return Val(f.Interface())
+		f = rv.FieldByName(k)
+		if !f.IsValid() {
+			return Value{}
 		}
-		// panicf("%q not found in %#v", k, v)
-		return Value{}
 	}
 	return Val(f.Interface())
 }
@@ -58,7 +56,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		}
 		return
 	case reflect.Slice, reflect.Array:
-		idx := key.MustNum("reflect: store into Go array/slice", 0).Int()
+		idx := key.MustNum("index key", 0).Int()
 		if idx >= int64(rv.Len()) || idx < 0 {
 			return
 		}
@@ -70,7 +68,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		rv = rv.Elem()
 	}
 
-	k := (key.MustStr("reflect: store into Go struct", 0))
+	k := (key.MustStr("index key", 0))
 	f := rv.FieldByName(k)
 	if !f.IsValid() || !f.CanAddr() {
 		panicf("reflect: %q not assignable in %#v", k, v)

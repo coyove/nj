@@ -298,7 +298,6 @@ func init() {
 		"$f(prompt='', n=1) => { s1, s2, ..., sn }", "\tprint prompt and read N user inputs",
 	)
 	AddGlobalValue("math", MathLib)
-	AddGlobalValue("str", StringMethods)
 	AddGlobalValue("int", func(env *Env) {
 		switch v := env.Get(0); v.Type() {
 		case typ.Number:
