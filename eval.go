@@ -18,6 +18,7 @@ type stacktrace struct {
 // ExecError represents the runtime error
 type ExecError struct {
 	r      interface{}
+	native *Func
 	stacks []stacktrace
 }
 
@@ -48,6 +49,10 @@ func (e *ExecError) Error() string {
 	}
 	if e.r != nil {
 		msg.WriteString("root panic:\n")
+		if e.native != nil {
+			msg.WriteString(e.native.Name)
+			msg.WriteString("() ")
+		}
 		msg.WriteString(fmt.Sprintf("%v\n", e.r))
 	}
 	return msg.String()
@@ -59,6 +64,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 	stackEnv.StackOffset = uint32(len(*env.stack))
 
 	var retStack []stacktrace
+	var nativeCls *Func
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -74,6 +80,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			} else {
 				e := &ExecError{}
 				e.r = r // root panic
+				e.native = nativeCls
 				e.stacks = make([]stacktrace, len(retStack)+1)
 				copy(e.stacks, retStack)
 				e.stacks[len(e.stacks)-1] = rr
@@ -345,7 +352,9 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				stackEnv.DebugCaller = K
 				stackEnv.DebugCursor = cursor
 				stackEnv.DebugStacktrace = retStack
+				nativeCls = cls
 				cls.Native(&stackEnv)
+				nativeCls = nil
 				env.A = stackEnv.A
 				stackEnv.Clear()
 			} else {

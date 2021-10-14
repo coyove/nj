@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"math/rand"
+	"path/filepath"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -54,24 +55,31 @@ func init() {
 			n := env.Get(3).IntDefault(-1)
 			env.A = Str(strings.Replace(src, from, to, int(n)))
 		}, ""),
+		Str("match"), Native2("match", func(env *Env, pattern, str Value) Value {
+			m, err := filepath.Match(pattern.MustStr("pattern", 0), str.MustStr("text", 0))
+			if err != nil {
+				panic(err)
+			}
+			return Bool(m)
+		}, ""),
 		Str("find"), Native2("find", func(env *Env, src, substr Value) Value {
 			s := src.MustStr("", 0)
-			return Int(int64(strings.Index(s, substr.MustStr("find()", 0))))
+			return Int(int64(strings.Index(s, substr.MustStr("", 0))))
 		}, ""),
 		Str("findany"), Native2("findany", func(env *Env, src, substr Value) Value {
 			s := src.MustStr("", 0)
-			return Int(int64(strings.IndexAny(s, substr.MustStr("findany()", 0))))
+			return Int(int64(strings.IndexAny(s, substr.MustStr("", 0))))
 		}, ""),
 		Str("rfind"), Native2("rfind", func(env *Env, src, substr Value) Value {
-			s := src.MustStr("last_index", 0)
-			return Int(int64(strings.LastIndex(s, substr.MustStr("last_index", 0))))
+			s := src.MustStr("", 0)
+			return Int(int64(strings.LastIndex(s, substr.MustStr("", 0))))
 		}, ""),
 		Str("rfindany"), Native2("rfindany", func(env *Env, src, substr Value) Value {
-			s := src.MustStr("last_index", 0)
-			return Int(int64(strings.LastIndexAny(s, substr.MustStr("last_index_any", 0))))
+			s := src.MustStr("", 0)
+			return Int(int64(strings.LastIndexAny(s, substr.MustStr("", 0))))
 		}, ""),
 		Str("sub"), Native3("sub", func(env *Env, src, start, end Value) Value {
-			s := src.MustStr("sub", 0)
+			s := src.MustStr("", 0)
 			st := start.IntDefault(0)
 			en := end.IntDefault(int64(len(s)))
 			for st < 0 && len(s) > 0 {
@@ -84,45 +92,45 @@ func init() {
 		}, ""),
 		Str("trim"), Native2("trim", func(env *Env, src, cutset Value) Value {
 			if cutset == Nil {
-				return Str(strings.TrimSpace(src.MustStr("trim()", 0)))
+				return Str(strings.TrimSpace(src.MustStr("", 0)))
 			}
-			c := cutset.MustStr("trim() cutset", 0)
-			return Str(strings.Trim(src.MustStr("trim()", 0), c))
+			c := cutset.MustStr("", 0)
+			return Str(strings.Trim(src.MustStr("", 0), c))
 		}, ""),
 		Str("ltrim"), Native2("ltrim", func(env *Env, src, cutset Value) Value {
-			c := cutset.MustStr("trim_left cutset", 0)
-			return Str(strings.TrimLeft(src.MustStr("trim_left", 0), c))
+			c := cutset.MustStr("", 0)
+			return Str(strings.TrimLeft(src.MustStr("", 0), c))
 		}, ""),
 		Str("rtrim"), Native2("rtrim", func(env *Env, src, cutset Value) Value {
-			c := cutset.MustStr("trim_right cutset", 0)
-			return Str(strings.TrimRight(src.MustStr("trim_right", 0), c))
+			c := cutset.MustStr("", 0)
+			return Str(strings.TrimRight(src.MustStr("", 0), c))
 		}, ""),
 		Str("ptrim"), Native2("ptrim", func(env *Env, src, cutset Value) Value {
-			c := cutset.MustStr("trim_prefix", 0)
-			return Str(strings.TrimPrefix(src.MustStr("trim_prefix", 0), c))
+			c := cutset.MustStr("", 0)
+			return Str(strings.TrimPrefix(src.MustStr("", 0), c))
 		}, ""),
 		Str("strim"), Native2("strim", func(env *Env, src, cutset Value) Value {
-			c := cutset.MustStr("trim_suffix", 0)
-			return Str(strings.TrimSuffix(src.MustStr("trim_suffix", 0), c))
+			c := cutset.MustStr("", 0)
+			return Str(strings.TrimSuffix(src.MustStr("", 0), c))
 		}, ""),
 		Str("decode_utf8"), Native("decode_utf8", func(env *Env) {
-			r, sz := utf8.DecodeRuneInString(env.Get(0).MustStr("decode_utf8()", 0))
+			r, sz := utf8.DecodeRuneInString(env.Get(0).MustStr("", 0))
 			env.A = Array(Int(int64(r)), Int(int64(sz)))
 		}, "$f(string) => { char_unicode, width_in_bytes }"),
 		Str("startswith"), Native2("startswith", func(env *Env, t, p Value) Value {
-			return Bool(strings.HasPrefix(t.MustStr("startswith()", 0), p.MustStr("startswith() prefix", 0)))
+			return Bool(strings.HasPrefix(t.MustStr("", 0), p.MustStr("", 0)))
 		}, "startswith(text, prefix) => bool"),
 		Str("endswith"), Native2("endswith", func(env *Env, t, s Value) Value {
-			return Bool(strings.HasSuffix(t.MustStr("endswith()", 0), s.MustStr("endswith() suffix", 0)))
+			return Bool(strings.HasSuffix(t.MustStr("", 0), s.MustStr("", 0)))
 		}, "endswith(text, suffix) => bool"),
 		Str("upper"), Native1("upper", func(env *Env, t Value) Value {
-			return Str(strings.ToUpper(t.MustStr("upper()", 0)))
+			return Str(strings.ToUpper(t.MustStr("", 0)))
 		}, "$f(text) => TEXT"),
 		Str("lower"), Native1("lower", func(env *Env, t Value) Value {
-			return Str(strings.ToLower(t.MustStr("lower()", 0)))
+			return Str(strings.ToLower(t.MustStr("", 0)))
 		}, "$f(TEXT) => text"),
 		Str("bytes"), Native2("bytes", func(env *Env, s, n Value) Value {
-			sz := s.MustStr("bytes", 0)
+			sz := s.MustStr("", 0)
 			var r []byte
 			if max := n.IntDefault(-1); max >= 0 && len(sz) > int(max) {
 				r = []byte(sz[:max])
@@ -134,7 +142,7 @@ func init() {
 		Str("chars"), Native2("chars", func(env *Env, s, n Value) Value {
 			var r []Value
 			max := n.IntDefault(0)
-			for s := s.MustStr("chars", 0); len(s) > 0; {
+			for s := s.MustStr("", 0); len(s) > 0; {
 				_, sz := utf8.DecodeRuneInString(s)
 				if sz == 0 {
 					break
@@ -152,7 +160,7 @@ func init() {
 			"\tchars('a中c', 1) => { 'a' }",
 		),
 		Str("format"), Native("format", func(env *Env) {
-			f := env.Get(0).MustStr("format() pattern", 0)
+			f := env.Get(0).MustStr("", 0)
 			p, tmp := bytes.Buffer{}, bytes.Buffer{}
 			popi := 0
 			pop := func() Value { popi++; return env.Get(popi) }
@@ -162,7 +170,7 @@ func init() {
 					p.WriteString(f)
 					break
 				} else if idx == len(f)-1 {
-					panicf("format(): unexpected '%%' at end")
+					panicf("unexpected '%%' at end")
 				}
 				p.WriteString(f[:idx])
 				if f[idx+1] == '%' {
@@ -185,7 +193,7 @@ func init() {
 						expecting = typ.Interface
 					case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
 					default:
-						panicf("format(): unexpected verb: '%c'", f[0])
+						panicf("unexpected verb: '%c'", f[0])
 					}
 					tmp.WriteByte(f[0])
 					f = f[1:]
@@ -275,15 +283,15 @@ var MathLib = Map(
 		defer rg.Unlock()
 		switch len(env.Stack()) {
 		case 2:
-			af, ai, aIsInt := env.Get(0).MustNum("random() start value", 0).Num()
-			bf, bi, bIsInt := env.Get(1).MustNum("random() end (exclusively) value", 0).Num()
+			af, ai, aIsInt := env.Get(0).MustNum("", 0).Num()
+			bf, bi, bIsInt := env.Get(1).MustNum("", 0).Num()
 			if aIsInt && bIsInt {
 				env.A = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
 			} else {
 				env.A = Float(rg.Float64()*(bf-af) + af)
 			}
 		case 1:
-			env.A = Int(int64(rg.Intn(int(env.Get(0).MustNum("random()", 0).Int()))))
+			env.A = Int(int64(rg.Intn(int(env.Get(0).MustNum("", 0).Int()))))
 		default:
 			env.A = Float(rg.Float64())
 		}
@@ -291,21 +299,21 @@ var MathLib = Map(
 		"$f() => [0, 1)",
 		"$f(n) => [0, n)",
 		"$f(a, b) => [a, b]"),
-	Str("sqrt"), Native1("sqrt", func(env *Env, v Value) Value { return Float(math.Sqrt(v.MustNum("sqrt()", 0).Float())) }),
-	Str("floor"), Native1("floor", func(env *Env, v Value) Value { return Float(math.Floor(v.MustNum("floor()", 0).Float())) }),
-	Str("ceil"), Native1("ceil", func(env *Env, v Value) Value { return Float(math.Ceil(v.MustNum("ceil()", 0).Float())) }),
-	Str("min"), Native("min", func(env *Env) { mathMinMax(env, "min() #%d arg", false) }, "max(a, b, ...) => largest_number"),
-	Str("max"), Native("max", func(env *Env) { mathMinMax(env, "max() #%d arg", true) }, "min(a, b, ...) => smallest_number"),
+	Str("sqrt"), Native1("sqrt", func(env *Env, v Value) Value { return Float(math.Sqrt(v.MustNum("", 0).Float())) }),
+	Str("floor"), Native1("floor", func(env *Env, v Value) Value { return Float(math.Floor(v.MustNum("", 0).Float())) }),
+	Str("ceil"), Native1("ceil", func(env *Env, v Value) Value { return Float(math.Ceil(v.MustNum("", 0).Float())) }),
+	Str("min"), Native("min", func(env *Env) { mathMinMax(env, "#%d arg", false) }, "max(a, b, ...) => largest_number"),
+	Str("max"), Native("max", func(env *Env) { mathMinMax(env, "#%d arg", true) }, "min(a, b, ...) => smallest_number"),
 	Str("pow"), Native2("pow", func(env *Env, a, b Value) Value {
-		af, ai, aIsInt := a.MustNum("pow() base", 0).Num()
-		bf, bi, bIsInt := b.MustNum("pow() power", 0).Num()
+		af, ai, aIsInt := a.MustNum("base", 0).Num()
+		bf, bi, bIsInt := b.MustNum("power", 0).Num()
 		if aIsInt && bIsInt {
 			return Int(ipow(ai, bi))
 		}
 		return Float(math.Pow(af, bf))
 	}, "pow(a, b) => a to the power of b"),
 	Str("abs"), Native("abs", func(env *Env) {
-		switch f, i, isInt := env.Get(0).MustNum("abs", 0).Num(); {
+		switch f, i, isInt := env.Get(0).MustNum("", 0).Num(); {
 		case isInt && i < 0:
 			env.A = Int(-i)
 		case isInt && i >= 0:
@@ -315,37 +323,37 @@ var MathLib = Map(
 		}
 	}),
 	Str("remainder"), Native("remainder", func(env *Env) {
-		env.A = Float(math.Remainder(env.Get(0).MustNum("remainder()", 1).Float(), env.Get(1).MustNum("remainder()", 2).Float()))
+		env.A = Float(math.Remainder(env.Get(0).MustNum("", 1).Float(), env.Get(1).MustNum("", 2).Float()))
 	}),
 	Str("mod"), Native("mod", func(env *Env) {
-		env.A = Float(math.Mod(env.Get(0).MustNum("mod()", 1).Float(), env.Get(1).MustNum("mod()", 2).Float()))
+		env.A = Float(math.Mod(env.Get(0).MustNum("", 1).Float(), env.Get(1).MustNum("", 2).Float()))
 	}),
 	Str("cos"), Native("cos", func(env *Env) {
-		env.A = Float(math.Cos(env.Get(0).MustNum("cos()", 0).Float()))
+		env.A = Float(math.Cos(env.Get(0).MustNum("", 0).Float()))
 	}),
 	Str("sin"), Native("sin", func(env *Env) {
-		env.A = Float(math.Sin(env.Get(0).MustNum("sin()", 0).Float()))
+		env.A = Float(math.Sin(env.Get(0).MustNum("", 0).Float()))
 	}),
 	Str("tan"), Native("tan", func(env *Env) {
-		env.A = Float(math.Tan(env.Get(0).MustNum("tan()", 0).Float()))
+		env.A = Float(math.Tan(env.Get(0).MustNum("", 0).Float()))
 	}),
 	Str("acos"), Native("acos", func(env *Env) {
-		env.A = Float(math.Acos(env.Get(0).MustNum("acos()", 0).Float()))
+		env.A = Float(math.Acos(env.Get(0).MustNum("", 0).Float()))
 	}),
 	Str("asin"), Native("asin", func(env *Env) {
-		env.A = Float(math.Asin(env.Get(0).MustNum("asin()", 0).Float()))
+		env.A = Float(math.Asin(env.Get(0).MustNum("", 0).Float()))
 	}),
 	Str("atan"), Native("atan", func(env *Env) {
-		env.A = Float(math.Atan(env.Get(0).MustNum("atan()", 0).Float()))
+		env.A = Float(math.Atan(env.Get(0).MustNum("", 0).Float()))
 	}),
 	Str("atan2"), Native("atan2", func(env *Env) {
-		env.A = Float(math.Atan2(env.Get(0).MustNum("atan2()", 1).Float(), env.Get(1).MustNum("atan()", 2).Float()))
+		env.A = Float(math.Atan2(env.Get(0).MustNum("", 1).Float(), env.Get(1).MustNum("", 2).Float()))
 	}),
 	Str("ldexp"), Native("ldexp", func(env *Env) {
-		env.A = Float(math.Ldexp(env.Get(0).MustNum("ldexp()", 0).Float(), int(env.Get(1).IntDefault(0))))
+		env.A = Float(math.Ldexp(env.Get(0).MustNum("", 0).Float(), int(env.Get(1).IntDefault(0))))
 	}),
 	Str("modf"), Native("modf", func(env *Env) {
-		a, b := math.Modf(env.Get(0).MustNum("modf()", 0).Float())
+		a, b := math.Modf(env.Get(0).MustNum("", 0).Float())
 		env.A = Array(Float(a), Float(b))
 	}),
 )

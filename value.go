@@ -394,7 +394,7 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 			case 1:
 				results = []reflect.Value{out.ReflectValue(t.Out(0))}
 			default:
-				out.MustMap("expecting multiple returned arguments", 0)
+				out.MustMap("expect multiple returned arguments", 0)
 				results = make([]reflect.Value, t.NumOut())
 				for i := range results {
 					results[i] = out.Map().Get(Int(int64(i))).ReflectValue(t.Out(i))
@@ -453,7 +453,10 @@ func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
 		if strings.Contains(msg, "%d") {
 			msg = fmt.Sprintf(msg, msgArg)
 		}
-		panicf("%s: expect %v, got %v", msg, t, v.Type())
+		if msg != "" {
+			panicf("%s: expect %v, got %v", msg, t, v.Type())
+		}
+		panicf("expect %v, got %v", t, v.Type())
 	}
 	return v
 }
