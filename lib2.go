@@ -121,6 +121,16 @@ func init() {
 		Str("lower"), Native1("lower", func(env *Env, t Value) Value {
 			return Str(strings.ToLower(t.MustStr("lower()", 0)))
 		}, "$f(TEXT) => text"),
+		Str("bytes"), Native2("bytes", func(env *Env, s, n Value) Value {
+			sz := s.MustStr("bytes", 0)
+			var r []byte
+			if max := n.IntDefault(-1); max >= 0 && len(sz) > int(max) {
+				r = []byte(sz[:max])
+			} else {
+				r = []byte(sz)
+			}
+			return Bytes(r)
+		}),
 		Str("chars"), Native2("chars", func(env *Env, s, n Value) Value {
 			var r []Value
 			max := n.IntDefault(0)

@@ -547,14 +547,15 @@ func TestReflectedValue(t *testing.T) {
 		t.Fatal(x)
 	}
 
-	p, _ := LoadString(`function foo(v)
+	p, _ := LoadString(`function foo(v, p)
+	p[0] = 99
 	return v, v + 1, nil
 	end
 	bar(foo)`, &CompileOptions{GlobalKeyValues: map[string]interface{}{
-		"bar": func(cb func(a int) (int, int, error)) {
-			a, b, _ := cb(10)
-			fmt.Println(a, b)
-			if a != 10 || b != 11 {
+		"bar": func(cb func(a int, p []byte) (int, int, error)) {
+			buf := []byte{0}
+			a, b, _ := cb(10, buf)
+			if a != 10 || b != 11 || buf[0] != 99 {
 				t.Fatal(a, b)
 			}
 		},

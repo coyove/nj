@@ -160,7 +160,8 @@ func Rune(r rune) Value {
 
 // Bytes returns an alterable string value
 func Bytes(b []byte) Value {
-	return Str(*(*string)(unsafe.Pointer(&b)))
+	return Value{v: uint64(typ.String), p: unsafe.Pointer(&b)}
+	// return Str(*(*string)(unsafe.Pointer(&b)))
 }
 
 // Val creates a Value from golang interface{}
@@ -306,6 +307,13 @@ func (v Value) Str() string {
 	return *(*string)(v.p)
 }
 
+func (v Value) UnsafeBytes() []byte {
+	if v.IsSmallString() {
+		panic("immutable string")
+	}
+	return *(*[]byte)(v.p)
+}
+
 // When isInt == true, use intValue, otherwise floatValue
 func (v Value) Num() (floatValue float64, intValue int64, isInt bool) {
 	if v.p == int64Marker {
@@ -367,6 +375,9 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	}
 	if v.Type() == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
 		return reflect.Zero(t)
+	}
+	if v.Type() == typ.String && t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
+		return reflect.ValueOf(v.UnsafeBytes())
 	}
 	if v.Type() == typ.Func && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {

@@ -265,6 +265,9 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case typ.Interface:
 				reflectStore(subject.Interface(), env.A, v)
 				env.A = v
+			case typ.String:
+				subject.UnsafeBytes()[env.A.MustNum("alter mutable string by index", 0).Int()] = byte(v.MustNum("alter mutable string byte", 0).Int())
+				env.A = v
 			default:
 				panicf("cannot store %v into (%v)[%v]", v.Type(), subject.Type(), env.A.Type())
 			}
