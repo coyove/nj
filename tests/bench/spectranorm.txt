@@ -30,7 +30,7 @@ function TimesTranspVec(v, s, n, u, wg)
 end
 
 function ATimesTransp(v, u)
-    x = narray(len(u)) 
+    x = table.makearray(len(u)) 
     wg = sync.waitgroup() 
 
     for i = 0, nCPU do

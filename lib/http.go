@@ -161,17 +161,17 @@ func init() {
 			script.Bytes(buf),
 			script.Val(client.Jar),
 		)
-	}, `http($a...a$) => code, body, headers, cookie_jar
-    'url' is a mandatory parameter, others are optional and pretty self explanatory:
-	http(url="...") -- GET req
-	http(url="...", no_redirect=true)
-	http("POST", "...")
-	http("POST", "...", form={key=value})
-    http("POST", "...", multipart={file='@path/to/file'})`,
-
-		"method", "url", "rawbody", "timeout", "proxy",
-		"header", "query", "form", "multipart",
-		"json", "jar", "no_redirect"))
+	}, "http(options) => { code, body, headers, cookie_jar }",
+		"\t'url' is a mandatory parameter in options, others are optional and pretty self explanatory:",
+		"\thttp({url='...'})",
+		"\thttp({url='...', no_redirect=true})",
+		"\thttp({method='POST', url='...'})",
+		"\thttp({method='POST', url='...'}, json={...})",
+		"\thttp({method='POST', url='...', query={key=value}})",
+		"\thttp({method='POST', url='...', header={key=value}, form={key=value}})",
+		"\thttp({method='POST', url='...', multipart={file='@path/to/file'}})",
+		"\thttp({method='POST', url='...', proxy='http://127.0.0.1:8080'})",
+	))
 }
 
 func panicErr(err error) {

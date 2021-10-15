@@ -20,7 +20,7 @@ print(str.from("stretch tree of depth %d\t check: %v").format(stretchDepth, chec
 
 longLivedTree = bottomUpTree(maxDepth) 
 wg = sync.waitgroup() 
-result = narray(maxDepth+1) 
+result = table.makearray(maxDepth+1) 
 
 function worker( depth, check)
     iterations = 1 << (maxDepth - depth + minDepth) 

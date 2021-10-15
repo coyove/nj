@@ -57,8 +57,8 @@ size = 1600
 nCPU = 4
 bytesPerRow = size >> 3 
 
-initial_r = narray(size) 
-initial_i = narray(size) 
+initial_r = table.makearray(size) 
+initial_i = table.makearray(size) 
 
 inv = 2 / size 
 for xy =0, size do
@@ -67,7 +67,7 @@ for xy =0, size do
     initial_i[xy] = i - 1.0 
 end
 
-rows = narray(size) 
+rows = table.makearray(size) 
 y = -1 
 mux = sync.mutex() 
 wg = sync.waitgroup() 

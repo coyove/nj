@@ -422,14 +422,14 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 		a := v.Table()
 		switch t.Kind() {
 		case reflect.Slice:
-			s := reflect.MakeSlice(t, len(a.Array()), len(a.Array()))
-			for i, a := range a.Array() {
+			s := reflect.MakeSlice(t, len(a.ArrayPart()), len(a.ArrayPart()))
+			for i, a := range a.ArrayPart() {
 				s.Index(i).Set(a.ReflectValue(t.Elem()))
 			}
 			return s
 		case reflect.Array:
 			s := reflect.New(t).Elem()
-			for i, a := range a.Array() {
+			for i, a := range a.ArrayPart() {
 				s.Index(i).Set(a.ReflectValue(t.Elem()))
 			}
 			return s
@@ -524,7 +524,7 @@ func (v Value) toString(lv int, j bool) string {
 		m := v.Table()
 		if len(m.hashItems) == 0 {
 			p := bytes.NewBufferString("[")
-			for _, a := range m.Array() {
+			for _, a := range m.ArrayPart() {
 				p.WriteString(a.toString(lv+1, j))
 				p.WriteString(",")
 			}

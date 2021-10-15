@@ -305,7 +305,7 @@ func (m *Table) Next(k Value) (Value, Value) {
 	return nextHashPair(idx + 1)
 }
 
-func (m *Table) Array() []Value {
+func (m *Table) ArrayPart() []Value {
 	return m.items
 }
 

@@ -15,18 +15,18 @@ type Set struct {
 func init() {
 	script.AddGlobalValue("set", func(env *script.Env) {
 		s := &Set{m: map[uint64]struct{}{}, p: env.Global}
-		for _, e := range env.Get(0).MustMap("").Array() {
+		for _, e := range env.Get(0).MustMap("").ArrayPart() {
 			s.Add(e)
 		}
 		env.A = script.Val(s)
 	},
 		"set() => unique_set",
 		"set({ e1, e2, ..., en }) => unique_set",
-		"\tcreate a unique set, methods:",
-		"\t\tunique_set.add(value) => added_or_not",
-		"\t\tunique_set.exists(value) => exists_or_not",
-		"\t\tunique_set.values() => { e1, e2, ... en }",
-		"\t\tunique_set.size() => int",
+		"\tcreate a unique set:",
+		"\t\tunique_set.Add(value) => bool",
+		"\t\tunique_set.Exists(value) => bool",
+		"\t\tunique_set.Values() => { e1, e2, ... en }",
+		"\t\tunique_set.Size() => int",
 	)
 }
 

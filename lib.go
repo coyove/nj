@@ -55,7 +55,7 @@ func init() {
 
 	AddGlobalValue("VERSION", Int(Version))
 	AddGlobalValue("undefined", Undef)
-	AddGlobalValue("_", func(env *Env) { env.A = env.Get(0) }, "nop()")
+	AddGlobalValue("_", func(env *Env) { env.A = env.Get(0) }, "nop(a) => a")
 	AddGlobalValue("globals", func(env *Env) {
 		keys := make([]string, 0, len(g))
 		for k := range g {
@@ -101,8 +101,6 @@ func init() {
 			return Int(int64(reflectLen(v.Interface())))
 		}
 	})
-	AddGlobalValue("alen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("").items))) })
-	AddGlobalValue("hlen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("").hashItems))) })
 	AddGlobalValue("eval", func(env *Env, s, g Value) Value {
 		var m map[string]interface{}
 		if g.Type() == typ.Table {
@@ -112,7 +110,7 @@ func init() {
 				return true
 			})
 		}
-		wrap := func(err error) error { return fmt.Errorf("panic inside eval(): %v", err) }
+		wrap := func(err error) error { return fmt.Errorf("panic inside: %v", err) }
 		f, err := LoadString(s.MustStr(""), &CompileOptions{GlobalKeyValues: m})
 		if err != nil {
 			panic(wrap(err))
@@ -211,14 +209,36 @@ func init() {
 			return Array(lines...)
 		}, "$f(skip) => { func_name1, line1, cursor1, n2, l2, c2, ... }"),
 	))
-	AddGlobalValue("narray", func(env *Env, n Value) Value {
-		a := Array(make([]Value, n.MustNum("").Int())...)
-		a.Table().count = 0
-		return a
-	}, "narray(n) => { nil, ..., nil }", "\treturn an array, preallocate space for n values")
-	AddGlobalValue("type", func(env *Env) {
-		env.A = Str(env.Get(0).Type().String())
-	}, "type(value) => string", "\treturn value's type")
+	AddGlobalValue("table", Map(
+		Str("makearray"), Native1("makearray", func(env *Env, n Value) Value {
+			a := Array(make([]Value, n.MustNum("").Int())...)
+			a.Table().count = 0
+			return a
+		}, "makearray(n) => { nil, ..., nil }", "\treturn a table array, preallocate space for n values"),
+		Str("arraylen"), Native1("arraylen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("").items))) }),
+		Str("maplen"), Native1("maplen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("").hashItems))) }),
+		Str("keys"), Native1("keys", func(env *Env, m Value) Value {
+			a := make([]Value, 0)
+			m.MustMap("").Foreach(func(k, v Value) bool {
+				a = append(a, k)
+				return true
+			})
+			return Array(a...)
+		}),
+		Str("append"), Native2("append", func(env *Env, m, v Value) Value {
+			a := m.MustMap("")
+			a.Set(Int(int64(len(a.items))), v)
+			return m
+		}, "append(array, value) => append value to array"),
+		Str("concat"), Native2("concat", func(env *Env, a, b Value) Value {
+			ma, mb := a.MustMap(""), b.MustMap("")
+			for _, b := range mb.ArrayPart() {
+				ma.Set(Int(int64(len(ma.items))), b)
+			}
+			return ma.Value()
+		}, "concat(array1, array2) => put elements from array2 to array1's end"),
+	))
+	AddGlobalValue("type", func(env *Env) { env.A = Str(env.Get(0).Type().String()) }, "type(value) => string", "\treturn value's type")
 	AddGlobalValue("pcall", func(env *Env, f Value) Value {
 		a, err := f.MustFunc("").Call(env.Stack()[1:]...)
 		if err == nil {
@@ -263,6 +283,7 @@ func init() {
 		}
 	}, "$f(value) => number", "\tconvert string to number")
 	AddGlobalValue("stdout", func(env *Env) { env.A = _interface(env.Global.Stdout) }, "$f() => fd", "\treturn stdout fd")
+	AddGlobalValue("stderr", func(env *Env) { env.A = _interface(env.Global.Stderr) }, "$f() => fd", "\treturn stderr fd")
 	AddGlobalValue("stdin", func(env *Env) { env.A = _interface(env.Global.Stdin) }, "$f() => fd", "\treturn stdin fd")
 	AddGlobalValue("print", func(env *Env) {
 		for _, a := range env.Stack() {
@@ -275,7 +296,7 @@ func init() {
 		for _, a := range env.Stack()[1:] {
 			fmt.Fprint(w, a.String())
 		}
-	}, "write(writer, a, b, c, ...)", "\twrite raw values to writer")
+	}, "write(writer, a, b, c, ...)", "\twrite values to writer")
 	AddGlobalValue("println", func(env *Env) {
 		for _, a := range env.Stack() {
 			fmt.Fprint(env.Global.Stdout, a.String(), " ")
@@ -295,7 +316,7 @@ func init() {
 		}
 		return Array(results...)
 	},
-		"$f(prompt='', n=1) => { s1, s2, ..., sn }", "\tprint prompt and read N user inputs",
+		"$f(prompt='', n=1) => { s1, s2, ..., sN }", "\tprint prompt and read N user inputs",
 	)
 	AddGlobalValue("math", MathLib)
 	AddGlobalValue("int", func(env *Env) {
@@ -338,9 +359,9 @@ func init() {
 		}
 	},
 		"Go_time() => time.Time",
-		"\treturns time.Time struct of current time",
+		"\treturn time.Time of current time",
 		"Go_time(year, month, day, h, m, s, nanoseconds, 'local'|'utc') => time.Time",
-		"\treturns time.Time struct constructed by the given arguments",
+		"\treturn time.Time constructed by the given arguments",
 	)
 	AddGlobalValue("clock", func(env *Env, prefix Value) Value {
 		x := time.Now()
@@ -408,7 +429,7 @@ func init() {
 	AddGlobalValue("iserror", func(env *Env) {
 		_, ok := env.Get(0).Interface().(error)
 		env.A = Bool(ok)
-	}, "iserror(value)", "\ttest whether value is an error")
+	}, "iserror(value) => bool", "\ttest whether value is an error")
 
 	AddGlobalValue("json", Map(
 		Str("stringify"), Native("stringify", func(env *Env) {
@@ -429,37 +450,15 @@ func init() {
 	))
 
 	AddGlobalValue("sync", Map(
-		Str("mutex"), Native("mutex", func(env *Env) { env.A = Val(&sync.Mutex{}) }, "$f() => create a mutex"),
-		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() => create a read-write mutex"),
-		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() => create a wait group"),
+		Str("mutex"), Native("mutex", func(env *Env) { env.A = Val(&sync.Mutex{}) }, "$f() => mutex"),
+		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() => read-write mutex"),
+		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() => wait group"),
 	))
-
-	// Array related functions
-	AddGlobalValue("append", func(env *Env, m, v Value) Value {
-		a := m.MustMap("")
-		a.Set(Int(int64(len(a.items))), v)
-		return m
-	}, "append(array, value) => append value to array")
-	AddGlobalValue("concat", func(env *Env, a, b Value) Value {
-		ma, mb := a.MustMap(""), b.MustMap("")
-		for _, b := range mb.Array() {
-			ma.Set(Int(int64(len(ma.items))), b)
-		}
-		return ma.Value()
-	}, "concat(array1, array2) => put elements from array2 to array1's end")
 	AddGlobalValue("next", func(env *Env, m, k Value) Value {
 		nk, nv := m.MustMap("").Next(k)
 		return Array(nk, nv)
-	}, "next(map, start_key) => {next_key, next_value}", "\tfind next key-value pair in the map")
+	}, "next(map, start_key) => { next_key, next_value }", "\tfind next key-value pair in the map")
 	AddGlobalValue("parent", func(env *Env, m Value) Value {
 		return m.MustMap("").Parent.Value()
-	}, "parent(map) => map", "\tfind given map's parent map, or nil if not existed")
-	AddGlobalValue("keys", func(env *Env, m Value) Value {
-		a := make([]Value, 0)
-		m.MustMap("").Foreach(func(k, v Value) bool {
-			a = append(a, k)
-			return true
-		})
-		return Array(a...)
-	})
+	}, "parent(table) => table", "\tfind given table's parent, or nil if not existed")
 }

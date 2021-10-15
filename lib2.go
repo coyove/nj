@@ -89,31 +89,31 @@ func init() {
 				en += int64(len(s))
 			}
 			return Str(s[st:en])
-		}, ""),
+		}, "sub(text, start, end) => text[start:end]"),
 		Str("trim"), Native2("trim", func(env *Env, src, cutset Value) Value {
 			if cutset == Nil {
 				return Str(strings.TrimSpace(src.MustStr("")))
 			}
 			c := cutset.MustStr("")
 			return Str(strings.Trim(src.MustStr(""), c))
-		}, ""),
+		}, "trim(' text ') => 'text'", "trim('text', 'tx') => 'e'"),
 		Str("ltrim"), Native2("ltrim", func(env *Env, src, cutset Value) Value {
 			c := cutset.MustStr("")
 			return Str(strings.TrimLeft(src.MustStr(""), c))
-		}, ""),
+		}, "ltrim('abcdtext', 'abxy') => 'cdtext'"),
 		Str("rtrim"), Native2("rtrim", func(env *Env, src, cutset Value) Value {
 			c := cutset.MustStr("")
 			return Str(strings.TrimRight(src.MustStr(""), c))
-		}, ""),
+		}, "rtrim('textabcd', 'cdxy') => 'textab'"),
 		Str("ptrim"), Native2("ptrim", func(env *Env, src, cutset Value) Value {
 			c := cutset.MustStr("")
 			return Str(strings.TrimPrefix(src.MustStr(""), c))
-		}, ""),
+		}, "ptrim('prefixtext', 'prefix') => 'text'"),
 		Str("strim"), Native2("strim", func(env *Env, src, cutset Value) Value {
 			c := cutset.MustStr("")
 			return Str(strings.TrimSuffix(src.MustStr(""), c))
-		}, ""),
-		Str("decode_utf8"), Native("decode_utf8", func(env *Env) {
+		}, "strim('textsuffix', 'suffix') => 'text'"),
+		Str("decutf8"), Native("decutf8", func(env *Env) {
 			r, sz := utf8.DecodeRuneInString(env.Get(0).MustStr(""))
 			env.A = Array(Int(int64(r)), Int(int64(sz)))
 		}, "$f(string) => { char_unicode, width_in_bytes }"),
@@ -125,10 +125,10 @@ func init() {
 		}, "endswith(text, suffix) => bool"),
 		Str("upper"), Native1("upper", func(env *Env, t Value) Value {
 			return Str(strings.ToUpper(t.MustStr("")))
-		}, "$f(text) => TEXT"),
+		}, "$f('text') => 'TEXT'"),
 		Str("lower"), Native1("lower", func(env *Env, t Value) Value {
 			return Str(strings.ToLower(t.MustStr("")))
-		}, "$f(TEXT) => text"),
+		}, "$f('TEXT') => 'text'"),
 		Str("bytes"), Native2("bytes", func(env *Env, s, n Value) Value {
 			sz := s.MustStr("")
 			var r []byte
@@ -154,7 +154,8 @@ func init() {
 				s = s[sz:]
 			}
 			return Array(r...)
-		}, "chars(string) => { char1, char2, ... }", "chars(string, max) => { char1, char2, ..., char_max }",
+		}, "chars(string) => { char1, char2, ... }",
+			"chars(string, max) => { char1, char2, ..., char_max }",
 			"\tbreak a string into (at most 'max') chars, e.g.:",
 			"\tchars('a中c') => { 'a', '中', 'c' }",
 			"\tchars('a中c', 1) => { 'a' }",
@@ -246,7 +247,7 @@ func init() {
 						a := make([]byte, n)
 						n, err := rd.Read(a)
 						if err != nil && err != io.EOF {
-							panicf("read(): %v", err)
+							panic(err)
 						}
 						return Bytes(a[:n])
 					} else {
