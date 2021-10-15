@@ -133,6 +133,19 @@ func MapVal(kvs ...interface{}) Value {
 	return Value{v: uint64(typ.Table), p: unsafe.Pointer(t)}
 }
 
+// MapAdd adds key-value pairs into an existing table if any
+func MapAdd(old Value, kvs ...Value) Value {
+	if old.Type() == typ.Table {
+		t := old.Table()
+		t.resizeHash(t.Len()*2 + len(kvs))
+		for i := 0; i < len(kvs)/2*2; i += 2 {
+			t.Set(kvs[i], kvs[i+1])
+		}
+		return t.Value()
+	}
+	return Map(kvs...)
+}
+
 // TableProto returns a table whose parent will be set to p
 func TableProto(p *Table, kvs ...Value) Value {
 	m := Map(kvs...)
@@ -451,6 +464,10 @@ func (v Value) MustBool(msg string) bool { return v.mustBe(typ.Bool, msg, 0).Boo
 func (v Value) MustStr(msg string) string { return v.mustBe(typ.String, msg, 0).String() }
 
 func (v Value) MustNum(msg string) Value { return v.mustBe(typ.Number, msg, 0) }
+
+func (v Value) MustInt(msg string) int64 { return v.mustBe(typ.Number, msg, 0).Int() }
+
+func (v Value) MustFloat(msg string) float64 { return v.mustBe(typ.Number, msg, 0).Float() }
 
 func (v Value) MustMap(msg string) *Table { return v.mustBe(typ.Table, msg, 0).Table() }
 

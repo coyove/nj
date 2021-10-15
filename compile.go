@@ -96,34 +96,33 @@ func (table *symtable) borrowAddress() uint16 {
 	return table.vp - 1
 }
 
-func (table *symtable) returnAddress(v uint16) {
-	if v == regA {
-		return
-	}
-	if v>>12 == 1 {
-		// collapse() may encounter constants, and return them if any
-		// so here we silently drop these constant addresses
-		return
-	}
-	if _, existed := table.reusableTmps[v]; existed {
-		table.reusableTmps[v] = true
-	}
-}
-
-func (table *symtable) returnAddresses(a interface{}) {
+func (table *symtable) freeAddr(a interface{}) {
 	switch a := a.(type) {
 	case []parser.Node:
 		for _, n := range a {
 			if n.Type == parser.Address {
-				table.returnAddress(n.Addr)
+				table.freeAddr(n.Addr)
 			}
 		}
 	case []uint16:
 		for _, n := range a {
-			table.returnAddress(n)
+			table.freeAddr(n)
 		}
+	case uint16:
+		if a == regA {
+			return
+		}
+		if a>>12 == 1 {
+			// collapse() may encounter constants, and return them if any
+			// so here we silently drop these constant addresses
+			return
+		}
+		if _, existed := table.reusableTmps[a]; existed {
+			table.reusableTmps[a] = true
+		}
+
 	default:
-		panic("DEBUG returnAddresses")
+		panic("DEBUG freeAddr")
 	}
 }
 
@@ -198,7 +197,7 @@ func (table *symtable) addMaskedSymTable() {
 func (table *symtable) removeMaskedSymTable() {
 	last := table.maskedSym[len(table.maskedSym)-1]
 	for _, k := range last {
-		table.returnAddress(k.addr)
+		table.freeAddr(k.addr)
 	}
 	table.maskedSym = table.maskedSym[:len(table.maskedSym)-1]
 }
@@ -270,7 +269,7 @@ func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
 	n0a := getAddr(n0)
 	if !n1.Valid() {
 		table.code.writeInst(op, n0a, 0)
-		table.returnAddresses(tmp)
+		table.freeAddr(tmp)
 		return
 	}
 
@@ -280,7 +279,7 @@ func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
 	} else {
 		table.code.writeInst(op, n0a, n1a)
 	}
-	table.returnAddresses(tmp)
+	table.freeAddr(tmp)
 }
 
 func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existedVar uint16) uint16 {

@@ -95,7 +95,7 @@ func (table *symtable) writeInst3(bop byte, atoms []parser.Node) uint16 {
 		// We would love to see 'key' using regA, in this case writeInst will just omit it
 		table.writeInst(typ.OpSet, _nodeRegA, atoms[3])
 		table.writeInst(typ.OpStore, atoms[1], atoms[2])
-		table.returnAddresses(atoms[1:])
+		table.freeAddr(atoms[1:])
 		return regA
 	}
 
@@ -108,7 +108,7 @@ func (table *symtable) writeInst3(bop byte, atoms []parser.Node) uint16 {
 	default:
 		// binary splitInst
 		table.writeInst(bop, atoms[1], atoms[2])
-		table.returnAddresses(atoms[1:])
+		table.freeAddr(atoms[1:])
 	}
 
 	return regA
@@ -241,7 +241,7 @@ func (table *symtable) compileCall(nodes []parser.Node) uint16 {
 	}
 
 	table.code.writePos(nodes[0].Pos())
-	table.returnAddresses(tmp)
+	table.freeAddr(tmp)
 	return regA
 }
 
@@ -355,7 +355,7 @@ func (table *symtable) compileFreeAddr(atoms []parser.Node) uint16 {
 	for i := 1; i < len(atoms); i++ {
 		s := atoms[i].SymbolValue()
 		yx := table.get(s)
-		table.returnAddress(yx)
+		table.freeAddr(yx)
 		if len(table.maskedSym) > 0 {
 			delete(table.maskedSym[len(table.maskedSym)-1], s)
 		} else {
@@ -392,7 +392,7 @@ func (table *symtable) collapse(atoms []parser.Node, optLast bool) {
 		if optLast {
 			_, old, opb := splitInst(table.code.Code[len(table.code.Code)-1])
 			table.code.truncateLast()
-			table.returnAddress(old)
+			table.freeAddr(old)
 			atoms[lastCompound.i] = parser.NewAddress(opb)
 		}
 	}

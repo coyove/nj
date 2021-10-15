@@ -215,13 +215,13 @@ func (m *Table) setHash(incoming hashItem) (prev Value, growed bool) {
 		// Grow if distances become big or we went all the way around.
 		if num < 8 {
 			if idx == idxStart {
-				m.resize(num + 1)
+				m.resizeHash(num + 1)
 				prev, _ = m.setHash(incoming)
 				return prev, true
 			}
 		} else {
 			if int(m.hashCount) >= num/2 || idx == idxStart {
-				m.resize(num*2 + 1)
+				m.resizeHash(num*2 + 1)
 				prev, _ = m.setHash(incoming)
 				return prev, true
 			}
@@ -309,6 +309,16 @@ func (m *Table) ArrayPart() []Value {
 	return m.items
 }
 
+func (m *Table) MapPart() map[Value]Value {
+	g := make(map[Value]Value, len(m.hashItems))
+	for _, i := range m.hashItems {
+		if i.Key != Nil {
+			g[i.Key] = i.Val
+		}
+	}
+	return g
+}
+
 func (m *Table) String() string {
 	return m.Value().String()
 }
@@ -320,7 +330,7 @@ func (m *Table) Value() Value {
 	return Value{v: uint64(typ.Table), p: unsafe.Pointer(m)}
 }
 
-func (m *Table) resize(newSize int) {
+func (m *Table) resizeHash(newSize int) {
 	tmp := Table{hashItems: make([]hashItem, newSize)}
 	for _, e := range m.hashItems {
 		if e.Key != Nil {

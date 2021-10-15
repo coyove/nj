@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
 	"math/rand"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -14,10 +17,41 @@ import (
 	"github.com/coyove/script/typ"
 )
 
-var StringMethods Value
+var StringMethods, MathLib, TableLib, OSLib Value
 
 func init() {
-	StringMethods = Map(
+	TableLib = MapAdd(TableLib,
+		Str("makearray"), Native1("makearray", func(env *Env, n Value) Value {
+			a := Array(make([]Value, n.MustInt(""))...)
+			a.Table().count = 0
+			return a
+		}, "makearray(n) => { nil, ..., nil }", "\treturn a table array, preallocate space for n values"),
+		Str("arraylen"), Native1("arraylen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("").items))) }),
+		Str("maplen"), Native1("maplen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("").hashItems))) }),
+		Str("keys"), Native1("keys", func(env *Env, m Value) Value {
+			a := make([]Value, 0)
+			m.MustMap("").Foreach(func(k, v Value) bool {
+				a = append(a, k)
+				return true
+			})
+			return Array(a...)
+		}),
+		Str("append"), Native2("append", func(env *Env, m, v Value) Value {
+			a := m.MustMap("")
+			a.Set(Int(int64(len(a.items))), v)
+			return m
+		}, "append(array, value)", "\tappend value to table array"),
+		Str("concat"), Native2("concat", func(env *Env, a, b Value) Value {
+			ma, mb := a.MustMap(""), b.MustMap("")
+			for _, b := range mb.ArrayPart() {
+				ma.Set(Int(int64(len(ma.items))), b)
+			}
+			return ma.Value()
+		}, "concat(array1, array2)", "\tput elements from array2 to array1's end"),
+	)
+	AddGlobalValue("table", TableLib)
+
+	StringMethods = MapAdd(StringMethods,
 		Str("from"), Native1("from", func(env *Env, src Value) Value {
 			return Str(fmt.Sprint(src.Interface()))
 		}, ""),
@@ -262,102 +296,118 @@ func init() {
 	)
 
 	AddGlobalValue("str", StringMethods)
-}
 
-var rg = struct {
-	sync.Mutex
-	*rand.Rand
-}{Rand: rand.New(rand.NewSource(1))}
+	var rg = struct {
+		sync.Mutex
+		*rand.Rand
+	}{Rand: rand.New(rand.NewSource(1))}
 
-var MathLib = Map(
-	Str("INF"), Float(math.Inf(1)),
-	Str("NEG_INF"), Float(math.Inf(-1)),
-	Str("PI"), Float(math.Pi),
-	Str("E"), Float(math.E),
-	Str("randomseed"), Native("randomseed", func(env *Env) {
-		rg.Lock()
-		defer rg.Unlock()
-		rg.Rand.Seed(env.Get(0).IntDefault(1))
-	}, "randomseed(int)"),
-	Str("random"), Native("random", func(env *Env) {
-		rg.Lock()
-		defer rg.Unlock()
-		switch len(env.Stack()) {
-		case 2:
-			af, ai, aIsInt := env.Get(0).MustNum("").Num()
-			bf, bi, bIsInt := env.Get(1).MustNum("").Num()
-			if aIsInt && bIsInt {
-				env.A = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
-			} else {
-				env.A = Float(rg.Float64()*(bf-af) + af)
+	MathLib = MapAdd(MathLib,
+		Str("INF"), Float(math.Inf(1)),
+		Str("NEG_INF"), Float(math.Inf(-1)),
+		Str("PI"), Float(math.Pi),
+		Str("E"), Float(math.E),
+		Str("randomseed"), Native("randomseed", func(env *Env) {
+			rg.Lock()
+			defer rg.Unlock()
+			rg.Rand.Seed(env.Get(0).IntDefault(1))
+		}, "randomseed(int)"),
+		Str("random"), Native("random", func(env *Env) {
+			rg.Lock()
+			defer rg.Unlock()
+			switch len(env.Stack()) {
+			case 2:
+				af, ai, aIsInt := env.Get(0).MustNum("").Num()
+				bf, bi, bIsInt := env.Get(1).MustNum("").Num()
+				if aIsInt && bIsInt {
+					env.A = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
+				} else {
+					env.A = Float(rg.Float64()*(bf-af) + af)
+				}
+			case 1:
+				env.A = Int(int64(rg.Intn(int(env.Get(0).MustNum("").Int()))))
+			default:
+				env.A = Float(rg.Float64())
 			}
-		case 1:
-			env.A = Int(int64(rg.Intn(int(env.Get(0).MustNum("").Int()))))
-		default:
-			env.A = Float(rg.Float64())
-		}
-	},
-		"$f() => [0, 1)",
-		"$f(n) => [0, n)",
-		"$f(a, b) => [a, b]"),
-	Str("sqrt"), Native1("sqrt", func(env *Env, v Value) Value { return Float(math.Sqrt(v.MustNum("").Float())) }),
-	Str("floor"), Native1("floor", func(env *Env, v Value) Value { return Float(math.Floor(v.MustNum("").Float())) }),
-	Str("ceil"), Native1("ceil", func(env *Env, v Value) Value { return Float(math.Ceil(v.MustNum("").Float())) }),
-	Str("min"), Native("min", func(env *Env) { mathMinMax(env, "#%d arg", false) }, "max(a, b, ...) => largest_number"),
-	Str("max"), Native("max", func(env *Env) { mathMinMax(env, "#%d arg", true) }, "min(a, b, ...) => smallest_number"),
-	Str("pow"), Native2("pow", func(env *Env, a, b Value) Value {
-		af, ai, aIsInt := a.MustNum("base").Num()
-		bf, bi, bIsInt := b.MustNum("power").Num()
-		if aIsInt && bIsInt {
-			return Int(ipow(ai, bi))
-		}
-		return Float(math.Pow(af, bf))
-	}, "pow(a, b) => a to the power of b"),
-	Str("abs"), Native("abs", func(env *Env) {
-		switch f, i, isInt := env.Get(0).MustNum("").Num(); {
-		case isInt && i < 0:
-			env.A = Int(-i)
-		case isInt && i >= 0:
-			env.A = Int(i)
-		default:
-			env.A = Float(math.Abs(f))
-		}
-	}),
-	Str("remainder"), Native("remainder", func(env *Env) {
-		env.A = Float(math.Remainder(env.Get(0).MustNum("").Float(), env.Get(1).MustNum("").Float()))
-	}),
-	Str("mod"), Native("mod", func(env *Env) {
-		env.A = Float(math.Mod(env.Get(0).MustNum("").Float(), env.Get(1).MustNum("").Float()))
-	}),
-	Str("cos"), Native("cos", func(env *Env) {
-		env.A = Float(math.Cos(env.Get(0).MustNum("").Float()))
-	}),
-	Str("sin"), Native("sin", func(env *Env) {
-		env.A = Float(math.Sin(env.Get(0).MustNum("").Float()))
-	}),
-	Str("tan"), Native("tan", func(env *Env) {
-		env.A = Float(math.Tan(env.Get(0).MustNum("").Float()))
-	}),
-	Str("acos"), Native("acos", func(env *Env) {
-		env.A = Float(math.Acos(env.Get(0).MustNum("").Float()))
-	}),
-	Str("asin"), Native("asin", func(env *Env) {
-		env.A = Float(math.Asin(env.Get(0).MustNum("").Float()))
-	}),
-	Str("atan"), Native("atan", func(env *Env) {
-		env.A = Float(math.Atan(env.Get(0).MustNum("").Float()))
-	}),
-	Str("atan2"), Native("atan2", func(env *Env) {
-		env.A = Float(math.Atan2(env.Get(0).MustNum("").Float(), env.Get(1).MustNum("").Float()))
-	}),
-	Str("ldexp"), Native("ldexp", func(env *Env) {
-		env.A = Float(math.Ldexp(env.Get(0).MustNum("").Float(), int(env.Get(1).IntDefault(0))))
-	}),
-	Str("modf"), Native("modf", func(env *Env) {
-		a, b := math.Modf(env.Get(0).MustNum("").Float())
-		env.A = Array(Float(a), Float(b))
-	}),
-)
+		},
+			"$f() => [0, 1)",
+			"$f(n) => [0, n)",
+			"$f(a, b) => [a, b]"),
+		Str("sqrt"), Native1("sqrt", func(env *Env, v Value) Value { return Float(math.Sqrt(v.MustFloat(""))) }),
+		Str("floor"), Native1("floor", func(env *Env, v Value) Value { return Float(math.Floor(v.MustFloat(""))) }),
+		Str("ceil"), Native1("ceil", func(env *Env, v Value) Value { return Float(math.Ceil(v.MustFloat(""))) }),
+		Str("min"), Native("min", func(env *Env) { mathMinMax(env, "#%d arg", false) }, "max(a, b, ...) => largest_number"),
+		Str("max"), Native("max", func(env *Env) { mathMinMax(env, "#%d arg", true) }, "min(a, b, ...) => smallest_number"),
+		Str("pow"), Native2("pow", func(env *Env, a, b Value) Value {
+			af, ai, aIsInt := a.MustNum("base").Num()
+			bf, bi, bIsInt := b.MustNum("power").Num()
+			if aIsInt && bIsInt {
+				return Int(ipow(ai, bi))
+			}
+			return Float(math.Pow(af, bf))
+		}, "pow(a, b) => a to the power of b"),
+		Str("abs"), Native("abs", func(env *Env) {
+			switch f, i, isInt := env.Get(0).MustNum("").Num(); {
+			case isInt && i < 0:
+				env.A = Int(-i)
+			case isInt && i >= 0:
+				env.A = Int(i)
+			default:
+				env.A = Float(math.Abs(f))
+			}
+		}),
+		Str("remainder"), Native("remainder", func(env *Env) { env.A = Float(math.Remainder(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
+		Str("mod"), Native("mod", func(env *Env) { env.A = Float(math.Mod(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
+		Str("cos"), Native("cos", func(env *Env) { env.A = Float(math.Cos(env.Get(0).MustFloat(""))) }),
+		Str("sin"), Native("sin", func(env *Env) { env.A = Float(math.Sin(env.Get(0).MustFloat(""))) }),
+		Str("tan"), Native("tan", func(env *Env) { env.A = Float(math.Tan(env.Get(0).MustFloat(""))) }),
+		Str("acos"), Native("acos", func(env *Env) { env.A = Float(math.Acos(env.Get(0).MustFloat(""))) }),
+		Str("asin"), Native("asin", func(env *Env) { env.A = Float(math.Asin(env.Get(0).MustFloat(""))) }),
+		Str("atan"), Native("atan", func(env *Env) { env.A = Float(math.Atan(env.Get(0).MustFloat(""))) }),
+		Str("atan2"), Native("atan2", func(env *Env) { env.A = Float(math.Atan2(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
+		Str("ldexp"), Native("ldexp", func(env *Env) { env.A = Float(math.Ldexp(env.Get(0).MustFloat(""), int(env.Get(1).IntDefault(0)))) }),
+		Str("modf"), Native("modf", func(env *Env) {
+			a, b := math.Modf(env.Get(0).MustFloat(""))
+			env.A = Array(Float(a), Float(b))
+		}),
+	)
+	AddGlobalValue("math", MathLib)
+
+	OSLib = MapAdd(OSLib,
+		Str("shell"), Native1("shell", func(env *Env, cmd Value) Value {
+			v, err := exec.Command("sh", "-c", cmd.MustStr("")).Output()
+			if err != nil {
+				panic(err)
+			}
+			return Bytes(v)
+		}),
+		Str("readdir"), Native1("readdir", func(env *Env, path Value) Value {
+			p := path.MustStr("")
+			fi, err := ioutil.ReadDir(p)
+			if err != nil {
+				panic(err)
+			}
+			return ValRec(fi)
+		}),
+		Str("remove"), Native1("remove", func(env *Env, path Value) Value {
+			p := path.MustStr("")
+			fi, err := os.Stat(p)
+			if err != nil {
+				panic(err)
+			}
+			if fi.IsDir() {
+				err = os.RemoveAll(p)
+			} else {
+				err = os.Remove(p)
+			}
+			if err != nil {
+				panic(err)
+			}
+			return Nil
+		}),
+	)
+	AddGlobalValue("os", OSLib)
+}
 
 func mathMinMax(env *Env, msg string, max bool) {
 	if len(env.Stack()) <= 0 {

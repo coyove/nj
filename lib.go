@@ -1,9 +1,12 @@
 package script
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"io/ioutil"
 	"math"
 	"os"
 	"regexp"
@@ -120,14 +123,14 @@ func init() {
 			panic(wrap(err))
 		}
 		return v
-	}, "eval(string, globals) => evaluate the string")
+	}, "eval(string, globals) => result", "\tevaluate the string and return the reuslt")
 	AddGlobalValue("apply", func(env *Env, f Value) Value {
 		res, err := f.MustFunc("").Call(env.Stack()[1:]...)
 		if err != nil {
 			panic(err)
 		}
 		return res
-	}, "apply(function, array) => call function using arguments in array")
+	}, "apply(function, array) => result", "\tcall function using arguments array")
 
 	AddGlobalValue("go", Map(
 		Str("new"), Native1("new", func(env *Env, f Value) Value {
@@ -179,7 +182,7 @@ func init() {
 			env.A = Array(r...)
 		}, "$f() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
 		Str("set"), Native2("set", func(env *Env, idx, value Value) Value {
-			(*env.Global.Stack)[idx.MustNum("").Int()] = value
+			(*env.Global.Stack)[idx.MustInt("")] = value
 			return Nil
 		}, "$f(idx, value)"),
 		Str("trace"), Native1("trace", func(env *Env, skip Value) Value {
@@ -209,35 +212,6 @@ func init() {
 			return Array(lines...)
 		}, "$f(skip) => { func_name1, line1, cursor1, n2, l2, c2, ... }"),
 	))
-	AddGlobalValue("table", Map(
-		Str("makearray"), Native1("makearray", func(env *Env, n Value) Value {
-			a := Array(make([]Value, n.MustNum("").Int())...)
-			a.Table().count = 0
-			return a
-		}, "makearray(n) => { nil, ..., nil }", "\treturn a table array, preallocate space for n values"),
-		Str("arraylen"), Native1("arraylen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("").items))) }),
-		Str("maplen"), Native1("maplen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("").hashItems))) }),
-		Str("keys"), Native1("keys", func(env *Env, m Value) Value {
-			a := make([]Value, 0)
-			m.MustMap("").Foreach(func(k, v Value) bool {
-				a = append(a, k)
-				return true
-			})
-			return Array(a...)
-		}),
-		Str("append"), Native2("append", func(env *Env, m, v Value) Value {
-			a := m.MustMap("")
-			a.Set(Int(int64(len(a.items))), v)
-			return m
-		}, "append(array, value) => append value to array"),
-		Str("concat"), Native2("concat", func(env *Env, a, b Value) Value {
-			ma, mb := a.MustMap(""), b.MustMap("")
-			for _, b := range mb.ArrayPart() {
-				ma.Set(Int(int64(len(ma.items))), b)
-			}
-			return ma.Value()
-		}, "concat(array1, array2) => put elements from array2 to array1's end"),
-	))
 	AddGlobalValue("type", func(env *Env) { env.A = Str(env.Get(0).Type().String()) }, "type(value) => string", "\treturn value's type")
 	AddGlobalValue("pcall", func(env *Env, f Value) Value {
 		a, err := f.MustFunc("").Call(env.Stack()[1:]...)
@@ -248,7 +222,7 @@ func init() {
 			return Val(err.r)
 		}
 		return Val(err)
-	}, "pcall(function, arg1, arg2, ...) => result_of_function",
+	}, "pcall(function, arg1, arg2, ...) => result_or_error",
 		"\texecute the function, catch panic and return as error")
 	AddGlobalValue("panic", func(env *Env) { panic(env.Get(0)) }, "panic(value)")
 	AddGlobalValue("assert", func(env *Env) {
@@ -316,9 +290,10 @@ func init() {
 		}
 		return Array(results...)
 	},
-		"$f(prompt='', n=1) => { s1, s2, ..., sN }", "\tprint prompt and read N user inputs",
+		"$f() => { s1, s2, ... }", "\tread all user inputs",
+		"$f(prompt) => { s1, s2, ... }", "\tprint prompt and read all user inputs",
+		"$f(prompt, N) => { s1, s2, ..., sN }", "\tprint prompt and read N user inputs",
 	)
-	AddGlobalValue("math", MathLib)
 	AddGlobalValue("int", func(env *Env) {
 		switch v := env.Get(0); v.Type() {
 		case typ.Number:
@@ -377,11 +352,11 @@ func init() {
 		return Int(s[1] / 1e9)
 	}, "clock(nil|'nano'|'micro'|'milli') => int", "\t(nano|micro|milli)seconds since startup")
 	AddGlobalValue("exit", func(env *Env, code Value) Value {
-		os.Exit(int(code.MustNum("").Int()))
+		os.Exit(int(code.MustInt("")))
 		return Nil
 	}, "exit(code)")
-	AddGlobalValue("chr", func(env *Env) { env.A = Rune(rune(env.Get(0).MustNum("").Int())) }, "chr(unicode) => string")
-	AddGlobalValue("byte", func(env *Env, a Value) Value { return Byte(byte(a.MustNum("").Int())) }, "byte(int) => one byte string")
+	AddGlobalValue("chr", func(env *Env) { env.A = Rune(rune(env.Get(0).MustInt(""))) }, "chr(unicode) => string")
+	AddGlobalValue("byte", func(env *Env, a Value) Value { return Byte(byte(a.MustInt(""))) }, "byte(int) => one_byte_string")
 	AddGlobalValue("ord", func(env *Env) {
 		r, _ := utf8.DecodeRuneInString(env.Get(0).MustStr(""))
 		env.A = Int(int64(r))
@@ -425,7 +400,7 @@ func init() {
 	}, "re(string) => create a regular expression object")
 	AddGlobalValue("error", func(env *Env, msg Value) Value {
 		return Val(errors.New(msg.MustStr("")))
-	}, "error(text)", "\tcreate an error")
+	}, "error(text) => error", "\tcreate an error")
 	AddGlobalValue("iserror", func(env *Env) {
 		_, ok := env.Get(0).Interface().(error)
 		env.A = Bool(ok)
@@ -446,7 +421,7 @@ func init() {
 				return et
 			}
 			return Val(result)
-		}, "$f(json_string, selector, default?) => object"),
+		}, "$f(json_string, selector) => object", "$f(json_string, selector, default_value) => object_or_default_value"),
 	))
 
 	AddGlobalValue("sync", Map(
@@ -461,4 +436,95 @@ func init() {
 	AddGlobalValue("parent", func(env *Env, m Value) Value {
 		return m.MustMap("").Parent.Value()
 	}, "parent(table) => table", "\tfind given table's parent, or nil if not existed")
+	AddGlobalValue("unwrap", func(env *Env, m Value) Value {
+		return ValRec(m.Interface())
+	}, "unwrap(value) => value", "\tunwrap Go's array, slice or map into table")
+	AddGlobalValue("open", func(env *Env, path, flag, perm Value) Value {
+		var opt int
+		for _, f := range flag.StringDefault("") {
+			switch f {
+			case 'w':
+				opt |= os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+			case 'r':
+				opt |= os.O_RDONLY
+			case 'a':
+				opt |= os.O_APPEND | os.O_CREATE
+			case 'x':
+				opt |= os.O_EXCL
+			case '+':
+				opt |= os.O_RDWR | os.O_CREATE
+			}
+		}
+		f, err := os.OpenFile(path.MustStr("path"), opt, fs.FileMode(perm.IntDefault(0)))
+		if err != nil {
+			panic(err)
+		}
+		a := Map(
+			Str("_f"), Val(f),
+			Str("close"), Native1("close", func(e *Env, rx Value) Value {
+				return Val(rx.Table().GetString("_f").Interface().(*os.File).Close())
+			}, ""),
+			Str("read"), Native2("read", func(e *Env, rx, n Value) Value {
+				f := rx.Table().GetString("_f").Interface().(*os.File)
+				if c := n.IntDefault(0); c == 0 {
+					buf, err := ioutil.ReadAll(f)
+					if err != nil {
+						panic(err)
+					}
+					return Bytes(buf)
+				}
+				p := make([]byte, n.IntDefault(0))
+				rn, err := f.Read(p)
+				if rn > 0 {
+					return Bytes(p[:rn])
+				}
+				if err == io.EOF {
+					return Nil
+				}
+				panic(err)
+			}, ""),
+			Str("write"), Native2("write", func(e *Env, rx, buf Value) Value {
+				f := rx.Table().GetString("_f").Interface().(*os.File)
+				wn, err := f.WriteString(buf.MustStr(""))
+				if err != nil {
+					panic(err)
+				}
+				return Int(int64(wn))
+			}, ""),
+			Str("seek"), Native3("seek", func(e *Env, rx, off, where Value) Value {
+				f := rx.Table().GetString("_f").Interface().(*os.File)
+				wn, err := f.Seek(off.MustInt("offset"), int(where.MustInt("where")))
+				if err != nil {
+					panic(err)
+				}
+				return Int(int64(wn))
+			}, ""),
+			Str("readlines"), Native2("readlines", func(e *Env, rx, cb Value) Value {
+				f := rx.Table().GetString("_f").Interface().(*os.File)
+				if _, err := f.Seek(0, 0); err != nil {
+					panic(err)
+				}
+				for rd := bufio.NewReader(f); ; {
+					line, err := rd.ReadString('\n')
+					if len(line) > 0 {
+						if v, err := cb.MustFunc("callback").Call(Str(line)); err != nil {
+							panic(err)
+						} else if v != Nil {
+							return v
+						}
+					}
+					if err != nil {
+						if err != io.EOF {
+							panic(err)
+						}
+						break
+					}
+				}
+				return Nil
+			}, "readlines(f)", "\tfor every line read, f(line) will be called", "\tto exit the reading, return anything other than nil in callback"),
+		)
+		b := Map()
+		b.Table().Parent = a.Table()
+		return b
+	}, "open(path, flag, perm) => open file")
 }

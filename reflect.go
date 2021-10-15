@@ -2,6 +2,7 @@ package script
 
 import (
 	"reflect"
+	"strings"
 )
 
 func reflectLen(v interface{}) int {
@@ -37,11 +38,30 @@ func reflectLoad(v interface{}, key Value) Value {
 			rv = rv.Elem()
 		}
 		f = rv.FieldByName(k)
-		if !f.IsValid() {
-			return Value{}
+		if !f.IsValid() || !(k[0] >= 'A' && k[0] <= 'Z') {
+			return reflectLoadCaseless(v, k)
 		}
 	}
 	return Val(f.Interface())
+}
+
+func reflectLoadCaseless(v interface{}, k string) Value {
+	rv := reflect.ValueOf(v)
+	rt := reflect.TypeOf(v)
+	for i := 0; i < rt.NumMethod(); i++ {
+		if strings.EqualFold(rt.Method(i).Name, k) {
+			return Val(rv.Method(i).Interface())
+		}
+	}
+	if rv.Kind() == reflect.Ptr {
+		rv, rt = rv.Elem(), rt.Elem()
+	}
+	for i := 0; i < rt.NumField(); i++ {
+		if strings.EqualFold(rt.Field(i).Name, k) {
+			return Val(rv.Field(i).Interface())
+		}
+	}
+	return Nil
 }
 
 func reflectStore(v interface{}, key Value, v2 Value) {
