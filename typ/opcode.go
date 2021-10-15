@@ -43,7 +43,7 @@ const (
 	Bool      ValueType = 1
 	Number    ValueType = 3
 	String    ValueType = 7
-	Map       ValueType = 15
+	Table     ValueType = 15
 	Func      ValueType = 17
 	Interface ValueType = 19
 )
@@ -52,5 +52,5 @@ func (t ValueType) String() string {
 	if t > Interface {
 		return "?"
 	}
-	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "map", "?", "function", "?", "interface"}[t]
+	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "table", "?", "function", "?", "interface"}[t]
 }

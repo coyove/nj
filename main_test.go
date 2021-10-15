@@ -231,7 +231,7 @@ func BenchmarkGoMap50(b *testing.B) { benchmarkGoMap(b, 50) }
 
 func benchmarkRHMap(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
-	m := NewHashMap(n)
+	m := NewTable(n)
 	for i := 0; i < n; i++ {
 		m.Set(Int(int64(i)), Int(int64(i)))
 	}
@@ -280,7 +280,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		if v2.Map().Get(Int(int64(i))).Int() != int64(i) {
+		if v2.Table().Get(Int(int64(i))).Int() != int64(i) {
 			t.Fatal(v2)
 		}
 	}
@@ -347,7 +347,7 @@ local a = 100
 return {a + add(), a + add(), a + add()}
 `, &CompileOptions{GlobalKeyValues: map[string]interface{}{"add": add}})
 	v, err := p2.Run()
-	if v1 := v.Map().Array(); v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
+	if v1 := v.Table().Array(); v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())
 	}
 
@@ -397,7 +397,7 @@ func TestSmallString(t *testing.T) {
 
 func TestRHMap(t *testing.T) {
 	rand.Seed(time.Now().Unix())
-	m := HashMap{}
+	m := Table{}
 	m2 := map[int64]int64{}
 	counter := int64(0)
 	for i := 0; i < 1e6; i++ {
@@ -485,7 +485,7 @@ func TestACall(t *testing.T) {
 	end
 	a = new(m, {a=10})
     return a`, nil))
-	v, err := foo.Map().GetString("pow2").Func().Call()
+	v, err := foo.Table().GetString("pow2").Func().Call()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -496,13 +496,13 @@ func TestACall(t *testing.T) {
 	foo = MustRun(LoadString(`m.a = 11
     return m.pow2()`, &CompileOptions{
 		GlobalKeyValues: map[string]interface{}{
-			"m": MapWithParent(Map(
+			"m": TableProto(Map(
 				Str("a"), Int(0),
 				Str("pow2"), Native1("pow2", func(env *Env, self Value) Value {
-					i := self.Map().GetString("a").Int()
+					i := self.Table().GetString("a").Int()
 					return Int(i * i)
 				}),
-			).Map()),
+			).Table()),
 		},
 	}))
 	if foo.Int() != 121 {

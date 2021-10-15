@@ -113,8 +113,8 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(vaf + vbf)
 				}
 				env._set(opa, env.A)
-			} else if va.Type() == typ.Map {
-				k, v := va.Map().Next(vb)
+			} else if va.Type() == typ.Table {
+				k, v := va.Table().Next(vb)
 				env.A = Array(k, v)
 			} else {
 				panicf("inc " + errNeedNumbers)
@@ -256,7 +256,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				panicf("bitwise ursh " + errNeedNumbers)
 			}
 		case typ.OpBitNot:
-			env.A = Int(^env._get(opa).MustNum("bitwise not "+errNeedNumbers, 0).Int())
+			env.A = Int(^env._get(opa).mustBe(typ.Number, "bitwise not "+errNeedNumbers, 0).Int())
 		case typ.OpArray:
 			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
@@ -266,22 +266,23 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case typ.OpStore:
 			subject, v := env._get(opa), env._get(opb)
 			switch subject.Type() {
-			case typ.Map:
-				m := subject.Map()
+			case typ.Table:
+				m := subject.Table()
 				env.A = m.Set(env.A, v)
 			case typ.Interface:
 				reflectStore(subject.Interface(), env.A, v)
 				env.A = v
 			case typ.String:
-				subject.UnsafeBytes()[env.A.MustNum("alter mutable string by index", 0).Int()] = byte(v.MustNum("alter mutable string byte", 0).Int())
+				vb := byte(v.mustBe(typ.Number, "alter mutable string byte", 0).Int())
+				subject.UnsafeBytes()[env.A.mustBe(typ.Number, "alter mutable string by index", 0).Int()] = vb
 				env.A = v
 			default:
 				panicf("cannot store %v into (%v)[%v]", v.Type(), subject.Type(), env.A.Type())
 			}
 		case typ.OpLoad:
 			switch a := env._get(opa); a.Type() {
-			case typ.Map:
-				env.A = a.Map().Get(env._get(opb))
+			case typ.Table:
+				env.A = a.Table().Get(env._get(opb))
 			case typ.Interface:
 				env.A = reflectLoad(a.Interface(), env._get(opb))
 			case typ.String:
@@ -294,7 +295,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					}
 					break
 				} else if idx.Type() == typ.String {
-					if f := StringMethods.Map().GetString(idx.Str()); f != Nil {
+					if f := StringMethods.Table().GetString(idx.Str()); f != Nil {
 						if f.Type() == typ.Func {
 							f2 := *f.Func()
 							f2.MethodSrc = a
@@ -313,7 +314,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case typ.OpPush:
 			stackEnv.Push(env._get(opa))
 		case typ.OpPushVararg:
-			*stackEnv.stack = append(*stackEnv.stack, env._get(opa).MustMap("unpack arguments", 0).Array()...)
+			*stackEnv.stack = append(*stackEnv.stack, env._get(opa).mustBe(typ.Table, "unpack arguments", 0).Table().Array()...)
 		case typ.OpRet:
 			v := env._get(opa)
 			if len(retStack) == 0 {
@@ -331,7 +332,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case typ.OpLoadFunc:
 			env.A = env.Global.Functions[opa].Value()
 		case typ.OpCall, typ.OpTailCall:
-			cls := env._get(opa).MustFunc("invoke function", 0)
+			cls := env._get(opa).mustBe(typ.Func, "invoke function", 0).Func()
 			if opb != regPhantom {
 				stackEnv.Push(env._get(opb))
 			}

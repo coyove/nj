@@ -21,16 +21,16 @@ var HostWhitelist = map[string][]string{}
 func init() {
 	script.AddGlobalValue("url", script.Map(
 		script.Str("escape"), script.Native1("escape", func(env *script.Env, a script.Value) script.Value {
-			return script.Str(url.QueryEscape(a.MustStr("escape", 0)))
+			return script.Str(url.QueryEscape(a.MustStr("")))
 		}),
 		script.Str("unescape"), script.Native1("unescape", func(env *script.Env, a script.Value) script.Value {
-			v, err := url.QueryUnescape(a.MustStr("unescape", 0))
+			v, err := url.QueryUnescape(a.MustStr(""))
 			panicErr(err)
 			return script.Str(v)
 		}),
 	))
 	script.AddGlobalValue("http", script.Native("http", func(env *script.Env) {
-		args := env.Get(0).Map()
+		args := env.Get(0).Table()
 
 		ctx, cancel, _ := env.Deadline()
 		defer func() {
@@ -47,8 +47,8 @@ func init() {
 
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Get(script.Str(k))
-			if x.Type() == typ.Map {
-				p := x.Map()
+			if x.Type() == typ.Table {
+				p := x.Table()
 				for k, v := p.Next(script.Nil); k != script.Nil; k, v = p.Next(k) {
 					add(k.String(), v.String())
 				}

@@ -17,8 +17,8 @@ import (
 	"github.com/coyove/script/typ"
 )
 
-type HashMap struct {
-	Parent    *HashMap
+type Table struct {
+	Parent    *Table
 	hashCount uint32
 	count     uint32
 	hashItems []hashItem
@@ -32,29 +32,29 @@ type hashItem struct {
 	Distance int // How far item is from its best position.
 }
 
-func NewHashMap(size int) *HashMap {
-	return &HashMap{hashItems: make([]hashItem, int64(size))}
+func NewTable(size int) *Table {
+	return &Table{hashItems: make([]hashItem, int64(size))}
 }
 
-func (m *HashMap) Len() int { return int(m.count) + int(m.hashCount) }
+func (m *Table) Len() int { return int(m.count) + int(m.hashCount) }
 
-func (m *HashMap) MapLen() int { return int(m.hashCount) }
+func (m *Table) MapLen() int { return int(m.hashCount) }
 
-func (m *HashMap) ArrayLen() int { return int(m.count) }
+func (m *Table) ArrayLen() int { return int(m.count) }
 
 // Clear clears Map, where already allocated memory will be reused.
-func (m *HashMap) Clear() {
+func (m *Table) Clear() {
 	m.hashItems = m.hashItems[:0]
 	m.items = m.items[:0]
 	m.count, m.hashCount = 0, 0
 }
 
-func (m *HashMap) GetString(k string) (v Value) {
+func (m *Table) GetString(k string) (v Value) {
 	return m.Get(Str(k))
 }
 
 // Get retrieves the value for a given key.
-func (m *HashMap) Get(k Value) (v Value) {
+func (m *Table) Get(k Value) (v Value) {
 	if k == Nil {
 		return Nil
 	}
@@ -78,7 +78,7 @@ FINAL:
 	return v
 }
 
-func (m *HashMap) findHash(k Value) int {
+func (m *Table) findHash(k Value) int {
 	num := len(m.hashItems)
 	if num <= 0 {
 		return -1
@@ -107,7 +107,7 @@ func (m *HashMap) findHash(k Value) int {
 	}
 }
 
-func (m *HashMap) Contains(k Value) bool {
+func (m *Table) Contains(k Value) bool {
 	if k == Nil {
 		return false
 	}
@@ -119,7 +119,7 @@ func (m *HashMap) Contains(k Value) bool {
 	return m.findHash(k) >= 0
 }
 
-func (m *HashMap) ParentContains(k Value) *HashMap {
+func (m *Table) ParentContains(k Value) *Table {
 	if k == Nil {
 		return nil
 	}
@@ -135,12 +135,12 @@ func (m *HashMap) ParentContains(k Value) *HashMap {
 	return nil
 }
 
-func (m *HashMap) SetString(k string, v Value) (prev Value) {
+func (m *Table) SetString(k string, v Value) (prev Value) {
 	return m.Set(Str(k), v)
 }
 
 // Set inserts or updates a key/val pair into the Map. If val == Nil, then key will get deleted
-func (m *HashMap) Set(k, v Value) (prev Value) {
+func (m *Table) Set(k, v Value) (prev Value) {
 	if k == Nil {
 		panicf("table set with nil key")
 	}
@@ -185,7 +185,7 @@ func (m *HashMap) Set(k, v Value) (prev Value) {
 	return
 }
 
-func (m *HashMap) setHash(incoming hashItem) (prev Value, growed bool) {
+func (m *Table) setHash(incoming hashItem) (prev Value, growed bool) {
 	num := len(m.hashItems)
 	idx := int(incoming.Key.HashCode() % uint64(num))
 
@@ -229,7 +229,7 @@ func (m *HashMap) setHash(incoming hashItem) (prev Value, growed bool) {
 	}
 }
 
-func (m *HashMap) delHash(k Value) (prev Value) {
+func (m *Table) delHash(k Value) (prev Value) {
 	idx := m.findHash(k)
 	if idx < 0 {
 		return Nil
@@ -264,7 +264,7 @@ func (m *HashMap) delHash(k Value) (prev Value) {
 	return prev
 }
 
-func (m *HashMap) Foreach(f func(k, v Value) bool) {
+func (m *Table) Foreach(f func(k, v Value) bool) {
 	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
 		if !f(k, v) {
 			return
@@ -272,7 +272,7 @@ func (m *HashMap) Foreach(f func(k, v Value) bool) {
 	}
 }
 
-func (m *HashMap) Next(k Value) (Value, Value) {
+func (m *Table) Next(k Value) (Value, Value) {
 	nextHashPair := func(start int) (Value, Value) {
 		for i := start; i < len(m.hashItems); i++ {
 			if i := &m.hashItems[i]; i.Key != Nil {
@@ -305,23 +305,23 @@ func (m *HashMap) Next(k Value) (Value, Value) {
 	return nextHashPair(idx + 1)
 }
 
-func (m *HashMap) Array() []Value {
+func (m *Table) Array() []Value {
 	return m.items
 }
 
-func (m *HashMap) String() string {
+func (m *Table) String() string {
 	return m.Value().String()
 }
 
-func (m *HashMap) Value() Value {
+func (m *Table) Value() Value {
 	if m == nil {
 		return Nil
 	}
-	return Value{v: uint64(typ.Map), p: unsafe.Pointer(m)}
+	return Value{v: uint64(typ.Table), p: unsafe.Pointer(m)}
 }
 
-func (m *HashMap) resize(newSize int) {
-	tmp := HashMap{hashItems: make([]hashItem, newSize)}
+func (m *Table) resize(newSize int) {
+	tmp := Table{hashItems: make([]hashItem, newSize)}
 	for _, e := range m.hashItems {
 		if e.Key != Nil {
 			e.Distance = 0

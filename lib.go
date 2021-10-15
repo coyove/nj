@@ -70,20 +70,20 @@ func init() {
 	}, "globals() => { g1, g2, ... }", "\tlist all global values")
 	AddGlobalValue("doc", func(env *Env, f, doc Value) Value {
 		if doc == Nil {
-			return Str(f.MustFunc("", 0).DocString)
+			return Str(f.MustFunc("").DocString)
 		}
-		f.MustFunc("doc()", 0).DocString = doc.String()
+		f.MustFunc("").DocString = doc.String()
 		return doc
 	}, "doc(function) => string", "\treturn function's documentation",
 		"doc(function, docstring)", "\tupdate function's documentation")
 	AddGlobalValue("new", func(env *Env, v, a Value) Value {
-		m := *v.MustMap("", 0)
+		m := *v.MustMap("")
 		m.hashItems = append([]hashItem{}, m.hashItems...)
 		m.items = append([]Value{}, m.items...)
-		if a.Type() != typ.Map {
-			return (&HashMap{Parent: &m}).Value()
+		if a.Type() != typ.Table {
+			return (&Table{Parent: &m}).Value()
 		}
-		a.Map().Parent = &m
+		a.Table().Parent = &m
 		return a
 	})
 	AddGlobalValue("prototype", g["new"])
@@ -91,8 +91,8 @@ func init() {
 		switch v.Type() {
 		case typ.String:
 			return Int(int64(len(v.Str())))
-		case typ.Map:
-			return Int(int64(v.Map().Len()))
+		case typ.Table:
+			return Int(int64(v.Table().Len()))
 		case typ.Func:
 			return Int(int64(v.Func().NumParams))
 		case typ.Number, typ.Nil, typ.Bool:
@@ -101,19 +101,19 @@ func init() {
 			return Int(int64(reflectLen(v.Interface())))
 		}
 	})
-	AddGlobalValue("alen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("alen()", 0).items))) })
-	AddGlobalValue("hlen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("hlen()", 0).hashItems))) })
+	AddGlobalValue("alen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("").items))) })
+	AddGlobalValue("hlen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("").hashItems))) })
 	AddGlobalValue("eval", func(env *Env, s, g Value) Value {
 		var m map[string]interface{}
-		if g.Type() == typ.Map {
+		if g.Type() == typ.Table {
 			m = map[string]interface{}{}
-			g.Map().Foreach(func(k, v Value) bool {
+			g.Table().Foreach(func(k, v Value) bool {
 				m[k.String()] = v.Interface()
 				return true
 			})
 		}
 		wrap := func(err error) error { return fmt.Errorf("panic inside eval(): %v", err) }
-		f, err := LoadString(s.MustStr("", 0), &CompileOptions{GlobalKeyValues: m})
+		f, err := LoadString(s.MustStr(""), &CompileOptions{GlobalKeyValues: m})
 		if err != nil {
 			panic(wrap(err))
 		}
@@ -124,7 +124,7 @@ func init() {
 		return v
 	}, "eval(string, globals) => evaluate the string")
 	AddGlobalValue("apply", func(env *Env, f Value) Value {
-		res, err := f.MustFunc("", 0).Call(env.Stack()[1:]...)
+		res, err := f.MustFunc("").Call(env.Stack()[1:]...)
 		if err != nil {
 			panic(err)
 		}
@@ -135,11 +135,11 @@ func init() {
 		Str("new"), Native1("new", func(env *Env, f Value) Value {
 			wg := &sync.WaitGroup{}
 			b := Map(
-				Str("_f"), f.MustFunc("", 0).WrappedValue(),
+				Str("_f"), f.MustFunc("").WrappedValue(),
 				Str("_r"), Undef,
 				Str("_wg"), Val(wg),
 				Str("start"), Native1("start", func(env *Env, t Value) Value {
-					m := t.Map()
+					m := t.Table()
 					wg := m.GetString("_wg").Interface().(*sync.WaitGroup)
 					wg.Add(1)
 					args := append([]Value{}, env.Stack()[1:]...)
@@ -154,11 +154,11 @@ func init() {
 					return Nil
 				}),
 				Str("wait"), Native1("wait", func(env *Env, t Value) Value {
-					t.Map().GetString("_wg").Interface().(*sync.WaitGroup).Wait()
-					return t.Map().GetString("_r")
+					t.Table().GetString("_wg").Interface().(*sync.WaitGroup).Wait()
+					return t.Table().GetString("_r")
 				}),
 			)
-			return MapWithParent(b.Map())
+			return TableProto(b.Table())
 		}),
 	))
 
@@ -181,7 +181,7 @@ func init() {
 			env.A = Array(r...)
 		}, "$f() => { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
 		Str("set"), Native2("set", func(env *Env, idx, value Value) Value {
-			(*env.Global.Stack)[idx.MustNum("", 0).Int()] = value
+			(*env.Global.Stack)[idx.MustNum("").Int()] = value
 			return Nil
 		}, "$f(idx, value)"),
 		Str("trace"), Native1("trace", func(env *Env, skip Value) Value {
@@ -212,15 +212,15 @@ func init() {
 		}, "$f(skip) => { func_name1, line1, cursor1, n2, l2, c2, ... }"),
 	))
 	AddGlobalValue("narray", func(env *Env, n Value) Value {
-		a := Array(make([]Value, n.MustNum("", 0).Int())...)
-		a.Map().count = 0
+		a := Array(make([]Value, n.MustNum("").Int())...)
+		a.Table().count = 0
 		return a
 	}, "narray(n) => { nil, ..., nil }", "\treturn an array, preallocate space for n values")
 	AddGlobalValue("type", func(env *Env) {
 		env.A = Str(env.Get(0).Type().String())
 	}, "type(value) => string", "\treturn value's type")
 	AddGlobalValue("pcall", func(env *Env, f Value) Value {
-		a, err := f.MustFunc("pcall", 0).Call(env.Stack()[1:]...)
+		a, err := f.MustFunc("").Call(env.Stack()[1:]...)
 		if err == nil {
 			return a
 		}
@@ -356,27 +356,27 @@ func init() {
 		return Int(s[1] / 1e9)
 	}, "clock(nil|'nano'|'micro'|'milli') => int", "\t(nano|micro|milli)seconds since startup")
 	AddGlobalValue("exit", func(env *Env, code Value) Value {
-		os.Exit(int(code.MustNum("", 0).Int()))
+		os.Exit(int(code.MustNum("").Int()))
 		return Nil
 	}, "exit(code)")
-	AddGlobalValue("chr", func(env *Env) { env.A = Rune(rune(env.Get(0).MustNum("", 0).Int())) }, "chr(unicode) => string")
-	AddGlobalValue("byte", func(env *Env, a Value) Value { return Byte(byte(a.MustNum("", 0).Int())) }, "byte(int) => one byte string")
+	AddGlobalValue("chr", func(env *Env) { env.A = Rune(rune(env.Get(0).MustNum("").Int())) }, "chr(unicode) => string")
+	AddGlobalValue("byte", func(env *Env, a Value) Value { return Byte(byte(a.MustNum("").Int())) }, "byte(int) => one byte string")
 	AddGlobalValue("ord", func(env *Env) {
-		r, _ := utf8.DecodeRuneInString(env.Get(0).MustStr("ord()", 0))
+		r, _ := utf8.DecodeRuneInString(env.Get(0).MustStr(""))
 		env.A = Int(int64(r))
 	}, "$f(string) => unicode")
 	AddGlobalValue("re", func(env *Env, r Value) Value {
-		rx, err := regexp.Compile(r.MustStr("", 0))
+		rx, err := regexp.Compile(r.MustStr(""))
 		if err != nil {
 			panic(err)
 		}
 		a := Map(
 			Str("_rx"), Val(rx),
 			Str("match"), Native2("match", func(e *Env, rx, text Value) Value {
-				return Bool(rx.Map().GetString("_rx").Interface().(*regexp.Regexp).MatchString(text.MustStr("", 0)))
+				return Bool(rx.Table().GetString("_rx").Interface().(*regexp.Regexp).MatchString(text.MustStr("")))
 			}, ""),
 			Str("find"), Native2("find", func(e *Env, rx, text Value) Value {
-				m := rx.Map().GetString("_rx").Interface().(*regexp.Regexp).FindStringSubmatch(text.MustStr("", 0))
+				m := rx.Table().GetString("_rx").Interface().(*regexp.Regexp).FindStringSubmatch(text.MustStr(""))
 				mm := []Value{}
 				for _, m := range m {
 					mm = append(mm, Str(m))
@@ -384,7 +384,7 @@ func init() {
 				return Array(mm...)
 			}, ""),
 			Str("findall"), Native3("findall", func(e *Env, rx, text, n Value) Value {
-				m := rx.Map().GetString("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(text.MustStr("", 0), int(n.IntDefault(-1)))
+				m := rx.Table().GetString("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(text.MustStr(""), int(n.IntDefault(-1)))
 				mm := []Value{}
 				for _, m := range m {
 					for _, m := range m {
@@ -394,16 +394,16 @@ func init() {
 				return Array(mm...)
 			}, ""),
 			Str("replace"), Native3("replace", func(e *Env, rx, text, newtext Value) Value {
-				m := rx.Map().GetString("_rx").Interface().(*regexp.Regexp).ReplaceAllString(text.MustStr("", 0), newtext.MustStr("", 0))
+				m := rx.Table().GetString("_rx").Interface().(*regexp.Regexp).ReplaceAllString(text.MustStr(""), newtext.MustStr(""))
 				return Str(m)
 			}, ""),
 		)
 		b := Map()
-		b.Map().Parent = a.Map()
+		b.Table().Parent = a.Table()
 		return b
 	}, "re(string) => create a regular expression object")
 	AddGlobalValue("error", func(env *Env, msg Value) Value {
-		return Val(errors.New(msg.MustStr("", 0)))
+		return Val(errors.New(msg.MustStr("")))
 	}, "error(text)", "\tcreate an error")
 	AddGlobalValue("iserror", func(env *Env) {
 		_, ok := env.Get(0).Interface().(error)
@@ -415,12 +415,12 @@ func init() {
 			env.A = Str(env.Get(0).JSONString())
 		}, "$f(value) => json_string"),
 		Str("parse"), Native1("parse", func(env *Env, js Value) Value {
-			j := strings.TrimSpace(js.MustStr("", 0))
+			j := strings.TrimSpace(js.MustStr(""))
 			return Val(gjson.Parse(j))
 		}, "$f(json_string) => object"),
 		Str("get"), Native3("get", func(env *Env, js, path, et Value) Value {
-			j := strings.TrimSpace(js.MustStr("json string", 0))
-			result := gjson.Get(j, path.MustStr("selector", 0))
+			j := strings.TrimSpace(js.MustStr("json string"))
+			result := gjson.Get(j, path.MustStr("selector"))
 			if !result.Exists() {
 				return et
 			}
@@ -436,27 +436,27 @@ func init() {
 
 	// Array related functions
 	AddGlobalValue("append", func(env *Env, m, v Value) Value {
-		a := m.MustMap("", 0)
+		a := m.MustMap("")
 		a.Set(Int(int64(len(a.items))), v)
 		return m
 	}, "append(array, value) => append value to array")
 	AddGlobalValue("concat", func(env *Env, a, b Value) Value {
-		ma, mb := a.MustMap("", 0), b.MustMap("", 0)
+		ma, mb := a.MustMap(""), b.MustMap("")
 		for _, b := range mb.Array() {
 			ma.Set(Int(int64(len(ma.items))), b)
 		}
 		return ma.Value()
 	}, "concat(array1, array2) => put elements from array2 to array1's end")
 	AddGlobalValue("next", func(env *Env, m, k Value) Value {
-		nk, nv := m.MustMap("", 0).Next(k)
+		nk, nv := m.MustMap("").Next(k)
 		return Array(nk, nv)
 	}, "next(map, start_key) => {next_key, next_value}", "\tfind next key-value pair in the map")
 	AddGlobalValue("parent", func(env *Env, m Value) Value {
-		return m.MustMap("", 0).Parent.Value()
+		return m.MustMap("").Parent.Value()
 	}, "parent(map) => map", "\tfind given map's parent map, or nil if not existed")
 	AddGlobalValue("keys", func(env *Env, m Value) Value {
 		a := make([]Value, 0)
-		m.MustMap("", 0).Foreach(func(k, v Value) bool {
+		m.MustMap("").Foreach(func(k, v Value) bool {
 			a = append(a, k)
 			return true
 		})

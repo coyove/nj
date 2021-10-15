@@ -98,7 +98,7 @@ func Int(i int64) Value {
 
 // Array returns an array consists of 'm'
 func Array(m ...Value) Value {
-	x := &HashMap{items: m}
+	x := &Table{items: m}
 	for _, i := range x.items {
 		if i != Nil {
 			x.count++
@@ -107,28 +107,36 @@ func Array(m ...Value) Value {
 	return x.Value()
 }
 
+func ArrayVal(v ...interface{}) Value {
+	m := make([]Value, len(v))
+	for i := range v {
+		m[i] = Val(v[i])
+	}
+	return Array(m...)
+}
+
 // Map returns a map, kvs should be laid out as: key1, value1, key2, value2, ...
 func Map(kvs ...Value) Value {
-	t := NewHashMap(len(kvs) / 2)
+	t := NewTable(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		t.Set(kvs[i], kvs[i+1])
 	}
-	return Value{v: uint64(typ.Map), p: unsafe.Pointer(t)}
+	return Value{v: uint64(typ.Table), p: unsafe.Pointer(t)}
 }
 
 // MapVal returns a map, kvs should be laid out as: key1, value1, key2, value2, ...
 func MapVal(kvs ...interface{}) Value {
-	t := NewHashMap(len(kvs) / 2)
+	t := NewTable(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		t.Set(Val(kvs[i]), Val(kvs[i+1]))
 	}
-	return Value{v: uint64(typ.Map), p: unsafe.Pointer(t)}
+	return Value{v: uint64(typ.Table), p: unsafe.Pointer(t)}
 }
 
-// MapWithParent returns a map whose parent will be set to p
-func MapWithParent(p *HashMap, kvs ...Value) Value {
+// TableProto returns a table whose parent will be set to p
+func TableProto(p *Table, kvs ...Value) Value {
 	m := Map(kvs...)
-	m.Map().Parent = p
+	m.Table().Parent = p
 	return m
 }
 
@@ -183,7 +191,7 @@ func Val(i interface{}) Value {
 		return Str(v)
 	case []byte:
 		return Bytes(v)
-	case *HashMap:
+	case *Table:
 		return v.Value()
 	case []Value:
 		return Array(v...)
@@ -214,7 +222,7 @@ func Val(i interface{}) Value {
 		}
 		if v.IsObject() {
 			m := v.Map()
-			x := NewHashMap(len(m))
+			x := NewTable(len(m))
 			for k, v := range m {
 				x.Set(Str(k), Val(v))
 			}
@@ -272,7 +280,7 @@ func ValRec(v interface{}) Value {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		m := NewHashMap(rv.Len() + 1)
+		m := NewTable(rv.Len() + 1)
 		iter := rv.MapRange()
 		for iter.Next() {
 			m.Set(ValRec(iter.Key()), Val(iter.Value()))
@@ -329,7 +337,7 @@ func (v Value) Float() float64 { f, _, _ := v.Num(); return f }
 
 func (v Value) Bool() bool { return v.p == trueMarker }
 
-func (v Value) Map() *HashMap { return (*HashMap)(v.p) }
+func (v Value) Table() *Table { return (*Table)(v.p) }
 
 // Func cast value to function
 func (v Value) Func() *Func { return (*Func)(v.p) }
@@ -349,8 +357,8 @@ func (v Value) Interface() interface{} {
 		return vf
 	case typ.String:
 		return v.Str()
-	case typ.Map:
-		return v.Map()
+	case typ.Table:
+		return v.Table()
 	case typ.Func:
 		return v.Func()
 	case typ.Interface:
@@ -394,10 +402,10 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 			case 1:
 				results = []reflect.Value{out.ReflectValue(t.Out(0))}
 			default:
-				out.MustMap("expect multiple returned arguments", 0)
+				out.mustBe(typ.Table, "expect multiple returned arguments", 0)
 				results = make([]reflect.Value, t.NumOut())
 				for i := range results {
-					results[i] = out.Map().Get(Int(int64(i))).ReflectValue(t.Out(i))
+					results[i] = out.Table().Get(Int(int64(i))).ReflectValue(t.Out(i))
 				}
 			}
 			return
@@ -410,8 +418,8 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 			rv := reflect.ValueOf(v.Interface())
 			return rv.Convert(t)
 		}
-	case typ.Map:
-		a := v.Map()
+	case typ.Table:
+		a := v.Table()
 		switch t.Kind() {
 		case reflect.Slice:
 			s := reflect.MakeSlice(t, len(a.Array()), len(a.Array()))
@@ -438,15 +446,15 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	return reflect.ValueOf(v.Interface())
 }
 
-func (v Value) MustBool(msg string, a int) bool { return v.mustBe(typ.Bool, msg, a).Bool() }
+func (v Value) MustBool(msg string) bool { return v.mustBe(typ.Bool, msg, 0).Bool() }
 
-func (v Value) MustStr(msg string, a int) string { return v.mustBe(typ.String, msg, a).String() }
+func (v Value) MustStr(msg string) string { return v.mustBe(typ.String, msg, 0).String() }
 
-func (v Value) MustNum(msg string, a int) Value { return v.mustBe(typ.Number, msg, a) }
+func (v Value) MustNum(msg string) Value { return v.mustBe(typ.Number, msg, 0) }
 
-func (v Value) MustMap(msg string, a int) *HashMap { return v.mustBe(typ.Map, msg, a).Map() }
+func (v Value) MustMap(msg string) *Table { return v.mustBe(typ.Table, msg, 0).Table() }
 
-func (v Value) MustFunc(msg string, a int) *Func { return v.mustBe(typ.Func, msg, a).Func() }
+func (v Value) MustFunc(msg string) *Func { return v.mustBe(typ.Func, msg, 0).Func() }
 
 func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
 	if v.Type() != t {
@@ -512,8 +520,8 @@ func (v Value) toString(lv int, j bool) string {
 			return strconv.Quote(v.Str())
 		}
 		return v.Str()
-	case typ.Map:
-		m := v.Map()
+	case typ.Table:
+		m := v.Table()
 		if len(m.hashItems) == 0 {
 			p := bytes.NewBufferString("[")
 			for _, a := range m.Array() {

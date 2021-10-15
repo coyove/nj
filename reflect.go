@@ -24,13 +24,13 @@ func reflectLoad(v interface{}, key Value) Value {
 			return Val(v.Interface())
 		}
 	case reflect.Slice, reflect.Array:
-		idx := key.MustNum("index key", 0).Int() - 1
+		idx := key.MustNum("index key").Int() - 1
 		if idx < int64(rv.Len()) && idx >= 0 {
 			return Val(rv.Index(int(idx)).Interface())
 		}
 	}
 
-	k := key.MustStr("index key", 0)
+	k := key.MustStr("index key")
 	f := rv.MethodByName(k)
 	if !f.IsValid() {
 		if rv.Kind() == reflect.Ptr {
@@ -56,7 +56,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		}
 		return
 	case reflect.Slice, reflect.Array:
-		idx := key.MustNum("index key", 0).Int()
+		idx := key.MustNum("index key").Int()
 		if idx >= int64(rv.Len()) || idx < 0 {
 			return
 		}
@@ -68,7 +68,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		rv = rv.Elem()
 	}
 
-	k := (key.MustStr("index key", 0))
+	k := key.MustStr("index key")
 	f := rv.FieldByName(k)
 	if !f.IsValid() || !f.CanAddr() {
 		panicf("reflect: %q not assignable in %#v", k, v)
