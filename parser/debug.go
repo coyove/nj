@@ -19,21 +19,43 @@ func IsDebug() bool {
 	return os.Getenv("crab_stack") != ""
 }
 
+func processSpecialError(err *error, r interface{}) bool {
+	if x, ok := r.(interface{ IsValue(Node) }); ok {
+		*err = CatchedError{x}
+		return true
+	}
+	if x, ok := r.(interface{ GetRootPanic() interface{} }); ok {
+		*err = CatchedError{x.GetRootPanic()}
+		return true
+	}
+	return false
+}
+
+func processPanic(err *error, r interface{}) {
+	if IsDebug() {
+		log.Println(string(debug.Stack()))
+	}
+
+	*err, _ = r.(error)
+	if *err == nil {
+		*err = fmt.Errorf("%v", r)
+	}
+}
+
 func CatchError(err *error) {
 	if r := recover(); r != nil {
-		if IsDebug() {
-			log.Println(string(debug.Stack()))
-		}
-
-		x, ok := r.(interface{ IsValue(Node) })
-		if ok {
-			*err = CatchedError{x}
+		if processSpecialError(err, r) {
 			return
 		}
+		processPanic(err, r)
+	}
+}
 
-		*err, _ = r.(error)
-		if *err == nil {
-			*err = fmt.Errorf("%v", r)
+func CatchErrorFuncCall(err *error, f string) {
+	if r := recover(); r != nil {
+		if processSpecialError(err, r) {
+			return
 		}
+		processPanic(err, fmt.Errorf("%s() %v", f, r))
 	}
 }

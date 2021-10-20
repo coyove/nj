@@ -2,6 +2,7 @@ package script
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -240,6 +241,15 @@ func init() {
 		"assert(value1, value2)", "\tpanic when two values are not equal",
 		"assert(value1, value2, msg)", "\tpanic message when two values are not equal",
 	)
+	AddGlobalValue("int", func(env *Env) {
+		switch v := env.Get(0); v.Type() {
+		case typ.Number:
+			env.A = Int(v.Int())
+		default:
+			v, _ := strconv.ParseInt(v.String(), 0, 64)
+			env.A = Int(v)
+		}
+	}, "int(value) => integer", "\tconvert value to integer number (int64)")
 	AddGlobalValue("float", func(env *Env) {
 		v := env.Get(0)
 		switch v.Type() {
@@ -294,30 +304,8 @@ func init() {
 		"$f(prompt) => { s1, s2, ... }", "\tprint prompt and read all user inputs",
 		"$f(prompt, N) => { s1, s2, ..., sN }", "\tprint prompt and read N user inputs",
 	)
-	AddGlobalValue("int", func(env *Env) {
-		switch v := env.Get(0); v.Type() {
-		case typ.Number:
-			env.A = Int(v.Int())
-		default:
-			v, _ := strconv.ParseInt(v.String(), 0, 64)
-			env.A = Int(v)
-		}
-	}, "int(value) => integer", "\tconvert value to integer number (int64)")
-	AddGlobalValue("time", func(env *Env, prefix Value) Value {
-		switch prefix.StringDefault("") {
-		case "nano":
-			return Int(time.Now().UnixNano())
-		case "micro":
-			return Int(time.Now().UnixNano() / 1e3)
-		case "milli":
-			return Int(time.Now().UnixNano() / 1e6)
-		}
-		return Int(time.Now().Unix())
-	}, "time(nil|'nano'|'micro'|'milli') => int", "\tunix timestamp in (nano|micro|milli)seconds")
-	AddGlobalValue("sleep", func(env *Env, milli Value) Value {
-		time.Sleep(time.Duration(milli.IntDefault(0)) * time.Millisecond)
-		return Nil
-	}, "sleep(milliseconds)")
+	AddGlobalValue("time", func(env *Env) { env.A = Float(float64(time.Now().UnixNano()) / 1e9) }, "time() => seconds", "\tunix timestamp in seconds")
+	AddGlobalValue("sleep", func(env *Env) { time.Sleep(time.Duration(env.Get(0).MustInt("")) * time.Millisecond) }, "sleep(milliseconds)")
 	AddGlobalValue("Go_time", func(env *Env) {
 		if env.Size() > 0 {
 			loc := time.UTC
@@ -341,20 +329,9 @@ func init() {
 	AddGlobalValue("clock", func(env *Env, prefix Value) Value {
 		x := time.Now()
 		s := *(*[2]int64)(unsafe.Pointer(&x))
-		switch prefix.StringDefault("") {
-		case "nano":
-			return Int(s[1])
-		case "micro":
-			return Int(s[1] / 1e3)
-		case "milli":
-			return Int(s[1] / 1e6)
-		}
-		return Int(s[1] / 1e9)
-	}, "clock(nil|'nano'|'micro'|'milli') => int", "\t(nano|micro|milli)seconds since startup")
-	AddGlobalValue("exit", func(env *Env, code Value) Value {
-		os.Exit(int(code.MustInt("")))
-		return Nil
-	}, "exit(code)")
+		return Float(float64(s[1]) / 1e9)
+	}, "clock() => seconds", "\tseconds since startup (monotonic clock)")
+	AddGlobalValue("exit", func(env *Env) { os.Exit(int(env.Get(0).MustInt(""))) }, "exit(code)")
 	AddGlobalValue("chr", func(env *Env) { env.A = Rune(rune(env.Get(0).MustInt(""))) }, "chr(unicode) => string")
 	AddGlobalValue("byte", func(env *Env, a Value) Value { return Byte(byte(a.MustInt(""))) }, "byte(int) => one_byte_string")
 	AddGlobalValue("ord", func(env *Env) {
@@ -504,6 +481,17 @@ func init() {
 				if _, err := f.Seek(0, 0); err != nil {
 					panic(err)
 				}
+				if cb == Nil {
+					buf, err := ioutil.ReadAll(f)
+					if err != nil {
+						panic(err)
+					}
+					res := []Value{}
+					for _, line := range bytes.Split(buf, []byte("\n")) {
+						res = append(res, Bytes(line))
+					}
+					return Array(res...)
+				}
 				for rd := bufio.NewReader(f); ; {
 					line, err := rd.ReadString('\n')
 					if len(line) > 0 {
@@ -521,7 +509,10 @@ func init() {
 					}
 				}
 				return Nil
-			}, "readlines(f)", "\tfor every line read, f(line) will be called", "\tto exit the reading, return anything other than nil in callback"),
+			},
+				"readlines()", "\tread the whole file and return lines as a table array",
+				"readlines(f)", "\tfor every line read, f(line) will be called", "\tto exit the reading, return anything other than nil in callback",
+			),
 		)
 		b := Map()
 		b.Table().Parent = a.Table()

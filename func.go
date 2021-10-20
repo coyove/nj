@@ -48,6 +48,9 @@ type WrappedFunc struct {
 
 // Native creates a golang-Native function
 func Native(name string, f func(env *Env), doc ...string) Value {
+	if name == "" {
+		name = "<native>"
+	}
 	return (&Func{
 		Name:      name,
 		Native:    f,
@@ -131,7 +134,7 @@ func (c *Func) CallSimple(args ...interface{}) (v1 interface{}, err error) {
 }
 
 func (c *Func) Call(args ...Value) (v1 Value, err error) {
-	defer parser.CatchError(&err)
+	defer parser.CatchErrorFuncCall(&err, c.Name)
 
 	newEnv := Env{
 		Global: c.LoadGlobal,

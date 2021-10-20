@@ -22,6 +22,8 @@ type ExecError struct {
 	stacks []stacktrace
 }
 
+func (e *ExecError) GetRootPanic() interface{} { return e.r }
+
 func (e *ExecError) Error() string {
 	msg := bytes.Buffer{}
 	msg.WriteString("stacktrace:\n")
