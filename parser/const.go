@@ -105,6 +105,11 @@ func __markupFuncName(recv, name Token) Token {
 	return name
 }
 
+func __markupLambdaName(lambda Token) Token {
+	lambda.Str = "<lambda-" + strconv.Itoa(int(lambda.Pos.Line)) + ">"
+	return lambda
+}
+
 func __call(cls, args Node) Node {
 	return NewComplex(NewSymbol(ACall), cls, args)
 }

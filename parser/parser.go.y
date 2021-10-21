@@ -20,6 +20,7 @@ package parser
 %type<expr> jmp_stat
 %type<expr> flow_stat
 %type<expr> func_stat
+%type<expr> func_expr
 %type<expr> comma
 %type<token> lparen
 
@@ -29,7 +30,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot TLParen
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TLambda TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot TLParen
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
@@ -202,7 +203,7 @@ func_stat:
         TFunc TIdent lparen ')' stats TEnd                               { $$ = __func($2, emptyNode, "", $5) } | 
         TFunc TIdent lparen ident_list ')' stats TEnd                    { $$ = __func($2, $4, "", $6) } | 
         TFunc TIdent lparen ident_list TDotDotDot ')' stats TEnd         { $$ = __func($2, __dotdotdot($4), "", $7) } | 
-        TFunc TIdent lparen TIdent lparen ')' stats TEnd                    {
+        TFunc TIdent '.' TIdent lparen ')' stats TEnd                    {
             $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($2, $4), emptyNode, "", $7)) 
         } | 
         TFunc TIdent '.' TIdent lparen ident_list ')' stats TEnd         {
@@ -211,6 +212,11 @@ func_stat:
         TFunc TIdent '.' TIdent lparen ident_list TDotDotDot ')' stats TEnd         {
             $$ = __store(NewSymbolFromToken($2), NewString($4.Str), __func(__markupFuncName($2, $4), __dotdotdot($6), "", $9)) 
         }
+
+func_expr:
+        TLambda lparen ')' stats TEnd                               { $$ = __func(__markupLambdaName($1), emptyNode, "", $4) } | 
+        TLambda lparen ident_list ')' stats TEnd                    { $$ = __func(__markupLambdaName($1), $3, "", $5) } | 
+        TLambda lparen ident_list TDotDotDot ')' stats TEnd         { $$ = __func(__markupLambdaName($1), __dotdotdot($3), "", $6) }
 
 jmp_stat:
         TBreak {
@@ -295,7 +301,10 @@ expr:
         '~' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ABitNot), $2).SetPos($1.Pos) } |
         TNot expr %prec UNARY             { $$ = NewComplex(NewSymbol(ANot), $2).SetPos($1.Pos) } |
         '-' expr %prec UNARY              { $$ = NewComplex(NewSymbol(ASub), zeroNode, $2).SetPos($1.Pos) } |
-        '+' expr %prec UNARY              { $$ = NewComplex(NewSymbol(AAdd), zeroNode, $2).SetPos($1.Pos) }
+        '+' expr %prec UNARY              { $$ = NewComplex(NewSymbol(AAdd), zeroNode, $2).SetPos($1.Pos) } |
+        func_expr                         {
+            $$ = $1 
+        }
 
 prefix_expr:
         '(' expr ')'                      { $$ = $2 } |

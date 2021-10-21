@@ -334,7 +334,16 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case typ.OpLoadFunc:
 			env.A = env.Global.Functions[opa].Value()
 		case typ.OpCall, typ.OpTailCall:
-			cls := env._get(opa).mustBe(typ.Func, "invoke function", 0).Func()
+			a := env._get(opa)
+			at := a.Type()
+			if at == typ.Table {
+				a = a.Table().GetString("__call")
+				at = a.Type()
+			}
+			if at != typ.Func {
+				panicf("calling function, got %v", at)
+			}
+			cls := a.Func()
 			if opb != regPhantom {
 				stackEnv.Push(env._get(opb))
 			}

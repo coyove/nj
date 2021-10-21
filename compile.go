@@ -246,10 +246,10 @@ var flatOpMapping = map[string]byte{
 
 func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
 	var tmp []uint16
-	getAddr := func(n parser.Node) uint16 {
+	getAddr := func(n parser.Node, intoNewAddr bool) uint16 {
 		switch n.Type {
 		case parser.Complex:
-			addr := table.compileNodeInto(n, true, 0)
+			addr := table.compileNodeInto(n, intoNewAddr, regA)
 			tmp = append(tmp, addr)
 			return addr
 		default:
@@ -266,14 +266,14 @@ func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
 		return
 	}
 
-	n0a := getAddr(n0)
+	n0a := getAddr(n0, n1.Valid())
 	if !n1.Valid() {
 		table.code.writeInst(op, n0a, 0)
 		table.freeAddr(tmp)
 		return
 	}
 
-	n1a := getAddr(n1)
+	n1a := getAddr(n1, true)
 	if op == typ.OpSet && n0a == n1a {
 		// No need to set, mostly n0a and n1a are both $a
 	} else {

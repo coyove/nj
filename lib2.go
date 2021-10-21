@@ -52,6 +52,9 @@ func init() {
 	AddGlobalValue("table", TableLib)
 
 	StringMethods = MapAdd(StringMethods,
+		Str("__call"), Native1("str", func(env *Env, src Value) Value {
+			return Str(fmt.Sprint(src.Interface()))
+		}, ""),
 		Str("from"), Native1("from", func(env *Env, src Value) Value {
 			return Str(fmt.Sprint(src.Interface()))
 		}, ""),

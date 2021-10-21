@@ -138,3 +138,18 @@ b1 = new(Benz, {index=1})
 b2 = new(Benz, {index=2})
 b3 = new(Honda, {index=3})
 println(b0.get_brand(), b1.get_brand(), b2.get_brand(), b3.get_brand())
+
+
+-- closure
+function foo(a)
+    return closure(a, lambda(a, b)
+        m = {a=a, b=b}
+        return closure(m, lambda(m, c)
+            m.a = m.a + 1
+            return m.a + m.b + c
+        end)
+    end)
+end
+bar = foo(2)(3)
+assert(bar(4), 10)
+assert(bar(5), 12)

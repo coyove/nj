@@ -132,6 +132,24 @@ func init() {
 		}
 		return res
 	}, "apply(function, array) => result", "\tcall function using arguments array")
+	AddGlobalValue("closure", func(env *Env, m, f Value) Value {
+		lambda := f.MustFunc("")
+		return TableProto(Map(
+			Str("__source"), m,
+			Str("__lambda"), lambda.Value(),
+			Str("__call"), Native("<closure-"+lambda.Name+">", func(env *Env) {
+				recv := env.Get(0).MustMap("")
+				f := recv.GetString("__lambda").MustFunc("")
+				f.MethodSrc = Nil
+				stk := append([]Value{recv.GetString("__source")}, env.Stack()[1:]...)
+				res, err := f.Call(stk...)
+				if err != nil {
+					panic(err)
+				}
+				env.A = res
+			}),
+		).Table())
+	}, "closure(value, lambda) => lambda_with_closure", "\tbind 'value' to lambda, when lambda is called, 'value' will be passed in as the first argument")
 
 	AddGlobalValue("go", Map(
 		Str("new"), Native1("new", func(env *Env, f Value) Value {

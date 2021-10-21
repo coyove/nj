@@ -57,10 +57,8 @@ func (table *symtable) compileSetMove(atoms []parser.Node) uint16 {
 	}
 
 	fromYX := table.compileNode(atoms[2])
-	if newYX != fromYX {
-		table.code.writeInst(typ.OpSet, newYX, fromYX)
-		table.code.writePos(atoms[0].Pos())
-	}
+	table.code.writeInst(typ.OpSet, newYX, fromYX)
+	table.code.writePos(atoms[0].Pos())
 	return newYX
 }
 
@@ -291,8 +289,14 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 	cls.Code = code
 	cls.Locals = newtable.symbolsToDebugLocals()
 
-	table.funcs = append(table.funcs, cls)
-	table.code.writeInst(typ.OpLoadFunc, uint16(len(table.funcs))-1, 0)
+	if table.global != nil {
+		x := table.global
+		x.funcs = append(x.funcs, cls)
+		table.code.writeInst(typ.OpLoadFunc, uint16(len(x.funcs))-1, 0)
+	} else {
+		table.funcs = append(table.funcs, cls)
+		table.code.writeInst(typ.OpLoadFunc, uint16(len(table.funcs))-1, 0)
+	}
 	table.code.writePos(atoms[0].Pos())
 	return regA
 }

@@ -59,6 +59,9 @@ type packet struct {
 }
 
 func (b *packet) writeInst(op byte, opa, opb uint16) {
+	if opa == opb && op == typ.OpSet {
+		return
+	}
 	b.Code = append(b.Code, inst(op, opa, opb))
 }
 

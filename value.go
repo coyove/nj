@@ -27,7 +27,7 @@ var (
 	smallStringMarker = unsafe.Pointer(new([9]int64))
 
 	Nil     = Value{}
-	Undef   = Val(new(int))
+	Undef   = _interface(new(int))
 	Zero    = Int(0)
 	NullStr = Str("")
 	False   = Bool(false)

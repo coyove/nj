@@ -200,6 +200,7 @@ var reservedWords = map[string]uint32{
 	"break":    TBreak,
 	"else":     TElse,
 	"function": TFunc,
+	"lambda":   TLambda,
 	"if":       TIf,
 	"elseif":   TElseIf,
 	"then":     TThen,
