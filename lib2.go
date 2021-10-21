@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/coyove/script/typ"
@@ -26,23 +27,23 @@ func init() {
 			a.Table().count = 0
 			return a
 		}, "makearray(n) => { nil, ..., nil }", "\treturn a table array, preallocate space for n values"),
-		Str("arraylen"), Native1("arraylen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("").items))) }),
-		Str("maplen"), Native1("maplen", func(env *Env, v Value) Value { return Int(int64(len(v.MustMap("").hashItems))) }),
+		Str("arraylen"), Native1("arraylen", func(env *Env, v Value) Value { return Int(int64(len(v.MustTable("").items))) }),
+		Str("maplen"), Native1("maplen", func(env *Env, v Value) Value { return Int(int64(len(v.MustTable("").hashItems))) }),
 		Str("keys"), Native1("keys", func(env *Env, m Value) Value {
 			a := make([]Value, 0)
-			m.MustMap("").Foreach(func(k, v Value) bool {
+			m.MustTable("").Foreach(func(k, v Value) bool {
 				a = append(a, k)
 				return true
 			})
 			return Array(a...)
 		}),
 		Str("append"), Native2("append", func(env *Env, m, v Value) Value {
-			a := m.MustMap("")
+			a := m.MustTable("")
 			a.Set(Int(int64(len(a.items))), v)
 			return m
 		}, "append(array, value)", "\tappend value to table array"),
 		Str("concat"), Native2("concat", func(env *Env, a, b Value) Value {
-			ma, mb := a.MustMap(""), b.MustMap("")
+			ma, mb := a.MustTable(""), b.MustTable("")
 			for _, b := range mb.ArrayPart() {
 				ma.Set(Int(int64(len(ma.items))), b)
 			}
@@ -272,14 +273,14 @@ func init() {
 			p := Map(
 				Str("_buf"), Val(b),
 				Str("value"), Native1("value", func(env *Env, a Value) Value {
-					return Bytes(a.MustMap("").GetString("_buf").Interface().(*bytes.Buffer).Bytes())
+					return Bytes(a.MustTable("").GetString("_buf").Interface().(*bytes.Buffer).Bytes())
 				}),
 				Str("write"), Native2("write", func(env *Env, a, b Value) Value {
-					a.MustMap("").GetString("_buf").Interface().(*bytes.Buffer).WriteString(b.String())
+					a.MustTable("").GetString("_buf").Interface().(*bytes.Buffer).WriteString(b.String())
 					return Nil
 				}),
 				Str("read"), Native2("read", func(env *Env, a, n Value) Value {
-					rd := a.MustMap("").GetString("_buf").Interface().(*bytes.Buffer)
+					rd := a.MustTable("").GetString("_buf").Interface().(*bytes.Buffer)
 					if n := n.IntDefault(0); n > 0 {
 						a := make([]byte, n)
 						n, err := rd.Read(a)
@@ -377,12 +378,41 @@ func init() {
 	AddGlobalValue("math", MathLib)
 
 	OSLib = MapAdd(OSLib,
-		Str("shell"), Native1("shell", func(env *Env, cmd Value) Value {
-			v, err := exec.Command("sh", "-c", cmd.MustStr("")).Output()
-			if err != nil {
-				panic(err)
+		Str("args"), ValRec(os.Args),
+		Str("environ"), Native("environ", func(env *Env) { env.A = ValRec(os.Environ()) }),
+		Str("shell"), Native2("shell", func(env *Env, cmd, opt Value) Value {
+			timeout := time.Duration(1 << 62) // basically forever
+			if tmp := opt.MaybeTableGetString("timeout"); tmp != Nil {
+				timeout = time.Duration(tmp.MustFloat("timeout") * float64(time.Second))
 			}
-			return Bytes(v)
+
+			out := make(chan interface{})
+			p := exec.Command("sh", "-c", cmd.MustStr(""))
+
+			if tmp := opt.MaybeTableGetString("env"); tmp != Nil {
+				tmp.MustTable("env").Foreach(func(k, v Value) bool {
+					p.Env = append(p.Env, k.String()+"="+v.String())
+					return true
+				})
+			}
+			go func() {
+				v, err := p.Output()
+				if err != nil {
+					out <- err
+				} else {
+					out <- v
+				}
+			}()
+			select {
+			case r := <-out:
+				if buf, ok := r.([]byte); ok {
+					return Bytes(buf)
+				}
+				panic(r)
+			case <-time.After(timeout):
+				p.Process.Kill()
+				panic("timeout")
+			}
 		}),
 		Str("readdir"), Native1("readdir", func(env *Env, path Value) Value {
 			p := path.MustStr("")

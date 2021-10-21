@@ -469,7 +469,7 @@ func (v Value) MustInt(msg string) int64 { return v.mustBe(typ.Number, msg, 0).I
 
 func (v Value) MustFloat(msg string) float64 { return v.mustBe(typ.Number, msg, 0).Float() }
 
-func (v Value) MustMap(msg string) *Table { return v.mustBe(typ.Table, msg, 0).Table() }
+func (v Value) MustTable(msg string) *Table { return v.mustBe(typ.Table, msg, 0).Table() }
 
 func (v Value) MustFunc(msg string) *Func {
 	if vt := v.Type(); vt == typ.Table {
@@ -597,4 +597,11 @@ func (v Value) IntDefault(d int64) int64 {
 		return v.Int()
 	}
 	return d
+}
+
+func (v Value) MaybeTableGetString(key string) Value {
+	if v.Type() != typ.Table {
+		return Nil
+	}
+	return v.Table().GetString(key)
 }

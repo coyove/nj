@@ -81,7 +81,7 @@ func init() {
 	}, "doc(function) => string", "\treturn function's documentation",
 		"doc(function, docstring)", "\tupdate function's documentation")
 	AddGlobalValue("new", func(env *Env, v, a Value) Value {
-		m := *v.MustMap("")
+		m := *v.MustTable("")
 		m.hashItems = append([]hashItem{}, m.hashItems...)
 		m.items = append([]Value{}, m.items...)
 		if a.Type() != typ.Table {
@@ -138,7 +138,7 @@ func init() {
 			Str("__source"), m,
 			Str("__lambda"), lambda.Value(),
 			Str("__call"), Native("<closure-"+lambda.Name+">", func(env *Env) {
-				recv := env.Get(0).MustMap("")
+				recv := env.Get(0).MustTable("")
 				f := recv.GetString("__lambda").MustFunc("")
 				f.MethodSrc = Nil
 				stk := append([]Value{recv.GetString("__source")}, env.Stack()[1:]...)
@@ -325,7 +325,7 @@ func init() {
 		"$f(prompt, N) => { s1, s2, ..., sN }", "\tprint prompt and read N user inputs",
 	)
 	AddGlobalValue("time", func(env *Env) { env.A = Float(float64(time.Now().UnixNano()) / 1e9) }, "time() => seconds", "\tunix timestamp in seconds")
-	AddGlobalValue("sleep", func(env *Env) { time.Sleep(time.Duration(env.Get(0).MustInt("")) * time.Millisecond) }, "sleep(milliseconds)")
+	AddGlobalValue("sleep", func(env *Env) { time.Sleep(time.Duration(env.Get(0).MustFloat("") * float64(time.Second))) }, "sleep(seconds)")
 	AddGlobalValue("Go_time", func(env *Env) {
 		if env.Size() > 0 {
 			loc := time.UTC
@@ -427,11 +427,11 @@ func init() {
 		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() => wait group"),
 	))
 	AddGlobalValue("next", func(env *Env, m, k Value) Value {
-		nk, nv := m.MustMap("").Next(k)
+		nk, nv := m.MustTable("").Next(k)
 		return Array(nk, nv)
 	}, "next(table, start_key) => { next_key, next_value }", "\tfind next key-value pair in the table")
 	AddGlobalValue("parent", func(env *Env, m Value) Value {
-		return m.MustMap("").Parent.Value()
+		return m.MustTable("").Parent.Value()
 	}, "parent(table) => table", "\tfind given table's parent, or nil if not existed")
 	AddGlobalValue("unwrap", func(env *Env, m Value) Value {
 		return ValRec(m.Interface())
