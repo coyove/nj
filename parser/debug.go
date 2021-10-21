@@ -25,7 +25,7 @@ func processSpecialError(err *error, r interface{}) bool {
 		return true
 	}
 	if x, ok := r.(interface{ GetRootPanic() interface{} }); ok {
-		*err = CatchedError{x.GetRootPanic()}
+		*err = x.(error)
 		return true
 	}
 	return false

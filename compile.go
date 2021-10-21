@@ -274,11 +274,7 @@ func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
 	}
 
 	n1a := getAddr(n1, true)
-	if op == typ.OpSet && n0a == n1a {
-		// No need to set, mostly n0a and n1a are both $a
-	} else {
-		table.code.writeInst(op, n0a, n1a)
-	}
+	table.code.writeInst(op, n0a, n1a)
 	table.freeAddr(tmp)
 }
 

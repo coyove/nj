@@ -471,7 +471,14 @@ func (v Value) MustFloat(msg string) float64 { return v.mustBe(typ.Number, msg, 
 
 func (v Value) MustMap(msg string) *Table { return v.mustBe(typ.Table, msg, 0).Table() }
 
-func (v Value) MustFunc(msg string) *Func { return v.mustBe(typ.Func, msg, 0).Func() }
+func (v Value) MustFunc(msg string) *Func {
+	if vt := v.Type(); vt == typ.Table {
+		v = v.Table().GetString("__call")
+	} else if vt == typ.Func {
+		return v.Func()
+	}
+	return v.mustBe(typ.Func, msg, 0).Func()
+}
 
 func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
 	if v.Type() != t {

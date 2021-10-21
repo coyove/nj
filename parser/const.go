@@ -106,7 +106,7 @@ func __markupFuncName(recv, name Token) Token {
 }
 
 func __markupLambdaName(lambda Token) Token {
-	lambda.Str = "<lambda-" + strconv.Itoa(int(lambda.Pos.Line)) + ">"
+	lambda.Str = "<lambda" + strconv.Itoa(int(lambda.Pos.Line)) + ">"
 	return lambda
 }
 

@@ -24,7 +24,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const Version int64 = 301
+const Version int64 = 290
 
 var (
 	g   = map[string]Value{}
@@ -260,12 +260,14 @@ func init() {
 		"assert(value1, value2, msg)", "\tpanic message when two values are not equal",
 	)
 	AddGlobalValue("int", func(env *Env) {
+		env.A = Nil
 		switch v := env.Get(0); v.Type() {
 		case typ.Number:
 			env.A = Int(v.Int())
 		default:
-			v, _ := strconv.ParseInt(v.String(), 0, 64)
-			env.A = Int(v)
+			if v, err := strconv.ParseInt(v.String(), int(env.Get(1).IntDefault(0)), 64); err == nil {
+				env.A = Int(v)
+			}
 		}
 	}, "int(value) => integer", "\tconvert value to integer number (int64)")
 	AddGlobalValue("float", func(env *Env) {
@@ -427,7 +429,7 @@ func init() {
 	AddGlobalValue("next", func(env *Env, m, k Value) Value {
 		nk, nv := m.MustMap("").Next(k)
 		return Array(nk, nv)
-	}, "next(map, start_key) => { next_key, next_value }", "\tfind next key-value pair in the map")
+	}, "next(table, start_key) => { next_key, next_value }", "\tfind next key-value pair in the table")
 	AddGlobalValue("parent", func(env *Env, m Value) Value {
 		return m.MustMap("").Parent.Value()
 	}, "parent(table) => table", "\tfind given table's parent, or nil if not existed")

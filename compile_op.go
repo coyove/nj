@@ -1,6 +1,9 @@
 package script
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/coyove/script/parser"
 	"github.com/coyove/script/typ"
 )
@@ -289,13 +292,18 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 	cls.Code = code
 	cls.Locals = newtable.symbolsToDebugLocals()
 
+	var loadFuncIndex uint16
 	if table.global != nil {
 		x := table.global
+		loadFuncIndex = uint16(len(x.funcs))
 		x.funcs = append(x.funcs, cls)
-		table.code.writeInst(typ.OpLoadFunc, uint16(len(x.funcs))-1, 0)
 	} else {
+		loadFuncIndex = uint16(len(table.funcs))
 		table.funcs = append(table.funcs, cls)
-		table.code.writeInst(typ.OpLoadFunc, uint16(len(table.funcs))-1, 0)
+	}
+	table.code.writeInst(typ.OpLoadFunc, loadFuncIndex, 0)
+	if strings.HasPrefix(cls.Name, "<lambda") {
+		cls.Name = cls.Name[:len(cls.Name)-1] + "_" + strconv.Itoa(int(loadFuncIndex)) + ">"
 	}
 	table.code.writePos(atoms[0].Pos())
 	return regA

@@ -146,6 +146,7 @@ function foo(a)
         m = {a=a, b=b}
         return closure(m, lambda(m, c)
             m.a = m.a + 1
+            if c == 6 then panic(m.a + m.b + c) end
             return m.a + m.b + c
         end)
     end)
@@ -153,3 +154,13 @@ end
 bar = foo(2)(3)
 assert(bar(4), 10)
 assert(bar(5), 12)
+
+bar = apply(foo(2), 3)
+assert(bar(4), 10)
+assert(bar(5), 12)
+assert(pcall(bar, 6), 14)
+
+-- syntax test
+m = {}
+function m.a() return 'a' end
+assert(m.a() == 'a')
