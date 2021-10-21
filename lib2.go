@@ -339,8 +339,8 @@ func init() {
 		Str("sqrt"), Native1("sqrt", func(env *Env, v Value) Value { return Float(math.Sqrt(v.MustFloat(""))) }),
 		Str("floor"), Native1("floor", func(env *Env, v Value) Value { return Float(math.Floor(v.MustFloat(""))) }),
 		Str("ceil"), Native1("ceil", func(env *Env, v Value) Value { return Float(math.Ceil(v.MustFloat(""))) }),
-		Str("min"), Native("min", func(env *Env) { mathMinMax(env, "#%d arg", false) }, "max(a, b, ...) => largest_number"),
-		Str("max"), Native("max", func(env *Env) { mathMinMax(env, "#%d arg", true) }, "min(a, b, ...) => smallest_number"),
+		Str("min"), Native("min", func(env *Env) { mathMinMax(env, "#%d arg", false) }, "$f(a, b, ...) => largest_number"),
+		Str("max"), Native("max", func(env *Env) { mathMinMax(env, "#%d arg", true) }, "$f(a, b, ...) => smallest_number"),
 		Str("pow"), Native2("pow", func(env *Env, a, b Value) Value {
 			af, ai, aIsInt := a.MustNum("base").Num()
 			bf, bi, bIsInt := b.MustNum("power").Num()

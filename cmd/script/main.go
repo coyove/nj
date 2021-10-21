@@ -1,24 +1,18 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"strings"
 	"time"
 
 	"github.com/coyove/script"
-	"github.com/coyove/script/lib"
 )
 
 const VERSION = "0.2.0"
@@ -45,76 +39,7 @@ func main() {
 	flag.Parse()
 
 	if *apiServer != "" {
-		script.RemoveGlobalValue("sleep")
-		script.RemoveGlobalValue("scanln")
-		lib.HostWhitelist["httpbin.org"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
-		lib.HostWhitelist["example.com"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
-		lib.HostWhitelist["bokete.jp"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
-		lib.HostWhitelist["cn.bing.com"] = []string{"DELETE", "GET", "PATCH", "POST", "PUT"}
-
-		apiServerStatic := func() string {
-			buf, _ := exec.Command("go", "env", "GOPATH").Output()
-			return filepath.Join(strings.TrimSpace(string(buf)), "/src/github.com/coyove/script/cmd/script/docs")
-		}()
-		http.Handle("/", http.FileServer(http.Dir(apiServerStatic)))
-		http.HandleFunc("/share", func(w http.ResponseWriter, r *http.Request) {
-			defer func() { recover() }()
-			read := func(resp *http.Response, err error) ([]byte, error) {
-				if err != nil {
-					return nil, err
-				}
-				buf, _ := ioutil.ReadAll(resp.Body)
-				resp.Body.Close()
-				return bytes.TrimSpace(buf), nil
-			}
-			var buf []byte
-			var err error
-			if src := r.URL.Query().Get("get"); src != "" {
-				buf, err = read(http.Get("http://sprunge.us/" + src))
-			} else {
-				buf, err = read(http.Post("http://sprunge.us", "application/x-www-form-urlencoded",
-					strings.NewReader("sprunge="+url.QueryEscape(getCode(r)))))
-			}
-			if err != nil {
-				writeJSON(w, map[string]interface{}{"error": err.Error()})
-			} else {
-				writeJSON(w, map[string]interface{}{"data": string(buf)})
-			}
-		})
-		http.HandleFunc("/eval", func(w http.ResponseWriter, r *http.Request) {
-			defer func() { recover() }()
-
-			start := time.Now()
-			c := getCode(r)
-
-			p, err := script.LoadString(c, nil)
-			if err != nil {
-				writeJSON(w, map[string]interface{}{"error": err.Error()})
-				return
-			}
-			bufOut := &limitedWriter{limit: 16 * 1024}
-			p.SetTimeout(time.Second * 2)
-			p.MaxCallStackSize = 100
-			p.Stdout = bufOut
-			p.Stderr = bufOut
-			code := p.PrettyCode()
-			v, err := p.Run()
-			if err != nil {
-				writeJSON(w, map[string]interface{}{
-					"error":   err.Error(),
-					"elapsed": time.Since(start).Seconds(),
-					"stdout":  bufOut.String(),
-					"opcode":  code,
-				})
-				return
-			}
-			writeJSON(w, map[string]interface{}{
-				"elapsed": time.Since(start).Seconds(),
-				"result":  v.Interface(),
-				"stdout":  bufOut.String(),
-				"opcode":  code,
-			})
-		})
+		http.HandleFunc("/", script.WebREPLHandler(nil))
 		log.Println("listen", *apiServer)
 		http.ListenAndServe(*apiServer, nil)
 		return
@@ -207,33 +132,4 @@ func main() {
 		fmt.Print(i)
 		fmt.Print(" ", err, "\n")
 	}
-}
-
-func writeJSON(w http.ResponseWriter, m map[string]interface{}) {
-	w.Header().Add("Access-Control-Allow-Origin", "*")
-	buf, _ := json.Marshal(m)
-	w.Write(buf)
-}
-
-func getCode(r *http.Request) string {
-	c := strings.TrimSpace(r.FormValue("code"))
-	if c == "" {
-		c = strings.TrimSpace(r.URL.Query().Get("code"))
-	}
-	if len(c) > 16*1024 {
-		c = c[:16*1024]
-	}
-	return c
-}
-
-type limitedWriter struct {
-	limit int
-	bytes.Buffer
-}
-
-func (w *limitedWriter) Write(b []byte) (int, error) {
-	if w.Len() > w.limit {
-		return 0, fmt.Errorf("overflow")
-	}
-	return w.Buffer.Write(b)
 }

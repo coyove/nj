@@ -546,6 +546,13 @@ func (v Value) toString(lv int, j bool) string {
 		return v.Str()
 	case typ.Table:
 		m := v.Table()
+		if sf := m.GetString("__str"); sf.Type() == typ.Func {
+			v, err := sf.Func().Call()
+			if err != nil {
+				return fmt.Sprintf("<table.__str: %v>", err)
+			}
+			return v.toString(lv+1, j)
+		}
 		if len(m.hashItems) == 0 {
 			p := bytes.NewBufferString("[")
 			for _, a := range m.ArrayPart() {
