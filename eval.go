@@ -275,8 +275,8 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				reflectStore(subject.Interface(), env.A, v)
 				env.A = v
 			case typ.String:
-				vb := byte(v.mustBe(typ.Number, "alter mutable string byte", 0).Int())
-				subject.UnsafeBytes()[env.A.mustBe(typ.Number, "alter mutable string by index", 0).Int()] = vb
+				vb := byte(v.MustInt("alter bytes value"))
+				subject.MustBytes("alter bytes")[env.A.mustBe(typ.Number, "alter bytes index", 0).Int()] = vb
 				env.A = v
 			default:
 				panicf("cannot store %v into (%v)[%v]", v.Type(), subject.Type(), env.A.Type())

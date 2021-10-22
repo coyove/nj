@@ -28,8 +28,8 @@ type Token struct {
 	Pos  Position
 }
 
-func (self *Token) String() string {
-	return self.Str
+func (t *Token) String() string {
+	return t.Str
 }
 
 type Node struct {

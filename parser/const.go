@@ -193,13 +193,43 @@ func __dotdotdot(expr Node) Node {
 	return expr
 }
 
-func __forIn(key, value Token, expr, body Node, pos Position) Node {
+func __forIn(key, value Token, expr, skip, body Node, pos Position) Node {
 	k, v, e, tmp := NewSymbolFromToken(key), NewSymbolFromToken(value), randomVarname(), randomVarname()
 	next := NewComplex(NewSymbol(AInc), e, k).SetPos(pos)
+	moveNext := __chain(
+		__move(tmp, next).SetPos(pos),
+		__move(k, __load(tmp, NewNumberFromInt(0)).SetPos(pos)).SetPos(pos),
+		__move(v, __load(tmp, NewNumberFromInt(1)).SetPos(pos)).SetPos(pos),
+	)
+	skipExpr := __chain()
+	if skip.num != 1 {
+		skipVar, skipEnd, repeatLabel, exitLabel := randomVarname(), randomVarname(), randomVarname(), randomVarname()
+		skipExpr = skipExpr.append(__set(skipEnd, skip).SetPos(pos))
+		moveNext = __chain(
+			__set(skipVar, skipEnd).SetPos(pos),
+			__chain(
+				NewComplex(NewSymbol(ALabel), repeatLabel),
+				__if(__lessEq(skipVar, zeroNode).SetPos(pos),
+					NewComplex(NewSymbol(AGoto), exitLabel),
+					__chain(
+						moveNext,
+						__if(
+							NewComplex(NewSymbol(AEq), k, NewSymbol(ANil)).SetPos(pos),
+							breakNode,
+							__inc(skipVar, NewNumberFromInt(-1)).SetPos(pos), // repeat
+						).SetPos(pos),
+					),
+				).SetPos(pos),
+				NewComplex(NewSymbol(AGoto), repeatLabel),
+				NewComplex(NewSymbol(ALabel), exitLabel),
+			),
+		)
+	}
 	return __do(
 		__set(e, expr).SetPos(pos),
+		skipExpr,
 		__set(k, NewSymbol(ANil)).SetPos(pos),
-		__set(tmp, next).SetPos(pos),
+		__set(tmp, next).SetPos(pos), // init, move to the first key
 		__move(k, __load(tmp, NewNumberFromInt(0)).SetPos(pos)).SetPos(pos),
 		__set(v, __load(tmp, NewNumberFromInt(1)).SetPos(pos)).SetPos(pos),
 		__loop(__chain(
@@ -208,9 +238,7 @@ func __forIn(key, value Token, expr, body Node, pos Position) Node {
 				breakNode,
 				__chain(
 					body,
-					__move(tmp, next).SetPos(pos),
-					__move(k, __load(tmp, NewNumberFromInt(0)).SetPos(pos)).SetPos(pos),
-					__move(v, __load(tmp, NewNumberFromInt(1)).SetPos(pos)).SetPos(pos),
+					moveNext,
 				),
 			).SetPos(pos),
 		)).SetPos(pos),

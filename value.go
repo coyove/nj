@@ -181,8 +181,7 @@ func Rune(r rune) Value {
 
 // Bytes returns an alterable string value
 func Bytes(b []byte) Value {
-	return Value{v: uint64(typ.String), p: unsafe.Pointer(&b)}
-	// return Str(*(*string)(unsafe.Pointer(&b)))
+	return Value{v: 1<<63 + uint64(typ.String), p: unsafe.Pointer(&b)}
 }
 
 // Val creates a Value from golang interface{}
@@ -328,10 +327,11 @@ func (v Value) Str() string {
 	return *(*string)(v.p)
 }
 
-func (v Value) UnsafeBytes() []byte {
-	if v.IsSmallString() {
-		panic("immutable string")
-	}
+func (v Value) IsBytes() bool {
+	return v.v == 1<<63+uint64(typ.String)
+}
+
+func (v Value) Bytes() []byte {
 	return *(*[]byte)(v.p)
 }
 
@@ -369,6 +369,9 @@ func (v Value) Interface() interface{} {
 		}
 		return vf
 	case typ.String:
+		if v.IsBytes() {
+			return v.Bytes()
+		}
 		return v.Str()
 	case typ.Table:
 		return v.Table()
@@ -394,13 +397,14 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	if t == reflect.TypeOf(Value{}) {
 		return reflect.ValueOf(v)
 	}
-	if v.Type() == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
+	vt := v.Type()
+	if vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
 		return reflect.Zero(t)
 	}
-	if v.Type() == typ.String && t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
-		return reflect.ValueOf(v.UnsafeBytes())
+	if vt == typ.String && t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
+		return reflect.ValueOf(v.MustBytes("ReflectValue"))
 	}
-	if v.Type() == typ.Func && t.Kind() == reflect.Func {
+	if vt == typ.Func && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
 			in := make([]Value, len(args))
 			for i := range in {
@@ -425,7 +429,7 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 		})
 	}
 
-	switch v.Type() {
+	switch vt {
 	case typ.Number:
 		if t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
 			rv := reflect.ValueOf(v.Interface())
@@ -470,6 +474,16 @@ func (v Value) MustInt(msg string) int64 { return v.mustBe(typ.Number, msg, 0).I
 func (v Value) MustFloat(msg string) float64 { return v.mustBe(typ.Number, msg, 0).Float() }
 
 func (v Value) MustTable(msg string) *Table { return v.mustBe(typ.Table, msg, 0).Table() }
+
+func (v Value) MustBytes(msg string) []byte {
+	if !v.IsBytes() {
+		if msg != "" {
+			panicf("%s: expect bytes, got %v", msg, v.Type())
+		}
+		panicf("expect bytes, got %v", v.Type())
+	}
+	return v.Bytes()
+}
 
 func (v Value) MustFunc(msg string) *Func {
 	if vt := v.Type(); vt == typ.Table {

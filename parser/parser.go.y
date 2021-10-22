@@ -175,12 +175,10 @@ for_stat:
                 ).SetPos($1.Pos))
             }
         } |
-        TFor TIdent ',' TIdent TIn expr TDo stats TEnd {
-            $$ = __forIn($2, $4, $6, $8, $1.Pos)
-        } |
-        TFor TIdent TIn expr TDo stats TEnd {
-            $$ = __forIn($2, $1, $4, $6, $1.Pos)
-        }
+        TFor TIdent ',' TIdent TIn expr TDo stats TEnd          { $$ = __forIn($2, $4, $6, oneNode, $8, $1.Pos) } |
+        TFor TIdent TIn expr TDo stats TEnd                     { $$ = __forIn($2, $1, $4, oneNode, $6, $1.Pos) } |
+        TFor TIdent ',' TIdent TIn expr ',' expr TDo stats TEnd { $$ = __forIn($2, $4, $6, $8, $10, $1.Pos) } |
+        TFor TIdent TIn expr ',' expr TDo stats TEnd            { $$ = __forIn($2, $1, $4, $6, $8, $1.Pos) }
 
 
 if_stat:

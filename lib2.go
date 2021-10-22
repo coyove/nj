@@ -23,10 +23,24 @@ var StringMethods, MathLib, TableLib, OSLib Value
 func init() {
 	TableLib = MapAdd(TableLib,
 		Str("makearray"), Native1("makearray", func(env *Env, n Value) Value {
-			a := Array(make([]Value, n.MustInt(""))...)
-			a.Table().count = 0
-			return a
+			return Array(make([]Value, n.MustInt(""))...)
 		}, "makearray(n) => { nil, ..., nil }", "\treturn a table array, preallocate space for n values"),
+		Str("slice"), Native3("slice", func(env *Env, t, s, e Value) Value {
+			start, end := int(s.MustInt("")), int(e.MustInt(""))
+			return Array(t.MustTable("").items[start:end]...)
+		}),
+		Str("copy"), Native3("copy", func(env *Env, t, s, e Value) Value {
+			start, end := int(s.MustInt("")), int(e.MustInt(""))
+			a := t.MustTable("").items
+			if start >= 0 && start < len(a) && end >= 0 && end <= len(a) && start <= end {
+				return Array(append([]Value{}, a[start:end]...)...)
+			}
+			m, from := NewTable(0), t.Table()
+			for i := start; i < end; i++ {
+				m.Set(Int(int64(i-start)), from.Get(Int(int64(i))))
+			}
+			return m.Value()
+		}),
 		Str("arraylen"), Native1("arraylen", func(env *Env, v Value) Value { return Int(int64(len(v.MustTable("").items))) }),
 		Str("maplen"), Native1("maplen", func(env *Env, v Value) Value { return Int(int64(len(v.MustTable("").hashItems))) }),
 		Str("keys"), Native1("keys", func(env *Env, m Value) Value {
@@ -167,16 +181,18 @@ func init() {
 		Str("lower"), Native1("lower", func(env *Env, t Value) Value {
 			return Str(strings.ToLower(t.MustStr("")))
 		}, "$f('TEXT') => 'text'"),
-		Str("bytes"), Native2("bytes", func(env *Env, s, n Value) Value {
-			sz := s.MustStr("")
-			var r []byte
-			if max := n.IntDefault(-1); max >= 0 && len(sz) > int(max) {
-				r = []byte(sz[:max])
-			} else {
-				r = []byte(sz)
-			}
-			return Bytes(r)
+		Str("isbytes"), Native1("isbytes", func(env *Env, s Value) Value {
+			return Bool(s.IsBytes())
 		}),
+		Str("bytes"), Native1("bytes", func(env *Env, s Value) Value {
+			if s.Type() == typ.Number {
+				return Bytes(make([]byte, s.Int()))
+			}
+			return Bytes([]byte(s.MustStr("")))
+		},
+			"bytes(string) => bytes", "\tcreate a byte array from the given string",
+			"bytes(n) => n_bytes", "\tcreate an n-byte long array",
+		),
 		Str("chars"), Native2("chars", func(env *Env, s, n Value) Value {
 			var r []Value
 			max := n.IntDefault(0)

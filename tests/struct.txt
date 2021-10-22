@@ -117,7 +117,7 @@ assert(cnt == 3)
 assert(k == 99) -- k shouldn't be altered
 
 function worker()
-    sleep(1000)
+    sleep(1)
     print("worker after 1s")
     return 'finished'
 end
