@@ -3,9 +3,9 @@ package parser
 import (
 	"fmt"
 	"io"
-	"math"
 	"strconv"
 	"strings"
+	"unsafe"
 )
 
 type Position struct {
@@ -33,164 +33,188 @@ func (t *Token) String() string {
 }
 
 type Node struct {
-	Type    byte   // Node type
-	Addr    uint16 // raw address value
-	symLine uint32 // symbol position
-	num     uint64 // float64 or int64 value
-	strSym  string // string or symbol value
-	Nodes   []Node // Nodes value
+	typ     byte
+	pad     byte
+	Addr    uint16
+	symLine uint32
+	ptr     unsafe.Pointer
 }
 
-func NewSymbolFromToken(tok Token) Node {
-	return Node{Type: Symbol, symLine: tok.Pos.Line, strSym: tok.Str}
+func Sym(tok Token) Node {
+	return Node{typ: SYM, symLine: tok.Pos.Line, ptr: unsafe.Pointer(&tok.Str)}
 }
 
-func NewAddress(yx uint16) Node { return Node{Type: Address, Addr: yx} }
+func Addr(yx uint16) Node { return Node{typ: ADDR, Addr: yx} }
 
-func NewSymbol(s string) Node { return Node{Type: Symbol, strSym: s} }
+func staticSym(s string) Node {
+	return Node{typ: SYM, ptr: unsafe.Pointer(&s)}
+}
 
-func NewString(s string) Node { return Node{Type: String, strSym: s} }
+func Str(s string) Node { return Node{typ: STR, ptr: unsafe.Pointer(&s)} }
 
-func NewNumberFromString(v string) Node {
+func Num(v string) Node {
 	i, err := strconv.ParseInt(v, 0, 64)
 	if err == nil {
-		return Node{Type: Int, num: uint64(i)}
+		return Int(i)
 	}
 	if err.(*strconv.NumError).Err == strconv.ErrRange {
 		i, err := strconv.ParseUint(v, 0, 64)
 		if err == nil {
-			return Node{Type: Int, num: uint64(int64(i))}
+			return Int(int64(i))
 		}
 	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
 		panic("invalid number format: \"" + v + "\"")
 	}
-	if float64(int64(f)) == f {
-		return Node{Type: Int, num: uint64(int64(f))}
-	}
-	return Node{Type: Float, num: math.Float64bits(f)}
+	return Float(f)
 }
 
-func NewNumberFromInt(v int64) Node {
-	return Node{num: uint64(v), Type: Int}
+func Int(v int64) (n Node) {
+	*(*int64)(unsafe.Pointer(&n)) = v
+	n.ptr = intNode
+	return
 }
 
-func NewNumberFromFloat(v float64) Node {
+func Float(v float64) (n Node) {
 	if float64(int64(v)) == v {
-		return Node{num: uint64(int64(v)), Type: Int}
+		return Int(int64(v))
 	}
-	return Node{Type: Float, num: math.Float64bits(float64(v))}
+	*(*float64)(unsafe.Pointer(&n)) = v
+	n.ptr = floatNode
+	return
+}
+
+func (n Node) Type() byte {
+	switch n.ptr {
+	case intNode:
+		return INT
+	case floatNode:
+		return FLOAT
+	default:
+		switch n.typ {
+		case STR, SYM, ADDR, NODES:
+			return n.typ
+		}
+	}
+	return INVALID
 }
 
 func (n Node) Valid() bool {
-	t := n.Type
-	return t == Symbol || t == Float || t == String || t == Complex || t == Address || t == Int
+	return n.Type() != INVALID
 }
 
-func (n Node) IsNumber() bool {
-	t := n.Type
-	return t == Float || t == Int
+func (n Node) IsNum() bool {
+	t := n.Type()
+	return t == FLOAT || t == INT
 }
 
-func (n Node) IsCall() bool {
-	t := n.Type
-	return t == Symbol && n.SymbolValue() == ACall
-}
-
-func (n Node) StringValue() string { return n.strSym }
-
-func (n Node) SymbolValue() string { return n.strSym }
-
-func (n Node) IntValue() int64 { return int64(n.num) }
-
-func (n Node) FloatValue() float64 { return math.Float64frombits(n.num) }
-
-func (n Node) NumberValue() (float64, int64, bool) {
-	if n.Type == Int {
-		return float64(n.IntValue()), n.IntValue(), true
+func (n Node) Str() string {
+	if n.Type() != STR {
+		return ""
 	}
-	return n.FloatValue(), int64(n.FloatValue()), false
+	return *(*string)(n.ptr)
+}
+
+func (n Node) Sym() string {
+	if n.Type() != SYM {
+		return ""
+	}
+	return *(*string)(n.ptr)
+}
+
+func (n Node) Int() int64 { return *(*int64)(unsafe.Pointer(&n)) }
+
+func (n Node) Float() float64 { return *(*float64)(unsafe.Pointer(&n)) }
+
+func (n Node) Num() (float64, int64, bool) {
+	if n.Type() == INT {
+		return float64(n.Int()), n.Int(), true
+	}
+	return n.Float(), int64(n.Float()), false
 }
 
 func (n Node) IsNegativeNumber() bool {
-	if n.Type == Float {
-		return n.FloatValue() < 0
+	if n.Type() == FLOAT {
+		return n.Float() < 0
 	}
-	return n.IntValue() < 0
+	return n.Int() < 0
 }
 
-func (n Node) DuplicateNodes() []Node {
-	return append([]Node{}, n.Nodes...)
+func (n Node) Nodes() []Node {
+	if n.Type() != NODES {
+		return nil
+	}
+	return *(*[]Node)(n.ptr)
 }
 
-func NewComplex(args ...Node) Node {
+func Nodes(args ...Node) Node {
 	if len(args) == 3 {
-		op := args[0].SymbolValue()
+		op := args[0].Sym()
 		a, b := args[1], args[2]
-		if op == AAdd && a.Type == String && b.Type == String {
-			return NewString(a.StringValue() + b.StringValue())
+		if op == AAdd && a.Type() == STR && b.Type() == STR {
+			return Str(a.Str() + b.Str())
 		}
-		if a.IsNumber() && b.IsNumber() {
+		if a.IsNum() && b.IsNum() {
 			switch op {
 			case AAdd:
-				af, ai, aIsInt := a.NumberValue()
-				bf, bi, bIsInt := b.NumberValue()
+				af, ai, aIsInt := a.Num()
+				bf, bi, bIsInt := b.Num()
 				if aIsInt && bIsInt {
-					return NewNumberFromInt(ai + bi)
+					return Int(ai + bi)
 				} else {
-					return NewNumberFromFloat(af + bf)
+					return Float(af + bf)
 				}
 			case ASub:
-				af, ai, aIsInt := a.NumberValue()
-				bf, bi, bIsInt := b.NumberValue()
+				af, ai, aIsInt := a.Num()
+				bf, bi, bIsInt := b.Num()
 				if aIsInt && bIsInt {
-					return NewNumberFromInt(ai - bi)
+					return Int(ai - bi)
 				} else {
-					return NewNumberFromFloat(af - bf)
+					return Float(af - bf)
 
 				}
 			case AMul:
-				af, ai, aIsInt := a.NumberValue()
-				bf, bi, bIsInt := b.NumberValue()
+				af, ai, aIsInt := a.Num()
+				bf, bi, bIsInt := b.Num()
 				if aIsInt && bIsInt {
-					return NewNumberFromInt(ai * bi)
+					return Int(ai * bi)
 				} else {
-					return NewNumberFromFloat(af * bf)
+					return Float(af * bf)
 				}
 			case ADiv:
-				af, ai, aIsInt := a.NumberValue()
-				bf, bi, bIsInt := b.NumberValue()
+				af, ai, aIsInt := a.Num()
+				bf, bi, bIsInt := b.Num()
 				if aIsInt && bIsInt && ai%bi == 0 {
-					return NewNumberFromInt(ai / bi)
+					return Int(ai / bi)
 				} else {
-					return NewNumberFromFloat(af / bf)
+					return Float(af / bf)
 				}
 			}
 		}
 	}
-	return Node{Nodes: args, Type: Complex}
+	return Node{ptr: unsafe.Pointer(&args), typ: NODES}
 }
 
-func (n Node) SetPos(pos Position) Node {
-	switch n.Type {
-	case Symbol:
-		n.symLine = pos.Line
-	case Complex:
-		c := n.Nodes
+func (n Node) At(tok Token) Node {
+	switch n.Type() {
+	case SYM:
+		n.symLine = tok.Pos.Line
+	case NODES:
+		c := n.Nodes()
 		if len(c) > 0 {
-			c[0] = c[0].SetPos(pos)
+			c[0] = c[0].At(tok)
 		}
 	}
 	return n
 }
 
 func (n Node) Pos() Position {
-	switch n.Type {
-	case Symbol:
+	switch n.Type() {
+	case SYM:
 		return Position{Line: n.symLine}
-	case Complex:
-		c := n.Nodes
+	case NODES:
+		c := n.Nodes()
 		if len(c) == 0 {
 			panic("Pos()")
 		}
@@ -202,11 +226,11 @@ func (n Node) Pos() Position {
 
 func (n Node) Dump(w io.Writer, ident string) {
 	io.WriteString(w, ident)
-	switch n.Type {
-	case Complex:
+	switch n.Type() {
+	case NODES:
 		nocpl := true
-		for _, a := range n.Nodes {
-			if a.Type == Complex {
+		for _, a := range n.Nodes() {
+			if a.Type() == NODES {
 				nocpl = false
 				break
 			}
@@ -214,47 +238,47 @@ func (n Node) Dump(w io.Writer, ident string) {
 
 		if !nocpl {
 			io.WriteString(w, "[\n")
-			for _, a := range n.Nodes {
+			for _, a := range n.Nodes() {
 				a.Dump(w, "  "+ident)
-				if a.Type != Complex {
+				if a.Type() != NODES {
 					io.WriteString(w, "\n")
 				}
 			}
 			io.WriteString(w, ident)
 		} else {
 			io.WriteString(w, "[")
-			for i, a := range n.Nodes {
+			for i, a := range n.Nodes() {
 				a.Dump(w, "")
-				if i < len(n.Nodes)-1 {
+				if i < len(n.Nodes())-1 {
 					io.WriteString(w, " ")
 				}
 			}
 		}
 		io.WriteString(w, "]\n")
-	case Symbol:
-		io.WriteString(w, fmt.Sprintf("%s/%d", n.strSym, n.symLine))
+	case SYM:
+		io.WriteString(w, fmt.Sprintf("%s/%d", n.Sym(), n.symLine))
 	default:
 		io.WriteString(w, n.String())
 	}
 }
 
 func (n Node) String() string {
-	switch n.Type {
-	case Int:
-		return strconv.FormatInt(n.IntValue(), 10)
-	case Float:
-		return strconv.FormatFloat(n.FloatValue(), 'f', -1, 64)
-	case String:
-		return strconv.Quote(n.strSym)
-	case Symbol:
-		return fmt.Sprintf("%s at line %d", n.strSym, n.symLine)
-	case Complex:
-		buf := make([]string, len(n.Nodes))
-		for i, a := range n.Nodes {
+	switch n.Type() {
+	case INT:
+		return strconv.FormatInt(n.Int(), 10)
+	case FLOAT:
+		return strconv.FormatFloat(n.Float(), 'f', -1, 64)
+	case STR:
+		return strconv.Quote(n.Str())
+	case SYM:
+		return fmt.Sprintf("%s/%d", n.Sym(), n.symLine)
+	case NODES:
+		buf := make([]string, len(n.Nodes()))
+		for i, a := range n.Nodes() {
 			buf[i] = a.String()
 		}
 		return "[" + strings.Join(buf, " ") + "]"
-	case Address:
+	case ADDR:
 		return "0x" + strconv.FormatInt(int64(n.Addr), 16)
 	default:
 		return fmt.Sprintf("DEBUG: %#v", n)
@@ -262,38 +286,15 @@ func (n Node) String() string {
 }
 
 func (n Node) append(n2 ...Node) Node {
-	n.Nodes = append(n.Nodes, n2...)
+	*(*[]Node)(n.ptr) = append(n.Nodes(), n2...)
 	return n
 }
 
-// func (n Node) isSimpleAddSub() (a Symbol, v float64, ok bool) {
-// 	if n.Type() != CPL || len(n.Cpl()) < 3 {
-// 		return
-// 	}
-// 	// a = a + v
-// 	if n.CplIndex(1).Type() == SYM && n.CplIndex(0).Sym().Equals(AAdd) && n.CplIndex(2).Type() == NUM {
-// 		a, v, ok = n.CplIndex(1).Sym(), n.CplIndex(2).Value.(float64), true
-// 	}
-// 	// a = v + a
-// 	if n.CplIndex(2).Type() == SYM && n.CplIndex(0).Sym().Equals(AAdd) && n.CplIndex(1).Type() == NUM {
-// 		a, v, ok = n.CplIndex(2).Sym(), n.CplIndex(1).Value.(float64), true
-// 	}
-// 	// a = a - v
-// 	if n.CplIndex(1).Type() == SYM && n.CplIndex(0).Sym().Equals(ASub) && n.CplIndex(2).Type() == NUM {
-// 		a, v, ok = n.CplIndex(1).Sym(), -n.CplIndex(2).Value.(float64), true
-// 	}
-// 	return
-// }
-
-func (n Node) isCallStat() bool {
-	return len(n.Nodes) > 0 && n.Nodes[0].SymbolValue() == ACall
-}
-
 func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
-	if len(n.Nodes) == 3 && n.Nodes[0].SymbolValue() == ALoad {
-		return __store(n.Nodes[1], n.Nodes[2], v)
+	if len(n.Nodes()) == 3 && n.Nodes()[0].Sym() == ALoad {
+		return __store(n.Nodes()[1], n.Nodes()[2], v)
 	}
-	if n.Type != Symbol {
+	if n.Type() != SYM {
 		panic(fmt.Sprintf("%v: invalid assignment", n))
 	}
 	return sm(n, v)

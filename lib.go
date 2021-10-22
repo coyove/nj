@@ -11,7 +11,6 @@ import (
 	"math"
 	"os"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -61,17 +60,12 @@ func init() {
 	AddGlobalValue("undefined", Undef)
 	AddGlobalValue("_", func(env *Env) { env.A = env.Get(0) }, "nop(a) => a")
 	AddGlobalValue("globals", func(env *Env) {
-		keys := make([]string, 0, len(g))
-		for k := range g {
-			keys = append(keys, k)
+		r := NewTable(len(env.Global.Func.Locals))
+		for i, name := range env.Global.Func.Locals {
+			r.Set(Str(name), (*env.Global.Stack)[i])
 		}
-		sort.Strings(keys)
-		globals := make([]Value, len(keys))
-		for i, k := range keys {
-			globals[i] = g[k]
-		}
-		env.A = Array(globals...)
-	}, "globals() => { g1, g2, ... }", "\tlist all global values")
+		env.A = r.Value()
+	}, "globals() => { key1=value1, ... }", "\tlist all global values")
 	AddGlobalValue("doc", func(env *Env, f, doc Value) Value {
 		if doc == Nil {
 			return Str(f.MustFunc("").DocString)
@@ -107,12 +101,19 @@ func init() {
 	})
 	AddGlobalValue("eval", func(env *Env, s, g Value) Value {
 		var m map[string]interface{}
-		if g.Type() == typ.Table {
+		if gt := g.MaybeTableGetString("globals"); gt.Type() == typ.Table {
 			m = map[string]interface{}{}
-			g.Table().Foreach(func(k, v Value) bool {
+			gt.Table().Foreach(func(k, v Value) bool {
 				m[k.String()] = v.Interface()
 				return true
 			})
+		}
+		if !g.MaybeTableGetString("compileonly").IsFalse() {
+			v, err := parser.Parse(s.MustStr(""), "")
+			if err != nil {
+				panic(err)
+			}
+			return Val(v)
 		}
 		wrap := func(err error) error { return fmt.Errorf("panic inside: %v", err) }
 		f, err := LoadString(s.MustStr(""), &CompileOptions{GlobalKeyValues: m})
@@ -276,11 +277,11 @@ func init() {
 		case typ.Number:
 			env.A = v
 		case typ.String:
-			switch v := parser.NewNumberFromString(v.Str()); v.Type {
-			case parser.Float:
-				env.A = Float(v.FloatValue())
-			case parser.Int:
-				env.A = Int(v.IntValue())
+			switch v := parser.Num(v.Str()); v.Type() {
+			case parser.FLOAT:
+				env.A = Float(v.Float())
+			case parser.INT:
+				env.A = Int(v.Int())
 			}
 		default:
 			env.A = Value{}

@@ -347,6 +347,10 @@ local a = 100
 return {a + add(), a + add(), a + add()}
 `, &CompileOptions{GlobalKeyValues: map[string]interface{}{"add": add}})
 	v, err := p2.Run()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(p2.PrettyCode())
 	if v1 := v.Table().ArrayPart(); v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())
 	}

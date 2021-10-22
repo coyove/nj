@@ -51,11 +51,6 @@ func init() {
 			})
 			return Array(a...)
 		}),
-		Str("append"), Native2("append", func(env *Env, m, v Value) Value {
-			a := m.MustTable("")
-			a.Set(Int(int64(len(a.items))), v)
-			return m
-		}, "append(array, value)", "\tappend value to table array"),
 		Str("concat"), Native2("concat", func(env *Env, a, b Value) Value {
 			ma, mb := a.MustTable(""), b.MustTable("")
 			for _, b := range mb.ArrayPart() {
@@ -63,6 +58,15 @@ func init() {
 			}
 			return ma.Value()
 		}, "concat(array1, array2)", "\tput elements from array2 to array1's end"),
+		Str("merge"), Native2("merge", func(env *Env, a, b Value) Value {
+			ma, mb := a.MustTable(""), b.MustTable("")
+			ma.resizeHash(len(mb.hashItems) + len(ma.hashItems))
+			mb.Foreach(func(k, v Value) bool {
+				ma.Set(k, v)
+				return true
+			})
+			return ma.Value()
+		}, "$f(table1, table2)", "\tmerge elements from table2 to table1"),
 	)
 	AddGlobalValue("table", TableLib)
 

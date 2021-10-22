@@ -59,7 +59,7 @@ func WebREPLHandler(loader func(string) (*Program, error)) func(w http.ResponseW
 		}
 		writeJSON(w, map[string]interface{}{
 			"elapsed": time.Since(start).Seconds(),
-			"result":  v.Interface(),
+			"result":  fmt.Sprint(v),
 			"stdout":  bufOut.String(),
 			"opcode":  code,
 		})

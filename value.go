@@ -335,8 +335,8 @@ func (v Value) Bytes() []byte {
 	return *(*[]byte)(v.p)
 }
 
-// When isInt == true, use intValue, otherwise floatValue
-func (v Value) Num() (floatValue float64, intValue int64, isInt bool) {
+// When isInt == true, use Int, otherwise Float
+func (v Value) Num() (Float float64, Int int64, isInt bool) {
 	if v.p == int64Marker {
 		return float64(int64(v.v)), int64(v.v), true
 	}

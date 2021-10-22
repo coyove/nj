@@ -5,5 +5,5 @@ import (
 )
 
 func TestHashString(t *testing.T) {
-	t.Log(Parse(`a+1`, ""))
+	t.Log(Parse(`(a+1)`, ""))
 }

@@ -25,7 +25,7 @@ func reflectLoad(v interface{}, key Value) Value {
 			return Val(v.Interface())
 		}
 	case reflect.Slice, reflect.Array:
-		idx := key.MustNum("index key").Int() - 1
+		idx := key.MustNum("index key").Int()
 		if idx < int64(rv.Len()) && idx >= 0 {
 			return Val(rv.Index(int(idx)).Interface())
 		}

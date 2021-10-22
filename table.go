@@ -33,7 +33,7 @@ type hashItem struct {
 }
 
 func NewTable(size int) *Table {
-	return &Table{hashItems: make([]hashItem, int64(size))}
+	return &Table{hashItems: make([]hashItem, int64(size)*2)}
 }
 
 func (m *Table) Len() int { return int(m.count) + int(m.hashCount) }
@@ -331,6 +331,12 @@ func (m *Table) Value() Value {
 }
 
 func (m *Table) resizeHash(newSize int) {
+	if newSize < len(m.hashItems) {
+		panic("resizeHash: invalid size")
+	}
+	if newSize == len(m.hashItems) {
+		return
+	}
 	tmp := Table{hashItems: make([]hashItem, newSize)}
 	for _, e := range m.hashItems {
 		if e.Key != Nil {

@@ -100,7 +100,7 @@ func (table *symtable) freeAddr(a interface{}) {
 	switch a := a.(type) {
 	case []parser.Node:
 		for _, n := range a {
-			if n.Type == parser.Address {
+			if n.Type() == parser.ADDR {
 				table.freeAddr(n.Addr)
 			}
 		}
@@ -247,8 +247,8 @@ var flatOpMapping = map[string]byte{
 func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
 	var tmp []uint16
 	getAddr := func(n parser.Node, intoNewAddr bool) uint16 {
-		switch n.Type {
-		case parser.Complex:
+		switch n.Type() {
+		case parser.NODES:
 			addr := table.compileNodeInto(n, intoNewAddr, regA)
 			tmp = append(tmp, addr)
 			return addr
@@ -293,17 +293,17 @@ func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existe
 }
 
 func (table *symtable) compileStaticNode(node parser.Node) (uint16, bool) {
-	switch node.Type {
-	case parser.Address:
+	switch node.Type() {
+	case parser.ADDR:
 		return node.Addr, true
-	case parser.String:
-		return table.loadK(node.StringValue()), true
-	case parser.Float:
-		return table.loadK(node.FloatValue()), true
-	case parser.Int:
-		return table.loadK(node.IntValue()), true
-	case parser.Symbol:
-		return table.get(node.SymbolValue()), true
+	case parser.STR:
+		return table.loadK(node.Str()), true
+	case parser.FLOAT:
+		return table.loadK(node.Float()), true
+	case parser.INT:
+		return table.loadK(node.Int()), true
+	case parser.SYM:
+		return table.get(node.Sym()), true
 	}
 	return 0, false
 }
@@ -313,12 +313,12 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		return addr
 	}
 
-	nodes := node.Nodes
+	nodes := node.Nodes()
 	if len(nodes) == 0 {
 		return regA
 	}
 
-	name := nodes[0].SymbolValue()
+	name := nodes[0].Sym()
 	var yx uint16
 	switch name {
 	case parser.ADoBlock, parser.ABegin:
@@ -355,15 +355,15 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 }
 
 func (table *symtable) collectConsts(node parser.Node) {
-	switch node.Type {
-	case parser.String:
-		table.loadK(node.StringValue())
-	case parser.Float:
-		table.loadK(node.FloatValue())
-	case parser.Int:
-		table.loadK(node.IntValue())
-	case parser.Complex:
-		for _, n := range node.Nodes {
+	switch node.Type() {
+	case parser.STR:
+		table.loadK(node.Str())
+	case parser.FLOAT:
+		table.loadK(node.Float())
+	case parser.INT:
+		table.loadK(node.Int())
+	case parser.NODES:
+		for _, n := range node.Nodes() {
 			table.collectConsts(n)
 		}
 	}
