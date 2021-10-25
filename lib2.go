@@ -73,21 +73,27 @@ func init() {
 	StringMethods = MapAdd(StringMethods,
 		Str("__call"), Native1("str", func(env *Env, src Value) Value {
 			return Str(fmt.Sprint(src.Interface()))
-		}, ""),
+		}, "call stub"),
+		Str("size"), Native1("size", func(env *Env, src Value) Value {
+			return Int(int64(len(src.MustStr(""))))
+		}, "size(text) => length"),
+		Str("len"), Native1("len", func(env *Env, src Value) Value {
+			return Int(int64(len(src.MustStr(""))))
+		}, "len(text) => length"),
+		Str("count"), Native1("count", func(env *Env, src Value) Value {
+			return Int(int64(utf8.RuneCountInString(src.MustStr(""))))
+		}, "count(text) => count_of_runes"),
 		Str("from"), Native1("from", func(env *Env, src Value) Value {
 			return Str(fmt.Sprint(src.Interface()))
-		}, ""),
+		}, "from(value) => string", "\tconvert value to string"),
 		Str("iequal"), Native2("iequal", func(env *Env, src, a Value) Value {
-			s := src.MustStr("")
-			return Bool(strings.EqualFold(s, a.MustStr("")))
+			return Bool(strings.EqualFold(src.MustStr(""), a.MustStr("")))
 		}, ""),
 		Str("contains"), Native2("contains", func(env *Env, src, a Value) Value {
-			s := src.MustStr("")
-			return Bool(strings.Contains(s, a.MustStr("")))
+			return Bool(strings.Contains(src.MustStr(""), a.MustStr("")))
 		}, ""),
 		Str("containsany"), Native2("containsany", func(env *Env, src, a Value) Value {
-			s := src.MustStr("")
-			return Bool(strings.ContainsAny(s, a.MustStr("")))
+			return Bool(strings.ContainsAny(src.MustStr(""), a.MustStr("")))
 		}, ""),
 		Str("split"), Native3("split", func(env *Env, src, delim, n Value) Value {
 			s := src.MustStr("text")
@@ -119,21 +125,17 @@ func init() {
 			return Bool(m)
 		}, ""),
 		Str("find"), Native2("find", func(env *Env, src, substr Value) Value {
-			s := src.MustStr("")
-			return Int(int64(strings.Index(s, substr.MustStr(""))))
-		}, ""),
+			return Int(int64(strings.Index(src.MustStr(""), substr.MustStr(""))))
+		}, "$f(text, chars_set) => index", "\tfind the first index of from chars_set which occurs in text"),
 		Str("findany"), Native2("findany", func(env *Env, src, substr Value) Value {
-			s := src.MustStr("")
-			return Int(int64(strings.IndexAny(s, substr.MustStr(""))))
-		}, ""),
+			return Int(int64(strings.IndexAny(src.MustStr(""), substr.MustStr(""))))
+		}, "$f(text, chars_set) => index", "\tfind the first index of any char from chars_set which occurs in text"),
 		Str("rfind"), Native2("rfind", func(env *Env, src, substr Value) Value {
-			s := src.MustStr("")
-			return Int(int64(strings.LastIndex(s, substr.MustStr(""))))
+			return Int(int64(strings.LastIndex(src.MustStr(""), substr.MustStr(""))))
 		}, ""),
 		Str("rfindany"), Native2("rfindany", func(env *Env, src, substr Value) Value {
-			s := src.MustStr("")
-			return Int(int64(strings.LastIndexAny(s, substr.MustStr(""))))
-		}, ""),
+			return Int(int64(strings.LastIndexAny(src.MustStr(""), substr.MustStr(""))))
+		}, "$f(text, chars_set) => last_index", "\tfind the last index of any char from chars_set which occurs in text"),
 		Str("sub"), Native3("sub", func(env *Env, src, start, end Value) Value {
 			s := src.MustStr("")
 			st := start.IntDefault(0)
@@ -150,25 +152,22 @@ func init() {
 			if cutset == Nil {
 				return Str(strings.TrimSpace(src.MustStr("")))
 			}
-			c := cutset.MustStr("")
-			return Str(strings.Trim(src.MustStr(""), c))
-		}, "trim(' text ') => 'text'", "trim('text', 'tx') => 'e'"),
+			return Str(strings.Trim(src.MustStr(""), cutset.MustStr("")))
+		},
+			"trim(text) => text", "\ttrim spaces at left and right side of text",
+			"trim(text, cutset) => text", "\tremove chars both occurred in cutset and left-side/right-side of text"),
+		Str("lremove"), Native2("lremove", func(env *Env, src, cutset Value) Value {
+			return Str(strings.TrimPrefix(src.MustStr(""), cutset.MustStr("")))
+		}, "$f(text, prefix) => text", "\tremove prefix in text if any"),
+		Str("rremove"), Native2("rremove", func(env *Env, src, cutset Value) Value {
+			return Str(strings.TrimSuffix(src.MustStr(""), cutset.MustStr("")))
+		}, "$f(text, suffix) => text", "\tremove suffix in text if any"),
 		Str("ltrim"), Native2("ltrim", func(env *Env, src, cutset Value) Value {
-			c := cutset.MustStr("")
-			return Str(strings.TrimLeft(src.MustStr(""), c))
-		}, "ltrim('abcdtext', 'abxy') => 'cdtext'"),
+			return Str(strings.TrimLeft(src.MustStr(""), cutset.StringDefault(" ")))
+		}, "$f(text, cutset) => text", "\tremove chars both ocurred in cutset and left-side of text"),
 		Str("rtrim"), Native2("rtrim", func(env *Env, src, cutset Value) Value {
-			c := cutset.MustStr("")
-			return Str(strings.TrimRight(src.MustStr(""), c))
-		}, "rtrim('textabcd', 'cdxy') => 'textab'"),
-		Str("ptrim"), Native2("ptrim", func(env *Env, src, cutset Value) Value {
-			c := cutset.MustStr("")
-			return Str(strings.TrimPrefix(src.MustStr(""), c))
-		}, "ptrim('prefixtext', 'prefix') => 'text'"),
-		Str("strim"), Native2("strim", func(env *Env, src, cutset Value) Value {
-			c := cutset.MustStr("")
-			return Str(strings.TrimSuffix(src.MustStr(""), c))
-		}, "strim('textsuffix', 'suffix') => 'text'"),
+			return Str(strings.TrimRight(src.MustStr(""), cutset.StringDefault(" ")))
+		}, "$f(text, cutset) => text", "\tremove chars both ocurred in cutset and right-side of text"),
 		Str("decutf8"), Native("decutf8", func(env *Env) {
 			r, sz := utf8.DecodeRuneInString(env.Get(0).MustStr(""))
 			env.A = Array(Int(int64(r)), Int(int64(sz)))
@@ -187,7 +186,7 @@ func init() {
 		}, "$f('TEXT') => 'text'"),
 		Str("isbytes"), Native1("isbytes", func(env *Env, s Value) Value {
 			return Bool(s.IsBytes())
-		}),
+		}, "isbytes(value) => bool", "\ttest whether strng is muteable"),
 		Str("bytes"), Native1("bytes", func(env *Env, s Value) Value {
 			if s.Type() == typ.Number {
 				return Bytes(make([]byte, s.Int()))

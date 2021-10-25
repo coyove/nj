@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sync/atomic"
+	"unicode/utf8"
 
 	"github.com/coyove/script/typ"
 )
@@ -118,6 +119,17 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			} else if va.Type() == typ.Table {
 				k, v := va.Table().Next(vb)
 				env.A = Array(k, v)
+			} else if va.Type() == typ.String {
+				idx := int64(0)
+				if vb != Nil {
+					idx = vb.MustInt("string iteration")
+				}
+				r, sz := utf8.DecodeRuneInString(va.Str()[idx:])
+				if sz == 0 {
+					env.A = Array(Nil, Nil)
+				} else {
+					env.A = Array(Int(int64(sz)+idx), Rune(r))
+				}
 			} else {
 				panicf("inc " + errNeedNumbers)
 			}

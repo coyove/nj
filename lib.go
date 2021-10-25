@@ -75,13 +75,11 @@ func init() {
 	}, "doc(function) => string", "\treturn function's documentation",
 		"doc(function, docstring)", "\tupdate function's documentation")
 	AddGlobalValue("new", func(env *Env, v, a Value) Value {
-		m := *v.MustTable("")
-		m.hashItems = append([]hashItem{}, m.hashItems...)
-		m.items = append([]Value{}, m.items...)
+		m := v.MustTable("").Copy()
 		if a.Type() != typ.Table {
-			return (&Table{Parent: &m}).Value()
+			return (&Table{Parent: m}).Value()
 		}
-		a.Table().Parent = &m
+		a.Table().Parent = m
 		return a
 	})
 	AddGlobalValue("prototype", g["new"])

@@ -172,7 +172,7 @@ func Byte(s byte) Value {
 	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStringMarker) + 8)}
 }
 
-// Rune returns a one-rune string value
+// Rune returns a one-rune string value encoded in UTF-8
 func Rune(r rune) Value {
 	x := [8]byte{}
 	n := utf8.EncodeRune(x[:], r)

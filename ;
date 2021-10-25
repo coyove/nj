@@ -43,16 +43,12 @@ do
     end
     assert(sum == 16)
 
-    sum = 0
-    lst = {1,2,3,4,5,6,7,8,9}
-    local k = 'not touched'
-    for k, v in lst do
-        if v%3 == 1 then continue end
+sum = 0
+    for _, v in {1,2,3,4,5,6} do
+        if v == 5 then continue end
         sum = sum + v
-        k, v = next(lst, k)
     end
-    assert(sum, 2 + 5 + 8)
-    assert(k, 'not touched')
+    assert(sum == 16)
 end
 
 do

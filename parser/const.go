@@ -23,6 +23,7 @@ var (
 	zero      = Int(0)
 	one       = Int(1)
 	emptyNode = Nodes()
+	nullStr   = Str("")
 )
 
 var (
@@ -35,6 +36,7 @@ var (
 	AFor, SFor           = "loop", staticSym("loop")
 	AFunc, SFunc         = "function", staticSym("function")
 	ABreak, SBreak       = "break", staticSym("break")
+	AContinue, SContinue = "continue", staticSym("continue")
 	ABegin, SBegin       = "prog", staticSym("prog")
 	ALoad, SLoad         = "load", staticSym("load")
 	AStore, SStore       = "store", staticSym("store")
@@ -89,7 +91,7 @@ func __store(subject, key, value Node) Node { return Nodes((SStore), subject, va
 
 func __if(cond, t, f Node) Node { return Nodes((SIf), cond, t, f) }
 
-func __loop(body ...Node) Node { return Nodes(SFor, __chain(body...)) }
+func __loop(cont Node, body ...Node) Node { return Nodes(SFor, __chain(body...), cont) }
 
 func __goto(label Node) Node { return Nodes(SGoto, label) }
 
@@ -97,14 +99,15 @@ func __label(name Node) Node { return Nodes(SLabel, name) }
 
 func __ret(v Node) Node { return Nodes(SReturn, v) }
 
-func __func(name Token, paramList Node, doc string, stats Node) Node {
+func __func(name Token, pp Node, stats Node) Node {
 	__findTailCall(stats.Nodes())
 	funcname := Sym(name)
 	p := name
+	paramList := pp.Nodes()[0]
 	return __chain(
 		__set(funcname, SNil).At(p),
 		__move(funcname,
-			Nodes((SFunc), funcname, paramList, stats, Str(doc)).At(p)).At(p),
+			Nodes((SFunc), funcname, paramList, stats, pp.Nodes()[1]).At(p)).At(p),
 	)
 }
 
@@ -185,7 +188,7 @@ func __dotdotdot(expr Node) Node {
 	return expr
 }
 
-func __forIn(key, value Token, expr, skip, body Node, pos Token) Node {
+func __forIn(key, value Token, expr, body Node, pos Token) Node {
 	k, v, e, tmp := Sym(key), Sym(value), randomVarname(), randomVarname()
 	next := Nodes((SInc), e, k).At(pos)
 	moveNext := __chain(
@@ -193,38 +196,14 @@ func __forIn(key, value Token, expr, skip, body Node, pos Token) Node {
 		__move(k, __load(tmp, zero).At(pos)).At(pos),
 		__move(v, __load(tmp, one).At(pos)).At(pos),
 	)
-	skipExpr := __chain()
-	if skip.Int() != 1 {
-		skipVar, skipEnd, repeatLabel, exitLabel := randomVarname(), randomVarname(), randomVarname(), randomVarname()
-		skipExpr = skipExpr.append(__set(skipEnd, skip).At(pos))
-		moveNext = __chain(
-			__set(skipVar, skipEnd).At(pos),
-			__chain(
-				__label(repeatLabel),
-				__if(__lessEq(skipVar, zero).At(pos),
-					__goto(exitLabel),
-					__chain(
-						moveNext,
-						__if(
-							Nodes((SEq), k, SNil).At(pos),
-							breakNode,
-							__inc(skipVar, Int(-1)).At(pos), // repeat
-						).At(pos),
-					),
-				).At(pos),
-				__goto(repeatLabel),
-				__label(exitLabel),
-			),
-		)
-	}
 	return __do(
 		__set(e, expr).At(pos),
-		skipExpr,
 		__set(k, SNil).At(pos),
 		__set(tmp, next).At(pos), // init, move to the first key
 		__move(k, __load(tmp, zero).At(pos)).At(pos),
 		__set(v, __load(tmp, one).At(pos)).At(pos),
 		__loop(
+			moveNext,
 			__if(
 				Nodes((SEq), k, SNil).At(pos),
 				breakNode,

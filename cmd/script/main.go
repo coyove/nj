@@ -19,7 +19,7 @@ const VERSION = "0.2.0"
 
 var (
 	goroutinePerCPU = flag.Int("goroutine", 2, "goroutines per CPU")
-	output          = flag.String("o", "none", "separated by comma: (none|compileonly|opcode|bytes|ret|timing)+")
+	output          = flag.String("o", "ret", "separated by comma: (none|compileonly|opcode|bytes|ret|timing)+")
 	input           = flag.String("i", "f", "input source, 'f': file, '-': stdin, others: string")
 	version         = flag.Bool("v", false, "print version and usage")
 	timeout         = flag.Int("t", 0, "max execution time in ms")

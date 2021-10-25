@@ -330,6 +330,13 @@ func (m *Table) Value() Value {
 	return Value{v: uint64(typ.Table), p: unsafe.Pointer(m)}
 }
 
+func (m *Table) Copy() *Table {
+	m2 := *m
+	m2.hashItems = append([]hashItem{}, m.hashItems...)
+	m2.items = append([]Value{}, m.items...)
+	return &m2
+}
+
 func (m *Table) resizeHash(newSize int) {
 	if newSize < len(m.hashItems) {
 		panic("resizeHash: invalid size")

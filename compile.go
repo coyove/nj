@@ -26,7 +26,9 @@ type symbol struct {
 func (s *symbol) String() string { return fmt.Sprintf("symbol:%d", s.addr) }
 
 type breaklabel struct {
-	labelPos []int
+	continueNode parser.Node
+	continueGoto int
+	labelPos     []int
 }
 
 type CompileOptions struct {
@@ -331,7 +333,7 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		yx = table.compileIf(nodes)
 	case parser.AFor:
 		yx = table.compileWhile(nodes)
-	case parser.ABreak:
+	case parser.ABreak, parser.AContinue:
 		yx = table.compileBreak(nodes)
 	case parser.ACall, parser.ATailCall:
 		yx = table.compileCall(nodes)

@@ -19,6 +19,7 @@ package parser
 %type<expr> jmp_stat
 %type<expr> func_stat
 %type<expr> func_params
+%type<expr> func_docstring
 %type<expr> comma
 
 %union {
@@ -27,7 +28,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TElse TFor TWhile TFunc TLambda TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot TLParen
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TLambda TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot TLParen
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
@@ -110,20 +111,22 @@ assign_stat:
 
 for_stat:
     TWhile expr TDo stats TEnd {
-        $$ = __loop(__if($2, $4, breakNode).At($1)).At($1)
+        $$ = __loop(emptyNode, __if($2, $4, breakNode).At($1)).At($1)
     } |
     TRepeat stats TUntil expr {
-        $$ = __loop($2, __if($4, breakNode, emptyNode).At($1)).At($1)
+        $$ = __loop(emptyNode, $2, __if($4, breakNode, emptyNode).At($1)).At($1)
     } |
     TFor TIdent '=' expr ',' expr TDo stats TEnd {
         forVar, forEnd := Sym($2), randomVarname()
+        cont := __inc(forVar, one).At($1)
         $$ = __do(
             __set(forVar, $4).At($1),
             __set(forEnd, $6).At($1),
             __loop(
+                cont,
                 __if(
                     __less(forVar, forEnd),
-                    __chain($8, __inc(forVar, one).At($1)),
+                    __chain($8, cont),
                     breakNode,
                 ).At($1),
             ).At($1),
@@ -139,12 +142,13 @@ for_stat:
         )
         if $8.IsNum() { // step is a static number, easy case
             if $8.IsNegativeNumber() {
-                $$ = $$.append(__loop(__if(__less(forEnd, forVar), body, breakNode).At($1)).At($1))
+                $$ = $$.append(__loop(__inc(forVar, forStep), __if(__less(forEnd, forVar), body, breakNode).At($1)).At($1))
             } else {
-                $$ = $$.append(__loop(__if(__less(forVar, forEnd), body, breakNode).At($1)).At($1))
+                $$ = $$.append(__loop(__inc(forVar, forStep), __if(__less(forVar, forEnd), body, breakNode).At($1)).At($1))
             }
         } else { 
             $$ = $$.append(__loop(
+                __inc(forVar, forStep),
                 __if(
                     __less(zero, forStep).At($1),
                     __if(__lessEq(forEnd, forVar), breakNode, body).At($1), // +step
@@ -153,10 +157,8 @@ for_stat:
             ).At($1))
         }
     } |
-    TFor TIdent ',' TIdent TIn expr TDo stats TEnd          { $$ = __forIn($2, $4, $6, one, $8, $1) } |
-    TFor TIdent TIn expr TDo stats TEnd                     { $$ = __forIn($2, $1, $4, one, $6, $1) } |
-    TFor TIdent ',' TIdent TIn expr ',' expr TDo stats TEnd { $$ = __forIn($2, $4, $6, $8, $10, $1) } |
-    TFor TIdent TIn expr ',' expr TDo stats TEnd            { $$ = __forIn($2, $1, $4, $6, $8, $1) }
+    TFor TIdent ',' TIdent TIn expr TDo stats TEnd          { $$ = __forIn($2, $4, $6, $8, $1) } |
+    TFor TIdent TIn expr TDo stats TEnd                     { $$ = __forIn($2, $1, $4, $6, $1) }
 
 if_stat:
     TIf expr TThen stats elseif_stat TEnd %prec 'T' { $$ = __if($2, $4, $5).At($1) }
@@ -165,19 +167,23 @@ elseif_stat:
     { $$ = Nodes() } | TElse stats { $$ = $2 } | TElseIf expr TThen stats elseif_stat { $$ = __if($2, $4, $5).At($1) }
 
 func_stat:
-    TFunc TIdent func_params stats TEnd            { $$ = __func($2, $3, "", $4) } | 
-    TFunc TIdent '.' TIdent func_params stats TEnd { $$ = __store(Sym($2), Str($4.Str), __func(__markupFuncName($2, $4), $5, "", $6)) }
+    TFunc TIdent func_params stats TEnd            { $$ = __func($2, $3, $4) } | 
+    TFunc TIdent '.' TIdent func_params stats TEnd { $$ = __store(Sym($2), Str($4.Str), __func(__markupFuncName($2, $4), $5, $6)) }
 
 func_params:
-    TLParen ')'                       { $$ = emptyNode } | 
-    TLParen ident_list ')'            { $$ = $2 } |
-    TLParen ident_list TDotDotDot ')' { $$ = __dotdotdot($2) } |
-    '(' ')'                           { $$ = emptyNode } | 
-    '(' ident_list ')'                { $$ = $2 } |
-    '(' ident_list TDotDotDot ')'     { $$ = __dotdotdot($2) }
+    TLParen ')' func_docstring                       { $$ = Nodes(emptyNode, $3) } | 
+    TLParen ident_list ')' func_docstring            { $$ = Nodes($2, $4) } |
+    TLParen ident_list TDotDotDot ')' func_docstring { $$ = Nodes(__dotdotdot($2), $5) } |
+    '(' ')' func_docstring                           { $$ = Nodes(emptyNode, $3) } | 
+    '(' ident_list ')' func_docstring                { $$ = Nodes($2, $4) } |
+    '(' ident_list TDotDotDot ')' func_docstring     { $$ = Nodes(__dotdotdot($2), $5) }
+
+func_docstring:
+    { $$ = nullStr } | TString { $$ = Str($1.Str) }
 
 jmp_stat:
     TBreak               { $$ = Nodes(SBreak).At($1) } |
+    TContinue            { $$ = Nodes(SContinue).At($1) } |
     TGoto TIdent         { $$ = __goto(Sym($2)).At($1) } |
     TLabel TIdent TLabel { $$ = __label(Sym($2)) } |
     TReturnVoid          { $$ = __ret(SNil).At($1) } |
@@ -197,7 +203,7 @@ declarator:
 
 expr:
     prefix_expr                       { $$ = $1 } |
-    TLambda func_params stats TEnd    { $$ = __func(__markupLambdaName($1), $2, "", $3) } | 
+    TLambda func_params stats TEnd    { $$ = __func(__markupLambdaName($1), $2, $3) } | 
     TNumber                           { $$ = Num($1.Str) } |
     TString                           { $$ = Str($1.Str) } |
     '{' '}'                           { $$ = Nodes((SArrayMap), emptyNode).At($1) } |

@@ -314,15 +314,24 @@ func (table *symtable) compileBreak(atoms []parser.Node) uint16 {
 	if len(table.forLoops) == 0 {
 		panicf("%v: outside loop", atoms[0])
 	}
-	table.forLoops[len(table.forLoops)-1].labelPos = append(table.forLoops[len(table.forLoops)-1].labelPos, table.code.Len())
-	table.code.writeJmpInst(typ.OpJmp, 0)
+	bl := table.forLoops[len(table.forLoops)-1]
+	if atoms[0].Sym() == parser.AContinue {
+		table.compileNode(bl.continueNode)
+		table.code.writeJmpInst(typ.OpJmp, bl.continueGoto-len(table.code.Code)-1)
+	} else {
+		bl.labelPos = append(bl.labelPos, table.code.Len())
+		table.code.writeJmpInst(typ.OpJmp, 0)
+	}
 	return regA
 }
 
 // [loop [chain ...]]
 func (table *symtable) compileWhile(atoms []parser.Node) uint16 {
 	init := table.code.Len()
-	breaks := &breaklabel{}
+	breaks := &breaklabel{
+		continueNode: atoms[2],
+		continueGoto: init,
+	}
 
 	table.forLoops = append(table.forLoops, breaks)
 	table.addMaskedSymTable()
