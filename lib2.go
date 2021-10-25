@@ -24,12 +24,15 @@ func init() {
 	TableLib = MapAdd(TableLib,
 		Str("makearray"), Native1("makearray", func(env *Env, n Value) Value {
 			return Array(make([]Value, n.MustInt(""))...)
-		}, "makearray(n) => { nil, ..., nil }", "\treturn a table array, preallocate space for n values"),
+		}, "makearray(n: int) array", "\treturn a table array, preallocate space for n values"),
 		Str("slice"), Native3("slice", func(env *Env, t, s, e Value) Value {
 			start, end := int(s.MustInt("")), int(e.MustInt(""))
 			return Array(t.MustTable("").items[start:end]...)
 		}),
 		Str("copy"), Native3("copy", func(env *Env, t, s, e Value) Value {
+			if s == Nil && e == Nil {
+				return t.MustTable("").Copy().Value()
+			}
 			start, end := int(s.MustInt("")), int(e.MustInt(""))
 			a := t.MustTable("").items
 			if start >= 0 && start < len(a) && end >= 0 && end <= len(a) && start <= end {
@@ -57,7 +60,7 @@ func init() {
 				ma.Set(Int(int64(len(ma.items))), b)
 			}
 			return ma.Value()
-		}, "concat(array1, array2)", "\tput elements from array2 to array1's end"),
+		}, "concat(array1: array, array2: array)", "\tput elements from array2 to array1's end"),
 		Str("merge"), Native2("merge", func(env *Env, a, b Value) Value {
 			ma, mb := a.MustTable(""), b.MustTable("")
 			ma.resizeHash(len(mb.hashItems) + len(ma.hashItems))
@@ -66,26 +69,26 @@ func init() {
 				return true
 			})
 			return ma.Value()
-		}, "$f(table1, table2)", "\tmerge elements from table2 to table1"),
+		}, "$f(table1: table, table2: table)", "\tmerge elements from table2 to table1"),
 	)
 	AddGlobalValue("table", TableLib)
 
 	StringMethods = MapAdd(StringMethods,
-		Str("__call"), Native1("str", func(env *Env, src Value) Value {
+		Str("__call"), Native2("str", func(env *Env, strObj, src Value) Value {
 			return Str(fmt.Sprint(src.Interface()))
-		}, "call stub"),
+		}),
 		Str("size"), Native1("size", func(env *Env, src Value) Value {
 			return Int(int64(len(src.MustStr(""))))
-		}, "size(text) => length"),
+		}, "size({text}: string) int"),
 		Str("len"), Native1("len", func(env *Env, src Value) Value {
 			return Int(int64(len(src.MustStr(""))))
-		}, "len(text) => length"),
+		}, "len({text}: string) int"),
 		Str("count"), Native1("count", func(env *Env, src Value) Value {
 			return Int(int64(utf8.RuneCountInString(src.MustStr(""))))
-		}, "count(text) => count_of_runes"),
+		}, "count({text}: string) int", "\treturn count of runes in text"),
 		Str("from"), Native1("from", func(env *Env, src Value) Value {
 			return Str(fmt.Sprint(src.Interface()))
-		}, "from(value) => string", "\tconvert value to string"),
+		}, "from(v: value) string", "\tconvert value to string"),
 		Str("iequal"), Native2("iequal", func(env *Env, src, a Value) Value {
 			return Bool(strings.EqualFold(src.MustStr(""), a.MustStr("")))
 		}, ""),
@@ -109,7 +112,7 @@ func init() {
 				}
 			}
 			return Array(r...)
-		}, "split(text, delim) => {part1, part2, ...}", "split(text, delim, n) => {part1, ..., partN}"),
+		}, "split({text}: string, delim: string) array", "split({text}: string, delim: string, n: int) array"),
 		Str("replace"), Native("replace", func(env *Env) {
 			src := env.Get(0).MustStr("text")
 			from := env.Get(1).MustStr("old text")
@@ -126,16 +129,16 @@ func init() {
 		}, ""),
 		Str("find"), Native2("find", func(env *Env, src, substr Value) Value {
 			return Int(int64(strings.Index(src.MustStr(""), substr.MustStr(""))))
-		}, "$f(text, chars_set) => index", "\tfind the first index of from chars_set which occurs in text"),
+		}, "$f({text}: string, sub: string) int", "\tfind index of first appearence of sub in text"),
 		Str("findany"), Native2("findany", func(env *Env, src, substr Value) Value {
 			return Int(int64(strings.IndexAny(src.MustStr(""), substr.MustStr(""))))
-		}, "$f(text, chars_set) => index", "\tfind the first index of any char from chars_set which occurs in text"),
+		}, "$f({text}: string, charset: string) int", "\tfind index of first appearence of any char from charset in text"),
 		Str("rfind"), Native2("rfind", func(env *Env, src, substr Value) Value {
 			return Int(int64(strings.LastIndex(src.MustStr(""), substr.MustStr(""))))
 		}, ""),
 		Str("rfindany"), Native2("rfindany", func(env *Env, src, substr Value) Value {
 			return Int(int64(strings.LastIndexAny(src.MustStr(""), substr.MustStr(""))))
-		}, "$f(text, chars_set) => last_index", "\tfind the last index of any char from chars_set which occurs in text"),
+		}, "$f({text}: string, charset: string) int", "\tsame as findany(), but from right to left"),
 		Str("sub"), Native3("sub", func(env *Env, src, start, end Value) Value {
 			s := src.MustStr("")
 			st := start.IntDefault(0)
@@ -147,54 +150,54 @@ func init() {
 				en += int64(len(s))
 			}
 			return Str(s[st:en])
-		}, "sub(text, start, end) => text[start:end]"),
+		}, "$f({text}: string, start: int, end: int) string"),
 		Str("trim"), Native2("trim", func(env *Env, src, cutset Value) Value {
 			if cutset == Nil {
 				return Str(strings.TrimSpace(src.MustStr("")))
 			}
 			return Str(strings.Trim(src.MustStr(""), cutset.MustStr("")))
 		},
-			"trim(text) => text", "\ttrim spaces at left and right side of text",
-			"trim(text, cutset) => text", "\tremove chars both occurred in cutset and left-side/right-side of text"),
+			"$f{text}: string) string", "\ttrim spaces at left and right side of text",
+			"$f{text}: string, cutset: string) string", "\tremove chars both occurred in cutset and left-side/right-side of text"),
 		Str("lremove"), Native2("lremove", func(env *Env, src, cutset Value) Value {
 			return Str(strings.TrimPrefix(src.MustStr(""), cutset.MustStr("")))
-		}, "$f(text, prefix) => text", "\tremove prefix in text if any"),
+		}, "$f({text}: string, prefix: string) string", "\tremove prefix in text if any"),
 		Str("rremove"), Native2("rremove", func(env *Env, src, cutset Value) Value {
 			return Str(strings.TrimSuffix(src.MustStr(""), cutset.MustStr("")))
-		}, "$f(text, suffix) => text", "\tremove suffix in text if any"),
+		}, "$f({text}: string, suffix: string) string", "\tremove suffix in text if any"),
 		Str("ltrim"), Native2("ltrim", func(env *Env, src, cutset Value) Value {
 			return Str(strings.TrimLeft(src.MustStr(""), cutset.StringDefault(" ")))
-		}, "$f(text, cutset) => text", "\tremove chars both ocurred in cutset and left-side of text"),
+		}, "$f({text}: string, cutset: string) string", "\tremove chars both ocurred in cutset and left-side of text"),
 		Str("rtrim"), Native2("rtrim", func(env *Env, src, cutset Value) Value {
 			return Str(strings.TrimRight(src.MustStr(""), cutset.StringDefault(" ")))
-		}, "$f(text, cutset) => text", "\tremove chars both ocurred in cutset and right-side of text"),
+		}, "$f({text}: string, cutset: string) string", "\tremove chars both ocurred in cutset and right-side of text"),
 		Str("decutf8"), Native("decutf8", func(env *Env) {
 			r, sz := utf8.DecodeRuneInString(env.Get(0).MustStr(""))
 			env.A = Array(Int(int64(r)), Int(int64(sz)))
-		}, "$f(string) => { char_unicode, width_in_bytes }"),
+		}, "$f({text}: string) array", "\tdecode first char in UTF-8 string, return { char_unicode, width_in_bytes }"),
 		Str("startswith"), Native2("startswith", func(env *Env, t, p Value) Value {
 			return Bool(strings.HasPrefix(t.MustStr(""), p.MustStr("")))
-		}, "startswith(text, prefix) => bool"),
+		}, "$f(text: string, prefix: string) bool"),
 		Str("endswith"), Native2("endswith", func(env *Env, t, s Value) Value {
 			return Bool(strings.HasSuffix(t.MustStr(""), s.MustStr("")))
-		}, "endswith(text, suffix) => bool"),
+		}, "$f(text: string, suffix: string) bool"),
 		Str("upper"), Native1("upper", func(env *Env, t Value) Value {
 			return Str(strings.ToUpper(t.MustStr("")))
-		}, "$f('text') => 'TEXT'"),
+		}, "$f(s: string) string"),
 		Str("lower"), Native1("lower", func(env *Env, t Value) Value {
 			return Str(strings.ToLower(t.MustStr("")))
-		}, "$f('TEXT') => 'text'"),
+		}, "$f(s: string) string"),
 		Str("isbytes"), Native1("isbytes", func(env *Env, s Value) Value {
 			return Bool(s.IsBytes())
-		}, "isbytes(value) => bool", "\ttest whether strng is muteable"),
+		}, "$f(v: value) bool", "\ttest whether strng is muteable"),
 		Str("bytes"), Native1("bytes", func(env *Env, s Value) Value {
 			if s.Type() == typ.Number {
 				return Bytes(make([]byte, s.Int()))
 			}
 			return Bytes([]byte(s.MustStr("")))
 		},
-			"bytes(string) => bytes", "\tcreate a byte array from the given string",
-			"bytes(n) => n_bytes", "\tcreate an n-byte long array",
+			"$f(v: string) bytes", "\tcreate a byte array from the given string",
+			"$f(n: int) bytes", "\tcreate an n-byte long array",
 		),
 		Str("chars"), Native2("chars", func(env *Env, s, n Value) Value {
 			var r []Value
@@ -211,11 +214,10 @@ func init() {
 				s = s[sz:]
 			}
 			return Array(r...)
-		}, "chars(string) => { char1, char2, ... }",
-			"chars(string, max) => { char1, char2, ..., char_max }",
-			"\tbreak a string into (at most 'max') chars, e.g.:",
-			"\tchars('a中c') => { 'a', '中', 'c' }",
-			"\tchars('a中c', 1) => { 'a' }",
+		}, "chars({text}: string) array",
+			"\tbreak a string into chars, e.g.: chars('a中c') => { 'a', '中', 'c' }",
+			"chars({text}: string, n: int) array",
+			"\tbreak a string into at most n chars, e.g.: chars('a中c', 1) => { 'a' }",
 		),
 		Str("format"), Native("format", func(env *Env) {
 			f := env.Get(0).MustStr("")
@@ -283,7 +285,7 @@ func init() {
 				}
 			}
 			env.A = Str(p.String())
-		}, "format(pattern, a1, a2, ...)"),
+		}, "format({pattern}: string, ...args: value) string"),
 		Str("buffer"), Native1("buffer", func(env *Env, v Value) Value {
 			b := &bytes.Buffer{}
 			if v != Nil {
@@ -334,7 +336,7 @@ func init() {
 			rg.Lock()
 			defer rg.Unlock()
 			rg.Rand.Seed(env.Get(0).IntDefault(1))
-		}, "randomseed(int)"),
+		}, "randomseed(seed: int)"),
 		Str("random"), Native("random", func(env *Env) {
 			rg.Lock()
 			defer rg.Unlock()
@@ -353,14 +355,14 @@ func init() {
 				env.A = Float(rg.Float64())
 			}
 		},
-			"$f() => [0, 1)",
-			"$f(n) => [0, n)",
-			"$f(a, b) => [a, b]"),
+			"$f() float", "\treturn [0, 1)",
+			"$f(n: int) int", "\treturn [0, n)",
+			"$f(a: number, b: number) number", "\treturn [a, b]"),
 		Str("sqrt"), Native1("sqrt", func(env *Env, v Value) Value { return Float(math.Sqrt(v.MustFloat(""))) }),
 		Str("floor"), Native1("floor", func(env *Env, v Value) Value { return Float(math.Floor(v.MustFloat(""))) }),
 		Str("ceil"), Native1("ceil", func(env *Env, v Value) Value { return Float(math.Ceil(v.MustFloat(""))) }),
-		Str("min"), Native("min", func(env *Env) { mathMinMax(env, "#%d arg", false) }, "$f(a, b, ...) => largest_number"),
-		Str("max"), Native("max", func(env *Env) { mathMinMax(env, "#%d arg", true) }, "$f(a, b, ...) => smallest_number"),
+		Str("min"), Native("min", func(env *Env) { mathMinMax(env, "#%d arg", false) }, "$f(...a: number) number"),
+		Str("max"), Native("max", func(env *Env) { mathMinMax(env, "#%d arg", true) }, "$f(...a: number) number"),
 		Str("pow"), Native2("pow", func(env *Env, a, b Value) Value {
 			af, ai, aIsInt := a.MustNum("base").Num()
 			bf, bi, bIsInt := b.MustNum("power").Num()
@@ -368,7 +370,7 @@ func init() {
 				return Int(ipow(ai, bi))
 			}
 			return Float(math.Pow(af, bf))
-		}, "pow(a, b) => a to the power of b"),
+		}, "pow(a: number, b: number) number"),
 		Str("abs"), Native("abs", func(env *Env) {
 			switch f, i, isInt := env.Get(0).MustNum("").Num(); {
 			case isInt && i < 0:

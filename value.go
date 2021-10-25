@@ -25,6 +25,8 @@ var (
 	trueMarker        = unsafe.Pointer(new(int64))
 	falseMarker       = unsafe.Pointer(new(int64))
 	smallStringMarker = unsafe.Pointer(new([9]int64))
+	metaStringStart   = Str("__\x00\x00\x00\x00\x00\x00")
+	metaStringEnd     = Str("__\xff\xff\xff\xff\xff\xff")
 
 	Nil     = Value{}
 	Undef   = _interface(new(int))
@@ -315,6 +317,13 @@ func _interface(i interface{}) Value {
 
 func (v Value) IsSmallString() bool {
 	return uintptr(v.p) >= uintptr(smallStringMarker) && uintptr(v.p) <= uintptr(smallStringMarker)+8*8
+}
+
+func (v Value) IsMetaString() bool {
+	if !v.IsSmallString() {
+		return false
+	}
+	return v.v >= metaStringStart.v && v.v <= metaStringEnd.v
 }
 
 func (v Value) Str() string {

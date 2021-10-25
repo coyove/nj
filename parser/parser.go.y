@@ -240,7 +240,9 @@ prefix_expr:
     prefix_expr TString                                { $$ = __call($1, Nodes(Str($2.Str))).At($2) } |
     prefix_expr TLParen ')'                            { $$ = __call($1, emptyNode).At($2) } |
     prefix_expr TLParen expr_list comma ')'            { $$ = __call($1, $3).At($2) } |
-    prefix_expr TLParen expr_list TDotDotDot comma ')' { $$ = __call($1, __dotdotdot($3)).At($2) }
+    prefix_expr TLParen expr_assign_list comma ')'     { $$ = __call($1, Nodes(SArrayMap, $3).At($2)).At($2) } |
+    prefix_expr TLParen expr_list TDotDotDot comma ')' { $$ = __call($1, __dotdotdot($3)).At($2) } |
+    prefix_expr TLParen expr_list ',' expr_assign_list comma ')' { $$ = __call($1, $3.append(Nodes(SArrayMap, $5).At($2))).At($2) }
 
 declarator_list:
     declarator { $$ = Nodes($1) } | declarator_list ',' declarator { $$ = $1.append($3) }

@@ -70,7 +70,7 @@ func (m *Table) Get(k Value) (v Value) {
 		v = m.Parent.Get(k)
 	}
 FINAL:
-	if m.Parent != nil && v.Type() == typ.Func {
+	if (m.Parent != nil || k.IsMetaString()) && v.Type() == typ.Func {
 		f := *v.Func()
 		f.MethodSrc = m.Value()
 		v = f.Value()

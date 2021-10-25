@@ -91,13 +91,16 @@ func (c *Func) String() string {
 		p.WriteString("function")
 	}
 	p.WriteString("(")
+	if c.MethodSrc != Nil {
+		p.WriteString("{" + c.MethodSrc.Type().String() + "},")
+	}
 	for i := 0; i < int(c.NumParams); i++ {
 		fmt.Fprintf(&p, "a%d,", i)
 	}
 	if c.Variadic {
 		p.Truncate(p.Len() - 1)
 		p.WriteString("...")
-	} else if c.NumParams > 0 {
+	} else if p.Bytes()[p.Len()-1] == ',' {
 		p.Truncate(p.Len() - 1)
 	}
 	p.WriteString(")")

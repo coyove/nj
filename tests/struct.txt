@@ -142,14 +142,13 @@ println(b0.get_brand(), b1.get_brand(), b2.get_brand(), b3.get_brand())
 
 -- closure
 function foo(a)
-    return closure(a, lambda(a, b)
-        m = {a=a, b=b}
-        return closure(m, lambda(m, c)
+    return closure(lambda(a, b)
+        return closure(lambda(m, c)
             m.a = m.a + 1
             if c == 6 then panic(m.a + m.b + c) end
             return m.a + m.b + c
-        end)
-    end)
+        end, a=a, b=b)
+    end, a)
 end
 bar = foo(2)(3)
 assert(bar(4), 10)
@@ -164,3 +163,14 @@ assert(pcall(bar, 6), 14)
 m = {}
 function m.a() return 'a' end
 assert(m.a() == 'a')
+
+cls = {}
+cls.__str = lambda(o) return o.v end
+cls2 = prototype(cls)
+cls2.__str = lambda(o) return o.v + '2' end
+obj = new(cls, v='obj')
+obj2 = new(cls2, v='obj')
+assert(str(obj), 'obj')
+assert(str(obj2), 'obj2')
+print(obj2)
+

@@ -72,7 +72,8 @@ function pp(name, f, ident)
     if type(f) == "table" then
         for k, v in f do pp(name + "." + str(k), v, ident) end
     elseif type(f) == "function" then
-        print(ident, name, " ", doc(f))
+        local d = doc(f)
+        print(ident, name, " ", d.ltrim(name))
         print()
     else
         print(ident, name, "=", f)
