@@ -1308,7 +1308,7 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line parser.go.y:243
 		{
-			yyVAL.expr = __call(yyDollar[1].expr, Nodes(SArrayMap, yyDollar[3].expr).At(yyDollar[2].token)).At(yyDollar[2].token)
+			yyVAL.expr = __call(yyDollar[1].expr, Nodes(Nodes(SArrayMap, yyDollar[3].expr).At(yyDollar[2].token))).At(yyDollar[2].token)
 		}
 	case 83:
 		yyDollar = yyS[yypt-6 : yypt+1]

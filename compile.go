@@ -351,7 +351,7 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		if _, ok := flatOpMapping[name]; ok {
 			return table.compileFlat(nodes)
 		}
-		panicf("DEBUG: compileNode unknown symbol: %q", name)
+		panicf("DEBUG: compileNode unknown symbol: %q in %v", name, node)
 	}
 	return yx
 }

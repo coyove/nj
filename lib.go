@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -292,6 +293,9 @@ func init() {
 		}
 		fmt.Fprintln(env.Global.Stdout)
 	}, "print(...args: value)", "\tprint values, no space between them")
+	AddGlobalValue("printf", func(env *Env) {
+		sprintf(env, os.Stdout)
+	}, "$f(format: string, ...args: value)")
 	AddGlobalValue("write", func(env *Env) {
 		w := env.Get(0).Interface().(io.Writer)
 		for _, a := range env.Stack()[1:] {
@@ -317,9 +321,9 @@ func init() {
 		}
 		return Array(results...)
 	},
-		"$f() array", "\tread all user inputs and return { input1, input2, ... }",
-		"$f(prompt: string) array", "\tprint prompt and read all user inputs",
-		"$f(prompt: string, n: int) array", "\tprint prompt and read at most n user inputs",
+		"$f() array", "\tread all user inputs and return as { input1, input2, ... }",
+		"$f(prompt: string) array", "\tprint prompt then read all user inputs",
+		"$f(prompt: string, n: int) array", "\tprint prompt then read n user inputs",
 	)
 	AddGlobalValue("time", func(env *Env) { env.A = Float(float64(time.Now().UnixNano()) / 1e9) }, "time() float", "\tunix timestamp in seconds")
 	AddGlobalValue("sleep", func(env *Env) { time.Sleep(time.Duration(env.Get(0).MustFloat("") * float64(time.Second))) }, "sleep(sec: float)")
@@ -421,6 +425,31 @@ func init() {
 		Str("mutex"), Native("mutex", func(env *Env) { env.A = Val(&sync.Mutex{}) }, "$f() value", "\tcreate a mutex"),
 		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() value", "\tcreate a read-write mutex"),
 		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() value", "\tcreate a wait group"),
+		Str("map"), Native3("map", func(env *Env, list, f, opt Value) Value {
+			n := runtime.NumCPU()
+			if nn := opt.MaybeTableGetString("n"); nn != Nil {
+				n = int(nn.MustInt("number of goroutines"))
+			}
+			if n < 1 {
+				panicf("invalid number of goroutines: %v", n)
+			}
+			out := make([]Value, list.MustTable("").Len())
+			wg := sync.WaitGroup{}
+			wg.Add(n)
+			for i := 0; i < n; i++ {
+				go func(i int) {
+					defer wg.Done()
+					res, err := f.MustFunc("callback").Call(list.MustTable("").Get(Int(int64(i))))
+					if err != nil {
+						out[i] = Val(err)
+					} else {
+						out[i] = res
+					}
+				}(i)
+			}
+			wg.Wait()
+			return Array(out...)
+		}, "$f(list: array, f: function, opt: table) array", "\tcreate a wait group"),
 	))
 	AddGlobalValue("next", func(env *Env, m, k Value) Value {
 		nk, nv := m.MustTable("").Next(k)

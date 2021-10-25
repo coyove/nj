@@ -174,3 +174,10 @@ assert(str(obj), 'obj')
 assert(str(obj2), 'obj2')
 print(obj2)
 
+t = table(a=1, b=2)
+t2 = t.copy()
+t.b =3
+assert(t2.b, 2)
+
+t = table({1,2,3,4}).filter(lambda(v) return v >= 2 end)
+assert(t[0] == 2 and t[2] == 4)

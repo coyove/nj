@@ -22,13 +22,56 @@ var StringMethods, MathLib, TableLib, OSLib Value
 
 func init() {
 	TableLib = MapAdd(TableLib,
+		Str("__call"), Native2("__call", func(env *Env, t, m Value) Value {
+			if m == Nil {
+				return TableProto(t.MustTable(""))
+			}
+			m.MustTable("").Parent = t.MustTable("")
+			return m
+		}),
+		Str("__safe"), Native2("__safe", func(env *Env, t, m Value) Value {
+			x := NewTable(t.MustTable("").Len())
+			t.MustTable("").Foreach(func(k, v Value) bool {
+				if v.Type() == typ.Func {
+					old := v.Func()
+					v = Native(v.Func().Name, func(env *Env) {
+						mu := env.Get(0).MustTable("").GetString("_mu").Interface().(*sync.Mutex)
+						mu.Lock()
+						defer mu.Unlock()
+						a, err := old.Call(env.Stack()...)
+						if err != nil {
+							panic(err)
+						}
+						env.A = a
+					}, v.Func().DocString)
+				}
+				x.Set(k, v)
+				return true
+			})
+			x.SetString("_mu", Val(&sync.Mutex{}))
+			if m == Nil {
+				return TableProto(x)
+			}
+			m.MustTable("").Parent = x
+			return m
+		}, "$f(src: table) table", "\tcreate a concurrently accessible table"),
+		Str("get"), Native2("get", func(env *Env, m, k Value) Value {
+			return m.MustTable("").Get(k)
+		}, "$f({t}: table, k: value) value"),
+		Str("set"), Native3("set", func(env *Env, m, k, v Value) Value {
+			m.MustTable("").Set(k, v)
+			return m
+		}, "$f({t}: table, k: value, v: value) table"),
+		Str("make"), Native1("make", func(env *Env, n Value) Value {
+			return NewTable(int(n.MustInt(""))).Value()
+		}, "$f(n: int) table", "\treturn a table, preallocate enough hash space for n values"),
 		Str("makearray"), Native1("makearray", func(env *Env, n Value) Value {
 			return Array(make([]Value, n.MustInt(""))...)
-		}, "makearray(n: int) array", "\treturn a table array, preallocate space for n values"),
+		}, "$f(n: int) array", "\treturn a table array, preallocate space for n values"),
 		Str("slice"), Native3("slice", func(env *Env, t, s, e Value) Value {
 			start, end := int(s.MustInt("")), int(e.MustInt(""))
 			return Array(t.MustTable("").items[start:end]...)
-		}),
+		}, "$f({t}: array, start: int, end: int) array", "\tslice array, from start to end"),
 		Str("copy"), Native3("copy", func(env *Env, t, s, e Value) Value {
 			if s == Nil && e == Nil {
 				return t.MustTable("").Copy().Value()
@@ -43,24 +86,90 @@ func init() {
 				m.Set(Int(int64(i-start)), from.Get(Int(int64(i))))
 			}
 			return m.Value()
-		}),
-		Str("arraylen"), Native1("arraylen", func(env *Env, v Value) Value { return Int(int64(len(v.MustTable("").items))) }),
-		Str("maplen"), Native1("maplen", func(env *Env, v Value) Value { return Int(int64(len(v.MustTable("").hashItems))) }),
+		},
+			"$f({t}: table) table", "\tcopy the entire table",
+			"$f({t}: array, start: int, end: int) array", "\tcopy array, from start to end",
+		),
+		Str("parent"), Native1("parent", func(env *Env, v Value) Value {
+			return v.MustTable("").Parent.Value()
+		}, "$f({t}: table) table", "\treturn table's parent if any"),
+		Str("arraylen"), Native1("arraylen", func(env *Env, v Value) Value {
+			return Int(int64(len(v.MustTable("").items)))
+		}, "$f({t}: array) int", "\treturn the true size of array (including trailing nils)"),
+		Str("maplen"), Native1("maplen", func(env *Env, v Value) Value {
+			return Int(int64(len(v.MustTable("").hashItems)))
+		}, "$f({t}: table) int", "\treturn the true size of table map (including empty entries)"),
 		Str("keys"), Native1("keys", func(env *Env, m Value) Value {
 			a := make([]Value, 0)
+			m.MustTable("").Foreach(func(k, v Value) bool { a = append(a, k); return true })
+			return Array(a...)
+		}, "$f({t}: table) array"),
+		Str("values"), Native1("values", func(env *Env, m Value) Value {
+			a := make([]Value, 0)
+			m.MustTable("").Foreach(func(k, v Value) bool { a = append(a, v); return true })
+			return Array(a...)
+		}, "$f({t}: table) array"),
+		Str("items"), Native1("items", func(env *Env, m Value) Value {
+			a := make([]Value, 0)
+			m.MustTable("").Foreach(func(k, v Value) bool { a = append(a, Array(k, v)); return true })
+			return Array(a...)
+		}, "$f({t}: table) array"),
+		Str("foreach"), Native2("foreach", func(env *Env, m, f Value) Value {
 			m.MustTable("").Foreach(func(k, v Value) bool {
-				a = append(a, k)
+				v, err := f.MustFunc("").Call(k, v)
+				if err != nil {
+					panic(err)
+				}
+				return v == Nil
+			})
+			return Nil
+		}, "$f({t}: table, f: function)"),
+		Str("contains"), Native2("contains", func(env *Env, a, b Value) Value {
+			found := false
+			a.MustTable("").Foreach(func(k, v Value) bool { found = v.Equal(b); return !found })
+			return Bool(found)
+		}, "$f({t}: table, v: value)", "\ttest if table contains value"),
+		Str("append"), Native("append", func(env *Env) {
+			ma := env.Get(0).MustTable("")
+			for i := 1; i < env.Size(); i++ {
+				ma.Set(Int(int64(len(ma.items))), env.Get(i))
+			}
+			env.A = ma.Value()
+		}, "$f({a}: array, ...args: value)", "\tappend values to array"),
+		Str("filter"), Native2("filter", func(env *Env, a, b Value) Value {
+			ma := a.MustTable("")
+			a2 := make([]Value, 0, ma.ArrayLen())
+			ma.Foreach(func(k, v Value) bool {
+				r, err := b.MustFunc("").Call(v)
+				if err != nil {
+					panic(err)
+				}
+				if !r.IsFalse() {
+					a2 = append(a2, v)
+				}
 				return true
 			})
-			return Array(a...)
-		}),
+			return Array(a2...)
+		}, "$f({a}: array, f: function)", "\tfilter out all values where f(value) is false"),
+		Str("removeat"), Native2("removeat", func(env *Env, a, b Value) Value {
+			ma, idx := a.MustTable(""), b.MustInt("")
+			if idx < 0 || idx >= int64(len(ma.items)) {
+				return Nil
+			}
+			old := ma.items[idx]
+			ma.items = append(ma.items[:idx], ma.items[idx+1:]...)
+			if old != Nil {
+				ma.count--
+			}
+			return old
+		}, "$f({a}: array, index: int)", "\tremove value at index from array"),
 		Str("concat"), Native2("concat", func(env *Env, a, b Value) Value {
 			ma, mb := a.MustTable(""), b.MustTable("")
 			for _, b := range mb.ArrayPart() {
 				ma.Set(Int(int64(len(ma.items))), b)
 			}
 			return ma.Value()
-		}, "concat(array1: array, array2: array)", "\tput elements from array2 to array1's end"),
+		}, "$f({array1}: array, array2: array)", "\tput elements from array2 to array1's end"),
 		Str("merge"), Native2("merge", func(env *Env, a, b Value) Value {
 			ma, mb := a.MustTable(""), b.MustTable("")
 			ma.resizeHash(len(mb.hashItems) + len(ma.hashItems))
@@ -69,7 +178,7 @@ func init() {
 				return true
 			})
 			return ma.Value()
-		}, "$f(table1: table, table2: table)", "\tmerge elements from table2 to table1"),
+		}, "$f({table1}: table, table2: table)", "\tmerge elements from table2 to table1"),
 	)
 	AddGlobalValue("table", TableLib)
 
@@ -220,71 +329,9 @@ func init() {
 			"\tbreak a string into at most n chars, e.g.: chars('a中c', 1) => { 'a' }",
 		),
 		Str("format"), Native("format", func(env *Env) {
-			f := env.Get(0).MustStr("")
-			p, tmp := bytes.Buffer{}, bytes.Buffer{}
-			popi := 0
-			pop := func() Value { popi++; return env.Get(popi) }
-			for len(f) > 0 {
-				idx := strings.Index(f, "%")
-				if idx == -1 {
-					p.WriteString(f)
-					break
-				} else if idx == len(f)-1 {
-					panicf("unexpected '%%' at end")
-				}
-				p.WriteString(f[:idx])
-				if f[idx+1] == '%' {
-					p.WriteString("%")
-					f = f[idx+2:]
-					continue
-				}
-				tmp.Reset()
-				tmp.WriteByte('%')
-				expecting := typ.Nil
-				for f = f[idx+1:]; len(f) > 0 && expecting == typ.Nil; {
-					switch f[0] {
-					case 'b', 'd', 'o', 'O', 'c', 'e', 'E', 'f', 'F', 'g', 'G':
-						expecting = typ.Number
-					case 's', 'q', 'U':
-						expecting = typ.String
-					case 'x', 'X':
-						expecting = typ.String + typ.Number
-					case 'v':
-						expecting = typ.Interface
-					case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
-					default:
-						panicf("unexpected verb: '%c'", f[0])
-					}
-					tmp.WriteByte(f[0])
-					f = f[1:]
-				}
-				switch expecting {
-				case typ.String:
-					p.WriteString(fmt.Sprintf(tmp.String(), pop().String()))
-				case typ.Number:
-					f, i, isInt := pop().Num()
-					if isInt {
-						fmt.Fprintf(&p, tmp.String(), i)
-					} else {
-						fmt.Fprintf(&p, tmp.String(), f)
-					}
-				case typ.Number + typ.String:
-					v := pop()
-					if v.Type() == typ.String {
-						fmt.Fprintf(&p, tmp.String(), v.Str())
-					} else {
-						f, i, isInt := pop().Num()
-						if isInt {
-							fmt.Fprintf(&p, tmp.String(), i)
-						} else {
-							fmt.Fprintf(&p, tmp.String(), f)
-						}
-					}
-				case typ.Interface:
-					fmt.Fprint(&p, pop())
-				}
-			}
-			env.A = Str(p.String())
+			buf := &bytes.Buffer{}
+			sprintf(env, buf)
+			env.A = Bytes(buf.Bytes())
 		}, "format({pattern}: string, ...args: value) string"),
 		Str("buffer"), Native1("buffer", func(env *Env, v Value) Value {
 			b := &bytes.Buffer{}
@@ -498,4 +545,71 @@ func ipow(base, exp int64) int64 {
 		base *= base
 	}
 	return result
+}
+
+func sprintf(env *Env, p io.Writer) {
+	f := env.Get(0).MustStr("")
+	tmp := bytes.Buffer{}
+	popi := 0
+	pop := func() Value { popi++; return env.Get(popi) }
+	for len(f) > 0 {
+		idx := strings.Index(f, "%")
+		if idx == -1 {
+			fmt.Fprint(p, f)
+			break
+		} else if idx == len(f)-1 {
+			panicf("unexpected '%%' at end")
+		}
+		fmt.Fprint(p, f[:idx])
+		if f[idx+1] == '%' {
+			p.Write([]byte("%"))
+			f = f[idx+2:]
+			continue
+		}
+		tmp.Reset()
+		tmp.WriteByte('%')
+		expecting := typ.Nil
+		for f = f[idx+1:]; len(f) > 0 && expecting == typ.Nil; {
+			switch f[0] {
+			case 'b', 'd', 'o', 'O', 'c', 'e', 'E', 'f', 'F', 'g', 'G':
+				expecting = typ.Number
+			case 's', 'q', 'U':
+				expecting = typ.String
+			case 'x', 'X':
+				expecting = typ.String + typ.Number
+			case 'v':
+				expecting = typ.Interface
+			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
+			default:
+				panicf("unexpected verb: '%c'", f[0])
+			}
+			tmp.WriteByte(f[0])
+			f = f[1:]
+		}
+		switch expecting {
+		case typ.String:
+			fmt.Fprintf(p, tmp.String(), pop().String())
+		case typ.Number:
+			f, i, isInt := pop().Num()
+			if isInt {
+				fmt.Fprintf(p, tmp.String(), i)
+			} else {
+				fmt.Fprintf(p, tmp.String(), f)
+			}
+		case typ.Number + typ.String:
+			v := pop()
+			if v.Type() == typ.String {
+				fmt.Fprintf(p, tmp.String(), v.Str())
+			} else {
+				f, i, isInt := pop().Num()
+				if isInt {
+					fmt.Fprintf(p, tmp.String(), i)
+				} else {
+					fmt.Fprintf(p, tmp.String(), f)
+				}
+			}
+		case typ.Interface:
+			fmt.Fprint(p, pop())
+		}
+	}
 }
