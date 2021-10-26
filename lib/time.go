@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/coyove/script"
+	"github.com/coyove/script/typ"
 )
 
 func init() {
@@ -113,17 +114,8 @@ func init() {
 
 		tt, ok := env.Get(1).Interface().(time.Time)
 		if !ok {
-			ts := env.Get(1).IntDefault(0)
-			if ts > 0 {
-				if ts < 1<<33 {
-					tt = time.Unix(ts, 0)
-				} else if ts < 1<<33*1e3 {
-					tt = time.Unix(0, ts*1e6)
-				} else if ts < 1<<33*1e6 {
-					tt = time.Unix(0, ts*1e3)
-				} else {
-					tt = time.Unix(0, ts)
-				}
+			if t := env.Get(1); t.Type() == typ.Number {
+				tt = time.Unix(0, int64(t.Float()*1e9))
 			} else {
 				tt = time.Now()
 			}
@@ -132,9 +124,9 @@ func init() {
 		r := tt.Format(f)
 		env.A = script.Str(r)
 	},
-		"strtime(format_string) => string",
-		"strtime(format_string, time.Time) => string",
-		"strtime(format_string, unix_timestamp) => string",
+		"strtime(format: string) string",
+		"strtime(format: string, t: value) string",
+		"strtime(format: string, unix_sec: float) string",
 		"\tformat doc: https://www.php.net/manual/datetime.format.php",
 	)
 }

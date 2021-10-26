@@ -146,25 +146,24 @@ func init() {
 		resp, err := client.Do(req)
 		panicErr(err)
 
-		defer resp.Body.Close()
-
-		var r io.Reader = resp.Body
-		buf := panicErr2(ioutil.ReadAll(r)).([]byte)
+		var buf script.Value
+		if args.GetString("body_reader").IsFalse() && args.GetString("br").IsFalse() {
+			resp.Body.Close()
+		} else {
+			buf = script.TableProtoChain([]*script.Table{script.ReaderProto(), script.CloserProto()}, script.Str("_f"), script.Val(resp.Body))
+		}
 
 		hdr := map[string]string{}
 		for k := range resp.Header {
 			hdr[k] = resp.Header.Get(k)
 		}
-		env.A = script.Array(
-			script.Int(int64(resp.StatusCode)),
-			script.Val(hdr),
-			script.Bytes(buf),
-			script.Val(client.Jar),
-		)
-	}, "http(options) => { code, body, headers, cookie_jar }",
+		env.A = script.Array(script.Int(int64(resp.StatusCode)), script.Val(hdr), buf, script.Val(client.Jar))
+	}, "http(options: table) array",
+		"\tperforma an HTTP request and return { code, headers, body_reader, cookie_jar }",
 		"\t'url' is a mandatory parameter in options, others are optional and pretty self explanatory:",
 		"\thttp({url='...'})",
 		"\thttp({url='...', no_redirect=true})",
+		"\thttp({url='...', body_reader=true})",
 		"\thttp({method='POST', url='...'})",
 		"\thttp({method='POST', url='...'}, json={...})",
 		"\thttp({method='POST', url='...', query={key=value}})",

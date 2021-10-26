@@ -181,3 +181,20 @@ assert(t2.b, 2)
 
 t = table({1,2,3,4}).filter(lambda(v) return v >= 2 end)
 assert(t[0] == 2 and t[2] == 4)
+
+
+f1 = open("tests/a.txt", "w+")
+f1.write("hello zzz")
+f1.close()
+
+f1 = open("tests/a.txt", "r")
+f2 = open("tests/b.txt", "w+")
+f2.write(f1.read(5))
+f1.close()
+f2.write(" world")
+f2.close()
+
+assert(open("tests/b.txt").read(), "hello world")
+
+os.remove("tests/a.txt")
+os.remove("tests/b.txt")

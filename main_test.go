@@ -8,11 +8,13 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -575,5 +577,22 @@ func TestReflectedValue(t *testing.T) {
 	_, err := p.Run()
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	{
+		a := []interface{}{nil}
+		a[0] = a
+		b := map[int]interface{}{1: 2}
+		b[2] = b
+		c := make(chan int, 10)
+		d := struct {
+			A int
+			b string
+			c *sync.Mutex
+			D interface{}
+		}{A: 1, b: "zzz", D: true}
+		resp, _ := http.Get("http://example.com")
+		e := resp.Body
+		fmt.Println(Stringify(a), Stringify(b), Stringify(c), Stringify(d), Stringify(e))
 	}
 }

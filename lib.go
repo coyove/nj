@@ -470,61 +470,26 @@ func init() {
 		for _, f := range flag.StringDefault("") {
 			switch f {
 			case 'w':
+				opt &^= os.O_RDWR | os.O_RDONLY
 				opt |= os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 			case 'r':
+				opt &^= os.O_RDWR | os.O_WRONLY
 				opt |= os.O_RDONLY
 			case 'a':
 				opt |= os.O_APPEND | os.O_CREATE
 			case 'x':
 				opt |= os.O_EXCL
 			case '+':
+				opt &^= os.O_RDONLY | os.O_WRONLY
 				opt |= os.O_RDWR | os.O_CREATE
 			}
 		}
-		f, err := os.OpenFile(path.MustStr("path"), opt, fs.FileMode(perm.IntDefault(0)))
+		f, err := os.OpenFile(path.MustStr("path"), opt, fs.FileMode(perm.IntDefault(0644)))
 		if err != nil {
 			panic(err)
 		}
-		a := Map(
+		return TableProtoChain([]*Table{ReaderProto(), WriterProto(), CloserProto(), SeekerProto()},
 			Str("_f"), Val(f),
-			Str("close"), Native1("close", func(e *Env, rx Value) Value {
-				return Val(rx.Table().GetString("_f").Interface().(*os.File).Close())
-			}, ""),
-			Str("read"), Native2("read", func(e *Env, rx, n Value) Value {
-				f := rx.Table().GetString("_f").Interface().(*os.File)
-				if c := n.IntDefault(0); c == 0 {
-					buf, err := ioutil.ReadAll(f)
-					if err != nil {
-						panic(err)
-					}
-					return Bytes(buf)
-				}
-				p := make([]byte, n.IntDefault(0))
-				rn, err := f.Read(p)
-				if rn > 0 {
-					return Bytes(p[:rn])
-				}
-				if err == io.EOF {
-					return Nil
-				}
-				panic(err)
-			}, ""),
-			Str("write"), Native2("write", func(e *Env, rx, buf Value) Value {
-				f := rx.Table().GetString("_f").Interface().(*os.File)
-				wn, err := f.WriteString(buf.MustStr(""))
-				if err != nil {
-					panic(err)
-				}
-				return Int(int64(wn))
-			}, ""),
-			Str("seek"), Native3("seek", func(e *Env, rx, off, where Value) Value {
-				f := rx.Table().GetString("_f").Interface().(*os.File)
-				wn, err := f.Seek(off.MustInt("offset"), int(where.MustInt("where")))
-				if err != nil {
-					panic(err)
-				}
-				return Int(int64(wn))
-			}, ""),
 			Str("readlines"), Native2("readlines", func(e *Env, rx, cb Value) Value {
 				f := rx.Table().GetString("_f").Interface().(*os.File)
 				if _, err := f.Seek(0, 0); err != nil {
@@ -563,8 +528,55 @@ func init() {
 				"readlines(f: function)", "\tfor every line read, f(line) will be called", "\tto exit the reading, return anything other than nil in f",
 			),
 		)
-		b := Map()
-		b.Table().Parent = a.Table()
-		return b
 	}, "open(path: string, flag: string, perm: int) value")
+}
+
+func ReaderProto() *Table {
+	return Map(Str("read"), Native2("read", func(e *Env, rx, n Value) Value {
+		f := rx.Table().GetString("_f").Interface().(io.Reader)
+		if c := n.IntDefault(0); c == 0 {
+			buf, err := ioutil.ReadAll(f)
+			if err != nil {
+				panic(err)
+			}
+			return Bytes(buf)
+		}
+		p := make([]byte, n.IntDefault(0))
+		rn, err := f.Read(p)
+		if rn > 0 {
+			return Bytes(p[:rn])
+		}
+		if err == io.EOF {
+			return Nil
+		}
+		panic(err)
+	}, "")).Table()
+}
+
+func WriterProto() *Table {
+	return Map(Str("write"), Native2("write", func(e *Env, rx, buf Value) Value {
+		f := rx.Table().GetString("_f").Interface().(io.Writer)
+		wn, err := fmt.Fprint(f, buf.MustStr(""))
+		if err != nil {
+			panic(err)
+		}
+		return Int(int64(wn))
+	}, "")).Table()
+}
+
+func SeekerProto() *Table {
+	return Map(Str("seek"), Native3("seek", func(e *Env, rx, off, where Value) Value {
+		f := rx.Table().GetString("_f").Interface().(io.Seeker)
+		wn, err := f.Seek(off.MustInt("offset"), int(where.MustInt("where")))
+		if err != nil {
+			panic(err)
+		}
+		return Int(int64(wn))
+	}, "")).Table()
+}
+
+func CloserProto() *Table {
+	return Map(Str("close"), Native1("close", func(e *Env, rx Value) Value {
+		return Val(rx.Table().GetString("_f").Interface().(io.Closer).Close())
+	}, "")).Table()
 }

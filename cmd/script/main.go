@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/coyove/script"
+	_ "github.com/coyove/script/lib"
 )
 
 const VERSION = "0.2.0"

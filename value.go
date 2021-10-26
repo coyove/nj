@@ -155,6 +155,19 @@ func TableProto(p *Table, kvs ...Value) Value {
 	return m
 }
 
+func TableProtoChain(p []*Table, kvs ...Value) Value {
+	m := Map(kvs...)
+	if len(p) == 0 {
+		return m
+	}
+	cur := m.Table()
+	for _, tp := range p {
+		cur.Parent = tp
+		cur = tp
+	}
+	return m
+}
+
 // Str returns a string value
 func Str(s string) Value {
 	if len(s) <= 8 { // payload 7b
@@ -591,19 +604,19 @@ func (v Value) toString(lv int, j bool) string {
 			p.WriteString(v.toString(lv+1, j))
 			p.WriteString(",")
 		}
-		return strings.TrimRight(p.String(), ", ") + "}"
+		if m.Parent == nil {
+			return strings.TrimRight(p.String(), ", ") + "}"
+		}
+		return p.String() + "^" + m.Parent.String() + "}"
 	case typ.Func:
 		return v.Func().String()
 	case typ.Interface:
 		i := v.Interface()
-		if !reflectCheckCyclicStruct(i) {
-			i = "<interface: omit deep nesting>"
-		}
 		if j {
 			buf, _ := json.Marshal(i)
 			return string(buf)
 		}
-		return fmt.Sprintf("%v", i)
+		return "<" + Stringify(i) + ">"
 	}
 	if j {
 		return "null"

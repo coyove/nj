@@ -18,9 +18,19 @@ import (
 	"github.com/coyove/script/typ"
 )
 
-var StringMethods, MathLib, TableLib, OSLib Value
+var StringMethods, MathLib, TableLib, OSLib, IOLib Value
 
 func init() {
+	IOLib = MapAdd(IOLib,
+		Str("native"), Map(
+			Str("reader"), Native("reader", func(env *Env) { env.A = ReaderProto().Value() }),
+			Str("writer"), Native("writer", func(env *Env) { env.A = WriterProto().Value() }),
+			Str("seeker"), Native("seeker", func(env *Env) { env.A = SeekerProto().Value() }),
+			Str("closer"), Native("closer", func(env *Env) { env.A = CloserProto().Value() }),
+		),
+	)
+	AddGlobalValue("io", IOLib)
+
 	TableLib = MapAdd(TableLib,
 		Str("__call"), Native2("__call", func(env *Env, t, m Value) Value {
 			if m == Nil {
