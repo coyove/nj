@@ -605,6 +605,9 @@ func (v Value) toString(lv int, j bool) string {
 		}
 		return fmt.Sprintf("%v", i)
 	}
+	if j {
+		return "null"
+	}
 	return "nil"
 }
 
