@@ -433,23 +433,34 @@ func init() {
 			if n < 1 {
 				panicf("invalid number of goroutines: %v", n)
 			}
-			out := make([]Value, list.MustTable("").Len())
+			lst := list.MustTable("")
+			in := make(chan [2]Value, lst.ArrayLen())
+			out := lst.Copy()
+			outLock := sync.Mutex{}
 			wg := sync.WaitGroup{}
 			wg.Add(n)
 			for i := 0; i < n; i++ {
 				go func(i int) {
 					defer wg.Done()
-					res, err := f.MustFunc("callback").Call(list.MustTable("").Get(Int(int64(i))))
-					if err != nil {
-						out[i] = Val(err)
-					} else {
-						out[i] = res
+					for p := range in {
+						res, err := f.MustFunc("callback").Call(p[0], p[1])
+						outLock.Lock()
+						if err != nil {
+							out.Set(p[0], Val(err))
+						} else {
+							out.Set(p[0], res)
+						}
+						outLock.Unlock()
 					}
 				}(i)
 			}
+			for i, v := range lst.items {
+				in <- [2]Value{Int(int64(i)), v}
+			}
+			close(in)
 			wg.Wait()
-			return Array(out...)
-		}, "$f(list: array, f: function, opt: table) array", "\tcreate a wait group"),
+			return out.Value()
+		}, "$f(list: array, f: function, opt: table) array", "\tmap an array of values into new ones using f concurrently"),
 	))
 	AddGlobalValue("next", func(env *Env, m, k Value) Value {
 		nk, nv := m.MustTable("").Next(k)
