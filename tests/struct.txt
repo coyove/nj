@@ -154,7 +154,7 @@ bar = foo(2)(3)
 assert(bar(4), 10)
 assert(bar(5), 12)
 
-bar = apply(foo(2), 3)
+bar = foo(2)(3)
 assert(bar(4), 10)
 assert(bar(5), 12)
 assert(pcall(bar, 6), 14)

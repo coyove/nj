@@ -122,15 +122,15 @@ func init() {
 		if err != nil {
 			panic(wrap(err))
 		}
+		if !g.MaybeTableGetString("returnglobals").IsFalse() {
+			r := NewTable(len(p.Locals))
+			for i, name := range p.Locals {
+				r.Set(Str(name), (*p.Stack)[i])
+			}
+			return r.Value()
+		}
 		return v
 	}, "eval(code: string, globals: table) value", "\tevaluate the string and return the executed reuslt")
-	AddGlobalValue("apply", func(env *Env, f Value) Value {
-		res, err := f.MustFunc("").Call(env.Stack()[1:]...)
-		if err != nil {
-			panic(err)
-		}
-		return res
-	}, "apply(f: function, args: array) value", "\tcall function using an array of arguments")
 	AddGlobalValue("closure", func(env *Env, f, m Value) Value {
 		lambda := f.MustFunc("")
 		return Map(
@@ -148,7 +148,7 @@ func init() {
 				env.A = res
 			}),
 		)
-	}, "closure(v: value, lambda: function) value", "\tbind v to lambda, when lambda is called, v will be passed in as the first argument")
+	}, "closure(lambda: function, v: value) value", "\tbind v to lambda, when lambda is called, v will be passed in as the first argument")
 
 	AddGlobalValue("go", Map(
 		Str("new"), Native1("new", func(env *Env, f Value) Value {
@@ -240,7 +240,7 @@ func init() {
 			return Val(err.r)
 		}
 		return Val(err)
-	}, "pcall(f: function, ...arg: value) value", "\texecute the function, catch panic and return as error if any")
+	}, "pcall(f: function, ...arg: value) value", "\texecute f, catch panic and return as error if any")
 	AddGlobalValue("panic", func(env *Env) { panic(env.Get(0)) }, "panic(v: value)")
 	AddGlobalValue("assert", func(env *Env) {
 		v := env.Get(0)
@@ -283,7 +283,7 @@ func init() {
 		default:
 			env.A = Value{}
 		}
-	}, "$f(v: value) float", "\tconvert string to number")
+	}, "$f(v: value) number", "\tconvert string to number")
 	AddGlobalValue("stdout", func(env *Env) { env.A = _interface(env.Global.Stdout) }, "$f() value", "\treturn stdout")
 	AddGlobalValue("stderr", func(env *Env) { env.A = _interface(env.Global.Stderr) }, "$f() value", "\treturn stderr")
 	AddGlobalValue("stdin", func(env *Env) { env.A = _interface(env.Global.Stdin) }, "$f() value", "\treturn stdin")
@@ -395,13 +395,8 @@ func init() {
 		}, "$f({re}: value, old: string, new: string) string"),
 	))
 
-	AddGlobalValue("error", func(env *Env, msg Value) Value {
-		return Val(errors.New(msg.MustStr("")))
-	}, "error(text: string) value", "\tcreate an error")
-	AddGlobalValue("iserror", func(env *Env) {
-		_, ok := env.Get(0).Interface().(error)
-		env.A = Bool(ok)
-	}, "iserror(v: value) bool", "\ttest whether value is an error")
+	AddGlobalValue("error", func(env *Env, msg Value) Value { return Val(errors.New(msg.MustStr(""))) }, "error(text: string) value", "\tcreate an error")
+	AddGlobalValue("iserror", func(env *Env) { _, ok := env.Get(0).Interface().(error); env.A = Bool(ok) }, "iserror(v: value) bool", "\treturn whether value is an error")
 
 	AddGlobalValue("json", Map(
 		Str("stringify"), Native("stringify", func(env *Env) {
@@ -422,45 +417,43 @@ func init() {
 	))
 
 	AddGlobalValue("sync", Map(
-		Str("mutex"), Native("mutex", func(env *Env) { env.A = Val(&sync.Mutex{}) }, "$f() value", "\tcreate a mutex"),
-		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() value", "\tcreate a read-write mutex"),
-		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() value", "\tcreate a wait group"),
+		Str("mutex"), Native("mutex", func(env *Env) { env.A = Val(&sync.Mutex{}) }, "$f() value", "\tcreate a sync.Mutex"),
+		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() value", "\tcreate a sync.RWMutex"),
+		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() value", "\tcreate a sync.WaitGroup"),
 		Str("map"), Native3("map", func(env *Env, list, f, opt Value) Value {
-			n := runtime.NumCPU()
-			if nn := opt.MaybeTableGetString("n"); nn != Nil {
-				n = int(nn.MustInt("number of goroutines"))
-			}
-			if n < 1 {
+			n, t := int(opt.IntDefault(int64(runtime.NumCPU()))), list.MustTable("")
+			if n < 1 || n > runtime.NumCPU()*1e3 {
 				panicf("invalid number of goroutines: %v", n)
 			}
-			lst := list.MustTable("")
-			in := make(chan [2]Value, lst.ArrayLen())
-			out := lst.Copy()
-			outLock := sync.Mutex{}
-			wg := sync.WaitGroup{}
+			var wg = sync.WaitGroup{}
+			var in = make(chan [2]Value, t.Len())
+			var out, outLock = t.Copy(), sync.Mutex{}
+			var outError error
 			wg.Add(n)
 			for i := 0; i < n; i++ {
-				go func(i int) {
+				go func() {
 					defer wg.Done()
 					for p := range in {
 						res, err := f.MustFunc("callback").Call(p[0], p[1])
-						outLock.Lock()
 						if err != nil {
-							out.Set(p[0], Val(err))
-						} else {
-							out.Set(p[0], res)
+							outError = err
+							return
 						}
+						outLock.Lock()
+						out.Set(p[0], res)
 						outLock.Unlock()
 					}
-				}(i)
+				}()
 			}
-			for i, v := range lst.items {
-				in <- [2]Value{Int(int64(i)), v}
-			}
+			t.Foreach(func(k, v Value) bool { in <- [2]Value{k, v}; return true })
 			close(in)
 			wg.Wait()
+			if outError != nil {
+				panic(outError)
+			}
 			return out.Value()
-		}, "$f(list: array, f: function, opt: table) array", "\tmap an array of values into new ones using f concurrently"),
+		}, "$f(t: table, f: function, n: int) table",
+			"\tmap values in table into new values in new table by using f(k, v) concurrently on n goroutines (n defaults to the number of CPUs)"),
 	))
 	AddGlobalValue("next", func(env *Env, m, k Value) Value {
 		nk, nv := m.MustTable("").Next(k)
@@ -567,7 +560,7 @@ func init() {
 				return Nil
 			},
 				"readlines() array", "\tread the whole file and return lines as a table array",
-				"readlines(f: function)", "\tfor every line read, f(line) will be called", "\tto exit the reading, return anything other than nil in callback",
+				"readlines(f: function)", "\tfor every line read, f(line) will be called", "\tto exit the reading, return anything other than nil in f",
 			),
 		)
 		b := Map()
