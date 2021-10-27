@@ -291,7 +291,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				subject.MustBytes("alter bytes")[env.A.mustBe(typ.Number, "alter bytes index", 0).Int()] = vb
 				env.A = v
 			default:
-				panicf("cannot store %v into (%v)[%v]", v.Type(), subject.Type(), env.A.Type())
+				panicf("can't store %v into (%v)[%v]", v.Type(), subject.Type(), env.A.Type())
 			}
 		case typ.OpLoad:
 			switch a := env._get(opa); a.Type() {
@@ -323,7 +323,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				}
 				fallthrough
 			default:
-				panicf("cannot load (%v)[%v]", a.Type(), env._get(opb).Type())
+				panicf("can't load (%v)[%v]", a.Type(), env._get(opb).Type())
 			}
 		case typ.OpPush:
 			stackEnv.Push(env._get(opa))
@@ -353,7 +353,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				at = a.Type()
 			}
 			if at != typ.Func {
-				panicf("calling function, got %v", at)
+				panicf("can't call %v", at)
 			}
 			cls := a.Func()
 			if opb != regPhantom {

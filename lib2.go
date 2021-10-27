@@ -348,32 +348,12 @@ func init() {
 			if v != Nil {
 				b.WriteString(v.String())
 			}
-			p := Map(
-				Str("_buf"), Val(b),
+			return TableProtoChain([]*Table{ReaderProto(), WriterProto()},
+				Str("_f"), Val(b),
 				Str("value"), Native1("value", func(env *Env, a Value) Value {
-					return Bytes(a.MustTable("").GetString("_buf").Interface().(*bytes.Buffer).Bytes())
-				}),
-				Str("write"), Native2("write", func(env *Env, a, b Value) Value {
-					a.MustTable("").GetString("_buf").Interface().(*bytes.Buffer).WriteString(b.String())
-					return Nil
-				}),
-				Str("read"), Native2("read", func(env *Env, a, n Value) Value {
-					rd := a.MustTable("").GetString("_buf").Interface().(*bytes.Buffer)
-					if n := n.IntDefault(0); n > 0 {
-						a := make([]byte, n)
-						n, err := rd.Read(a)
-						if err != nil && err != io.EOF {
-							panic(err)
-						}
-						return Bytes(a[:n])
-					} else {
-						return Bytes(rd.Bytes())
-					}
+					return Bytes(a.MustTable("").GetString("_f").Interface().(*bytes.Buffer).Bytes())
 				}),
 			)
-			a := Map()
-			a.Table().Parent = p.Table()
-			return a
 		}),
 	)
 

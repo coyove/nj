@@ -467,8 +467,11 @@ func init() {
 	}, "unwrap(v: value) value", "\tunwrap Go's array, slice or map into table")
 	AddGlobalValue("open", func(env *Env, path, flag, perm Value) Value {
 		var opt int
-		for _, f := range flag.StringDefault("") {
+		var autoClose bool
+		for _, f := range flag.StringDefault("r") {
 			switch f {
+			case 'C':
+				autoClose = true
 			case 'w':
 				opt &^= os.O_RDWR | os.O_RDONLY
 				opt |= os.O_WRONLY | os.O_CREATE | os.O_TRUNC
@@ -488,8 +491,32 @@ func init() {
 		if err != nil {
 			panic(err)
 		}
+		if autoClose {
+			runtime.SetFinalizer(f, func(f *os.File) { f.Close() })
+		}
 		return TableProtoChain([]*Table{ReaderProto(), WriterProto(), CloserProto(), SeekerProto()},
 			Str("_f"), Val(f),
+			Str("sync"), Native1("sync", func(e *Env, rx Value) Value {
+				if err := rx.Table().GetString("_f").Interface().(*os.File).Sync(); err != nil {
+					panic(err)
+				}
+				return Nil
+			}),
+			Str("stat"), Native1("stat", func(e *Env, rx Value) Value {
+				fi, err := rx.Table().GetString("_f").Interface().(*os.File).Stat()
+				if err != nil {
+					panic(err)
+				}
+				return Val(fi)
+			}),
+			Str("truncate"), Native2("truncate", func(e *Env, rx, n Value) Value {
+				f := rx.Table().GetString("_f").Interface().(*os.File)
+				if err := f.Truncate(n.MustInt("")); err != nil {
+					panic(err)
+				}
+				t, _ := f.Seek(0, 2)
+				return Int(t)
+			}),
 			Str("readlines"), Native2("readlines", func(e *Env, rx, cb Value) Value {
 				f := rx.Table().GetString("_f").Interface().(*os.File)
 				if _, err := f.Seek(0, 0); err != nil {
@@ -534,34 +561,64 @@ func init() {
 func ReaderProto() *Table {
 	return Map(Str("read"), Native2("read", func(e *Env, rx, n Value) Value {
 		f := rx.Table().GetString("_f").Interface().(io.Reader)
-		if c := n.IntDefault(0); c == 0 {
+		switch n.Type() {
+		case typ.Number:
+			p := make([]byte, n.IntDefault(0))
+			rn, err := f.Read(p)
+			if rn > 0 {
+				return Bytes(p[:rn])
+			}
+			if err == io.EOF {
+				return Nil
+			}
+			panic(err)
+		case typ.String:
+			if !n.IsBytes() {
+				panic("require bytes to read(bytes)")
+			}
+			rn, err := f.Read(n.Bytes())
+			return Array(Int(int64(rn)), Val(err)) // return in Go style
+		default:
 			buf, err := ioutil.ReadAll(f)
 			if err != nil {
 				panic(err)
 			}
 			return Bytes(buf)
 		}
-		p := make([]byte, n.IntDefault(0))
-		rn, err := f.Read(p)
-		if rn > 0 {
-			return Bytes(p[:rn])
-		}
-		if err == io.EOF {
-			return Nil
-		}
-		panic(err)
-	}, "")).Table()
+	},
+		"read() bytes", "\tread all bytes",
+		"read(n: int) bytes", "\tread n bytes",
+		"read(buf: bytes) array", "\tread into buf and return { bytes_read, error } in Go style",
+	)).Table()
 }
 
 func WriterProto() *Table {
-	return Map(Str("write"), Native2("write", func(e *Env, rx, buf Value) Value {
-		f := rx.Table().GetString("_f").Interface().(io.Writer)
-		wn, err := fmt.Fprint(f, buf.MustStr(""))
-		if err != nil {
-			panic(err)
-		}
-		return Int(int64(wn))
-	}, "")).Table()
+	return Map(
+		Str("write"), Native2("write", func(e *Env, rx, buf Value) Value {
+			f := rx.Table().GetString("_f").Interface().(io.Writer)
+			wn, err := fmt.Fprint(f, buf.MustStr(""))
+			if err != nil {
+				panic(err)
+			}
+			return Int(int64(wn))
+		}, "$f({w}: value, buf: string) int", "\twrite buf to w"),
+		Str("pipe"), Native3("pipe", func(e *Env, rx, rd, n Value) Value {
+			w := rx.Table().GetString("_f").Interface().(io.Writer)
+			r := rd.Table().GetString("_f").Interface().(io.Reader)
+			var wn int64
+			var err error
+			if n := n.IntDefault(0); n > 0 {
+				wn, err = io.CopyN(w, r, n)
+			} else {
+				wn, err = io.Copy(w, r)
+			}
+			if err != nil {
+				panic(err)
+			}
+			return Int(wn)
+		}, "$f({w}: value, r: value) int", "\tcopy bytes from r to w, return number of bytes copied",
+			"$f({w}: value, r: value, n: int) int", "\tcopy at most n bytes from r to w"),
+	).Table()
 }
 
 func SeekerProto() *Table {

@@ -556,72 +556,81 @@ func (v Value) HashCode() uint64 {
 	return code
 }
 
-func (v Value) String() string { return v.toString(0, false) }
+func (v Value) String() string {
+	return v.toString(&bytes.Buffer{}, 0, false).String()
+}
 
-func (v Value) JSONString() string { return v.toString(0, true) }
+func (v Value) JSONString() string {
+	return v.toString(&bytes.Buffer{}, 0, true).String()
+}
 
-func (v Value) MarshalJSON() ([]byte, error) { return []byte(v.toString(0, true)), nil }
+func (v Value) MarshalJSON() ([]byte, error) {
+	return v.toString(&bytes.Buffer{}, 0, true).Bytes(), nil
+}
 
-func (v Value) toString(lv int, j bool) string {
-	if lv > 32 {
-		return "<omit deep nesting>"
+func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
+	if lv > 10 {
+		p.WriteString("...")
+		return p
 	}
 	switch v.Type() {
 	case typ.Bool:
-		return strconv.FormatBool(v.Bool())
+		p.WriteString(strconv.FormatBool(v.Bool()))
 	case typ.Number:
-		vf, vi, vIsInt := v.Num()
-		if vIsInt {
-			return strconv.FormatInt(vi, 10)
+		if vf, vi, vIsInt := v.Num(); vIsInt {
+			p.WriteString(strconv.FormatInt(vi, 10))
+		} else {
+			p.WriteString(strconv.FormatFloat(vf, 'f', -1, 64))
 		}
-		return strconv.FormatFloat(vf, 'f', -1, 64)
 	case typ.String:
 		if j {
-			return strconv.Quote(v.Str())
+			p.WriteString(strconv.Quote(v.Str()))
+		} else {
+			p.WriteString(v.Str())
 		}
-		return v.Str()
 	case typ.Table:
 		m := v.Table()
 		if sf := m.GetString("__str"); sf.Type() == typ.Func {
-			v, err := sf.Func().Call()
-			if err != nil {
-				return fmt.Sprintf("<table.__str: %v>", err)
+			if v, err := sf.Func().Call(); err != nil {
+				p.WriteString(fmt.Sprintf("<table.__str: %v>", err))
+			} else {
+				v.toString(p, lv+1, j)
 			}
-			return v.toString(lv+1, j)
+			return p
 		}
 		if len(m.hashItems) == 0 {
-			p := bytes.NewBufferString("[")
+			p.WriteString(ifstr(j, "[", "{"))
 			for _, a := range m.ArrayPart() {
-				p.WriteString(a.toString(lv+1, j))
+				a.toString(p, lv+1, j)
 				p.WriteString(",")
 			}
-			return strings.TrimRight(p.String(), ", ") + "]"
+			closeBuffer(p, ifstr(j, "]", "}"))
+		} else {
+			p.WriteString("{")
+			for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
+				k.toString(p, lv+1, j)
+				p.WriteString(ifstr(j, ":", "="))
+				v.toString(p, lv+1, j)
+				p.WriteString(",")
+			}
+			closeBuffer(p, "}")
 		}
-		p := bytes.NewBufferString("{")
-		for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
-			p.WriteString(k.toString(lv+1, j))
-			p.WriteString(":")
-			p.WriteString(v.toString(lv+1, j))
-			p.WriteString(",")
+		if m.Parent != nil {
+			p.WriteString("^")
+			m.Parent.Value().toString(p, lv+1, j)
 		}
-		if m.Parent == nil {
-			return strings.TrimRight(p.String(), ", ") + "}"
-		}
-		return p.String() + "^" + m.Parent.String() + "}"
 	case typ.Func:
-		return v.Func().String()
+		p.WriteString(v.Func().String())
 	case typ.Interface:
-		i := v.Interface()
 		if j {
-			buf, _ := json.Marshal(i)
-			return string(buf)
+			json.NewEncoder(p).Encode(v.Interface())
+		} else {
+			reflectStringify(p, reflect.ValueOf(v.Interface()), 0, false)
 		}
-		return "<" + Stringify(i) + ">"
+	default:
+		p.WriteString(ifstr(j, "null", "nil"))
 	}
-	if j {
-		return "null"
-	}
-	return "nil"
+	return p
 }
 
 func (v Value) StringDefault(d string) string {

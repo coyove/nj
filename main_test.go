@@ -593,6 +593,8 @@ func TestReflectedValue(t *testing.T) {
 		}{A: 1, b: "zzz", D: true}
 		resp, _ := http.Get("http://example.com")
 		e := resp.Body
-		fmt.Println(Stringify(a), Stringify(b), Stringify(c), Stringify(d), Stringify(e))
+		f, _ := os.Stat("main_test.go")
+		g := &ExecError{}
+		fmt.Println(Stringify(a), Stringify(b), Stringify(c), Stringify(d), Stringify(e), Stringify(f), Stringify(g))
 	}
 }

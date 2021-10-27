@@ -107,135 +107,153 @@ func Stringify(v interface{}) string {
 	if v == nil {
 		return "nil"
 	}
-	if s, ok := v.(fmt.Stringer); ok {
-		return s.String()
-	}
-
-	close := func(p *bytes.Buffer, one bool) {
-		for p.Len() > 0 {
-			b := p.Bytes()[p.Len()-1]
-			if b == ' ' || b == ',' {
-				p.Truncate(p.Len() - 1)
-			} else {
-				break
-			}
-		}
-		p.WriteString(" }")
-	}
-
-	const maxDepth = 10
-
-	var simple func(*bytes.Buffer, reflect.Value, int, bool)
-	simple = func(p *bytes.Buffer, rv reflect.Value, depth int, showType bool) {
-		k := rv.Kind()
-
-		if showType {
-			if k == reflect.Ptr {
-				rv = rv.Elem()
-				p.WriteString("(*")
-			} else if k == reflect.Interface {
-				rv = rv.Elem()
-				p.WriteString("(^")
-			}
-			if !rv.IsValid() {
-				p.WriteString("nil)")
-				return
-			}
-			p.WriteString(rv.Type().String())
-			p.WriteString(")(")
-		} else {
-			if k == reflect.Ptr || k == reflect.Interface {
-				rv = rv.Elem()
-			}
-			if !rv.IsValid() {
-				p.WriteString("nil)")
-				return
-			}
-		}
-
-		switch rv.Kind() {
-		case reflect.Bool:
-			p.WriteString(strconv.FormatBool(rv.Bool()))
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			p.WriteString(strconv.FormatInt(rv.Int(), 10))
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-			p.WriteString(strconv.FormatUint(rv.Uint(), 10))
-		case reflect.Float32, reflect.Float64:
-			p.WriteString(strconv.FormatFloat(rv.Float(), 'f', -1, 64))
-		case reflect.Complex64, reflect.Complex128:
-			c := rv.Complex()
-			p.WriteString(strconv.FormatFloat(real(c), 'f', -1, 64))
-			p.WriteString("+")
-			p.WriteString(strconv.FormatFloat(imag(c), 'f', -1, 64))
-			p.WriteString("i")
-		case reflect.String:
-			p.WriteString(rv.String())
-		case reflect.Struct:
-			count := 0
-			p.WriteString(rv.Type().String())
-			p.WriteString("{ ")
-			if depth > maxDepth {
-				p.WriteString("...")
-			} else {
-				rt := rv.Type()
-				for i := 0; i < rt.NumField(); i++ {
-					p.WriteString(rt.Field(i).Name)
-					p.WriteString(": ")
-					simple(p, rv.Field(i), depth+1, rt.Field(i).Type.Kind() == reflect.Interface)
-					p.WriteString(", ")
-					count++
-				}
-			}
-			close(p, count > 0)
-		case reflect.Array, reflect.Slice:
-			p.WriteString("[")
-			if rv.Kind() == reflect.Array {
-				p.WriteString(strconv.Itoa(int(rv.Len())))
-			}
-			p.WriteString("]")
-			p.WriteString(rv.Type().Elem().String())
-			p.WriteString("{ ")
-			if depth > maxDepth {
-				p.WriteString("...")
-			} else {
-				showType := rv.Type().Elem().Kind() == reflect.Interface
-				for i := 0; i < rv.Len(); i++ {
-					simple(p, rv.Index(i), depth+1, showType)
-					p.WriteString(", ")
-				}
-			}
-			close(p, rv.Len() > 0)
-		case reflect.Map:
-			p.WriteString("map[")
-			p.WriteString(rv.Type().Key().String())
-			p.WriteString("]")
-			p.WriteString(rv.Type().Elem().String())
-			p.WriteString("{ ")
-			if depth > maxDepth {
-				p.WriteString("...")
-			} else {
-				iter := rv.MapRange()
-				showType1 := rv.Type().Key().Kind() == reflect.Interface
-				showType2 := rv.Type().Elem().Kind() == reflect.Interface
-				for iter.Next() {
-					simple(p, iter.Key(), depth+1, showType1)
-					p.WriteString(": ")
-					simple(p, iter.Value(), depth+1, showType2)
-					p.WriteString(", ")
-				}
-			}
-			close(p, rv.Len() > 0)
-		default:
-			p.WriteString(rv.Type().String())
-			p.WriteString("{}")
-		}
-
-		if showType {
-			p.WriteString(")")
-		}
-	}
-
 	p := bytes.NewBufferString("")
-	simple(p, reflect.ValueOf(v), 0, false)
+	reflectStringify(p, reflect.ValueOf(v), 0, false)
 	return p.String()
+}
+
+func reflectStringify(p *bytes.Buffer, rv reflect.Value, depth int, showType bool) {
+	const maxDepth = 10
+	if rv.Type().Implements(reflect.TypeOf((*fmt.Stringer)(nil)).Elem()) {
+		if !rv.CanInterface() {
+			p.WriteString("...")
+		} else {
+			p.WriteString(rv.Interface().(fmt.Stringer).String())
+		}
+		return
+	}
+	if rv.Type().Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+		if !rv.CanInterface() {
+			p.WriteString("...")
+		} else {
+			p.WriteString(rv.Interface().(error).Error())
+		}
+		return
+	}
+
+	k := rv.Kind()
+
+	if showType {
+		if k == reflect.Ptr {
+			rv = rv.Elem()
+			p.WriteString("(*")
+		} else if k == reflect.Interface {
+			rv = rv.Elem()
+			p.WriteString("(^")
+		}
+		if !rv.IsValid() {
+			p.WriteString("nil)")
+			return
+		}
+		p.WriteString(rv.Type().String())
+		p.WriteString(")(")
+	} else {
+		if k == reflect.Ptr || k == reflect.Interface {
+			rv = rv.Elem()
+		}
+		if !rv.IsValid() {
+			p.WriteString("nil)")
+			return
+		}
+	}
+
+	switch rv.Kind() {
+	case reflect.Bool:
+		p.WriteString(strconv.FormatBool(rv.Bool()))
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		p.WriteString(strconv.FormatInt(rv.Int(), 10))
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		p.WriteString(strconv.FormatUint(rv.Uint(), 10))
+	case reflect.Float32, reflect.Float64:
+		p.WriteString(strconv.FormatFloat(rv.Float(), 'f', -1, 64))
+	case reflect.Complex64, reflect.Complex128:
+		c := rv.Complex()
+		p.WriteString(strconv.FormatFloat(real(c), 'f', -1, 64))
+		p.WriteString("+")
+		p.WriteString(strconv.FormatFloat(imag(c), 'f', -1, 64))
+		p.WriteString("i")
+	case reflect.String:
+		p.WriteString(rv.String())
+	case reflect.Struct:
+		count := 0
+		p.WriteString(rv.Type().String())
+		p.WriteString("{ ")
+		if depth > maxDepth {
+			p.WriteString("...")
+		} else {
+			rt := rv.Type()
+			for i := 0; i < rt.NumField(); i++ {
+				p.WriteString(rt.Field(i).Name)
+				p.WriteString(": ")
+				reflectStringify(p, rv.Field(i), depth+1, rt.Field(i).Type.Kind() == reflect.Interface)
+				p.WriteString(", ")
+				count++
+			}
+		}
+		closeBuffer(p, " }")
+	case reflect.Array, reflect.Slice:
+		p.WriteString("[")
+		if rv.Kind() == reflect.Array {
+			p.WriteString(strconv.Itoa(int(rv.Len())))
+		}
+		p.WriteString("]")
+		p.WriteString(rv.Type().Elem().String())
+		p.WriteString("{ ")
+		if depth > maxDepth {
+			p.WriteString("...")
+		} else {
+			showType := rv.Type().Elem().Kind() == reflect.Interface
+			for i := 0; i < rv.Len(); i++ {
+				reflectStringify(p, rv.Index(i), depth+1, showType)
+				p.WriteString(", ")
+			}
+		}
+		closeBuffer(p, " }")
+	case reflect.Map:
+		p.WriteString("map[")
+		p.WriteString(rv.Type().Key().String())
+		p.WriteString("]")
+		p.WriteString(rv.Type().Elem().String())
+		p.WriteString("{ ")
+		if depth > maxDepth {
+			p.WriteString("...")
+		} else {
+			iter := rv.MapRange()
+			showType1 := rv.Type().Key().Kind() == reflect.Interface
+			showType2 := rv.Type().Elem().Kind() == reflect.Interface
+			for iter.Next() {
+				reflectStringify(p, iter.Key(), depth+1, showType1)
+				p.WriteString(": ")
+				reflectStringify(p, iter.Value(), depth+1, showType2)
+				p.WriteString(", ")
+			}
+		}
+		closeBuffer(p, " }")
+	default:
+		p.WriteString(rv.Type().String())
+		p.WriteString("{}")
+	}
+
+	if showType {
+		p.WriteString(")")
+	}
+}
+
+func closeBuffer(p *bytes.Buffer, suffix string) {
+	for p.Len() > 0 {
+		b := p.Bytes()[p.Len()-1]
+		if b == ' ' || b == ',' {
+			p.Truncate(p.Len() - 1)
+		} else {
+			break
+		}
+	}
+	p.WriteString(suffix)
+}
+
+func ifstr(v bool, t, f string) string {
+	if v {
+		return t
+	}
+	return f
 }
