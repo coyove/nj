@@ -40,7 +40,7 @@ func main() {
 	flag.Parse()
 
 	if *apiServer != "" {
-		http.HandleFunc("/", script.WebREPLHandler(nil))
+		http.HandleFunc("/", script.WebREPLHandler(nil, nil))
 		log.Println("listen", *apiServer)
 		http.ListenAndServe(*apiServer, nil)
 		return

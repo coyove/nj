@@ -294,7 +294,7 @@ func init() {
 		fmt.Fprintln(env.Global.Stdout)
 	}, "print(...args: value)", "\tprint values, no space between them")
 	AddGlobalValue("printf", func(env *Env) {
-		sprintf(env, os.Stdout)
+		sprintf(env, env.Global.Stdout)
 	}, "$f(format: string, ...args: value)")
 	AddGlobalValue("write", func(env *Env) {
 		w := env.Get(0).Interface().(io.Writer)

@@ -13,7 +13,7 @@ import (
 //go:embed typ/index.html
 var indexBytes []byte
 
-func WebREPLHandler(loader func(string) (*Program, error)) func(w http.ResponseWriter, r *http.Request) {
+func WebREPLHandler(opt *CompileOptions, cb func(*Program)) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() { recover() }()
 
@@ -25,27 +25,20 @@ func WebREPLHandler(loader func(string) (*Program, error)) func(w http.ResponseW
 		}
 
 		start := time.Now()
-		bufOut := &limitedWriter{limit: 16 * 1024}
+		bufOut := &limitedWriter{limit: 32 * 1024}
 
-		var p *Program
-		var err error
-		if loader == nil {
-			p, err = LoadString(c, nil)
-			if err != nil {
-				writeJSON(w, map[string]interface{}{"error": err.Error()})
-				return
-			}
-			p.SetTimeout(time.Second * 2)
-			p.MaxCallStackSize = 100
-		} else {
-			p, err = loader(c)
-			if err != nil {
-				writeJSON(w, map[string]interface{}{"error": err.Error()})
-				return
-			}
+		p, err := LoadString(c, opt)
+		if err != nil {
+			writeJSON(w, map[string]interface{}{"error": err.Error()})
+			return
 		}
+		p.SetTimeout(time.Second * 2)
+		p.MaxCallStackSize = 100
 		p.Stdout = bufOut
 		p.Stderr = bufOut
+		if cb != nil {
+			cb(p)
+		}
 		code := p.PrettyCode()
 		v, err := p.Run()
 		if err != nil {
@@ -90,8 +83,8 @@ type limitedWriter struct {
 }
 
 func (w *limitedWriter) Write(b []byte) (int, error) {
-	if w.Len() > w.limit {
-		return 0, fmt.Errorf("overflow")
+	if w.Len()+len(b) > w.limit {
+		b = b[:w.limit-w.Len()]
 	}
 	return w.Buffer.Write(b)
 }

@@ -3,7 +3,6 @@ package script
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -615,17 +614,21 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 			}
 			closeBuffer(p, "}")
 		}
-		if m.Parent != nil {
+		if m.Parent != nil && !j {
 			p.WriteString("^")
 			m.Parent.Value().toString(p, lv+1, j)
 		}
 	case typ.Func:
-		p.WriteString(v.Func().String())
+		if j {
+			p.WriteString(strconv.Quote(v.Func().String()))
+		} else {
+			p.WriteString(v.Func().String())
+		}
 	case typ.Interface:
 		if j {
-			json.NewEncoder(p).Encode(v.Interface())
+			p.WriteString(strconv.Quote(reflect.TypeOf(v.Interface()).String()))
 		} else {
-			reflectStringify(p, reflect.ValueOf(v.Interface()), 0, false)
+			p.WriteString(reflect.TypeOf(v.Interface()).String())
 		}
 	default:
 		p.WriteString(ifstr(j, "null", "nil"))
