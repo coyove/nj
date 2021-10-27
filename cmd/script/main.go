@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,15 +17,12 @@ import (
 	_ "github.com/coyove/script/lib"
 )
 
-const VERSION = "0.2.0"
-
 var (
-	goroutinePerCPU = flag.Int("goroutine", 2, "goroutines per CPU")
-	output          = flag.String("o", "ret", "separated by comma: (none|compileonly|opcode|bytes|ret|timing)+")
-	input           = flag.String("i", "f", "input source, 'f': file, '-': stdin, others: string")
-	version         = flag.Bool("v", false, "print version and usage")
-	timeout         = flag.Int("t", 0, "max execution time in ms")
-	apiServer       = flag.String("serve", "", "start as language playground")
+	output    = flag.String("o", "ret", "separated by comma: (none|compileonly|opcode|bytes|ret|timing)+")
+	input     = flag.String("i", "f", "input source, 'f': file, '-': stdin, others: string")
+	version   = flag.Bool("v", false, "print version and usage")
+	timeout   = flag.Int("t", 0, "max execution time in ms")
+	apiServer = flag.String("serve", "", "start as language playground")
 )
 
 func main() {
@@ -49,7 +47,7 @@ func main() {
 	log.SetFlags(0)
 
 	if *version {
-		fmt.Println("\"script\": script virtual machine v" + VERSION + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")")
+		fmt.Println("script virtual machine v" + strconv.FormatInt(script.Version, 10) + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")")
 		flag.Usage()
 		return
 	}
@@ -97,7 +95,7 @@ func main() {
 		}
 	}
 
-	runtime.GOMAXPROCS(runtime.NumCPU() * *goroutinePerCPU)
+	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	start := time.Now()
 
 	var b *script.Program

@@ -257,3 +257,10 @@ func ifstr(v bool, t, f string) string {
 	}
 	return f
 }
+
+func ifquote(v bool, s string) string {
+	if v {
+		return strconv.Quote(s)
+	}
+	return s
+}

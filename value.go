@@ -569,7 +569,7 @@ func (v Value) MarshalJSON() ([]byte, error) {
 
 func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 	if lv > 10 {
-		p.WriteString("...")
+		p.WriteString(ifstr(j, "{}", "..."))
 		return p
 	}
 	switch v.Type() {
@@ -582,11 +582,7 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 			p.WriteString(strconv.FormatFloat(vf, 'f', -1, 64))
 		}
 	case typ.String:
-		if j {
-			p.WriteString(strconv.Quote(v.Str()))
-		} else {
-			p.WriteString(v.Str())
-		}
+		p.WriteString(ifquote(j, v.Str()))
 	case typ.Table:
 		m := v.Table()
 		if sf := m.GetString("__str"); sf.Type() == typ.Func {
@@ -619,16 +615,15 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 			m.Parent.Value().toString(p, lv+1, j)
 		}
 	case typ.Func:
-		if j {
-			p.WriteString(strconv.Quote(v.Func().String()))
-		} else {
-			p.WriteString(v.Func().String())
-		}
+		p.WriteString(ifquote(j, v.Func().String()))
 	case typ.Interface:
-		if j {
-			p.WriteString(strconv.Quote(reflect.TypeOf(v.Interface()).String()))
+		i := v.Interface()
+		if s, ok := i.(fmt.Stringer); ok {
+			p.WriteString(ifquote(j, s.String()))
+		} else if s, ok := i.(error); ok {
+			p.WriteString(ifquote(j, s.Error()))
 		} else {
-			p.WriteString(reflect.TypeOf(v.Interface()).String())
+			p.WriteString(ifquote(j, reflect.TypeOf(i).String()))
 		}
 	default:
 		p.WriteString(ifstr(j, "null", "nil"))
