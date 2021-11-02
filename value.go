@@ -262,6 +262,8 @@ func Val(i interface{}) Value {
 		return Int(rv.Int())
 	} else if k >= reflect.Uint && k <= reflect.Uintptr {
 		return Int(int64(rv.Uint()))
+	} else if (k == reflect.Ptr || k == reflect.Interface) && rv.IsNil() {
+		return Nil
 	} else if k == reflect.Func {
 		nf, _ := i.(func(*Env))
 		if nf == nil {
