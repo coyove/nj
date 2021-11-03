@@ -12,13 +12,14 @@
 package script
 
 import (
+	"bytes"
 	"unsafe"
 
 	"github.com/coyove/script/typ"
 )
 
 type Table struct {
-	Parent    *Table
+	parent    *Table
 	hashCount uint32
 	count     uint32
 	hashItems []hashItem
@@ -49,6 +50,17 @@ func (m *Table) Clear() {
 	m.count, m.hashCount = 0, 0
 }
 
+func (m *Table) Parent() *Table { return m.parent }
+
+func (m *Table) ClearParent() { m.parent = nil }
+
+func (m *Table) SetParent(m2 *Table) {
+	if m.parent != nil {
+		m2.SetParent(m.parent)
+	}
+	m.parent = m2
+}
+
 func (m *Table) GetString(k string) (v Value) {
 	return m.Get(Str(k))
 }
@@ -66,11 +78,11 @@ func (m *Table) Get(k Value) (v Value) {
 	}
 	if idx := m.findHash(k); idx >= 0 {
 		v = m.hashItems[idx].Val
-	} else if m.Parent != nil {
-		v = m.Parent.Get(k)
+	} else if m.parent != nil {
+		v = m.parent.Get(k)
 	}
 FINAL:
-	if (m.Parent != nil || k.IsMetaString()) && v.Type() == typ.Func {
+	if (m.parent != nil || k.IsMetaString()) && v.Type() == typ.Func {
 		f := *v.Func()
 		f.MethodSrc = m.Value()
 		v = f.Value()
@@ -123,8 +135,8 @@ func (m *Table) ParentContains(k Value) *Table {
 	if k == Nil {
 		return nil
 	}
-	if m.Parent != nil {
-		p := m.Parent.ParentContains(k)
+	if m.parent != nil {
+		p := m.parent.ParentContains(k)
 		if p != nil {
 			return p
 		}
@@ -145,7 +157,7 @@ func (m *Table) Set(k, v Value) (prev Value) {
 		panicf("table set with nil key")
 	}
 
-	if m.Parent != nil && v.Type() != typ.Func {
+	if m.parent != nil && v.Type() != typ.Func {
 		if x := m.ParentContains(k); x != nil && x != m {
 			return x.Set(k, v)
 		}
@@ -321,6 +333,30 @@ func (m *Table) MapPart() map[Value]Value {
 
 func (m *Table) String() string {
 	return m.Value().String()
+}
+
+func (m *Table) rawPrint(p *bytes.Buffer, lv int, j bool) {
+	if len(m.hashItems) == 0 {
+		p.WriteString(ifstr(j, "[", "{"))
+		for _, a := range m.ArrayPart() {
+			a.toString(p, lv+1, j)
+			p.WriteString(",")
+		}
+		closeBuffer(p, ifstr(j, "]", "}"))
+	} else {
+		p.WriteString("{")
+		for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
+			k.toString(p, lv+1, j)
+			p.WriteString(ifstr(j, ":", "="))
+			v.toString(p, lv+1, j)
+			p.WriteString(",")
+		}
+		closeBuffer(p, "}")
+	}
+	if m.parent != nil && !j {
+		p.WriteString("^")
+		m.parent.rawPrint(p, lv+1, j)
+	}
 }
 
 func (m *Table) Value() Value {

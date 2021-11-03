@@ -121,9 +121,7 @@ function worker()
     print("worker after 1s")
     return 'finished'
 end
-g = go.new(worker)
-g.start()
-assert(g.wait() == 'finished')
+assert(sync.map({0}, worker)[0] == 'finished')
 
 Car = {_brand=''}
 function Car.get_brand(this)
@@ -137,7 +135,10 @@ b0 = new(Car)
 b1 = new(Benz, {index=1})
 b2 = new(Benz, {index=2})
 b3 = new(Honda, {index=3})
-println(b0.get_brand(), b1.get_brand(), b2.get_brand(), b3.get_brand())
+assert(b0.get_brand(), 'a car')
+assert(b1.get_brand(), 'a benz car #1')
+assert(b2.get_brand(), 'a benz car #2')
+assert(b3.get_brand(), 'a honda car #3')
 
 
 -- closure

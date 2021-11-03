@@ -203,7 +203,7 @@ declarator:
 
 expr:
     prefix_expr                       { $$ = $1 } |
-    TLambda func_params stats TEnd    { $$ = __func(__markupLambdaName($1), $2, $3) } | 
+    TLambda func_params stats TEnd    { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
     TNumber                           { $$ = Num($1.Str) } |
     TString                           { $$ = Str($1.Str) } |
     '{' '}'                           { $$ = Nodes((SArrayMap), emptyNode).At($1) } |

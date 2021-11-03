@@ -150,7 +150,7 @@ func MapAdd(old Value, kvs ...Value) Value {
 // TableProto returns a table whose parent will be set to p
 func TableProto(p *Table, kvs ...Value) Value {
 	m := Map(kvs...)
-	m.Table().Parent = p
+	m.Table().SetParent(p)
 	return m
 }
 
@@ -161,8 +161,7 @@ func TableProtoChain(p []*Table, kvs ...Value) Value {
 	}
 	cur := m.Table()
 	for _, tp := range p {
-		cur.Parent = tp
-		cur = tp
+		cur.SetParent(tp)
 	}
 	return m
 }
@@ -377,8 +376,6 @@ func (v Value) Table() *Table { return (*Table)(v.p) }
 
 // Func cast value to function
 func (v Value) Func() *Func { return (*Func)(v.p) }
-
-func (v Value) WrappedFunc() *Func { return v.Interface().(*WrappedFunc).Func }
 
 // Interface returns the interface{} representation of Value
 func (v Value) Interface() interface{} {
@@ -595,27 +592,7 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 			}
 			return p
 		}
-		if len(m.hashItems) == 0 {
-			p.WriteString(ifstr(j, "[", "{"))
-			for _, a := range m.ArrayPart() {
-				a.toString(p, lv+1, j)
-				p.WriteString(",")
-			}
-			closeBuffer(p, ifstr(j, "]", "}"))
-		} else {
-			p.WriteString("{")
-			for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
-				k.toString(p, lv+1, j)
-				p.WriteString(ifstr(j, ":", "="))
-				v.toString(p, lv+1, j)
-				p.WriteString(",")
-			}
-			closeBuffer(p, "}")
-		}
-		if m.Parent != nil && !j {
-			p.WriteString("^")
-			m.Parent.Value().toString(p, lv+1, j)
-		}
+		m.rawPrint(p, lv, j)
 	case typ.Func:
 		p.WriteString(ifquote(j, v.Func().String()))
 	case typ.Interface:

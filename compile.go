@@ -437,17 +437,6 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	cls.Stdout = os.Stdout
 	cls.Stdin = os.Stdin
 	cls.Stderr = os.Stderr
-	cls.GLoad = func(k string) Value {
-		if k == "" {
-			return Value{}
-		}
-		return coreStack.Get(int(shadowTable.mustGetSymbol(k)))
-	}
-	cls.GStore = func(k string, v Value) {
-		if k != "" {
-			coreStack.Set(int(shadowTable.mustGetSymbol(k)), v)
-		}
-	}
 	for _, f := range cls.Functions {
 		f.LoadGlobal = cls
 	}

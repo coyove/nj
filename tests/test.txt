@@ -240,3 +240,8 @@ assert(foo()(), 2)
 foo()
 ({a=1}).a  -- should run flawlessly
 ({a=(1+bar())}).a
+
+assert((lambda(x) return (x+1) end)(1), 2)
+assert((lambda(x) (x+1) end)(1), 2)
+assert((lambda(x) end)(1), nil)
+assert((lambda(x) x.a end)(a=100), 100)

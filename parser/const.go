@@ -111,6 +111,14 @@ func __func(name Token, pp Node, stats Node) Node {
 	)
 }
 
+func __lambda(name Token, pp Node, stats Node) Node {
+	nodes := stats.Nodes()
+	if len(nodes) > 1 && nodes[0].Sym() == ABegin {
+		nodes[len(nodes)-1] = Nodes(SReturn, nodes[len(nodes)-1])
+	}
+	return __func(name, pp, stats)
+}
+
 func __markupFuncName(recv, name Token) Token {
 	name.Str = recv.Str + "." + name.Str
 	return name

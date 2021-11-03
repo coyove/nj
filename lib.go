@@ -77,9 +77,9 @@ func init() {
 	AddGlobalValue("new", func(env *Env, v, a Value) Value {
 		m := v.MustTable("").Copy()
 		if a.Type() != typ.Table {
-			return (&Table{Parent: m}).Value()
+			return (&Table{parent: m}).Value()
 		}
-		a.Table().Parent = m
+		a.Table().SetParent(m)
 		return a
 	})
 	AddGlobalValue("prototype", g["new"])
@@ -134,13 +134,18 @@ func init() {
 	AddGlobalValue("closure", func(env *Env, f, m Value) Value {
 		lambda := f.MustFunc("")
 		return Map(
-			Str("__source"), m,
-			Str("__lambda"), lambda.Value(),
+			Str("source"), m,
+			Str("lambda"), lambda.Value(),
+			Str("__str"), Native("<closure-"+lambda.Name+"__str>", func(env *Env) {
+				recv := env.Get(0).MustTable("")
+				f := recv.GetString("lambda").MustFunc("")
+				src := recv.GetString("source")
+				env.A = Str(fmt.Sprintf("<closure-" + f.Name + "-" + src.String() + ">"))
+			}),
 			Str("__call"), Native("<closure-"+lambda.Name+">", func(env *Env) {
 				recv := env.Get(0).MustTable("")
-				f := recv.GetString("__lambda").MustFunc("")
-				f.MethodSrc = Nil
-				stk := append([]Value{recv.GetString("__source")}, env.Stack()[1:]...)
+				f := recv.GetString("lambda").MustFunc("")
+				stk := append([]Value{recv.GetString("source")}, env.Stack()[1:]...)
 				res, err := f.Call(stk...)
 				if err != nil {
 					panic(err)
@@ -149,37 +154,6 @@ func init() {
 			}),
 		)
 	}, "closure(lambda: function, v: value) value", "\tbind v to lambda, when lambda is called, v will be passed in as the first argument")
-
-	AddGlobalValue("go", Map(
-		Str("new"), Native1("new", func(env *Env, f Value) Value {
-			wg := &sync.WaitGroup{}
-			b := Map(
-				Str("_f"), f.MustFunc("").WrappedValue(),
-				Str("_r"), Undef,
-				Str("_wg"), Val(wg),
-				Str("start"), Native1("start", func(env *Env, t Value) Value {
-					m := t.Table()
-					wg := m.GetString("_wg").Interface().(*sync.WaitGroup)
-					wg.Add(1)
-					args := append([]Value{}, env.Stack()[1:]...)
-					go func() {
-						defer wg.Done()
-						res, err := m.GetString("_f").WrappedFunc().Call(args...)
-						if err != nil {
-							panic(err)
-						}
-						m.SetString("_r", res)
-					}()
-					return Nil
-				}),
-				Str("wait"), Native1("wait", func(env *Env, t Value) Value {
-					t.Table().GetString("_wg").Interface().(*sync.WaitGroup).Wait()
-					return t.Table().GetString("_r")
-				}),
-			)
-			return TableProto(b.Table())
-		}),
-	))
 
 	// Debug libraries
 	AddGlobalValue("debug", Map(
@@ -460,7 +434,7 @@ func init() {
 		return Array(nk, nv)
 	}, "next(t: table, k: value) array", "\tfind next key-value pair after k in the table and return as { next_key, next_value }")
 	AddGlobalValue("parent", func(env *Env, m Value) Value {
-		return m.MustTable("").Parent.Value()
+		return m.MustTable("").Parent().Value()
 	}, "parent(t: table) table", "\tfind given table's parent, or nil if not existed")
 	AddGlobalValue("unwrap", func(env *Env, m Value) Value {
 		return ValRec(m.Interface())

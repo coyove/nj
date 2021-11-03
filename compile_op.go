@@ -303,7 +303,7 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 	}
 	table.code.writeInst(typ.OpLoadFunc, loadFuncIndex, 0)
 	if strings.HasPrefix(cls.Name, "<lambda") {
-		cls.Name = cls.Name[:len(cls.Name)-1] + "_" + strconv.Itoa(int(loadFuncIndex)) + ">"
+		cls.Name = cls.Name[:len(cls.Name)-1] + "-" + strconv.Itoa(int(loadFuncIndex)) + ">"
 	}
 	table.code.writePos(atoms[0].Pos())
 	return regA

@@ -54,7 +54,7 @@ func runFile(t *testing.T, path string) {
 					panic("findGlobal failed")
 				}
 				env.Global.Set("G_FLAG", Str("ok"))
-				env.Global.Println("find global")
+				fmt.Println("find global")
 			},
 			"G": "test",
 		},

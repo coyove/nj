@@ -36,7 +36,7 @@ func init() {
 			if m == Nil {
 				return TableProto(t.MustTable(""))
 			}
-			m.MustTable("").Parent = t.MustTable("")
+			m.MustTable("").SetParent(t.MustTable(""))
 			return m
 		}),
 		Str("__safe"), Native2("__safe", func(env *Env, t, m Value) Value {
@@ -62,7 +62,7 @@ func init() {
 			if m == Nil {
 				return TableProto(x)
 			}
-			m.MustTable("").Parent = x
+			m.MustTable("").SetParent(x)
 			return m
 		}, "$f(src: table) table", "\tcreate a concurrently accessible table"),
 		Str("get"), Native2("get", func(env *Env, m, k Value) Value {
@@ -101,8 +101,12 @@ func init() {
 			"$f({t}: array, start: int, end: int) array", "\tcopy array, from start to end",
 		),
 		Str("parent"), Native1("parent", func(env *Env, v Value) Value {
-			return v.MustTable("").Parent.Value()
+			return v.MustTable("").Parent().Value()
 		}, "$f({t}: table) table", "\treturn table's parent if any"),
+		Str("setparent"), Native2("setparent", func(env *Env, v, p Value) Value {
+			v.MustTable("").SetParent(p.MustTable(""))
+			return Nil
+		}, "$f({t}: table, p: table)", "\tset table's parent"),
 		Str("arraylen"), Native1("arraylen", func(env *Env, v Value) Value {
 			return Int(int64(len(v.MustTable("").items)))
 		}, "$f({t}: array) int", "\treturn the true size of array (including trailing nils)"),
@@ -189,6 +193,11 @@ func init() {
 			})
 			return ma.Value()
 		}, "$f({table1}: table, table2: table)", "\tmerge elements from table2 to table1"),
+		Str("print"), Native1("print", func(env *Env, a Value) Value {
+			p := &bytes.Buffer{}
+			a.MustTable("").rawPrint(p, 0, false)
+			return Bytes(p.Bytes())
+		}, "$f({t}: table) string", "\tprint raw elements in table, ignore __str"),
 	)
 	AddGlobalValue("table", TableLib)
 
