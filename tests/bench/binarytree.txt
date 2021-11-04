@@ -16,31 +16,30 @@ if (minDepth + 2 > n) then maxDepth = minDepth + 2 end
 stretchDepth = maxDepth + 1 
 
 check_l = itemCheck(bottomUpTree(stretchDepth)) 
-print(str.from("stretch tree of depth %d\t check: %v").format(stretchDepth, check_l) )
+print(str:from("stretch tree of depth %d\t check: %v").format(stretchDepth, check_l) )
 
 longLivedTree = bottomUpTree(maxDepth) 
-wg = sync.waitgroup() 
-result = table.makearray(maxDepth+1) 
+result = table:makearray(maxDepth+1) 
 
-function worker( depth, check)
+function worker(k, args)
+    local depth, check = args[0], args[1]
     iterations = 1 << (maxDepth - depth + minDepth) 
     check = 0 
 
     for i = 0,iterations do
         check = check + itemCheck(bottomUpTree(depth)) 
     end
-    result[depth] = str.from("%d\t trees of depth %d\t check: %v").format(iterations, depth, check)
-    wg.Done()
+    result[depth] = str:from("%d\t trees of depth %d\t check: %v").format(iterations, depth, check)
 end
 
+payload = table()
 for depth_l = minDepth,maxDepth,2 do
-    wg.Add(1)
-    go.new(worker).start(depth_l, check_l)
+    payload.append({depth_l, check_l})
 end
-wg.Wait()
+sync:map(payload, worker)
 
 for depth = minDepth,maxDepth,2 do
     print(result[depth]) 
 end
 
-print(str.from("long lived tree of depth %d\t check: %v\n").format(maxDepth, itemCheck(longLivedTree)))
+print(str:from("long lived tree of depth %d\t check: %v\n").format(maxDepth, itemCheck(longLivedTree)))

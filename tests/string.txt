@@ -15,9 +15,9 @@ print("reflectLoad: ", err.Error())
 assert(err.Error() == "err")
 assert("eerrrr" == re("(e|r)").replace(err.Error(), "$1$1"))
 
-assert("x" == str.from("嘻x嘻").trim("嘻"))
-assert("嘻x" == str.from("嘻x嘻").rtrim("嘻"))
-assert("x嘻" == str.from("嘻x嘻").ltrim("嘻"))
+assert("x" == str:from("嘻x嘻").trim("嘻"))
+assert("嘻x" == str:from("嘻x嘻").rtrim("嘻"))
+assert("x嘻" == str:from("嘻x嘻").ltrim("嘻"))
 
 -- assert(("abc")[1:2] == "ab")
 -- assert(("abc")[3:3] == "c")
@@ -27,8 +27,8 @@ assert("x嘻" == str.from("嘻x嘻").ltrim("嘻"))
 
 -- json generator
 do
-	str.json_get = json.get
-	local j = json.stringify({
+	str.json_get = json:get
+	local j = json:stringify({
 	      a = 'A',
 	      ["b-2"] = true,
 	})
@@ -36,7 +36,7 @@ do
 end
 
 function str.reverse(s)
-	x = str.buffer()
+	x = str:buffer()
 	s = s.chars()
 	for i=len(s)-1,-1,-1 do
 		x.write(s[i])
@@ -44,5 +44,5 @@ function str.reverse(s)
 	print (parent(x))
 	return x.value()
 end
-assert("abc", str.from("cba").reverse())
-assert("あbc", str.from("cbあ").reverse())
+assert("abc", str:from("cba").reverse())
+assert("あbc", str:from("cbあ").reverse())

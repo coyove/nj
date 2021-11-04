@@ -150,7 +150,7 @@ func init() {
 		if args.GetString("body_reader").IsFalse() && args.GetString("br").IsFalse() {
 			resp.Body.Close()
 		} else {
-			buf = script.TableProtoChain([]*script.Table{script.ReaderProto(), script.CloserProto()}, script.Str("_f"), script.Val(resp.Body))
+			buf = script.TableProto(script.ReadCloser, script.Str("_f"), script.Val(resp.Body))
 		}
 
 		hdr := map[string]string{}

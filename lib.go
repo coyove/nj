@@ -75,7 +75,7 @@ func init() {
 	}, "doc(f: function) string", "\treturn function's documentation",
 		"doc(f: function, docstring: string)", "\tupdate function's documentation")
 	AddGlobalValue("new", func(env *Env, v, a Value) Value {
-		m := v.MustTable("").Copy()
+		m := v.MustTable("")
 		if a.Type() != typ.Table {
 			return (&Table{parent: m}).Value()
 		}
@@ -145,6 +145,7 @@ func init() {
 			Str("__call"), Native("<closure-"+lambda.Name+">", func(env *Env) {
 				recv := env.Get(0).MustTable("")
 				f := recv.GetString("lambda").MustFunc("")
+				f.MethodSrc = Nil
 				stk := append([]Value{recv.GetString("source")}, env.Stack()[1:]...)
 				res, err := f.Call(stk...)
 				if err != nil {
@@ -468,7 +469,7 @@ func init() {
 		if autoClose {
 			runtime.SetFinalizer(f, func(f *os.File) { f.Close() })
 		}
-		return TableProtoChain([]*Table{ReaderProto(), WriterProto(), CloserProto(), SeekerProto()},
+		return TableProto(ReadWriteSeekCloser,
 			Str("_f"), Val(f),
 			Str("sync"), Native1("sync", func(e *Env, rx Value) Value {
 				if err := rx.Table().GetString("_f").Interface().(*os.File).Sync(); err != nil {
@@ -532,8 +533,8 @@ func init() {
 	}, "open(path: string, flag: string, perm: int) value")
 }
 
-func ReaderProto() *Table {
-	return Map(Str("read"), Native2("read", func(e *Env, rx, n Value) Value {
+var (
+	ReaderProto = Map(Str("read"), Native2("read", func(e *Env, rx, n Value) Value {
 		f := rx.Table().GetString("_f").Interface().(io.Reader)
 		switch n.Type() {
 		case typ.Number:
@@ -564,10 +565,7 @@ func ReaderProto() *Table {
 		"read(n: int) bytes", "\tread n bytes",
 		"read(buf: bytes) array", "\tread into buf and return { bytes_read, error } in Go style",
 	)).Table()
-}
-
-func WriterProto() *Table {
-	return Map(
+	WriterProto = Map(
 		Str("write"), Native2("write", func(e *Env, rx, buf Value) Value {
 			f := rx.Table().GetString("_f").Interface().(io.Writer)
 			wn, err := fmt.Fprint(f, buf.MustStr(""))
@@ -593,10 +591,7 @@ func WriterProto() *Table {
 		}, "$f({w}: value, r: value) int", "\tcopy bytes from r to w, return number of bytes copied",
 			"$f({w}: value, r: value, n: int) int", "\tcopy at most n bytes from r to w"),
 	).Table()
-}
-
-func SeekerProto() *Table {
-	return Map(Str("seek"), Native3("seek", func(e *Env, rx, off, where Value) Value {
+	SeekerProto = Map(Str("seek"), Native3("seek", func(e *Env, rx, off, where Value) Value {
 		f := rx.Table().GetString("_f").Interface().(io.Seeker)
 		wn, err := f.Seek(off.MustInt("offset"), int(where.MustInt("where")))
 		if err != nil {
@@ -604,10 +599,12 @@ func SeekerProto() *Table {
 		}
 		return Int(int64(wn))
 	}, "")).Table()
-}
-
-func CloserProto() *Table {
-	return Map(Str("close"), Native1("close", func(e *Env, rx Value) Value {
+	CloserProto = Map(Str("close"), Native1("close", func(e *Env, rx Value) Value {
 		return Val(rx.Table().GetString("_f").Interface().(io.Closer).Close())
 	}, "")).Table()
-}
+	ReadWriter          = MapMerge(MapMerge(Map(), ReaderProto.Value()), WriterProto.Value()).Table()
+	ReadCloser          = MapMerge(MapMerge(Map(), ReaderProto.Value()), CloserProto.Value()).Table()
+	WriteCloser         = MapMerge(MapMerge(Map(), WriterProto.Value()), CloserProto.Value()).Table()
+	ReadWriteCloser     = MapMerge(MapMerge(Map(), ReadWriter.Value()), CloserProto.Value()).Table()
+	ReadWriteSeekCloser = MapMerge(MapMerge(Map(), ReadWriteCloser.Value()), SeekerProto.Value()).Table()
+)

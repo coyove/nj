@@ -32,7 +32,7 @@ package parser
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
-%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' '@' TIDiv
+%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' ':' TIDiv
 
 /* Operators */
 %right 'T'
@@ -199,7 +199,8 @@ jmp_stat:
 declarator:
     TIdent                   { $$ = Sym($1) } |
     prefix_expr '[' expr ']' { $$ = __load($1, $3).At($2) } |
-    prefix_expr '.' TIdent   { $$ = __load($1, Str($3.Str)).At($2) }
+    prefix_expr '.' TIdent   { $$ = __load($1, Str($3.Str)).At($2) } |
+    prefix_expr ':' TIdent   { $$ = __loadStatic($1, Str($3.Str)).At($2) }
 
 expr:
     prefix_expr                       { $$ = $1 } |

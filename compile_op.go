@@ -122,6 +122,9 @@ func (table *symtable) compileFlat(atoms []parser.Node) uint16 {
 		panicf("DEBUG compileFlat invalid symbol: %v", atoms[0])
 	}
 	yx := table.writeInst3(op, atoms)
+	if head == parser.ALoadStatic {
+		table.writeInst(typ.OpLoadFunc, parser.Addr(0), parser.Addr(yx))
+	}
 	if p := atoms[0].Pos(); p.Line > 0 {
 		table.code.writePos(p)
 	}

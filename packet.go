@@ -192,9 +192,13 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 		case typ.OpMap:
 			sb.WriteString("map")
 		case typ.OpLoadFunc:
-			cls := p.Functions[a]
-			sb.WriteString("loadfunc " + cls.Name + "\n")
-			sb.WriteString(pkPrettify(cls, p, false))
+			if b != 0 {
+				sb.WriteString("loadstatic " + readAddr(b, true) + "\n")
+			} else {
+				cls := p.Functions[a]
+				sb.WriteString("loadfunc " + cls.Name + "\n")
+				sb.WriteString(pkPrettify(cls, p, false))
+			}
 		case typ.OpTailCall, typ.OpCall:
 			if b != regPhantom {
 				sb.WriteString("push " + readAddr(b, true) + " -> ")

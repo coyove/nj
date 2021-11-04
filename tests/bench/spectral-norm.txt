@@ -5,45 +5,44 @@ function A(i, j)
     return ((i+j)*(i+j+1)/2 + i + 1) 
 end
 
-function TimesVec(v, s, n, u, wg)
+function TimesVec(k, args)
+    local v, s, n, u = (lambda(args) args end)(args)
     ul = len(u) 
-    for i = s, n do
+    for i = int(s),int(n) do
         vi = 0 
         for j = 0,ul do
             vi = vi + u[j] / A(i, j) 
         end
         v[i] = vi 
     end
-    wg.Done() 
 end
 
-function TimesTranspVec(v, s, n, u, wg) 
+function TimesTranspVec(k, args)
+    local v, s, n, u = (lambda(args) args end)(args)
     ul = len(u) 
-    for i = s, n do
+    for i = int(s),int(n) do
         vi = 0 
         for j = 0,ul do
             vi = vi + u[j] / A(j, i) 
         end
         v[i] = vi 
     end
-    wg.Done() 
 end
 
 function ATimesTransp(v, u)
-    x = table.makearray(len(u)) 
-    wg = sync.waitgroup() 
+    x = table:makearray(len(u)) 
 
+    payload = table()
     for i = 0, nCPU do
-        wg.Add(1) 
-        go.new(TimesVec).start(x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u, wg)
+        payload.append({x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u})
     end
-    wg.Wait() 
+    sync:map(payload, TimesVec, n=nCPU)
 
+    payload.clear()
     for i = 0, nCPU do
-        wg.Add(1) 
-        go.new(TimesTranspVec).start(v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x, wg)
+        payload.append({v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x})
     end
-    wg.Wait() 
+    sync:map(payload, TimesTranspVec, n=nCPU)
 end
 
 n = 5500
@@ -67,5 +66,5 @@ for i = 0, len(v) do
     vv = vv + v[i] * v[i]
 end
 
-println(math.sqrt(vBv/vv)) 
+println(math:sqrt(vBv/vv)) 
     

@@ -22,12 +22,15 @@ var StringMethods, MathLib, TableLib, OSLib, IOLib Value
 
 func init() {
 	IOLib = MapAdd(IOLib,
-		Str("native"), Map(
-			Str("reader"), Native("reader", func(env *Env) { env.A = ReaderProto().Value() }),
-			Str("writer"), Native("writer", func(env *Env) { env.A = WriterProto().Value() }),
-			Str("seeker"), Native("seeker", func(env *Env) { env.A = SeekerProto().Value() }),
-			Str("closer"), Native("closer", func(env *Env) { env.A = CloserProto().Value() }),
-		),
+		Str("reader"), ReaderProto.Value(),
+		Str("writer"), WriterProto.Value(),
+		Str("seeker"), SeekerProto.Value(),
+		Str("closer"), CloserProto.Value(),
+		Str("readwriter"), ReadWriter.Value(),
+		Str("readcloser"), ReadCloser.Value(),
+		Str("writecloser"), WriteCloser.Value(),
+		Str("readwritecloser"), ReadWriteCloser.Value(),
+		Str("readwriteseekcloser"), ReadWriteSeekCloser.Value(),
 	)
 	AddGlobalValue("io", IOLib)
 
@@ -39,7 +42,7 @@ func init() {
 			m.MustTable("").SetParent(t.MustTable(""))
 			return m
 		}),
-		Str("__safe"), Native2("__safe", func(env *Env, t, m Value) Value {
+		Str("concurrent"), Native2("concurrent", func(env *Env, t, m Value) Value {
 			x := NewTable(t.MustTable("").Len())
 			t.MustTable("").Foreach(func(k, v Value) bool {
 				if v.Type() == typ.Func {
@@ -78,6 +81,10 @@ func init() {
 		Str("makearray"), Native1("makearray", func(env *Env, n Value) Value {
 			return Array(make([]Value, n.MustInt(""))...)
 		}, "$f(n: int) array", "\treturn a table array, preallocate space for n values"),
+		Str("clear"), Native1("clear", func(env *Env, m Value) Value {
+			m.MustTable("").Clear()
+			return Nil
+		}, "$f({t}: table)"),
 		Str("slice"), Native3("slice", func(env *Env, t, s, e Value) Value {
 			start, end := int(s.MustInt("")), int(e.MustInt(""))
 			return Array(t.MustTable("").items[start:end]...)
@@ -357,7 +364,7 @@ func init() {
 			if v != Nil {
 				b.WriteString(v.String())
 			}
-			return TableProtoChain([]*Table{ReaderProto(), WriterProto()},
+			return TableProto(ReadWriter,
 				Str("_f"), Val(b),
 				Str("value"), Native1("value", func(env *Env, a Value) Value {
 					return Bytes(a.MustTable("").GetString("_f").Interface().(*bytes.Buffer).Bytes())

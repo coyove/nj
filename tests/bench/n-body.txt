@@ -60,7 +60,7 @@ function offsetMomentum()
     sysV[0].z = -pz / solarMass 
 end
 
-sqrt = math.sqrt 
+sqrt = math:sqrt 
 function energy()
      e =0
     for i=0,N  do

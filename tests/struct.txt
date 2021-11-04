@@ -1,11 +1,11 @@
-timer = {c=0,X=10}
+timer = {}
 function timer.reset(self)
     self.c = 0
 end
 function timer.add(self, v)
     self.c = self.c + v + self.X
 end
-T1, T2 = new(timer), new(timer)
+T1, T2 = new(timer, c=0,X=10), new(timer, c=0,X=10)
 T1.add(2)
 T2.add(3)
 assert(T1.c == 12 and T2.c == 13)
@@ -20,7 +20,7 @@ assert(T1.c == 132 and T2.c == 53)
 
 another = {f=timer.add}
 x = {X=1e3,c=-1}
-another.f(x, 10)
+another:f(x, 10)
 assert(x.c == 1009)
 
 print(timer.add)
@@ -121,11 +121,11 @@ function worker()
     print("worker after 1s")
     return 'finished'
 end
-assert(sync.map({0}, worker)[0] == 'finished')
+assert(sync:map({0}, worker)[0] == 'finished')
 
-Car = {_brand=''}
+Car = {}
 function Car.get_brand(this)
-	if this._brand then return str.from('a %s car #%d').format(this._brand, this.index) end
+	if this._brand then return ('a %s car #%d').format(this._brand, this.index) end
 	return 'a car'
 end
 Benz = prototype(Car, {_brand='benz'})
@@ -197,5 +197,5 @@ f2.close()
 
 assert(open("tests/b.txt").read(), "hello world")
 
-os.remove("tests/a.txt")
-os.remove("tests/b.txt")
+os:remove("tests/a.txt")
+os:remove("tests/b.txt")

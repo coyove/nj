@@ -116,22 +116,25 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(vaf + vbf)
 				}
 				env._set(opa, env.A)
-			} else if va.Type() == typ.Table {
-				k, v := va.Table().Next(vb)
-				env.A = Array(k, v)
-			} else if va.Type() == typ.String {
-				idx := int64(0)
-				if vb != Nil {
-					idx = vb.MustInt("string iteration")
-				}
-				r, sz := utf8.DecodeRuneInString(va.Str()[idx:])
-				if sz == 0 {
-					env.A = Array(Nil, Nil)
-				} else {
-					env.A = Array(Int(int64(sz)+idx), Rune(r))
-				}
 			} else {
-				panicf("inc " + errNeedNumbers)
+				switch va.Type() {
+				case typ.Table:
+					k, v := va.Table().Next(vb)
+					env.A = Array(k, v)
+				case typ.String:
+					idx := int64(0)
+					if vb != Nil {
+						idx = vb.MustInt("string iteration")
+					}
+					r, sz := utf8.DecodeRuneInString(va.Str()[idx:])
+					if sz == 0 {
+						env.A = Array(Nil, Nil)
+					} else {
+						env.A = Array(Int(int64(sz)+idx), Rune(r))
+					}
+				default:
+					panicf("inc " + errNeedNumbers)
+				}
 			}
 		case typ.OpAdd:
 			va, vb := env._get(opa), env._get(opb)
@@ -275,7 +278,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
 		case typ.OpMap:
-			env.A = Map(append([]Value{}, stackEnv.Stack()...)...)
+			env.A = Map(stackEnv.Stack()...)
 			stackEnv.Clear()
 		case typ.OpStore:
 			subject, v := env._get(opa), env._get(opb)
@@ -344,7 +347,14 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			stackEnv.StackOffset = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
 		case typ.OpLoadFunc:
-			env.A = env.Global.Functions[opa].Value()
+			if opb != 0 {
+				env.A = env._get(opb)
+				if env.A.Type() == typ.Func {
+					env.A.Func().MethodSrc = Nil
+				}
+			} else {
+				env.A = env.Global.Functions[opa].Value()
+			}
 		case typ.OpCall, typ.OpTailCall:
 			a := env._get(opa)
 			at := a.Type()

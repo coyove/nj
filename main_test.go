@@ -214,22 +214,24 @@ a = 0
 
 func BenchmarkCompiling(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_parser.Parse("return a+1", "")
+		_parser.Parse("(a+1)", "")
 	}
 }
 
 func BenchmarkGoCompiling(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		parser.ParseExpr("a+1")
+		parser.ParseExpr("(a+1)")
 	}
 }
 
-func BenchmarkRHMap10(b *testing.B) { benchmarkRHMap(b, 10) }
-func BenchmarkGoMap10(b *testing.B) { benchmarkGoMap(b, 10) }
-func BenchmarkRHMap20(b *testing.B) { benchmarkRHMap(b, 20) }
-func BenchmarkGoMap20(b *testing.B) { benchmarkGoMap(b, 20) }
-func BenchmarkRHMap50(b *testing.B) { benchmarkRHMap(b, 50) }
-func BenchmarkGoMap50(b *testing.B) { benchmarkGoMap(b, 50) }
+func BenchmarkRHMap10(b *testing.B)    { benchmarkRHMap(b, 10) }
+func BenchmarkGoMap10(b *testing.B)    { benchmarkGoMap(b, 10) }
+func BenchmarkRHMap20(b *testing.B)    { benchmarkRHMap(b, 20) }
+func BenchmarkGoMap20(b *testing.B)    { benchmarkGoMap(b, 20) }
+func BenchmarkRHMap50(b *testing.B)    { benchmarkRHMap(b, 50) }
+func BenchmarkGoMap50(b *testing.B)    { benchmarkGoMap(b, 50) }
+func BenchmarkRHMapUnc10(b *testing.B) { benchmarkRHMapUnconstrainted(b, 10) }
+func BenchmarkGoMapUnc10(b *testing.B) { benchmarkGoMapUnconstrainted(b, 10) }
 
 func benchmarkRHMap(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
@@ -245,6 +247,17 @@ func benchmarkRHMap(b *testing.B, n int) {
 	}
 }
 
+func benchmarkRHMapUnconstrainted(b *testing.B, n int) {
+	rand.Seed(time.Now().Unix())
+	m := NewTable(1)
+	for i := 0; i < b.N; i++ {
+		for i := 0; i < n; i++ {
+			x := rand.Intn(n)
+			m.Set(Int(int64(x)), Int(int64(i)))
+		}
+	}
+}
+
 func benchmarkGoMap(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
 	m := map[int]int{}
@@ -255,6 +268,17 @@ func benchmarkGoMap(b *testing.B, n int) {
 		idx := rand.Intn(n)
 		if m[idx] == -1 {
 			b.Fatal(idx, m)
+		}
+	}
+}
+
+func benchmarkGoMapUnconstrainted(b *testing.B, n int) {
+	rand.Seed(time.Now().Unix())
+	m := map[int]int{}
+	for i := 0; i < b.N; i++ {
+		for i := 0; i < n; i++ {
+			idx := rand.Intn(n)
+			m[idx] = i
 		}
 	}
 }
@@ -524,7 +548,7 @@ func TestACall(t *testing.T) {
 	}
 
 	foo = MustRun(LoadString(`function foo(m...)
-	return sum(table.concat(m, m)...) + sum2(m...)
+	return sum(table:concat(m, m)...) + sum2(m...)
     end
     return foo`, &CompileOptions{
 		GlobalKeyValues: map[string]interface{}{

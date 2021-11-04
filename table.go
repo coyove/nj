@@ -34,7 +34,10 @@ type hashItem struct {
 }
 
 func NewTable(size int) *Table {
-	return &Table{hashItems: make([]hashItem, int64(size)*2)}
+	if size >= 8 {
+		size *= 2
+	}
+	return &Table{hashItems: make([]hashItem, int64(size))}
 }
 
 func (m *Table) Len() int { return int(m.count) + int(m.hashCount) }
@@ -51,8 +54,6 @@ func (m *Table) Clear() {
 }
 
 func (m *Table) Parent() *Table { return m.parent }
-
-func (m *Table) ClearParent() { m.parent = nil }
 
 func (m *Table) SetParent(m2 *Table) {
 	if m.parent != nil {
@@ -82,7 +83,7 @@ func (m *Table) Get(k Value) (v Value) {
 		v = m.parent.Get(k)
 	}
 FINAL:
-	if (m.parent != nil || k.IsMetaString()) && v.Type() == typ.Func {
+	if v.Type() == typ.Func {
 		f := *v.Func()
 		f.MethodSrc = m.Value()
 		v = f.Value()

@@ -147,22 +147,19 @@ func MapAdd(old Value, kvs ...Value) Value {
 	return Map(kvs...)
 }
 
+func MapMerge(to Value, from Value) Value {
+	if to.Type() == typ.Table && from.Type() == typ.Table {
+		t := to.Table()
+		t.resizeHash((t.Len() + from.Table().Len()) * 2)
+		from.Table().Foreach(func(k, v Value) bool { t.Set(k, v); return true })
+	}
+	return to
+}
+
 // TableProto returns a table whose parent will be set to p
 func TableProto(p *Table, kvs ...Value) Value {
 	m := Map(kvs...)
 	m.Table().SetParent(p)
-	return m
-}
-
-func TableProtoChain(p []*Table, kvs ...Value) Value {
-	m := Map(kvs...)
-	if len(p) == 0 {
-		return m
-	}
-	cur := m.Table()
-	for _, tp := range p {
-		cur.SetParent(tp)
-	}
 	return m
 }
 

@@ -154,9 +154,9 @@ a = 2
 assert( 1 + 2 *3/4 == 2.5)
 assert( 1 /2+ 2.5 * (a + 1) * 5 == 38)
 assert((a + 1) % 2 == 1)
-assert(math.mod(a + 1.25, 2) == 1.25)
-assert(math.remainder(a + 1.25, 2) == -0.75)
-assert(math.mod(- a - 1.25, 2) == -1.25)
+assert(math:mod(a + 1.25, 2) == 1.25)
+assert(math:remainder(a + 1.25, 2) == -0.75)
+assert(math:mod(- a - 1.25, 2) == -1.25)
 
 do
     local mark = 0
