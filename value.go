@@ -530,7 +530,16 @@ func (v Value) Equal(r Value) bool {
 	}
 	switch v.Type() + r.Type() {
 	case typ.String * 2:
-		return r.Str() == v.Str()
+		if r.IsSmallString() {
+			if v.IsSmallString() {
+				return r == v
+			}
+			return false
+		}
+		if v.IsSmallString() {
+			return false
+		}
+		return *(*string)(v.p) == *(*string)(r.p)
 	case typ.Interface * 2:
 		return v.Interface() == r.Interface()
 	}
