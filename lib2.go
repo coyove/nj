@@ -224,7 +224,10 @@ func init() {
 		Str("from"), Native1("from", func(env *Env, src Value) Value {
 			return Str(fmt.Sprint(src.Interface()))
 		}, "from(v: value) string", "\tconvert value to string"),
-		Str("iequal"), Native2("iequal", func(env *Env, src, a Value) Value {
+		Str("equals"), Native2("equals", func(env *Env, src, a Value) Value {
+			return Bool(src.MustStr("") == a.MustStr(""))
+		}, ""),
+		Str("iequals"), Native2("iequals", func(env *Env, src, a Value) Value {
 			return Bool(strings.EqualFold(src.MustStr(""), a.MustStr("")))
 		}, ""),
 		Str("contains"), Native2("contains", func(env *Env, src, a Value) Value {

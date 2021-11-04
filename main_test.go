@@ -345,14 +345,6 @@ func TestFalsyValue(t *testing.T) {
 	assert(!s.IsFalse())
 	s = Bool(false)
 	assert(s.IsFalse())
-
-	assert(!Str("abc").IsMetaString())
-	assert(!Str("_abc").IsMetaString())
-	assert(Str("__abc").IsMetaString())
-	assert(Str("__abcd").IsMetaString())
-	assert(Str("__abcde").IsMetaString())
-	assert(Str("__abcdef").IsMetaString())
-	assert(!Str("__abcdefg").IsMetaString())
 }
 
 func TestPlainReturn(t *testing.T) {

@@ -44,5 +44,5 @@ function str.reverse(s)
 	print (parent(x))
 	return x.value()
 end
-assert("abc", str:from("cba").reverse())
-assert("あbc", str:from("cbあ").reverse())
+assert(("abc").equals(str:from("cba").reverse()))
+assert(("あbc").equals(str:from("cbあ").reverse()))

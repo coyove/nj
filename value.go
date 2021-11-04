@@ -17,15 +17,16 @@ import (
 )
 
 var (
-	int64Marker       = unsafe.Pointer(new(int64))
+	baseMarker        = [80]byte{}
+	baseStart         = uintptr(unsafe.Pointer(&baseMarker[0]))
+	baseEnd           = uintptr(unsafe.Pointer(&baseMarker[0])) + uintptr(len(baseMarker))
+	int64Marker       = unsafe.Pointer(&baseMarker[int(typ.Number)])
+	float64Marker     = unsafe.Pointer(&baseMarker[int(typ.Number)+8])
+	trueMarker        = unsafe.Pointer(&baseMarker[int(typ.Bool)])
+	falseMarker       = unsafe.Pointer(&baseMarker[int(typ.Bool)+8])
+	smallStringMarker = unsafe.Pointer(&baseMarker[int(typ.String)])
 	int64Marker2      = uintptr(int64Marker) * 2
-	float64Marker     = unsafe.Pointer(new(int64))
 	float64Marker2    = uintptr(float64Marker) * 2
-	trueMarker        = unsafe.Pointer(new(int64))
-	falseMarker       = unsafe.Pointer(new(int64))
-	smallStringMarker = unsafe.Pointer(new([9]int64))
-	metaStringStart   = Str("__\x00\x00\x00\x00\x00\x00")
-	metaStringEnd     = Str("__\xff\xff\xff\xff\xff\xff")
 
 	Nil     = Value{}
 	Undef   = _interface(new(int))
@@ -53,22 +54,14 @@ func (v Value) IsValue(parser.Node) {}
 
 // Type returns the type of value, its logic should align IsFalse()
 func (v Value) Type() typ.ValueType {
-	switch v.p {
-	case int64Marker, float64Marker:
-		return typ.Number
-	case trueMarker, falseMarker:
-		return typ.Bool
-	case nil:
-		return typ.Nil
-	}
-	if uintptr(v.p) >= uintptr(smallStringMarker) && uintptr(v.p) <= uintptr(smallStringMarker)+8*8 {
-		return typ.String
+	if uintptr(v.p) >= baseStart && uintptr(v.p) < baseEnd {
+		return typ.ValueType(uintptr(v.p) & 7)
 	}
 	return typ.ValueType(v.v)
 }
 
 // IsFalse tests whether value contains a falsy value: nil, false, empty string or 0
-// Note that empty list and nil pointer in golang are considered as 'true'
+// Note that empty table and zero-length bytes are considered 'true'
 func (v Value) IsFalse() bool {
 	return v == Nil || v == Zero || v == False || v == NullStr
 }
@@ -92,7 +85,7 @@ func Float(f float64) Value {
 	return Value{v: math.Float64bits(f), p: float64Marker}
 }
 
-// Int returns a number value like Float does, but it preserves int64 values which overflow float64
+// Int returns a number value
 func Int(i int64) Value {
 	return Value{v: uint64(i), p: int64Marker}
 }
@@ -327,13 +320,6 @@ func _interface(i interface{}) Value {
 
 func (v Value) IsSmallString() bool {
 	return uintptr(v.p) >= uintptr(smallStringMarker) && uintptr(v.p) <= uintptr(smallStringMarker)+8*8
-}
-
-func (v Value) IsMetaString() bool {
-	if !v.IsSmallString() {
-		return false
-	}
-	return v.v >= metaStringStart.v && v.v <= metaStringEnd.v
 }
 
 func (v Value) Str() string {
