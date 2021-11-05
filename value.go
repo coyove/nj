@@ -62,9 +62,7 @@ func (v Value) Type() typ.ValueType {
 
 // IsFalse tests whether value contains a falsy value: nil, false, empty string or 0
 // Note that empty table and zero-length bytes are considered 'true'
-func (v Value) IsFalse() bool {
-	return v == Nil || v == Zero || v == False || v == NullStr
-}
+func (v Value) IsFalse() bool { return v.v == 0 || v.p == falseMarker }
 
 // IsInt tests whether value contains an integer (int64)
 func (v Value) IsInt() bool { return v.p == int64Marker }
@@ -332,13 +330,9 @@ func (v Value) Str() string {
 	return *(*string)(v.p)
 }
 
-func (v Value) IsBytes() bool {
-	return v.v == 1<<63+uint64(typ.String)
-}
+func (v Value) IsBytes() bool { return v.v == 1<<63+uint64(typ.String) }
 
-func (v Value) Bytes() []byte {
-	return *(*[]byte)(v.p)
-}
+func (v Value) Bytes() []byte { return *(*[]byte)(v.p) }
 
 // When isInt == true, use Int, otherwise Float
 func (v Value) Num() (Float float64, Int int64, isInt bool) {

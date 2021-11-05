@@ -337,7 +337,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			if len(retStack) == 0 {
 				return v
 			}
-			// Return upper stack
+			// Return to upper stack
 			r := retStack[len(retStack)-1]
 			cursor = r.cursor
 			K = r.cls

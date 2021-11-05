@@ -155,6 +155,8 @@ func (c *Func) Call(args ...Value) (v1 Value, err error) {
 	return
 }
 
+func (f *Func) Pure() *Func { f.MethodSrc = Nil; return f }
+
 func (p *Program) PrettyCode() string { return pkPrettify(&p.Func, p, true) }
 
 func (p *Program) SetTimeout(d time.Duration) { p.Deadline = time.Now().Add(d).UnixNano() }
