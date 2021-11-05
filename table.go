@@ -153,12 +153,6 @@ func (m *Table) Set(k, v Value) (prev Value) {
 		panicf("table set with nil key")
 	}
 
-	if m.parent != nil && v.Type() != typ.Func {
-		if x := m.ParentContains(k); x != nil && x != m {
-			return x.Set(k, v)
-		}
-	}
-
 	if k.IsInt() {
 		idx := k.Int()
 		if idx >= 0 && idx < int64(len(m.items)) {
@@ -360,6 +354,17 @@ func (m *Table) Value() Value {
 		return Nil
 	}
 	return Value{v: uint64(typ.Table), p: unsafe.Pointer(m)}
+}
+
+func (m *Table) Move() *Table {
+	if f := m.GetString("__move"); f.Type() == typ.Func {
+		res, err := f.Func().Call()
+		if err != nil {
+			panic(err)
+		}
+		return res.MustTable("table.__move")
+	}
+	return m
 }
 
 func (m *Table) Copy() *Table {

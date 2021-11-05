@@ -25,75 +25,16 @@ assert(x.c == 1009)
 
 print(timer.add)
 
-out = {}
-A = {a="A"}
-function A.foo(v)
-    print("A:", v.a)
-    out[len(out)] = "A:" + v.a
-end
+dict={}
+function dict.__call(self) return new(new(self)) end
 
-B1 = new(A)
-
-B2 = new(A)
-function B2.foo(v)
-    print("B2:", v.a)
-    out[len(out)] = "B2:" + v.a
-end
-
-C1 = new(B1)
-C1.a = "C1"
-C1.foo()
-
-C2 = new(B2)
-C2.a = "C2"
-C2.foo()
-
-C3 = new(B2)
-function C3.foo(v)
-    print("C3:", v.a)
-    out[len(out)] = "C3:" + v.a
-    parent(C3).foo()
-end
-C3.a = "C3"
-C3.foo()
-
-D4 = new(C3)
-function D4.foo(v)
-    print("D4:", v.a)
-    out[len(out)] = "D4:" + v.a
-    parent(D4).foo()
-end
-D4.a = "D4"
-D4.b = 'z'
-D4.b = 'zz' -- repeat setting
-assert(D4.b == 'zz')
-D4.foo()
-
-assert(out[0] == 'A:C1')
-assert(out[1] == 'B2:C2')
-assert(out[2] == 'C3:C3')
-assert(out[3] == 'B2:C3')
-assert(out[4] == 'D4:D4')
-assert(out[5] == 'C3:D4')
-assert(out[6] == 'B2:D4')
-
-dict={_iter=undefined}
 function dict.next(self)
-    local k, v
-    if self._iter == undefined then
-        k, v = next(self)
-    else
-        k, v = next(self, self._iter)
-    end
-    if k == nil then
-        self._iter = undefined
-    else
-        self._iter = k
-    end
+    local k, v = next(self, parent(self)._iter)
+    parent(self)._iter = k
     return k, v
 end
 
-m = new(dict)
+m = dict()
 m[0] = 0
 m[true] = false
 m.zz = 'zz'
@@ -106,6 +47,19 @@ while true do
     assert(m[k] == v)
     println(k ,v)
 end
+
+CarPrototype = {}
+function CarPrototype.getBrand(this) return parent(this).brand end
+function CarPrototype.setBrand(this, brand) parent(this).brand = brand; return this end
+function CarPrototype.__str(this) return ('a %s %s car').format(this.color, this.brand) end
+
+Car = prototype(CarPrototype, {brand=''})
+function Car.__move(this) return table:copy(this) end
+
+carA = new(Car, color='red').setBrand('ferrari')
+carB = new(Car, color='orange').setBrand('mclaren')
+
+println(carA, carB)
 
 cnt = 0
 k = 99

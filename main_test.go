@@ -340,11 +340,12 @@ func TestFalsyValue(t *testing.T) {
 	assert(Float(0).IsFalse())
 	assert(Float(1 / math.Inf(-1)).IsFalse())
 	assert(!Float(math.NaN()).IsFalse())
-
-	s := Bool(true)
-	assert(!s.IsFalse())
-	s = Bool(false)
-	assert(s.IsFalse())
+	assert(!Bool(true).IsFalse())
+	assert(Bool(false).IsFalse())
+	assert(Str("").IsFalse())
+	assert(Bytes(nil).IsFalse())
+	assert(Bytes([]byte("")).IsFalse())
+	assert(!Val([]byte("")).IsFalse())
 }
 
 func TestPlainReturn(t *testing.T) {

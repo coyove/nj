@@ -75,7 +75,7 @@ func init() {
 	}, "doc(f: function) string", "\treturn function's documentation",
 		"doc(f: function, docstring: string)", "\tupdate function's documentation")
 	AddGlobalValue("new", func(env *Env, v, a Value) Value {
-		m := v.MustTable("")
+		m := v.MustTable("").Move()
 		if a.Type() != typ.Table {
 			return (&Table{parent: m}).Value()
 		}
