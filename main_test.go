@@ -63,7 +63,7 @@ func runFile(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 
-	// log.Println(b.PrettyCode())
+	log.Println(b.PrettyCode())
 
 	_, err = b.Call()
 	if err != nil {
@@ -613,4 +613,32 @@ func TestReflectedValue(t *testing.T) {
 		g := &ExecError{}
 		fmt.Println(Stringify(a), Stringify(b), Stringify(c), Stringify(d), Stringify(e), Stringify(f), Stringify(g))
 	}
+}
+
+func TestHashcodeDist(t *testing.T) {
+	slots := [256]int{}
+	for i := 0; i < 1e6; i++ {
+		v := Int(int64(i)).HashCode()
+		slots[byte(v)]++
+	}
+	rand.Seed(time.Now().Unix())
+	tmp := make([]byte, 8)
+	for i := 0; i < 1e6; i++ {
+		rand.Read(tmp)
+		slots[byte(Bytes(tmp).HashCode())]++
+	}
+	tmp = make([]byte, 16)
+	for i := 0; i < 1e6; i++ {
+		rand.Read(tmp)
+		slots[byte(Bytes(tmp).HashCode())]++
+	}
+	avg := 0
+	for _, s := range slots {
+		avg += s
+	}
+	avg /= len(slots)
+	for i := range slots {
+		slots[i] -= avg
+	}
+	t.Log(slots)
 }

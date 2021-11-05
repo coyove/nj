@@ -200,7 +200,7 @@ func init() {
 			})
 			return ma.Value()
 		}, "$f({table1}: table, table2: table)", "\tmerge elements from table2 to table1"),
-		Str("print"), Native1("print", func(env *Env, a Value) Value {
+		Str("tostring"), Native1("print", func(env *Env, a Value) Value {
 			p := &bytes.Buffer{}
 			a.MustTable("").rawPrint(p, 0, false)
 			return Bytes(p.Bytes())
@@ -210,7 +210,12 @@ func init() {
 
 	StringMethods = MapAdd(StringMethods,
 		Str("__call"), Native2("str", func(env *Env, strObj, src Value) Value {
-			return Str(fmt.Sprint(src.Interface()))
+			switch i := src.Interface().(type) {
+			case []byte:
+				return Bytes(i)
+			default:
+				return Str(fmt.Sprint(i))
+			}
 		}),
 		Str("size"), Native1("size", func(env *Env, src Value) Value {
 			return Int(int64(len(src.MustStr(""))))
@@ -226,16 +231,16 @@ func init() {
 		}, "from(v: value) string", "\tconvert value to string"),
 		Str("equals"), Native2("equals", func(env *Env, src, a Value) Value {
 			return Bool(src.MustStr("") == a.MustStr(""))
-		}, ""),
+		}, "$f({text1}: string, text2: string) bool"),
 		Str("iequals"), Native2("iequals", func(env *Env, src, a Value) Value {
 			return Bool(strings.EqualFold(src.MustStr(""), a.MustStr("")))
-		}, ""),
+		}, "$f({text1}: string, text2: string) bool"),
 		Str("contains"), Native2("contains", func(env *Env, src, a Value) Value {
 			return Bool(strings.Contains(src.MustStr(""), a.MustStr("")))
-		}, ""),
+		}, "$f({text}: string, substr: string) bool"),
 		Str("containsany"), Native2("containsany", func(env *Env, src, a Value) Value {
 			return Bool(strings.ContainsAny(src.MustStr(""), a.MustStr("")))
-		}, ""),
+		}, "$f({text}: string, chars: string) bool"),
 		Str("split"), Native3("split", func(env *Env, src, delim, n Value) Value {
 			s := src.MustStr("text")
 			d := delim.MustStr("delimeter")
@@ -325,14 +330,11 @@ func init() {
 		Str("lower"), Native1("lower", func(env *Env, t Value) Value {
 			return Str(strings.ToLower(t.MustStr("")))
 		}, "$f(s: string) string"),
-		Str("isbytes"), Native1("isbytes", func(env *Env, s Value) Value {
-			return Bool(s.IsBytes())
-		}, "$f(v: value) bool", "\ttest whether strng is muteable"),
 		Str("bytes"), Native1("bytes", func(env *Env, s Value) Value {
 			if s.Type() == typ.Number {
-				return Bytes(make([]byte, s.Int()))
+				return Val(make([]byte, s.Int()))
 			}
-			return Bytes([]byte(s.MustStr("")))
+			return Val([]byte(s.MustStr("")))
 		},
 			"$f(v: string) bytes", "\tcreate a byte array from the given string",
 			"$f(n: int) bytes", "\tcreate an n-byte long array",

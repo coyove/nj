@@ -4,23 +4,21 @@ import (
 	"bytes"
 	"context"
 	"time"
-
-	"github.com/coyove/script/typ"
 )
 
-// Env is the environment for a closure to run within.
-// stack contains arguments used by the execution and is a Global shared value, local can only use stack[StackOffset:]
-// A and V stores the results of the execution (e.g: return a, b, c => env.A = a, env.V = []Value{b, c})
+// Env is the environment for a function to run within.
+// stack contains arguments used by the execution and is a global shared value, local can only use stack[stackOffset:]
+// A stores the result of the execution
 type Env struct {
 	Global      *Program
-	stack       *[]Value
 	A           Value
-	StackOffset uint32
+	stack       *[]Value
+	stackOffset uint32
 
 	// Debug info for native functions to read
-	DebugCursor     uint32
-	DebugCaller     *Func
-	DebugStacktrace []stacktrace
+	IP         uint32
+	CS         *Func
+	Stacktrace []stacktrace
 }
 
 func (env *Env) growZero(newSize int) {
@@ -33,7 +31,7 @@ func (env *Env) growZero(newSize int) {
 
 func (env *Env) grow(newSize int) {
 	s := *env.stack
-	sz := int(env.StackOffset) + newSize
+	sz := int(env.stackOffset) + newSize
 	if sz > cap(s) {
 		old := s
 		s = make([]Value, sz+newSize)
@@ -45,7 +43,7 @@ func (env *Env) grow(newSize int) {
 // Get gets a value from the current stack
 func (env *Env) Get(index int) Value {
 	s := *env.stack
-	index += int(env.StackOffset)
+	index += int(env.stackOffset)
 	if index < len(*env.stack) {
 		return s[index]
 	}
@@ -59,7 +57,7 @@ func (env *Env) Set(index int, value Value) {
 
 // Clear clears the current stack
 func (env *Env) Clear() {
-	*env.stack = (*env.stack)[:env.StackOffset]
+	*env.stack = (*env.stack)[:env.stackOffset]
 	env.A = Value{}
 }
 
@@ -74,12 +72,12 @@ func (env *Env) PushVararg(v []Value) {
 
 func (env *Env) Prepend(v Value) {
 	*env.stack = append(*env.stack, Nil)
-	copy((*env.stack)[env.StackOffset+1:], (*env.stack)[env.StackOffset:])
-	(*env.stack)[env.StackOffset] = v
+	copy((*env.stack)[env.stackOffset+1:], (*env.stack)[env.stackOffset:])
+	(*env.stack)[env.stackOffset] = v
 }
 
 func (env *Env) Size() int {
-	return len(*env.stack) - int(env.StackOffset)
+	return len(*env.stack) - int(env.stackOffset)
 }
 
 func (env *Env) _get(yx uint16) (zzz Value) {
@@ -88,13 +86,11 @@ func (env *Env) _get(yx uint16) (zzz Value) {
 	}
 
 	index := int(yx & 0xfff)
-	if yx>>12 == 1 {
+	// if yx>>12 == 1 {
+	if yx >= 1<<12 {
 		return (*env.Global.Stack)[index]
 	}
-
-	s := *env.stack
-	index += int(env.StackOffset)
-	return s[index]
+	return (*env.stack)[index+int(env.stackOffset)]
 }
 
 func (env *Env) _set(yx uint16, v Value) {
@@ -102,28 +98,17 @@ func (env *Env) _set(yx uint16, v Value) {
 		env.A = v
 	} else {
 		index := int(yx & 0xfff)
-		s := *env.stack
-		if yx>>12 == 1 {
+		if yx >= 1<<12 {
 			(*env.Global.Stack)[index] = v
 		} else {
-			s[index+int(env.StackOffset)] = v
+			(*env.stack)[index+int(env.stackOffset)] = v
 		}
 	}
 }
 
-func (env *Env) Stack() []Value { return (*env.stack)[env.StackOffset:] }
+func (env *Env) Stack() []Value { return (*env.stack)[env.stackOffset:] }
 
 func (env *Env) CopyStack() []Value { return append([]Value{}, env.Stack()...) }
-
-func (env *Env) StackInterface() []interface{} {
-	r := make([]interface{}, env.Size())
-	for i := range r {
-		r[i] = env.Stack()[i].Interface()
-	}
-	return r
-}
-
-// Some useful helper functions
 
 func (env *Env) Deadline() (context.Context, func(), time.Time) {
 	if env.Global.Deadline == 0 {
@@ -139,11 +124,4 @@ func (env *Env) String() string {
 	buf.WriteString(env.A.String())
 	buf.WriteString(")")
 	return buf.String()
-}
-
-func (env *Env) MustVal(v Value, t typ.ValueType, arg string) Value {
-	if v.Type() != t {
-		panicf("%s(%s): expects %s, got %s", env.DebugCaller.Name, arg, t, v.Type())
-	}
-	return v
 }

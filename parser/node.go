@@ -295,7 +295,7 @@ func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
 		return __store(n.Nodes()[1], n.Nodes()[2], v)
 	}
 	if n.Type() != SYM {
-		panic(fmt.Sprintf("%v: invalid assignment", n))
+		panic(fmt.Sprintf("DEBUG: %v invalid assignment", n))
 	}
 	return sm(n, v)
 }

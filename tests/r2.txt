@@ -23,7 +23,7 @@ assert( 1 + (1 + (1 + (1 + a))) == 6)
 assert( "sep6")
 
 c = { 1,2,3,4 }
-assert( 1 + (1 + (1 + (1 + a))) + len(c) == 10)
+assert( 1 + (1 + (1 + (1 + a))) + len(c) , 10)
 assert( "sep7")
 
  a = 10

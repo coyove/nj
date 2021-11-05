@@ -47,6 +47,7 @@ func (table *symtable) compileSetMove(atoms []parser.Node) uint16 {
 	if atoms[0].Sym() == parser.AMove {
 		// a = b
 		if newYX == table.loadK(nil) {
+			// a is not declared yet
 			newYX = table.borrowAddress()
 
 			// Do not use t.put() because it may put the symbol into masked tables
@@ -414,10 +415,12 @@ func (table *symtable) collapse(atoms []parser.Node, optLast bool) {
 
 	if lastCompound.n.Valid() {
 		if optLast {
-			_, old, opb := splitInst(table.code.Code[len(table.code.Code)-1])
-			table.code.truncateLast()
-			table.freeAddr(old)
-			atoms[lastCompound.i] = parser.Addr(opb)
+			op, old, opb := splitInst(table.code.Code[len(table.code.Code)-1])
+			if op == typ.OpSet {
+				table.code.truncateLast()
+				table.freeAddr(old)
+				atoms[lastCompound.i] = parser.Addr(opb)
+			}
 		}
 	}
 }

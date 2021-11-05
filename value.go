@@ -39,8 +39,9 @@ var (
 const (
 	ValueSize = int64(unsafe.Sizeof(Value{}))
 
-	errNeedNumbers          = "operator requires numbers"
-	errNeedNumbersOrStrings = "operator requires number-to-number or string-to-string"
+	errNeedNumber           = "operator requires number, got %v"
+	errNeedNumbers          = "operator requires numbers, got %v and %v"
+	errNeedNumbersOrStrings = "operator requires numbers or strings, got %v and %v"
 )
 
 // Value is the basic data type used by the intepreter, an empty Value naturally represent nil
@@ -180,13 +181,11 @@ func Rune(r rune) Value {
 	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStringMarker) + uintptr(n)*8)}
 }
 
-// Bytes returns an alterable string value
-func Bytes(b []byte) Value {
-	return Value{v: 1<<63 + uint64(typ.String), p: unsafe.Pointer(&b)}
-}
+// Bytes returns a string value from bytes
+func Bytes(b []byte) Value { return Str(*(*string)(unsafe.Pointer(&b))) }
 
 // Val creates a Value from golang interface{}
-// []Type, [..]Type and map[Type]Type will be left as is (except []byte and []Value),
+// []Type, [..]Type and map[Type]Type will be left as is (except []Value),
 // to convert them recursively, use ValRec instead
 func Val(i interface{}) Value {
 	switch v := i.(type) {
@@ -202,8 +201,6 @@ func Val(i interface{}) Value {
 		return Int(v)
 	case string:
 		return Str(v)
-	case []byte:
-		return Bytes(v)
 	case *Table:
 		return v.Value()
 	case []Value:
@@ -330,10 +327,6 @@ func (v Value) Str() string {
 	return *(*string)(v.p)
 }
 
-func (v Value) IsBytes() bool { return v.v == 1<<63+uint64(typ.String) }
-
-func (v Value) Bytes() []byte { return *(*[]byte)(v.p) }
-
 // When isInt == true, use Int, otherwise Float
 func (v Value) Num() (Float float64, Int int64, isInt bool) {
 	if v.p == int64Marker {
@@ -366,9 +359,6 @@ func (v Value) Interface() interface{} {
 		}
 		return vf
 	case typ.String:
-		if v.IsBytes() {
-			return v.Bytes()
-		}
 		return v.Str()
 	case typ.Table:
 		return v.Table()
@@ -397,9 +387,6 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	vt := v.Type()
 	if vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
 		return reflect.Zero(t)
-	}
-	if vt == typ.String && t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
-		return reflect.ValueOf(v.MustBytes("ReflectValue"))
 	}
 	if vt == typ.Func && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
@@ -472,16 +459,6 @@ func (v Value) MustFloat(msg string) float64 { return v.mustBe(typ.Number, msg, 
 
 func (v Value) MustTable(msg string) *Table { return v.mustBe(typ.Table, msg, 0).Table() }
 
-func (v Value) MustBytes(msg string) []byte {
-	if !v.IsBytes() {
-		if msg != "" {
-			panicf("%s: expect bytes, got %v", msg, v.Type())
-		}
-		panicf("expect bytes, got %v", v.Type())
-	}
-	return v.Bytes()
-}
-
 func (v Value) MustFunc(msg string) *Func {
 	if vt := v.Type(); vt == typ.Table {
 		v = v.Table().GetString("__call")
@@ -508,36 +485,18 @@ func (v Value) Equal(r Value) bool {
 	if v == r {
 		return true
 	}
-	switch v.Type() + r.Type() {
-	case typ.String * 2:
-		if r.IsSmallString() {
-			if v.IsSmallString() {
-				return r == v
-			}
-			return false
-		}
-		if v.IsSmallString() {
-			return false
-		}
-		return *(*string)(v.p) == *(*string)(r.p)
-	case typ.Interface * 2:
-		return v.Interface() == r.Interface()
-	}
-	return false
+	return v.v == uint64(typ.String) && v.v == r.v && *(*string)(v.p) == *(*string)(r.p)
 }
 
 func (v Value) HashCode() uint64 {
-	code := uint64(5381)
-	if v.Type() != typ.String || v.IsSmallString() {
-		for _, r := range *(*[ValueSize]byte)(unsafe.Pointer(&v)) {
-			code = code*33 + uint64(r)
-		}
-	} else {
+	if typ.ValueType(v.v) == typ.String {
+		code := uint64(5381)
 		for _, r := range v.Str() {
 			code = code*33 + uint64(r)
 		}
+		return code
 	}
-	return code
+	return v.v ^ uint64(uintptr(v.p))
 }
 
 func (v Value) String() string {

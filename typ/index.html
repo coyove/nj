@@ -64,9 +64,9 @@ println("Author is:", author)
 
 -- Print all global values, mainly functions
 -- use doc(function) to view its documentation
-local g = debug.globals()
+local g = debug:globals()
 
-print(("version %s, total global values: %d").format(VERSION, table.arraylen(g)/3))
+print(("version %s, total global values: %d").format(VERSION, table:arraylen(g)/3))
 
 function pp(name, f, ident)
     if type(f) == "table" then

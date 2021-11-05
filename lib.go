@@ -160,8 +160,8 @@ func init() {
 	AddGlobalValue("debug", Map(
 		Str("locals"), Native("locals", func(env *Env) {
 			var r []Value
-			start := env.StackOffset - uint32(env.DebugCaller.StackSize)
-			for i, name := range env.DebugCaller.Locals {
+			start := env.stackOffset - uint32(env.CS.StackSize)
+			for i, name := range env.CS.Locals {
 				idx := start + uint32(i)
 				r = append(r, Int(int64(idx)), Str(name), (*env.stack)[idx])
 			}
@@ -179,7 +179,7 @@ func init() {
 			return Nil
 		}, "$f(idx: int, v: value)"),
 		Str("trace"), Native1("trace", func(env *Env, skip Value) Value {
-			stacks := append(env.DebugStacktrace, stacktrace{cls: env.DebugCaller, cursor: env.DebugCursor})
+			stacks := append(env.Stacktrace, stacktrace{cls: env.CS, cursor: env.IP})
 			lines := make([]Value, 0, len(stacks))
 			for i := len(stacks) - 1 - int(skip.IntDefault(0)); i >= 0; i-- {
 				r := stacks[i]
@@ -547,11 +547,8 @@ var (
 				return Nil
 			}
 			panic(err)
-		case typ.String:
-			if !n.IsBytes() {
-				panic("require bytes to read(bytes)")
-			}
-			rn, err := f.Read(n.Bytes())
+		case typ.Interface:
+			rn, err := f.Read(n.Interface().([]byte))
 			return Array(Int(int64(rn)), Val(err)) // return in Go style
 		default:
 			buf, err := ioutil.ReadAll(f)

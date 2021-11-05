@@ -64,7 +64,7 @@ func (e *ExecError) Error() string {
 // internalExecCursorLoop executes 'K' under 'env' from the given start 'cursor'
 func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 	stackEnv := env
-	stackEnv.StackOffset = uint32(len(*env.stack))
+	stackEnv.stackOffset = uint32(len(*env.stack))
 
 	var retStack []stacktrace
 	var nativeCls *Func
@@ -133,7 +133,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 						env.A = Array(Int(int64(sz)+idx), Rune(r))
 					}
 				default:
-					panicf("inc " + errNeedNumbers)
+					panicf("inc "+errNeedNumbers, va.Type(), vb.Type())
 				}
 			}
 		case typ.OpAdd:
@@ -152,7 +152,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case typ.String + typ.Number:
 				env.A = Str(va.String() + vb.String())
 			default:
-				panicf("add " + errNeedNumbersOrStrings)
+				panicf("add "+errNeedNumbersOrStrings, va.Type(), vb.Type())
 			}
 		case typ.OpSub:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
@@ -164,7 +164,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(va.Float() - vb.Float())
 				}
 			} else {
-				panicf("sub " + errNeedNumbers)
+				panicf("sub "+errNeedNumbers, va.Type(), vb.Type())
 			}
 		case typ.OpMul:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
@@ -176,29 +176,25 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					env.A = Float(va.Float() * vb.Float())
 				}
 			} else {
-				panicf("mul " + errNeedNumbers)
+				panicf("mul "+errNeedNumbers, va.Type(), vb.Type())
 			}
 		case typ.OpDiv:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Float(va.Float() / vb.Float())
 			} else {
-				panicf("div " + errNeedNumbers)
+				panicf("div "+errNeedNumbers, va.Type(), vb.Type())
 			}
 		case typ.OpIDiv:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(va.Int() / vb.Int())
 			} else {
-				panicf("idiv " + errNeedNumbers)
+				panicf("idiv "+errNeedNumbers, va.Type(), vb.Type())
 			}
 		case typ.OpMod:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
-				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
-					env.A = Int(va.unsafeint() % vb.unsafeint())
-				} else {
-					panicf("modulating floating numbers is ambiguous, use math.mod/math.remainder instead")
-				}
+				env.A = Int(va.Int() % vb.Int())
 			} else {
-				panicf("mod " + errNeedNumbers)
+				panicf("mod "+errNeedNumbers, va.Type(), vb.Type())
 			}
 		case typ.OpEq:
 			env.A = Bool(env._get(opa).Equal(env._get(opb)))
@@ -217,7 +213,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case typ.String + typ.String:
 				env.A = Bool(va.Str() < vb.Str())
 			default:
-				panicf("comparison " + errNeedNumbersOrStrings)
+				panicf("comparison "+errNeedNumbersOrStrings, va.Type(), vb.Type())
 			}
 		case typ.OpLessEq:
 			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
@@ -232,7 +228,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case typ.String + typ.String:
 				env.A = Bool(va.Str() <= vb.Str())
 			default:
-				panicf("comparison " + errNeedNumbersOrStrings)
+				panicf("comparison "+errNeedNumbersOrStrings, va.Type(), vb.Type())
 			}
 		case typ.OpNot:
 			env.A = Bool(env._get(opa).IsFalse())
@@ -240,40 +236,44 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(va.Int() & vb.Int())
 			} else {
-				panicf("bitwise and " + errNeedNumbers)
+				panicf("bitwise and "+errNeedNumbers, va.Type(), vb.Type())
 			}
 		case typ.OpBitOr:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(va.Int() | vb.Int())
 			} else {
-				panicf("bitwise or " + errNeedNumbers)
+				panicf("bitwise or "+errNeedNumbers, va.Type(), vb.Type())
 			}
 		case typ.OpBitXor:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(va.Int() ^ vb.Int())
 			} else {
-				panicf("bitwise xor " + errNeedNumbers)
+				panicf("bitwise xor "+errNeedNumbers, va.Type(), vb.Type())
 			}
 		case typ.OpBitLsh:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(va.Int() << vb.Int())
 			} else {
-				panicf("bitwise lsh " + errNeedNumbers)
+				panicf("bitwise lsh "+errNeedNumbers, va.Type(), vb.Type())
 			}
 		case typ.OpBitRsh:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(va.Int() >> vb.Int())
 			} else {
-				panicf("bitwise rsh " + errNeedNumbers)
+				panicf("bitwise rsh "+errNeedNumbers, va.Type(), vb.Type())
 			}
 		case typ.OpBitURsh:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int(int64(uint64(va.Int()) >> vb.Int()))
 			} else {
-				panicf("bitwise ursh " + errNeedNumbers)
+				panicf("bitwise ursh "+errNeedNumbers, va.Type(), vb.Type())
 			}
 		case typ.OpBitNot:
-			env.A = Int(^env._get(opa).mustBe(typ.Number, "bitwise not "+errNeedNumbers, 0).Int())
+			if a := env._get(opa); a.Type() == typ.Number {
+				env.A = Int(^a.Int())
+			} else {
+				panicf("bitwise not "+errNeedNumber, a.Type())
+			}
 		case typ.OpArray:
 			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
@@ -289,21 +289,16 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case typ.Interface:
 				reflectStore(subject.Interface(), env.A, v)
 				env.A = v
-			case typ.String:
-				vb := byte(v.MustInt("alter bytes value"))
-				subject.MustBytes("alter bytes")[env.A.mustBe(typ.Number, "alter bytes index", 0).Int()] = vb
-				env.A = v
 			default:
 				panicf("can't store %v into (%v)[%v]", v.Type(), subject.Type(), env.A.Type())
 			}
 		case typ.OpLoad:
-			switch a := env._get(opa); a.Type() {
+			switch a, idx := env._get(opa), env._get(opb); a.Type() {
 			case typ.Table:
-				env.A = a.Table().Get(env._get(opb))
+				env.A = a.Table().Get(idx)
 			case typ.Interface:
-				env.A = reflectLoad(a.Interface(), env._get(opb))
+				env.A = reflectLoad(a.Interface(), idx)
 			case typ.String:
-				idx := env._get(opb)
 				if idx.Type() == typ.Number {
 					if s := a.Str(); idx.Int() >= 0 && idx.Int() < int64(len(s)) {
 						env.A = Int(int64(s[idx.Int()]))
@@ -326,7 +321,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				}
 				fallthrough
 			default:
-				panicf("can't load (%v)[%v]", a.Type(), env._get(opb).Type())
+				panicf("can't load (%v)[%v]", a.Type(), idx.Type())
 			}
 		case typ.OpPush:
 			stackEnv.Push(env._get(opa))
@@ -341,10 +336,10 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			r := retStack[len(retStack)-1]
 			cursor = r.cursor
 			K = r.cls
-			env.StackOffset = r.stackOffset
+			env.stackOffset = r.stackOffset
 			env.A = v
-			*env.stack = (*env.stack)[:env.StackOffset+uint32(r.cls.StackSize)]
-			stackEnv.StackOffset = uint32(len(*env.stack))
+			*env.stack = (*env.stack)[:env.stackOffset+uint32(r.cls.StackSize)]
+			stackEnv.stackOffset = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
 		case typ.OpLoadFunc:
 			if opb != 0 {
@@ -383,9 +378,9 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			}
 			if cls.Native != nil {
 				stackEnv.Global = env.Global
-				stackEnv.DebugCaller = K
-				stackEnv.DebugCursor = cursor
-				stackEnv.DebugStacktrace = retStack
+				stackEnv.CS = K
+				stackEnv.IP = cursor
+				stackEnv.Stacktrace = retStack
 				nativeCls = cls
 				cls.Native(&stackEnv)
 				nativeCls = nil
@@ -397,13 +392,13 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				last := stacktrace{
 					cls:         K,
 					cursor:      cursor,
-					stackOffset: uint32(env.StackOffset),
+					stackOffset: uint32(env.stackOffset),
 				}
 
 				// Switch 'env' to 'stackEnv' and clear 'stackEnv'
 				cursor = 0
 				K = cls
-				env.StackOffset = stackEnv.StackOffset
+				env.stackOffset = stackEnv.stackOffset
 				env.Global = cls.LoadGlobal
 				env.A = stackEnv.A
 
@@ -415,7 +410,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					panicf("call stack overflow, max: %d", env.Global.MaxCallStackSize)
 				}
 
-				stackEnv.StackOffset = uint32(len(*env.stack))
+				stackEnv.stackOffset = uint32(len(*env.stack))
 			}
 		case typ.OpJmp:
 			cursor = uint32(int32(cursor) + int32(v&0xffffff) - 1<<23)

@@ -55,12 +55,7 @@ func (m *Table) Clear() {
 
 func (m *Table) Parent() *Table { return m.parent }
 
-func (m *Table) SetParent(m2 *Table) {
-	if m.parent != nil {
-		m2.SetParent(m.parent)
-	}
-	m.parent = m2
-}
+func (m *Table) SetParent(m2 *Table) { m.parent = m2 }
 
 func (m *Table) GetString(k string) (v Value) {
 	return m.Get(Str(k))
