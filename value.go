@@ -26,10 +26,8 @@ var (
 	falseMarker       = unsafe.Pointer(&baseMarker[int(typ.Bool)+8])
 	smallStringMarker = unsafe.Pointer(&baseMarker[int(typ.String)])
 	int64Marker2      = uintptr(int64Marker) * 2
-	float64Marker2    = uintptr(float64Marker) * 2
 
 	Nil     = Value{}
-	Undef   = _interface(new(int))
 	Zero    = Int(0)
 	NullStr = Str("")
 	False   = Bool(false)
@@ -336,9 +334,19 @@ func (v Value) Num() (Float float64, Int int64, isInt bool) {
 	return x, int64(x), false
 }
 
-func (v Value) Int() int64 { _, i, _ := v.Num(); return i }
+func (v Value) Int() int64 {
+	if v.p == int64Marker {
+		return int64(v.v)
+	}
+	return int64(math.Float64frombits(v.v))
+}
 
-func (v Value) Float() float64 { f, _, _ := v.Num(); return f }
+func (v Value) Float() float64 {
+	if v.p == int64Marker {
+		return float64(int64(v.v))
+	}
+	return math.Float64frombits(v.v)
+}
 
 func (v Value) Bool() bool { return v.p == trueMarker }
 

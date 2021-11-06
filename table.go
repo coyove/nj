@@ -121,26 +121,10 @@ func (m *Table) Contains(k Value) bool {
 	}
 	if k.IsInt() {
 		if idx := k.Int(); idx >= 0 && idx < int64(len(m.items)) {
-			return true
+			return m.items[idx] != Nil
 		}
 	}
 	return m.findHash(k) >= 0
-}
-
-func (m *Table) ParentContains(k Value) *Table {
-	if k == Nil {
-		return nil
-	}
-	if m.parent != nil {
-		p := m.parent.ParentContains(k)
-		if p != nil {
-			return p
-		}
-	}
-	if m.Contains(k) {
-		return m
-	}
-	return nil
 }
 
 func (m *Table) SetString(k string, v Value) (prev Value) {
@@ -151,6 +135,14 @@ func (m *Table) SetString(k string, v Value) (prev Value) {
 func (m *Table) Set(k, v Value) (prev Value) {
 	if k == Nil {
 		panicf("table set with nil key")
+	}
+
+	if m.parent != nil && !m.Contains(k) {
+		for p := m.parent; p != nil; p = p.parent {
+			if p.Contains(k) {
+				return p.Set(k, v)
+			}
+		}
 	}
 
 	if k.IsInt() {
@@ -356,13 +348,13 @@ func (m *Table) Value() Value {
 	return Value{v: uint64(typ.Table), p: unsafe.Pointer(m)}
 }
 
-func (m *Table) Move() *Table {
-	if f := m.GetString("__move"); f.Type() == typ.Func {
+func (m *Table) New() *Table {
+	if f := m.GetString("__new"); f.Type() == typ.Func {
 		res, err := f.Func().Call()
 		if err != nil {
 			panic(err)
 		}
-		return res.MustTable("table.__move")
+		return res.MustTable("table.__new")
 	}
 	return m
 }

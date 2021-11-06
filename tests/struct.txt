@@ -49,17 +49,18 @@ while true do
 end
 
 CarPrototype = {}
-function CarPrototype.getBrand(this) return parent(this).brand end
-function CarPrototype.setBrand(this, brand) parent(this).brand = brand; return this end
-function CarPrototype.__str(this) return ('a %s %s car').format(this.color, this.brand) end
+function CarPrototype.getBrand(this) return this.brand end
+function CarPrototype.setBrand(this, brand) this.brand = brand; return this end
+function CarPrototype.__str(this) return ('%s %s').format(this.color, this.brand) end
 
 Car = prototype(CarPrototype, {brand=''})
-function Car.__move(this) return table:copy(this) end
+function Car.__new(this) return table:copy(this) end
 
 carA = new(Car, color='red').setBrand('ferrari')
 carB = new(Car, color='orange').setBrand('mclaren')
 
-println(carA, carB)
+assert(str(carA), "red ferrari")
+assert(str(carB), "orange mclaren")
 
 cnt = 0
 k = 99
@@ -76,24 +77,6 @@ function worker()
     return 'finished'
 end
 assert(sync:map({0}, worker)[0] == 'finished')
-
-Car = {}
-function Car.get_brand(this)
-	if this._brand then return ('a %s car #%d').format(this._brand, this.index) end
-	return 'a car'
-end
-Benz = prototype(Car, {_brand='benz'})
-Honda = prototype(Car, {_brand='honda'})
-
-b0 = new(Car)
-b1 = new(Benz, {index=1})
-b2 = new(Benz, {index=2})
-b3 = new(Honda, {index=3})
-assert(b0.get_brand(), 'a car')
-assert(b1.get_brand(), 'a benz car #1')
-assert(b2.get_brand(), 'a benz car #2')
-assert(b3.get_brand(), 'a honda car #3')
-
 
 -- closure
 function foo(a)
@@ -121,8 +104,8 @@ assert(m.a() == 'a')
 
 cls = {}
 cls.__str = lambda(o) return o.v end
-cls2 = prototype(cls)
-cls2.__str = lambda(o) return o.v + '2' end
+cls2 = {__str= lambda(o) return o.v + '2' end}
+cls2 = new(cls, cls2)
 obj = new(cls, v='obj')
 obj2 = new(cls2, v='obj')
 assert(str(obj), 'obj')

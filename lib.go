@@ -58,7 +58,6 @@ func init() {
 	}()
 
 	AddGlobalValue("VERSION", Int(Version))
-	AddGlobalValue("undefined", Undef)
 	AddGlobalValue("globals", func(env *Env) {
 		r := NewTable(len(env.Global.Func.Locals))
 		for i, name := range env.Global.Func.Locals {
@@ -75,7 +74,7 @@ func init() {
 	}, "doc(f: function) string", "\treturn function's documentation",
 		"doc(f: function, docstring: string)", "\tupdate function's documentation")
 	AddGlobalValue("new", func(env *Env, v, a Value) Value {
-		m := v.MustTable("").Move()
+		m := v.MustTable("").New()
 		if a.Type() != typ.Table {
 			return (&Table{parent: m}).Value()
 		}
@@ -437,6 +436,11 @@ func init() {
 	AddGlobalValue("parent", func(env *Env, m Value) Value {
 		return m.MustTable("").Parent().Value()
 	}, "parent(t: table) table", "\tfind given table's parent, or nil if not existed")
+	AddGlobalValue("pure", func(env *Env, m Value) Value {
+		m2 := *m.MustTable("")
+		m2.parent = nil
+		return m2.Value()
+	}, "$f(t: table) table", "\treturn a new table who shares all the data from t, but with no parent table")
 	AddGlobalValue("unwrap", func(env *Env, m Value) Value {
 		return ValRec(m.Interface())
 	}, "unwrap(v: value) value", "\tunwrap Go's array, slice or map into table")

@@ -168,8 +168,7 @@ elseif_stat:
 
 func_stat:
     TFunc TIdent func_params stats TEnd            { $$ = __func($2, $3, $4) } | 
-    TFunc TIdent '.' TIdent func_params stats TEnd { $$ = __store(Sym($2), Str($4.Str), __func(__markupFuncName($2, $4), $5, $6)) } |
-    TFunc '[' expr ']' '.' TIdent func_params stats TEnd { $$ = __store(Sym($2), $3, __func($6, $7, $8)) } 
+    TFunc TIdent '.' TIdent func_params stats TEnd { $$ = __store(Sym($2), Str($4.Str), __func(__markupFuncName($2, $4), $5, $6)) }
 
 func_params:
     TLParen ')' func_docstring                       { $$ = Nodes(emptyNode, $3) } | 

@@ -80,29 +80,25 @@ func (env *Env) Size() int {
 	return len(*env.stack) - int(env.stackOffset)
 }
 
-func (env *Env) _get(yx uint16) (zzz Value) {
+func (env *Env) _get(yx uint16) Value {
 	if yx == regA {
 		return env.A
 	}
 
-	index := int(yx & 0xfff)
 	// if yx>>12 == 1 {
 	if yx >= 1<<12 {
-		return (*env.Global.Stack)[index]
+		return (*env.Global.Stack)[yx&0xfff]
 	}
-	return (*env.stack)[index+int(env.stackOffset)]
+	return (*env.stack)[yx+uint16(env.stackOffset)]
 }
 
 func (env *Env) _set(yx uint16, v Value) {
 	if yx == regA {
 		env.A = v
+	} else if yx >= 1<<12 {
+		(*env.Global.Stack)[yx&0xfff] = v
 	} else {
-		index := int(yx & 0xfff)
-		if yx >= 1<<12 {
-			(*env.Global.Stack)[index] = v
-		} else {
-			(*env.stack)[index+int(env.stackOffset)] = v
-		}
+		(*env.stack)[yx+uint16(env.stackOffset)] = v
 	}
 }
 
