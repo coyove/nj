@@ -100,8 +100,8 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		}
 
 		v := K.Code.Code[cursor]
+		bop, opa, opb := v.op, v.a, uint16(v.b)
 		cursor++
-		bop, opa, opb := splitInst(v)
 
 		switch bop {
 		case typ.OpSet:
@@ -375,7 +375,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				env.A = stackEnv.A
 				stackEnv.Clear()
 			} else {
-				stackEnv.growZero(int(cls.StackSize))
+				stackEnv.growZero(int(cls.StackSize), int(cls.NumParams))
 
 				last := stacktrace{
 					cls:         K,
@@ -401,10 +401,10 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				stackEnv.stackOffset = uint32(len(*env.stack))
 			}
 		case typ.OpJmp:
-			cursor = uint32(int32(cursor) + int32(v&0xffffff) - 1<<23)
+			cursor = uint32(int32(cursor) + v.b)
 		case typ.OpIfNot:
 			if env.A.IsFalse() {
-				cursor = uint32(int32(cursor) + int32(v&0xffffff) - 1<<23)
+				cursor = uint32(int32(cursor) + v.b)
 			}
 		}
 	}

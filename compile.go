@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	regA       uint16 = 0x1fff // full 13 bits
-	regPhantom uint16 = 0x1ffe // full 13 bits
+	regA       uint16 = 0xffff
+	regPhantom uint16 = 0xfffe
 )
 
 func panicf(msg string, args ...interface{}) Value {
@@ -114,7 +114,7 @@ func (table *symtable) freeAddr(a interface{}) {
 		if a == regA {
 			return
 		}
-		if a>>12 == 1 {
+		if a>>15 == 1 {
 			// collapse() may encounter constants, and return them if any
 			// so here we silently drop these constant addresses
 			return
@@ -152,7 +152,7 @@ func (table *symtable) get(varname string) uint16 {
 	}
 
 	calc := func(k *symbol) uint16 {
-		addr := (depth << 12) | (uint16(k.addr) & 0xfff)
+		addr := (depth << 15) | (uint16(k.addr) & 0x7fff)
 		return addr
 	}
 
@@ -217,7 +217,7 @@ func (table *symtable) loadK(v interface{}) uint16 {
 		panicf("DEBUG: collect consts %#v", v)
 	}
 
-	idx := 1<<12 | table.borrowAddress()
+	idx := 1<<15 | table.borrowAddress()
 	table.constMap[v] = idx
 	return idx
 }

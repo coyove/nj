@@ -21,10 +21,10 @@ type Env struct {
 	Stacktrace []stacktrace
 }
 
-func (env *Env) growZero(newSize int) {
+func (env *Env) growZero(newSize, zeroSize int) {
 	old := len(*env.stack)
 	env.grow(newSize)
-	for i := old; i < len(*env.stack); i++ {
+	for i := old; i < zeroSize; i++ {
 		(*env.stack)[i] = Value{}
 	}
 }
@@ -84,21 +84,19 @@ func (env *Env) _get(yx uint16) Value {
 	if yx == regA {
 		return env.A
 	}
-
-	// if yx>>12 == 1 {
-	if yx >= 1<<12 {
-		return (*env.Global.Stack)[yx&0xfff]
+	if yx >= 1<<15 {
+		return (*env.Global.Stack)[yx&0x7fff]
 	}
-	return (*env.stack)[yx+uint16(env.stackOffset)]
+	return (*env.stack)[uint32(yx)+(env.stackOffset)]
 }
 
 func (env *Env) _set(yx uint16, v Value) {
 	if yx == regA {
 		env.A = v
-	} else if yx >= 1<<12 {
-		(*env.Global.Stack)[yx&0xfff] = v
+	} else if yx >= 1<<15 {
+		(*env.Global.Stack)[yx&0x7fff] = v
 	} else {
-		(*env.stack)[yx+uint16(env.stackOffset)] = v
+		(*env.stack)[uint32(yx)+(env.stackOffset)] = v
 	}
 }
 

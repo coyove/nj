@@ -10,24 +10,21 @@ import (
 	"github.com/coyove/script/typ"
 )
 
-func inst(op byte, a, b uint16) uint32 {
+func inst(op byte, a, b uint16) _inst {
 	// 6 + 13 + 13
-	return uint32(op)<<26 + uint32(a&0x1fff)<<13 + uint32(b&0x1fff)
+	return _inst{op: op, a: a, b: int32(b)}
 }
 
-func jmpInst(op byte, dist int) uint32 {
+func jmpInst(op byte, dist int) _inst {
 	if dist < -(1<<23) || dist >= 1<<23 {
 		panic("long jump")
 	}
 	// 6 + 26
-	return uint32(op)<<26 + uint32(dist+1<<23)
+	return _inst{op: op, b: int32(dist)}
 }
 
-func splitInst(op uint32) (op1 byte, a, b uint16) {
-	op1 = byte(op >> 26)
-	a = uint16(op>>13) & 0x1fff
-	b = uint16(op) & 0x1fff
-	return
+func splitInst(i _inst) (op byte, a, b uint16) {
+	return i.op, i.a, uint16(i.b)
 }
 
 type posVByte []byte
@@ -53,8 +50,15 @@ func (p posVByte) read(i int) (next int, idx, line uint32) {
 	return i + n + n2, uint32(a), uint32(b)
 }
 
+type _inst struct {
+	op byte
+	k  bool
+	a  uint16
+	b  int32
+}
+
 type packet struct {
-	Code []uint32
+	Code []_inst
 	Pos  posVByte
 }
 
@@ -131,7 +135,7 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 			if a&0xfff == p.NilIndex {
 				return "nil"
 			}
-			if a>>12 == 1 || toplevel {
+			if a>>15 == 1 || toplevel {
 				v := (*p.Stack)[a&0xfff]
 				if v != Nil {
 					text := v.JSONString()
@@ -143,7 +147,7 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 			}
 		}
 
-		if a>>12 == 1 {
+		if a>>15 == 1 {
 			return fmt.Sprintf("g$%d", a&0xfff) + suffix
 		}
 		return fmt.Sprintf("$%d", a&0xfff) + suffix
@@ -208,7 +212,7 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 			}
 			sb.WriteString("call " + readAddr(a, true))
 		case typ.OpIfNot, typ.OpJmp:
-			pos := int32(inst&0xffffff) - 1<<23
+			pos := inst.b
 			pos2 := uint32(int32(cursor) + pos)
 			if bop == typ.OpIfNot {
 				sb.WriteString("if not $a ")

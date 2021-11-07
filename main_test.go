@@ -63,7 +63,8 @@ func runFile(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 
-	// log.Println(b.PrettyCode())
+	log.Println(b.PrettyCode())
+	log.Println(b.shadowTable)
 
 	_, err = b.Call()
 	if err != nil {

@@ -149,7 +149,7 @@ func (c *Func) Call(args ...Value) (v1 Value, err error) {
 				newEnv._set(c.NumParams-1, Array())
 			}
 		}
-		newEnv.growZero(int(c.StackSize))
+		newEnv.growZero(int(c.StackSize), int(c.NumParams))
 		v1 = internalExecCursorLoop(newEnv, c, 0)
 	}
 	return
