@@ -14,7 +14,7 @@ func init() {
 		for _, e := range env.Get(0).MustTable("").ArrayPart() {
 			s.Add(e)
 		}
-		*env.A() = script.Val(s)
+		env.A = script.Val(s)
 	},
 		"$f() value",
 		"$f(a: array) value",

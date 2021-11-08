@@ -11,15 +11,13 @@ import (
 )
 
 func inst(op byte, a, b uint16) _inst {
-	// 6 + 13 + 13
 	return _inst{op: op, a: a, b: int32(b)}
 }
 
 func jmpInst(op byte, dist int) _inst {
-	if dist < -(1<<23) || dist >= 1<<23 {
+	if dist < -(1<<30) || dist >= 1<<30 {
 		panic("long jump")
 	}
-	// 6 + 26
 	return _inst{op: op, b: int32(dist)}
 }
 
@@ -52,7 +50,6 @@ func (p posVByte) read(i int) (next int, idx, line uint32) {
 
 type _inst struct {
 	op byte
-	k  bool
 	a  uint16
 	b  int32
 }
@@ -132,25 +129,29 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 
 		suffix := ""
 		if rValue {
-			if a&0xfff == p.NilIndex {
+			if a&regLocalMask == p.NilIndex {
 				return "nil"
 			}
-			if a>>15 == 1 || toplevel {
-				v := (*p.Stack)[a&0xfff]
-				if v != Nil {
+			if a > regLocalMask || toplevel {
+				switch v := (*p.Stack)[a&regLocalMask]; v.Type() {
+				case typ.Number, typ.Bool, typ.String:
 					text := v.JSONString()
 					if len(text) > 120 {
 						text = text[:60] + "..." + text[len(text)-60:]
 					}
 					suffix = "(" + text + ")"
+				case typ.Table:
+					suffix = "{" + v.Table().Name() + "}"
+				case typ.Interface:
+					suffix = "<" + v.String() + ">"
 				}
 			}
 		}
 
-		if a>>15 == 1 {
-			return fmt.Sprintf("g$%d", a&0xfff) + suffix
+		if a > regLocalMask {
+			return fmt.Sprintf("g$%d", a&regLocalMask) + suffix
 		}
-		return fmt.Sprintf("$%d", a&0xfff) + suffix
+		return fmt.Sprintf("$%d", a&regLocalMask) + suffix
 	}
 
 	oldpos := c.Code.Pos

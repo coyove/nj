@@ -32,7 +32,13 @@ func WebREPLHandler(opt *CompileOptions, cb func(*Program)) func(w http.Response
 			writeJSON(w, map[string]interface{}{"error": err.Error()})
 			return
 		}
-		p.SetTimeout(time.Second * 2)
+		finished := false
+		go func() {
+			time.Sleep(time.Second * 2)
+			if !finished {
+				p.EmergStop()
+			}
+		}()
 		p.MaxCallStackSize = 100
 		p.Stdout = bufOut
 		p.Stderr = bufOut
@@ -41,6 +47,7 @@ func WebREPLHandler(opt *CompileOptions, cb func(*Program)) func(w http.Response
 		}
 		code := p.PrettyCode()
 		v, err := p.Run()
+		finished = true
 		if err != nil {
 			writeJSON(w, map[string]interface{}{
 				"error":   err.Error(),

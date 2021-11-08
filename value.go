@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"strconv"
@@ -137,11 +138,14 @@ func MapAdd(old Value, kvs ...Value) Value {
 	return Map(kvs...)
 }
 
-func MapMerge(to Value, from Value) Value {
+func MapMerge(to Value, from Value, kvs ...Value) Value {
 	if to.Type() == typ.Table && from.Type() == typ.Table {
 		t := to.Table()
-		t.resizeHash((t.Len() + from.Table().Len()) * 2)
+		t.resizeHash((t.Len() + from.Table().Len() + len(kvs)) * 2)
 		from.Table().Foreach(func(k, v Value) bool { t.Set(k, v); return true })
+		for i := 0; i < len(kvs)/2*2; i += 2 {
+			t.Set(kvs[i], kvs[i+1])
+		}
 	}
 	return to
 }
@@ -271,13 +275,13 @@ func Val(i interface{}) Value {
 				switch outs := rv.Call(ins); rt.NumOut() {
 				case 0:
 				case 1:
-					*env.A() = Val(outs[0].Interface())
+					env.A = Val(outs[0].Interface())
 				default:
 					a := make([]Value, len(outs))
 					for i := range outs {
 						a[i] = Val(outs[i].Interface())
 					}
-					*env.A() = Array(a...)
+					env.A = Array(a...)
 				}
 			}
 		}
@@ -381,8 +385,6 @@ func (v Value) Interface() interface{} {
 func (v Value) puintptr() uintptr { return uintptr(v.p) }
 
 func (v Value) unsafeint() int64 { return int64(v.v) }
-
-func (v Value) unsafefloat() float64 { return math.Float64frombits(v.v) }
 
 // ReflectValue returns reflect.Value based on reflect.Type
 func (v Value) ReflectValue(t reflect.Type) reflect.Value {
@@ -545,7 +547,7 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 			}
 			return p
 		}
-		m.rawPrint(p, lv, j)
+		m.rawPrint(p, lv, j, false)
 	case typ.Func:
 		p.WriteString(ifquote(j, v.Func().String()))
 	case typ.Interface:
@@ -577,9 +579,56 @@ func (v Value) IntDefault(d int64) int64 {
 	return d
 }
 
+func (v Value) FloatDefault(d float64) float64 {
+	if v.Type() == typ.Number {
+		return v.Float()
+	}
+	return d
+}
+
 func (v Value) MaybeTableGetString(key string) Value {
 	if v.Type() != typ.Table {
 		return Nil
 	}
 	return v.Table().GetString(key)
 }
+
+func (v Value) Reader() io.Reader {
+	switch v.Type() {
+	case typ.Interface:
+		switch rd := v.Interface().(type) {
+		case io.Reader:
+			return rd
+		case []byte:
+			return bytes.NewReader(rd)
+		}
+	case typ.String:
+		return strings.NewReader(v.Str())
+	case typ.Table:
+		return TableIO{v.Table()}
+	}
+	return wrongIO{}
+}
+
+func (v Value) Writer() io.Writer {
+	switch v.Type() {
+	case typ.Interface:
+		switch rd := v.Interface().(type) {
+		case io.Writer:
+			return rd
+		case []byte:
+			w := bytes.NewBuffer(rd)
+			w.Reset()
+			return w
+		}
+	case typ.Table:
+		return TableIO{v.Table()}
+	}
+	return wrongIO{}
+}
+
+type wrongIO struct{}
+
+func (m wrongIO) Read(p []byte) (int, error) { return 0, fmt.Errorf("reader not implemented") }
+
+func (m wrongIO) Write(p []byte) (int, error) { return 0, fmt.Errorf("writer not implemented") }

@@ -122,11 +122,21 @@ func main() {
 	if _compileonly {
 		return
 	}
+
+	var finished bool
 	if *timeout > 0 {
-		b.SetTimeout(time.Second * time.Duration(*timeout))
+		// b.SetTimeout(time.Second * time.Duration(*timeout))
+		go func() {
+			time.Sleep(time.Second * time.Duration(*timeout))
+			if !finished {
+				b.EmergStop()
+				log.Fatalln("timeout")
+			}
+		}()
 	}
 
 	i, err := b.Call()
+	finished = true
 	if _ret {
 		fmt.Print(i)
 		fmt.Print(" ", err, "\n")

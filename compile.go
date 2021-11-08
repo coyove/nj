@@ -11,12 +11,21 @@ import (
 )
 
 const (
-	regA       uint16 = 0xffff
-	regPhantom uint16 = 0xfffe
+	regA          uint16 = 0xffff
+	regPhantom    uint16 = 0xfffe
+	regLocalMask         = 0x7fff
+	regGlobalFlag        = 0x8000
+	maxAddress           = 0x7f00
 )
 
 func panicf(msg string, args ...interface{}) Value {
 	panic(fmt.Errorf(msg, args...))
+}
+
+func panicErr(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
 
 type symbol struct {
@@ -57,7 +66,8 @@ type symtable struct {
 	collectConstMode bool
 	constMap         map[interface{}]uint16
 
-	reusableTmps map[uint16]bool
+	reusableTmps      map[uint16]bool
+	reusableTmpsArray []uint16
 
 	forwardGoto map[int]string
 	labelPos    map[string]int
@@ -84,14 +94,17 @@ func (table *symtable) symbolsToDebugLocals() []string {
 }
 
 func (table *symtable) borrowAddress() uint16 {
-	for tmp, ok := range table.reusableTmps {
-		if ok {
-			table.reusableTmps[tmp] = false
-			return tmp
+	if len(table.reusableTmpsArray) > 0 {
+		tmp := table.reusableTmpsArray[0]
+		table.reusableTmpsArray = table.reusableTmpsArray[1:]
+		if !table.reusableTmps[tmp] {
+			panic("DEBUG: corrupted reusable map")
 		}
+		table.reusableTmps[tmp] = false
+		return tmp
 	}
-	if table.vp > 4000 { // 12 bits {
-		panic("too many variables (4000) in a single scope")
+	if table.vp > maxAddress {
+		panic("too many variables in a single scope")
 	}
 	table.reusableTmps[table.vp] = false
 	table.vp++
@@ -114,12 +127,12 @@ func (table *symtable) freeAddr(a interface{}) {
 		if a == regA {
 			return
 		}
-		if a>>15 == 1 {
-			// collapse() may encounter constants, and return them if any
-			// so here we silently drop these constant addresses
+		if a > regLocalMask {
+			// We don't free global variables
 			return
 		}
-		if _, existed := table.reusableTmps[a]; existed {
+		if available, existed := table.reusableTmps[a]; existed && !available {
+			table.reusableTmpsArray = append(table.reusableTmpsArray, a)
 			table.reusableTmps[a] = true
 		}
 
@@ -152,7 +165,7 @@ func (table *symtable) get(varname string) uint16 {
 	}
 
 	calc := func(k *symbol) uint16 {
-		addr := (depth << 15) | (uint16(k.addr) & 0x7fff)
+		addr := (depth << 15) | (uint16(k.addr) & regLocalMask)
 		return addr
 	}
 
@@ -217,7 +230,7 @@ func (table *symtable) loadK(v interface{}) uint16 {
 		panicf("DEBUG: collect consts %#v", v)
 	}
 
-	idx := 1<<15 | table.borrowAddress()
+	idx := regGlobalFlag | table.borrowAddress()
 	table.constMap[v] = idx
 	return idx
 }

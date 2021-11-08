@@ -374,6 +374,19 @@ func (table *symtable) patchGoto() {
 		}
 		code[i] = jmpInst(typ.OpJmp, pos-(i+1))
 	}
+	for i, c := range code {
+		if c.op == typ.OpJmp && c.b != 0 {
+			dest := int32(i) + c.b + 1
+			for int(dest) < len(code) {
+				if c2 := code[dest]; c2.op == typ.OpJmp && c2.b != 0 {
+					dest += c2.b + 1
+					continue
+				}
+				break
+			}
+			code[i].b = dest - int32(i) - 1
+		}
+	}
 }
 
 func (table *symtable) compileFreeAddr(atoms []parser.Node) uint16 {

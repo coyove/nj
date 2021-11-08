@@ -133,6 +133,16 @@ f2.write(" world")
 f2.close()
 
 assert(open("tests/b.txt").read(), "hello world")
+open.close()
+
+f1 = open("tests/a.txt", "r")
+f2 = open("tests/b.txt", "a+")
+f2.pipe(f1)
+f1.close()
+f2.close()
+
+assert(open("tests/b.txt").read(), "hello worldhello zzz")
+open.close()
 
 os:remove("tests/a.txt")
 os:remove("tests/b.txt")

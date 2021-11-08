@@ -12,6 +12,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
@@ -285,7 +286,7 @@ func benchmarkGoMapUnconstrainted(b *testing.B, n int) {
 }
 
 func TestBigList(t *testing.T) {
-	n := 2000 - len(g)
+	n := maxAddress/2 - len(g)
 
 	makeCode := func(n int) string {
 		buf := bytes.Buffer{}
@@ -312,7 +313,18 @@ func TestBigList(t *testing.T) {
 		}
 	}
 
-	_, err = LoadString(makeCode(2000), nil)
+	{
+		f, err := os.Create("cpuprofile")
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
+	start := time.Now()
+	_, err = LoadString(makeCode(maxAddress), nil)
+	fmt.Println("load", time.Since(start))
 	if !strings.Contains(err.Error(), "too many") {
 		t.Fatal(err)
 	}

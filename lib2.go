@@ -35,11 +35,12 @@ func init() {
 	AddGlobalValue("io", IOLib)
 
 	TableLib = MapAdd(TableLib,
+		Str("__name"), Str("tablelib"),
 		Str("__call"), Native2("__call", func(env *Env, t, m Value) Value {
 			if m == Nil {
 				return TableProto(t.MustTable(""))
 			}
-			m.MustTable("").SetParent(t.MustTable(""))
+			m.MustTable("").SetFirstParent(t.MustTable(""))
 			return m
 		}),
 		Str("concurrent"), Native2("concurrent", func(env *Env, t, m Value) Value {
@@ -52,10 +53,8 @@ func init() {
 						mu.Lock()
 						defer mu.Unlock()
 						a, err := old.Call(env.Stack()...)
-						if err != nil {
-							panic(err)
-						}
-						*env.A() = a
+						panicErr(err)
+						env.A = a
 					}, v.Func().DocString)
 				}
 				x.Set(k, v)
@@ -65,7 +64,7 @@ func init() {
 			if m == Nil {
 				return TableProto(x)
 			}
-			m.MustTable("").SetParent(x)
+			m.MustTable("").SetFirstParent(x)
 			return m
 		}, "$f(src: table) table", "\tcreate a concurrently accessible table"),
 		Str("get"), Native2("get", func(env *Env, m, k Value) Value {
@@ -138,9 +137,7 @@ func init() {
 		Str("foreach"), Native2("foreach", func(env *Env, m, f Value) Value {
 			m.MustTable("").Foreach(func(k, v Value) bool {
 				v, err := f.MustFunc("").Call(k, v)
-				if err != nil {
-					panic(err)
-				}
+				panicErr(err)
 				return v == Nil
 			})
 			return Nil
@@ -155,16 +152,14 @@ func init() {
 			for i := 1; i < env.Size(); i++ {
 				ma.Set(Int(int64(len(ma.items))), env.Get(i))
 			}
-			*env.A() = ma.Value()
+			env.A = ma.Value()
 		}, "$f({a}: array, ...args: value)", "\tappend values to array"),
 		Str("filter"), Native2("filter", func(env *Env, a, b Value) Value {
 			ma := a.MustTable("")
 			a2 := make([]Value, 0, ma.ArrayLen())
 			ma.Foreach(func(k, v Value) bool {
 				r, err := b.MustFunc("").Call(v)
-				if err != nil {
-					panic(err)
-				}
+				panicErr(err)
 				if !r.IsFalse() {
 					a2 = append(a2, v)
 				}
@@ -200,15 +195,27 @@ func init() {
 			})
 			return ma.Value()
 		}, "$f({table1}: table, table2: table)", "\tmerge elements from table2 to table1"),
-		Str("tostring"), Native1("print", func(env *Env, a Value) Value {
+		Str("tostring"), Native1("tostring", func(env *Env, a Value) Value {
 			p := &bytes.Buffer{}
-			a.MustTable("").rawPrint(p, 0, false)
+			a.MustTable("").rawPrint(p, 0, false, true)
 			return Bytes(p.Bytes())
 		}, "$f({t}: table) string", "\tprint raw elements in table, ignore __str"),
+		Str("name"), Native1("name", func(env *Env, a Value) Value {
+			return Str(a.MustTable("").Name())
+		}, "$f({t}: table) string", "\tprint table's name"),
+		Str("pure"), Native1("pure", func(env *Env, m Value) Value {
+			m2 := *m.MustTable("")
+			m2.parent = nil
+			return m2.Value()
+		}, "$f({t}: table) table", "\treturn a new table who shares all the data from t, but with no parent"),
+		Str("unwrap"), Native1("unwrap", func(env *Env, m Value) Value {
+			return ValRec(m.Interface())
+		}, "unwrap(v: value) value", "\tunwrap Go's array, slice or map into table"),
 	)
 	AddGlobalValue("table", TableLib)
 
 	StringMethods = MapAdd(StringMethods,
+		Str("__name"), Str("strlib"),
 		Str("__call"), Native2("str", func(env *Env, strObj, src Value) Value {
 			switch i := src.Interface().(type) {
 			case []byte:
@@ -261,13 +268,11 @@ func init() {
 			from := env.Get(1).MustStr("old text")
 			to := env.Get(2).MustStr("new text")
 			n := env.Get(3).IntDefault(-1)
-			*env.A() = Str(strings.Replace(src, from, to, int(n)))
+			env.A = Str(strings.Replace(src, from, to, int(n)))
 		}, ""),
 		Str("match"), Native2("match", func(env *Env, pattern, str Value) Value {
 			m, err := filepath.Match(pattern.MustStr("pattern"), str.MustStr("text"))
-			if err != nil {
-				panic(err)
-			}
+			panicErr(err)
 			return Bool(m)
 		}, ""),
 		Str("find"), Native2("find", func(env *Env, src, substr Value) Value {
@@ -316,7 +321,7 @@ func init() {
 		}, "$f({text}: string, cutset: string) string", "\tremove chars both ocurred in cutset and right-side of text"),
 		Str("decutf8"), Native("decutf8", func(env *Env) {
 			r, sz := utf8.DecodeRuneInString(env.Get(0).MustStr(""))
-			*env.A() = Array(Int(int64(r)), Int(int64(sz)))
+			env.A = Array(Int(int64(r)), Int(int64(sz)))
 		}, "$f({text}: string) array", "\tdecode first char in UTF-8 string, return { char_unicode, width_in_bytes }"),
 		Str("startswith"), Native2("startswith", func(env *Env, t, p Value) Value {
 			return Bool(strings.HasPrefix(t.MustStr(""), p.MustStr("")))
@@ -362,7 +367,7 @@ func init() {
 		Str("format"), Native("format", func(env *Env) {
 			buf := &bytes.Buffer{}
 			sprintf(env, buf)
-			*env.A() = Bytes(buf.Bytes())
+			env.A = Bytes(buf.Bytes())
 		}, "format({pattern}: string, ...args: value) string"),
 		Str("buffer"), Native1("buffer", func(env *Env, v Value) Value {
 			b := &bytes.Buffer{}
@@ -386,6 +391,7 @@ func init() {
 	}{Rand: rand.New(rand.NewSource(1))}
 
 	MathLib = MapAdd(MathLib,
+		Str("__name"), Str("mathlib"),
 		Str("INF"), Float(math.Inf(1)),
 		Str("NEG_INF"), Float(math.Inf(-1)),
 		Str("PI"), Float(math.Pi),
@@ -403,14 +409,14 @@ func init() {
 				af, ai, aIsInt := env.Get(0).MustNum("").Num()
 				bf, bi, bIsInt := env.Get(1).MustNum("").Num()
 				if aIsInt && bIsInt {
-					*env.A() = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
+					env.A = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
 				} else {
-					*env.A() = Float(rg.Float64()*(bf-af) + af)
+					env.A = Float(rg.Float64()*(bf-af) + af)
 				}
 			case 1:
-				*env.A() = Int(int64(rg.Intn(int(env.Get(0).MustNum("").Int()))))
+				env.A = Int(int64(rg.Intn(int(env.Get(0).MustNum("").Int()))))
 			default:
-				*env.A() = Float(rg.Float64())
+				env.A = Float(rg.Float64())
 			}
 		},
 			"$f() float", "\treturn [0, 1)",
@@ -432,33 +438,34 @@ func init() {
 		Str("abs"), Native("abs", func(env *Env) {
 			switch f, i, isInt := env.Get(0).MustNum("").Num(); {
 			case isInt && i < 0:
-				*env.A() = Int(-i)
+				env.A = Int(-i)
 			case isInt && i >= 0:
-				*env.A() = Int(i)
+				env.A = Int(i)
 			default:
-				*env.A() = Float(math.Abs(f))
+				env.A = Float(math.Abs(f))
 			}
 		}),
-		Str("remainder"), Native("remainder", func(env *Env) { *env.A() = Float(math.Remainder(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
-		Str("mod"), Native("mod", func(env *Env) { *env.A() = Float(math.Mod(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
-		Str("cos"), Native("cos", func(env *Env) { *env.A() = Float(math.Cos(env.Get(0).MustFloat(""))) }),
-		Str("sin"), Native("sin", func(env *Env) { *env.A() = Float(math.Sin(env.Get(0).MustFloat(""))) }),
-		Str("tan"), Native("tan", func(env *Env) { *env.A() = Float(math.Tan(env.Get(0).MustFloat(""))) }),
-		Str("acos"), Native("acos", func(env *Env) { *env.A() = Float(math.Acos(env.Get(0).MustFloat(""))) }),
-		Str("asin"), Native("asin", func(env *Env) { *env.A() = Float(math.Asin(env.Get(0).MustFloat(""))) }),
-		Str("atan"), Native("atan", func(env *Env) { *env.A() = Float(math.Atan(env.Get(0).MustFloat(""))) }),
-		Str("atan2"), Native("atan2", func(env *Env) { *env.A() = Float(math.Atan2(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
-		Str("ldexp"), Native("ldexp", func(env *Env) { *env.A() = Float(math.Ldexp(env.Get(0).MustFloat(""), int(env.Get(1).IntDefault(0)))) }),
+		Str("remainder"), Native("remainder", func(env *Env) { env.A = Float(math.Remainder(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
+		Str("mod"), Native("mod", func(env *Env) { env.A = Float(math.Mod(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
+		Str("cos"), Native("cos", func(env *Env) { env.A = Float(math.Cos(env.Get(0).MustFloat(""))) }),
+		Str("sin"), Native("sin", func(env *Env) { env.A = Float(math.Sin(env.Get(0).MustFloat(""))) }),
+		Str("tan"), Native("tan", func(env *Env) { env.A = Float(math.Tan(env.Get(0).MustFloat(""))) }),
+		Str("acos"), Native("acos", func(env *Env) { env.A = Float(math.Acos(env.Get(0).MustFloat(""))) }),
+		Str("asin"), Native("asin", func(env *Env) { env.A = Float(math.Asin(env.Get(0).MustFloat(""))) }),
+		Str("atan"), Native("atan", func(env *Env) { env.A = Float(math.Atan(env.Get(0).MustFloat(""))) }),
+		Str("atan2"), Native("atan2", func(env *Env) { env.A = Float(math.Atan2(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
+		Str("ldexp"), Native("ldexp", func(env *Env) { env.A = Float(math.Ldexp(env.Get(0).MustFloat(""), int(env.Get(1).IntDefault(0)))) }),
 		Str("modf"), Native("modf", func(env *Env) {
 			a, b := math.Modf(env.Get(0).MustFloat(""))
-			*env.A() = Array(Float(a), Float(b))
+			env.A = Array(Float(a), Float(b))
 		}),
 	)
 	AddGlobalValue("math", MathLib)
 
 	OSLib = MapAdd(OSLib,
+		Str("__name"), Str("oslib"),
 		Str("args"), ValRec(os.Args),
-		Str("environ"), Native("environ", func(env *Env) { *env.A() = ValRec(os.Environ()) }),
+		Str("environ"), Native("environ", func(env *Env) { env.A = ValRec(os.Environ()) }),
 		Str("shell"), Native2("shell", func(env *Env, cmd, opt Value) Value {
 			timeout := time.Duration(1 << 62) // basically forever
 			if tmp := opt.MaybeTableGetString("timeout"); tmp != Nil {
@@ -496,25 +503,19 @@ func init() {
 		Str("readdir"), Native1("readdir", func(env *Env, path Value) Value {
 			p := path.MustStr("")
 			fi, err := ioutil.ReadDir(p)
-			if err != nil {
-				panic(err)
-			}
+			panicErr(err)
 			return ValRec(fi)
 		}),
 		Str("remove"), Native1("remove", func(env *Env, path Value) Value {
 			p := path.MustStr("")
 			fi, err := os.Stat(p)
-			if err != nil {
-				panic(err)
-			}
+			panicErr(err)
 			if fi.IsDir() {
 				err = os.RemoveAll(p)
 			} else {
 				err = os.Remove(p)
 			}
-			if err != nil {
-				panic(err)
-			}
+			panicErr(err)
 			return Nil
 		}),
 	)
@@ -532,14 +533,14 @@ func mathMinMax(env *Env, msg string, max bool) {
 				i = x
 			}
 		}
-		*env.A() = Int(i)
+		env.A = Int(i)
 	} else {
 		for i := 1; i < len(env.Stack()); i++ {
 			if x, _, _ := env.Get(i).mustBe(typ.Number, msg, i+1).Num(); x >= f == max {
 				f = x
 			}
 		}
-		*env.A() = Float(f)
+		env.A = Float(f)
 	}
 }
 

@@ -13,6 +13,8 @@ package script
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"unsafe"
 
 	"github.com/coyove/script/typ"
@@ -57,6 +59,14 @@ func (m *Table) Parent() *Table { return m.parent }
 
 func (m *Table) SetParent(m2 *Table) { m.parent = m2 }
 
+func (m *Table) SetFirstParent(m2 *Table) {
+	if m.parent != nil {
+		m2 = m2.Copy()
+		m2.SetFirstParent(m.parent)
+	}
+	m.parent = m2
+}
+
 func (m *Table) GetString(k string) (v Value) {
 	return m.Get(Str(k))
 }
@@ -80,7 +90,7 @@ func (m *Table) Get(k Value) (v Value) {
 FINAL:
 	if v.Type() == typ.Func {
 		f := *v.Func()
-		f.MethodSrc = m.Value()
+		f.Receiver = m.Value()
 		v = f.Value()
 	}
 	return v
@@ -317,7 +327,7 @@ func (m *Table) String() string {
 	return m.Value().String()
 }
 
-func (m *Table) rawPrint(p *bytes.Buffer, lv int, j bool) {
+func (m *Table) rawPrint(p *bytes.Buffer, lv int, j, parent bool) {
 	if len(m.hashItems) == 0 {
 		p.WriteString(ifstr(j, "[", "{"))
 		for _, a := range m.ArrayPart() {
@@ -335,9 +345,9 @@ func (m *Table) rawPrint(p *bytes.Buffer, lv int, j bool) {
 		}
 		closeBuffer(p, "}")
 	}
-	if m.parent != nil && !j {
+	if m.parent != nil && parent {
 		p.WriteString("^")
-		m.parent.rawPrint(p, lv+1, j)
+		m.parent.rawPrint(p, lv+1, j, true)
 	}
 }
 
@@ -346,6 +356,22 @@ func (m *Table) Value() Value {
 		return Nil
 	}
 	return Value{v: uint64(typ.Table), p: unsafe.Pointer(m)}
+}
+
+func (m *Table) Name() string {
+	var n string
+	old := m.parent
+	m.parent = nil
+	if f := m.GetString("__name"); f != Nil {
+		n = f.String()
+	} else {
+		n = "table"
+	}
+	m.parent = old
+	if m.parent != nil {
+		n += "^" + m.parent.Name()
+	}
+	return n
 }
 
 func (m *Table) New() *Table {
@@ -381,4 +407,44 @@ func (m *Table) resizeHash(newSize int) {
 		}
 	}
 	m.hashItems = tmp.hashItems
+}
+
+type TableIO struct {
+	*Table
+}
+
+func (m TableIO) Read(p []byte) (int, error) {
+	if rb := m.Table.GetString("readbuf"); rb.Type() == typ.Func {
+		v, err := rb.Func().Call(Val(p))
+		if err != nil {
+			return 0, err
+		}
+		t := v.MustTable("TableIO.Read: readbuf()")
+		n := t.Get(Int(0)).MustInt("TableIO.Read: (int, error)")
+		err, _ = t.Get(Int(1)).Interface().(error)
+		return int(n), err
+	}
+	if rb := m.Table.GetString("read"); rb.Type() == typ.Func {
+		v, err := rb.Func().Call(Int(int64(len(p))))
+		if err != nil {
+			return 0, err
+		}
+		s := v.MustStr("TableIO.Read: read()")
+		if len(s) == 0 {
+			return 0, io.EOF
+		}
+		return copy(p, s), nil
+	}
+	return 0, fmt.Errorf("reader not implemented")
+}
+
+func (m TableIO) Write(p []byte) (int, error) {
+	if rb := m.Table.GetString("write"); rb.Type() == typ.Func {
+		v, err := rb.Func().Call(Bytes(p))
+		if err != nil {
+			return 0, err
+		}
+		return int(v.MustInt("TableIO.Write")), nil
+	}
+	return 0, fmt.Errorf("writer not implemented")
 }

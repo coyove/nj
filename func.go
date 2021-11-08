@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 	"unsafe"
 
 	"github.com/coyove/script/parser"
@@ -22,12 +21,11 @@ type Func struct {
 	Native     func(env *Env)
 	LoadGlobal *Program
 	Locals     []string
-	MethodSrc  Value
+	Receiver   Value
 }
 
 type Program struct {
 	Func
-	Deadline         int64
 	MaxCallStackSize int64
 	Stack            *[]Value
 	Functions        []*Func
@@ -51,19 +49,19 @@ func Native(name string, f func(env *Env), doc ...string) Value {
 }
 
 func Native1(name string, f func(*Env, Value) Value, doc ...string) Value {
-	return Native(name, func(env *Env) { *env.A() = f(env, env.Get(0)) }, doc...)
+	return Native(name, func(env *Env) { env.A = f(env, env.Get(0)) }, doc...)
 }
 
 func Native2(name string, f func(*Env, Value, Value) Value, doc ...string) Value {
-	return Native(name, func(env *Env) { *env.A() = f(env, env.Get(0), env.Get(1)) }, doc...)
+	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1)) }, doc...)
 }
 
 func Native3(name string, f func(*Env, Value, Value, Value) Value, doc ...string) Value {
-	return Native(name, func(env *Env) { *env.A() = f(env, env.Get(0), env.Get(1), env.Get(2)) }, doc...)
+	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1), env.Get(2)) }, doc...)
 }
 
 func Native4(name string, f func(*Env, Value, Value, Value, Value) Value, doc ...string) Value {
-	return Native(name, func(env *Env) { *env.A() = f(env, env.Get(0), env.Get(1), env.Get(2), env.Get(3)) }, doc...)
+	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1), env.Get(2), env.Get(3)) }, doc...)
 }
 
 func (c *Func) IsNative() bool { return c.Native != nil }
@@ -80,8 +78,8 @@ func (c *Func) String() string {
 		p.WriteString("function")
 	}
 	p.WriteString("(")
-	if c.MethodSrc != Nil {
-		p.WriteString("{" + c.MethodSrc.Type().String() + "},")
+	if c.Receiver != Nil {
+		p.WriteString("{" + c.Receiver.Type().String() + "},")
 	}
 	for i := 0; i < int(c.NumParams); i++ {
 		fmt.Fprintf(&p, "a%d,", i)
@@ -117,6 +115,21 @@ func (p *Program) Call() (v1 Value, err error) {
 	return
 }
 
+func (p *Program) EmergStop() {
+	p.Func.EmergStop()
+	for _, f := range p.Functions {
+		f.EmergStop()
+	}
+}
+
+// EmergStop terminates the execution of Func
+// After calling, Func will become unavailable for any further operations
+func (c *Func) EmergStop() {
+	for i := range c.Code.Code {
+		c.Code.Code[i] = inst(typ.OpRet, regA, 0)
+	}
+}
+
 func (c *Func) CallSimple(args ...interface{}) (v1 interface{}, err error) {
 	x := make([]Value, len(args))
 	for i := range args {
@@ -132,13 +145,13 @@ func (c *Func) Call(args ...Value) (v1 Value, err error) {
 		Global: c.LoadGlobal,
 		stack:  &args,
 	}
-	if c.MethodSrc != Nil {
-		newEnv.Prepend(c.MethodSrc)
+	if c.Receiver != Nil {
+		newEnv.Prepend(c.Receiver)
 	}
 
 	if c.Native != nil {
 		c.Native(&newEnv)
-		v1 = *newEnv.A()
+		v1 = newEnv.A
 	} else {
 		if c.Variadic {
 			s := *newEnv.stack
@@ -155,13 +168,9 @@ func (c *Func) Call(args ...Value) (v1 Value, err error) {
 	return
 }
 
-func (f *Func) Pure() *Func { f.MethodSrc = Nil; return f }
+func (f *Func) Pure() *Func { f.Receiver = Nil; return f }
 
 func (p *Program) PrettyCode() string { return pkPrettify(&p.Func, p, true) }
-
-func (p *Program) SetTimeout(d time.Duration) { p.Deadline = time.Now().Add(d).UnixNano() }
-
-func (p *Program) SetDeadline(d time.Time) { p.Deadline = d.UnixNano() }
 
 func (p *Program) Get(k string) (v Value, err error) {
 	defer parser.CatchError(&err)

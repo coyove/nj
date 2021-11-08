@@ -2,20 +2,18 @@ package script
 
 import (
 	"bytes"
-	"context"
-	"time"
 )
 
 // Env is the environment for a function to run within.
 // stack contains arguments used by the execution and is a global shared value, local can only use stack[stackOffset:]
 // A stores the result of the execution
 type Env struct {
-	a           Value
+	Global      *Program
+	A           Value
 	stack       *[]Value
 	stackOffset uint32
 
 	// Debug info for native functions to read
-	Global     *Program
 	IP         uint32
 	CS         *Func
 	Stacktrace []stacktrace
@@ -40,8 +38,6 @@ func (env *Env) grow(newSize int) {
 	*env.stack = s[:sz]
 }
 
-func (env *Env) A() *Value { return &env.a }
-
 // Get gets a value from the current stack
 func (env *Env) Get(index int) Value {
 	s := *env.stack
@@ -54,13 +50,13 @@ func (env *Env) Get(index int) Value {
 
 // Set sets a value in the current stack
 func (env *Env) Set(index int, value Value) {
-	env._set(uint16(index)&0x7fff, value)
+	env._set(uint16(index)&regLocalMask, value)
 }
 
 // Clear clears the current stack
 func (env *Env) Clear() {
 	*env.stack = (*env.stack)[:env.stackOffset]
-	*env.A() = Value{}
+	env.A = Value{}
 }
 
 // Push pushes a value into the current stack
@@ -84,19 +80,19 @@ func (env *Env) Size() int {
 
 func (env *Env) _get(yx uint16) Value {
 	if yx == regA {
-		return *env.A()
+		return env.A
 	}
-	if yx >= 1<<15 {
-		return (*env.Global.Stack)[yx&0x7fff]
+	if yx > regLocalMask {
+		return (*env.Global.Stack)[yx&regLocalMask]
 	}
 	return (*env.stack)[uint32(yx)+(env.stackOffset)]
 }
 
 func (env *Env) _set(yx uint16, v Value) {
 	if yx == regA {
-		*env.A() = v
-	} else if yx >= 1<<15 {
-		(*env.Global.Stack)[yx&0x7fff] = v
+		env.A = v
+	} else if yx > regLocalMask {
+		(*env.Global.Stack)[yx&regLocalMask] = v
 	} else {
 		(*env.stack)[uint32(yx)+(env.stackOffset)] = v
 	}
@@ -106,18 +102,9 @@ func (env *Env) Stack() []Value { return (*env.stack)[env.stackOffset:] }
 
 func (env *Env) CopyStack() []Value { return append([]Value{}, env.Stack()...) }
 
-func (env *Env) Deadline() (context.Context, func(), time.Time) {
-	if env.Global.Deadline == 0 {
-		return context.TODO(), func() {}, time.Time{}
-	}
-	d := time.Unix(0, env.Global.Deadline)
-	ctx, cancel := context.WithDeadline(context.Background(), d)
-	return ctx, cancel, d
-}
-
 func (env *Env) String() string {
 	buf := bytes.NewBufferString("env(")
-	buf.WriteString(env.A().String())
+	buf.WriteString(env.A.String())
 	buf.WriteString(")")
 	return buf.String()
 }

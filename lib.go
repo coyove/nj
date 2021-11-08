@@ -26,10 +26,7 @@ import (
 
 const Version int64 = 304
 
-var (
-	g   = map[string]Value{}
-	now int64
-)
+var g = map[string]Value{}
 
 func AddGlobalValue(k string, v interface{}, doc ...string) {
 	switch v := v.(type) {
@@ -51,19 +48,13 @@ func RemoveGlobalValue(k string) {
 }
 
 func init() {
-	go func() {
-		for a := range time.Tick(time.Second / 2) {
-			now = a.UnixNano()
-		}
-	}()
-
 	AddGlobalValue("VERSION", Int(Version))
 	AddGlobalValue("globals", func(env *Env) {
 		r := NewTable(len(env.Global.Func.Locals))
 		for i, name := range env.Global.Func.Locals {
 			r.Set(Str(name), (*env.Global.Stack)[i])
 		}
-		*env.A() = r.Value()
+		env.A = r.Value()
 	}, "globals() table", "\tlist all global values as key-value pairs")
 	AddGlobalValue("doc", func(env *Env, f, doc Value) Value {
 		if doc == Nil {
@@ -90,7 +81,9 @@ func init() {
 			return Int(int64(v.Table().Len()))
 		case typ.Func:
 			return Int(int64(v.Func().NumParams))
-		case typ.Number, typ.Nil, typ.Bool:
+		case typ.Nil:
+			return Int(0)
+		case typ.Number, typ.Bool:
 			return panicf("can't measure length of %v", v.Type())
 		default:
 			return Int(int64(reflectLen(v.Interface())))
@@ -107,9 +100,7 @@ func init() {
 		}
 		if !g.MaybeTableGetString("compileonly").IsFalse() {
 			v, err := parser.Parse(s.MustStr(""), "")
-			if err != nil {
-				panic(err)
-			}
+			panicErr(err)
 			return Val(v)
 		}
 		wrap := func(err error) error { return fmt.Errorf("panic inside: %v", err) }
@@ -139,18 +130,16 @@ func init() {
 				recv := env.Get(0).MustTable("")
 				f := recv.GetString("lambda").MustFunc("")
 				src := recv.GetString("source")
-				*env.A() = Str(fmt.Sprintf("<closure-" + f.Name + "-" + src.String() + ">"))
+				env.A = Str(fmt.Sprintf("<closure-" + f.Name + "-" + src.String() + ">"))
 			}),
 			Str("__call"), Native("<closure-"+lambda.Name+">", func(env *Env) {
 				recv := env.Get(0).MustTable("")
 				f := recv.GetString("lambda").MustFunc("")
-				f.MethodSrc = Nil
+				f.Receiver = Nil
 				stk := append([]Value{recv.GetString("source")}, env.Stack()[1:]...)
 				res, err := f.Call(stk...)
-				if err != nil {
-					panic(err)
-				}
-				*env.A() = res
+				panicErr(err)
+				env.A = res
 			}),
 		)
 	}, "closure(lambda: function, v: value) value", "\tbind v to lambda, when lambda is called, v will be passed in as the first argument")
@@ -164,14 +153,14 @@ func init() {
 				idx := start + uint32(i)
 				r = append(r, Int(int64(idx)), Str(name), (*env.stack)[idx])
 			}
-			*env.A() = Array(r...)
+			env.A = Array(r...)
 		}, "$f() array", "\treturn { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
 		Str("globals"), Native("globals", func(env *Env) {
 			var r []Value
 			for i, name := range env.Global.Func.Locals {
 				r = append(r, Int(int64(i)), Str(name), (*env.Global.Stack)[i])
 			}
-			*env.A() = Array(r...)
+			env.A = Array(r...)
 		}, "$f() array", "\treturn { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
 		Str("set"), Native2("set", func(env *Env, idx, value Value) Value {
 			(*env.Global.Stack)[idx.MustInt("")] = value
@@ -204,7 +193,7 @@ func init() {
 			return Array(lines...)
 		}, "$f(skip: int) array", "\treturn { func_name0, line1, cursor1, n2, l2, c2, ... }"),
 	))
-	AddGlobalValue("type", func(env *Env) { *env.A() = Str(env.Get(0).Type().String()) }, "type(v value) string", "\treturn value's type")
+	AddGlobalValue("type", func(env *Env) { env.A = Str(env.Get(0).Type().String()) }, "type(v value) string", "\treturn value's type")
 	AddGlobalValue("pcall", func(env *Env, f Value) Value {
 		a, err := f.MustFunc("").Call(env.Stack()[1:]...)
 		if err == nil {
@@ -232,13 +221,13 @@ func init() {
 		"assert(v1: value, v2: value, msg: string)", "\tpanic message when two values are not equal",
 	)
 	AddGlobalValue("int", func(env *Env) {
-		*env.A() = Nil
+		env.A = Nil
 		switch v := env.Get(0); v.Type() {
 		case typ.Number:
-			*env.A() = Int(v.Int())
+			env.A = Int(v.Int())
 		default:
 			if v, err := strconv.ParseInt(v.String(), int(env.Get(1).IntDefault(0)), 64); err == nil {
-				*env.A() = Int(v)
+				env.A = Int(v)
 			}
 		}
 	}, "int(v: value) int", "\tconvert value to integer number (int64)")
@@ -246,21 +235,21 @@ func init() {
 		v := env.Get(0)
 		switch v.Type() {
 		case typ.Number:
-			*env.A() = v
+			env.A = v
 		case typ.String:
 			switch v := parser.Num(v.Str()); v.Type() {
 			case parser.FLOAT:
-				*env.A() = Float(v.Float())
+				env.A = Float(v.Float())
 			case parser.INT:
-				*env.A() = Int(v.Int())
+				env.A = Int(v.Int())
 			}
 		default:
-			*env.A() = Value{}
+			env.A = Value{}
 		}
 	}, "$f(v: value) number", "\tconvert string to number")
-	AddGlobalValue("stdout", func(env *Env) { *env.A() = _interface(env.Global.Stdout) }, "$f() value", "\treturn stdout")
-	AddGlobalValue("stderr", func(env *Env) { *env.A() = _interface(env.Global.Stderr) }, "$f() value", "\treturn stderr")
-	AddGlobalValue("stdin", func(env *Env) { *env.A() = _interface(env.Global.Stdin) }, "$f() value", "\treturn stdin")
+	AddGlobalValue("stdout", func(env *Env) { env.A = _interface(env.Global.Stdout) }, "$f() value", "\treturn stdout")
+	AddGlobalValue("stderr", func(env *Env) { env.A = _interface(env.Global.Stderr) }, "$f() value", "\treturn stderr")
+	AddGlobalValue("stdin", func(env *Env) { env.A = _interface(env.Global.Stdin) }, "$f() value", "\treturn stdin")
 	AddGlobalValue("print", func(env *Env) {
 		for _, a := range env.Stack() {
 			fmt.Fprint(env.Global.Stdout, a.String())
@@ -299,7 +288,7 @@ func init() {
 		"$f(prompt: string) array", "\tprint prompt then read all user inputs",
 		"$f(prompt: string, n: int) array", "\tprint prompt then read n user inputs",
 	)
-	AddGlobalValue("time", func(env *Env) { *env.A() = Float(float64(time.Now().UnixNano()) / 1e9) }, "time() float", "\tunix timestamp in seconds")
+	AddGlobalValue("time", func(env *Env) { env.A = Float(float64(time.Now().UnixNano()) / 1e9) }, "time() float", "\tunix timestamp in seconds")
 	AddGlobalValue("sleep", func(env *Env) { time.Sleep(time.Duration(env.Get(0).MustFloat("") * float64(time.Second))) }, "sleep(sec: float)")
 	AddGlobalValue("Go_time", func(env *Env) {
 		if env.Size() > 0 {
@@ -307,13 +296,13 @@ func init() {
 			if env.Get(7).StringDefault("") == "local" {
 				loc = time.Local
 			}
-			*env.A() = Val(time.Date(
+			env.A = Val(time.Date(
 				int(env.Get(0).IntDefault(1970)), time.Month(env.Get(1).IntDefault(1)), int(env.Get(2).IntDefault(1)),
 				int(env.Get(3).IntDefault(0)), int(env.Get(4).IntDefault(0)), int(env.Get(5).IntDefault(0)),
 				int(env.Get(6).IntDefault(0)), loc,
 			))
 		} else {
-			*env.A() = Val(time.Now())
+			env.A = Val(time.Now())
 		}
 	},
 		"Go_time() value",
@@ -327,19 +316,18 @@ func init() {
 		return Float(float64(s[1]) / 1e9)
 	}, "clock() float", "\tseconds since startup (monotonic clock)")
 	AddGlobalValue("exit", func(env *Env) { os.Exit(int(env.Get(0).MustInt(""))) }, "exit(code: int)")
-	AddGlobalValue("chr", func(env *Env) { *env.A() = Rune(rune(env.Get(0).MustInt(""))) }, "chr(code: int) string")
+	AddGlobalValue("chr", func(env *Env) { env.A = Rune(rune(env.Get(0).MustInt(""))) }, "chr(code: int) string")
 	AddGlobalValue("byte", func(env *Env, a Value) Value { return Byte(byte(a.MustInt(""))) }, "byte(code: int) string")
 	AddGlobalValue("ord", func(env *Env) {
 		r, _ := utf8.DecodeRuneInString(env.Get(0).MustStr(""))
-		*env.A() = Int(int64(r))
+		env.A = Int(int64(r))
 	}, "$f(s: string) int")
 
 	AddGlobalValue("re", Map(
+		Str("__name"), Str("relib"),
 		Str("__call"), Native2("", func(env *Env, re, r Value) Value {
 			rx, err := regexp.Compile(r.MustStr(""))
-			if err != nil {
-				panic(err)
-			}
+			panicErr(err)
 			return TableProto(re.MustTable(""), Str("_rx"), Val(rx))
 		}, "$f(regex: string) table", "\tcreate a regular expression object"),
 		Str("match"), Native2("match", func(e *Env, rx, text Value) Value {
@@ -370,11 +358,11 @@ func init() {
 	))
 
 	AddGlobalValue("error", func(env *Env, msg Value) Value { return Val(errors.New(msg.MustStr(""))) }, "error(text: string) value", "\tcreate an error")
-	AddGlobalValue("iserror", func(env *Env) { _, ok := env.Get(0).Interface().(error); *env.A() = Bool(ok) }, "iserror(v: value) bool", "\treturn whether value is an error")
+	AddGlobalValue("iserror", func(env *Env) { _, ok := env.Get(0).Interface().(error); env.A = Bool(ok) }, "iserror(v: value) bool", "\treturn whether value is an error")
 
 	AddGlobalValue("json", Map(
 		Str("stringify"), Native("stringify", func(env *Env) {
-			*env.A() = Str(env.Get(0).JSONString())
+			env.A = Str(env.Get(0).JSONString())
 		}, "$f(v: value) string"),
 		Str("parse"), Native1("parse", func(env *Env, js Value) Value {
 			j := strings.TrimSpace(js.MustStr(""))
@@ -391,9 +379,9 @@ func init() {
 	))
 
 	AddGlobalValue("sync", Map(
-		Str("mutex"), Native("mutex", func(env *Env) { *env.A() = Val(&sync.Mutex{}) }, "$f() value", "\tcreate a sync.Mutex"),
-		Str("rwmutex"), Native("rwmutex", func(env *Env) { *env.A() = Val(&sync.RWMutex{}) }, "$f() value", "\tcreate a sync.RWMutex"),
-		Str("waitgroup"), Native("waitgroup", func(env *Env) { *env.A() = Val(&sync.WaitGroup{}) }, "$f() value", "\tcreate a sync.WaitGroup"),
+		Str("mutex"), Native("mutex", func(env *Env) { env.A = Val(&sync.Mutex{}) }, "$f() value", "\tcreate a sync.Mutex"),
+		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() value", "\tcreate a sync.RWMutex"),
+		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() value", "\tcreate a sync.WaitGroup"),
 		Str("map"), Native3("map", func(env *Env, list, f, opt Value) Value {
 			n, t := int(opt.IntDefault(int64(runtime.NumCPU()))), list.MustTable("")
 			if n < 1 || n > runtime.NumCPU()*1e3 {
@@ -436,176 +424,168 @@ func init() {
 	AddGlobalValue("parent", func(env *Env, m Value) Value {
 		return m.MustTable("").Parent().Value()
 	}, "parent(t: table) table", "\tfind given table's parent, or nil if not existed")
-	AddGlobalValue("pure", func(env *Env, m Value) Value {
-		m2 := *m.MustTable("")
-		m2.parent = nil
-		return m2.Value()
-	}, "$f(t: table) table", "\treturn a new table who shares all the data from t, but with no parent table")
-	AddGlobalValue("unwrap", func(env *Env, m Value) Value {
-		return ValRec(m.Interface())
-	}, "unwrap(v: value) value", "\tunwrap Go's array, slice or map into table")
-	AddGlobalValue("open", func(env *Env, path, flag, perm Value) Value {
-		var opt int
-		var autoClose bool
-		for _, f := range flag.StringDefault("r") {
-			switch f {
-			case 'C':
-				autoClose = true
-			case 'w':
-				opt &^= os.O_RDWR | os.O_RDONLY
-				opt |= os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-			case 'r':
-				opt &^= os.O_RDWR | os.O_WRONLY
-				opt |= os.O_RDONLY
-			case 'a':
-				opt |= os.O_APPEND | os.O_CREATE
-			case 'x':
-				opt |= os.O_EXCL
-			case '+':
-				opt &^= os.O_RDONLY | os.O_WRONLY
-				opt |= os.O_RDWR | os.O_CREATE
+
+	AddGlobalValue("open", Map(
+		Str("__call"), Native("open", func(env *Env) {
+			path, flag, perm := env.Get(1), env.Get(2), env.Get(3)
+			var opt int
+			for _, f := range flag.StringDefault("r") {
+				switch f {
+				case 'w':
+					opt &^= os.O_RDWR | os.O_RDONLY
+					opt |= os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+				case 'r':
+					opt &^= os.O_RDWR | os.O_WRONLY
+					opt |= os.O_RDONLY
+				case 'a':
+					opt |= os.O_APPEND | os.O_CREATE
+				case 'x':
+					opt |= os.O_EXCL
+				case '+':
+					opt &^= os.O_RDONLY | os.O_WRONLY
+					opt |= os.O_RDWR | os.O_CREATE
+				}
 			}
-		}
-		f, err := os.OpenFile(path.MustStr("path"), opt, fs.FileMode(perm.IntDefault(0644)))
-		if err != nil {
-			panic(err)
-		}
-		if autoClose {
-			runtime.SetFinalizer(f, func(f *os.File) { f.Close() })
-		}
-		return TableProto(ReadWriteSeekCloser,
-			Str("_f"), Val(f),
-			Str("sync"), Native1("sync", func(e *Env, rx Value) Value {
-				if err := rx.Table().GetString("_f").Interface().(*os.File).Sync(); err != nil {
-					panic(err)
-				}
-				return Nil
-			}),
-			Str("stat"), Native1("stat", func(e *Env, rx Value) Value {
-				fi, err := rx.Table().GetString("_f").Interface().(*os.File).Stat()
-				if err != nil {
-					panic(err)
-				}
-				return Val(fi)
-			}),
-			Str("truncate"), Native2("truncate", func(e *Env, rx, n Value) Value {
-				f := rx.Table().GetString("_f").Interface().(*os.File)
-				if err := f.Truncate(n.MustInt("")); err != nil {
-					panic(err)
-				}
-				t, _ := f.Seek(0, 2)
-				return Int(t)
-			}),
-			Str("readlines"), Native2("readlines", func(e *Env, rx, cb Value) Value {
-				f := rx.Table().GetString("_f").Interface().(*os.File)
-				if _, err := f.Seek(0, 0); err != nil {
-					panic(err)
-				}
-				if cb == Nil {
-					buf, err := ioutil.ReadAll(f)
-					if err != nil {
-						panic(err)
-					}
-					res := []Value{}
-					for _, line := range bytes.Split(buf, []byte("\n")) {
-						res = append(res, Bytes(line))
-					}
-					return Array(res...)
-				}
-				for rd := bufio.NewReader(f); ; {
-					line, err := rd.ReadString('\n')
-					if len(line) > 0 {
-						if v, err := cb.MustFunc("callback").Call(Str(line)); err != nil {
-							panic(err)
-						} else if v != Nil {
-							return v
-						}
-					}
-					if err != nil {
-						if err != io.EOF {
-							panic(err)
-						}
-						break
-					}
-				}
-				return Nil
-			},
-				"readlines() array", "\tread the whole file and return lines as a table array",
-				"readlines(f: function)", "\tfor every line read, f(line) will be called", "\tto exit the reading, return anything other than nil in f",
-			),
-		)
-	}, "open(path: string, flag: string, perm: int) value")
+			f, err := os.OpenFile(path.MustStr("path"), opt, fs.FileMode(perm.IntDefault(0644)))
+			panicErr(err)
+			env.Get(0).MustTable("").Set(Int(0), Val(f))
+
+			m := TableProto(ReadWriteSeekCloser,
+				Str("_f"), Val(f),
+				Str("sync"), Native1("sync", func(e *Env, rx Value) Value {
+					panicErr(rx.Table().GetString("_f").Interface().(*os.File).Sync())
+					return Nil
+				}),
+				Str("stat"), Native1("stat", func(e *Env, rx Value) Value {
+					fi, err := rx.Table().GetString("_f").Interface().(*os.File).Stat()
+					panicErr(err)
+					return Val(fi)
+				}),
+				Str("truncate"), Native2("truncate", func(e *Env, rx, n Value) Value {
+					f := rx.Table().GetString("_f").Interface().(*os.File)
+					panicErr(f.Truncate(n.MustInt("")))
+					t, err := f.Seek(0, 2)
+					panicErr(err)
+					return Int(t)
+				}),
+			)
+			env.A = m
+		}, "open(path: string, flag: string, perm: int) table"),
+		Str("close"), Native("close", func(env *Env) {
+			f, _ := env.Get(0).MustTable("").Get(Int(0)).Interface().(*os.File)
+			if f != nil {
+				panicErr(f.Close())
+			} else {
+				panicf("no opened file yet")
+			}
+		}, "$f()", "\tclose last opened file"),
+	))
 }
 
 var (
-	ReaderProto = Map(Str("read"), Native2("read", func(e *Env, rx, n Value) Value {
-		f := rx.Table().GetString("_f").Interface().(io.Reader)
-		switch n.Type() {
-		case typ.Number:
-			p := make([]byte, n.IntDefault(0))
-			rn, err := f.Read(p)
-			if rn > 0 {
-				return Bytes(p[:rn])
-			}
-			if err == io.EOF {
-				return Nil
-			}
-			panic(err)
-		case typ.Interface:
-			rn, err := f.Read(n.Interface().([]byte))
-			return Array(Int(int64(rn)), Val(err)) // return in Go style
-		default:
-			buf, err := ioutil.ReadAll(f)
-			if err != nil {
+	ReaderProto = Map(Str("__name"), Str("reader"),
+		Str("read"), Native2("read", func(e *Env, rx, n Value) Value {
+			f := rx.Table().GetString("_f").Interface().(io.Reader)
+			switch n.Type() {
+			case typ.Number:
+				p := make([]byte, n.IntDefault(0))
+				rn, err := f.Read(p)
+				if rn > 0 {
+					return Bytes(p[:rn])
+				}
+				if err == io.EOF {
+					return Nil
+				}
 				panic(err)
+			case typ.Interface:
+				rn, err := f.Read(n.Interface().([]byte))
+				return Array(Int(int64(rn)), Val(err)) // return in Go style
+			default:
+				buf, err := ioutil.ReadAll(f)
+				panicErr(err)
+				return Bytes(buf)
 			}
-			return Bytes(buf)
-		}
-	},
-		"read() bytes", "\tread all bytes",
-		"read(n: int) bytes", "\tread n bytes",
-		"read(buf: bytes) array", "\tread into buf and return { bytes_read, error } in Go style",
-	)).Table()
-	WriterProto = Map(
+		},
+			"read() string", "\tread all bytes",
+			"read(n: int) string", "\tread n bytes",
+		),
+		Str("readbuf"), Native2("readbuf", func(e *Env, rx, n Value) Value {
+			rn, err := rx.Table().GetString("_f").Interface().(io.Reader).Read(n.Interface().([]byte))
+			return Array(Int(int64(rn)), Val(err)) // return in Go style
+		}, "$f(buf: bytes) array", "\tread into buf and return { bytes_read, error } in Go style"),
+		Str("readlines"), Native2("readlines", func(e *Env, rx, cb Value) Value {
+			f := rx.Table().GetString("_f").Interface().(io.Reader)
+			delim := rx.Table().GetString("delim").StringDefault("\n")
+			if cb == Nil {
+				buf, err := ioutil.ReadAll(f)
+				if err != nil {
+					panic(err)
+				}
+				parts := bytes.Split(buf, []byte(delim))
+				var res []Value
+				for i, line := range parts {
+					if i < len(parts)-1 {
+						line = append(line, delim...)
+					}
+					res = append(res, Bytes(line))
+				}
+				return Array(res...)
+			}
+			for rd := bufio.NewReader(f); ; {
+				line, err := rd.ReadString(delim[0])
+				if len(line) > 0 {
+					if v, err := cb.MustFunc("callback").Call(Str(line)); err != nil {
+						panic(err)
+					} else if v != Nil {
+						return v
+					}
+				}
+				if err != nil {
+					if err != io.EOF {
+						panic(err)
+					}
+					break
+				}
+			}
+			return Nil
+		},
+			"readlines() array", "\tread the whole file and return lines as a table array",
+			"readlines(f: function)", "\tfor every line read, f(line) will be called", "\tto exit the reading, return anything other than nil in f",
+		),
+	).Table()
+	WriterProto = Map(Str("__name"), Str("writer"),
 		Str("write"), Native2("write", func(e *Env, rx, buf Value) Value {
 			f := rx.Table().GetString("_f").Interface().(io.Writer)
 			wn, err := fmt.Fprint(f, buf.MustStr(""))
-			if err != nil {
-				panic(err)
-			}
+			panicErr(err)
 			return Int(int64(wn))
 		}, "$f({w}: value, buf: string) int", "\twrite buf to w"),
-		Str("pipe"), Native3("pipe", func(e *Env, rx, rd, n Value) Value {
-			w := rx.Table().GetString("_f").Interface().(io.Writer)
-			r := rd.Table().GetString("_f").Interface().(io.Reader)
+		Str("pipe"), Native3("pipe", func(e *Env, dest, src, n Value) Value {
 			var wn int64
 			var err error
 			if n := n.IntDefault(0); n > 0 {
-				wn, err = io.CopyN(w, r, n)
+				wn, err = io.CopyN(dest.Writer(), src.Reader(), n)
 			} else {
-				wn, err = io.Copy(w, r)
+				wn, err = io.Copy(dest.Writer(), src.Reader())
 			}
-			if err != nil {
-				panic(err)
-			}
+			panicErr(err)
 			return Int(wn)
 		}, "$f({w}: value, r: value) int", "\tcopy bytes from r to w, return number of bytes copied",
 			"$f({w}: value, r: value, n: int) int", "\tcopy at most n bytes from r to w"),
 	).Table()
-	SeekerProto = Map(Str("seek"), Native3("seek", func(e *Env, rx, off, where Value) Value {
+	SeekerProto = Map(Str("__name"), Str("seeker"), Str("seek"), Native3("seek", func(e *Env, rx, off, where Value) Value {
 		f := rx.Table().GetString("_f").Interface().(io.Seeker)
 		wn, err := f.Seek(off.MustInt("offset"), int(where.MustInt("where")))
-		if err != nil {
-			panic(err)
-		}
+		panicErr(err)
 		return Int(int64(wn))
 	}, "")).Table()
-	CloserProto = Map(Str("close"), Native1("close", func(e *Env, rx Value) Value {
-		return Val(rx.Table().GetString("_f").Interface().(io.Closer).Close())
+	CloserProto = Map(Str("__name"), Str("closer"), Str("close"), Native1("close", func(e *Env, rx Value) Value {
+		panicErr(rx.Table().GetString("_f").Interface().(io.Closer).Close())
+		return Nil
 	}, "")).Table()
-	ReadWriter          = MapMerge(MapMerge(Map(), ReaderProto.Value()), WriterProto.Value()).Table()
-	ReadCloser          = MapMerge(MapMerge(Map(), ReaderProto.Value()), CloserProto.Value()).Table()
-	WriteCloser         = MapMerge(MapMerge(Map(), WriterProto.Value()), CloserProto.Value()).Table()
-	ReadWriteCloser     = MapMerge(MapMerge(Map(), ReadWriter.Value()), CloserProto.Value()).Table()
-	ReadWriteSeekCloser = MapMerge(MapMerge(Map(), ReadWriteCloser.Value()), SeekerProto.Value()).Table()
+	ReadWriter          = MapMerge(MapMerge(Map(), ReaderProto.Value()), WriterProto.Value(), Str("__name"), Str("readwriter")).Table()
+	ReadCloser          = MapMerge(MapMerge(Map(), ReaderProto.Value()), CloserProto.Value(), Str("__name"), Str("readcloser")).Table()
+	WriteCloser         = MapMerge(MapMerge(Map(), WriterProto.Value()), CloserProto.Value(), Str("__name"), Str("writecloser")).Table()
+	ReadWriteCloser     = MapMerge(MapMerge(Map(), ReadWriter.Value()), CloserProto.Value(), Str("__name"), Str("readwritecloser")).Table()
+	ReadWriteSeekCloser = MapMerge(MapMerge(Map(), ReadWriteCloser.Value()), SeekerProto.Value(), Str("__name"), Str("readwriteseekcloser")).Table()
 )
