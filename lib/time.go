@@ -122,7 +122,7 @@ func init() {
 		}
 
 		r := tt.Format(f)
-		env.A = script.Str(r)
+		*env.A() = script.Str(r)
 	},
 		"strtime(format: string) string",
 		"strtime(format: string, t: value) string",

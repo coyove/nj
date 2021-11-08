@@ -36,7 +36,7 @@ func init() {
 		defer func() {
 			cancel()
 			if r := recover(); r != nil {
-				env.A = script.Array(script.Val(r))
+				*env.A() = script.Array(script.Val(r))
 			}
 		}()
 
@@ -157,7 +157,7 @@ func init() {
 		for k := range resp.Header {
 			hdr[k] = resp.Header.Get(k)
 		}
-		env.A = script.Array(script.Int(int64(resp.StatusCode)), script.Val(hdr), buf, script.Val(client.Jar))
+		*env.A() = script.Array(script.Int(int64(resp.StatusCode)), script.Val(hdr), buf, script.Val(client.Jar))
 	}, "http(options: table) array",
 		"\tperforma an HTTP request and return { code, headers, body_reader, cookie_jar }",
 		"\t'url' is a mandatory parameter in options, others are optional and pretty self explanatory:",

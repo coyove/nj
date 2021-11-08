@@ -63,7 +63,7 @@ func init() {
 		for i, name := range env.Global.Func.Locals {
 			r.Set(Str(name), (*env.Global.Stack)[i])
 		}
-		env.A = r.Value()
+		*env.A() = r.Value()
 	}, "globals() table", "\tlist all global values as key-value pairs")
 	AddGlobalValue("doc", func(env *Env, f, doc Value) Value {
 		if doc == Nil {
@@ -139,7 +139,7 @@ func init() {
 				recv := env.Get(0).MustTable("")
 				f := recv.GetString("lambda").MustFunc("")
 				src := recv.GetString("source")
-				env.A = Str(fmt.Sprintf("<closure-" + f.Name + "-" + src.String() + ">"))
+				*env.A() = Str(fmt.Sprintf("<closure-" + f.Name + "-" + src.String() + ">"))
 			}),
 			Str("__call"), Native("<closure-"+lambda.Name+">", func(env *Env) {
 				recv := env.Get(0).MustTable("")
@@ -150,7 +150,7 @@ func init() {
 				if err != nil {
 					panic(err)
 				}
-				env.A = res
+				*env.A() = res
 			}),
 		)
 	}, "closure(lambda: function, v: value) value", "\tbind v to lambda, when lambda is called, v will be passed in as the first argument")
@@ -164,14 +164,14 @@ func init() {
 				idx := start + uint32(i)
 				r = append(r, Int(int64(idx)), Str(name), (*env.stack)[idx])
 			}
-			env.A = Array(r...)
+			*env.A() = Array(r...)
 		}, "$f() array", "\treturn { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
 		Str("globals"), Native("globals", func(env *Env) {
 			var r []Value
 			for i, name := range env.Global.Func.Locals {
 				r = append(r, Int(int64(i)), Str(name), (*env.Global.Stack)[i])
 			}
-			env.A = Array(r...)
+			*env.A() = Array(r...)
 		}, "$f() array", "\treturn { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
 		Str("set"), Native2("set", func(env *Env, idx, value Value) Value {
 			(*env.Global.Stack)[idx.MustInt("")] = value
@@ -204,7 +204,7 @@ func init() {
 			return Array(lines...)
 		}, "$f(skip: int) array", "\treturn { func_name0, line1, cursor1, n2, l2, c2, ... }"),
 	))
-	AddGlobalValue("type", func(env *Env) { env.A = Str(env.Get(0).Type().String()) }, "type(v value) string", "\treturn value's type")
+	AddGlobalValue("type", func(env *Env) { *env.A() = Str(env.Get(0).Type().String()) }, "type(v value) string", "\treturn value's type")
 	AddGlobalValue("pcall", func(env *Env, f Value) Value {
 		a, err := f.MustFunc("").Call(env.Stack()[1:]...)
 		if err == nil {
@@ -232,13 +232,13 @@ func init() {
 		"assert(v1: value, v2: value, msg: string)", "\tpanic message when two values are not equal",
 	)
 	AddGlobalValue("int", func(env *Env) {
-		env.A = Nil
+		*env.A() = Nil
 		switch v := env.Get(0); v.Type() {
 		case typ.Number:
-			env.A = Int(v.Int())
+			*env.A() = Int(v.Int())
 		default:
 			if v, err := strconv.ParseInt(v.String(), int(env.Get(1).IntDefault(0)), 64); err == nil {
-				env.A = Int(v)
+				*env.A() = Int(v)
 			}
 		}
 	}, "int(v: value) int", "\tconvert value to integer number (int64)")
@@ -246,21 +246,21 @@ func init() {
 		v := env.Get(0)
 		switch v.Type() {
 		case typ.Number:
-			env.A = v
+			*env.A() = v
 		case typ.String:
 			switch v := parser.Num(v.Str()); v.Type() {
 			case parser.FLOAT:
-				env.A = Float(v.Float())
+				*env.A() = Float(v.Float())
 			case parser.INT:
-				env.A = Int(v.Int())
+				*env.A() = Int(v.Int())
 			}
 		default:
-			env.A = Value{}
+			*env.A() = Value{}
 		}
 	}, "$f(v: value) number", "\tconvert string to number")
-	AddGlobalValue("stdout", func(env *Env) { env.A = _interface(env.Global.Stdout) }, "$f() value", "\treturn stdout")
-	AddGlobalValue("stderr", func(env *Env) { env.A = _interface(env.Global.Stderr) }, "$f() value", "\treturn stderr")
-	AddGlobalValue("stdin", func(env *Env) { env.A = _interface(env.Global.Stdin) }, "$f() value", "\treturn stdin")
+	AddGlobalValue("stdout", func(env *Env) { *env.A() = _interface(env.Global.Stdout) }, "$f() value", "\treturn stdout")
+	AddGlobalValue("stderr", func(env *Env) { *env.A() = _interface(env.Global.Stderr) }, "$f() value", "\treturn stderr")
+	AddGlobalValue("stdin", func(env *Env) { *env.A() = _interface(env.Global.Stdin) }, "$f() value", "\treturn stdin")
 	AddGlobalValue("print", func(env *Env) {
 		for _, a := range env.Stack() {
 			fmt.Fprint(env.Global.Stdout, a.String())
@@ -299,7 +299,7 @@ func init() {
 		"$f(prompt: string) array", "\tprint prompt then read all user inputs",
 		"$f(prompt: string, n: int) array", "\tprint prompt then read n user inputs",
 	)
-	AddGlobalValue("time", func(env *Env) { env.A = Float(float64(time.Now().UnixNano()) / 1e9) }, "time() float", "\tunix timestamp in seconds")
+	AddGlobalValue("time", func(env *Env) { *env.A() = Float(float64(time.Now().UnixNano()) / 1e9) }, "time() float", "\tunix timestamp in seconds")
 	AddGlobalValue("sleep", func(env *Env) { time.Sleep(time.Duration(env.Get(0).MustFloat("") * float64(time.Second))) }, "sleep(sec: float)")
 	AddGlobalValue("Go_time", func(env *Env) {
 		if env.Size() > 0 {
@@ -307,13 +307,13 @@ func init() {
 			if env.Get(7).StringDefault("") == "local" {
 				loc = time.Local
 			}
-			env.A = Val(time.Date(
+			*env.A() = Val(time.Date(
 				int(env.Get(0).IntDefault(1970)), time.Month(env.Get(1).IntDefault(1)), int(env.Get(2).IntDefault(1)),
 				int(env.Get(3).IntDefault(0)), int(env.Get(4).IntDefault(0)), int(env.Get(5).IntDefault(0)),
 				int(env.Get(6).IntDefault(0)), loc,
 			))
 		} else {
-			env.A = Val(time.Now())
+			*env.A() = Val(time.Now())
 		}
 	},
 		"Go_time() value",
@@ -327,11 +327,11 @@ func init() {
 		return Float(float64(s[1]) / 1e9)
 	}, "clock() float", "\tseconds since startup (monotonic clock)")
 	AddGlobalValue("exit", func(env *Env) { os.Exit(int(env.Get(0).MustInt(""))) }, "exit(code: int)")
-	AddGlobalValue("chr", func(env *Env) { env.A = Rune(rune(env.Get(0).MustInt(""))) }, "chr(code: int) string")
+	AddGlobalValue("chr", func(env *Env) { *env.A() = Rune(rune(env.Get(0).MustInt(""))) }, "chr(code: int) string")
 	AddGlobalValue("byte", func(env *Env, a Value) Value { return Byte(byte(a.MustInt(""))) }, "byte(code: int) string")
 	AddGlobalValue("ord", func(env *Env) {
 		r, _ := utf8.DecodeRuneInString(env.Get(0).MustStr(""))
-		env.A = Int(int64(r))
+		*env.A() = Int(int64(r))
 	}, "$f(s: string) int")
 
 	AddGlobalValue("re", Map(
@@ -370,11 +370,11 @@ func init() {
 	))
 
 	AddGlobalValue("error", func(env *Env, msg Value) Value { return Val(errors.New(msg.MustStr(""))) }, "error(text: string) value", "\tcreate an error")
-	AddGlobalValue("iserror", func(env *Env) { _, ok := env.Get(0).Interface().(error); env.A = Bool(ok) }, "iserror(v: value) bool", "\treturn whether value is an error")
+	AddGlobalValue("iserror", func(env *Env) { _, ok := env.Get(0).Interface().(error); *env.A() = Bool(ok) }, "iserror(v: value) bool", "\treturn whether value is an error")
 
 	AddGlobalValue("json", Map(
 		Str("stringify"), Native("stringify", func(env *Env) {
-			env.A = Str(env.Get(0).JSONString())
+			*env.A() = Str(env.Get(0).JSONString())
 		}, "$f(v: value) string"),
 		Str("parse"), Native1("parse", func(env *Env, js Value) Value {
 			j := strings.TrimSpace(js.MustStr(""))
@@ -391,9 +391,9 @@ func init() {
 	))
 
 	AddGlobalValue("sync", Map(
-		Str("mutex"), Native("mutex", func(env *Env) { env.A = Val(&sync.Mutex{}) }, "$f() value", "\tcreate a sync.Mutex"),
-		Str("rwmutex"), Native("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() value", "\tcreate a sync.RWMutex"),
-		Str("waitgroup"), Native("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() value", "\tcreate a sync.WaitGroup"),
+		Str("mutex"), Native("mutex", func(env *Env) { *env.A() = Val(&sync.Mutex{}) }, "$f() value", "\tcreate a sync.Mutex"),
+		Str("rwmutex"), Native("rwmutex", func(env *Env) { *env.A() = Val(&sync.RWMutex{}) }, "$f() value", "\tcreate a sync.RWMutex"),
+		Str("waitgroup"), Native("waitgroup", func(env *Env) { *env.A() = Val(&sync.WaitGroup{}) }, "$f() value", "\tcreate a sync.WaitGroup"),
 		Str("map"), Native3("map", func(env *Env, list, f, opt Value) Value {
 			n, t := int(opt.IntDefault(int64(runtime.NumCPU()))), list.MustTable("")
 			if n < 1 || n > runtime.NumCPU()*1e3 {

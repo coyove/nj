@@ -51,19 +51,19 @@ func Native(name string, f func(env *Env), doc ...string) Value {
 }
 
 func Native1(name string, f func(*Env, Value) Value, doc ...string) Value {
-	return Native(name, func(env *Env) { env.A = f(env, env.Get(0)) }, doc...)
+	return Native(name, func(env *Env) { *env.A() = f(env, env.Get(0)) }, doc...)
 }
 
 func Native2(name string, f func(*Env, Value, Value) Value, doc ...string) Value {
-	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1)) }, doc...)
+	return Native(name, func(env *Env) { *env.A() = f(env, env.Get(0), env.Get(1)) }, doc...)
 }
 
 func Native3(name string, f func(*Env, Value, Value, Value) Value, doc ...string) Value {
-	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1), env.Get(2)) }, doc...)
+	return Native(name, func(env *Env) { *env.A() = f(env, env.Get(0), env.Get(1), env.Get(2)) }, doc...)
 }
 
 func Native4(name string, f func(*Env, Value, Value, Value, Value) Value, doc ...string) Value {
-	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1), env.Get(2), env.Get(3)) }, doc...)
+	return Native(name, func(env *Env) { *env.A() = f(env, env.Get(0), env.Get(1), env.Get(2), env.Get(3)) }, doc...)
 }
 
 func (c *Func) IsNative() bool { return c.Native != nil }
@@ -138,7 +138,7 @@ func (c *Func) Call(args ...Value) (v1 Value, err error) {
 
 	if c.Native != nil {
 		c.Native(&newEnv)
-		v1 = newEnv.A
+		v1 = *newEnv.A()
 	} else {
 		if c.Variadic {
 			s := *newEnv.stack

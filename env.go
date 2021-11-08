@@ -10,12 +10,12 @@ import (
 // stack contains arguments used by the execution and is a global shared value, local can only use stack[stackOffset:]
 // A stores the result of the execution
 type Env struct {
-	Global      *Program
-	A           Value
+	a           Value
 	stack       *[]Value
 	stackOffset uint32
 
 	// Debug info for native functions to read
+	Global     *Program
 	IP         uint32
 	CS         *Func
 	Stacktrace []stacktrace
@@ -40,6 +40,8 @@ func (env *Env) grow(newSize int) {
 	*env.stack = s[:sz]
 }
 
+func (env *Env) A() *Value { return &env.a }
+
 // Get gets a value from the current stack
 func (env *Env) Get(index int) Value {
 	s := *env.stack
@@ -52,13 +54,13 @@ func (env *Env) Get(index int) Value {
 
 // Set sets a value in the current stack
 func (env *Env) Set(index int, value Value) {
-	env._set(uint16(index)&0xfff, value)
+	env._set(uint16(index)&0x7fff, value)
 }
 
 // Clear clears the current stack
 func (env *Env) Clear() {
 	*env.stack = (*env.stack)[:env.stackOffset]
-	env.A = Value{}
+	*env.A() = Value{}
 }
 
 // Push pushes a value into the current stack
@@ -82,7 +84,7 @@ func (env *Env) Size() int {
 
 func (env *Env) _get(yx uint16) Value {
 	if yx == regA {
-		return env.A
+		return *env.A()
 	}
 	if yx >= 1<<15 {
 		return (*env.Global.Stack)[yx&0x7fff]
@@ -92,7 +94,7 @@ func (env *Env) _get(yx uint16) Value {
 
 func (env *Env) _set(yx uint16, v Value) {
 	if yx == regA {
-		env.A = v
+		*env.A() = v
 	} else if yx >= 1<<15 {
 		(*env.Global.Stack)[yx&0x7fff] = v
 	} else {
@@ -115,7 +117,7 @@ func (env *Env) Deadline() (context.Context, func(), time.Time) {
 
 func (env *Env) String() string {
 	buf := bytes.NewBufferString("env(")
-	buf.WriteString(env.A.String())
+	buf.WriteString(env.A().String())
 	buf.WriteString(")")
 	return buf.String()
 }

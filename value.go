@@ -271,13 +271,13 @@ func Val(i interface{}) Value {
 				switch outs := rv.Call(ins); rt.NumOut() {
 				case 0:
 				case 1:
-					env.A = Val(outs[0].Interface())
+					*env.A() = Val(outs[0].Interface())
 				default:
 					a := make([]Value, len(outs))
 					for i := range outs {
 						a[i] = Val(outs[i].Interface())
 					}
-					env.A = Array(a...)
+					*env.A() = Array(a...)
 				}
 			}
 		}

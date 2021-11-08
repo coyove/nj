@@ -12,11 +12,11 @@ func init() {
 	script.AddGlobalValue("goquery", func(env *script.Env) {
 		doc, err := goquery.NewDocumentFromReader(strings.NewReader(env.Get(0).MustStr("")))
 		if err != nil {
-			env.A = script.Val(err)
+			*env.A() = script.Val(err)
 			return
 		}
 		r := qResult{doc.Find(env.Get(1).StringDefault(""))}
-		env.A = script.Val(r)
+		*env.A() = script.Val(r)
 	})
 }
 

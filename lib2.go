@@ -55,7 +55,7 @@ func init() {
 						if err != nil {
 							panic(err)
 						}
-						env.A = a
+						*env.A() = a
 					}, v.Func().DocString)
 				}
 				x.Set(k, v)
@@ -155,7 +155,7 @@ func init() {
 			for i := 1; i < env.Size(); i++ {
 				ma.Set(Int(int64(len(ma.items))), env.Get(i))
 			}
-			env.A = ma.Value()
+			*env.A() = ma.Value()
 		}, "$f({a}: array, ...args: value)", "\tappend values to array"),
 		Str("filter"), Native2("filter", func(env *Env, a, b Value) Value {
 			ma := a.MustTable("")
@@ -261,7 +261,7 @@ func init() {
 			from := env.Get(1).MustStr("old text")
 			to := env.Get(2).MustStr("new text")
 			n := env.Get(3).IntDefault(-1)
-			env.A = Str(strings.Replace(src, from, to, int(n)))
+			*env.A() = Str(strings.Replace(src, from, to, int(n)))
 		}, ""),
 		Str("match"), Native2("match", func(env *Env, pattern, str Value) Value {
 			m, err := filepath.Match(pattern.MustStr("pattern"), str.MustStr("text"))
@@ -316,7 +316,7 @@ func init() {
 		}, "$f({text}: string, cutset: string) string", "\tremove chars both ocurred in cutset and right-side of text"),
 		Str("decutf8"), Native("decutf8", func(env *Env) {
 			r, sz := utf8.DecodeRuneInString(env.Get(0).MustStr(""))
-			env.A = Array(Int(int64(r)), Int(int64(sz)))
+			*env.A() = Array(Int(int64(r)), Int(int64(sz)))
 		}, "$f({text}: string) array", "\tdecode first char in UTF-8 string, return { char_unicode, width_in_bytes }"),
 		Str("startswith"), Native2("startswith", func(env *Env, t, p Value) Value {
 			return Bool(strings.HasPrefix(t.MustStr(""), p.MustStr("")))
@@ -362,7 +362,7 @@ func init() {
 		Str("format"), Native("format", func(env *Env) {
 			buf := &bytes.Buffer{}
 			sprintf(env, buf)
-			env.A = Bytes(buf.Bytes())
+			*env.A() = Bytes(buf.Bytes())
 		}, "format({pattern}: string, ...args: value) string"),
 		Str("buffer"), Native1("buffer", func(env *Env, v Value) Value {
 			b := &bytes.Buffer{}
@@ -403,14 +403,14 @@ func init() {
 				af, ai, aIsInt := env.Get(0).MustNum("").Num()
 				bf, bi, bIsInt := env.Get(1).MustNum("").Num()
 				if aIsInt && bIsInt {
-					env.A = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
+					*env.A() = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
 				} else {
-					env.A = Float(rg.Float64()*(bf-af) + af)
+					*env.A() = Float(rg.Float64()*(bf-af) + af)
 				}
 			case 1:
-				env.A = Int(int64(rg.Intn(int(env.Get(0).MustNum("").Int()))))
+				*env.A() = Int(int64(rg.Intn(int(env.Get(0).MustNum("").Int()))))
 			default:
-				env.A = Float(rg.Float64())
+				*env.A() = Float(rg.Float64())
 			}
 		},
 			"$f() float", "\treturn [0, 1)",
@@ -432,33 +432,33 @@ func init() {
 		Str("abs"), Native("abs", func(env *Env) {
 			switch f, i, isInt := env.Get(0).MustNum("").Num(); {
 			case isInt && i < 0:
-				env.A = Int(-i)
+				*env.A() = Int(-i)
 			case isInt && i >= 0:
-				env.A = Int(i)
+				*env.A() = Int(i)
 			default:
-				env.A = Float(math.Abs(f))
+				*env.A() = Float(math.Abs(f))
 			}
 		}),
-		Str("remainder"), Native("remainder", func(env *Env) { env.A = Float(math.Remainder(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
-		Str("mod"), Native("mod", func(env *Env) { env.A = Float(math.Mod(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
-		Str("cos"), Native("cos", func(env *Env) { env.A = Float(math.Cos(env.Get(0).MustFloat(""))) }),
-		Str("sin"), Native("sin", func(env *Env) { env.A = Float(math.Sin(env.Get(0).MustFloat(""))) }),
-		Str("tan"), Native("tan", func(env *Env) { env.A = Float(math.Tan(env.Get(0).MustFloat(""))) }),
-		Str("acos"), Native("acos", func(env *Env) { env.A = Float(math.Acos(env.Get(0).MustFloat(""))) }),
-		Str("asin"), Native("asin", func(env *Env) { env.A = Float(math.Asin(env.Get(0).MustFloat(""))) }),
-		Str("atan"), Native("atan", func(env *Env) { env.A = Float(math.Atan(env.Get(0).MustFloat(""))) }),
-		Str("atan2"), Native("atan2", func(env *Env) { env.A = Float(math.Atan2(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
-		Str("ldexp"), Native("ldexp", func(env *Env) { env.A = Float(math.Ldexp(env.Get(0).MustFloat(""), int(env.Get(1).IntDefault(0)))) }),
+		Str("remainder"), Native("remainder", func(env *Env) { *env.A() = Float(math.Remainder(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
+		Str("mod"), Native("mod", func(env *Env) { *env.A() = Float(math.Mod(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
+		Str("cos"), Native("cos", func(env *Env) { *env.A() = Float(math.Cos(env.Get(0).MustFloat(""))) }),
+		Str("sin"), Native("sin", func(env *Env) { *env.A() = Float(math.Sin(env.Get(0).MustFloat(""))) }),
+		Str("tan"), Native("tan", func(env *Env) { *env.A() = Float(math.Tan(env.Get(0).MustFloat(""))) }),
+		Str("acos"), Native("acos", func(env *Env) { *env.A() = Float(math.Acos(env.Get(0).MustFloat(""))) }),
+		Str("asin"), Native("asin", func(env *Env) { *env.A() = Float(math.Asin(env.Get(0).MustFloat(""))) }),
+		Str("atan"), Native("atan", func(env *Env) { *env.A() = Float(math.Atan(env.Get(0).MustFloat(""))) }),
+		Str("atan2"), Native("atan2", func(env *Env) { *env.A() = Float(math.Atan2(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
+		Str("ldexp"), Native("ldexp", func(env *Env) { *env.A() = Float(math.Ldexp(env.Get(0).MustFloat(""), int(env.Get(1).IntDefault(0)))) }),
 		Str("modf"), Native("modf", func(env *Env) {
 			a, b := math.Modf(env.Get(0).MustFloat(""))
-			env.A = Array(Float(a), Float(b))
+			*env.A() = Array(Float(a), Float(b))
 		}),
 	)
 	AddGlobalValue("math", MathLib)
 
 	OSLib = MapAdd(OSLib,
 		Str("args"), ValRec(os.Args),
-		Str("environ"), Native("environ", func(env *Env) { env.A = ValRec(os.Environ()) }),
+		Str("environ"), Native("environ", func(env *Env) { *env.A() = ValRec(os.Environ()) }),
 		Str("shell"), Native2("shell", func(env *Env, cmd, opt Value) Value {
 			timeout := time.Duration(1 << 62) // basically forever
 			if tmp := opt.MaybeTableGetString("timeout"); tmp != Nil {
@@ -532,14 +532,14 @@ func mathMinMax(env *Env, msg string, max bool) {
 				i = x
 			}
 		}
-		env.A = Int(i)
+		*env.A() = Int(i)
 	} else {
 		for i := 1; i < len(env.Stack()); i++ {
 			if x, _, _ := env.Get(i).mustBe(typ.Number, msg, i+1).Num(); x >= f == max {
 				f = x
 			}
 		}
-		env.A = Float(f)
+		*env.A() = Float(f)
 	}
 }
 
