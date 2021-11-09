@@ -80,10 +80,9 @@ func init() {
 		Str("makearray"), Native1("makearray", func(env *Env, n Value) Value {
 			return Array(make([]Value, n.MustInt(""))...)
 		}, "$f(n: int) array", "\treturn a table array, preallocate space for n values"),
-		Str("clear"), Native1("clear", func(env *Env, m Value) Value {
-			m.MustTable("").Clear()
-			return Nil
-		}, "$f({t}: table)"),
+		Str("clear"), Native("clear", func(env *Env) { env.Get(0).MustTable("").Clear() }, "$f({t}: table)"),
+		Str("cleararray"), Native("cleararray", func(env *Env) { env.Get(0).MustTable("").ClearArray() }, "$f({t}: table)"),
+		Str("clearmap"), Native("clearmap", func(env *Env) { env.Get(0).MustTable("").ClearMap() }, "$f({t}: table)"),
 		Str("slice"), Native3("slice", func(env *Env, t, s, e Value) Value {
 			start, end := int(s.MustInt("")), int(e.MustInt(""))
 			return Array(t.MustTable("").items[start:end]...)
@@ -113,6 +112,10 @@ func init() {
 			v.MustTable("").SetParent(p.MustTable(""))
 			return Nil
 		}, "$f({t}: table, p: table)", "\tset table's parent"),
+		Str("setfirstparent"), Native2("setfirstparent", func(env *Env, v, p Value) Value {
+			v.MustTable("").SetFirstParent(p.MustTable(""))
+			return Nil
+		}, "$f({t}: table, p: table)", "\tinsert table's first parent"),
 		Str("arraylen"), Native1("arraylen", func(env *Env, v Value) Value {
 			return Int(int64(len(v.MustTable("").items)))
 		}, "$f({t}: array) int", "\treturn the true size of array (including trailing nils)"),
@@ -385,11 +388,6 @@ func init() {
 
 	AddGlobalValue("str", StringMethods)
 
-	var rg = struct {
-		sync.Mutex
-		*rand.Rand
-	}{Rand: rand.New(rand.NewSource(1))}
-
 	MathLib = MapAdd(MathLib,
 		Str("__name"), Str("mathlib"),
 		Str("INF"), Float(math.Inf(1)),
@@ -397,52 +395,45 @@ func init() {
 		Str("PI"), Float(math.Pi),
 		Str("E"), Float(math.E),
 		Str("randomseed"), Native("randomseed", func(env *Env) {
-			rg.Lock()
-			defer rg.Unlock()
-			rg.Rand.Seed(env.Get(0).IntDefault(1))
+			rand.Seed(env.Get(0).IntDefault(1))
 		}, "randomseed(seed: int)"),
 		Str("random"), Native("random", func(env *Env) {
-			rg.Lock()
-			defer rg.Unlock()
 			switch len(env.Stack()) {
 			case 2:
-				af, ai, aIsInt := env.Get(0).MustNum("").Num()
-				bf, bi, bIsInt := env.Get(1).MustNum("").Num()
-				if aIsInt && bIsInt {
-					env.A = Int(int64(rg.Intn(int(bi-ai+1))) + ai)
-				} else {
-					env.A = Float(rg.Float64()*(bf-af) + af)
-				}
+				ai := env.Get(0).MustInt("")
+				bi := env.Get(1).MustInt("")
+				env.A = Int(rand.Int63n(bi-ai+1) + ai)
 			case 1:
-				env.A = Int(int64(rg.Intn(int(env.Get(0).MustNum("").Int()))))
+				env.A = Int(rand.Int63n(env.Get(0).MustInt("")))
 			default:
-				env.A = Float(rg.Float64())
+				env.A = Float(rand.Float64())
 			}
 		},
 			"$f() float", "\treturn [0, 1)",
 			"$f(n: int) int", "\treturn [0, n)",
-			"$f(a: number, b: number) number", "\treturn [a, b]"),
+			"$f(a: int, b: int) int", "\treturn [a, b]"),
 		Str("sqrt"), Native1("sqrt", func(env *Env, v Value) Value { return Float(math.Sqrt(v.MustFloat(""))) }),
 		Str("floor"), Native1("floor", func(env *Env, v Value) Value { return Float(math.Floor(v.MustFloat(""))) }),
 		Str("ceil"), Native1("ceil", func(env *Env, v Value) Value { return Float(math.Ceil(v.MustFloat(""))) }),
 		Str("min"), Native("min", func(env *Env) { mathMinMax(env, "#%d arg", false) }, "$f(...a: number) number"),
 		Str("max"), Native("max", func(env *Env) { mathMinMax(env, "#%d arg", true) }, "$f(...a: number) number"),
 		Str("pow"), Native2("pow", func(env *Env, a, b Value) Value {
-			af, ai, aIsInt := a.MustNum("base").Num()
-			bf, bi, bIsInt := b.MustNum("power").Num()
-			if aIsInt && bIsInt {
-				return Int(ipow(ai, bi))
+			ai := a.MustNum("base")
+			bi := b.MustNum("power")
+			if ai.IsInt() {
+				return Int(ipow(ai.Int(), bi.Int()))
 			}
-			return Float(math.Pow(af, bf))
+			return Float(math.Pow(ai.Float(), bi.Float()))
 		}, "pow(a: number, b: number) number"),
 		Str("abs"), Native("abs", func(env *Env) {
-			switch f, i, isInt := env.Get(0).MustNum("").Num(); {
-			case isInt && i < 0:
-				env.A = Int(-i)
-			case isInt && i >= 0:
-				env.A = Int(i)
-			default:
-				env.A = Float(math.Abs(f))
+			if i := env.Get(0).MustNum(""); i.IsInt() {
+				if i := i.Int(); i < 0 {
+					env.A = Int(-i)
+				} else {
+					env.A = Int(i)
+				}
+			} else {
+				env.A = Float(math.Abs(i.Float()))
 			}
 		}),
 		Str("remainder"), Native("remainder", func(env *Env) { env.A = Float(math.Remainder(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
@@ -526,21 +517,23 @@ func mathMinMax(env *Env, msg string, max bool) {
 	if len(env.Stack()) <= 0 {
 		return
 	}
-	f, i, isInt := env.Get(0).mustBe(typ.Number, msg, 1).Num()
-	if isInt {
+	v := env.Get(0).mustBe(typ.Number, msg, 1)
+	if v.IsInt() {
+		vi := v.Int()
 		for ii := 1; ii < len(env.Stack()); ii++ {
-			if x := env.Get(ii).mustBe(typ.Number, msg, ii+1).Int(); x >= i == max {
-				i = x
+			if x := env.Get(ii).mustBe(typ.Number, msg, ii+1).Int(); x >= vi == max {
+				vi = x
 			}
 		}
-		env.A = Int(i)
+		env.A = Int(vi)
 	} else {
+		vf := v.Float()
 		for i := 1; i < len(env.Stack()); i++ {
-			if x, _, _ := env.Get(i).mustBe(typ.Number, msg, i+1).Num(); x >= f == max {
-				f = x
+			if x := env.Get(i).mustBe(typ.Number, msg, i+1).Float(); x >= vf == max {
+				vf = x
 			}
 		}
-		env.A = Float(f)
+		env.A = Float(vf)
 	}
 }
 
@@ -563,7 +556,6 @@ func sprintf(env *Env, p io.Writer) {
 	f := env.Get(0).MustStr("")
 	tmp := bytes.Buffer{}
 	popi := 0
-	pop := func() Value { popi++; return env.Get(popi) }
 	for len(f) > 0 {
 		idx := strings.Index(f, "%")
 		if idx == -1 {
@@ -591,6 +583,8 @@ func sprintf(env *Env, p io.Writer) {
 				expecting = typ.String + typ.Number
 			case 'v':
 				expecting = typ.Interface
+			case 't':
+				expecting = typ.Bool
 			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
 			default:
 				panicf("unexpected verb: '%c'", f[0])
@@ -598,30 +592,30 @@ func sprintf(env *Env, p io.Writer) {
 			tmp.WriteByte(f[0])
 			f = f[1:]
 		}
+
+		popi++
+		pop := env.Get(popi)
 		switch expecting {
+		case typ.Bool:
+			fmt.Fprint(p, !pop.IsFalse())
 		case typ.String:
-			fmt.Fprintf(p, tmp.String(), pop().String())
+			fmt.Fprintf(p, tmp.String(), pop.String())
 		case typ.Number:
-			f, i, isInt := pop().Num()
-			if isInt {
-				fmt.Fprintf(p, tmp.String(), i)
+			if pop.mustBe(typ.Number, "arg #%d", popi-1).IsInt() {
+				fmt.Fprintf(p, tmp.String(), pop.Int())
 			} else {
-				fmt.Fprintf(p, tmp.String(), f)
+				fmt.Fprintf(p, tmp.String(), pop.Float())
 			}
 		case typ.Number + typ.String:
-			v := pop()
-			if v.Type() == typ.String {
-				fmt.Fprintf(p, tmp.String(), v.Str())
+			if pop.Type() == typ.String {
+				fmt.Fprintf(p, tmp.String(), pop.Str())
+			} else if pop.mustBe(typ.Number, "arg #%d", popi-1).IsInt() {
+				fmt.Fprintf(p, tmp.String(), pop.Int())
 			} else {
-				f, i, isInt := pop().Num()
-				if isInt {
-					fmt.Fprintf(p, tmp.String(), i)
-				} else {
-					fmt.Fprintf(p, tmp.String(), f)
-				}
+				fmt.Fprintf(p, tmp.String(), pop.Float())
 			}
 		case typ.Interface:
-			fmt.Fprint(p, pop())
+			fmt.Fprint(p, pop.Interface())
 		}
 	}
 }

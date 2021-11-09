@@ -31,6 +31,9 @@ func (env *Env) grow(newSize int) {
 	s := *env.stack
 	sz := int(env.stackOffset) + newSize
 	if sz > cap(s) {
+		if env.Global != nil && env.Global.MaxStackSize > 0 && int64(sz) > env.Global.MaxStackSize {
+			panic("stack overflow")
+		}
 		old := s
 		s = make([]Value, sz+newSize)
 		copy(s, old)

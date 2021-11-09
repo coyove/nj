@@ -26,14 +26,13 @@ type Func struct {
 
 type Program struct {
 	Func
-	MaxCallStackSize int64
-	Stack            *[]Value
-	Functions        []*Func
-	Stdout           io.Writer
-	Stderr           io.Writer
-	Stdin            io.Reader
-	NilIndex         uint16
-	shadowTable      *symtable
+	MaxStackSize int64
+	Stack        *[]Value
+	Functions    []*Func
+	Stdout       io.Writer
+	Stderr       io.Writer
+	Stdin        io.Reader
+	shadowTable  *symtable
 }
 
 // Native creates a golang-Native function

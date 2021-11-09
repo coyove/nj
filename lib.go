@@ -490,25 +490,19 @@ var (
 			case typ.Number:
 				p := make([]byte, n.IntDefault(0))
 				rn, err := f.Read(p)
-				if rn > 0 {
+				if err == nil || rn > 0 {
 					return Bytes(p[:rn])
 				}
 				if err == io.EOF {
 					return Nil
 				}
 				panic(err)
-			case typ.Interface:
-				rn, err := f.Read(n.Interface().([]byte))
-				return Array(Int(int64(rn)), Val(err)) // return in Go style
 			default:
 				buf, err := ioutil.ReadAll(f)
 				panicErr(err)
 				return Bytes(buf)
 			}
-		},
-			"read() string", "\tread all bytes",
-			"read(n: int) string", "\tread n bytes",
-		),
+		}, "read() string", "\tread all bytes, return nil if EOF reached", "read(n: int) string", "\tread n bytes"),
 		Str("readbuf"), Native2("readbuf", func(e *Env, rx, n Value) Value {
 			rn, err := rx.Table().GetString("_f").Interface().(io.Reader).Read(n.Interface().([]byte))
 			return Array(Int(int64(rn)), Val(err)) // return in Go style

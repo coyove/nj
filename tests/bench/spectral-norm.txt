@@ -2,11 +2,11 @@ n = 0
 nCPU = 4
 
 function A(i, j)
-    return ((i+j)*(i+j+1)/2 + i + 1) 
+    return ((i+j)*(i+j+1)//2 + i + 1) 
 end
 
 function TimesVec(k, args)
-    local v, s, n, u = (lambda(args) args end)(args)
+    local v, s, n, u = args
     ul = len(u) 
     for i = int(s),int(n) do
         vi = 0 
@@ -18,7 +18,7 @@ function TimesVec(k, args)
 end
 
 function TimesTranspVec(k, args)
-    local v, s, n, u = (lambda(args) args end)(args)
+    local v, s, n, u = args
     ul = len(u) 
     for i = int(s),int(n) do
         vi = 0 

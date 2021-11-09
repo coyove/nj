@@ -48,12 +48,12 @@ func (m *Table) MapLen() int { return int(m.hashCount) }
 
 func (m *Table) ArrayLen() int { return int(m.count) }
 
-// Clear clears Map, where already allocated memory will be reused.
-func (m *Table) Clear() {
-	m.hashItems = m.hashItems[:0]
-	m.items = m.items[:0]
-	m.count, m.hashCount = 0, 0
-}
+// Clear clears the table, where already allocated memory will be reused.
+func (m *Table) Clear() { m.ClearArray(); m.ClearMap() }
+
+func (m *Table) ClearArray() { m.items = m.items[:0]; m.count = 0 }
+
+func (m *Table) ClearMap() { m.hashItems = m.hashItems[:0]; m.hashCount = 0 }
 
 func (m *Table) Parent() *Table { return m.parent }
 
@@ -414,37 +414,41 @@ type TableIO struct {
 }
 
 func (m TableIO) Read(p []byte) (int, error) {
-	if rb := m.Table.GetString("readbuf"); rb.Type() == typ.Func {
-		v, err := rb.Func().Call(Val(p))
-		if err != nil {
-			return 0, err
+	if m.Table != nil {
+		if rb := m.Table.GetString("readbuf"); rb.Type() == typ.Func {
+			v, err := rb.Func().Call(Val(p))
+			if err != nil {
+				return 0, err
+			}
+			t := v.MustTable("TableIO.Read: readbuf()")
+			n := t.Get(Int(0)).MustInt("TableIO.Read: (int, error)")
+			err, _ = t.Get(Int(1)).Interface().(error)
+			return int(n), err
 		}
-		t := v.MustTable("TableIO.Read: readbuf()")
-		n := t.Get(Int(0)).MustInt("TableIO.Read: (int, error)")
-		err, _ = t.Get(Int(1)).Interface().(error)
-		return int(n), err
-	}
-	if rb := m.Table.GetString("read"); rb.Type() == typ.Func {
-		v, err := rb.Func().Call(Int(int64(len(p))))
-		if err != nil {
-			return 0, err
+		if rb := m.Table.GetString("read"); rb.Type() == typ.Func {
+			v, err := rb.Func().Call(Int(int64(len(p))))
+			if err != nil {
+				return 0, err
+			}
+			s := v.MustStr("TableIO.Read: read()")
+			if len(s) == 0 {
+				return 0, io.EOF
+			}
+			return copy(p, s), nil
 		}
-		s := v.MustStr("TableIO.Read: read()")
-		if len(s) == 0 {
-			return 0, io.EOF
-		}
-		return copy(p, s), nil
 	}
 	return 0, fmt.Errorf("reader not implemented")
 }
 
 func (m TableIO) Write(p []byte) (int, error) {
-	if rb := m.Table.GetString("write"); rb.Type() == typ.Func {
-		v, err := rb.Func().Call(Bytes(p))
-		if err != nil {
-			return 0, err
+	if m.Table != nil {
+		if rb := m.Table.GetString("write"); rb.Type() == typ.Func {
+			v, err := rb.Func().Call(Bytes(p))
+			if err != nil {
+				return 0, err
+			}
+			return int(v.MustInt("TableIO.Write")), nil
 		}
-		return int(v.MustInt("TableIO.Write")), nil
 	}
 	return 0, fmt.Errorf("writer not implemented")
 }

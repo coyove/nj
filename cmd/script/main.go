@@ -22,6 +22,7 @@ var (
 	input     = flag.String("i", "f", "input source, 'f': file, '-': stdin, others: string")
 	version   = flag.Bool("v", false, "print version and usage")
 	timeout   = flag.Int("t", 0, "max execution time in ms")
+	stackSize = flag.Int("ss", 1e6, "max stack size (counted by 16 bytes)")
 	apiServer = flag.String("serve", "", "start as language playground")
 )
 
@@ -118,6 +119,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	b.MaxStackSize = int64(*stackSize)
 
 	if _compileonly {
 		return

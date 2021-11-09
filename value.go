@@ -18,15 +18,15 @@ import (
 )
 
 var (
-	baseMarker        = [80]byte{}
-	baseStart         = uintptr(unsafe.Pointer(&baseMarker[0]))
-	baseEnd           = uintptr(unsafe.Pointer(&baseMarker[0])) + uintptr(len(baseMarker))
-	int64Marker       = unsafe.Pointer(&baseMarker[int(typ.Number)])
-	float64Marker     = unsafe.Pointer(&baseMarker[int(typ.Number)+8])
-	trueMarker        = unsafe.Pointer(&baseMarker[int(typ.Bool)])
-	falseMarker       = unsafe.Pointer(&baseMarker[int(typ.Bool)+8])
-	smallStringMarker = unsafe.Pointer(&baseMarker[int(typ.String)])
-	int64Marker2      = uintptr(int64Marker) * 2
+	baseMarker     = [80]byte{}
+	baseStart      = uintptr(unsafe.Pointer(&baseMarker[0]))
+	baseEnd        = uintptr(unsafe.Pointer(&baseMarker[0])) + uintptr(len(baseMarker))
+	int64Marker    = unsafe.Pointer(&baseMarker[int(typ.Number)])
+	float64Marker  = unsafe.Pointer(&baseMarker[int(typ.Number)+8])
+	trueMarker     = unsafe.Pointer(&baseMarker[int(typ.Bool)])
+	falseMarker    = unsafe.Pointer(&baseMarker[int(typ.Bool)+8])
+	smallStrMarker = unsafe.Pointer(&baseMarker[int(typ.String)])
+	int64Marker2   = uintptr(int64Marker) * 2
 
 	Nil     = Value{}
 	Zero    = Int(0)
@@ -61,7 +61,6 @@ func (v Value) Type() typ.ValueType {
 }
 
 // IsFalse tests whether value contains a falsy value: nil, false, empty string or 0
-// Note that empty table and zero-length bytes are considered 'true'
 func (v Value) IsFalse() bool { return v.v == 0 || v.p == falseMarker }
 
 // IsInt tests whether value contains an integer (int64)
@@ -77,7 +76,8 @@ func Bool(v bool) Value {
 
 // Float returns a number value
 func Float(f float64) Value {
-	if float64(int64(f)) == f {
+	// if float64(int64(f)) == f {
+	if math.Floor(f) == f {
 		return Value{v: uint64(int64(f)), p: int64Marker}
 	}
 	return Value{v: math.Float64bits(f), p: float64Marker}
@@ -164,7 +164,7 @@ func Str(s string) Value {
 		copy(x[:], s)
 		return Value{
 			v: binary.BigEndian.Uint64(x[:]),
-			p: unsafe.Pointer(uintptr(smallStringMarker) + uintptr(len(s))*8),
+			p: unsafe.Pointer(uintptr(smallStrMarker) + uintptr(len(s))*8),
 		}
 	}
 	return Value{v: uint64(typ.String), p: unsafe.Pointer(&s)}
@@ -173,14 +173,14 @@ func Str(s string) Value {
 // Byte returns a one-byte string value
 func Byte(s byte) Value {
 	x := [8]byte{s}
-	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStringMarker) + 8)}
+	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStrMarker) + 8)}
 }
 
 // Rune returns a one-rune string value encoded in UTF-8
 func Rune(r rune) Value {
 	x := [8]byte{}
 	n := utf8.EncodeRune(x[:], r)
-	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStringMarker) + uintptr(n)*8)}
+	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStrMarker) + uintptr(n)*8)}
 }
 
 // Bytes returns a string value from bytes
@@ -197,8 +197,8 @@ func Val(i interface{}) Value {
 		return Bool(v)
 	case float64:
 		return Float(v)
-	case float32:
-		return Float(float64(v))
+	case int:
+		return Int(int64(v))
 	case int64:
 		return Int(v)
 	case string:
@@ -225,19 +225,13 @@ func Val(i interface{}) Value {
 			return Bool(v.Bool())
 		}
 		if v.IsArray() {
-			a := v.Array()
-			x := make([]Value, len(a))
-			for i, a := range a {
-				x[i] = Val(a)
-			}
+			x := make([]Value, 0, len(v.Raw)/10)
+			v.ForEach(func(k, v gjson.Result) bool { x = append(x, Val(v)); return true })
 			return Array(x...)
 		}
 		if v.IsObject() {
-			m := v.Map()
-			x := NewTable(len(m))
-			for k, v := range m {
-				x.Set(Str(k), Val(v))
-			}
+			x := NewTable(len(v.Raw) / 10)
+			v.ForEach(func(k, v gjson.Result) bool { x.Set(Val(k), Val(v)); return true })
 			return x.Value()
 		}
 		return Nil
@@ -254,34 +248,30 @@ func Val(i interface{}) Value {
 		nf, _ := i.(func(*Env))
 		if nf == nil {
 			rt := rv.Type()
-			rtNumIn := rt.NumIn()
 			nf = func(env *Env) {
-				getter := func(i int, t reflect.Type) reflect.Value {
-					return env.Get(i).ReflectValue(t)
-				}
+				rtNumIn := rt.NumIn()
 				ins := make([]reflect.Value, 0, rtNumIn)
 				if !rt.IsVariadic() {
 					for i := 0; i < rtNumIn; i++ {
-						ins = append(ins, getter(i, rt.In(i)))
+						ins = append(ins, env.Get(i).ReflectValue(rt.In(i)))
 					}
 				} else {
 					for i := 0; i < rtNumIn-1; i++ {
-						ins = append(ins, getter(i, rt.In(i)))
+						ins = append(ins, env.Get(i).ReflectValue(rt.In(i)))
 					}
 					for i := rtNumIn - 1; i < env.Size(); i++ {
-						ins = append(ins, getter(i, rt.In(rtNumIn-1).Elem()))
+						ins = append(ins, env.Get(i).ReflectValue(rt.In(rtNumIn-1).Elem()))
 					}
 				}
-				switch outs := rv.Call(ins); rt.NumOut() {
-				case 0:
-				case 1:
+				if outs := rv.Call(ins); len(outs) == 0 {
+				} else if len(outs) == 1 {
 					env.A = Val(outs[0].Interface())
-				default:
-					a := make([]Value, len(outs))
+				} else {
+					x := make([]Value, len(outs))
 					for i := range outs {
-						a[i] = Val(outs[i].Interface())
+						x[i] = Val(outs[i].Interface())
 					}
-					env.A = Array(a...)
+					env.A = Array(x...)
 				}
 			}
 		}
@@ -291,12 +281,10 @@ func Val(i interface{}) Value {
 }
 
 func ValRec(v interface{}) Value {
-	rv := reflect.ValueOf(v)
-	switch rv.Kind() {
+	switch rv := reflect.ValueOf(v); rv.Kind() {
 	case reflect.Map:
 		m := NewTable(rv.Len() + 1)
-		iter := rv.MapRange()
-		for iter.Next() {
+		for iter := rv.MapRange(); iter.Next(); {
 			m.Set(ValRec(iter.Key()), Val(iter.Value()))
 		}
 		return m.Value()
@@ -316,26 +304,17 @@ func _interface(i interface{}) Value {
 }
 
 func (v Value) IsSmallString() bool {
-	return uintptr(v.p) >= uintptr(smallStringMarker) && uintptr(v.p) <= uintptr(smallStringMarker)+8*8
+	return uintptr(v.p) >= uintptr(smallStrMarker) && uintptr(v.p) <= uintptr(smallStrMarker)+8*8
 }
 
 func (v Value) Str() string {
 	if v.IsSmallString() {
 		buf := make([]byte, 8)
 		binary.BigEndian.PutUint64(buf, v.v)
-		buf = buf[:(uintptr(v.p)-uintptr(smallStringMarker))/8]
+		buf = buf[:(uintptr(v.p)-uintptr(smallStrMarker))/8]
 		return *(*string)(unsafe.Pointer(&buf))
 	}
 	return *(*string)(v.p)
-}
-
-// When isInt == true, use Int, otherwise Float
-func (v Value) Num() (Float float64, Int int64, isInt bool) {
-	if v.p == int64Marker {
-		return float64(int64(v.v)), int64(v.v), true
-	}
-	x := math.Float64frombits(v.v)
-	return x, int64(x), false
 }
 
 func (v Value) Int() int64 {
@@ -365,11 +344,10 @@ func (v Value) Interface() interface{} {
 	case typ.Bool:
 		return v.Bool()
 	case typ.Number:
-		vf, vi, vIsInt := v.Num()
-		if vIsInt {
-			return vi
+		if v.IsInt() {
+			return v.Int()
 		}
-		return vf
+		return v.Float()
 	case typ.String:
 		return v.Str()
 	case typ.Table:
@@ -530,10 +508,10 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 	case typ.Bool:
 		p.WriteString(strconv.FormatBool(v.Bool()))
 	case typ.Number:
-		if vf, vi, vIsInt := v.Num(); vIsInt {
-			p.WriteString(strconv.FormatInt(vi, 10))
+		if v.IsInt() {
+			p.WriteString(strconv.FormatInt(v.Int(), 10))
 		} else {
-			p.WriteString(strconv.FormatFloat(vf, 'f', -1, 64))
+			p.WriteString(strconv.FormatFloat(v.Float(), 'f', -1, 64))
 		}
 	case typ.String:
 		p.WriteString(ifquote(j, v.Str()))
@@ -607,7 +585,7 @@ func (v Value) Reader() io.Reader {
 	case typ.Table:
 		return TableIO{v.Table()}
 	}
-	return wrongIO{}
+	return TableIO{}
 }
 
 func (v Value) Writer() io.Writer {
@@ -624,11 +602,5 @@ func (v Value) Writer() io.Writer {
 	case typ.Table:
 		return TableIO{v.Table()}
 	}
-	return wrongIO{}
+	return TableIO{}
 }
-
-type wrongIO struct{}
-
-func (m wrongIO) Read(p []byte) (int, error) { return 0, fmt.Errorf("reader not implemented") }
-
-func (m wrongIO) Write(p []byte) (int, error) { return 0, fmt.Errorf("writer not implemented") }

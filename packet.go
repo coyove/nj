@@ -129,9 +129,6 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 
 		suffix := ""
 		if rValue {
-			if a&regLocalMask == p.NilIndex {
-				return "nil"
-			}
 			if a > regLocalMask || toplevel {
 				switch v := (*p.Stack)[a&regLocalMask]; v.Type() {
 				case typ.Number, typ.Bool, typ.String:

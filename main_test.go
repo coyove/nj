@@ -656,3 +656,21 @@ func TestHashcodeDist(t *testing.T) {
 	}
 	t.Log(slots)
 }
+
+func BenchmarkFloat64(b *testing.B) {
+	x := ([]float64{1.1})[0]
+	for i := 0; i < b.N; i++ {
+		if float64(int64(x)) == x {
+			b.Fatal(x)
+		}
+	}
+}
+
+func BenchmarkFloat64_2(b *testing.B) {
+	x := ([]float64{1.1})[0]
+	for i := 0; i < b.N; i++ {
+		if math.Floor(x) == x {
+			b.Fatal(x)
+		}
+	}
+}

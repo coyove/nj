@@ -389,8 +389,14 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	defer parser.CatchError(&err)
 
 	table := newsymtable(opt)
+	table.collectConstMode = true
 	shadowTable := &symtable{sym: table.sym, constMap: table.constMap}
 	coreStack := &Env{stack: new([]Value)}
+
+	// Load nil first so it will be at the top
+	table.loadK(nil)
+	coreStack.Push(Nil)
+
 	push := func(k string, v Value) {
 		table.put(k, uint16(coreStack.Size()))
 		coreStack.Push(v)
@@ -412,8 +418,6 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	table.vp = uint16(coreStack.Size())
 
 	// Find and fill consts
-	table.collectConstMode = true
-	table.loadK(nil)
 	table.loadK(true)
 	table.loadK(false)
 	table.collectConsts(n)
@@ -435,7 +439,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		case bool:
 			coreStack.Set(int(stackPos), Bool(k))
 		case nil:
-			coreStack.Set(int(stackPos), Value{})
+			coreStack.Set(int(stackPos), Nil)
 		default:
 			panic("DEBUG")
 		}
@@ -454,7 +458,6 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	for _, f := range cls.Functions {
 		f.LoadGlobal = cls
 	}
-	cls.NilIndex = table.loadK(nil)
 	cls.shadowTable = shadowTable
 	cls.LoadGlobal = cls
 	return cls, err

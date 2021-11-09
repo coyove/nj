@@ -39,7 +39,7 @@ func WebREPLHandler(opt *CompileOptions, cb func(*Program)) func(w http.Response
 				p.EmergStop()
 			}
 		}()
-		p.MaxCallStackSize = 100
+		p.MaxStackSize = 100
 		p.Stdout = bufOut
 		p.Stderr = bufOut
 		if cb != nil {

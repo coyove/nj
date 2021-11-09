@@ -384,10 +384,6 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 					retStack = append(retStack, last)
 				}
 
-				if env.Global.MaxCallStackSize > 0 && int64(len(retStack)) > env.Global.MaxCallStackSize {
-					panicf("call stack overflow, max: %d", env.Global.MaxCallStackSize)
-				}
-
 				stackEnv.stackOffset = uint32(len(*env.stack))
 			}
 		case typ.OpJmp:
