@@ -50,8 +50,8 @@ func RemoveGlobalValue(k string) {
 func init() {
 	AddGlobalValue("VERSION", Int(Version))
 	AddGlobalValue("globals", func(env *Env) {
-		r := NewTable(len(env.Global.Func.Locals))
-		for i, name := range env.Global.Func.Locals {
+		r := NewTable(len(env.Global.Top.Locals))
+		for i, name := range env.Global.Top.Locals {
 			r.Set(Str(name), (*env.Global.Stack)[i])
 		}
 		env.A = r.Value()
@@ -113,8 +113,8 @@ func init() {
 			panic(wrap(err))
 		}
 		if !g.MaybeTableGetString("returnglobals").IsFalse() {
-			r := NewTable(len(p.Locals))
-			for i, name := range p.Locals {
+			r := NewTable(len(p.Top.Locals))
+			for i, name := range p.Top.Locals {
 				r.Set(Str(name), (*p.Stack)[i])
 			}
 			return r.Value()
@@ -157,7 +157,7 @@ func init() {
 		}, "$f() array", "\treturn { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
 		Str("globals"), Native("globals", func(env *Env) {
 			var r []Value
-			for i, name := range env.Global.Func.Locals {
+			for i, name := range env.Global.Top.Locals {
 				r = append(r, Int(int64(i)), Str(name), (*env.Global.Stack)[i])
 			}
 			env.A = Array(r...)

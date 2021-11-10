@@ -25,14 +25,14 @@ type Func struct {
 }
 
 type Program struct {
-	Func
+	Top          *Func
+	Symbols      map[string]*symbol
 	MaxStackSize int64
 	Stack        *[]Value
 	Functions    []*Func
 	Stdout       io.Writer
 	Stderr       io.Writer
 	Stdin        io.Reader
-	shadowTable  *symtable
 }
 
 // Native creates a golang-Native function
@@ -62,8 +62,6 @@ func Native3(name string, f func(*Env, Value, Value, Value) Value, doc ...string
 func Native4(name string, f func(*Env, Value, Value, Value, Value) Value, doc ...string) Value {
 	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1), env.Get(2), env.Get(3)) }, doc...)
 }
-
-func (c *Func) IsNative() bool { return c.Native != nil }
 
 func (c *Func) Value() Value { return Value{v: uint64(typ.Func), p: unsafe.Pointer(c)} }
 
@@ -101,21 +99,17 @@ func (c *Func) PrettyCode() string {
 }
 
 func (p *Program) Run() (v1 Value, err error) {
-	return p.Call()
-}
-
-func (p *Program) Call() (v1 Value, err error) {
 	defer parser.CatchError(&err)
 	newEnv := Env{
 		Global: p,
 		stack:  p.Stack,
 	}
-	v1 = internalExecCursorLoop(newEnv, &p.Func, 0)
+	v1 = internalExecCursorLoop(newEnv, p.Top, 0)
 	return
 }
 
 func (p *Program) EmergStop() {
-	p.Func.EmergStop()
+	p.Top.EmergStop()
 	for _, f := range p.Functions {
 		f.EmergStop()
 	}
@@ -169,17 +163,25 @@ func (c *Func) Call(args ...Value) (v1 Value, err error) {
 
 func (f *Func) Pure() *Func { f.Receiver = Nil; return f }
 
-func (p *Program) PrettyCode() string { return pkPrettify(&p.Func, p, true) }
+func (p *Program) PrettyCode() string { return pkPrettify(p.Top, p, true) }
 
 func (p *Program) Get(k string) (v Value, err error) {
 	defer parser.CatchError(&err)
-	return (*p.Stack)[int(p.shadowTable.mustGetSymbol(k))], nil
+	return (*p.Stack)[int(p.mustGetSymbol(k))], nil
 }
 
 func (p *Program) Set(k string, v Value) (err error) {
 	defer parser.CatchError(&err)
-	(*p.Stack)[int(p.shadowTable.mustGetSymbol(k))] = v
+	(*p.Stack)[int(p.mustGetSymbol(k))] = v
 	return nil
+}
+
+func (p *Program) mustGetSymbol(name string) uint16 {
+	addr := p.Symbols[name]
+	if addr == nil {
+		panicf("%q not found", name)
+	}
+	return addr.addr
 }
 
 func fixDocString(in, name, arg string) string {

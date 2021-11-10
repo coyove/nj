@@ -50,7 +50,8 @@ func runFile(t *testing.T, path string) {
 				}
 			},
 			"findGlobal": func(env *Env) {
-				v, _ := env.Global.Get("G_FLAG")
+				v, err := env.Global.Get("G_FLAG")
+				fmt.Println(err)
 				if v.IsFalse() {
 					panic("findGlobal failed")
 				}
@@ -64,10 +65,10 @@ func runFile(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 
-	log.Println(b.PrettyCode())
-	log.Println(b.shadowTable)
+	// log.Println(b.PrettyCode())
+	// log.Println(b.Symbols)
 
-	_, err = b.Call()
+	_, err = b.Run()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +101,7 @@ return a
 end
 return foo
 `, &CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
-		v, _ := cls.Call()
+		v, _ := cls.Run()
 		if v, _ := v.Func().Call(Int(10)); v.Int() != 11 {
 			t.Fatal(v)
 		}
@@ -121,7 +122,7 @@ return a
 end
 return foo
 `, nil)
-		v, _ := cls.Call()
+		v, _ := cls.Run()
 		if v, _ := v.Func().Call(Array(Int(1), Int(2), Int(3), Int(4))); v.Int() != 11 {
 			t.Fatal(v)
 		}
@@ -151,7 +152,7 @@ foo()
 		t.Fatal(s)
 	}
 
-	_, err = cls.Call()
+	_, err = cls.Run()
 	if err == nil {
 		t.FailNow()
 	}
@@ -168,7 +169,7 @@ func TestArithmeticUnfold(t *testing.T) {
 		t.Error(err)
 	}
 
-	if v, _ := cls.Call(); v.Float() != 2.5 {
+	if v, _ := cls.Run(); v.Float() != 2.5 {
 		t.Error("exec failed")
 	}
 }
@@ -195,7 +196,7 @@ func TestRegisterOptimzation(t *testing.T) {
 	// But after the if block, there is another c = a + b, we can't re-use the registers R0 and R1
 	// because they will not contain the value we want as the if block was not executed at all.
 
-	if n, _ := cls.Call(); n.Int() != 3 {
+	if n, _ := cls.Run(); n.Int() != 3 {
 		t.Error("exec failed:", n, cls)
 	}
 }
@@ -209,7 +210,7 @@ a = 0
 		t.Error(err)
 	}
 
-	if v, _ := cls.Call(); !math.IsNaN(v.Float()) {
+	if v, _ := cls.Run(); !math.IsNaN(v.Float()) {
 		t.Error("wrong answer")
 	}
 }
@@ -302,7 +303,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	f, _ := LoadString(makeCode(n), nil)
-	v2, err := f.Call()
+	v2, err := f.Run()
 	if err != nil {
 		t.Fatal(err)
 	}

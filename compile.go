@@ -141,14 +141,6 @@ func (table *symtable) freeAddr(a interface{}) {
 	}
 }
 
-func (table *symtable) mustGetSymbol(name string) uint16 {
-	addr := table.get(name)
-	if addr == table.loadK(nil) {
-		panicf("%q not found", name)
-	}
-	return addr
-}
-
 func (table *symtable) get(varname string) uint16 {
 	depth := uint16(0)
 	regNil := table.loadK(nil)
@@ -390,7 +382,6 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 
 	table := newsymtable(opt)
 	table.collectConstMode = true
-	shadowTable := &symtable{sym: table.sym, constMap: table.constMap}
 	coreStack := &Env{stack: new([]Value)}
 
 	// Load nil first so it will be at the top
@@ -445,12 +436,14 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		}
 	}
 
-	cls = &Program{}
-	cls.Name = "main"
-	cls.Code = table.code
-	cls.StackSize = table.vp
+	cls = &Program{Top: &Func{}}
+	cls.Top.Name = "main"
+	cls.Top.Code = table.code
+	cls.Top.StackSize = table.vp
+	cls.Top.Locals = table.symbolsToDebugLocals()
+	cls.Top.LoadGlobal = cls
 	cls.Stack = coreStack.stack
-	cls.Locals = table.symbolsToDebugLocals()
+	cls.Symbols = table.sym
 	cls.Functions = table.funcs
 	cls.Stdout = os.Stdout
 	cls.Stdin = os.Stdin
@@ -458,8 +451,6 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	for _, f := range cls.Functions {
 		f.LoadGlobal = cls
 	}
-	cls.shadowTable = shadowTable
-	cls.LoadGlobal = cls
 	return cls, err
 }
 

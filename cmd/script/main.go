@@ -137,7 +137,7 @@ func main() {
 		}()
 	}
 
-	i, err := b.Call()
+	i, err := b.Run()
 	finished = true
 	if _ret {
 		fmt.Print(i)
