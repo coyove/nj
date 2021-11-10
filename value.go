@@ -111,29 +111,11 @@ func Array(m ...Value) Value {
 	return x.Value()
 }
 
-// ArrayVal creates an array consists of given arguments
-func ArrayVal(v ...interface{}) Value {
-	m := make([]Value, len(v))
-	for i := range v {
-		m[i] = Val(v[i])
-	}
-	return Array(m...)
-}
-
 // Map creates a map from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
 func Map(kvs ...Value) Value {
 	t := NewTable(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		t.Set(kvs[i], kvs[i+1])
-	}
-	return Value{v: uint64(typ.Table), p: unsafe.Pointer(t)}
-}
-
-// MapVal creates a map from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
-func MapVal(kvs ...interface{}) Value {
-	t := NewTable(len(kvs) / 2)
-	for i := 0; i < len(kvs)/2*2; i += 2 {
-		t.Set(Val(kvs[i]), Val(kvs[i+1]))
 	}
 	return Value{v: uint64(typ.Table), p: unsafe.Pointer(t)}
 }

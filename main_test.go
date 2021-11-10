@@ -554,7 +554,7 @@ func TestACall(t *testing.T) {
 	}
 
 	foo = MustRun(LoadString(`function foo(m...)
-	return sum(table:concat(m, m)...) + sum2(m...)
+	return sum(table:concat(m, m)...) + sum2(table:slice(m, 0, 2)...)
     end
     return foo`, &CompileOptions{
 		GlobalKeyValues: map[string]interface{}{
