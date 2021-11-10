@@ -18,9 +18,20 @@ import (
 )
 
 var (
-	baseMarker     = [80]byte{}
-	baseStart      = uintptr(unsafe.Pointer(&baseMarker[0]))
-	baseEnd        = uintptr(unsafe.Pointer(&baseMarker[0])) + uintptr(len(baseMarker))
+	baseMarker = func() []byte {
+		// Ensures baseMarker is at least 256 bytes long and its memory aligns with 256 bytes
+		b := make([]byte, 512)
+		for i := range b {
+			if byte(uintptr(unsafe.Pointer(&b[i]))) == 0 {
+				return b[i:]
+			}
+		}
+		panic("memory")
+	}()
+	baseStart  = uintptr(unsafe.Pointer(&baseMarker[0]))
+	baseLength = uintptr(len(baseMarker))
+	// baseEnd        = uintptr(unsafe.Pointer(&baseMarker[0])) + baseLength
+
 	int64Marker    = unsafe.Pointer(&baseMarker[int(typ.Number)])
 	float64Marker  = unsafe.Pointer(&baseMarker[int(typ.Number)+8])
 	trueMarker     = unsafe.Pointer(&baseMarker[int(typ.Bool)])
@@ -36,7 +47,7 @@ var (
 )
 
 const (
-	ValueSize = int64(unsafe.Sizeof(Value{}))
+	ValueSize = unsafe.Sizeof(Value{})
 
 	errNeedNumber           = "operator requires number, got %v"
 	errNeedNumbers          = "operator requires numbers, got %v and %v"
@@ -52,21 +63,22 @@ type Value struct {
 // Reverse-reference in 'parser' package
 func (v Value) IsValue(parser.Node) {}
 
-// Type returns the type of value, its logic should align IsFalse()
+// Type returns the type of value
 func (v Value) Type() typ.ValueType {
-	if uintptr(v.p) >= baseStart && uintptr(v.p) < baseEnd {
+	if uintptr(v.p)^baseStart < baseLength {
+		// if uintptr(v.p) >= baseStart && uintptr(v.p) < baseEnd {
 		return typ.ValueType(uintptr(v.p) & 7)
 	}
 	return typ.ValueType(v.v)
 }
 
-// IsFalse tests whether value contains a falsy value: nil, false, empty string or 0
+// IsFalse tests whether value is falsy: nil, false, empty string or 0
 func (v Value) IsFalse() bool { return v.v == 0 || v.p == falseMarker }
 
-// IsInt tests whether value contains an integer (int64)
+// IsInt tests whether value is an integer number
 func (v Value) IsInt() bool { return v.p == int64Marker }
 
-// Bool returns a boolean value
+// Bool creates a boolean value
 func Bool(v bool) Value {
 	if v {
 		return Value{uint64(typ.Bool), trueMarker}
@@ -74,21 +86,21 @@ func Bool(v bool) Value {
 	return Value{uint64(typ.Bool), falseMarker}
 }
 
-// Float returns a number value
+// Float creates a number value
 func Float(f float64) Value {
-	// if float64(int64(f)) == f {
-	if math.Floor(f) == f {
+	if float64(int64(f)) == f {
+		// if math.Floor(f) == f {
 		return Value{v: uint64(int64(f)), p: int64Marker}
 	}
 	return Value{v: math.Float64bits(f), p: float64Marker}
 }
 
-// Int returns a number value
+// Int creates a number value
 func Int(i int64) Value {
 	return Value{v: uint64(i), p: int64Marker}
 }
 
-// Array returns an array consists of 'm'
+// Array creates an array consists of given arguments
 func Array(m ...Value) Value {
 	x := &Table{items: m}
 	for _, i := range x.items {
@@ -99,6 +111,7 @@ func Array(m ...Value) Value {
 	return x.Value()
 }
 
+// ArrayVal creates an array consists of given arguments
 func ArrayVal(v ...interface{}) Value {
 	m := make([]Value, len(v))
 	for i := range v {
@@ -107,7 +120,7 @@ func ArrayVal(v ...interface{}) Value {
 	return Array(m...)
 }
 
-// Map returns a map, kvs should be laid out as: key1, value1, key2, value2, ...
+// Map creates a map from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
 func Map(kvs ...Value) Value {
 	t := NewTable(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
@@ -116,7 +129,7 @@ func Map(kvs ...Value) Value {
 	return Value{v: uint64(typ.Table), p: unsafe.Pointer(t)}
 }
 
-// MapVal returns a map, kvs should be laid out as: key1, value1, key2, value2, ...
+// MapVal creates a map from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
 func MapVal(kvs ...interface{}) Value {
 	t := NewTable(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
@@ -125,39 +138,35 @@ func MapVal(kvs ...interface{}) Value {
 	return Value{v: uint64(typ.Table), p: unsafe.Pointer(t)}
 }
 
-// MapAdd adds key-value pairs into an existing table if any
-func MapAdd(old Value, kvs ...Value) Value {
-	if old.Type() == typ.Table {
-		t := old.Table()
-		t.resizeHash(t.Len()*2 + len(kvs))
-		for i := 0; i < len(kvs)/2*2; i += 2 {
-			t.Set(kvs[i], kvs[i+1])
-		}
-		return t.Value()
+// TableMerge merges key-value pairs from `src` and `kvs` into `dst`
+func TableMerge(dst Value, src Value, kvs ...Value) Value {
+	var t *Table
+	switch dst.Type() {
+	case typ.Table:
+		t = dst.Table()
+	case typ.Nil:
+		t = NewTable(1)
+	default:
+		return dst
 	}
-	return Map(kvs...)
+	if src.Type() == typ.Table {
+		t.resizeHash((t.Len() + src.Table().Len() + len(kvs)) * 2)
+		src.Table().Foreach(func(k, v Value) bool { t.Set(k, v); return true })
+	}
+	for i := 0; i < len(kvs)/2*2; i += 2 {
+		t.Set(kvs[i], kvs[i+1])
+	}
+	return t.Value()
 }
 
-func MapMerge(to Value, from Value, kvs ...Value) Value {
-	if to.Type() == typ.Table && from.Type() == typ.Table {
-		t := to.Table()
-		t.resizeHash((t.Len() + from.Table().Len() + len(kvs)) * 2)
-		from.Table().Foreach(func(k, v Value) bool { t.Set(k, v); return true })
-		for i := 0; i < len(kvs)/2*2; i += 2 {
-			t.Set(kvs[i], kvs[i+1])
-		}
-	}
-	return to
-}
-
-// TableProto returns a table whose parent will be set to p
+// TableProto creates a table whose parent will be set to p
 func TableProto(p *Table, kvs ...Value) Value {
 	m := Map(kvs...)
 	m.Table().SetParent(p)
 	return m
 }
 
-// Str returns a string value
+// Str creates a string value
 func Str(s string) Value {
 	if len(s) <= 8 { // payload 7b
 		x := [8]byte{byte(len(s))}
@@ -170,25 +179,24 @@ func Str(s string) Value {
 	return Value{v: uint64(typ.String), p: unsafe.Pointer(&s)}
 }
 
-// Byte returns a one-byte string value
+// Byte creates a one-byte string value
 func Byte(s byte) Value {
 	x := [8]byte{s}
 	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStrMarker) + 8)}
 }
 
-// Rune returns a one-rune string value encoded in UTF-8
+// Rune creates a one-rune string value encoded in UTF-8
 func Rune(r rune) Value {
 	x := [8]byte{}
 	n := utf8.EncodeRune(x[:], r)
 	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStrMarker) + uintptr(n)*8)}
 }
 
-// Bytes returns a string value from bytes
+// Bytes creates a string value from bytes
 func Bytes(b []byte) Value { return Str(*(*string)(unsafe.Pointer(&b))) }
 
-// Val creates a Value from golang interface{}
-// []Type, [..]Type and map[Type]Type will be left as is (except []Value),
-// to convert them recursively, use ValRec instead
+// Val creates a `Value` from golang `interface{}`
+// `slice`, `array` and `map` will be left as is (except []Value), to convert them recursively, use ValRec instead
 func Val(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
@@ -216,20 +224,17 @@ func Val(i interface{}) Value {
 	case reflect.Value:
 		return Val(v.Interface())
 	case gjson.Result:
-		switch v.Type {
-		case gjson.String:
+		if v.Type == gjson.String {
 			return Str(v.Str)
-		case gjson.Number:
+		} else if v.Type == gjson.Number {
 			return Float(v.Float())
-		case gjson.True, gjson.False:
+		} else if v.Type == gjson.True || v.Type == gjson.False {
 			return Bool(v.Bool())
-		}
-		if v.IsArray() {
+		} else if v.IsArray() {
 			x := make([]Value, 0, len(v.Raw)/10)
 			v.ForEach(func(k, v gjson.Result) bool { x = append(x, Val(v)); return true })
 			return Array(x...)
-		}
-		if v.IsObject() {
+		} else if v.IsObject() {
 			x := NewTable(len(v.Raw) / 10)
 			v.ForEach(func(k, v gjson.Result) bool { x.Set(Val(k), Val(v)); return true })
 			return x.Value()
@@ -252,10 +257,16 @@ func Val(i interface{}) Value {
 				rtNumIn := rt.NumIn()
 				ins := make([]reflect.Value, 0, rtNumIn)
 				if !rt.IsVariadic() {
+					if env.Size() != rtNumIn {
+						panicf("call native function, expect %d arguments, got %d", rtNumIn, env.Size())
+					}
 					for i := 0; i < rtNumIn; i++ {
 						ins = append(ins, env.Get(i).ReflectValue(rt.In(i)))
 					}
 				} else {
+					if env.Size() < rtNumIn-1 {
+						panicf("call native variadic function, expect at least %d arguments, got %d", rtNumIn-1, env.Size())
+					}
 					for i := 0; i < rtNumIn-1; i++ {
 						ins = append(ins, env.Get(i).ReflectValue(rt.In(i)))
 					}
@@ -267,17 +278,13 @@ func Val(i interface{}) Value {
 				} else if len(outs) == 1 {
 					env.A = Val(outs[0].Interface())
 				} else {
-					x := make([]Value, len(outs))
-					for i := range outs {
-						x[i] = Val(outs[i].Interface())
-					}
-					env.A = Array(x...)
+					env.A = Array(valReflectValues(outs)...)
 				}
 			}
 		}
-		return (&Func{Name: "<native>", Native: nf}).Value()
+		return (&Func{Name: "<val.native>", Native: nf}).Value()
 	}
-	return _interface(i)
+	return intf(i)
 }
 
 func ValRec(v interface{}) Value {
@@ -294,21 +301,28 @@ func ValRec(v interface{}) Value {
 			a[i] = ValRec(rv.Index(i))
 		}
 		return Array(a...)
-	default:
-		return Val(v)
 	}
+	return Val(v)
 }
 
-func _interface(i interface{}) Value {
+func valReflectValues(args []reflect.Value) (a []Value) {
+	for i := range args {
+		a = append(a, Val(args[i].Interface()))
+	}
+	return
+}
+
+func intf(i interface{}) Value {
 	return Value{v: uint64(typ.Interface), p: unsafe.Pointer(&i)}
 }
 
-func (v Value) IsSmallString() bool {
+func (v Value) isSmallString() bool {
 	return uintptr(v.p) >= uintptr(smallStrMarker) && uintptr(v.p) <= uintptr(smallStrMarker)+8*8
 }
 
+// Str returns value as a string without checking Type()
 func (v Value) Str() string {
-	if v.IsSmallString() {
+	if v.isSmallString() {
 		buf := make([]byte, 8)
 		binary.BigEndian.PutUint64(buf, v.v)
 		buf = buf[:(uintptr(v.p)-uintptr(smallStrMarker))/8]
@@ -317,6 +331,7 @@ func (v Value) Str() string {
 	return *(*string)(v.p)
 }
 
+// Int returns value as an int without checking Type()
 func (v Value) Int() int64 {
 	if v.p == int64Marker {
 		return int64(v.v)
@@ -324,6 +339,7 @@ func (v Value) Int() int64 {
 	return int64(math.Float64frombits(v.v))
 }
 
+// Float returns value as a float without checking Type()
 func (v Value) Float() float64 {
 	if v.p == int64Marker {
 		return float64(int64(v.v))
@@ -331,14 +347,16 @@ func (v Value) Float() float64 {
 	return math.Float64frombits(v.v)
 }
 
+// Bool returns value as a boolean without checking Type()
 func (v Value) Bool() bool { return v.p == trueMarker }
 
+// Table returns value as a table without checking Type()
 func (v Value) Table() *Table { return (*Table)(v.p) }
 
-// Func cast value to function
+// Func returns value as a function without checking Type()
 func (v Value) Func() *Func { return (*Func)(v.p) }
 
-// Interface returns the interface{} representation of Value
+// Interface returns value as an interface{}
 func (v Value) Interface() interface{} {
 	switch v.Type() {
 	case typ.Bool:
@@ -360,38 +378,26 @@ func (v Value) Interface() interface{} {
 	return nil
 }
 
-func (v Value) puintptr() uintptr { return uintptr(v.p) }
+func (v Value) ptr() uintptr { return uintptr(v.p) }
 
-func (v Value) unsafeint() int64 { return int64(v.v) }
+func (v Value) unsafeInt() int64 { return int64(v.v) }
 
-// ReflectValue returns reflect.Value based on reflect.Type
+// ReflectValue returns value as a reflect.Value based on reflect.Type
 func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	if t == nil {
 		return reflect.ValueOf(v.Interface())
-	}
-	if t == reflect.TypeOf(Value{}) {
+	} else if t == reflect.TypeOf(Value{}) {
 		return reflect.ValueOf(v)
-	}
-	vt := v.Type()
-	if vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
+	} else if vt := v.Type(); vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
 		return reflect.Zero(t)
-	}
-	if vt == typ.Func && t.Kind() == reflect.Func {
+	} else if vt == typ.Func && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
-			in := make([]Value, len(args))
-			for i := range in {
-				in[i] = Val(args[i].Interface())
-			}
-			out, err := v.Func().Call(in...)
-			if err != nil {
-				panic(err)
-			}
-			switch t.NumOut() {
-			case 0:
-			case 1:
+			out, err := v.Func().Call(valReflectValues(args)...)
+			panicErr(err)
+			if to := t.NumOut(); to == 1 {
 				results = []reflect.Value{out.ReflectValue(t.Out(0))}
-			default:
-				out.mustBe(typ.Table, "expect multiple returned arguments", 0)
+			} else if to > 1 {
+				out.mustBe(typ.Table, "ReflectValue: expect multiple returned arguments", 0)
 				results = make([]reflect.Value, t.NumOut())
 				for i := range results {
 					results[i] = out.Table().Get(Int(int64(i))).ReflectValue(t.Out(i))
@@ -399,17 +405,10 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 			}
 			return
 		})
-	}
-
-	switch vt {
-	case typ.Number:
-		if t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
-			rv := reflect.ValueOf(v.Interface())
-			return rv.Convert(t)
-		}
-	case typ.Table:
-		a := v.Table()
-		switch t.Kind() {
+	} else if vt == typ.Number && t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
+		return reflect.ValueOf(v.Interface()).Convert(t)
+	} else if vt == typ.Table {
+		switch a := v.Table(); t.Kind() {
 		case reflect.Slice:
 			s := reflect.MakeSlice(t, len(a.ArrayPart()), len(a.ArrayPart()))
 			for i, a := range a.ArrayPart() {
@@ -449,11 +448,12 @@ func (v Value) MustTable(msg string) *Table { return v.mustBe(typ.Table, msg, 0)
 
 func (v Value) MustFunc(msg string) *Func {
 	if vt := v.Type(); vt == typ.Table {
-		v = v.Table().GetString("__call")
+		return v.Table().GetString("__call").MustFunc("")
 	} else if vt == typ.Func {
-		return v.Func()
+	} else {
+		panicf(msg+ifstr(msg != "", ": ", "")+"expect function or callable table, got %v", v.Type())
 	}
-	return v.mustBe(typ.Func, msg, 0).Func()
+	return v.Func()
 }
 
 func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
@@ -469,6 +469,7 @@ func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
 	return v
 }
 
+// Equal tests whether two values are equal
 func (v Value) Equal(r Value) bool {
 	if v == r {
 		return true
@@ -543,21 +544,21 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 	return p
 }
 
-func (v Value) StringDefault(d string) string {
+func (v Value) MaybeStr(d string) string {
 	if v.Type() == typ.String {
 		return v.Str()
 	}
 	return d
 }
 
-func (v Value) IntDefault(d int64) int64 {
+func (v Value) MaybeInt(d int64) int64 {
 	if v.Type() == typ.Number {
 		return v.Int()
 	}
 	return d
 }
 
-func (v Value) FloatDefault(d float64) float64 {
+func (v Value) MaybeFloat(d float64) float64 {
 	if v.Type() == typ.Number {
 		return v.Float()
 	}

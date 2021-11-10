@@ -102,7 +102,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case typ.OpInc:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				if va.IsInt() && vb.IsInt() {
-					env.A = Int(va.unsafeint() + vb.unsafeint())
+					env.A = Int(va.unsafeInt() + vb.unsafeInt())
 				} else {
 					env.A = Float(va.Float() + vb.Float())
 				}
@@ -131,8 +131,8 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			va, vb := env._get(opa), env._get(opb)
 			switch va.Type() + vb.Type() {
 			case typ.Number + typ.Number:
-				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
-					env.A = Int(va.unsafeint() + vb.unsafeint())
+				if sum := va.ptr() + vb.ptr(); sum == int64Marker2 {
+					env.A = Int(va.unsafeInt() + vb.unsafeInt())
 				} else {
 					env.A = Float(va.Float() + vb.Float())
 				}
@@ -145,8 +145,8 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			}
 		case typ.OpSub:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
-				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
-					env.A = Int(va.unsafeint() - vb.unsafeint())
+				if sum := va.ptr() + vb.ptr(); sum == int64Marker2 {
+					env.A = Int(va.unsafeInt() - vb.unsafeInt())
 				} else {
 					env.A = Float(va.Float() - vb.Float())
 				}
@@ -155,8 +155,8 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			}
 		case typ.OpMul:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
-				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
-					env.A = Int(va.unsafeint() * vb.unsafeint())
+				if sum := va.ptr() + vb.ptr(); sum == int64Marker2 {
+					env.A = Int(va.unsafeInt() * vb.unsafeInt())
 				} else {
 					env.A = Float(va.Float() * vb.Float())
 				}
@@ -188,8 +188,8 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case typ.OpLess:
 			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
 			case typ.Number + typ.Number:
-				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
-					env.A = Bool(va.unsafeint() < vb.unsafeint())
+				if sum := va.ptr() + vb.ptr(); sum == int64Marker2 {
+					env.A = Bool(va.unsafeInt() < vb.unsafeInt())
 				} else {
 					env.A = Bool(va.Float() < vb.Float())
 				}
@@ -201,8 +201,8 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case typ.OpLessEq:
 			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
 			case typ.Number + typ.Number:
-				if sum := va.puintptr() + vb.puintptr(); sum == int64Marker2 {
-					env.A = Bool(va.unsafeint() <= vb.unsafeint())
+				if sum := va.ptr() + vb.ptr(); sum == int64Marker2 {
+					env.A = Bool(va.unsafeInt() <= vb.unsafeInt())
 				} else {
 					env.A = Bool(va.Float() <= vb.Float())
 				}

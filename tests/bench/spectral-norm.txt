@@ -54,7 +54,7 @@ for idx = 0, n do
     v[idx] = 0 
 end
 
-for i = 0, 9 do
+for i = 0, 10 do
     ATimesTransp(v, u) 
     ATimesTransp(u, v) 
 end

@@ -124,6 +124,9 @@ func (table *symtable) compileFlat(atoms []parser.Node) uint16 {
 	}
 	yx := table.writeInst3(op, atoms)
 	if head == parser.ALoadStatic {
+		if p := atoms[0].Pos(); p.Line > 0 {
+			table.code.writePos(p)
+		}
 		table.writeInst(typ.OpLoadFunc, parser.Addr(0), parser.Addr(yx))
 	}
 	if p := atoms[0].Pos(); p.Line > 0 {

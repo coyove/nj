@@ -21,7 +21,7 @@ import (
 var StringMethods, MathLib, TableLib, OSLib, IOLib Value
 
 func init() {
-	IOLib = MapAdd(IOLib,
+	IOLib = TableMerge(IOLib, Nil,
 		Str("reader"), ReaderProto.Value(),
 		Str("writer"), WriterProto.Value(),
 		Str("seeker"), SeekerProto.Value(),
@@ -34,7 +34,7 @@ func init() {
 	)
 	AddGlobalValue("io", IOLib)
 
-	TableLib = MapAdd(TableLib,
+	TableLib = TableMerge(TableLib, Nil,
 		Str("__name"), Str("tablelib"),
 		Str("__call"), Native2("__call", func(env *Env, t, m Value) Value {
 			if m == Nil {
@@ -217,7 +217,7 @@ func init() {
 	)
 	AddGlobalValue("table", TableLib)
 
-	StringMethods = MapAdd(StringMethods,
+	StringMethods = TableMerge(StringMethods, Nil,
 		Str("__name"), Str("strlib"),
 		Str("__call"), Native2("str", func(env *Env, strObj, src Value) Value {
 			switch i := src.Interface().(type) {
@@ -255,7 +255,7 @@ func init() {
 			s := src.MustStr("text")
 			d := delim.MustStr("delimeter")
 			r := []Value{}
-			if n := n.IntDefault(0); n == 0 {
+			if n := n.MaybeInt(0); n == 0 {
 				for _, p := range strings.Split(s, d) {
 					r = append(r, Str(p))
 				}
@@ -270,7 +270,7 @@ func init() {
 			src := env.Get(0).MustStr("text")
 			from := env.Get(1).MustStr("old text")
 			to := env.Get(2).MustStr("new text")
-			n := env.Get(3).IntDefault(-1)
+			n := env.Get(3).MaybeInt(-1)
 			env.A = Str(strings.Replace(src, from, to, int(n)))
 		}, ""),
 		Str("match"), Native2("match", func(env *Env, pattern, str Value) Value {
@@ -292,8 +292,8 @@ func init() {
 		}, "$f({text}: string, charset: string) int", "\tsame as findany(), but from right to left"),
 		Str("sub"), Native3("sub", func(env *Env, src, start, end Value) Value {
 			s := src.MustStr("")
-			st := start.IntDefault(0)
-			en := end.IntDefault(int64(len(s)))
+			st := start.MaybeInt(0)
+			en := end.MaybeInt(int64(len(s)))
 			for st < 0 && len(s) > 0 {
 				st += int64(len(s))
 			}
@@ -317,10 +317,10 @@ func init() {
 			return Str(strings.TrimSuffix(src.MustStr(""), cutset.MustStr("")))
 		}, "$f({text}: string, suffix: string) string", "\tremove suffix in text if any"),
 		Str("ltrim"), Native2("ltrim", func(env *Env, src, cutset Value) Value {
-			return Str(strings.TrimLeft(src.MustStr(""), cutset.StringDefault(" ")))
+			return Str(strings.TrimLeft(src.MustStr(""), cutset.MaybeStr(" ")))
 		}, "$f({text}: string, cutset: string) string", "\tremove chars both ocurred in cutset and left-side of text"),
 		Str("rtrim"), Native2("rtrim", func(env *Env, src, cutset Value) Value {
-			return Str(strings.TrimRight(src.MustStr(""), cutset.StringDefault(" ")))
+			return Str(strings.TrimRight(src.MustStr(""), cutset.MaybeStr(" ")))
 		}, "$f({text}: string, cutset: string) string", "\tremove chars both ocurred in cutset and right-side of text"),
 		Str("decutf8"), Native("decutf8", func(env *Env) {
 			r, sz := utf8.DecodeRuneInString(env.Get(0).MustStr(""))
@@ -349,7 +349,7 @@ func init() {
 		),
 		Str("chars"), Native2("chars", func(env *Env, s, n Value) Value {
 			var r []Value
-			max := n.IntDefault(0)
+			max := n.MaybeInt(0)
 			for s := s.MustStr(""); len(s) > 0; {
 				_, sz := utf8.DecodeRuneInString(s)
 				if sz == 0 {
@@ -388,14 +388,14 @@ func init() {
 
 	AddGlobalValue("str", StringMethods)
 
-	MathLib = MapAdd(MathLib,
+	MathLib = TableMerge(MathLib, Nil,
 		Str("__name"), Str("mathlib"),
 		Str("INF"), Float(math.Inf(1)),
 		Str("NEG_INF"), Float(math.Inf(-1)),
 		Str("PI"), Float(math.Pi),
 		Str("E"), Float(math.E),
 		Str("randomseed"), Native("randomseed", func(env *Env) {
-			rand.Seed(env.Get(0).IntDefault(1))
+			rand.Seed(env.Get(0).MaybeInt(1))
 		}, "randomseed(seed: int)"),
 		Str("random"), Native("random", func(env *Env) {
 			switch len(env.Stack()) {
@@ -445,7 +445,7 @@ func init() {
 		Str("asin"), Native("asin", func(env *Env) { env.A = Float(math.Asin(env.Get(0).MustFloat(""))) }),
 		Str("atan"), Native("atan", func(env *Env) { env.A = Float(math.Atan(env.Get(0).MustFloat(""))) }),
 		Str("atan2"), Native("atan2", func(env *Env) { env.A = Float(math.Atan2(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
-		Str("ldexp"), Native("ldexp", func(env *Env) { env.A = Float(math.Ldexp(env.Get(0).MustFloat(""), int(env.Get(1).IntDefault(0)))) }),
+		Str("ldexp"), Native("ldexp", func(env *Env) { env.A = Float(math.Ldexp(env.Get(0).MustFloat(""), int(env.Get(1).MaybeInt(0)))) }),
 		Str("modf"), Native("modf", func(env *Env) {
 			a, b := math.Modf(env.Get(0).MustFloat(""))
 			env.A = Array(Float(a), Float(b))
@@ -453,7 +453,7 @@ func init() {
 	)
 	AddGlobalValue("math", MathLib)
 
-	OSLib = MapAdd(OSLib,
+	OSLib = TableMerge(OSLib, Nil,
 		Str("__name"), Str("oslib"),
 		Str("args"), ValRec(os.Args),
 		Str("environ"), Native("environ", func(env *Env) { env.A = ValRec(os.Environ()) }),

@@ -29,11 +29,11 @@ func init() {
 	))
 	script.AddGlobalValue("http", script.Native("http", func(env *script.Env) {
 		args := env.Get(0).Table()
-		to := args.GetString("timeout").FloatDefault(1 << 30)
+		to := args.GetString("timeout").MaybeFloat(1 << 30)
 
-		method := strings.ToUpper(args.Get(script.Str("method")).StringDefault("GET"))
+		method := strings.ToUpper(args.Get(script.Str("method")).MaybeStr("GET"))
 
-		u, err := url.Parse(args.Get(script.Str("url")).StringDefault("bad://%url%"))
+		u, err := url.Parse(args.Get(script.Str("url")).MaybeStr("bad://%url%"))
 		panicErr(err)
 
 		addKV := func(k string, add func(k, v string)) {
@@ -131,7 +131,7 @@ func init() {
 				return http.ErrUseLastResponse
 			}
 		}
-		if p := args.Get(script.Str("proxy")).StringDefault(""); p != "" {
+		if p := args.Get(script.Str("proxy")).MaybeStr(""); p != "" {
 			client.Transport = &http.Transport{
 				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
 			}

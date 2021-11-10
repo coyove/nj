@@ -12,7 +12,7 @@ import (
 
 func init() {
 	script.AddGlobalValue("strtime", func(env *script.Env) {
-		f := env.Get(0).StringDefault("")
+		f := env.Get(0).MaybeStr("")
 		switch strings.ToLower(f) {
 		case "ansic":
 			f = time.ANSIC
