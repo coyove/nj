@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"math"
 	"reflect"
 	"strconv"
@@ -132,11 +131,9 @@ func TableMerge(dst Value, src Value, kvs ...Value) Value {
 		return dst
 	}
 	if src.Type() == typ.Table {
-		t.resizeHash((t.Len() + src.Table().Len() + len(kvs)) * 2)
-		src.Table().Foreach(func(k, v Value) bool { t.Set(k, v); return true })
-	}
-	for i := 0; i < len(kvs)/2*2; i += 2 {
-		t.Set(kvs[i], kvs[i+1])
+		t.Merge(src.Table(), kvs...)
+	} else {
+		t.Merge(nil, kvs...)
 	}
 	return t.Value()
 }
@@ -552,38 +549,4 @@ func (v Value) MaybeTableGetString(key string) Value {
 		return Nil
 	}
 	return v.Table().GetString(key)
-}
-
-func (v Value) Reader() io.Reader {
-	switch v.Type() {
-	case typ.Interface:
-		switch rd := v.Interface().(type) {
-		case io.Reader:
-			return rd
-		case []byte:
-			return bytes.NewReader(rd)
-		}
-	case typ.String:
-		return strings.NewReader(v.Str())
-	case typ.Table:
-		return TableIO{v.Table()}
-	}
-	return TableIO{}
-}
-
-func (v Value) Writer() io.Writer {
-	switch v.Type() {
-	case typ.Interface:
-		switch rd := v.Interface().(type) {
-		case io.Writer:
-			return rd
-		case []byte:
-			w := bytes.NewBuffer(rd)
-			w.Reset()
-			return w
-		}
-	case typ.Table:
-		return TableIO{v.Table()}
-	}
-	return TableIO{}
 }

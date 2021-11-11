@@ -26,11 +26,11 @@ func init() {
 		Str("writer"), WriterProto.Value(),
 		Str("seeker"), SeekerProto.Value(),
 		Str("closer"), CloserProto.Value(),
-		Str("readwriter"), ReadWriter.Value(),
-		Str("readcloser"), ReadCloser.Value(),
-		Str("writecloser"), WriteCloser.Value(),
-		Str("readwritecloser"), ReadWriteCloser.Value(),
-		Str("readwriteseekcloser"), ReadWriteSeekCloser.Value(),
+		Str("readwriter"), ReadWriterProto.Value(),
+		Str("readcloser"), ReadCloserProto.Value(),
+		Str("writecloser"), WriteCloserProto.Value(),
+		Str("readwritecloser"), ReadWriteCloserProto.Value(),
+		Str("readwriteseekcloser"), ReadWriteSeekCloserProto.Value(),
 	)
 	AddGlobalValue("io", IOLib)
 
@@ -377,7 +377,7 @@ func init() {
 			if v != Nil {
 				b.WriteString(v.String())
 			}
-			return TableProto(ReadWriter,
+			return TableProto(ReadWriterProto,
 				Str("_f"), Val(b),
 				Str("value"), Native1("value", func(env *Env, a Value) Value {
 					return Bytes(a.MustTable("").GetString("_f").Interface().(*bytes.Buffer).Bytes())

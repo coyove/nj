@@ -73,7 +73,7 @@ func init() {
 			if urlForm {
 				bodyReader = strings.NewReader(form.Encode())
 			} else if rd := args.GetString("data"); rd != script.Nil {
-				bodyReader = rd.Reader()
+				bodyReader = script.NewReader(rd)
 			}
 		}
 
@@ -91,10 +91,10 @@ func init() {
 					}
 					if filename != "" {
 						part := panicErr2(writer.CreateFormFile(key, filename)).(io.Writer)
-						panicErr2(io.Copy(part, v.Reader()))
+						panicErr2(io.Copy(part, script.NewReader(v)))
 					} else {
 						part := panicErr2(writer.CreateFormField(key)).(io.Writer)
-						panicErr2(io.Copy(part, v.Reader()))
+						panicErr2(io.Copy(part, script.NewReader(v)))
 					}
 					return true
 				})
@@ -145,7 +145,7 @@ func init() {
 		if args.GetString("bodyreader").IsFalse() && args.GetString("br").IsFalse() {
 			resp.Body.Close()
 		} else {
-			buf = script.TableProto(script.ReadCloser, script.Str("_f"), script.Val(resp.Body))
+			buf = script.TableProto(script.ReadCloserProto, script.Str("_f"), script.Val(resp.Body))
 		}
 
 		hdr := map[string]string{}

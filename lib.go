@@ -1,13 +1,10 @@
 package script
 
 import (
-	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"math"
 	"os"
 	"regexp"
@@ -450,7 +447,7 @@ func init() {
 			panicErr(err)
 			env.Get(0).MustTable("").Set(Int(0), Val(f))
 
-			m := TableProto(ReadWriteSeekCloser,
+			m := TableProto(ReadWriteSeekCloserProto,
 				Str("_f"), Val(f),
 				Str("sync"), Native1("sync", func(e *Env, rx Value) Value {
 					panicErr(rx.Table().GetString("_f").Interface().(*os.File).Sync())
@@ -481,105 +478,3 @@ func init() {
 		}, "$f()", "\tclose last opened file"),
 	))
 }
-
-var (
-	ReaderProto = Map(Str("__name"), Str("reader"),
-		Str("read"), Native2("read", func(e *Env, rx, n Value) Value {
-			f := rx.Table().GetString("_f").Interface().(io.Reader)
-			switch n.Type() {
-			case typ.Number:
-				p := make([]byte, n.MaybeInt(0))
-				rn, err := f.Read(p)
-				if err == nil || rn > 0 {
-					return Bytes(p[:rn])
-				}
-				if err == io.EOF {
-					return Nil
-				}
-				panic(err)
-			default:
-				buf, err := ioutil.ReadAll(f)
-				panicErr(err)
-				return Bytes(buf)
-			}
-		}, "read() string", "\tread all bytes, return nil if EOF reached", "read(n: int) string", "\tread n bytes"),
-		Str("readbuf"), Native2("readbuf", func(e *Env, rx, n Value) Value {
-			rn, err := rx.Table().GetString("_f").Interface().(io.Reader).Read(n.Interface().([]byte))
-			return Array(Int(int64(rn)), Val(err)) // return in Go style
-		}, "$f(buf: bytes) array", "\tread into buf and return { bytes_read, error } in Go style"),
-		Str("readlines"), Native2("readlines", func(e *Env, rx, cb Value) Value {
-			f := rx.Table().GetString("_f").Interface().(io.Reader)
-			delim := rx.Table().GetString("delim").MaybeStr("\n")
-			if cb == Nil {
-				buf, err := ioutil.ReadAll(f)
-				if err != nil {
-					panic(err)
-				}
-				parts := bytes.Split(buf, []byte(delim))
-				var res []Value
-				for i, line := range parts {
-					if i < len(parts)-1 {
-						line = append(line, delim...)
-					}
-					res = append(res, Bytes(line))
-				}
-				return Array(res...)
-			}
-			for rd := bufio.NewReader(f); ; {
-				line, err := rd.ReadString(delim[0])
-				if len(line) > 0 {
-					if v, err := cb.MustFunc("callback").Call(Str(line)); err != nil {
-						panic(err)
-					} else if v != Nil {
-						return v
-					}
-				}
-				if err != nil {
-					if err != io.EOF {
-						panic(err)
-					}
-					break
-				}
-			}
-			return Nil
-		},
-			"readlines() array", "\tread the whole file and return lines as a table array",
-			"readlines(f: function)", "\tfor every line read, f(line) will be called", "\tto exit the reading, return anything other than nil in f",
-		),
-	).Table()
-	WriterProto = Map(Str("__name"), Str("writer"),
-		Str("write"), Native2("write", func(e *Env, rx, buf Value) Value {
-			f := rx.Table().GetString("_f").Interface().(io.Writer)
-			wn, err := fmt.Fprint(f, buf.MustStr(""))
-			panicErr(err)
-			return Int(int64(wn))
-		}, "$f({w}: value, buf: string) int", "\twrite buf to w"),
-		Str("pipe"), Native3("pipe", func(e *Env, dest, src, n Value) Value {
-			var wn int64
-			var err error
-			if n := n.MaybeInt(0); n > 0 {
-				wn, err = io.CopyN(dest.Writer(), src.Reader(), n)
-			} else {
-				wn, err = io.Copy(dest.Writer(), src.Reader())
-			}
-			panicErr(err)
-			return Int(wn)
-		}, "$f({w}: value, r: value) int", "\tcopy bytes from r to w, return number of bytes copied",
-			"$f({w}: value, r: value, n: int) int", "\tcopy at most n bytes from r to w"),
-	).Table()
-	SeekerProto = Map(Str("__name"), Str("seeker"), Str("seek"), Native3("seek", func(e *Env, rx, off, where Value) Value {
-		f := rx.Table().GetString("_f").Interface().(io.Seeker)
-		wn, err := f.Seek(off.MustInt("offset"), int(where.MustInt("where")))
-		panicErr(err)
-		return Int(int64(wn))
-	}, "")).Table()
-	CloserProto = Map(Str("__name"), Str("closer"), Str("close"), Native1("close", func(e *Env, rx Value) Value {
-		panicErr(rx.Table().GetString("_f").Interface().(io.Closer).Close())
-		return Nil
-	}, "")).Table()
-	ReadWriter          = TableMerge(TableMerge(Map(), ReaderProto.Value()), WriterProto.Value(), Str("__name"), Str("readwriter")).Table()
-	ReadCloser          = TableMerge(TableMerge(Map(), ReaderProto.Value()), CloserProto.Value(), Str("__name"), Str("readcloser")).Table()
-	WriteCloser         = TableMerge(TableMerge(Map(), WriterProto.Value()), CloserProto.Value(), Str("__name"), Str("writecloser")).Table()
-	ReadWriteCloser     = TableMerge(TableMerge(Map(), ReadWriter.Value()), CloserProto.Value(), Str("__name"), Str("readwritecloser")).Table()
-	ReadWriteSeekCloser = TableMerge(TableMerge(Map(), ReadWriteCloser.Value()), SeekerProto.Value(), Str("__name"), Str("readwriteseekcloser")).Table()
-)

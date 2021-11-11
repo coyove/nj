@@ -13,8 +13,6 @@ package script
 
 import (
 	"bytes"
-	"fmt"
-	"io"
 	"unsafe"
 
 	"github.com/coyove/script/typ"
@@ -377,9 +375,7 @@ func (m *Table) Name() string {
 func (m *Table) New() *Table {
 	if f := m.GetString("__new"); f.Type() == typ.Func {
 		res, err := f.Func().Call()
-		if err != nil {
-			panic(err)
-		}
+		panicErr(err)
 		return res.MustTable("table.__new")
 	}
 	return m
@@ -390,6 +386,19 @@ func (m *Table) Copy() *Table {
 	m2.hashItems = append([]hashItem{}, m.hashItems...)
 	m2.items = append([]Value{}, m.items...)
 	return &m2
+}
+
+func (m *Table) Merge(src *Table, kvs ...Value) *Table {
+	if src == nil {
+		m.resizeHash((m.Len() + len(kvs)) * 2)
+	} else {
+		m.resizeHash((m.Len() + src.Len() + len(kvs)) * 2)
+		src.Foreach(func(k, v Value) bool { m.Set(k, v); return true })
+	}
+	for i := 0; i < len(kvs)/2*2; i += 2 {
+		m.Set(kvs[i], kvs[i+1])
+	}
+	return m
 }
 
 func (m *Table) resizeHash(newSize int) {
@@ -407,48 +416,4 @@ func (m *Table) resizeHash(newSize int) {
 		}
 	}
 	m.hashItems = tmp.hashItems
-}
-
-type TableIO struct {
-	*Table
-}
-
-func (m TableIO) Read(p []byte) (int, error) {
-	if m.Table != nil {
-		if rb := m.Table.GetString("readbuf"); rb.Type() == typ.Func {
-			v, err := rb.Func().Call(Val(p))
-			if err != nil {
-				return 0, err
-			}
-			t := v.MustTable("TableIO.Read: readbuf()")
-			n := t.Get(Int(0)).MustInt("TableIO.Read: (int, error)")
-			err, _ = t.Get(Int(1)).Interface().(error)
-			return int(n), err
-		}
-		if rb := m.Table.GetString("read"); rb.Type() == typ.Func {
-			v, err := rb.Func().Call(Int(int64(len(p))))
-			if err != nil {
-				return 0, err
-			}
-			s := v.MustStr("TableIO.Read: read()")
-			if len(s) == 0 {
-				return 0, io.EOF
-			}
-			return copy(p, s), nil
-		}
-	}
-	return 0, fmt.Errorf("reader not implemented")
-}
-
-func (m TableIO) Write(p []byte) (int, error) {
-	if m.Table != nil {
-		if rb := m.Table.GetString("write"); rb.Type() == typ.Func {
-			v, err := rb.Func().Call(Bytes(p))
-			if err != nil {
-				return 0, err
-			}
-			return int(v.MustInt("TableIO.Write")), nil
-		}
-	}
-	return 0, fmt.Errorf("writer not implemented")
 }
