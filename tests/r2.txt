@@ -75,3 +75,7 @@ do
 	local err = pcall(bad, "boy")
 	assert(err == "badboy")
 end
+
+function foo(args...)
+for k, v in args do assert(k, v) end
+end

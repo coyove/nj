@@ -109,6 +109,8 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 				env._set(opa, env.A)
 			} else {
 				switch va.Type() {
+				case typ.Nil:
+					env.A = Array(Nil, Nil)
 				case typ.Table:
 					k, v := va.Table().Next(vb)
 					env.A = Array(k, v)
