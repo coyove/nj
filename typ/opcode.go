@@ -39,18 +39,18 @@ const (
 type ValueType byte
 
 const (
-	Nil       ValueType = 0
-	Bool      ValueType = 1
-	Number    ValueType = 3
-	String    ValueType = 7
-	Table     ValueType = 15
-	Func      ValueType = 17
-	Interface ValueType = 19
+	Nil    ValueType = 0
+	Bool   ValueType = 1
+	Number ValueType = 3
+	String ValueType = 7
+	Table  ValueType = 15
+	Func   ValueType = 17
+	Native ValueType = 19
 )
 
 func (t ValueType) String() string {
-	if t > Interface {
+	if t > Native {
 		return "?"
 	}
-	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "table", "?", "function", "?", "interface"}[t]
+	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "table", "?", "function", "?", "native"}[t]
 }

@@ -543,7 +543,7 @@ func TestACall(t *testing.T) {
 		GlobalKeyValues: map[string]interface{}{
 			"m": TableProto(Map(
 				Str("a"), Int(0),
-				Str("pow2"), Native1("pow2", func(env *Env, self Value) Value {
+				Str("pow2"), Func1("pow2", func(self Value) Value {
 					i := self.Table().GetString("a").Int()
 					return Int(i * i)
 				}),

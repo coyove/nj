@@ -15,7 +15,7 @@ type ValueIO Value
 
 var (
 	ReaderProto = Map(Str("__name"), Str("reader"),
-		Str("read"), Native2("read", func(e *Env, rx, n Value) Value {
+		Str("read"), Func2("read", func(rx, n Value) Value {
 			f := rx.Table().GetString("_f").Interface().(io.Reader)
 			switch n.Type() {
 			case typ.Number:
@@ -34,11 +34,11 @@ var (
 				return Bytes(buf)
 			}
 		}, "read() string", "\tread all bytes, return nil if EOF reached", "read(n: int) string", "\tread n bytes"),
-		Str("readbuf"), Native2("readbuf", func(e *Env, rx, n Value) Value {
+		Str("readbuf"), Func2("readbuf", func(rx, n Value) Value {
 			rn, err := rx.Table().GetString("_f").Interface().(io.Reader).Read(n.Interface().([]byte))
 			return Array(Int(int64(rn)), Val(err)) // return in Go style
 		}, "$f(buf: bytes) array", "\tread into buf and return { bytes_read, error } in Go style"),
-		Str("readlines"), Native2("readlines", func(e *Env, rx, cb Value) Value {
+		Str("readlines"), Func2("readlines", func(rx, cb Value) Value {
 			f := rx.Table().GetString("_f").Interface().(io.Reader)
 			delim := rx.Table().GetString("delim").MaybeStr("\n")
 			if cb == Nil {
@@ -80,13 +80,13 @@ var (
 	).Table()
 
 	WriterProto = Map(Str("__name"), Str("writer"),
-		Str("write"), Native2("write", func(e *Env, rx, buf Value) Value {
+		Str("write"), Func2("write", func(rx, buf Value) Value {
 			f := rx.Table().GetString("_f").Interface().(io.Writer)
 			wn, err := fmt.Fprint(f, buf.MustStr(""))
 			panicErr(err)
 			return Int(int64(wn))
 		}, "$f({w}: value, buf: string) int", "\twrite buf to w"),
-		Str("pipe"), Native3("pipe", func(e *Env, dest, src, n Value) Value {
+		Str("pipe"), Func3("pipe", func(dest, src, n Value) Value {
 			var wn int64
 			var err error
 			if n := n.MaybeInt(0); n > 0 {
@@ -101,7 +101,7 @@ var (
 	).Table()
 
 	SeekerProto = Map(Str("__name"), Str("seeker"),
-		Str("seek"), Native3("seek", func(e *Env, rx, off, where Value) Value {
+		Str("seek"), Func3("seek", func(rx, off, where Value) Value {
 			f := rx.Table().GetString("_f").Interface().(io.Seeker)
 			wn, err := f.Seek(off.MustInt("offset"), int(where.MustInt("where")))
 			panicErr(err)
@@ -109,7 +109,7 @@ var (
 		}, "")).Table()
 
 	CloserProto = Map(Str("__name"), Str("closer"),
-		Str("close"), Native1("close", func(e *Env, rx Value) Value {
+		Str("close"), Func1("close", func(rx Value) Value {
 			panicErr(rx.Table().GetString("_f").Interface().(io.Closer).Close())
 			return Nil
 		}, "")).Table()
@@ -128,7 +128,7 @@ var (
 // NewReader creates an io.Reader from value if possible
 func NewReader(v Value) io.Reader {
 	switch v.Type() {
-	case typ.Interface:
+	case typ.Native:
 		switch rd := v.Interface().(type) {
 		case io.Reader:
 			return rd
@@ -144,7 +144,7 @@ func NewReader(v Value) io.Reader {
 // NewWriter creates an io.Writer from value if possible
 func NewWriter(v Value) io.Writer {
 	switch v.Type() {
-	case typ.Interface:
+	case typ.Native:
 		switch rd := v.Interface().(type) {
 		case io.Writer:
 			return rd
@@ -159,7 +159,7 @@ func NewWriter(v Value) io.Writer {
 
 // NewCloser creates an io.Closer from value if possible
 func NewCloser(v Value) io.Closer {
-	if v.Type() == typ.Interface {
+	if v.Type() == typ.Native {
 		if rd, ok := v.Interface().(io.Closer); ok {
 			return rd
 		}
@@ -169,7 +169,7 @@ func NewCloser(v Value) io.Closer {
 
 func (m ValueIO) Read(p []byte) (int, error) {
 	switch Value(m).Type() {
-	case typ.Interface:
+	case typ.Native:
 		if rd, _ := Value(m).Interface().(io.Reader); rd != nil {
 			return rd.Read(p)
 		}
@@ -200,7 +200,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 
 func (m ValueIO) Write(p []byte) (int, error) {
 	switch Value(m).Type() {
-	case typ.Interface:
+	case typ.Native:
 		if rd, _ := Value(m).Interface().(io.Writer); rd != nil {
 			return rd.Write(p)
 		}
@@ -218,7 +218,7 @@ func (m ValueIO) Write(p []byte) (int, error) {
 
 func (m ValueIO) Close() error {
 	switch Value(m).Type() {
-	case typ.Interface:
+	case typ.Native:
 		if rd, _ := Value(m).Interface().(io.Closer); rd != nil {
 			return rd.Close()
 		}

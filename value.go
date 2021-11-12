@@ -261,7 +261,7 @@ func Val(i interface{}) Value {
 				}
 			}
 		}
-		return (&Func{Name: "<val.native>", Native: nf}).Value()
+		return (&Func{Name: "<" + rv.Type().String() + ">", Native: nf}).Value()
 	}
 	return intf(i)
 }
@@ -292,7 +292,7 @@ func valReflectValues(args []reflect.Value) (a []Value) {
 }
 
 func intf(i interface{}) Value {
-	return Value{v: uint64(typ.Interface), p: unsafe.Pointer(&i)}
+	return Value{v: uint64(typ.Native), p: unsafe.Pointer(&i)}
 }
 
 func (v Value) isSmallString() bool {
@@ -351,7 +351,7 @@ func (v Value) Interface() interface{} {
 		return v.Table()
 	case typ.Func:
 		return v.Func()
-	case typ.Interface:
+	case typ.Native:
 		return *(*interface{})(v.p)
 	}
 	return nil
@@ -508,7 +508,7 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 		m.rawPrint(p, lv, j, false)
 	case typ.Func:
 		p.WriteString(ifquote(j, v.Func().String()))
-	case typ.Interface:
+	case typ.Native:
 		i := v.Interface()
 		if s, ok := i.(fmt.Stringer); ok {
 			p.WriteString(ifquote(j, s.String()))

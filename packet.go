@@ -139,7 +139,7 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 					suffix = "(" + text + ")"
 				case typ.Table:
 					suffix = "{" + v.Table().Name() + "}"
-				case typ.Interface:
+				case typ.Native:
 					suffix = "<" + v.String() + ">"
 				}
 			}

@@ -267,7 +267,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			case typ.Table:
 				m := subject.Table()
 				env.A = m.Set(env.A, v)
-			case typ.Interface:
+			case typ.Native:
 				reflectStore(subject.Interface(), env.A, v)
 				env.A = v
 			default:
@@ -277,7 +277,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			switch a, idx := env._get(opa), env._get(opb); a.Type() {
 			case typ.Table:
 				env.A = a.Table().Get(idx)
-			case typ.Interface:
+			case typ.Native:
 				env.A = reflectLoad(a.Interface(), idx)
 			case typ.String:
 				if idx.Type() == typ.Number {

@@ -35,8 +35,8 @@ type Program struct {
 	Stdin        io.Reader
 }
 
-// Native creates a golang-Native function
-func Native(name string, f func(env *Env), doc ...string) Value {
+// Function creates a golang-Function function
+func Function(name string, f func(env *Env), doc ...string) Value {
 	if name == "" {
 		name = "<native>"
 	}
@@ -47,30 +47,26 @@ func Native(name string, f func(env *Env), doc ...string) Value {
 	}).Value()
 }
 
-func Native1(name string, f func(*Env, Value) Value, doc ...string) Value {
-	return Native(name, func(env *Env) { env.A = f(env, env.Get(0)) }, doc...)
+func Func1(name string, f func(Value) Value, doc ...string) Value {
+	return Function(name, func(env *Env) { env.A = f(env.Get(0)) }, doc...)
 }
 
-func Native2(name string, f func(*Env, Value, Value) Value, doc ...string) Value {
-	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1)) }, doc...)
+func Func2(name string, f func(Value, Value) Value, doc ...string) Value {
+	return Function(name, func(env *Env) { env.A = f(env.Get(0), env.Get(1)) }, doc...)
 }
 
-func Native3(name string, f func(*Env, Value, Value, Value) Value, doc ...string) Value {
-	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1), env.Get(2)) }, doc...)
+func Func3(name string, f func(Value, Value, Value) Value, doc ...string) Value {
+	return Function(name, func(env *Env) { env.A = f(env.Get(0), env.Get(1), env.Get(2)) }, doc...)
 }
 
-func Native4(name string, f func(*Env, Value, Value, Value, Value) Value, doc ...string) Value {
-	return Native(name, func(env *Env) { env.A = f(env, env.Get(0), env.Get(1), env.Get(2), env.Get(3)) }, doc...)
+func (c *Func) Value() Value {
+	return Value{v: uint64(typ.Func), p: unsafe.Pointer(c)}
 }
-
-func (c *Func) Value() Value { return Value{v: uint64(typ.Func), p: unsafe.Pointer(c)} }
 
 func (c *Func) String() string {
 	p := bytes.Buffer{}
 	if c.Name != "" {
 		p.WriteString(c.Name)
-	} else if c.Native != nil {
-		p.WriteString("native")
 	} else {
 		p.WriteString("function")
 	}
@@ -161,27 +157,30 @@ func (c *Func) Call(args ...Value) (v1 Value, err error) {
 	return
 }
 
-func (f *Func) Pure() *Func { f.Receiver = Nil; return f }
-
-func (p *Program) PrettyCode() string { return pkPrettify(p.Top, p, true) }
-
-func (p *Program) Get(k string) (v Value, err error) {
-	defer parser.CatchError(&err)
-	return (*p.Stack)[int(p.mustGetSymbol(k))], nil
+func (f *Func) Pure() *Func {
+	f.Receiver = Nil
+	return f
 }
 
-func (p *Program) Set(k string, v Value) (err error) {
-	defer parser.CatchError(&err)
-	(*p.Stack)[int(p.mustGetSymbol(k))] = v
-	return nil
+func (p *Program) PrettyCode() string {
+	return pkPrettify(p.Top, p, true)
 }
 
-func (p *Program) mustGetSymbol(name string) uint16 {
-	addr := p.Symbols[name]
+func (p *Program) Get(k string) (v Value, ok bool) {
+	addr := p.Symbols[k]
 	if addr == nil {
-		panicf("%q not found", name)
+		return Nil, false
 	}
-	return addr.addr
+	return (*p.Stack)[addr.addr], true
+}
+
+func (p *Program) Set(k string, v Value) (ok bool) {
+	addr := p.Symbols[k]
+	if addr == nil {
+		return false
+	}
+	(*p.Stack)[addr.addr] = v
+	return true
 }
 
 func fixDocString(in, name, arg string) string {

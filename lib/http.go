@@ -18,16 +18,16 @@ var HostWhitelist = map[string][]string{}
 
 func init() {
 	script.AddGlobalValue("url", script.Map(
-		script.Str("escape"), script.Native1("escape", func(env *script.Env, a script.Value) script.Value {
+		script.Str("escape"), script.Func1("escape", func(a script.Value) script.Value {
 			return script.Str(url.QueryEscape(a.MustStr("")))
 		}),
-		script.Str("unescape"), script.Native1("unescape", func(env *script.Env, a script.Value) script.Value {
+		script.Str("unescape"), script.Func1("unescape", func(a script.Value) script.Value {
 			v, err := url.QueryUnescape(a.MustStr(""))
 			panicErr(err)
 			return script.Str(v)
 		}),
 	))
-	script.AddGlobalValue("http", script.Native("http", func(env *script.Env) {
+	script.AddGlobalValue("http", script.Function("http", func(env *script.Env) {
 		args := env.Get(0).Table()
 		to := args.GetString("timeout").MaybeFloat(1 << 30)
 
@@ -123,7 +123,7 @@ func init() {
 		// Construct HTTP client
 		client := &http.Client{}
 		client.Timeout = time.Duration(to * float64(time.Second))
-		if v := args.Get(script.Str("jar")); v.Type() == typ.Interface {
+		if v := args.Get(script.Str("jar")); v.Type() == typ.Native {
 			client.Jar, _ = v.Interface().(http.CookieJar)
 		}
 		if !args.Get(script.Str("noredirect")).IsFalse() {
