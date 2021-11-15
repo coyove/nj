@@ -369,6 +369,8 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 		return reflect.ValueOf(v.Interface())
 	} else if t == reflect.TypeOf(Value{}) {
 		return reflect.ValueOf(v)
+	} else if t.Implements(ioWriterType) || t.Implements(ioReaderType) || t.Implements(ioCloserType) {
+		return reflect.ValueOf(ValueIO(v))
 	} else if vt := v.Type(); vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
 		return reflect.Zero(t)
 	} else if vt == typ.Func && t.Kind() == reflect.Func {
@@ -517,7 +519,7 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 		} else if s, ok := i.(error); ok {
 			p.WriteString(ifquote(j, s.Error()))
 		} else {
-			p.WriteString(ifquote(j, reflect.TypeOf(i).String()))
+			p.WriteString(ifquote(j, "<"+reflect.TypeOf(i).String()+">"))
 		}
 	default:
 		p.WriteString(ifstr(j, "null", "nil"))

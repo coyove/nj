@@ -6,12 +6,19 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"reflect"
 	"strings"
 
 	"github.com/coyove/script/typ"
 )
 
 type ValueIO Value
+
+var (
+	ioWriterType = reflect.TypeOf((*io.Writer)(nil)).Elem()
+	ioReaderType = reflect.TypeOf((*io.Reader)(nil)).Elem()
+	ioCloserType = reflect.TypeOf((*io.Closer)(nil)).Elem()
+)
 
 var (
 	ReaderProto = Map(Str("__name"), Str("reader"),

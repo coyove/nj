@@ -187,6 +187,20 @@ func (m *Table) Set(k, v Value) (prev Value) {
 	return
 }
 
+func (m *Table) RawSet(k, v Value) (prev Value) {
+	old := m.parent
+	m.parent = nil
+	prev, m.parent = m.Set(k, v), old
+	return prev
+}
+
+func (m *Table) RawGet(k Value) (v Value) {
+	old := m.parent
+	m.parent = nil
+	v, m.parent = m.Get(k), old
+	return v
+}
+
 func (m *Table) setHash(incoming hashItem) (prev Value, growed bool) {
 	num := len(m.hashItems)
 	idx := int(incoming.Key.HashCode() % uint64(num))
@@ -325,7 +339,7 @@ func (m *Table) String() string {
 	return m.Value().String()
 }
 
-func (m *Table) rawPrint(p *bytes.Buffer, lv int, j, parent bool) {
+func (m *Table) rawPrint(p *bytes.Buffer, lv int, j, showParent bool) {
 	if len(m.hashItems) == 0 {
 		p.WriteString(ifstr(j, "[", "{"))
 		for _, a := range m.ArrayPart() {
@@ -343,7 +357,7 @@ func (m *Table) rawPrint(p *bytes.Buffer, lv int, j, parent bool) {
 		}
 		closeBuffer(p, "}")
 	}
-	if m.parent != nil && parent {
+	if m.parent != nil && showParent {
 		p.WriteString("^")
 		m.parent.rawPrint(p, lv+1, j, true)
 	}

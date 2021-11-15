@@ -71,18 +71,29 @@ func init() {
 			return m.MustTable("").Get(k)
 		}, "$f({t}: table, k: value) value"),
 		Str("set"), Func3("set", func(m, k, v Value) Value {
-			m.MustTable("").Set(k, v)
-			return m
-		}, "$f({t}: table, k: value, v: value) table"),
+			return m.MustTable("").Set(k, v)
+		}, "$f({t}: table, k: value, v: value) value", "\tset value by key, return previous value"),
+		Str("rawget"), Func2("rawget", func(m, k Value) Value {
+			return m.MustTable("").RawGet(k)
+		}, "$f({t}: table, k: value) value"),
+		Str("rawset"), Func3("rawset", func(m, k, v Value) Value {
+			return m.MustTable("").RawSet(k, v)
+		}, "$f({t}: table, k: value, v: value) value", "\tset value by key, return previous value"),
 		Str("make"), Func1("make", func(n Value) Value {
 			return NewTable(int(n.MustInt(""))).Value()
 		}, "$f(n: int) table", "\treturn a table, preallocate enough hash space for n values"),
 		Str("makearray"), Func1("makearray", func(n Value) Value {
 			return Array(make([]Value, n.MustInt(""))...)
 		}, "$f(n: int) array", "\treturn a table array, preallocate space for n values"),
-		Str("clear"), Function("clear", func(env *Env) { env.Get(0).MustTable("").Clear() }, "$f({t}: table)"),
-		Str("cleararray"), Function("cleararray", func(env *Env) { env.Get(0).MustTable("").ClearArray() }, "$f({t}: table)"),
-		Str("clearmap"), Function("clearmap", func(env *Env) { env.Get(0).MustTable("").ClearMap() }, "$f({t}: table)"),
+		Str("clear"), Function("clear", func(env *Env) {
+			env.Get(0).MustTable("").Clear()
+		}, "$f({t}: table)"),
+		Str("cleararray"), Function("cleararray", func(env *Env) {
+			env.Get(0).MustTable("").ClearArray()
+		}, "$f({t}: table)"),
+		Str("clearmap"), Function("clearmap", func(env *Env) {
+			env.Get(0).MustTable("").ClearMap()
+		}, "$f({t}: table)"),
 		Str("slice"), Func3("slice", func(t, s, e Value) Value {
 			start, end := int(s.MustInt("")), int(e.MustInt(""))
 			return Array(t.MustTable("").items[start:end]...)
@@ -115,7 +126,7 @@ func init() {
 		Str("setfirstparent"), Func2("setfirstparent", func(v, p Value) Value {
 			v.MustTable("").SetFirstParent(p.MustTable(""))
 			return Nil
-		}, "$f({t}: table, p: table)", "\tinsert table's first parent"),
+		}, "$f({t}: table, p: table)", "\tinsert `p` as `t`'s first parent"),
 		Str("arraylen"), Func1("arraylen", func(v Value) Value {
 			return Int(int64(len(v.MustTable("").items)))
 		}, "$f({t}: array) int", "\treturn the true size of array (including trailing nils)"),
@@ -181,7 +192,7 @@ func init() {
 				ma.count--
 			}
 			return old
-		}, "$f({a}: array, index: int)", "\tremove value at index from array"),
+		}, "$f({a}: array, index: int)", "\tremove value at `index`"),
 		Str("concat"), Func2("concat", func(a, b Value) Value {
 			ma, mb := a.MustTable(""), b.MustTable("")
 			for _, b := range mb.ArrayPart() {
@@ -200,7 +211,7 @@ func init() {
 		}, "$f({table1}: table, table2: table)", "\tmerge elements from table2 to table1"),
 		Str("tostring"), Func1("tostring", func(a Value) Value {
 			p := &bytes.Buffer{}
-			a.MustTable("").rawPrint(p, 0, false, true)
+			a.MustTable("").rawPrint(p, 0, true, true)
 			return Bytes(p.Bytes())
 		}, "$f({t}: table) string", "\tprint raw elements in table, ignore __str"),
 		Str("name"), Func1("name", func(a Value) Value {
@@ -212,7 +223,10 @@ func init() {
 			return m2.Value()
 		}, "$f({t}: table) table", "\treturn a new table who shares all the data from t, but with no parent"),
 		Str("unwrap"), Func1("unwrap", func(m Value) Value {
-			return ValRec(m.Interface())
+			if m.Type() == typ.Native {
+				return ValRec(m.Interface())
+			}
+			return m
 		}, "unwrap(v: value) value", "\tunwrap Go's array, slice or map into table"),
 	)
 	AddGlobalValue("table", TableLib)
@@ -292,13 +306,13 @@ func init() {
 		}, ""),
 		Str("find"), Func2("find", func(src, substr Value) Value {
 			return Int(int64(strings.Index(src.MustStr(""), substr.MustStr(""))))
-		}, "$f({text}: string, sub: string) int", "\tfind index of first appearence of sub in text"),
+		}, "$f({text}: string, sub: string) int", "\tfind index of first appearence of `sub` in `text`"),
 		Str("findany"), Func2("findany", func(src, substr Value) Value {
 			return Int(int64(strings.IndexAny(src.MustStr(""), substr.MustStr(""))))
-		}, "$f({text}: string, charset: string) int", "\tfind index of first appearence of any char from charset in text"),
+		}, "$f({text}: string, charset: string) int", "\tfind index of first appearence of any char from `charset` in `text`"),
 		Str("rfind"), Func2("rfind", func(src, substr Value) Value {
 			return Int(int64(strings.LastIndex(src.MustStr(""), substr.MustStr(""))))
-		}, ""),
+		}, "$f({text}: string, sub: string) int", "\tsame as find(), but from right to left"),
 		Str("rfindany"), Func2("rfindany", func(src, substr Value) Value {
 			return Int(int64(strings.LastIndexAny(src.MustStr(""), substr.MustStr(""))))
 		}, "$f({text}: string, charset: string) int", "\tsame as findany(), but from right to left"),
@@ -320,24 +334,24 @@ func init() {
 			}
 			return Str(strings.Trim(src.MustStr(""), cutset.MustStr("")))
 		},
-			"$f{text}: string) string", "\ttrim spaces at left and right side of text",
-			"$f{text}: string, cutset: string) string", "\tremove chars both occurred in cutset and left-side/right-side of text"),
+			"$f{text}: string) string", "\ttrim spaces at left and right side of `text`",
+			"$f{text}: string, cutset: string) string", "\tremove chars both occurred in `cutset` and left-side/right-side of `text`"),
 		Str("lremove"), Func2("lremove", func(src, cutset Value) Value {
 			return Str(strings.TrimPrefix(src.MustStr(""), cutset.MustStr("")))
-		}, "$f({text}: string, prefix: string) string", "\tremove prefix in text if any"),
+		}, "$f({text}: string, prefix: string) string", "\tremove `prefix` in `text` if any"),
 		Str("rremove"), Func2("rremove", func(src, cutset Value) Value {
 			return Str(strings.TrimSuffix(src.MustStr(""), cutset.MustStr("")))
-		}, "$f({text}: string, suffix: string) string", "\tremove suffix in text if any"),
+		}, "$f({text}: string, suffix: string) string", "\tremove `suffix` in `text` if any"),
 		Str("ltrim"), Func2("ltrim", func(src, cutset Value) Value {
 			return Str(strings.TrimLeft(src.MustStr(""), cutset.MaybeStr(" ")))
-		}, "$f({text}: string, cutset: string) string", "\tremove chars both ocurred in cutset and left-side of text"),
+		}, "$f({text}: string, cutset: string) string", "\tremove chars both ocurred in `cutset` and left-side of `text`"),
 		Str("rtrim"), Func2("rtrim", func(src, cutset Value) Value {
 			return Str(strings.TrimRight(src.MustStr(""), cutset.MaybeStr(" ")))
-		}, "$f({text}: string, cutset: string) string", "\tremove chars both ocurred in cutset and right-side of text"),
+		}, "$f({text}: string, cutset: string) string", "\tremove chars both ocurred in `cutset` and right-side of `text`"),
 		Str("decutf8"), Function("decutf8", func(env *Env) {
 			r, sz := utf8.DecodeRuneInString(env.Get(0).MustStr(""))
 			env.A = Array(Int(int64(r)), Int(int64(sz)))
-		}, "$f({text}: string) array", "\tdecode first char in UTF-8 string, return { char_unicode, width_in_bytes }"),
+		}, "$f({text}: string) array", "\tdecode first UTF-8 char in `text`, return { unicode, width_in_bytes }"),
 		Str("startswith"), Func2("startswith", func(t, p Value) Value {
 			return Bool(strings.HasPrefix(t.MustStr(""), p.MustStr("")))
 		}, "$f(text: string, prefix: string) bool"),
@@ -375,9 +389,9 @@ func init() {
 			}
 			return Array(r...)
 		}, "chars({text}: string) array",
-			"\tbreak a string into chars, e.g.: chars('a中c') => { 'a', '中', 'c' }",
+			"\tbreak `text` into chars, e.g.: chars('a中c') => { 'a', '中', 'c' }",
 			"chars({text}: string, n: int) array",
-			"\tbreak a string into at most n chars, e.g.: chars('a中c', 1) => { 'a' }",
+			"\tbreak `text` into at most `n` chars, e.g.: chars('a中c', 1) => { 'a' }",
 		),
 		Str("format"), Function("format", func(env *Env) {
 			buf := &bytes.Buffer{}
@@ -397,7 +411,6 @@ func init() {
 			)
 		}),
 	)
-
 	AddGlobalValue("str", StringMethods)
 
 	MathLib = TableMerge(MathLib, Nil,
@@ -412,8 +425,7 @@ func init() {
 		Str("random"), Function("random", func(env *Env) {
 			switch len(env.Stack()) {
 			case 2:
-				ai := env.Get(0).MustInt("")
-				bi := env.Get(1).MustInt("")
+				ai, bi := env.Get(0).MustInt(""), env.Get(1).MustInt("")
 				env.A = Int(rand.Int63n(bi-ai+1) + ai)
 			case 1:
 				env.A = Int(rand.Int63n(env.Get(0).MustInt("")))
@@ -485,8 +497,7 @@ func init() {
 				})
 			}
 			go func() {
-				v, err := p.Output()
-				if err != nil {
+				if v, err := p.Output(); err != nil {
 					out <- err
 				} else {
 					out <- v
@@ -520,6 +531,13 @@ func init() {
 			}
 			panicErr(err)
 			return Nil
+		}),
+		Str("pstat"), Func1("pstat", func(path Value) Value {
+			fi, err := os.Stat(path.MustStr(""))
+			if err != nil {
+				return Nil
+			}
+			return Val(fi)
 		}),
 	)
 	AddGlobalValue("os", OSLib)

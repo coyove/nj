@@ -94,7 +94,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 	k := key.MustStr("index key")
 	f := rv.FieldByName(k)
 	if !f.IsValid() || !f.CanAddr() {
-		panicf("reflect: %q not assignable in %#v", k, v)
+		panicf("reflect: %q not assignable in %v", k, v)
 	}
 	if f.Type() == reflect.TypeOf(Value{}) {
 		f.Set(reflect.ValueOf(v2))

@@ -21,7 +21,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const Version int64 = 304
+const Version int64 = 327
 
 var g = map[string]Value{}
 
@@ -207,38 +207,39 @@ func init() {
 			env.A = wrapExecError(err)
 		}
 	}, "pcall(f: function, ...args: value) value", "\texecute `f`, catch panic and return as error if any")
-	AddGlobalValue("gcall", func(env *Env) {
-		f := env.Get(0).MustFunc("").Copy()
-		args := env.CopyStack()[1:]
-		w := make(chan Value, 1)
-		go func(f *Func, args []Value) {
-			if v, err := f.Call(args...); err != nil {
-				w <- wrapExecError(err)
-			} else {
-				w <- v
-			}
-		}(f, args)
-		env.A = Map(
-			Str("f"), f.Value(),
-			Str("w"), intf(w),
-			Str("stop"), Func1("stop", func(m Value) Value {
-				m.MustTable("").GetString("f").MustFunc("").EmergStop()
-				return Nil
-			}),
-			Str("wait"), Func2("wait", func(m, t Value) Value {
-				ch := m.MustTable("").GetString("w").Interface().(chan Value)
-				if w := t.MaybeFloat(0); w > 0 {
-					select {
-					case <-time.After(time.Duration(w * float64(time.Second))):
-						return Val(fmt.Errorf("timeout"))
-					case v := <-ch:
-						return v
-					}
+	AddGlobalValue("gcall", Map(
+		Str("__name"), Str("gcall"),
+		Str("__call"), Function("__call", func(env *Env) {
+			mt := env.Get(0).MustTable("")
+			f := env.Get(1).MustFunc("").Copy()
+			args := env.CopyStack()[2:]
+			w := make(chan Value, 1)
+			go func(f *Func, args []Value) {
+				if v, err := f.Call(args...); err != nil {
+					w <- wrapExecError(err)
+				} else {
+					w <- v
 				}
-				return <-ch
-			}),
-		)
-	}, "$f(f: function, ...args: value) table", "\texecute `f` in goroutine")
+			}(f, args)
+			env.A = TableProto(mt, Str("f"), f.Value(), Str("w"), intf(w))
+		}, "$f(f: function, ...args: value) table", "\texecute `f` in goroutine"),
+		Str("stop"), Func1("stop", func(m Value) Value {
+			m.MustTable("").GetString("f").MustFunc("").EmergStop()
+			return Nil
+		}),
+		Str("wait"), Func2("wait", func(m, t Value) Value {
+			ch := m.MustTable("").GetString("w").Interface().(chan Value)
+			if w := t.MaybeFloat(0); w > 0 {
+				select {
+				case <-time.After(time.Duration(w * float64(time.Second))):
+					return Val(fmt.Errorf("timeout"))
+				case v := <-ch:
+					return v
+				}
+			}
+			return <-ch
+		}),
+	))
 	AddGlobalValue("panic", func(env *Env) { panic(env.Get(0)) }, "panic(v: value)")
 	AddGlobalValue("assert", func(env *Env) {
 		v := env.Get(0)
@@ -276,9 +277,6 @@ func init() {
 			}
 		}
 	}, "$f(v: value) number", "\tconvert `v` to number based on its string representation")
-	AddGlobalValue("stdout", func(env *Env) { env.A = intf(env.Global.Stdout) }, "$f() value", "\treturn stdout")
-	AddGlobalValue("stderr", func(env *Env) { env.A = intf(env.Global.Stderr) }, "$f() value", "\treturn stderr")
-	AddGlobalValue("stdin", func(env *Env) { env.A = intf(env.Global.Stdin) }, "$f() value", "\treturn stdin")
 	AddGlobalValue("print", func(env *Env) {
 		for _, a := range env.Stack() {
 			fmt.Fprint(env.Global.Stdout, a.String())
@@ -289,11 +287,11 @@ func init() {
 		sprintf(env, env.Global.Stdout)
 	}, "$f(format: string, ...args: value)")
 	AddGlobalValue("write", func(env *Env) {
-		w := env.Get(0).Interface().(io.Writer)
+		w := NewWriter(env.Get(0))
 		for _, a := range env.Stack()[1:] {
 			fmt.Fprint(w, a.String())
 		}
-	}, "write(writer: value, ...args: value)", "\twrite values to writer")
+	}, "write(writer: value, ...args: value)", "\twrite values to `writer`")
 	AddGlobalValue("println", func(env *Env) {
 		for _, a := range env.Stack() {
 			fmt.Fprint(env.Global.Stdout, a.String(), " ")
@@ -413,6 +411,7 @@ func init() {
 		Str("rwmutex"), Function("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() value", "\tcreate a sync.RWMutex"),
 		Str("waitgroup"), Function("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() value", "\tcreate a sync.WaitGroup"),
 		Str("map"), Func3("map", func(list, f, opt Value) Value {
+			fun := f.MustFunc("mapping")
 			n, t := int(opt.MaybeInt(int64(runtime.NumCPU()))), list.MustTable("")
 			if n < 1 || n > runtime.NumCPU()*1e3 {
 				panicf("invalid number of goroutines: %v", n)
@@ -426,13 +425,16 @@ func init() {
 				go func() {
 					defer wg.Done()
 					for p := range in {
-						res, err := f.MustFunc("callback").Call(p[0], p[1])
+						if outError != nil {
+							return
+						}
+						res, err := fun.Call(p[0], p[1])
 						if err != nil {
 							outError = err
 							return
 						}
 						outLock.Lock()
-						out.Set(p[0], res)
+						out.RawSet(p[0], res)
 						outLock.Unlock()
 					}
 				}()
@@ -440,17 +442,15 @@ func init() {
 			t.Foreach(func(k, v Value) bool { in <- [2]Value{k, v}; return true })
 			close(in)
 			wg.Wait()
-			if outError != nil {
-				panic(outError)
-			}
+			panicErr(outError)
 			return out.Value()
 		}, "$f(t: table, f: function, n: int) table",
-			"\tmap values in table into new values in new table by using f(k, v) concurrently on n goroutines (n defaults to the number of CPUs)"),
+			"\tmap values in `t` into new values using f(k, v) concurrently on `n` goroutines (defaults to the number of CPUs)"),
 	))
 	AddGlobalValue("next", func(m, k Value) Value {
 		nk, nv := m.MustTable("").Next(k)
 		return Array(nk, nv)
-	}, "next(t: table, k: value) array", "\tfind next key-value pair after k in the table and return as { next_key, next_value }")
+	}, "next(t: table, k: value) array", "\tfind next key-value pair after `k` in the table and return as { next_key, next_value }")
 	AddGlobalValue("parent", func(m Value) Value {
 		return m.MustTable("").Parent().Value()
 	}, "parent(t: table) table", "\tfind given table's parent, or nil if not existed")
@@ -509,12 +509,5 @@ func init() {
 				panicf("no opened file yet")
 			}
 		}, "$f()", "\tclose last opened file"),
-		Str("pstat"), Func1("pstat", func(path Value) Value {
-			fi, err := os.Stat(path.MustStr(""))
-			if err != nil {
-				return Nil
-			}
-			return Val(fi)
-		}),
 	))
 }
