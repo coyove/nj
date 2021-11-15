@@ -436,7 +436,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		}
 	}
 
-	cls = &Program{Top: &Func{}}
+	cls = &Program{Top: &Func{FuncBody: &FuncBody{}}}
 	cls.Top.Name = "main"
 	cls.Top.Code = table.code
 	cls.Top.StackSize = table.vp

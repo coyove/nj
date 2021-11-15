@@ -290,7 +290,7 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 	code.writeInst(typ.OpRet, table.loadK(nil), 0)
 	// code.writeInst(typ.OpRet, regA, 0)
 
-	cls := &Func{}
+	cls := &Func{FuncBody: &FuncBody{}}
 	cls.Variadic = varargIdx >= 0
 	cls.NumParams = uint16(len(params.Nodes()))
 	cls.Name = atoms[1].Sym()

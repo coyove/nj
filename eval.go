@@ -22,7 +22,9 @@ type ExecError struct {
 	stacks []stacktrace
 }
 
-func (e *ExecError) GetRootPanic() interface{} { return e.r }
+func (e *ExecError) GetRootPanic() interface{} {
+	return e.r
+}
 
 func (e *ExecError) Error() string {
 	msg := bytes.Buffer{}
@@ -58,6 +60,14 @@ func (e *ExecError) Error() string {
 		msg.WriteString(fmt.Sprintf("%v\n", e.r))
 	}
 	return msg.String()
+}
+
+func wrapExecError(err error) Value {
+	if err, ok := err.(*ExecError); ok {
+		return Val(err.r)
+	} else {
+		return Val(err)
+	}
 }
 
 // internalExecCursorLoop executes 'K' under 'env' from the given start 'cursor'

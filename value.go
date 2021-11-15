@@ -261,7 +261,9 @@ func Val(i interface{}) Value {
 				}
 			}
 		}
-		return (&Func{Name: "<" + rv.Type().String() + ">", Native: nf}).Value()
+		return (&Func{FuncBody: &FuncBody{
+			Name: "<" + rv.Type().String() + ">", Native: nf},
+		}).Value()
 	}
 	return intf(i)
 }

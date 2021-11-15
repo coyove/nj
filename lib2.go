@@ -266,6 +266,18 @@ func init() {
 			}
 			return Array(r...)
 		}, "split({text}: string, delim: string) array", "split({text}: string, delim: string, n: int) array"),
+		Str("join"), Func2("join", func(delim, array Value) Value {
+			d := delim.MustStr("delimeter")
+			buf := &bytes.Buffer{}
+			for _, a := range array.MustTable("").ArrayPart() {
+				buf.WriteString(a.String())
+				buf.WriteString(d)
+			}
+			if buf.Len() > 0 {
+				buf.Truncate(buf.Len() - len(d))
+			}
+			return Bytes(buf.Bytes())
+		}, "join({text}: string, a: array) string"),
 		Str("replace"), Function("replace", func(env *Env) {
 			src := env.Get(0).MustStr("text")
 			from := env.Get(1).MustStr("old text")

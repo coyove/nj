@@ -201,15 +201,44 @@ func init() {
 		env.A = a
 	}, "$f(f: function, receiver: value, ...args: value) value")
 	AddGlobalValue("pcall", func(env *Env) {
-		a, err := env.Get(0).MustFunc("").Call(env.Stack()[1:]...)
-		if err == nil {
+		if a, err := env.Get(0).MustFunc("").Call(env.Stack()[1:]...); err == nil {
 			env.A = a
-		} else if err, ok := err.(*ExecError); ok {
-			env.A = Val(err.r)
 		} else {
-			env.A = Val(err)
+			env.A = wrapExecError(err)
 		}
 	}, "pcall(f: function, ...args: value) value", "\texecute `f`, catch panic and return as error if any")
+	AddGlobalValue("gcall", func(env *Env) {
+		f := env.Get(0).MustFunc("").Copy()
+		args := env.CopyStack()[1:]
+		w := make(chan Value, 1)
+		go func(f *Func, args []Value) {
+			if v, err := f.Call(args...); err != nil {
+				w <- wrapExecError(err)
+			} else {
+				w <- v
+			}
+		}(f, args)
+		env.A = Map(
+			Str("f"), f.Value(),
+			Str("w"), intf(w),
+			Str("stop"), Func1("stop", func(m Value) Value {
+				m.MustTable("").GetString("f").MustFunc("").EmergStop()
+				return Nil
+			}),
+			Str("wait"), Func2("wait", func(m, t Value) Value {
+				ch := m.MustTable("").GetString("w").Interface().(chan Value)
+				if w := t.MaybeFloat(0); w > 0 {
+					select {
+					case <-time.After(time.Duration(w * float64(time.Second))):
+						return Val(fmt.Errorf("timeout"))
+					case v := <-ch:
+						return v
+					}
+				}
+				return <-ch
+			}),
+		)
+	}, "$f(f: function, ...args: value) table", "\texecute `f` in goroutine")
 	AddGlobalValue("panic", func(env *Env) { panic(env.Get(0)) }, "panic(v: value)")
 	AddGlobalValue("assert", func(env *Env) {
 		v := env.Get(0)
@@ -293,23 +322,23 @@ func init() {
 	AddGlobalValue("sleep", func(env *Env) { time.Sleep(time.Duration(env.Get(0).MustFloat("") * float64(time.Second))) }, "sleep(sec: float)")
 	AddGlobalValue("Go_time", func(env *Env) {
 		if env.Size() > 0 {
-			loc := time.UTC
-			if env.Get(7).MaybeStr("") == "local" {
-				loc = time.Local
-			}
 			env.A = Val(time.Date(
-				int(env.Get(0).MaybeInt(1970)), time.Month(env.Get(1).MaybeInt(1)), int(env.Get(2).MaybeInt(1)),
-				int(env.Get(3).MaybeInt(0)), int(env.Get(4).MaybeInt(0)), int(env.Get(5).MaybeInt(0)),
-				int(env.Get(6).MaybeInt(0)), loc,
+				int(env.Get(0).MaybeInt(1970)),
+				time.Month(env.Get(1).MaybeInt(1)),
+				int(env.Get(2).MaybeInt(1)),
+				int(env.Get(3).MaybeInt(0)),
+				int(env.Get(4).MaybeInt(0)),
+				int(env.Get(5).MaybeInt(0)),
+				int(env.Get(6).MaybeInt(0)), time.UTC,
 			))
 		} else {
 			env.A = Val(time.Now())
 		}
 	},
-		"Go_time() value",
+		"$f() value",
 		"\treturn time.Time of current time",
-		"Go_time(year: int, month: int, day: int, h: int, m: int, s: int, nanoseconds: int, loc: string) value",
-		"\treturn time.Time constructed by the given arguments, loc defaults to 'local'",
+		"$f(year: int, month: int, day: int, h: int, m: int, s: int, nanoseconds: int) value",
+		"\treturn time.Time constructed by the given arguments",
 	)
 	AddGlobalValue("clock", func(prefix Value) Value {
 		x := time.Now()

@@ -12,6 +12,11 @@ import (
 )
 
 type Func struct {
+	*FuncBody
+	Receiver Value
+}
+
+type FuncBody struct {
 	Code       packet
 	Name       string
 	DocString  string
@@ -21,7 +26,6 @@ type Func struct {
 	Native     func(env *Env)
 	LoadGlobal *Program
 	Locals     []string
-	Receiver   Value
 }
 
 type Program struct {
@@ -41,9 +45,11 @@ func Function(name string, f func(env *Env), doc ...string) Value {
 		name = "<native>"
 	}
 	return (&Func{
-		Name:      name,
-		Native:    f,
-		DocString: fixDocString(strings.Join(doc, "\n"), name, ""),
+		FuncBody: &FuncBody{
+			Name:      name,
+			Native:    f,
+			DocString: fixDocString(strings.Join(doc, "\n"), name, ""),
+		},
 	}).Value()
 }
 
@@ -104,6 +110,8 @@ func (p *Program) Run() (v1 Value, err error) {
 	return
 }
 
+// EmergStop terminates the execution of program
+// After calling, program will become unavailable for any further operations
 func (p *Program) EmergStop() {
 	p.Top.EmergStop()
 	for _, f := range p.Functions {
@@ -119,7 +127,7 @@ func (c *Func) EmergStop() {
 	}
 }
 
-func (c *Func) CallSimple(args ...interface{}) (v1 interface{}, err error) {
+func (c *Func) CallVal(args ...interface{}) (v1 interface{}, err error) {
 	x := make([]Value, len(args))
 	for i := range args {
 		x[i] = Val(args[i])
@@ -181,6 +189,15 @@ func (p *Program) Set(k string, v Value) (ok bool) {
 	}
 	(*p.Stack)[addr.addr] = v
 	return true
+}
+
+func (f *Func) Copy() *Func {
+	b2 := *f.FuncBody
+	b2.Code.Code = append([]_inst{}, b2.Code.Code...)
+	return &Func{
+		FuncBody: &b2,
+		Receiver: f.Receiver,
+	}
 }
 
 func fixDocString(in, name, arg string) string {
