@@ -40,6 +40,8 @@ func NewTable(size int) *Table {
 	return &Table{hashItems: make([]hashItem, int64(size))}
 }
 
+func (m *Table) Size() int { return len(m.items) + len(m.hashItems) }
+
 func (m *Table) Len() int { return int(m.count) + int(m.hashCount) }
 
 func (m *Table) MapLen() int { return int(m.hashCount) }
@@ -344,7 +346,7 @@ func (m *Table) String() string {
 }
 
 func (m *Table) rawPrint(p *bytes.Buffer, lv int, j, showParent bool) {
-	if len(m.hashItems) == 0 {
+	if m.hashCount == 0 {
 		p.WriteString(ifstr(j, "[", "{"))
 		for _, a := range m.ArrayPart() {
 			a.toString(p, lv+1, j)

@@ -29,7 +29,7 @@ var (
 	}()
 	baseStart  = uintptr(unsafe.Pointer(&baseMarker[0]))
 	baseLength = uintptr(len(baseMarker))
-	// baseEnd        = uintptr(unsafe.Pointer(&baseMarker[0])) + baseLength
+	baseEnd    = uintptr(unsafe.Pointer(&baseMarker[0])) + baseLength
 
 	int64Marker    = unsafe.Pointer(&baseMarker[int(typ.Number)])
 	float64Marker  = unsafe.Pointer(&baseMarker[int(typ.Number)+8])
@@ -138,7 +138,7 @@ func TableMerge(dst Value, src Value, kvs ...Value) Value {
 	return t.Value()
 }
 
-// TableProto creates a table whose parent will be set to p
+// TableProto creates a table whose parent will be set to `p`
 func TableProto(p *Table, kvs ...Value) Value {
 	m := Map(kvs...)
 	m.Table().SetParent(p)
@@ -261,9 +261,7 @@ func Val(i interface{}) Value {
 				}
 			}
 		}
-		return (&Func{FuncBody: &FuncBody{
-			Name: "<" + rv.Type().String() + ">", Native: nf},
-		}).Value()
+		return (&Func{FuncBody: &FuncBody{Name: "<" + rv.Type().String() + ">", Native: nf}}).Value()
 	}
 	return intf(i)
 }
@@ -297,6 +295,22 @@ func intf(i interface{}) Value {
 	return Value{v: uint64(typ.Native), p: unsafe.Pointer(&i)}
 }
 
+func stringType(v Value) string {
+	switch vt := v.Type(); vt {
+	case typ.Number, typ.Bool, typ.Native:
+		return v.JSONString()
+	case typ.String:
+		if v.StrLen() <= 32 {
+			return v.JSONString()
+		}
+		return strconv.Quote(v.Str()[:32] + "...")
+	case typ.Table:
+		return "{" + v.Table().Name() + "}"
+	default:
+		return vt.String()
+	}
+}
+
 func (v Value) isSmallString() bool {
 	return uintptr(v.p) >= uintptr(smallStrMarker) && uintptr(v.p) <= uintptr(smallStrMarker)+8*8
 }
@@ -310,6 +324,14 @@ func (v Value) Str() string {
 		return *(*string)(unsafe.Pointer(&buf))
 	}
 	return *(*string)(v.p)
+}
+
+// StrLen returns the length of string without checking Type()
+func (v Value) StrLen() int {
+	if v.isSmallString() {
+		return int(uintptr(v.p)-uintptr(smallStrMarker)) / 8
+	}
+	return len(*(*string)(v.p))
 }
 
 // Int returns value as an int without checking Type()
@@ -434,7 +456,7 @@ func (v Value) MustFunc(msg string) *Func {
 		return v.Table().GetString("__call").MustFunc("")
 	} else if vt == typ.Func {
 	} else {
-		panicf(msg+ifstr(msg != "", ": ", "")+"expect function or callable table, got %v", v.Type())
+		panicf(msg+ifstr(msg != "", ": ", "")+"expect function or callable table, got %v", stringType(v))
 	}
 	return v.Func()
 }
@@ -445,9 +467,9 @@ func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
 			msg = fmt.Sprintf(msg, msgArg)
 		}
 		if msg != "" {
-			panicf("%s: expect %v, got %v", msg, t, v.Type())
+			panicf("%s: expect %v, got %v", msg, t, stringType(v))
 		}
-		panicf("expect %v, got %v", t, v.Type())
+		panicf("expect %v, got %v", t, stringType(v))
 	}
 	return v
 }

@@ -2,6 +2,9 @@ package script
 
 import (
 	"bytes"
+	"encoding/base32"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -14,11 +17,18 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/coyove/script/typ"
 )
 
-var StringMethods, MathLib, TableLib, OSLib, IOLib Value
+var (
+	StrLib   Value
+	MathLib  Value
+	TableLib Value
+	OSLib    Value
+	IOLib    Value
+)
 
 func init() {
 	IOLib = TableMerge(IOLib, Nil,
@@ -128,11 +138,17 @@ func init() {
 			return Nil
 		}, "$f({t}: table, p: table)", "\tinsert `p` as `t`'s first parent"),
 		Str("arraylen"), Func1("arraylen", func(v Value) Value {
-			return Int(int64(len(v.MustTable("").items)))
-		}, "$f({t}: array) int", "\treturn the true size of array (including trailing nils)"),
+			return Int(int64(v.MustTable("").ArrayLen()))
+		}, "$f({t}: array) int", "\treturn the length of array"),
 		Str("maplen"), Func1("maplen", func(v Value) Value {
+			return Int(int64(v.MustTable("").MapLen()))
+		}, "$f({t}: table) int", "\treturn the size of table map"),
+		Str("arraysize"), Func1("arraysize", func(v Value) Value {
+			return Int(int64(len(v.MustTable("").items)))
+		}, "$f({t}: array) int", "\treturn the true size of array (including nils)"),
+		Str("mapsize"), Func1("mapsize", func(v Value) Value {
 			return Int(int64(len(v.MustTable("").hashItems)))
-		}, "$f({t}: table) int", "\treturn the true size of table map (including empty entries)"),
+		}, "$f({t}: table) int", "\treturn the true size of table map (including empty nil entries)"),
 		Str("keys"), Func1("keys", func(m Value) Value {
 			a := make([]Value, 0)
 			m.MustTable("").Foreach(func(k, v Value) bool { a = append(a, k); return true })
@@ -231,7 +247,59 @@ func init() {
 	)
 	AddGlobalValue("table", TableLib)
 
-	StringMethods = TableMerge(StringMethods, Nil,
+	encDecProto := Map(
+		Str("__name"), Str("encdec"),
+		Str("encode"), Func2("encode", func(enc, t Value) Value {
+			x := struct {
+				a string
+				c int
+			}{a: t.MustStr(""), c: t.StrLen()}
+			return Str(enc.Interface().(interface{ EncodeToString([]byte) string }).EncodeToString(*(*[]byte)(unsafe.Pointer(&x))))
+		}),
+		Str("decode"), Func2("decode", func(enc, t Value) Value {
+			v, err := enc.Interface().(interface{ DecodeString(string) ([]byte, error) }).DecodeString(t.MustStr(""))
+			panicErr(err)
+			return Bytes(v)
+		}),
+		Str("encoder"), Func3("encoder", func(m, s, pad Value) Value {
+			buf := &bytes.Buffer{}
+			enc := Nil
+			switch n := m.MustTable("").Name(); n {
+			case "hex^encdec":
+				enc = Val(hex.NewEncoder(buf))
+			case "base32^encdec":
+				enc = Val(base32.NewEncoder(getBase32Encoding(s.MaybeStr(""), rune(pad.MaybeStr("=")[0])), buf))
+			case "base64^encdec":
+				enc = Val(base64.NewEncoder(getBase64Encoding(s.MaybeStr(""), rune(pad.MaybeStr("=")[0])), buf))
+			default:
+				panicf("encoder %q not supported", n)
+			}
+			return TableProto(WriteCloserProto,
+				Str("_f"), Val(enc),
+				Str("_b"), Val(buf),
+				Str("value"), Func1("value", func(p Value) Value {
+					return Bytes(p.MustTable("").GetString("_b").Interface().(*bytes.Buffer).Bytes())
+				}),
+			)
+		}),
+		Str("decoder"), Function("decoder", func(env *Env) {
+			m, src, s, pad := env.Get(0).MustTable("").Name(), NewReader(env.Get(1)), env.Get(2).MaybeStr(""), env.Get(3).MaybeStr("=")[0]
+			dec := Nil
+			switch m {
+			case "base64^encdec":
+				dec = Val(base64.NewDecoder(getBase64Encoding(s, rune(pad)), src))
+			case "base32^encdec":
+				dec = Val(base32.NewDecoder(getBase32Encoding(s, rune(pad)), src))
+			case "hex^encdec":
+				dec = Val(hex.NewDecoder(src))
+			default:
+				panicf("decoder %q not supported", m)
+			}
+			env.A = TableProto(ReaderProto, Str("_f"), Val(dec))
+		}),
+	)
+
+	StrLib = TableMerge(StrLib, Nil,
 		Str("__name"), Str("strlib"),
 		Str("__call"), Func2("str", func(strObj, src Value) Value {
 			switch i := src.Interface().(type) {
@@ -410,8 +478,15 @@ func init() {
 				}),
 			)
 		}),
+		Str("base64"), TableProto(encDecProto.Table(),
+			Str("__name"), Str("base64"),
+			Str("std"), Val(getBase64Encoding("std", '=')),
+			Str("url"), Val(getBase64Encoding("url", '=')),
+			Str("stdx"), Val(getBase64Encoding("std", -1)),
+			Str("urlx"), Val(getBase64Encoding("url", -1)),
+		),
 	)
-	AddGlobalValue("str", StringMethods)
+	AddGlobalValue("str", StrLib)
 
 	MathLib = TableMerge(MathLib, Nil,
 		Str("__name"), Str("mathlib"),
@@ -648,4 +723,47 @@ func sprintf(env *Env, p io.Writer) {
 			fmt.Fprint(p, pop.Interface())
 		}
 	}
+}
+
+func getBase64Encoding(x string, padding rune) (enc *base64.Encoding) {
+	a, _ := getBaseEncoding(true, x, padding)
+	return a
+}
+
+func getBase32Encoding(x string, padding rune) (enc *base32.Encoding) {
+	_, a := getBaseEncoding(true, x, padding)
+	return a
+}
+
+func getBaseEncoding(b64 bool, x string, padding rune) (enc *base64.Encoding, enc32 *base32.Encoding) {
+	const encodeStd64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	const encodeURL64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	const encodeStd32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+	const encodeHex32 = "0123456789ABCDEFGHIJKLMNOPQRSTUV"
+	if b64 {
+		switch x {
+		case "url", "URL", encodeURL64:
+			enc = base64.URLEncoding
+		case "", "std", "STD", encodeStd64:
+			enc = base64.StdEncoding
+		default:
+			enc = base64.NewEncoding(x)
+		}
+		if padding != '=' {
+			enc = enc.WithPadding(padding)
+		}
+	} else {
+		switch x {
+		case "hex", "HEX", encodeHex32:
+			enc32 = base32.HexEncoding
+		case "", "std", "STD", encodeStd32:
+			enc32 = base32.StdEncoding
+		default:
+			enc32 = base32.NewEncoding(x)
+		}
+		if padding != '=' {
+			enc32 = enc32.WithPadding(padding)
+		}
+	}
+	return
 }

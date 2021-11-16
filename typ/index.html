@@ -5,47 +5,48 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-  * {
-      box-sizing: border-box;
-      font-size: 14px;
-  }
-  html, body {
-      height: 100%;
-      margin: 0;
-  }
+    * {
+        box-sizing: border-box;
+        font-size: 14px;
+    }
+    html, body {
+        height: 100%;
+        margin: 0;
+    }
     #code {
         height: 100%;
         width: 100%;
         border: none;
         background-color: transparent;
+        resize: none;
     }
-  #input {
-      position:absolute;
-      left:0;
-      top:32px;
-      width:100%;
-      bottom:33%;
-  }
-  #output {
-      position: absolute;
-      width: 100%;
-      top: 67%;
-      bottom: 0;
-      overflow-y: scroll;
-  }
-  #output div {
-      white-space: pre-wrap;
-      word-break: break-all;
-      padding: 0.2em 0.5em;
-  }
-  #output div.title {
-      font-size: 90%;
-      background: #eee;
-  }
-  #output div.content {
-      font-family: monospace;
-      padding: 0.5em;
-  }
+    #input {
+        position:absolute;
+        left:0;
+        top:32px;
+        width:100%;
+        bottom:33%;
+    }
+    #output {
+        position: absolute;
+        width: 100%;
+        top: 67%;
+        bottom: 0;
+        overflow-y: scroll;
+    }
+    #output div {
+        white-space: pre-wrap;
+        word-break: break-all;
+        padding: 0.2em 0.5em;
+    }
+    #output div.title {
+        font-size: 90%;
+        background: #eee;
+    }
+    #output div.content {
+        font-family: monospace;
+        padding: 0.5em;
+    }
 </style>
 
 <body>
@@ -53,7 +54,7 @@
     <div style="line-height: 32px;height:32px;padding:0 0.5em">
 	<button onclick="run()">Run (F5)</button>
 	<span style="float:right">
-	  <a href="https://github.com/coyove/script">Github</a>
+	    <a href="https://github.com/coyove/script">Github</a>
 	</span>
     </div>
     <div id="input">
@@ -139,35 +140,35 @@ end</textarea>
         return el;
     }
 
-  function run() {
-      fetch('?code=' + encodeURIComponent(editor.value))
-	  .then(response => response.json())
-	  .then(function(data) {
-	      var el = output;
-	      el.innerHTML = '';
+    function run() {
+        fetch('?code=' + encodeURIComponent(editor.value))
+        .then(response => response.json())
+        .then(function(data) {
+            var el = output;
+            el.innerHTML = '';
 
-	      if (data.error) {
-              el.appendChild(div("Error", true))
-              el.appendChild(div(data.error))
-          } else if (data.result) {
-              el.appendChild(div("Results", true))
-              v = data.result;
-              el.appendChild(div(typeof v === 'object' ? JSON.stringify(v) : v));
-          }
-          if (data.stdout) {
-              el.appendChild(div("Stdout", true));
-              el.appendChild(div(data.stdout));
-              el.appendChild(div("Elapsed", true))
-              el.appendChild(div(data.elapsed + 's'));
-          }
-          if (data.opcode) {
-              el.appendChild(div("Compiled", true));
-              el.appendChild(div(data.opcode));
-          }
-          if (data.survey) {
-              el.appendChild(div("Survey", true));
-              el.appendChild(div(JSON.stringify(data.survey)));
-          }
-	  });
-  }
+            if (data.error) {
+                el.appendChild(div("Error", true))
+                el.appendChild(div(data.error))
+            } else if (data.result) {
+                el.appendChild(div("Results", true))
+                v = data.result;
+                el.appendChild(div(typeof v === 'object' ? JSON.stringify(v) : v));
+            }
+            if (data.stdout) {
+                el.appendChild(div("Stdout", true));
+                el.appendChild(div(data.stdout));
+                el.appendChild(div("Elapsed", true))
+                el.appendChild(div(data.elapsed + 's'));
+            }
+            if (data.opcode) {
+                el.appendChild(div("Compiled", true));
+                el.appendChild(div(data.opcode));
+            }
+            if (data.survey) {
+                el.appendChild(div("Survey", true));
+                el.appendChild(div(JSON.stringify(data.survey)));
+            }
+        });
+    }
 </script>

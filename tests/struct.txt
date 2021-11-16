@@ -18,11 +18,6 @@ println(T1.c, T2.c)
 T2.add(30)
 assert(T1.c == 132 and T2.c == 53)
 
-another = {f=timer.add}
-x = {X=1e3,c=-1}
-another:f(x, 10)
-assert(x.c == 1009)
-
 print(timer.add)
 
 dict={}

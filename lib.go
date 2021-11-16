@@ -86,6 +86,9 @@ func init() {
 			return Int(int64(reflectLen(v.Interface())))
 		}
 	})
+	AddGlobalValue("sizeof", func(v Value) Value {
+		return Int(int64(v.MustTable("").Size()))
+	})
 	AddGlobalValue("eval", func(s, g Value) Value {
 		var m map[string]interface{}
 		if gt := g.MaybeTableGetString("globals"); gt.Type() == typ.Table {
