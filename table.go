@@ -71,6 +71,10 @@ func (m *Table) GetString(k string) (v Value) {
 
 // Get retrieves the value for a given key.
 func (m *Table) Get(k Value) (v Value) {
+	return m.getImpl(k, true)
+}
+
+func (m *Table) getImpl(k Value, funcRecv bool) (v Value) {
 	if k == Nil {
 		return Nil
 	}
@@ -86,7 +90,7 @@ func (m *Table) Get(k Value) (v Value) {
 		v = m.parent.Get(k)
 	}
 FINAL:
-	if v.Type() == typ.Func {
+	if funcRecv && v.Type() == typ.Func {
 		f := *v.Func()
 		f.Receiver = m.Value()
 		v = f.Value()

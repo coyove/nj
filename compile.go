@@ -248,7 +248,7 @@ var flatOpMapping = map[string]byte{
 	parser.ABitURsh:    typ.OpBitURsh,
 	parser.AStore:      typ.OpStore,
 	parser.ALoad:       typ.OpLoad,
-	parser.ALoadStatic: typ.OpLoad,
+	parser.ALoadStatic: typ.OpLoadFunc,
 	parser.AInc:        typ.OpInc,
 }
 

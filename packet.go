@@ -195,7 +195,7 @@ func pkPrettify(c *Func, p *Program, toplevel bool) string {
 			sb.WriteString("map")
 		case typ.OpLoadFunc:
 			if b != 0 {
-				sb.WriteString("loadstatic " + readAddr(b, true) + "\n")
+				sb.WriteString("loadstatic " + readAddr(a, true) + " " + readAddr(b, true))
 			} else {
 				cls := p.Functions[a]
 				sb.WriteString("loadfunc " + cls.Name + "\n")

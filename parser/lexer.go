@@ -93,7 +93,7 @@ func (sc *Scanner) Next() uint32 {
 
 func (sc *Scanner) skipComments() {
 	for ch := sc.Next(); ; ch = sc.Next() {
-		if ch == '\n' || ch < 0 || ch == EOF {
+		if ch == '\n' || ch == EOF {
 			return
 		}
 	}
@@ -146,7 +146,7 @@ func (sc *Scanner) scanString(quote uint32) (string, error) {
 
 	ch := sc.Next()
 	for ch != quote || lastIsSlash {
-		if ch == '\n' || ch < 0 {
+		if ch == '\n' {
 			return "", sc.Error(buf.String(), "unterminated string")
 		}
 		lastIsSlash = ch == '\\'
@@ -398,9 +398,6 @@ func (lx *Lexer) Lex(lval *yySymType) int {
 	tok, err := lx.scanner.Scan(lx)
 	if err != nil {
 		panic(err)
-	}
-	if tok.Type < 0 {
-		return 0
 	}
 	lval.token = tok
 	lx.Token = tok

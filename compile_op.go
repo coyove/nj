@@ -123,19 +123,13 @@ func (table *symtable) compileFlat(atoms []parser.Node) uint16 {
 		panicf("DEBUG compileFlat invalid symbol: %v", atoms[0])
 	}
 	yx := table.writeInst3(op, atoms)
-	if head == parser.ALoadStatic {
-		if p := atoms[0].Pos(); p.Line > 0 {
-			table.code.writePos(p)
-		}
-		table.writeInst(typ.OpLoadFunc, parser.Addr(0), parser.Addr(yx))
-	}
 	if p := atoms[0].Pos(); p.Line > 0 {
 		table.code.writePos(p)
 	}
 	return yx
 }
 
-// [and a b] => $a = a if not a then return else $a = b end
+// [and a b] => $a = a if not a then goto out else $a = b end ::out::
 // [or a b]  => $a = a if not a then $a = b end
 func (table *symtable) compileAndOr(atoms []parser.Node) uint16 {
 	table.writeInst(typ.OpSet, _nodeRegA, atoms[1])

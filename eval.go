@@ -333,10 +333,7 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 			retStack = retStack[:len(retStack)-1]
 		case typ.OpLoadFunc:
 			if opb != 0 {
-				env.A = env._get(opb)
-				if env.A.Type() == typ.Func {
-					env.A.Func().Receiver = Nil
-				}
+				env.A = env._get(opa).MustTable("loadstatic").getImpl(env._get(opb), false)
 			} else {
 				env.A = env.Global.Functions[opa].Value()
 			}
