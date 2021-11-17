@@ -53,7 +53,7 @@ type symtable struct {
 	code packet
 
 	// toplevel symtable
-	funcs []*Func
+	funcs []*Function
 
 	// variable Name lookup
 	sym       map[string]*symbol
@@ -439,7 +439,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		}
 	}
 
-	cls = &Program{Top: &Func{FuncBody: &FuncBody{}}}
+	cls = &Program{Top: &Function{FuncBody: &FuncBody{}}}
 	cls.Top.Name = "main"
 	cls.Top.Code = table.code
 	cls.Top.StackSize = table.vp

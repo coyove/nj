@@ -194,7 +194,7 @@ func Val(i interface{}) Value {
 		return v.Value()
 	case []Value:
 		return Array(v...)
-	case *Func:
+	case *Function:
 		return v.Value()
 	case Value:
 		return v
@@ -261,7 +261,7 @@ func Val(i interface{}) Value {
 				}
 			}
 		}
-		return (&Func{FuncBody: &FuncBody{Name: "<" + rv.Type().String() + ">", Native: nf}}).Value()
+		return (&Function{FuncBody: &FuncBody{Name: "<" + rv.Type().String() + ">", Native: nf}}).Value()
 	}
 	return intf(i)
 }
@@ -357,7 +357,7 @@ func (v Value) Bool() bool { return v.p == trueMarker }
 func (v Value) Table() *Table { return (*Table)(v.p) }
 
 // Func returns value as a function without checking Type()
-func (v Value) Func() *Func { return (*Func)(v.p) }
+func (v Value) Func() *Function { return (*Function)(v.p) }
 
 // Interface returns value as an interface{}
 func (v Value) Interface() interface{} {
@@ -451,9 +451,9 @@ func (v Value) MustFloat(msg string) float64 { return v.mustBe(typ.Number, msg, 
 
 func (v Value) MustTable(msg string) *Table { return v.mustBe(typ.Table, msg, 0).Table() }
 
-func (v Value) MustFunc(msg string) *Func {
+func (v Value) MustFunc(msg string) *Function {
 	if vt := v.Type(); vt == typ.Table {
-		return v.Table().GetString("__call").MustFunc("")
+		return v.Table().GetString("__call").MustFunc(msg)
 	} else if vt == typ.Func {
 	} else {
 		panicf(msg+ifstr(msg != "", ": ", "")+"expect function or callable table, got %v", stringType(v))

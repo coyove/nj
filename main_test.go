@@ -687,7 +687,7 @@ func BenchmarkFloat64_2(b *testing.B) {
 }
 
 func BenchmarkReceiver(b *testing.B) {
-	x := Array(Function("", func(env *Env) {}))
+	x := Array(Func("", func(env *Env) {}))
 	fmt.Println(x.Table().Get(Int(0)).String())
 	for i := 0; i < b.N; i++ {
 		x.Table().Get(Int(0))

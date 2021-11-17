@@ -28,7 +28,7 @@ var g = map[string]Value{}
 func AddGlobalValue(k string, v interface{}, doc ...string) {
 	switch v := v.(type) {
 	case func(*Env):
-		g[k] = Function(k, v, doc...)
+		g[k] = Func(k, v, doc...)
 	case func(Value) Value:
 		g[k] = Func1(k, v, doc...)
 	case func(Value, Value) Value:
@@ -126,13 +126,13 @@ func init() {
 		return Map(
 			Str("source"), m,
 			Str("lambda"), lambda.Value(),
-			Str("__str"), Function("<closure-"+lambda.Name+"__str>", func(env *Env) {
+			Str("__str"), Func("<closure-"+lambda.Name+"__str>", func(env *Env) {
 				recv := env.Get(0).MustTable("")
 				f := recv.GetString("lambda").MustFunc("")
 				src := recv.GetString("source")
 				env.A = Str("<closure-" + f.Pure().String() + "-" + src.String() + ">")
 			}),
-			Str("__call"), Function("<closure-"+lambda.Name+">", func(env *Env) {
+			Str("__call"), Func("<closure-"+lambda.Name+">", func(env *Env) {
 				recv := env.Get(0).MustTable("")
 				f := recv.GetString("lambda").MustFunc("").Pure()
 				stk := append([]Value{recv.GetString("source")}, env.Stack()[1:]...)
@@ -147,7 +147,7 @@ func init() {
 
 	// Debug libraries
 	AddGlobalValue("debug", Map(
-		Str("locals"), Function("locals", func(env *Env) {
+		Str("locals"), Func("locals", func(env *Env) {
 			var r []Value
 			start := env.stackOffset - uint32(env.CS.StackSize)
 			for i, name := range env.CS.Locals {
@@ -156,17 +156,17 @@ func init() {
 			}
 			env.A = Array(r...)
 		}, "$f() array", "\treturn { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
-		Str("globals"), Function("globals", func(env *Env) {
+		Str("globals"), Func("globals", func(env *Env) {
 			var r []Value
 			for i, name := range env.Global.Top.Locals {
 				r = append(r, Int(int64(i)), Str(name), (*env.Global.Stack)[i])
 			}
 			env.A = Array(r...)
 		}, "$f() array", "\treturn { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
-		Str("set"), Function("set", func(env *Env) {
+		Str("set"), Func("set", func(env *Env) {
 			(*env.Global.Stack)[env.Get(0).MustInt("")] = env.Get(1)
 		}, "$f(idx: int, v: value)"),
-		Str("trace"), Function("trace", func(env *Env) {
+		Str("trace"), Func("trace", func(env *Env) {
 			stacks := append(env.Stacktrace, stacktrace{cls: env.CS, cursor: env.IP})
 			lines := make([]Value, 0, len(stacks))
 			for i := len(stacks) - 1 - int(env.Get(0).MaybeInt(0)); i >= 0; i-- {
@@ -212,12 +212,12 @@ func init() {
 	}, "pcall(f: function, ...args: value) value", "\texecute `f`, catch panic and return as error if any")
 	AddGlobalValue("gcall", Map(
 		Str("__name"), Str("gcall"),
-		Str("__call"), Function("__call", func(env *Env) {
+		Str("__call"), Func("__call", func(env *Env) {
 			mt := env.Get(0).MustTable("")
 			f := env.Get(1).MustFunc("").Copy()
 			args := env.CopyStack()[2:]
 			w := make(chan Value, 1)
-			go func(f *Func, args []Value) {
+			go func(f *Function, args []Value) {
 				if v, err := f.Call(args...); err != nil {
 					w <- wrapExecError(err)
 				} else {
@@ -392,7 +392,7 @@ func init() {
 	AddGlobalValue("iserror", func(env *Env) { _, ok := env.Get(0).Interface().(error); env.A = Bool(ok) }, "iserror(v: value) bool", "\treturn whether value is an error")
 
 	AddGlobalValue("json", Map(
-		Str("stringify"), Function("stringify", func(env *Env) {
+		Str("stringify"), Func("stringify", func(env *Env) {
 			env.A = Str(env.Get(0).JSONString())
 		}, "$f(v: value) string"),
 		Str("parse"), Func1("parse", func(js Value) Value {
@@ -410,9 +410,9 @@ func init() {
 	))
 
 	AddGlobalValue("sync", Map(
-		Str("mutex"), Function("mutex", func(env *Env) { env.A = Val(&sync.Mutex{}) }, "$f() value", "\tcreate a sync.Mutex"),
-		Str("rwmutex"), Function("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() value", "\tcreate a sync.RWMutex"),
-		Str("waitgroup"), Function("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() value", "\tcreate a sync.WaitGroup"),
+		Str("mutex"), Func("mutex", func(env *Env) { env.A = Val(&sync.Mutex{}) }, "$f() value", "\tcreate a sync.Mutex"),
+		Str("rwmutex"), Func("rwmutex", func(env *Env) { env.A = Val(&sync.RWMutex{}) }, "$f() value", "\tcreate a sync.RWMutex"),
+		Str("waitgroup"), Func("waitgroup", func(env *Env) { env.A = Val(&sync.WaitGroup{}) }, "$f() value", "\tcreate a sync.WaitGroup"),
 		Str("map"), Func3("map", func(list, f, opt Value) Value {
 			fun := f.MustFunc("mapping")
 			n, t := int(opt.MaybeInt(int64(runtime.NumCPU()))), list.MustTable("")
@@ -459,7 +459,7 @@ func init() {
 	}, "parent(t: table) table", "\tfind given table's parent, or nil if not existed")
 
 	AddGlobalValue("open", Map(
-		Str("__call"), Function("open", func(env *Env) {
+		Str("__call"), Func("open", func(env *Env) {
 			path, flag, perm := env.Get(1).MustStr("path"), env.Get(2), env.Get(3)
 			var opt int
 			for _, f := range flag.MaybeStr("r") {
@@ -504,7 +504,7 @@ func init() {
 			)
 			env.A = m
 		}, "open(path: string, flag: string, perm: int) table"),
-		Str("close"), Function("close", func(env *Env) {
+		Str("close"), Func("close", func(env *Env) {
 			f, _ := env.Get(0).MustTable("").Get(Int(0)).Interface().(*os.File)
 			if f != nil {
 				panicErr(f.Close())

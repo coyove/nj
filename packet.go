@@ -118,7 +118,7 @@ var (
 	}
 )
 
-func pkPrettify(c *Func, p *Program, toplevel bool) string {
+func pkPrettify(c *Function, p *Program, toplevel bool) string {
 	sb := &bytes.Buffer{}
 	sb.WriteString("+ START " + c.String() + "\n")
 

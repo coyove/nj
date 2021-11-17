@@ -11,7 +11,7 @@ import (
 	"github.com/coyove/script/typ"
 )
 
-type Func struct {
+type Function struct {
 	*FuncBody
 	Receiver Value
 }
@@ -29,22 +29,22 @@ type FuncBody struct {
 }
 
 type Program struct {
-	Top          *Func
+	Top          *Function
 	Symbols      map[string]*symbol
 	MaxStackSize int64
 	Stack        *[]Value
-	Functions    []*Func
+	Functions    []*Function
 	Stdout       io.Writer
 	Stderr       io.Writer
 	Stdin        io.Reader
 }
 
-// Function creates a golang-Function function
-func Function(name string, f func(env *Env), doc ...string) Value {
+// Func creates a function
+func Func(name string, f func(env *Env), doc ...string) Value {
 	if name == "" {
 		name = "<native>"
 	}
-	return (&Func{
+	return (&Function{
 		FuncBody: &FuncBody{
 			Name:      name,
 			Native:    f,
@@ -54,22 +54,22 @@ func Function(name string, f func(env *Env), doc ...string) Value {
 }
 
 func Func1(name string, f func(Value) Value, doc ...string) Value {
-	return Function(name, func(env *Env) { env.A = f(env.Get(0)) }, doc...)
+	return Func(name, func(env *Env) { env.A = f(env.Get(0)) }, doc...)
 }
 
 func Func2(name string, f func(Value, Value) Value, doc ...string) Value {
-	return Function(name, func(env *Env) { env.A = f(env.Get(0), env.Get(1)) }, doc...)
+	return Func(name, func(env *Env) { env.A = f(env.Get(0), env.Get(1)) }, doc...)
 }
 
 func Func3(name string, f func(Value, Value, Value) Value, doc ...string) Value {
-	return Function(name, func(env *Env) { env.A = f(env.Get(0), env.Get(1), env.Get(2)) }, doc...)
+	return Func(name, func(env *Env) { env.A = f(env.Get(0), env.Get(1), env.Get(2)) }, doc...)
 }
 
-func (c *Func) Value() Value {
+func (c *Function) Value() Value {
 	return Value{v: uint64(typ.Func), p: unsafe.Pointer(c)}
 }
 
-func (c *Func) String() string {
+func (c *Function) String() string {
 	p := bytes.Buffer{}
 	if c.Name != "" {
 		p.WriteString(c.Name)
@@ -93,7 +93,7 @@ func (c *Func) String() string {
 	return p.String()
 }
 
-func (c *Func) PrettyCode() string {
+func (c *Function) PrettyCode() string {
 	if c.Native != nil {
 		return "[Native Code]"
 	}
@@ -121,13 +121,13 @@ func (p *Program) EmergStop() {
 
 // EmergStop terminates the execution of Func
 // After calling, Func will become unavailable for any further operations
-func (c *Func) EmergStop() {
+func (c *Function) EmergStop() {
 	for i := range c.Code.Code {
 		c.Code.Code[i] = inst(typ.OpRet, regA, 0)
 	}
 }
 
-func (c *Func) CallVal(args ...interface{}) (v1 interface{}, err error) {
+func (c *Function) CallVal(args ...interface{}) (v1 interface{}, err error) {
 	x := make([]Value, len(args))
 	for i := range args {
 		x[i] = Val(args[i])
@@ -135,7 +135,7 @@ func (c *Func) CallVal(args ...interface{}) (v1 interface{}, err error) {
 	return c.Call(x...)
 }
 
-func (c *Func) Call(args ...Value) (v1 Value, err error) {
+func (c *Function) Call(args ...Value) (v1 Value, err error) {
 	defer parser.CatchErrorFuncCall(&err, c.Name)
 
 	newEnv := Env{
@@ -165,7 +165,7 @@ func (c *Func) Call(args ...Value) (v1 Value, err error) {
 	return
 }
 
-func (f *Func) Pure() *Func {
+func (f *Function) Pure() *Function {
 	f.Receiver = Nil
 	return f
 }
@@ -191,10 +191,10 @@ func (p *Program) Set(k string, v Value) (ok bool) {
 	return true
 }
 
-func (f *Func) Copy() *Func {
+func (f *Function) Copy() *Function {
 	b2 := *f.FuncBody
 	b2.Code.Code = append([]_inst{}, b2.Code.Code...)
-	return &Func{
+	return &Function{
 		FuncBody: &b2,
 		Receiver: f.Receiver,
 	}

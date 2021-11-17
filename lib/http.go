@@ -27,7 +27,7 @@ func init() {
 			return script.Str(v)
 		}),
 	))
-	script.AddGlobalValue("http", script.Function("http", func(env *script.Env) {
+	script.AddGlobalValue("http", script.Func("http", func(env *script.Env) {
 		args := env.Get(0).Table()
 		to := args.GetString("timeout").MaybeFloat(1 << 30)
 

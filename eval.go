@@ -12,13 +12,13 @@ import (
 type stacktrace struct {
 	cursor      uint32
 	stackOffset uint32
-	cls         *Func
+	cls         *Function
 }
 
 // ExecError represents the runtime error
 type ExecError struct {
 	r      interface{}
-	native *Func
+	native *Function
 	stacks []stacktrace
 }
 
@@ -71,12 +71,12 @@ func wrapExecError(err error) Value {
 }
 
 // internalExecCursorLoop executes 'K' under 'env' from the given start 'cursor'
-func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
+func internalExecCursorLoop(env Env, K *Function, cursor uint32) Value {
 	stackEnv := env
 	stackEnv.stackOffset = uint32(len(*env.stack))
 
 	var retStack []stacktrace
-	var nativeCls *Func
+	var nativeCls *Function
 
 	defer func() {
 		if r := recover(); r != nil {

@@ -15,7 +15,7 @@ type Env struct {
 
 	// Debug info for native functions to read
 	IP         uint32
-	CS         *Func
+	CS         *Function
 	Stacktrace []stacktrace
 }
 
@@ -41,6 +41,11 @@ func (env *Env) grow(newSize int) {
 	*env.stack = s[:sz]
 }
 
+// B is an alias of Get
+func (env *Env) B(index int) Value {
+	return env.Get(index)
+}
+
 // Get gets a value from the current stack
 func (env *Env) Get(index int) Value {
 	s := *env.stack
@@ -48,7 +53,7 @@ func (env *Env) Get(index int) Value {
 	if index < len(*env.stack) {
 		return s[index]
 	}
-	return Value{}
+	return Nil
 }
 
 // Set sets a value in the current stack

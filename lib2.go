@@ -58,8 +58,8 @@ func init() {
 			t.MustTable("").Foreach(func(k, v Value) bool {
 				if v.Type() == typ.Func {
 					old := v.Func()
-					v = Function(v.Func().Name, func(env *Env) {
-						mu := env.Get(0).MustTable("").GetString("_mu").Interface().(*sync.Mutex)
+					v = Func(v.Func().Name, func(env *Env) {
+						mu := env.B(0).MustTable("").GetString("_mu").Interface().(*sync.Mutex)
 						mu.Lock()
 						defer mu.Unlock()
 						a, err := old.Call(env.Stack()...)
@@ -95,14 +95,14 @@ func init() {
 		Str("makearray"), Func1("makearray", func(n Value) Value {
 			return Array(make([]Value, n.MustInt(""))...)
 		}, "$f(n: int) array", "\treturn a table array, preallocate space for n values"),
-		Str("clear"), Function("clear", func(env *Env) {
-			env.Get(0).MustTable("").Clear()
+		Str("clear"), Func("clear", func(env *Env) {
+			env.B(0).MustTable("").Clear()
 		}, "$f({t}: table)"),
-		Str("cleararray"), Function("cleararray", func(env *Env) {
-			env.Get(0).MustTable("").ClearArray()
+		Str("cleararray"), Func("cleararray", func(env *Env) {
+			env.B(0).MustTable("").ClearArray()
 		}, "$f({t}: table)"),
-		Str("clearmap"), Function("clearmap", func(env *Env) {
-			env.Get(0).MustTable("").ClearMap()
+		Str("clearmap"), Func("clearmap", func(env *Env) {
+			env.B(0).MustTable("").ClearMap()
 		}, "$f({t}: table)"),
 		Str("slice"), Func3("slice", func(t, s, e Value) Value {
 			start, end := int(s.MustInt("")), int(e.MustInt(""))
@@ -177,11 +177,9 @@ func init() {
 			a.MustTable("").Foreach(func(k, v Value) bool { found = v.Equal(b); return !found })
 			return Bool(found)
 		}, "$f({t}: table, v: value)", "\ttest if table contains value"),
-		Str("append"), Function("append", func(env *Env) {
-			ma := env.Get(0).MustTable("")
-			for i := 1; i < env.Size(); i++ {
-				ma.Set(Int(int64(len(ma.items))), env.Get(i))
-			}
+		Str("append"), Func("append", func(env *Env) {
+			ma := env.B(0).MustTable("")
+			ma.items = append(ma.items, env.Stack()[1:]...)
 			env.A = ma.Value()
 		}, "$f({a}: array, ...args: value)", "\tappend values to array"),
 		Str("filter"), Func2("filter", func(a, b Value) Value {
@@ -268,8 +266,8 @@ func init() {
 				}),
 			)
 		}),
-		Str("decoder"), Function("decoder", func(env *Env) {
-			t, src := env.Get(0).MustTable(""), NewReader(env.Get(1))
+		Str("decoder"), Func("decoder", func(env *Env) {
+			t, src := env.B(0).MustTable(""), NewReader(env.B(1))
 			dec := Nil
 			switch encoding := t.GetString("_e").Interface().(type) {
 			case *base64.Encoding:
@@ -362,9 +360,9 @@ func init() {
 			}
 			return Bytes(buf.Bytes())
 		}, "join({text}: string, a: array) string"),
-		Str("replace"), Function("replace", func(env *Env) {
-			src := env.Get(0).MustStr("text")
-			from := env.Get(1).MustStr("old text")
+		Str("replace"), Func("replace", func(env *Env) {
+			src := env.B(0).MustStr("text")
+			from := env.B(1).MustStr("old text")
 			to := env.Get(2).MustStr("new text")
 			n := env.Get(3).MaybeInt(-1)
 			env.A = Str(strings.Replace(src, from, to, int(n)))
@@ -418,8 +416,8 @@ func init() {
 		Str("rtrim"), Func2("rtrim", func(src, cutset Value) Value {
 			return Str(strings.TrimRight(src.MustStr(""), cutset.MaybeStr(" ")))
 		}, "$f({text}: string, cutset: string) string", "\tremove chars both ocurred in `cutset` and right-side of `text`"),
-		Str("decutf8"), Function("decutf8", func(env *Env) {
-			r, sz := utf8.DecodeRuneInString(env.Get(0).MustStr(""))
+		Str("utf8"), Func("utf8", func(env *Env) {
+			r, sz := utf8.DecodeRuneInString(env.B(0).MustStr(""))
 			env.A = Array(Int(int64(r)), Int(int64(sz)))
 		}, "$f({text}: string) array", "\tdecode first UTF-8 char in `text`, return { unicode, width_in_bytes }"),
 		Str("startswith"), Func2("startswith", func(t, p Value) Value {
@@ -463,7 +461,7 @@ func init() {
 			"chars({text}: string, n: int) array",
 			"\tbreak `text` into at most `n` chars, e.g.: chars('a中c', 1) => { 'a' }",
 		),
-		Str("format"), Function("format", func(env *Env) {
+		Str("format"), Func("format", func(env *Env) {
 			buf := &bytes.Buffer{}
 			sprintf(env, buf)
 			env.A = Bytes(buf.Bytes())
@@ -475,9 +473,8 @@ func init() {
 			}
 			return TableProto(ReadWriterProto,
 				Str("_f"), Val(b),
-				Str("reset"), Func1("reset", func(a Value) Value {
-					a.MustTable("").GetString("_f").Interface().(*bytes.Buffer).Reset()
-					return Nil
+				Str("reset"), Func("reset", func(env *Env) {
+					env.B(0).MustTable("").GetString("_f").Interface().(*bytes.Buffer).Reset()
 				}),
 				Str("value"), Func1("value", func(a Value) Value {
 					return Bytes(a.MustTable("").GetString("_f").Interface().(*bytes.Buffer).Bytes())
@@ -506,34 +503,30 @@ func init() {
 		Str("NEG_INF"), Float(math.Inf(-1)),
 		Str("PI"), Float(math.Pi),
 		Str("E"), Float(math.E),
-		Str("randomseed"), Function("randomseed", func(e *Env) { rand.Seed(e.Get(0).MaybeInt(1)) }, "$f(seed: int)"),
-		Str("random"), Function("random", func(e *Env) {
+		Str("randomseed"), Func("randomseed", func(e *Env) { rand.Seed(e.B(0).MaybeInt(1)) }, "$f(seed: int)"),
+		Str("random"), Func("random", func(e *Env) {
 			switch len(e.Stack()) {
 			case 2:
-				ai, bi := e.Get(0).MustInt(""), e.Get(1).MustInt("")
+				ai, bi := e.B(0).MustInt(""), e.B(1).MustInt("")
 				e.A = Int(rand.Int63n(bi-ai+1) + ai)
 			case 1:
-				e.A = Int(rand.Int63n(e.Get(0).MustInt("")))
+				e.A = Int(rand.Int63n(e.B(0).MustInt("")))
 			default:
 				e.A = Float(rand.Float64())
 			}
 		}, "$f() float", "\treturn [0, 1)",
 			"$f(n: int) int", "\treturn [0, n)",
 			"$f(a: int, b: int) int", "\treturn [a, b]"),
-		Str("sqrt"), Function("sqrt", func(e *Env) { e.A = Float(math.Sqrt(e.Get(0).MustFloat(""))) }),
-		Str("floor"), Function("floor", func(e *Env) { e.A = Float(math.Floor(e.Get(0).MustFloat(""))) }),
-		Str("ceil"), Function("ceil", func(e *Env) { e.A = Float(math.Ceil(e.Get(0).MustFloat(""))) }),
-		Str("min"), Function("min", func(e *Env) { mathMinMax(e, "#%d arg", false) }, "$f(...a: number) number"),
-		Str("max"), Function("max", func(e *Env) { mathMinMax(e, "#%d arg", true) }, "$f(...a: number) number"),
+		Str("sqrt"), Func("sqrt", func(e *Env) { e.A = Float(math.Sqrt(e.B(0).MustFloat(""))) }),
+		Str("floor"), Func("floor", func(e *Env) { e.A = Float(math.Floor(e.B(0).MustFloat(""))) }),
+		Str("ceil"), Func("ceil", func(e *Env) { e.A = Float(math.Ceil(e.B(0).MustFloat(""))) }),
+		Str("min"), Func("min", func(e *Env) { mathMinMax(e, false) }, "$f(a: number, ...b: number) number"),
+		Str("max"), Func("max", func(e *Env) { mathMinMax(e, true) }, "$f(a: number, ...b: number) number"),
 		Str("pow"), Func2("pow", func(a, b Value) Value {
-			ai, bi := a.MustNum("base"), b.MustNum("power")
-			if ai.IsInt() {
-				return Int(ipow(ai.Int(), bi.Int()))
-			}
-			return Float(math.Pow(ai.Float(), bi.Float()))
-		}, "pow(a: number, b: number) number"),
-		Str("abs"), Function("abs", func(e *Env) {
-			if e.A = e.Get(0).MustNum(""); e.A.IsInt() {
+			return Float(math.Pow(a.MustFloat("base"), b.MustFloat("exp")))
+		}, "pow(a: float, b: float) float"),
+		Str("abs"), Func("abs", func(e *Env) {
+			if e.A = e.B(0).MustNum(""); e.A.IsInt() {
 				if i := e.A.Int(); i < 0 {
 					e.A = Int(-i)
 				}
@@ -541,18 +534,18 @@ func init() {
 				e.A = Float(math.Abs(e.A.Float()))
 			}
 		}),
-		Str("remainder"), Function("remainder", func(e *Env) { e.A = Float(math.Remainder(e.Get(0).MustFloat(""), e.Get(1).MustFloat(""))) }),
-		Str("mod"), Function("mod", func(e *Env) { e.A = Float(math.Mod(e.Get(0).MustFloat(""), e.Get(1).MustFloat(""))) }),
-		Str("cos"), Function("cos", func(e *Env) { e.A = Float(math.Cos(e.Get(0).MustFloat(""))) }),
-		Str("sin"), Function("sin", func(e *Env) { e.A = Float(math.Sin(e.Get(0).MustFloat(""))) }),
-		Str("tan"), Function("tan", func(e *Env) { e.A = Float(math.Tan(e.Get(0).MustFloat(""))) }),
-		Str("acos"), Function("acos", func(e *Env) { e.A = Float(math.Acos(e.Get(0).MustFloat(""))) }),
-		Str("asin"), Function("asin", func(e *Env) { e.A = Float(math.Asin(e.Get(0).MustFloat(""))) }),
-		Str("atan"), Function("atan", func(e *Env) { e.A = Float(math.Atan(e.Get(0).MustFloat(""))) }),
-		Str("atan2"), Function("atan2", func(e *Env) { e.A = Float(math.Atan2(e.Get(0).MustFloat(""), e.Get(1).MustFloat(""))) }),
-		Str("ldexp"), Function("ldexp", func(e *Env) { e.A = Float(math.Ldexp(e.Get(0).MustFloat(""), int(e.Get(1).MaybeInt(0)))) }),
-		Str("modf"), Function("modf", func(e *Env) {
-			a, b := math.Modf(e.Get(0).MustFloat(""))
+		Str("remainder"), Func("remainder", func(e *Env) { e.A = Float(math.Remainder(e.B(0).MustFloat(""), e.B(1).MustFloat(""))) }),
+		Str("mod"), Func("mod", func(e *Env) { e.A = Float(math.Mod(e.B(0).MustFloat(""), e.B(1).MustFloat(""))) }),
+		Str("cos"), Func("cos", func(e *Env) { e.A = Float(math.Cos(e.B(0).MustFloat(""))) }),
+		Str("sin"), Func("sin", func(e *Env) { e.A = Float(math.Sin(e.B(0).MustFloat(""))) }),
+		Str("tan"), Func("tan", func(e *Env) { e.A = Float(math.Tan(e.B(0).MustFloat(""))) }),
+		Str("acos"), Func("acos", func(e *Env) { e.A = Float(math.Acos(e.B(0).MustFloat(""))) }),
+		Str("asin"), Func("asin", func(e *Env) { e.A = Float(math.Asin(e.B(0).MustFloat(""))) }),
+		Str("atan"), Func("atan", func(e *Env) { e.A = Float(math.Atan(e.B(0).MustFloat(""))) }),
+		Str("atan2"), Func("atan2", func(e *Env) { e.A = Float(math.Atan2(e.B(0).MustFloat(""), e.B(1).MustFloat(""))) }),
+		Str("ldexp"), Func("ldexp", func(e *Env) { e.A = Float(math.Ldexp(e.B(0).MustFloat(""), int(e.B(1).MaybeInt(0)))) }),
+		Str("modf"), Func("modf", func(e *Env) {
+			a, b := math.Modf(e.B(0).MustFloat(""))
 			e.A = Array(Float(a), Float(b))
 		}),
 	)
@@ -561,57 +554,58 @@ func init() {
 	OSLib = TableMerge(OSLib, Nil,
 		Str("__name"), Str("oslib"),
 		Str("args"), ValRec(os.Args),
-		Str("environ"), Function("environ", func(env *Env) { env.A = ValRec(os.Environ()) }),
+		Str("environ"), Func("environ", func(env *Env) { env.A = ValRec(os.Environ()) }),
 		Str("shell"), Func2("shell", func(cmd, opt Value) Value {
+			p := exec.Command("sh", "-c", cmd.MustStr(""))
+
 			timeout := time.Duration(1 << 62) // basically forever
 			if tmp := opt.MaybeTableGetString("timeout"); tmp != Nil {
 				timeout = time.Duration(tmp.MustFloat("timeout") * float64(time.Second))
 			}
-
-			out := make(chan interface{})
-			p := exec.Command("sh", "-c", cmd.MustStr(""))
-
 			if tmp := opt.MaybeTableGetString("env"); tmp != Nil {
 				tmp.MustTable("env").Foreach(func(k, v Value) bool {
 					p.Env = append(p.Env, k.String()+"="+v.String())
 					return true
 				})
 			}
-			go func() {
-				if v, err := p.Output(); err != nil {
-					out <- err
-				} else {
-					out <- v
-				}
-			}()
+			stdout := &bytes.Buffer{}
+			p.Stdout, p.Stderr = stdout, stdout
+			p.Dir = opt.MaybeTableGetString("dir").MaybeStr("")
+			if tmp := opt.MaybeTableGetString("stdout"); tmp != Nil {
+				p.Stdout = NewWriter(tmp)
+			}
+			if tmp := opt.MaybeTableGetString("stderr"); tmp != Nil {
+				p.Stderr = NewWriter(tmp)
+			}
+			if tmp := opt.MaybeTableGetString("stdin"); tmp != Nil {
+				p.Stdin = NewReader(tmp)
+			}
+
+			out := make(chan error)
+			go func() { out <- p.Run() }()
 			select {
 			case r := <-out:
-				if buf, ok := r.([]byte); ok {
-					return Bytes(buf)
-				}
-				panic(r)
+				panicErr(r)
 			case <-time.After(timeout):
 				p.Process.Kill()
 				panic("timeout")
 			}
+			return Str(stdout.String())
 		}),
 		Str("readdir"), Func1("readdir", func(path Value) Value {
-			p := path.MustStr("")
-			fi, err := ioutil.ReadDir(p)
+			fi, err := ioutil.ReadDir(path.MustStr(""))
 			panicErr(err)
 			return ValRec(fi)
 		}),
-		Str("remove"), Func1("remove", func(path Value) Value {
-			p := path.MustStr("")
+		Str("remove"), Func("remove", func(env *Env) {
+			p := env.B(0).MustStr("")
 			fi, err := os.Stat(p)
 			panicErr(err)
 			if fi.IsDir() {
-				err = os.RemoveAll(p)
+				panicErr(os.RemoveAll(p))
 			} else {
-				err = os.Remove(p)
+				panicErr(os.Remove(p))
 			}
-			panicErr(err)
-			return Nil
 		}),
 		Str("pstat"), Func1("pstat", func(path Value) Value {
 			fi, err := os.Stat(path.MustStr(""))
@@ -624,15 +618,11 @@ func init() {
 	AddGlobalValue("os", OSLib)
 }
 
-func mathMinMax(env *Env, msg string, max bool) {
-	if len(env.Stack()) <= 0 {
-		return
-	}
-	v := env.Get(0).mustBe(typ.Number, msg, 1)
-	if v.IsInt() {
+func mathMinMax(env *Env, max bool) {
+	if v := env.B(0).mustBe(typ.Number, "#%d arg", 1); v.IsInt() {
 		vi := v.Int()
 		for ii := 1; ii < len(env.Stack()); ii++ {
-			if x := env.Get(ii).mustBe(typ.Number, msg, ii+1).Int(); x >= vi == max {
+			if x := env.Get(ii).mustBe(typ.Number, "#%d arg", ii+1).Int(); x >= vi == max {
 				vi = x
 			}
 		}
@@ -640,7 +630,7 @@ func mathMinMax(env *Env, msg string, max bool) {
 	} else {
 		vf := v.Float()
 		for i := 1; i < len(env.Stack()); i++ {
-			if x := env.Get(i).mustBe(typ.Number, msg, i+1).Float(); x >= vf == max {
+			if x := env.Get(i).mustBe(typ.Number, "#%d arg", i+1).Float(); x >= vf == max {
 				vf = x
 			}
 		}
@@ -648,23 +638,8 @@ func mathMinMax(env *Env, msg string, max bool) {
 	}
 }
 
-func ipow(base, exp int64) int64 {
-	var result int64 = 1
-	for {
-		if exp&1 == 1 {
-			result *= base
-		}
-		exp >>= 1
-		if exp == 0 {
-			break
-		}
-		base *= base
-	}
-	return result
-}
-
 func sprintf(env *Env, p io.Writer) {
-	f := env.Get(0).MustStr("")
+	f := env.B(0).MustStr("")
 	tmp := bytes.Buffer{}
 	popi := 0
 	for len(f) > 0 {
