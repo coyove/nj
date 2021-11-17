@@ -2,6 +2,7 @@ package nj
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"unsafe"
@@ -42,6 +43,9 @@ type breaklabel struct {
 
 type CompileOptions struct {
 	GlobalKeyValues map[string]interface{}
+	Stdout          io.Writer
+	Stderr          io.Writer
+	Stdin           io.Reader
 }
 
 // symtable is responsible for recording the state of compilation
@@ -448,9 +452,15 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	cls.Stack = coreStack.stack
 	cls.Symbols = table.sym
 	cls.Functions = table.funcs
-	cls.Stdout = os.Stdout
-	cls.Stdin = os.Stdin
-	cls.Stderr = os.Stderr
+	if opt != nil {
+		cls.Stdout = ifany(opt.Stdout != nil, opt.Stdout, os.Stdout).(io.Writer)
+		cls.Stdin = ifany(opt.Stdin != nil, opt.Stdin, os.Stdin).(io.Reader)
+		cls.Stderr = ifany(opt.Stderr != nil, opt.Stderr, os.Stderr).(io.Writer)
+	} else {
+		cls.Stdout = os.Stdout
+		cls.Stdin = os.Stdin
+		cls.Stderr = os.Stderr
+	}
 	for _, f := range cls.Functions {
 		f.LoadGlobal = cls
 	}

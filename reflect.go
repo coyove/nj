@@ -264,3 +264,10 @@ func ifquote(v bool, s string) string {
 	}
 	return s
 }
+
+func ifany(v bool, a, b interface{}) interface{} {
+	if v {
+		return a
+	}
+	return b
+}
