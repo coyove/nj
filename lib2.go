@@ -247,32 +247,18 @@ func init() {
 	)
 	AddGlobalValue("table", TableLib)
 
-	encDecProto := Map(
+	encDecProto := TableProto(Map(
 		Str("__name"), Str("encdec"),
-		Str("encode"), Func2("encode", func(enc, t Value) Value {
-			x := struct {
-				a string
-				c int
-			}{a: t.MustStr(""), c: t.StrLen()}
-			return Str(enc.Interface().(interface{ EncodeToString([]byte) string }).EncodeToString(*(*[]byte)(unsafe.Pointer(&x))))
-		}),
-		Str("decode"), Func2("decode", func(enc, t Value) Value {
-			v, err := enc.Interface().(interface{ DecodeString(string) ([]byte, error) }).DecodeString(t.MustStr(""))
-			panicErr(err)
-			return Bytes(v)
-		}),
-		Str("encoder"), Func3("encoder", func(m, s, pad Value) Value {
-			buf := &bytes.Buffer{}
+		Str("encoder"), Func1("encoder", func(m Value) Value {
 			enc := Nil
-			switch n := m.MustTable("").Name(); n {
-			case "hex^encdec":
-				enc = Val(hex.NewEncoder(buf))
-			case "base32^encdec":
-				enc = Val(base32.NewEncoder(getBase32Encoding(s.MaybeStr(""), rune(pad.MaybeStr("=")[0])), buf))
-			case "base64^encdec":
-				enc = Val(base64.NewEncoder(getBase64Encoding(s.MaybeStr(""), rune(pad.MaybeStr("=")[0])), buf))
+			buf := &bytes.Buffer{}
+			switch encoding := m.MustTable("").GetString("_e").Interface().(type) {
 			default:
-				panicf("encoder %q not supported", n)
+				enc = Val(hex.NewEncoder(buf))
+			case *base32.Encoding:
+				enc = Val(base32.NewEncoder(encoding, buf))
+			case *base64.Encoding:
+				enc = Val(base64.NewEncoder(encoding, buf))
 			}
 			return TableProto(WriteCloserProto,
 				Str("_f"), Val(enc),
@@ -283,19 +269,35 @@ func init() {
 			)
 		}),
 		Str("decoder"), Function("decoder", func(env *Env) {
-			m, src, s, pad := env.Get(0).MustTable("").Name(), NewReader(env.Get(1)), env.Get(2).MaybeStr(""), env.Get(3).MaybeStr("=")[0]
+			t, src := env.Get(0).MustTable(""), NewReader(env.Get(1))
 			dec := Nil
-			switch m {
-			case "base64^encdec":
-				dec = Val(base64.NewDecoder(getBase64Encoding(s, rune(pad)), src))
-			case "base32^encdec":
-				dec = Val(base32.NewDecoder(getBase32Encoding(s, rune(pad)), src))
-			case "hex^encdec":
-				dec = Val(hex.NewDecoder(src))
+			switch encoding := t.GetString("_e").Interface().(type) {
+			case *base64.Encoding:
+				dec = Val(base64.NewDecoder(encoding, src))
+			case *base32.Encoding:
+				dec = Val(base32.NewDecoder(encoding, src))
 			default:
-				panicf("decoder %q not supported", m)
+				dec = Val(hex.NewDecoder(src))
 			}
 			env.A = TableProto(ReaderProto, Str("_f"), Val(dec))
+		}),
+	).Table(),
+		Str("__name"), Str("encdecfast"),
+		Str("encode"), Func2("encode", func(m, t Value) Value {
+			x := struct {
+				a string
+				c int
+			}{a: t.MustStr(""), c: t.StrLen()}
+			return Str(m.MustTable("").GetString("_e").Interface().(interface {
+				EncodeToString([]byte) string
+			}).EncodeToString(*(*[]byte)(unsafe.Pointer(&x))))
+		}),
+		Str("decode"), Func2("decode", func(m, t Value) Value {
+			v, err := m.MustTable("").GetString("_e").Interface().(interface {
+				DecodeString(string) ([]byte, error)
+			}).DecodeString(t.MustStr(""))
+			panicErr(err)
+			return Bytes(v)
 		}),
 	)
 
@@ -473,17 +475,27 @@ func init() {
 			}
 			return TableProto(ReadWriterProto,
 				Str("_f"), Val(b),
+				Str("reset"), Func1("reset", func(a Value) Value {
+					a.MustTable("").GetString("_f").Interface().(*bytes.Buffer).Reset()
+					return Nil
+				}),
 				Str("value"), Func1("value", func(a Value) Value {
 					return Bytes(a.MustTable("").GetString("_f").Interface().(*bytes.Buffer).Bytes())
 				}),
 			)
 		}),
-		Str("base64"), TableProto(encDecProto.Table(),
-			Str("__name"), Str("base64"),
-			Str("std"), Val(getBase64Encoding("std", '=')),
-			Str("url"), Val(getBase64Encoding("url", '=')),
-			Str("stdx"), Val(getBase64Encoding("std", -1)),
-			Str("urlx"), Val(getBase64Encoding("url", -1)),
+		Str("hex"), TableProto(encDecProto.Table().Parent(), Str("__name"), Str("hex")),
+		Str("base64"), Map(Str("__name"), Str("base64"),
+			Str("std"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase64Encoding("std", '='))),
+			Str("url"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase64Encoding("url", '='))),
+			Str("stdp"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase64Encoding("std", -1))),
+			Str("urlp"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase64Encoding("url", -1))),
+		),
+		Str("base32"), Map(Str("__name"), Str("base32"),
+			Str("std"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase32Encoding("std", '='))),
+			Str("hex"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase32Encoding("hex", '='))),
+			Str("stdp"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase32Encoding("std", -1))),
+			Str("hexp"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase32Encoding("hex", -1))),
 		),
 	)
 	AddGlobalValue("str", StrLib)
@@ -494,60 +506,54 @@ func init() {
 		Str("NEG_INF"), Float(math.Inf(-1)),
 		Str("PI"), Float(math.Pi),
 		Str("E"), Float(math.E),
-		Str("randomseed"), Function("randomseed", func(env *Env) {
-			rand.Seed(env.Get(0).MaybeInt(1))
-		}, "randomseed(seed: int)"),
-		Str("random"), Function("random", func(env *Env) {
-			switch len(env.Stack()) {
+		Str("randomseed"), Function("randomseed", func(e *Env) { rand.Seed(e.Get(0).MaybeInt(1)) }, "$f(seed: int)"),
+		Str("random"), Function("random", func(e *Env) {
+			switch len(e.Stack()) {
 			case 2:
-				ai, bi := env.Get(0).MustInt(""), env.Get(1).MustInt("")
-				env.A = Int(rand.Int63n(bi-ai+1) + ai)
+				ai, bi := e.Get(0).MustInt(""), e.Get(1).MustInt("")
+				e.A = Int(rand.Int63n(bi-ai+1) + ai)
 			case 1:
-				env.A = Int(rand.Int63n(env.Get(0).MustInt("")))
+				e.A = Int(rand.Int63n(e.Get(0).MustInt("")))
 			default:
-				env.A = Float(rand.Float64())
+				e.A = Float(rand.Float64())
 			}
-		},
-			"$f() float", "\treturn [0, 1)",
+		}, "$f() float", "\treturn [0, 1)",
 			"$f(n: int) int", "\treturn [0, n)",
 			"$f(a: int, b: int) int", "\treturn [a, b]"),
-		Str("sqrt"), Func1("sqrt", func(v Value) Value { return Float(math.Sqrt(v.MustFloat(""))) }),
-		Str("floor"), Func1("floor", func(v Value) Value { return Float(math.Floor(v.MustFloat(""))) }),
-		Str("ceil"), Func1("ceil", func(v Value) Value { return Float(math.Ceil(v.MustFloat(""))) }),
-		Str("min"), Function("min", func(env *Env) { mathMinMax(env, "#%d arg", false) }, "$f(...a: number) number"),
-		Str("max"), Function("max", func(env *Env) { mathMinMax(env, "#%d arg", true) }, "$f(...a: number) number"),
+		Str("sqrt"), Function("sqrt", func(e *Env) { e.A = Float(math.Sqrt(e.Get(0).MustFloat(""))) }),
+		Str("floor"), Function("floor", func(e *Env) { e.A = Float(math.Floor(e.Get(0).MustFloat(""))) }),
+		Str("ceil"), Function("ceil", func(e *Env) { e.A = Float(math.Ceil(e.Get(0).MustFloat(""))) }),
+		Str("min"), Function("min", func(e *Env) { mathMinMax(e, "#%d arg", false) }, "$f(...a: number) number"),
+		Str("max"), Function("max", func(e *Env) { mathMinMax(e, "#%d arg", true) }, "$f(...a: number) number"),
 		Str("pow"), Func2("pow", func(a, b Value) Value {
-			ai := a.MustNum("base")
-			bi := b.MustNum("power")
+			ai, bi := a.MustNum("base"), b.MustNum("power")
 			if ai.IsInt() {
 				return Int(ipow(ai.Int(), bi.Int()))
 			}
 			return Float(math.Pow(ai.Float(), bi.Float()))
 		}, "pow(a: number, b: number) number"),
-		Str("abs"), Function("abs", func(env *Env) {
-			if i := env.Get(0).MustNum(""); i.IsInt() {
-				if i := i.Int(); i < 0 {
-					env.A = Int(-i)
-				} else {
-					env.A = Int(i)
+		Str("abs"), Function("abs", func(e *Env) {
+			if e.A = e.Get(0).MustNum(""); e.A.IsInt() {
+				if i := e.A.Int(); i < 0 {
+					e.A = Int(-i)
 				}
 			} else {
-				env.A = Float(math.Abs(i.Float()))
+				e.A = Float(math.Abs(e.A.Float()))
 			}
 		}),
-		Str("remainder"), Function("remainder", func(env *Env) { env.A = Float(math.Remainder(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
-		Str("mod"), Function("mod", func(env *Env) { env.A = Float(math.Mod(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
-		Str("cos"), Function("cos", func(env *Env) { env.A = Float(math.Cos(env.Get(0).MustFloat(""))) }),
-		Str("sin"), Function("sin", func(env *Env) { env.A = Float(math.Sin(env.Get(0).MustFloat(""))) }),
-		Str("tan"), Function("tan", func(env *Env) { env.A = Float(math.Tan(env.Get(0).MustFloat(""))) }),
-		Str("acos"), Function("acos", func(env *Env) { env.A = Float(math.Acos(env.Get(0).MustFloat(""))) }),
-		Str("asin"), Function("asin", func(env *Env) { env.A = Float(math.Asin(env.Get(0).MustFloat(""))) }),
-		Str("atan"), Function("atan", func(env *Env) { env.A = Float(math.Atan(env.Get(0).MustFloat(""))) }),
-		Str("atan2"), Function("atan2", func(env *Env) { env.A = Float(math.Atan2(env.Get(0).MustFloat(""), env.Get(1).MustFloat(""))) }),
-		Str("ldexp"), Function("ldexp", func(env *Env) { env.A = Float(math.Ldexp(env.Get(0).MustFloat(""), int(env.Get(1).MaybeInt(0)))) }),
-		Str("modf"), Function("modf", func(env *Env) {
-			a, b := math.Modf(env.Get(0).MustFloat(""))
-			env.A = Array(Float(a), Float(b))
+		Str("remainder"), Function("remainder", func(e *Env) { e.A = Float(math.Remainder(e.Get(0).MustFloat(""), e.Get(1).MustFloat(""))) }),
+		Str("mod"), Function("mod", func(e *Env) { e.A = Float(math.Mod(e.Get(0).MustFloat(""), e.Get(1).MustFloat(""))) }),
+		Str("cos"), Function("cos", func(e *Env) { e.A = Float(math.Cos(e.Get(0).MustFloat(""))) }),
+		Str("sin"), Function("sin", func(e *Env) { e.A = Float(math.Sin(e.Get(0).MustFloat(""))) }),
+		Str("tan"), Function("tan", func(e *Env) { e.A = Float(math.Tan(e.Get(0).MustFloat(""))) }),
+		Str("acos"), Function("acos", func(e *Env) { e.A = Float(math.Acos(e.Get(0).MustFloat(""))) }),
+		Str("asin"), Function("asin", func(e *Env) { e.A = Float(math.Asin(e.Get(0).MustFloat(""))) }),
+		Str("atan"), Function("atan", func(e *Env) { e.A = Float(math.Atan(e.Get(0).MustFloat(""))) }),
+		Str("atan2"), Function("atan2", func(e *Env) { e.A = Float(math.Atan2(e.Get(0).MustFloat(""), e.Get(1).MustFloat(""))) }),
+		Str("ldexp"), Function("ldexp", func(e *Env) { e.A = Float(math.Ldexp(e.Get(0).MustFloat(""), int(e.Get(1).MaybeInt(0)))) }),
+		Str("modf"), Function("modf", func(e *Env) {
+			a, b := math.Modf(e.Get(0).MustFloat(""))
+			e.A = Array(Float(a), Float(b))
 		}),
 	)
 	AddGlobalValue("math", MathLib)
@@ -726,44 +732,25 @@ func sprintf(env *Env, p io.Writer) {
 }
 
 func getBase64Encoding(x string, padding rune) (enc *base64.Encoding) {
-	a, _ := getBaseEncoding(true, x, padding)
-	return a
+	if x == "url" {
+		enc = base64.URLEncoding
+	} else {
+		enc = base64.StdEncoding
+	}
+	if padding != '=' {
+		enc = enc.WithPadding(padding)
+	}
+	return
 }
 
 func getBase32Encoding(x string, padding rune) (enc *base32.Encoding) {
-	_, a := getBaseEncoding(true, x, padding)
-	return a
-}
-
-func getBaseEncoding(b64 bool, x string, padding rune) (enc *base64.Encoding, enc32 *base32.Encoding) {
-	const encodeStd64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-	const encodeURL64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-	const encodeStd32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
-	const encodeHex32 = "0123456789ABCDEFGHIJKLMNOPQRSTUV"
-	if b64 {
-		switch x {
-		case "url", "URL", encodeURL64:
-			enc = base64.URLEncoding
-		case "", "std", "STD", encodeStd64:
-			enc = base64.StdEncoding
-		default:
-			enc = base64.NewEncoding(x)
-		}
-		if padding != '=' {
-			enc = enc.WithPadding(padding)
-		}
+	if x == "hex" {
+		enc = base32.HexEncoding
 	} else {
-		switch x {
-		case "hex", "HEX", encodeHex32:
-			enc32 = base32.HexEncoding
-		case "", "std", "STD", encodeStd32:
-			enc32 = base32.StdEncoding
-		default:
-			enc32 = base32.NewEncoding(x)
-		}
-		if padding != '=' {
-			enc32 = enc32.WithPadding(padding)
-		}
+		enc = base32.StdEncoding
 	}
-	return
+	if padding != '=' {
+		enc = enc.WithPadding(padding)
+	}
+	return enc
 }

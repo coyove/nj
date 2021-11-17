@@ -659,20 +659,30 @@ func TestHashcodeDist(t *testing.T) {
 }
 
 func BenchmarkFloat64(b *testing.B) {
-	x := ([]float64{1.1})[0]
-	for i := 0; i < b.N; i++ {
-		if float64(int64(x)) == x {
-			b.Fatal(x)
+	var foo func()
+	foo = func() {
+		if b != nil {
+			time.Now()
+		} else {
+			foo()
 		}
+	}
+	for i := 0; i < b.N; i++ {
+		foo()
 	}
 }
 
 func BenchmarkFloat64_2(b *testing.B) {
-	x := ([]float64{1.1})[0]
-	for i := 0; i < b.N; i++ {
-		if math.Floor(x) == x {
-			b.Fatal(x)
+	var foo func(...string)
+	foo = func(a ...string) {
+		if len(a) == 0 {
+			time.Now()
+		} else {
+			foo(a...)
 		}
+	}
+	for i := 0; i < b.N; i++ {
+		foo()
 	}
 }
 

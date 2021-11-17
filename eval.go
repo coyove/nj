@@ -315,7 +315,13 @@ func internalExecCursorLoop(env Env, K *Func, cursor uint32) Value {
 		case typ.OpPush:
 			stackEnv.Push(env._get(opa))
 		case typ.OpPushVararg:
-			*stackEnv.stack = append(*stackEnv.stack, env._get(opa).mustBe(typ.Table, "unpack arguments", 0).Table().ArrayPart()...)
+			switch a := env._get(opa); a.Type() {
+			case typ.Table:
+				*stackEnv.stack = append(*stackEnv.stack, a.Table().ArrayPart()...)
+			case typ.Nil:
+			default:
+				a.MustTable("unpack arguments")
+			}
 		case typ.OpRet:
 			v := env._get(opa)
 			if len(retStack) == 0 {

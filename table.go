@@ -68,7 +68,7 @@ func (m *Table) SetFirstParent(m2 *Table) {
 }
 
 func (m *Table) GetString(k string) (v Value) {
-	return m.Get(Str(k))
+	return m.getImpl(Str(k), true)
 }
 
 // Get retrieves the value for a given key.
@@ -89,7 +89,7 @@ func (m *Table) getImpl(k Value, funcRecv bool) (v Value) {
 	if idx := m.findHash(k); idx >= 0 {
 		v = m.hashItems[idx].Val
 	} else if m.parent != nil {
-		v = m.parent.Get(k)
+		v = m.parent.getImpl(k, funcRecv)
 	}
 FINAL:
 	if funcRecv && v.Type() == typ.Func {

@@ -89,7 +89,7 @@ var (
 	WriterProto = Map(Str("__name"), Str("writer"),
 		Str("write"), Func2("write", func(rx, buf Value) Value {
 			f := rx.Table().GetString("_f").Interface().(io.Writer)
-			wn, err := fmt.Fprint(f, buf.MustStr(""))
+			wn, err := f.Write([]byte(buf.MustStr("")))
 			panicErr(err)
 			return Int(int64(wn))
 		}, "$f({w}: value, buf: string) int", "\twrite buf to w"),
