@@ -1,4 +1,4 @@
-package script
+package nj
 
 import (
 	"bytes"
@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/coyove/script/parser"
-	"github.com/coyove/script/typ"
+	"github.com/coyove/nj/parser"
+	"github.com/coyove/nj/typ"
 )
 
 func inst(op byte, a, b uint16) _inst {

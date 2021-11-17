@@ -1,4 +1,4 @@
-package script
+package nj
 
 import (
 	"fmt"
@@ -6,8 +6,8 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/coyove/script/parser"
-	"github.com/coyove/script/typ"
+	"github.com/coyove/nj/parser"
+	"github.com/coyove/nj/typ"
 )
 
 const (

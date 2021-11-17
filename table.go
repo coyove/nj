@@ -9,13 +9,13 @@
 //  express or implied. See the License for the specific language
 //  governing permissions and limitations under the License.
 
-package script
+package nj
 
 import (
 	"bytes"
 	"unsafe"
 
-	"github.com/coyove/script/typ"
+	"github.com/coyove/nj/typ"
 )
 
 type Table struct {

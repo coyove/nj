@@ -1,11 +1,11 @@
-package script
+package nj
 
 import (
 	"strconv"
 	"strings"
 
-	"github.com/coyove/script/parser"
-	"github.com/coyove/script/typ"
+	"github.com/coyove/nj/parser"
+	"github.com/coyove/nj/typ"
 )
 
 var _nodeRegA = parser.Addr(regA)

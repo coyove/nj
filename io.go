@@ -1,4 +1,4 @@
-package script
+package nj
 
 import (
 	"bufio"
@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/coyove/script/typ"
+	"github.com/coyove/nj/typ"
 )
 
 type ValueIO Value

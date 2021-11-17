@@ -1,4 +1,4 @@
-package script
+package nj
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"math"
 	"unicode/utf8"
 
-	"github.com/coyove/script/typ"
+	"github.com/coyove/nj/typ"
 )
 
 type stacktrace struct {

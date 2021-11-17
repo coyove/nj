@@ -1,4 +1,4 @@
-module github.com/coyove/script
+module github.com/coyove/nj
 
 go 1.16
 

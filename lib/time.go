@@ -6,12 +6,12 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/coyove/script"
-	"github.com/coyove/script/typ"
+	"github.com/coyove/nj"
+	"github.com/coyove/nj/typ"
 )
 
 func init() {
-	script.AddGlobalValue("strtime", func(env *script.Env) {
+	nj.AddGlobalValue("strtime", func(env *nj.Env) {
 		f := env.Get(0).MaybeStr("")
 		switch strings.ToLower(f) {
 		case "ansic":
@@ -122,7 +122,7 @@ func init() {
 		}
 
 		r := tt.Format(f)
-		env.A = script.Str(r)
+		env.A = nj.Str(r)
 	},
 		"strtime(format: string) string",
 		"strtime(format: string, t: value) string",

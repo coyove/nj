@@ -1,4 +1,4 @@
-package script
+package nj
 
 import (
 	"errors"
@@ -16,8 +16,8 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	"github.com/coyove/script/parser"
-	"github.com/coyove/script/typ"
+	"github.com/coyove/nj/parser"
+	"github.com/coyove/nj/typ"
 	"github.com/tidwall/gjson"
 )
 

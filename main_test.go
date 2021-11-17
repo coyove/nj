@@ -1,4 +1,4 @@
-package script
+package nj
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	_parser "github.com/coyove/script/parser"
+	_parser "github.com/coyove/nj/parser"
 )
 
 func init() {

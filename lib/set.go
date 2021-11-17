@@ -3,18 +3,18 @@ package lib
 import (
 	"fmt"
 
-	"github.com/coyove/script"
+	"github.com/coyove/nj"
 )
 
-type Set struct{ m map[uint64]script.Value }
+type Set struct{ m map[uint64]nj.Value }
 
 func init() {
-	script.AddGlobalValue("set", func(env *script.Env) {
-		s := Set{m: map[uint64]script.Value{}}
+	nj.AddGlobalValue("set", func(env *nj.Env) {
+		s := Set{m: map[uint64]nj.Value{}}
 		for _, e := range env.Get(0).MustTable("").ArrayPart() {
 			s.Add(e)
 		}
-		env.A = script.Val(s)
+		env.A = nj.Val(s)
 	},
 		"$f() value",
 		"$f(a: array) value",
@@ -30,7 +30,7 @@ func init() {
 	)
 }
 
-func (s Set) Add(v ...script.Value) int {
+func (s Set) Add(v ...nj.Value) int {
 	c := 0
 	for _, v := range v {
 		hash := v.HashCode()
@@ -42,7 +42,7 @@ func (s Set) Add(v ...script.Value) int {
 	return c
 }
 
-func (s Set) Delete(v script.Value) script.Value {
+func (s Set) Delete(v nj.Value) nj.Value {
 	hash := v.HashCode()
 	v = s.m[hash]
 	delete(s.m, hash)
@@ -75,13 +75,13 @@ func (s Set) Size() int {
 	return len(s.m)
 }
 
-func (s Set) Contains(v script.Value) bool {
+func (s Set) Contains(v nj.Value) bool {
 	_, ok := s.m[v.HashCode()]
 	return ok
 }
 
-func (s Set) Values() []script.Value {
-	v := make([]script.Value, 0, s.Size())
+func (s Set) Values() []nj.Value {
+	v := make([]nj.Value, 0, s.Size())
 	for _, sv := range s.m {
 		v = append(v, sv)
 	}

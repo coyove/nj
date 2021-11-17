@@ -10,37 +10,37 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coyove/script"
-	"github.com/coyove/script/typ"
+	"github.com/coyove/nj"
+	"github.com/coyove/nj/typ"
 )
 
 var HostWhitelist = map[string][]string{}
 
 func init() {
-	script.AddGlobalValue("url", script.Map(
-		script.Str("escape"), script.Func1("escape", func(a script.Value) script.Value {
-			return script.Str(url.QueryEscape(a.MustStr("")))
+	nj.AddGlobalValue("url", nj.Map(
+		nj.Str("escape"), nj.Func1("escape", func(a nj.Value) nj.Value {
+			return nj.Str(url.QueryEscape(a.MustStr("")))
 		}),
-		script.Str("unescape"), script.Func1("unescape", func(a script.Value) script.Value {
+		nj.Str("unescape"), nj.Func1("unescape", func(a nj.Value) nj.Value {
 			v, err := url.QueryUnescape(a.MustStr(""))
 			panicErr(err)
-			return script.Str(v)
+			return nj.Str(v)
 		}),
 	))
-	script.AddGlobalValue("http", script.Func("http", func(env *script.Env) {
+	nj.AddGlobalValue("http", nj.Func("http", func(env *nj.Env) {
 		args := env.Get(0).Table()
 		to := args.GetString("timeout").MaybeFloat(1 << 30)
 
-		method := strings.ToUpper(args.Get(script.Str("method")).MaybeStr("GET"))
+		method := strings.ToUpper(args.Get(nj.Str("method")).MaybeStr("GET"))
 
-		u, err := url.Parse(args.Get(script.Str("url")).MaybeStr("bad://%url%"))
+		u, err := url.Parse(args.Get(nj.Str("url")).MaybeStr("bad://%url%"))
 		panicErr(err)
 
 		addKV := func(k string, add func(k, v string)) {
-			x := args.Get(script.Str(k))
+			x := args.Get(nj.Str(k))
 			if x.Type() == typ.Table {
 				p := x.Table()
-				for k, v := p.Next(script.Nil); k != script.Nil; k, v = p.Next(k) {
+				for k, v := p.Next(nj.Nil); k != nj.Nil; k, v = p.Next(k) {
 					add(k.String(), v.String())
 				}
 			}
@@ -63,7 +63,7 @@ func init() {
 		var bodyReader io.Reader
 		dataFrom, urlForm, jsonForm := (*multipart.Writer)(nil), false, false
 
-		if j := args.GetString("json"); j != script.Nil {
+		if j := args.GetString("json"); j != nj.Nil {
 			bodyReader = strings.NewReader(j.JSONString())
 			jsonForm = true
 		} else {
@@ -72,8 +72,8 @@ func init() {
 			urlForm = len(form) > 0
 			if urlForm {
 				bodyReader = strings.NewReader(form.Encode())
-			} else if rd := args.GetString("data"); rd != script.Nil {
-				bodyReader = script.NewReader(rd)
+			} else if rd := args.GetString("data"); rd != nj.Nil {
+				bodyReader = nj.NewReader(rd)
 			}
 		}
 
@@ -82,7 +82,7 @@ func init() {
 			payload := bytes.Buffer{}
 			writer := multipart.NewWriter(&payload)
 			if x := args.GetString("multipart"); x.Type() == typ.Table {
-				x.Table().Foreach(func(k, v script.Value) bool {
+				x.Table().Foreach(func(k, v nj.Value) bool {
 					key := k.MustStr("multipart key")
 					filename := ""
 					if strings.Contains(key, "/") {
@@ -91,10 +91,10 @@ func init() {
 					}
 					if filename != "" {
 						part := panicErr2(writer.CreateFormFile(key, filename)).(io.Writer)
-						panicErr2(io.Copy(part, script.NewReader(v)))
+						panicErr2(io.Copy(part, nj.NewReader(v)))
 					} else {
 						part := panicErr2(writer.CreateFormField(key)).(io.Writer)
-						panicErr2(io.Copy(part, script.NewReader(v)))
+						panicErr2(io.Copy(part, nj.NewReader(v)))
 					}
 					return true
 				})
@@ -123,15 +123,15 @@ func init() {
 		// Construct HTTP client
 		client := &http.Client{}
 		client.Timeout = time.Duration(to * float64(time.Second))
-		if v := args.Get(script.Str("jar")); v.Type() == typ.Native {
+		if v := args.Get(nj.Str("jar")); v.Type() == typ.Native {
 			client.Jar, _ = v.Interface().(http.CookieJar)
 		}
-		if !args.Get(script.Str("noredirect")).IsFalse() {
+		if !args.Get(nj.Str("noredirect")).IsFalse() {
 			client.CheckRedirect = func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse
 			}
 		}
-		if p := args.Get(script.Str("proxy")).MaybeStr(""); p != "" {
+		if p := args.Get(nj.Str("proxy")).MaybeStr(""); p != "" {
 			client.Transport = &http.Transport{
 				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
 			}
@@ -141,18 +141,18 @@ func init() {
 		resp, err := client.Do(req)
 		panicErr(err)
 
-		var buf script.Value
+		var buf nj.Value
 		if args.GetString("bodyreader").IsFalse() && args.GetString("br").IsFalse() {
 			resp.Body.Close()
 		} else {
-			buf = script.TableProto(script.ReadCloserProto, script.Str("_f"), script.Val(resp.Body))
+			buf = nj.TableProto(nj.ReadCloserProto, nj.Str("_f"), nj.Val(resp.Body))
 		}
 
 		hdr := map[string]string{}
 		for k := range resp.Header {
 			hdr[k] = resp.Header.Get(k)
 		}
-		env.A = script.Array(script.Int(int64(resp.StatusCode)), script.Val(hdr), buf, script.Val(client.Jar))
+		env.A = nj.Array(nj.Int(int64(resp.StatusCode)), nj.Val(hdr), buf, nj.Val(client.Jar))
 	}, "http(options: table) array",
 		"\tperform an HTTP request and return { code, headers, body_reader, cookie_jar }",
 		"\t'url' is a mandatory parameter in options, others are optional and pretty self explanatory:",

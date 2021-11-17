@@ -1,4 +1,4 @@
-package script
+package nj
 
 import (
 	"bytes"
@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/coyove/script/parser"
-	"github.com/coyove/script/typ"
+	"github.com/coyove/nj/parser"
+	"github.com/coyove/nj/typ"
 )
 
 type Function struct {
@@ -54,15 +54,15 @@ func Func(name string, f func(env *Env), doc ...string) Value {
 }
 
 func Func1(name string, f func(Value) Value, doc ...string) Value {
-	return Func(name, func(env *Env) { env.A = f(env.Get(0)) }, doc...)
+	return Func(name, func(env *Env) { env.A = f(env.B(0)) }, doc...)
 }
 
 func Func2(name string, f func(Value, Value) Value, doc ...string) Value {
-	return Func(name, func(env *Env) { env.A = f(env.Get(0), env.Get(1)) }, doc...)
+	return Func(name, func(env *Env) { env.A = f(env.B(0), env.B(1)) }, doc...)
 }
 
 func Func3(name string, f func(Value, Value, Value) Value, doc ...string) Value {
-	return Func(name, func(env *Env) { env.A = f(env.Get(0), env.Get(1), env.Get(2)) }, doc...)
+	return Func(name, func(env *Env) { env.A = f(env.B(0), env.B(1), env.B(2)) }, doc...)
 }
 
 func (c *Function) Value() Value {

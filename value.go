@@ -1,4 +1,4 @@
-package script
+package nj
 
 import (
 	"bytes"
@@ -11,8 +11,8 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	"github.com/coyove/script/parser"
-	"github.com/coyove/script/typ"
+	"github.com/coyove/nj/parser"
+	"github.com/coyove/nj/typ"
 	"github.com/tidwall/gjson"
 )
 
@@ -147,7 +147,7 @@ func TableProto(p *Table, kvs ...Value) Value {
 
 // Str creates a string value
 func Str(s string) Value {
-	if len(s) <= 8 { // payload 7b
+	if len(s) <= 8 { // payload 8b
 		x := [8]byte{byte(len(s))}
 		copy(x[:], s)
 		return Value{

@@ -1,4 +1,4 @@
-package script
+package nj
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	"github.com/coyove/script/typ"
+	"github.com/coyove/nj/typ"
 )
 
 var (
@@ -590,7 +590,7 @@ func init() {
 				p.Process.Kill()
 				panic("timeout")
 			}
-			return Str(stdout.String())
+			return Bytes(stdout.Bytes())
 		}),
 		Str("readdir"), Func1("readdir", func(path Value) Value {
 			fi, err := ioutil.ReadDir(path.MustStr(""))

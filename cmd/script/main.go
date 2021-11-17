@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coyove/script"
-	_ "github.com/coyove/script/lib"
+	"github.com/coyove/nj"
+	_ "github.com/coyove/nj/lib"
 )
 
 var (
@@ -39,7 +39,7 @@ func main() {
 	flag.Parse()
 
 	if *apiServer != "" {
-		http.HandleFunc("/", script.WebREPLHandler(nil, nil))
+		http.HandleFunc("/", nj.WebREPLHandler(nil, nil))
 		log.Println("listen", *apiServer)
 		http.ListenAndServe(*apiServer, nil)
 		return
@@ -48,12 +48,12 @@ func main() {
 	log.SetFlags(0)
 
 	if *version {
-		fmt.Println("script virtual machine v" + strconv.FormatInt(script.Version, 10) + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")")
+		fmt.Println("nj virtual machine v" + strconv.FormatInt(nj.Version, 10) + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")")
 		flag.Usage()
 		return
 	}
 
-	if p, _ := os.Getwd(); !strings.Contains(p, "/cmd/script") {
+	if p, _ := os.Getwd(); !strings.Contains(p, "/cmd/nj") {
 		f, err := os.Create("cpuprofile")
 		if err != nil {
 			log.Fatal(err)
@@ -65,7 +65,7 @@ func main() {
 	switch *input {
 	case "f":
 		if source == "" {
-			log.Fatalln("Please specify the input file: ./script <filename>")
+			log.Fatalln("Please specify the input file: ./nj <filename>")
 		}
 	case "-":
 		buf, err := ioutil.ReadAll(os.Stdin)
@@ -99,7 +99,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	start := time.Now()
 
-	var b *script.Program
+	var b *nj.Program
 	var err error
 
 	defer func() {
@@ -112,9 +112,9 @@ func main() {
 	}()
 
 	if *input == "f" {
-		b, err = script.LoadFile(source, nil)
+		b, err = nj.LoadFile(source, nil)
 	} else {
-		b, err = script.LoadString(source, nil)
+		b, err = nj.LoadString(source, nil)
 	}
 	if err != nil {
 		log.Fatalln(err)
