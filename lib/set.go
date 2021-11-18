@@ -16,17 +16,17 @@ func init() {
 		}
 		env.A = nj.Val(s)
 	},
-		"$f() value",
-		"$f(a: array) value",
+		"$f() -> go.Set",
+		"$f(a: array) -> go.Set",
 		"\tcreate a unique set:",
-		"\t\tunique_set.add(...v: value) int",
-		"\t\tunique_set.delete(v: value) value",
-		"\t\tunique_set.union(set2: value)",
-		"\t\tunique_set.intersect(set2: value)",
-		"\t\tunique_set.subtract(set2: value)",
-		"\t\tunique_set.contains(v: value) bool",
-		"\t\tunique_set.values() array",
-		"\t\tunique_set.size() int",
+		"\t\tgo.Set.add(...v: value) -> int",
+		"\t\tgo.Set.delete(v: value) -> value",
+		"\t\tgo.Set.union(set2: value)",
+		"\t\tgo.Set.intersect(set2: value)",
+		"\t\tgo.Set.subtract(set2: value)",
+		"\t\tgo.Set.contains(v: value) -> bool",
+		"\t\tgo.Set.values() -> array",
+		"\t\tgo.Set.size() -> int",
 	)
 }
 

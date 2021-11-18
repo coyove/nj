@@ -19,7 +19,7 @@ type Function struct {
 type FuncBody struct {
 	Code       packet
 	Name       string
-	DocString  string
+	docString  string
 	StackSize  uint16
 	NumParams  uint16
 	Variadic   bool
@@ -40,33 +40,43 @@ type Program struct {
 }
 
 // Func creates a function
-func Func(name string, f func(env *Env), doc ...string) Value {
+func Func(name string, f func(*Env), doc ...string) Value {
 	if name == "" {
-		name = "<native>"
+		name = internal.UnnamedFunc
 	}
 	return (&Function{
 		FuncBody: &FuncBody{
 			Name:      name,
 			Native:    f,
-			DocString: fixDocString(strings.Join(doc, "\n"), name, ""),
+			docString: strings.Join(doc, "\n"),
 		},
 	}).Value()
 }
 
 func Func1(name string, f func(Value) Value, doc ...string) Value {
-	return Func(name, func(env *Env) { env.A = f(env.B(0)) }, doc...)
+	return Func(name, func(e *Env) { e.A = f(e.B(0)) }, doc...)
 }
 
 func Func2(name string, f func(Value, Value) Value, doc ...string) Value {
-	return Func(name, func(env *Env) { env.A = f(env.B(0), env.B(1)) }, doc...)
+	return Func(name, func(e *Env) { e.A = f(e.B(0), e.B(1)) }, doc...)
 }
 
 func Func3(name string, f func(Value, Value, Value) Value, doc ...string) Value {
-	return Func(name, func(env *Env) { env.A = f(env.B(0), env.B(1), env.B(2)) }, doc...)
+	return Func(name, func(e *Env) { e.A = f(e.B(0), e.B(1), e.B(2)) }, doc...)
 }
 
 func (c *Function) Value() Value {
 	return Value{v: uint64(typ.Func), p: unsafe.Pointer(c)}
+}
+
+func (c *Function) DocString() string {
+	n := c.Name
+	if c.Receiver.Type() == typ.Table {
+		n = c.Receiver.Table().Name() + ":" + n
+	} else if c.Receiver != Nil {
+		n = c.Receiver.Type().String() + ":" + n
+	}
+	return strings.Replace(c.docString, "$f", n, -1)
 }
 
 func (c *Function) String() string {
@@ -198,10 +208,4 @@ func (f *Function) Copy() *Function {
 		FuncBody: &b2,
 		Receiver: f.Receiver,
 	}
-}
-
-func fixDocString(in, name, arg string) string {
-	in = strings.Replace(in, "$a", arg, -1)
-	in = strings.Replace(in, "$f", name, -1)
-	return in
 }

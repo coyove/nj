@@ -50,7 +50,7 @@ func (env *Env) B(index int) Value {
 func (env *Env) Get(index int) Value {
 	s := *env.stack
 	index += int(env.stackOffset)
-	if index < len(*env.stack) {
+	if index < len(s) {
 		return s[index]
 	}
 	return Nil

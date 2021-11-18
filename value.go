@@ -113,13 +113,17 @@ func Array(m ...Value) Value {
 func Map(kvs ...Value) Value {
 	t := NewTable(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
-		t.Set(kvs[i], kvs[i+1])
+		k, v := kvs[i], kvs[i+1]
+		if v.Type() == typ.Func && v.Func().Name == internal.UnnamedFunc {
+			v.Func().Name = k.String()
+		}
+		t.Set(k, v)
 	}
 	return Value{v: uint64(typ.Table), p: unsafe.Pointer(t)}
 }
 
-// TableMerge merges key-value pairs from `src` and `kvs` into `dst`
-func TableMerge(dst Value, src Value, kvs ...Value) Value {
+// TableMerge merges key-value pairs from `src` into `dst`
+func TableMerge(dst Value, src Value) Value {
 	var t *Table
 	switch dst.Type() {
 	case typ.Table:
@@ -130,9 +134,7 @@ func TableMerge(dst Value, src Value, kvs ...Value) Value {
 		return dst
 	}
 	if src.Type() == typ.Table {
-		t.Merge(src.Table(), kvs...)
-	} else {
-		t.Merge(nil, kvs...)
+		t.Merge(src.Table())
 	}
 	return t.Value()
 }
@@ -441,6 +443,8 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 func (v Value) MustBool(msg string) bool { return v.mustBe(typ.Bool, msg, 0).Bool() }
 
 func (v Value) MustStr(msg string) string { return v.mustBe(typ.String, msg, 0).String() }
+
+func (v Value) MustStrLen(msg string) int { return v.mustBe(typ.String, msg, 0).StrLen() }
 
 func (v Value) MustNum(msg string) Value { return v.mustBe(typ.Number, msg, 0) }
 

@@ -347,6 +347,9 @@ func (m *Table) String() string {
 }
 
 func (m *Table) rawPrint(p *bytes.Buffer, lv int, j, showParent bool) {
+	if !j {
+		p.WriteString(m.Name())
+	}
 	if m.hashCount == 0 {
 		p.WriteString(ifstr(j, "[", "{"))
 		for _, a := range m.ArrayPart() {
@@ -379,14 +382,11 @@ func (m *Table) Value() Value {
 
 func (m *Table) Name() string {
 	var n string
-	old := m.parent
-	m.parent = nil
-	if f := m.GetString("__name"); f != Nil {
+	if f := m.RawGet(Str("__name")); f != Nil {
 		n = f.String()
 	} else {
 		n = "table"
 	}
-	m.parent = old
 	if m.parent != nil {
 		n += "^" + m.parent.Name()
 	}

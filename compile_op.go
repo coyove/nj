@@ -289,7 +289,7 @@ func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	cls.Variadic = varargIdx >= 0
 	cls.NumParams = uint16(len(params.Nodes()))
 	cls.Name = atoms[1].Sym()
-	cls.DocString = atoms[4].Str()
+	cls.docString = atoms[4].Str()
 	cls.StackSize = newtable.vp
 	cls.Code = code
 	cls.Locals = newtable.symbolsToDebugLocals()

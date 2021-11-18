@@ -289,7 +289,7 @@ func internalExecCursorLoop(env Env, K *Function, cursor uint32) Value {
 			switch a, idx := env._get(opa), env._get(opb); a.Type() {
 			case typ.Table:
 				env.A = a.Table().Get(idx)
-			case typ.Native:
+			case typ.Native, typ.Func:
 				env.A = reflectLoad(a.Interface(), idx)
 			case typ.String:
 				if idx.Type() == typ.Number {

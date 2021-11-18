@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"unsafe"
+
+	"github.com/coyove/nj/internal"
 )
 
 type Position struct {
@@ -65,7 +67,7 @@ func Num(v string) Node {
 	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
-		panic("invalid number format: \"" + v + "\"")
+		internal.Panic("invalid number format: %q", v)
 	}
 	return Float(f)
 }

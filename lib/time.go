@@ -124,9 +124,9 @@ func init() {
 		r := tt.Format(f)
 		env.A = nj.Str(r)
 	},
-		"strtime(format: string) string",
-		"strtime(format: string, t: value) string",
-		"strtime(format: string, unix_sec: float) string",
+		"$f(format: string) -> string",
+		"$f(format: string, t: go.time.Time) -> string",
+		"$f(format: string, unix_sec: float) -> string",
 		"\tformat doc: https://www.php.net/manual/datetime.format.php",
 	)
 }

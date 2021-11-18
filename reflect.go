@@ -69,15 +69,15 @@ func reflectLoadCaseless(v interface{}, k string) Value {
 	return Nil
 }
 
-func reflectStore(v interface{}, key Value, v2 Value) {
-	rv := reflect.ValueOf(v)
+func reflectStore(subject interface{}, key, value Value) {
+	rv := reflect.ValueOf(subject)
 	switch rv.Kind() {
 	case reflect.Map:
 		rk := key.ReflectValue(rv.Type().Key())
-		if v2 == Nil {
+		if value == Nil {
 			rv.SetMapIndex(rk, reflect.Value{})
 		} else {
-			rv.SetMapIndex(rk, v2.ReflectValue(rv.Type().Elem()))
+			rv.SetMapIndex(rk, value.ReflectValue(rv.Type().Elem()))
 		}
 		return
 	case reflect.Slice, reflect.Array:
@@ -85,7 +85,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 		if idx >= int64(rv.Len()) || idx < 0 {
 			return
 		}
-		rv.Index(int(idx)).Set(v2.ReflectValue(rv.Type().Elem()))
+		rv.Index(int(idx)).Set(value.ReflectValue(rv.Type().Elem()))
 		return
 	}
 
@@ -96,12 +96,12 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 	k := key.MustStr("index key")
 	f := rv.FieldByName(k)
 	if !f.IsValid() || !f.CanAddr() {
-		internal.Panic("reflect: %q not assignable in %v", k, v)
+		internal.Panic("reflect: %q not assignable in %v", k, subject)
 	}
 	if f.Type() == reflect.TypeOf(Value{}) {
-		f.Set(reflect.ValueOf(v2))
+		f.Set(reflect.ValueOf(value))
 	} else {
-		f.Set(v2.ReflectValue(f.Type()))
+		f.Set(value.ReflectValue(f.Type()))
 	}
 }
 

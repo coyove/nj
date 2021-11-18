@@ -7,6 +7,8 @@ import (
 	"runtime/debug"
 )
 
+const UnnamedFunc = "<native>"
+
 func Panic(msg string, args ...interface{}) {
 	panic(fmt.Errorf(msg, args...))
 }
