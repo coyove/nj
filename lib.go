@@ -121,22 +121,20 @@ func init() {
 		return Map(
 			Str("source"), m,
 			Str("lambda"), lambda.Value(),
-			Str("__str"), Func("<closure-"+lambda.Name+"__str>", func(env *Env) {
-				recv := env.B(0).MustTable("")
+			Str("__str"), Func("<closure-"+lambda.Name+"__str>", func(e *Env) {
+				recv := e.B(0).MustTable("")
 				f := recv.GetString("lambda").MustFunc("")
 				src := recv.GetString("source")
-				env.A = Str("<closure-" + f.Pure().String() + "-" + src.String() + ">")
+				e.A = Str("<closure-" + f.Pure().String() + "-" + src.String() + ">")
 			}),
-			Str("__call"), Func("<closure-"+lambda.Name+">", func(env *Env) {
-				recv := env.B(0).MustTable("")
+			Str("__call"), Func("<closure-"+lambda.Name+">", func(e *Env) {
+				recv := e.B(0).MustTable("")
 				f := recv.GetString("lambda").MustFunc("").Pure()
-				stk := append([]Value{recv.GetString("source")}, env.Stack()[1:]...)
-				res, err := f.Call(stk...)
-				internal.PanicErr(err)
-				env.A = res
+				stk := append([]Value{recv.GetString("source")}, e.Stack()[1:]...)
+				e.A = MustValue(f.Call(stk...))
 			}),
 		)
-	}, "$f(f: function, v?: value) -> function",
+	}, "$f(f: function, v: value) -> function",
 		"\tcreate a function out of `f`, when it is called, `v` will be injected into as the first argument:",
 		"\t\t closure(f, v)(args...) <=> f(v, args...)")
 
@@ -194,12 +192,10 @@ func init() {
 	AddGlobalValue("type", func(env *Env) {
 		env.A = Str(env.B(0).Type().String())
 	}, "$f(v: value) -> string", "\treturn value's type")
-	AddGlobalValue("apply", func(env *Env) {
-		fun := env.B(0).MustFunc("")
-		fun.Receiver = env.Get(1)
-		a, err := fun.Call(env.Stack()[2:]...)
-		internal.PanicErr(err)
-		env.A = a
+	AddGlobalValue("apply", func(e *Env) {
+		fun := *e.B(0).MustFunc("")
+		fun.Receiver = e.B(1)
+		e.A = MustValue(fun.Call(e.Stack()[2:]...))
 	}, "$f(f: function, receiver: value, args...: value) -> value")
 	AddGlobalValue("pcall", func(env *Env) {
 		if a, err := env.B(0).MustFunc("").Call(env.Stack()[1:]...); err == nil {
@@ -224,10 +220,10 @@ func init() {
 			env.A = TableProto(env.B(0).MustTable(""), Str("f"), f.Value(), Str("w"), intf(w))
 		}, "$f(f: function, args...: value) -> table^gcall", "\texecute `f` in goroutine"),
 		Str("stop"), Func("", func(env *Env) {
-			env.B(0).MustTable("").GetString("f").MustFunc("").EmergStop()
+			env.B(0).Recv("f").MustFunc("").EmergStop()
 		}),
 		Str("wait"), Func2("", func(m, t Value) Value {
-			ch := m.MustTable("").GetString("w").Interface().(chan Value)
+			ch := m.Recv("w").Interface().(chan Value)
 			if w := t.MaybeFloat(0); w > 0 {
 				select {
 				case <-time.After(time.Duration(w * float64(time.Second))):
@@ -344,23 +340,21 @@ func init() {
 	AddGlobalValue("re", Map(
 		Str("__name"), Str("relib"),
 		Str("__call"), Func2("", func(re, r Value) Value {
-			rx, err := regexp.Compile(r.MustStr(""))
-			internal.PanicErr(err)
-			return TableProto(re.MustTable(""), Str("_rx"), Val(rx))
+			return TableProto(re.MustTable(""), Str("_rx"), Val(regexp.MustCompile(r.MustStr(""))))
 		}, "$f(regex: string) -> table^relib", "\tcreate a regular expression object"),
-		Str("match"), Func2("", func(rx, text Value) Value {
-			return Bool(rx.Table().GetString("_rx").Interface().(*regexp.Regexp).MatchString(text.MustStr("")))
+		Str("match"), Func2("", func(re, text Value) Value {
+			return Bool(re.Recv("_rx").Interface().(*regexp.Regexp).MatchString(text.MustStr("")))
 		}, "$f({re}: value, text: string) -> bool"),
-		Str("find"), Func2("", func(rx, text Value) Value {
-			m := rx.Table().GetString("_rx").Interface().(*regexp.Regexp).FindStringSubmatch(text.MustStr(""))
+		Str("find"), Func2("", func(re, text Value) Value {
+			m := re.Recv("_rx").Interface().(*regexp.Regexp).FindStringSubmatch(text.MustStr(""))
 			mm := []Value{}
 			for _, m := range m {
 				mm = append(mm, Str(m))
 			}
 			return Array(mm...)
 		}, "$f({re}: value, text: string) -> array"),
-		Str("findall"), Func3("", func(rx, text, n Value) Value {
-			m := rx.Table().GetString("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(text.MustStr(""), int(n.MaybeInt(-1)))
+		Str("findall"), Func3("", func(re, text, n Value) Value {
+			m := re.Recv("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(text.MustStr(""), int(n.MaybeInt(-1)))
 			mm := []Value{}
 			for _, m := range m {
 				for _, m := range m {
@@ -369,8 +363,8 @@ func init() {
 			}
 			return Array(mm...)
 		}, "$f({re}: value, text: string) -> array"),
-		Str("replace"), Func3("", func(rx, text, newtext Value) Value {
-			m := rx.Table().GetString("_rx").Interface().(*regexp.Regexp).ReplaceAllString(text.MustStr(""), newtext.MustStr(""))
+		Str("replace"), Func3("", func(re, text, newtext Value) Value {
+			m := re.Recv("_rx").Interface().(*regexp.Regexp).ReplaceAllString(text.MustStr(""), newtext.MustStr(""))
 			return Str(m)
 		}, "$f({re}: value, old: string, new: string) -> string"),
 	))
@@ -477,16 +471,16 @@ func init() {
 				Str("_f"), Val(f),
 				Str("__name"), Str(f.Name()),
 				Str("sync"), Func1("", func(rx Value) Value {
-					internal.PanicErr(rx.Table().GetString("_f").Interface().(*os.File).Sync())
+					internal.PanicErr(rx.Recv("_f").Interface().(*os.File).Sync())
 					return Nil
 				}),
 				Str("stat"), Func1("", func(rx Value) Value {
-					fi, err := rx.Table().GetString("_f").Interface().(*os.File).Stat()
+					fi, err := rx.Recv("_f").Interface().(*os.File).Stat()
 					internal.PanicErr(err)
 					return Val(fi)
 				}),
 				Str("truncate"), Func2("", func(rx, n Value) Value {
-					f := rx.Table().GetString("_f").Interface().(*os.File)
+					f := rx.Recv("_f").Interface().(*os.File)
 					internal.PanicErr(f.Truncate(n.MustInt("")))
 					t, err := f.Seek(0, 2)
 					internal.PanicErr(err)

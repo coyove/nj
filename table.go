@@ -395,18 +395,26 @@ func (m *Table) Name() string {
 
 func (m *Table) New() *Table {
 	if f := m.GetString("__new"); f.Type() == typ.Func {
-		res, err := f.Func().Call()
-		internal.PanicErr(err)
-		return res.MustTable("table.__new")
+		return MustValue(f.Func().Call()).MustTable("table.__new")
 	}
 	return m
 }
 
+// Copy returns a new table with a copy of dataset
 func (m *Table) Copy() *Table {
 	m2 := *m
 	m2.hashItems = append([]hashItem{}, m.hashItems...)
 	m2.items = append([]Value{}, m.items...)
 	return &m2
+}
+
+// Shadow returns a new table with preallocated memory large enough to hold the original dataset
+func (m *Table) Shadow() *Table {
+	return &Table{
+		parent:    m.parent,
+		hashItems: make([]hashItem, len(m.hashItems)),
+		items:     make([]Value, len(m.items)),
+	}
 }
 
 func (m *Table) Merge(src *Table, kvs ...Value) *Table {

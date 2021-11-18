@@ -493,7 +493,10 @@ func Run(p *Program, err error) (Value, error) {
 
 func MustRun(p *Program, err error) Value {
 	internal.PanicErr(err)
-	v, err := p.Run()
+	return MustValue(p.Run())
+}
+
+func MustValue(v Value, err error) Value {
 	internal.PanicErr(err)
 	return v
 }

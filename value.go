@@ -73,6 +73,8 @@ func (v Value) Type() typ.ValueType {
 // IsFalse tests whether value is falsy: nil, false, empty string or 0
 func (v Value) IsFalse() bool { return v.v == 0 || v.p == falseMarker }
 
+func (v Value) IsTrue() bool { return !v.IsFalse() }
+
 // IsInt tests whether value is an integer number
 func (v Value) IsInt() bool { return v.p == int64Marker }
 
@@ -475,6 +477,13 @@ func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
 		internal.Panic("expect %v, got %v", t, stringType(v))
 	}
 	return v
+}
+
+func (v Value) Recv(k string) Value {
+	if v.Type() != typ.Table {
+		internal.Panic("method expects receiver, got %v, did you misuse 'table.key' and 'table:key'?", stringType(v))
+	}
+	return v.Table().GetString(k)
 }
 
 // Equal tests whether two values are equal

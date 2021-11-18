@@ -60,7 +60,7 @@ func init() {
 				if v.Type() == typ.Func {
 					old := v.Func()
 					v = Func(v.Func().Name, func(env *Env) {
-						mu := env.B(0).MustTable("").GetString("_mu").Interface().(*sync.Mutex)
+						mu := env.B(0).Recv("_mu").Interface().(*sync.Mutex)
 						mu.Lock()
 						defer mu.Unlock()
 						a, err := old.Call(env.Stack()...)
@@ -165,13 +165,9 @@ func init() {
 			m.MustTable("").Foreach(func(k, v Value) bool { a = append(a, Array(k, v)); return true })
 			return Array(a...)
 		}, "$f({t}: table) -> array"),
-		Str("foreach"), Func2("", func(m, f Value) Value {
-			m.MustTable("").Foreach(func(k, v Value) bool {
-				v, err := f.MustFunc("").Call(k, v)
-				internal.PanicErr(err)
-				return v == Nil
-			})
-			return Nil
+		Str("foreach"), Func("", func(e *Env) {
+			f := e.B(1).MustFunc("")
+			e.B(0).MustTable("").Foreach(func(k, v Value) bool { return MustValue(f.Call(k, v)) == Nil })
 		}, "$f({t}: table, f: function)"),
 		Str("contains"), Func2("", func(a, b Value) Value {
 			found := false
@@ -187,9 +183,7 @@ func init() {
 			ma := a.MustTable("")
 			a2 := make([]Value, 0, ma.ArrayLen())
 			ma.Foreach(func(k, v Value) bool {
-				r, err := b.MustFunc("").Call(v)
-				internal.PanicErr(err)
-				if !r.IsFalse() {
+				if MustValue(b.MustFunc("").Call(v)).IsTrue() {
 					a2 = append(a2, v)
 				}
 				return true
@@ -216,13 +210,7 @@ func init() {
 			return ma.Value()
 		}, "$f({array1}: array, array2: array)", "\tput elements from array2 to array1's end"),
 		Str("merge"), Func2("", func(a, b Value) Value {
-			ma, mb := a.MustTable(""), b.MustTable("")
-			ma.resizeHash(len(mb.hashItems) + len(ma.hashItems))
-			mb.Foreach(func(k, v Value) bool {
-				ma.Set(k, v)
-				return true
-			})
-			return ma.Value()
+			return a.MustTable("").Merge(b.MustTable("")).Value()
 		}, "$f({table1}: table, table2: table)", "\tmerge elements from table2 to table1"),
 		Str("tostring"), Func1("", func(a Value) Value {
 			p := &bytes.Buffer{}
@@ -251,7 +239,7 @@ func init() {
 		Str("encoder"), Func1("", func(m Value) Value {
 			enc := Nil
 			buf := &bytes.Buffer{}
-			switch encoding := m.MustTable("").GetString("_e").Interface().(type) {
+			switch encoding := m.Recv("_e").Interface().(type) {
 			default:
 				enc = Val(hex.NewEncoder(buf))
 			case *base32.Encoding:
@@ -263,14 +251,14 @@ func init() {
 				Str("_f"), Val(enc),
 				Str("_b"), Val(buf),
 				Str("value"), Func1("", func(p Value) Value {
-					return Bytes(p.MustTable("").GetString("_b").Interface().(*bytes.Buffer).Bytes())
+					return Bytes(p.Recv("_b").Interface().(*bytes.Buffer).Bytes())
 				}),
 			)
 		}),
-		Str("decoder"), Func("", func(env *Env) {
-			t, src := env.B(0).MustTable(""), NewReader(env.B(1))
+		Str("decoder"), Func("", func(e *Env) {
+			src := NewReader(e.B(1))
 			dec := Nil
-			switch encoding := t.GetString("_e").Interface().(type) {
+			switch encoding := e.B(0).Recv("_e").Interface().(type) {
 			case *base64.Encoding:
 				dec = Val(base64.NewDecoder(encoding, src))
 			case *base32.Encoding:
@@ -278,7 +266,7 @@ func init() {
 			default:
 				dec = Val(hex.NewDecoder(src))
 			}
-			env.A = TableProto(ReaderProto, Str("_f"), Val(dec))
+			e.A = TableProto(ReaderProto, Str("_f"), Val(dec))
 		}),
 	).Table(),
 		Str("__name"), Str("encdecfast"),
@@ -287,12 +275,12 @@ func init() {
 				a string
 				c int
 			}{a: t.MustStr(""), c: t.StrLen()}
-			return Str(m.MustTable("").GetString("_e").Interface().(interface {
+			return Str(m.Recv("_e").Interface().(interface {
 				EncodeToString([]byte) string
 			}).EncodeToString(*(*[]byte)(unsafe.Pointer(&x))))
 		}),
 		Str("decode"), Func2("", func(m, t Value) Value {
-			v, err := m.MustTable("").GetString("_e").Interface().(interface {
+			v, err := m.Recv("_e").Interface().(interface {
 				DecodeString(string) ([]byte, error)
 			}).DecodeString(t.MustStr(""))
 			internal.PanicErr(err)
@@ -356,12 +344,10 @@ func init() {
 			}
 			return Bytes(buf.Bytes())
 		}, "$f({text}: string, a: array) -> string"),
-		Str("replace"), Func("", func(env *Env) {
-			src := env.B(0).MustStr("text")
-			from := env.B(1).MustStr("old text")
-			to := env.Get(2).MustStr("new text")
-			n := env.Get(3).MaybeInt(-1)
-			env.A = Str(strings.Replace(src, from, to, int(n)))
+		Str("replace"), Func("", func(e *Env) {
+			src := e.B(0).MustStr("text")
+			from, to := e.B(1).MustStr("old"), e.Get(2).MustStr("new")
+			e.A = Str(strings.Replace(src, from, to, int(e.Get(3).MaybeInt(-1))))
 		}, "$f({text}: string, old: string, new: string) -> string"),
 		Str("match"), Func2("", func(pattern, str Value) Value {
 			m, err := filepath.Match(pattern.MustStr("pattern"), str.MustStr("text"))
@@ -457,11 +443,11 @@ func init() {
 			}
 			return TableProto(ReadWriterProto,
 				Str("_f"), Val(b),
-				Str("reset"), Func("", func(env *Env) {
-					env.B(0).MustTable("").GetString("_f").Interface().(*bytes.Buffer).Reset()
+				Str("reset"), Func("", func(e *Env) {
+					e.B(0).Recv("_f").Interface().(*bytes.Buffer).Reset()
 				}),
 				Str("value"), Func1("", func(a Value) Value {
-					return Bytes(a.MustTable("").GetString("_f").Interface().(*bytes.Buffer).Bytes())
+					return Bytes(a.Recv("_f").Interface().(*bytes.Buffer).Bytes())
 				}),
 			)
 		}),
@@ -504,8 +490,8 @@ func init() {
 		Str("sqrt"), Func("", func(e *Env) { e.A = Float(math.Sqrt(e.B(0).MustFloat(""))) }),
 		Str("floor"), Func("", func(e *Env) { e.A = Float(math.Floor(e.B(0).MustFloat(""))) }),
 		Str("ceil"), Func("", func(e *Env) { e.A = Float(math.Ceil(e.B(0).MustFloat(""))) }),
-		Str("min"), Func("", func(e *Env) { mathMinMax(e, false) }, "$f(a: number, ...b: number) -> number"),
-		Str("max"), Func("", func(e *Env) { mathMinMax(e, true) }, "$f(a: number, ...b: number) -> number"),
+		Str("min"), Func("", func(e *Env) { mathMinMax(e, false) }, "$f(a: number, b...: number) -> number"),
+		Str("max"), Func("", func(e *Env) { mathMinMax(e, true) }, "$f(a: number, b...: number) -> number"),
 		Str("pow"), Func2("", func(a, b Value) Value {
 			return Float(math.Pow(a.MustFloat("base"), b.MustFloat("exp")))
 		}, "$f(a: float, b: float) -> float"),
