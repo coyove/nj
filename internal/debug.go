@@ -1,4 +1,4 @@
-package parser
+package internal
 
 import (
 	"fmt"
@@ -6,6 +6,16 @@ import (
 	"os"
 	"runtime/debug"
 )
+
+func Panic(msg string, args ...interface{}) {
+	panic(fmt.Errorf(msg, args...))
+}
+
+func PanicErr(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
 
 type CatchedError struct {
 	Original interface{}
@@ -16,11 +26,11 @@ func (e CatchedError) Error() string {
 }
 
 func IsDebug() bool {
-	return os.Getenv("crab_stack") != ""
+	return os.Getenv("njd") != ""
 }
 
 func processSpecialError(err *error, r interface{}) bool {
-	if x, ok := r.(interface{ IsValue(Node) }); ok {
+	if x, ok := r.(interface{ IsValue() }); ok {
 		*err = CatchedError{x}
 		return true
 	}

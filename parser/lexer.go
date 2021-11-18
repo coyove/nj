@@ -9,6 +9,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 	"unsafe"
+
+	"github.com/coyove/nj/internal"
 )
 
 const EOF = 0xffffffff
@@ -422,7 +424,7 @@ func parse(reader string, name string) (chunk Node, lexer *Lexer, err error) {
 		Stmts:   Node{},
 		Token:   Token{Str: ""},
 	}
-	defer CatchError(&err)
+	defer internal.CatchError(&err)
 	yyParse(lexer)
 	chunk = lexer.Stmts
 	return

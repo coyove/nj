@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/coyove/nj"
+	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
 
@@ -23,7 +24,7 @@ func init() {
 		}),
 		nj.Str("unescape"), nj.Func1("unescape", func(a nj.Value) nj.Value {
 			v, err := url.QueryUnescape(a.MustStr(""))
-			panicErr(err)
+			internal.PanicErr(err)
 			return nj.Str(v)
 		}),
 	))
@@ -34,7 +35,7 @@ func init() {
 		method := strings.ToUpper(args.Get(nj.Str("method")).MaybeStr("GET"))
 
 		u, err := url.Parse(args.Get(nj.Str("url")).MaybeStr("bad://%url%"))
-		panicErr(err)
+		internal.PanicErr(err)
 
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Get(nj.Str(k))
@@ -52,7 +53,7 @@ func init() {
 				ok = ok || strings.EqualFold(allow, method)
 			}
 			if !ok {
-				panicErr(fmt.Errorf("%s %v not allowed", method, u))
+				internal.PanicErr(fmt.Errorf("%s %v not allowed", method, u))
 			}
 		}
 
@@ -90,16 +91,20 @@ func init() {
 						key = key[:strings.Index(key, "/")]
 					}
 					if filename != "" {
-						part := panicErr2(writer.CreateFormFile(key, filename)).(io.Writer)
-						panicErr2(io.Copy(part, nj.NewReader(v)))
+						part, err := writer.CreateFormFile(key, filename)
+						internal.PanicErr(err)
+						_, err = io.Copy(part, nj.NewReader(v))
+						internal.PanicErr(err)
 					} else {
-						part := panicErr2(writer.CreateFormField(key)).(io.Writer)
-						panicErr2(io.Copy(part, nj.NewReader(v)))
+						part, err := writer.CreateFormField(key)
+						internal.PanicErr(err)
+						_, err = io.Copy(part, nj.NewReader(v))
+						internal.PanicErr(err)
 					}
 					return true
 				})
 			}
-			panicErr(writer.Close())
+			internal.PanicErr(writer.Close())
 			if payload.Len() > 0 {
 				bodyReader = &payload
 				dataFrom = writer
@@ -107,7 +112,7 @@ func init() {
 		}
 
 		req, err := http.NewRequest(method, u.String(), bodyReader)
-		panicErr(err)
+		internal.PanicErr(err)
 
 		switch {
 		case urlForm:
@@ -139,7 +144,7 @@ func init() {
 
 		// Send
 		resp, err := client.Do(req)
-		panicErr(err)
+		internal.PanicErr(err)
 
 		var buf nj.Value
 		if args.GetString("bodyreader").IsFalse() && args.GetString("br").IsFalse() {
@@ -163,20 +168,7 @@ func init() {
 		"\thttp({method='POST', url='...'}, json={...})",
 		"\thttp({method='POST', url='...', query={key=value}})",
 		"\thttp({method='POST', url='...', header={key=value}, form={key=value}})",
-		"\thttp({method='POST', url='...', multipart={file='@path/to/file'}})",
+		"\thttp({method='POST', url='...', multipart={file={reader}}})",
 		"\thttp({method='POST', url='...', proxy='http://127.0.0.1:8080'})",
 	))
-}
-
-func panicErr(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
-func panicErr2(v interface{}, err error) interface{} {
-	if err != nil {
-		panic(err)
-	}
-	return v
 }

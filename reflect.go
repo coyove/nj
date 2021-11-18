@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/coyove/nj/internal"
 )
 
 func reflectLen(v interface{}) int {
@@ -14,7 +16,7 @@ func reflectLen(v interface{}) int {
 	case reflect.Map, reflect.Slice, reflect.Array:
 		return rv.Len()
 	default:
-		panicf("reflect: can't measure length of %T", v)
+		internal.Panic("reflect: can't measure length of %T", v)
 	}
 	return -1
 }
@@ -94,7 +96,7 @@ func reflectStore(v interface{}, key Value, v2 Value) {
 	k := key.MustStr("index key")
 	f := rv.FieldByName(k)
 	if !f.IsValid() || !f.CanAddr() {
-		panicf("reflect: %q not assignable in %v", k, v)
+		internal.Panic("reflect: %q not assignable in %v", k, v)
 	}
 	if f.Type() == reflect.TypeOf(Value{}) {
 		f.Set(reflect.ValueOf(v2))
@@ -265,8 +267,8 @@ func ifquote(v bool, s string) string {
 	return s
 }
 
-func ifany(v bool, a, b interface{}) interface{} {
-	if v {
+func or(a, b interface{}) interface{} {
+	if a != nil {
 		return a
 	}
 	return b

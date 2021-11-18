@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/parser"
 	"github.com/coyove/nj/typ"
 )
@@ -73,7 +74,7 @@ func (b *packet) writeJmpInst(op byte, d int) {
 func (b *packet) writePos(p parser.Position) {
 	if p.Line == 0 {
 		// Debug Code, used to detect a null meta struct
-		panicf("DEBUG: null line")
+		internal.Panic("DEBUG: null line")
 	}
 	b.Pos.append(uint32(len(b.Code)), p.Line)
 }

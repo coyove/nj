@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/coyove/nj/parser"
+	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
 
@@ -101,7 +101,7 @@ func (c *Function) PrettyCode() string {
 }
 
 func (p *Program) Run() (v1 Value, err error) {
-	defer parser.CatchError(&err)
+	defer internal.CatchError(&err)
 	newEnv := Env{
 		Global: p,
 		stack:  p.Stack,
@@ -136,7 +136,7 @@ func (c *Function) CallVal(args ...interface{}) (v1 interface{}, err error) {
 }
 
 func (c *Function) Call(args ...Value) (v1 Value, err error) {
-	defer parser.CatchErrorFuncCall(&err, c.Name)
+	defer internal.CatchErrorFuncCall(&err, c.Name)
 
 	newEnv := Env{
 		Global: c.LoadGlobal,

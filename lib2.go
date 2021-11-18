@@ -19,6 +19,7 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
+	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
 
@@ -63,7 +64,7 @@ func init() {
 						mu.Lock()
 						defer mu.Unlock()
 						a, err := old.Call(env.Stack()...)
-						panicErr(err)
+						internal.PanicErr(err)
 						env.A = a
 					}, v.Func().DocString)
 				}
@@ -167,7 +168,7 @@ func init() {
 		Str("foreach"), Func2("foreach", func(m, f Value) Value {
 			m.MustTable("").Foreach(func(k, v Value) bool {
 				v, err := f.MustFunc("").Call(k, v)
-				panicErr(err)
+				internal.PanicErr(err)
 				return v == Nil
 			})
 			return Nil
@@ -187,7 +188,7 @@ func init() {
 			a2 := make([]Value, 0, ma.ArrayLen())
 			ma.Foreach(func(k, v Value) bool {
 				r, err := b.MustFunc("").Call(v)
-				panicErr(err)
+				internal.PanicErr(err)
 				if !r.IsFalse() {
 					a2 = append(a2, v)
 				}
@@ -294,7 +295,7 @@ func init() {
 			v, err := m.MustTable("").GetString("_e").Interface().(interface {
 				DecodeString(string) ([]byte, error)
 			}).DecodeString(t.MustStr(""))
-			panicErr(err)
+			internal.PanicErr(err)
 			return Bytes(v)
 		}),
 	)
@@ -369,7 +370,7 @@ func init() {
 		}, ""),
 		Str("match"), Func2("match", func(pattern, str Value) Value {
 			m, err := filepath.Match(pattern.MustStr("pattern"), str.MustStr("text"))
-			panicErr(err)
+			internal.PanicErr(err)
 			return Bool(m)
 		}, ""),
 		Str("find"), Func2("find", func(src, substr Value) Value {
@@ -585,7 +586,7 @@ func init() {
 			go func() { out <- p.Run() }()
 			select {
 			case r := <-out:
-				panicErr(r)
+				internal.PanicErr(r)
 			case <-time.After(timeout):
 				p.Process.Kill()
 				panic("timeout")
@@ -594,17 +595,17 @@ func init() {
 		}),
 		Str("readdir"), Func1("readdir", func(path Value) Value {
 			fi, err := ioutil.ReadDir(path.MustStr(""))
-			panicErr(err)
+			internal.PanicErr(err)
 			return ValRec(fi)
 		}),
 		Str("remove"), Func("remove", func(env *Env) {
 			p := env.B(0).MustStr("")
 			fi, err := os.Stat(p)
-			panicErr(err)
+			internal.PanicErr(err)
 			if fi.IsDir() {
-				panicErr(os.RemoveAll(p))
+				internal.PanicErr(os.RemoveAll(p))
 			} else {
-				panicErr(os.Remove(p))
+				internal.PanicErr(os.Remove(p))
 			}
 		}),
 		Str("pstat"), Func1("pstat", func(path Value) Value {
@@ -648,7 +649,7 @@ func sprintf(env *Env, p io.Writer) {
 			fmt.Fprint(p, f)
 			break
 		} else if idx == len(f)-1 {
-			panicf("unexpected '%%' at end")
+			internal.Panic("unexpected '%%' at end")
 		}
 		fmt.Fprint(p, f[:idx])
 		if f[idx+1] == '%' {
@@ -673,7 +674,7 @@ func sprintf(env *Env, p io.Writer) {
 				expecting = typ.Bool
 			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
 			default:
-				panicf("unexpected verb: '%c'", f[0])
+				internal.Panic("unexpected verb: '%c'", f[0])
 			}
 			tmp.WriteByte(f[0])
 			f = f[1:]

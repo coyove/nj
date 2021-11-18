@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
+	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/parser"
 	"github.com/coyove/nj/typ"
 	"github.com/tidwall/gjson"
@@ -81,7 +82,8 @@ func init() {
 		case typ.Nil:
 			return Int(0)
 		case typ.Number, typ.Bool:
-			return panicf("can't measure length of %v", v.Type())
+			internal.Panic("can't measure length of %v", v.Type())
+			return Nil
 		default:
 			return Int(int64(reflectLen(v.Interface())))
 		}
@@ -100,7 +102,7 @@ func init() {
 		}
 		if !g.MaybeTableGetString("compileonly").IsFalse() {
 			v, err := parser.Parse(s.MustStr(""), "")
-			panicErr(err)
+			internal.PanicErr(err)
 			return Val(v)
 		}
 		wrap := func(err error) error { return fmt.Errorf("panic inside: %v", err) }
@@ -137,7 +139,7 @@ func init() {
 				f := recv.GetString("lambda").MustFunc("").Pure()
 				stk := append([]Value{recv.GetString("source")}, env.Stack()[1:]...)
 				res, err := f.Call(stk...)
-				panicErr(err)
+				internal.PanicErr(err)
 				env.A = res
 			}),
 		)
@@ -200,7 +202,7 @@ func init() {
 		fun := env.Get(0).MustFunc("")
 		fun.Receiver = env.Get(1)
 		a, err := fun.Call(env.Stack()[2:]...)
-		panicErr(err)
+		internal.PanicErr(err)
 		env.A = a
 	}, "$f(f: function, receiver: value, ...args: value) value")
 	AddGlobalValue("pcall", func(env *Env) {
@@ -247,13 +249,13 @@ func init() {
 	AddGlobalValue("assert", func(env *Env) {
 		v := env.Get(0)
 		if env.Size() <= 1 && v.IsFalse() {
-			panicf("assertion failed")
+			internal.Panic("assertion failed")
 		}
 		if env.Size() == 2 && !v.Equal(env.Get(1)) {
-			panicf("assertion failed: %v and %v", v, env.Get(1))
+			internal.Panic("assertion failed: %v and %v", v, env.Get(1))
 		}
 		if env.Size() == 3 && !v.Equal(env.Get(1)) {
-			panicf("%s: %v and %v", env.Get(2).String(), v, env.Get(1))
+			internal.Panic("%s: %v and %v", env.Get(2).String(), v, env.Get(1))
 		}
 	}, "assert(v: value)", "\tpanic when value is falsy",
 		"assert(v1: value, v2: value)", "\tpanic when two values are not equal",
@@ -264,7 +266,7 @@ func init() {
 			env.A = Int(v.Int())
 		} else {
 			v, err := strconv.ParseInt(v.String(), int(env.Get(1).MaybeInt(0)), 64)
-			panicErr(err)
+			internal.PanicErr(err)
 			env.A = Int(v)
 		}
 	}, "$f(v: value) int", "$f(v: value, base: int) int", "\tconvert value to integer number (int64)")
@@ -358,7 +360,7 @@ func init() {
 		Str("__name"), Str("relib"),
 		Str("__call"), Func2("", func(re, r Value) Value {
 			rx, err := regexp.Compile(r.MustStr(""))
-			panicErr(err)
+			internal.PanicErr(err)
 			return TableProto(re.MustTable(""), Str("_rx"), Val(rx))
 		}, "$f(regex: string) table", "\tcreate a regular expression object"),
 		Str("match"), Func2("match", func(rx, text Value) Value {
@@ -417,7 +419,7 @@ func init() {
 			fun := f.MustFunc("mapping")
 			n, t := int(opt.MaybeInt(int64(runtime.NumCPU()))), list.MustTable("")
 			if n < 1 || n > runtime.NumCPU()*1e3 {
-				panicf("invalid number of goroutines: %v", n)
+				internal.Panic("invalid number of goroutines: %v", n)
 			}
 			var wg = sync.WaitGroup{}
 			var in = make(chan [2]Value, t.Len())
@@ -445,7 +447,7 @@ func init() {
 			t.Foreach(func(k, v Value) bool { in <- [2]Value{k, v}; return true })
 			close(in)
 			wg.Wait()
-			panicErr(outError)
+			internal.PanicErr(outError)
 			return out.Value()
 		}, "$f(t: table, f: function, n: int) table",
 			"\tmap values in `t` into new values using f(k, v) concurrently on `n` goroutines (defaults to the number of CPUs)"),
@@ -480,25 +482,25 @@ func init() {
 				}
 			}
 			f, err := os.OpenFile(path, opt, fs.FileMode(perm.MaybeInt(0644)))
-			panicErr(err)
+			internal.PanicErr(err)
 			env.Get(0).MustTable("").Set(Int(0), Val(f))
 
 			m := TableProto(ReadWriteSeekCloserProto,
 				Str("_f"), Val(f),
 				Str("sync"), Func1("sync", func(rx Value) Value {
-					panicErr(rx.Table().GetString("_f").Interface().(*os.File).Sync())
+					internal.PanicErr(rx.Table().GetString("_f").Interface().(*os.File).Sync())
 					return Nil
 				}),
 				Str("stat"), Func1("stat", func(rx Value) Value {
 					fi, err := rx.Table().GetString("_f").Interface().(*os.File).Stat()
-					panicErr(err)
+					internal.PanicErr(err)
 					return Val(fi)
 				}),
 				Str("truncate"), Func2("truncate", func(rx, n Value) Value {
 					f := rx.Table().GetString("_f").Interface().(*os.File)
-					panicErr(f.Truncate(n.MustInt("")))
+					internal.PanicErr(f.Truncate(n.MustInt("")))
 					t, err := f.Seek(0, 2)
-					panicErr(err)
+					internal.PanicErr(err)
 					return Int(t)
 				}),
 			)
@@ -507,9 +509,9 @@ func init() {
 		Str("close"), Func("close", func(env *Env) {
 			f, _ := env.Get(0).MustTable("").Get(Int(0)).Interface().(*os.File)
 			if f != nil {
-				panicErr(f.Close())
+				internal.PanicErr(f.Close())
 			} else {
-				panicf("no opened file yet")
+				internal.Panic("no opened file yet")
 			}
 		}, "$f()", "\tclose last opened file"),
 	))

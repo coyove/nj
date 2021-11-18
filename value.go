@@ -11,7 +11,7 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	"github.com/coyove/nj/parser"
+	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 	"github.com/tidwall/gjson"
 )
@@ -59,8 +59,7 @@ type Value struct {
 	p unsafe.Pointer
 }
 
-// Reverse-reference in 'parser' package
-func (v Value) IsValue(parser.Node) {}
+func (v Value) IsValue() {}
 
 // Type returns the type of value
 func (v Value) Type() typ.ValueType {
@@ -198,7 +197,7 @@ func Val(i interface{}) Value {
 		return v.Value()
 	case Value:
 		return v
-	case parser.CatchedError:
+	case internal.CatchedError:
 		return Val(v.Original)
 	case reflect.Value:
 		return Val(v.Interface())
@@ -237,14 +236,14 @@ func Val(i interface{}) Value {
 				ins := make([]reflect.Value, 0, rtNumIn)
 				if !rt.IsVariadic() {
 					if env.Size() != rtNumIn {
-						panicf("call native function, expect %d arguments, got %d", rtNumIn, env.Size())
+						internal.Panic("call native function, expect %d arguments, got %d", rtNumIn, env.Size())
 					}
 					for i := 0; i < rtNumIn; i++ {
 						ins = append(ins, env.Get(i).ReflectValue(rt.In(i)))
 					}
 				} else {
 					if env.Size() < rtNumIn-1 {
-						panicf("call native variadic function, expect at least %d arguments, got %d", rtNumIn-1, env.Size())
+						internal.Panic("call native variadic function, expect at least %d arguments, got %d", rtNumIn-1, env.Size())
 					}
 					for i := 0; i < rtNumIn-1; i++ {
 						ins = append(ins, env.Get(i).ReflectValue(rt.In(i)))
@@ -398,7 +397,7 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	} else if vt == typ.Func && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
 			out, err := v.Func().Call(valReflectValues(args)...)
-			panicErr(err)
+			internal.PanicErr(err)
 			if to := t.NumOut(); to == 1 {
 				results = []reflect.Value{out.ReflectValue(t.Out(0))}
 			} else if to > 1 {
@@ -456,7 +455,7 @@ func (v Value) MustFunc(msg string) *Function {
 		return v.Table().GetString("__call").MustFunc(msg)
 	} else if vt == typ.Func {
 	} else {
-		panicf(msg+ifstr(msg != "", ": ", "")+"expect function or callable table, got %v", stringType(v))
+		internal.Panic(msg+ifstr(msg != "", ": ", "")+"expect function or callable table, got %v", stringType(v))
 	}
 	return v.Func()
 }
@@ -467,9 +466,9 @@ func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
 			msg = fmt.Sprintf(msg, msgArg)
 		}
 		if msg != "" {
-			panicf("%s: expect %v, got %v", msg, t, stringType(v))
+			internal.Panic("%s: expect %v, got %v", msg, t, stringType(v))
 		}
-		panicf("expect %v, got %v", t, stringType(v))
+		internal.Panic("expect %v, got %v", t, stringType(v))
 	}
 	return v
 }

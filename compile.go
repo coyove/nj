@@ -7,6 +7,7 @@ import (
 	"os"
 	"unsafe"
 
+	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/parser"
 	"github.com/coyove/nj/typ"
 )
@@ -19,23 +20,13 @@ const (
 	maxAddress           = 0x7f00
 )
 
-func panicf(msg string, args ...interface{}) Value {
-	panic(fmt.Errorf(msg, args...))
-}
-
-func panicErr(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
 type symbol struct {
 	addr uint16
 }
 
 func (s *symbol) String() string { return fmt.Sprintf("symbol:%d", s.addr) }
 
-type breaklabel struct {
+type breakLabel struct {
 	continueNode parser.Node
 	continueGoto int
 	labelPos     []int
@@ -48,22 +39,22 @@ type CompileOptions struct {
 	Stdin           io.Reader
 }
 
-// symtable is responsible for recording the state of compilation
-type symtable struct {
+// symTable is responsible for recording the state of compilation
+type symTable struct {
 	options *CompileOptions
 
-	global *symtable
+	global *symTable
 
 	code packet
 
 	// toplevel symtable
 	funcs []*Function
 
-	// variable Name lookup
+	// variable lookup
 	sym       map[string]*symbol
 	maskedSym []map[string]*symbol
 
-	forLoops []*breaklabel
+	forLoops []*breakLabel
 
 	vp uint16
 
@@ -77,8 +68,8 @@ type symtable struct {
 	labelPos    map[string]int
 }
 
-func newsymtable(opt *CompileOptions) *symtable {
-	t := &symtable{
+func newSymTable(opt *CompileOptions) *symTable {
+	t := &symTable{
 		sym:          make(map[string]*symbol),
 		constMap:     make(map[interface{}]uint16),
 		reusableTmps: make(map[uint16]bool),
@@ -89,7 +80,7 @@ func newsymtable(opt *CompileOptions) *symtable {
 	return t
 }
 
-func (table *symtable) symbolsToDebugLocals() []string {
+func (table *symTable) symbolsToDebugLocals() []string {
 	x := make([]string, table.vp)
 	for sym, info := range table.sym {
 		x[info.addr] = sym
@@ -97,7 +88,7 @@ func (table *symtable) symbolsToDebugLocals() []string {
 	return x
 }
 
-func (table *symtable) borrowAddress() uint16 {
+func (table *symTable) borrowAddress() uint16 {
 	if len(table.reusableTmpsArray) > 0 {
 		tmp := table.reusableTmpsArray[0]
 		table.reusableTmpsArray = table.reusableTmpsArray[1:]
@@ -115,7 +106,7 @@ func (table *symtable) borrowAddress() uint16 {
 	return table.vp - 1
 }
 
-func (table *symtable) freeAddr(a interface{}) {
+func (table *symTable) freeAddr(a interface{}) {
 	switch a := a.(type) {
 	case []parser.Node:
 		for _, n := range a {
@@ -145,7 +136,7 @@ func (table *symtable) freeAddr(a interface{}) {
 	}
 }
 
-func (table *symtable) get(varname string) uint16 {
+func (table *symTable) get(varname string) uint16 {
 	depth := uint16(0)
 	regNil := table.loadK(nil)
 
@@ -187,7 +178,7 @@ func (table *symtable) get(varname string) uint16 {
 	return regNil
 }
 
-func (table *symtable) put(varname string, addr uint16) {
+func (table *symTable) put(varname string, addr uint16) {
 	if addr == regA {
 		panic("DEBUG: put $a?")
 	}
@@ -201,11 +192,11 @@ func (table *symtable) put(varname string, addr uint16) {
 	}
 }
 
-func (table *symtable) addMaskedSymTable() {
+func (table *symTable) addMaskedSymTable() {
 	table.maskedSym = append(table.maskedSym, map[string]*symbol{})
 }
 
-func (table *symtable) removeMaskedSymTable() {
+func (table *symTable) removeMaskedSymTable() {
 	last := table.maskedSym[len(table.maskedSym)-1]
 	for _, k := range last {
 		table.freeAddr(k.addr)
@@ -213,7 +204,7 @@ func (table *symtable) removeMaskedSymTable() {
 	table.maskedSym = table.maskedSym[:len(table.maskedSym)-1]
 }
 
-func (table *symtable) loadK(v interface{}) uint16 {
+func (table *symTable) loadK(v interface{}) uint16 {
 	if table.global != nil {
 		return table.global.loadK(v)
 	}
@@ -223,7 +214,7 @@ func (table *symtable) loadK(v interface{}) uint16 {
 	}
 
 	if !table.collectConstMode {
-		panicf("DEBUG: collect consts %#v", v)
+		internal.Panic("DEBUG: collect consts %#v", v)
 	}
 
 	idx := regGlobalFlag | table.borrowAddress()
@@ -256,7 +247,7 @@ var flatOpMapping = map[string]byte{
 	parser.AInc:        typ.OpInc,
 }
 
-func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
+func (table *symTable) writeInst(op byte, n0, n1 parser.Node) {
 	var tmp []uint16
 	getAddr := func(n parser.Node, intoNewAddr bool) uint16 {
 		switch n.Type() {
@@ -267,7 +258,7 @@ func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
 		default:
 			addr, ok := table.compileStaticNode(n)
 			if !ok {
-				panicf("DEBUG writeInst unknown type: %#v", n)
+				internal.Panic("DEBUG writeInst unknown type: %#v", n)
 			}
 			return addr
 		}
@@ -290,7 +281,7 @@ func (table *symtable) writeInst(op byte, n0, n1 parser.Node) {
 	table.freeAddr(tmp)
 }
 
-func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existedVar uint16) uint16 {
+func (table *symTable) compileNodeInto(compound parser.Node, newVar bool, existedVar uint16) uint16 {
 	newYX := table.compileNode(compound)
 
 	var yx uint16
@@ -304,7 +295,7 @@ func (table *symtable) compileNodeInto(compound parser.Node, newVar bool, existe
 	return yx
 }
 
-func (table *symtable) compileStaticNode(node parser.Node) (uint16, bool) {
+func (table *symTable) compileStaticNode(node parser.Node) (uint16, bool) {
 	switch node.Type() {
 	case parser.ADDR:
 		return node.Addr, true
@@ -320,7 +311,7 @@ func (table *symtable) compileStaticNode(node parser.Node) (uint16, bool) {
 	return 0, false
 }
 
-func (table *symtable) compileNode(node parser.Node) uint16 {
+func (table *symTable) compileNode(node parser.Node) uint16 {
 	if addr, ok := table.compileStaticNode(node); ok {
 		return addr
 	}
@@ -361,12 +352,12 @@ func (table *symtable) compileNode(node parser.Node) uint16 {
 		if _, ok := flatOpMapping[name]; ok {
 			return table.compileFlat(nodes)
 		}
-		panicf("DEBUG: compileNode unknown symbol: %q in %v", name, node)
+		internal.Panic("DEBUG: compileNode unknown symbol: %q in %v", name, node)
 	}
 	return yx
 }
 
-func (table *symtable) collectConsts(node parser.Node) {
+func (table *symTable) collectConsts(node parser.Node) {
 	switch node.Type() {
 	case parser.STR:
 		table.loadK(node.Str())
@@ -382,9 +373,9 @@ func (table *symtable) collectConsts(node parser.Node) {
 }
 
 func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls *Program, err error) {
-	defer parser.CatchError(&err)
+	defer internal.CatchError(&err)
 
-	table := newsymtable(opt)
+	table := newSymTable(opt)
 	table.collectConstMode = true
 	coreStack := &Env{stack: new([]Value)}
 
@@ -453,13 +444,11 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	cls.Symbols = table.sym
 	cls.Functions = table.funcs
 	if opt != nil {
-		cls.Stdout = ifany(opt.Stdout != nil, opt.Stdout, os.Stdout).(io.Writer)
-		cls.Stdin = ifany(opt.Stdin != nil, opt.Stdin, os.Stdin).(io.Reader)
-		cls.Stderr = ifany(opt.Stderr != nil, opt.Stderr, os.Stderr).(io.Writer)
+		cls.Stdout = or(opt.Stdout, os.Stdout).(io.Writer)
+		cls.Stdin = or(opt.Stdin, os.Stdin).(io.Reader)
+		cls.Stderr = or(opt.Stderr, os.Stderr).(io.Writer)
 	} else {
-		cls.Stdout = os.Stdout
-		cls.Stdin = os.Stdin
-		cls.Stderr = os.Stderr
+		cls.Stdout, cls.Stdin, cls.Stderr = os.Stdout, os.Stdin, os.Stderr
 	}
 	for _, f := range cls.Functions {
 		f.LoadGlobal = cls
@@ -478,7 +467,7 @@ func LoadFile(path string, opt *CompileOptions) (*Program, error) {
 	if err != nil {
 		return nil, err
 	}
-	if parser.IsDebug() {
+	if internal.IsDebug() {
 		n.Dump(os.Stderr, "  ")
 	}
 	return compileNodeTopLevel(*(*string)(unsafe.Pointer(&code)), n, opt)
@@ -489,7 +478,7 @@ func LoadString(code string, opt *CompileOptions) (*Program, error) {
 	if err != nil {
 		return nil, err
 	}
-	if parser.IsDebug() {
+	if internal.IsDebug() {
 		n.Dump(os.Stderr, "  ")
 	}
 	return compileNodeTopLevel(code, n, opt)
@@ -503,12 +492,8 @@ func Run(p *Program, err error) (Value, error) {
 }
 
 func MustRun(p *Program, err error) Value {
-	if err != nil {
-		panic(err)
-	}
+	internal.PanicErr(err)
 	v, err := p.Run()
-	if err != nil {
-		panic(err)
-	}
+	internal.PanicErr(err)
 	return v
 }

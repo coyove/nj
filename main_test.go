@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coyove/nj/internal"
 	_parser "github.com/coyove/nj/parser"
 )
 
@@ -65,16 +66,14 @@ func runFile(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 
-	// log.Println(b.PrettyCode())
+	if internal.IsDebug() {
+		fmt.Println(b.PrettyCode())
+	}
 	// log.Println(b.Symbols)
 
 	_, err = b.Run()
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	if os.Getenv("crab") != "" {
-		fmt.Println(b.PrettyCode())
 	}
 }
 

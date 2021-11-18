@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"unsafe"
 
+	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
 
@@ -148,7 +149,7 @@ func (m *Table) SetString(k string, v Value) (prev Value) {
 // Set inserts or updates a key/val pair into the Map. If val == Nil, then key will get deleted
 func (m *Table) Set(k, v Value) (prev Value) {
 	if k == Nil {
-		panicf("table set with nil key")
+		internal.Panic("table set with nil key")
 	}
 
 	if m.parent != nil && !m.Contains(k) {
@@ -395,7 +396,7 @@ func (m *Table) Name() string {
 func (m *Table) New() *Table {
 	if f := m.GetString("__new"); f.Type() == typ.Func {
 		res, err := f.Func().Call()
-		panicErr(err)
+		internal.PanicErr(err)
 		return res.MustTable("table.__new")
 	}
 	return m

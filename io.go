@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
 
@@ -37,7 +38,7 @@ var (
 				panic(err)
 			default:
 				buf, err := ioutil.ReadAll(f)
-				panicErr(err)
+				internal.PanicErr(err)
 				return Bytes(buf)
 			}
 		}, "read() string", "\tread all bytes, return nil if EOF reached", "read(n: int) string", "\tread n bytes"),
@@ -90,7 +91,7 @@ var (
 		Str("write"), Func2("write", func(rx, buf Value) Value {
 			f := rx.Table().GetString("_f").Interface().(io.Writer)
 			wn, err := f.Write([]byte(buf.MustStr("")))
-			panicErr(err)
+			internal.PanicErr(err)
 			return Int(int64(wn))
 		}, "$f({w}: value, buf: string) int", "\twrite buf to w"),
 		Str("pipe"), Func3("pipe", func(dest, src, n Value) Value {
@@ -101,7 +102,7 @@ var (
 			} else {
 				wn, err = io.Copy(NewWriter(dest), NewReader(src))
 			}
-			panicErr(err)
+			internal.PanicErr(err)
 			return Int(wn)
 		}, "$f({w}: value, r: value) int", "\tcopy bytes from r to w, return number of bytes copied",
 			"$f({w}: value, r: value, n: int) int", "\tcopy at most n bytes from r to w"),
@@ -111,13 +112,13 @@ var (
 		Str("seek"), Func3("seek", func(rx, off, where Value) Value {
 			f := rx.Table().GetString("_f").Interface().(io.Seeker)
 			wn, err := f.Seek(off.MustInt("offset"), int(where.MustInt("where")))
-			panicErr(err)
+			internal.PanicErr(err)
 			return Int(int64(wn))
 		}, "")).Table()
 
 	CloserProto = Map(Str("__name"), Str("closer"),
 		Str("close"), Func1("close", func(rx Value) Value {
-			panicErr(rx.Table().GetString("_f").Interface().(io.Closer).Close())
+			internal.PanicErr(rx.Table().GetString("_f").Interface().(io.Closer).Close())
 			return Nil
 		}, "")).Table()
 

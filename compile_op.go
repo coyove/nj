@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/parser"
 	"github.com/coyove/nj/typ"
 )
@@ -11,7 +12,7 @@ import (
 var _nodeRegA = parser.Addr(regA)
 
 // [prog expr1 expr2 ...]
-func (table *symtable) compileChain(chain parser.Node) uint16 {
+func (table *symTable) compileChain(chain parser.Node) uint16 {
 	doblock := chain.Nodes()[0].Sym() == (parser.ADoBlock)
 
 	if doblock {
@@ -41,7 +42,7 @@ func (table *symtable) compileChain(chain parser.Node) uint16 {
 	return yx
 }
 
-func (table *symtable) compileSetMove(atoms []parser.Node) uint16 {
+func (table *symTable) compileSetMove(atoms []parser.Node) uint16 {
 	aDest := atoms[1].Sym()
 	newYX := table.get(aDest)
 	if atoms[0].Sym() == parser.AMove {
@@ -66,13 +67,13 @@ func (table *symtable) compileSetMove(atoms []parser.Node) uint16 {
 	return newYX
 }
 
-func (table *symtable) compileReturn(atoms []parser.Node) uint16 {
+func (table *symTable) compileReturn(atoms []parser.Node) uint16 {
 	table.writeInst(typ.OpRet, atoms[1], parser.Node{})
 	return regA
 }
 
 // writeInst3 accepts 3 arguments at most, 2 arguments will be encoded into opCode itself, the 3rd one will be in regA
-func (table *symtable) writeInst3(bop byte, atoms []parser.Node) uint16 {
+func (table *symTable) writeInst3(bop byte, atoms []parser.Node) uint16 {
 	// first atom: the splitInst Name, tail atoms: the args
 	if len(atoms) > 4 {
 		panic("DEBUG: too many arguments")
@@ -116,11 +117,11 @@ func (table *symtable) writeInst3(bop byte, atoms []parser.Node) uint16 {
 	return regA
 }
 
-func (table *symtable) compileFlat(atoms []parser.Node) uint16 {
+func (table *symTable) compileFlat(atoms []parser.Node) uint16 {
 	head := atoms[0].Sym()
 	op, ok := flatOpMapping[head]
 	if !ok {
-		panicf("DEBUG compileFlat invalid symbol: %v", atoms[0])
+		internal.Panic("DEBUG compileFlat invalid symbol: %v", atoms[0])
 	}
 	yx := table.writeInst3(op, atoms)
 	if p := atoms[0].Pos(); p.Line > 0 {
@@ -131,7 +132,7 @@ func (table *symtable) compileFlat(atoms []parser.Node) uint16 {
 
 // [and a b] => $a = a if not a then goto out else $a = b end ::out::
 // [or a b]  => $a = a if not a then $a = b end
-func (table *symtable) compileAndOr(atoms []parser.Node) uint16 {
+func (table *symTable) compileAndOr(atoms []parser.Node) uint16 {
 	table.writeInst(typ.OpSet, _nodeRegA, atoms[1])
 
 	if atoms[0].Sym() == (parser.AOr) {
@@ -157,7 +158,7 @@ func (table *symtable) compileAndOr(atoms []parser.Node) uint16 {
 }
 
 // [if condition [true-chain ...] [false-chain ...]]
-func (table *symtable) compileIf(atoms []parser.Node) uint16 {
+func (table *symTable) compileIf(atoms []parser.Node) uint16 {
 	condition := atoms[1]
 	trueBranch, falseBranch := atoms[2], atoms[3]
 
@@ -194,7 +195,7 @@ func (table *symtable) compileIf(atoms []parser.Node) uint16 {
 	return regA
 }
 
-func (table *symtable) compileList(nodes []parser.Node) uint16 {
+func (table *symTable) compileList(nodes []parser.Node) uint16 {
 	// [list [a, b, c, ...]]
 	table.collapse(nodes[1].Nodes(), true)
 	if nodes[0].Sym() == parser.AArray {
@@ -214,7 +215,7 @@ func (table *symtable) compileList(nodes []parser.Node) uint16 {
 }
 
 // [call callee [args ...]]
-func (table *symtable) compileCall(nodes []parser.Node) uint16 {
+func (table *symTable) compileCall(nodes []parser.Node) uint16 {
 	tmp := append([]parser.Node{nodes[1]}, nodes[2].Nodes()...)
 	isVariadic := false
 	if last := &tmp[len(tmp)-1]; len(last.Nodes()) == 2 && last.Nodes()[0].Sym() == parser.AUnpack {
@@ -248,9 +249,9 @@ func (table *symtable) compileCall(nodes []parser.Node) uint16 {
 }
 
 // [function Name [paramlist] [chain ...] docstring]
-func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
+func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	params := atoms[2]
-	newtable := newsymtable(table.options)
+	newtable := newSymTable(table.options)
 
 	if table.global == nil {
 		newtable.global = table
@@ -266,14 +267,14 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 			varargIdx = i
 		}
 		if _, ok := newtable.sym[n]; ok {
-			panicf("%v: duplicated parameter: %q", atoms[1], n)
+			internal.Panic("%v: duplicated parameter: %q", atoms[1], n)
 		}
 		newtable.put(n, uint16(i))
 	}
 
 	ln := len(newtable.sym)
 	if ln > 255 {
-		panicf("%v: too many parameters, 255 at most", atoms[1])
+		internal.Panic("%v: too many parameters, 255 at most", atoms[1])
 	}
 
 	newtable.vp = uint16(len(newtable.sym))
@@ -311,9 +312,9 @@ func (table *symtable) compileFunction(atoms []parser.Node) uint16 {
 }
 
 // [break]
-func (table *symtable) compileBreak(atoms []parser.Node) uint16 {
+func (table *symTable) compileBreak(atoms []parser.Node) uint16 {
 	if len(table.forLoops) == 0 {
-		panicf("%v: outside loop", atoms[0])
+		internal.Panic("%v: outside loop", atoms[0])
 	}
 	bl := table.forLoops[len(table.forLoops)-1]
 	if atoms[0].Sym() == parser.AContinue {
@@ -327,9 +328,9 @@ func (table *symtable) compileBreak(atoms []parser.Node) uint16 {
 }
 
 // [loop [chain ...]]
-func (table *symtable) compileWhile(atoms []parser.Node) uint16 {
+func (table *symTable) compileWhile(atoms []parser.Node) uint16 {
 	init := table.code.Len()
-	breaks := &breaklabel{
+	breaks := &breakLabel{
 		continueNode: atoms[2],
 		continueGoto: init,
 	}
@@ -347,7 +348,7 @@ func (table *symtable) compileWhile(atoms []parser.Node) uint16 {
 	return regA
 }
 
-func (table *symtable) compileGoto(atoms []parser.Node) uint16 {
+func (table *symTable) compileGoto(atoms []parser.Node) uint16 {
 	label := atoms[1].Sym()
 	if atoms[0].Sym() == parser.ALabel { // :: label ::
 		table.labelPos[label] = table.code.Len()
@@ -362,12 +363,12 @@ func (table *symtable) compileGoto(atoms []parser.Node) uint16 {
 	return regA
 }
 
-func (table *symtable) patchGoto() {
+func (table *symTable) patchGoto() {
 	code := table.code.Code
 	for i, l := range table.forwardGoto {
 		pos, ok := table.labelPos[l]
 		if !ok {
-			panicf("label %q not found", l)
+			internal.Panic("label %q not found", l)
 		}
 		code[i] = jmpInst(typ.OpJmp, pos-(i+1))
 	}
@@ -386,7 +387,7 @@ func (table *symtable) patchGoto() {
 	}
 }
 
-func (table *symtable) compileFreeAddr(atoms []parser.Node) uint16 {
+func (table *symTable) compileFreeAddr(atoms []parser.Node) uint16 {
 	for i := 1; i < len(atoms); i++ {
 		s := atoms[i].Sym()
 		yx := table.get(s)
@@ -403,7 +404,7 @@ func (table *symtable) compileFreeAddr(atoms []parser.Node) uint16 {
 // collapse will accept a list of nodes, for every expression inside,
 // it will be collapsed into a temp variable and be replaced with a ADR node,
 // For the last expression, it will be collapsed but not use a temp variable unless optLast == false
-func (table *symtable) collapse(atoms []parser.Node, optLast bool) {
+func (table *symTable) collapse(atoms []parser.Node, optLast bool) {
 	var lastCompound struct {
 		n parser.Node
 		i int
