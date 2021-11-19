@@ -420,9 +420,9 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	for k, stackPos := range table.constMap {
 		switch k := k.(type) {
 		case float64:
-			coreStack.Set(int(stackPos), Float(k))
+			coreStack.Set(int(stackPos), Float64(k))
 		case int64:
-			coreStack.Set(int(stackPos), Int(k))
+			coreStack.Set(int(stackPos), Int64(k))
 		case string:
 			coreStack.Set(int(stackPos), Str(k))
 		case bool:

@@ -30,7 +30,7 @@ func reflectLoad(v interface{}, key Value) Value {
 			return Val(v.Interface())
 		}
 	case reflect.Slice, reflect.Array:
-		idx := key.MustNum("index key").Int()
+		idx := key.MustNum("index key").Int64()
 		if idx < int64(rv.Len()) && idx >= 0 {
 			return Val(rv.Index(int(idx)).Interface())
 		}
@@ -81,7 +81,7 @@ func reflectStore(subject interface{}, key, value Value) {
 		}
 		return
 	case reflect.Slice, reflect.Array:
-		idx := key.MustNum("index key").Int()
+		idx := key.MustNum("index key").Int64()
 		if idx >= int64(rv.Len()) || idx < 0 {
 			return
 		}

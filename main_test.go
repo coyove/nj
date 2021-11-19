@@ -101,11 +101,11 @@ end
 return foo
 `, &CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
 		v, _ := cls.Run()
-		if v, _ := v.Func().Call(Int(10)); v.Int() != 11 {
+		if v, _ := v.Func().Call(Int64(10)); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v, _ := v.Func().Call(Int(100)); v.Int() != 111 {
+		if v, _ := v.Func().Call(Int64(100)); v.Int64() != 111 {
 			t.Fatal(v)
 		}
 	}
@@ -122,15 +122,15 @@ end
 return foo
 `, nil)
 		v, _ := cls.Run()
-		if v, _ := v.Func().Call(Array(Int(1), Int(2), Int(3), Int(4))); v.Int() != 11 {
+		if v, _ := v.Func().Call(Array(Int64(1), Int64(2), Int64(3), Int64(4))); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v, _ := v.Func().Call(Array(Int(10), Int(20))); v.Int() != 41 {
+		if v, _ := v.Func().Call(Array(Int64(10), Int64(20))); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 
-		if v, _ := v.Func().Call(); v.Int() != 41 {
+		if v, _ := v.Func().Call(); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 	}
@@ -168,7 +168,7 @@ func TestArithmeticUnfold(t *testing.T) {
 		t.Error(err)
 	}
 
-	if v, _ := cls.Run(); v.Float() != 2.5 {
+	if v, _ := cls.Run(); v.Float64() != 2.5 {
 		t.Error("exec failed")
 	}
 }
@@ -195,7 +195,7 @@ func TestRegisterOptimzation(t *testing.T) {
 	// But after the if block, there is another c = a + b, we can't re-use the registers R0 and R1
 	// because they will not contain the value we want as the if block was not executed at all.
 
-	if n, _ := cls.Run(); n.Int() != 3 {
+	if n, _ := cls.Run(); n.Int64() != 3 {
 		t.Error("exec failed:", n, cls)
 	}
 }
@@ -209,7 +209,7 @@ a = 0
 		t.Error(err)
 	}
 
-	if v, _ := cls.Run(); !math.IsNaN(v.Float()) {
+	if v, _ := cls.Run(); !math.IsNaN(v.Float64()) {
 		t.Error("wrong answer")
 	}
 }
@@ -239,11 +239,11 @@ func benchmarkRHMap(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
 	m := NewTable(n)
 	for i := 0; i < n; i++ {
-		m.Set(Int(int64(i)), Int(int64(i)))
+		m.Set(Int64(int64(i)), Int64(int64(i)))
 	}
 	for i := 0; i < b.N; i++ {
 		idx := rand.Intn(n)
-		if m.Get(Int(int64(idx))) != Int(int64(idx)) {
+		if m.Get(Int64(int64(idx))) != Int64(int64(idx)) {
 			b.Fatal(idx, m)
 		}
 	}
@@ -255,7 +255,7 @@ func benchmarkRHMapUnconstrainted(b *testing.B, n int) {
 	for i := 0; i < b.N; i++ {
 		for i := 0; i < n; i++ {
 			x := rand.Intn(n)
-			m.Set(Int(int64(x)), Int(int64(i)))
+			m.Set(Int64(int64(x)), Int64(int64(i)))
 		}
 	}
 }
@@ -308,7 +308,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		if v2.Table().Get(Int(int64(i))).Int() != int64(i) {
+		if v2.Table().Get(Int64(int64(i))).Int64() != int64(i) {
 			t.Fatal(v2)
 		}
 	}
@@ -350,9 +350,9 @@ func TestFalsyValue(t *testing.T) {
 		}
 	}
 
-	assert(Float(0).IsFalse())
-	assert(Float(1 / math.Inf(-1)).IsFalse())
-	assert(!Float(math.NaN()).IsFalse())
+	assert(Float64(0).IsFalse())
+	assert(Float64(1 / math.Inf(-1)).IsFalse())
+	assert(!Float64(math.NaN()).IsFalse())
 	assert(!Bool(true).IsFalse())
 	assert(Bool(false).IsFalse())
 	assert(Str("").IsFalse())
@@ -391,7 +391,7 @@ return {a + add(), a + add(), a + add()}
 		panic(err)
 	}
 	fmt.Println(p2.PrettyCode())
-	if v1 := v.Table().ArrayPart(); v1[0].Int() != 101 || v1[1].Int() != 102 || v1[2].Int() != 103 {
+	if v1 := v.Table().ArrayPart(); v1[0].Int64() != 101 || v1[1].Int64() != 102 || v1[2].Int64() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())
 	}
 
@@ -405,21 +405,21 @@ func TestNumberLexer(t *testing.T) {
 			t.Fatal(fn, ln, r, v)
 		}
 	}
-	assert("1 + 2 ", Int(3))
-	assert("1+ 2 ", Int(3))
-	assert("-1+ 2 ", Int(1))
-	assert("1- 2 ", Int(-1))
-	assert("1 - 2 ", Int(-1))
-	assert("1.5 +2", Float(3.5))
-	assert("1.5+ 2 ", Float(3.5))
-	assert("12.5e-1+ 2 ", Float(3.25))
-	assert("1.5e+1+ 2", Float(17))
-	assert(".5+ 2 ", Float(2.5))
-	assert("-.5+ 2", Float(1.5))
-	assert("0x1+ 2", Int(3))
-	assert("0xE+1 ", Int(15))
-	assert(".5E+1 ", Int(5))
-	assert("0x1_2_e+1", Int(0x12f))
+	assert("1 + 2 ", Int64(3))
+	assert("1+ 2 ", Int64(3))
+	assert("-1+ 2 ", Int64(1))
+	assert("1- 2 ", Int64(-1))
+	assert("1 - 2 ", Int64(-1))
+	assert("1.5 +2", Float64(3.5))
+	assert("1.5+ 2 ", Float64(3.5))
+	assert("12.5e-1+ 2 ", Float64(3.25))
+	assert("1.5e+1+ 2", Float64(17))
+	assert(".5+ 2 ", Float64(2.5))
+	assert("-.5+ 2", Float64(1.5))
+	assert("0x1+ 2", Int64(3))
+	assert("0xE+1 ", Int64(15))
+	assert(".5E+1 ", Int64(5))
+	assert("0x1_2_e+1", Int64(0x12f))
 }
 
 func TestSmallString(t *testing.T) {
@@ -450,12 +450,12 @@ func TestRHMap(t *testing.T) {
 			x = counter
 			counter++
 		}
-		m.Set(Int(int64(x)), Int(int64(x)))
+		m.Set(Int64(int64(x)), Int64(int64(x)))
 		m2[x] = x
 	}
 	for k := range m2 {
 		delete(m2, k)
-		m.Set(Int(k), Nil)
+		m.Set(Int64(k), Nil)
 		if rand.Intn(10000) == 0 {
 			break
 		}
@@ -464,13 +464,13 @@ func TestRHMap(t *testing.T) {
 	fmt.Println(m.count, len(m.hashItems), len(m2))
 
 	for k, v := range m2 {
-		if m.Get(Int(k)).Int() != v {
+		if m.Get(Int64(k)).Int64() != v {
 			for _, e := range m.hashItems {
-				if e.Key.Int() == k {
+				if e.Key.Int64() == k {
 					t.Log(e)
 				}
 			}
-			t.Fatal(m.Get(Int(k)), k, v)
+			t.Fatal(m.Get(Int64(k)), k, v)
 		}
 	}
 
@@ -479,22 +479,22 @@ func TestRHMap(t *testing.T) {
 	}
 
 	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
-		if _, ok := m2[k.Int()]; !ok {
+		if _, ok := m2[k.Int64()]; !ok {
 			t.Fatal(k, v, len(m2))
 		}
-		delete(m2, k.Int())
+		delete(m2, k.Int64())
 	}
 	if len(m2) != 0 {
 		t.Fatal(len(m2))
 	}
 
 	m.Clear()
-	m.Set(Int(0), Int(0))
-	m.Set(Int(1), Int(1))
-	m.Set(Int(2), Int(2))
+	m.Set(Int64(0), Int64(0))
+	m.Set(Int64(1), Int64(1))
+	m.Set(Int64(2), Int64(2))
 
 	for i := 4; i < 9; i++ {
-		m.Set(Int(int64(i*i)), Int(0))
+		m.Set(Int64(int64(i*i)), Int64(0))
 	}
 
 	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
@@ -509,7 +509,7 @@ func TestACall(t *testing.T) {
 	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	_, err := foo.Func().Call(Nil, Int(1), Int(2))
+	_, err := foo.Func().Call(Nil, Int64(1), Int64(2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -518,7 +518,7 @@ func TestACall(t *testing.T) {
 	assert(a == 1 and len(m) == 0)
     end
     return foo`, nil))
-	_, err = foo.Func().Call(Int(1))
+	_, err = foo.Func().Call(Int64(1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +533,7 @@ func TestACall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Int() != 100 {
+	if v.Int64() != 100 {
 		t.Fatal(v)
 	}
 
@@ -541,15 +541,15 @@ func TestACall(t *testing.T) {
     return m.pow2()`, &CompileOptions{
 		GlobalKeyValues: map[string]interface{}{
 			"m": TableProto(Map(
-				Str("a"), Int(0),
+				Str("a"), Int64(0),
 				Str("pow2"), Func1("pow2", func(self Value) Value {
-					i := self.Table().GetString("a").Int()
-					return Int(i * i)
+					i := self.Table().GetString("a").Int64()
+					return Int64(i * i)
 				}),
 			).Table()),
 		},
 	}))
-	if foo.Int() != 121 {
+	if foo.Int64() != 121 {
 		t.Fatal(foo)
 	}
 
@@ -570,11 +570,11 @@ func TestACall(t *testing.T) {
 			},
 		},
 	}))
-	v, err = foo.Func().Call(Int(1), Int(2), Int(3))
+	v, err = foo.Func().Call(Int64(1), Int64(2), Int64(3))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Int() != 15 {
+	if v.Int64() != 15 {
 		t.Fatal(v)
 	}
 }
@@ -585,7 +585,7 @@ func TestReflectedValue(t *testing.T) {
 	if x[0] != true || x[1] != false {
 		t.Fatal(x)
 	}
-	v = Map(Str("a"), Int(1), Str("b"), Int(2))
+	v = Map(Str("a"), Int64(1), Str("b"), Int64(2))
 	y := v.ReflectValue(reflect.TypeOf(map[string]byte{})).Interface().(map[string]byte)
 	if y["a"] != 1 || y["b"] != 2 {
 		t.Fatal(x)
@@ -632,7 +632,7 @@ func TestReflectedValue(t *testing.T) {
 func TestHashcodeDist(t *testing.T) {
 	slots := [256]int{}
 	for i := 0; i < 1e6; i++ {
-		v := Int(int64(i)).HashCode()
+		v := Int64(int64(i)).HashCode()
 		slots[byte(v)]++
 	}
 	rand.Seed(time.Now().Unix())
@@ -687,8 +687,8 @@ func BenchmarkFloat64_2(b *testing.B) {
 
 func BenchmarkReceiver(b *testing.B) {
 	x := Array(Func("", func(env *Env) {}))
-	fmt.Println(x.Table().Get(Int(0)).String())
+	fmt.Println(x.Table().Get(Int64(0)).String())
 	for i := 0; i < b.N; i++ {
-		x.Table().Get(Int(0))
+		x.Table().Get(Int64(0))
 	}
 }

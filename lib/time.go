@@ -115,7 +115,7 @@ func init() {
 		tt, ok := env.Get(1).Interface().(time.Time)
 		if !ok {
 			if t := env.Get(1); t.Type() == typ.Number {
-				tt = time.Unix(0, int64(t.Float()*1e9))
+				tt = time.Unix(0, int64(t.Float64()*1e9))
 			} else {
 				tt = time.Now()
 			}

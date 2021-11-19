@@ -46,7 +46,7 @@ func RemoveGlobalValue(k string) {
 }
 
 func init() {
-	AddGlobalValue("VERSION", Int(Version))
+	AddGlobalValue("VERSION", Int64(Version))
 	AddGlobalValue("globals", func(env *Env) {
 		r := NewTable(len(env.Global.Top.Locals))
 		for i, name := range env.Global.Top.Locals {
@@ -69,20 +69,23 @@ func init() {
 	AddGlobalValue("len", func(v Value) Value {
 		switch v.Type() {
 		case typ.String:
-			return Int(int64(len(v.Str())))
+			return Int(len(v.Str()))
 		case typ.Table:
-			return Int(int64(v.Table().Len()))
+			return Int(v.Table().Len())
 		case typ.Func:
-			return Int(int64(v.Func().NumParams))
+			return Int64(int64(v.Func().NumParams))
 		case typ.Nil:
-			return Int(0)
+			return Zero
 		case typ.Number, typ.Bool:
 			internal.Panic("can't measure length of %v", v.Type())
 		}
-		return Int(int64(reflectLen(v.Interface())))
+		return Int(reflectLen(v.Interface()))
 	})
 	AddGlobalValue("sizeof", func(v Value) Value {
-		return Int(int64(v.MustTable("").Size()))
+		if v.Type() == typ.Table {
+			return Int(v.Table().Size())
+		}
+		return Int64(int64(ValueSize))
 	})
 	AddGlobalValue("eval", func(s, g Value) Value {
 		var m map[string]interface{}
@@ -115,22 +118,20 @@ func init() {
 			return r.Value()
 		}
 		return v
-	}, "$f(code: string, globals?: table) -> value", "\tevaluate `code` and return the reuslt")
+	}, "$f(code: string, options?: table) -> value", "\tevaluate `code` and return the reuslt")
 	AddGlobalValue("closure", func(f, m Value) Value {
 		lambda := f.MustFunc("")
 		return Map(
 			Str("source"), m,
 			Str("lambda"), lambda.Value(),
 			Str("__str"), Func("<closure-"+lambda.Name+"__str>", func(e *Env) {
-				recv := e.B(0).MustTable("")
-				f := recv.GetString("lambda").MustFunc("")
-				src := recv.GetString("source")
+				f := e.B(0).Recv("lambda").MustFunc("")
+				src := e.B(0).Recv("source")
 				e.A = Str("<closure-" + f.Pure().String() + "-" + src.String() + ">")
 			}),
 			Str("__call"), Func("<closure-"+lambda.Name+">", func(e *Env) {
-				recv := e.B(0).MustTable("")
-				f := recv.GetString("lambda").MustFunc("").Pure()
-				stk := append([]Value{recv.GetString("source")}, e.Stack()[1:]...)
+				f := e.B(0).Recv("lambda").MustFunc("").Pure()
+				stk := append([]Value{e.B(0).Recv("source")}, e.Stack()[1:]...)
 				e.A = MustValue(f.Call(stk...))
 			}),
 		)
@@ -145,24 +146,24 @@ func init() {
 			start := env.stackOffset - uint32(env.CS.StackSize)
 			for i, name := range env.CS.Locals {
 				idx := start + uint32(i)
-				r = append(r, Int(int64(idx)), Str(name), (*env.stack)[idx])
+				r = append(r, Int64(int64(idx)), Str(name), (*env.stack)[idx])
 			}
 			env.A = Array(r...)
 		}, "$f() -> array", "\treturn { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
 		Str("globals"), Func("", func(env *Env) {
 			var r []Value
 			for i, name := range env.Global.Top.Locals {
-				r = append(r, Int(int64(i)), Str(name), (*env.Global.Stack)[i])
+				r = append(r, Int(i), Str(name), (*env.Global.Stack)[i])
 			}
 			env.A = Array(r...)
 		}, "$f() -> array", "\treturn { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
 		Str("set"), Func("set", func(env *Env) {
-			(*env.Global.Stack)[env.B(0).MustInt("")] = env.Get(1)
+			(*env.Global.Stack)[env.B(0).MustInt64("")] = env.Get(1)
 		}, "$f(idx: int, v: value)"),
 		Str("trace"), Func("", func(env *Env) {
 			stacks := append(env.Stacktrace, stacktrace{cls: env.CS, cursor: env.IP})
 			lines := make([]Value, 0, len(stacks))
-			for i := len(stacks) - 1 - int(env.B(0).MaybeInt(0)); i >= 0; i-- {
+			for i := len(stacks) - 1 - env.B(0).MaybeInt(0); i >= 0; i-- {
 				r := stacks[i]
 				src := uint32(0)
 				for i := 0; i < len(r.cls.Code.Pos); {
@@ -181,7 +182,7 @@ func init() {
 					}
 					i = ii
 				}
-				lines = append(lines, Str(r.cls.Name), Int(int64(src)), Int(int64(r.cursor-1)))
+				lines = append(lines, Str(r.cls.Name), Int64(int64(src)), Int64(int64(r.cursor-1)))
 			}
 			env.A = Array(lines...)
 		}, "$f(skip: int) -> array", "\treturn { func_name0, line1, cursor1, n2, l2, c2, ... }"),
@@ -235,36 +236,33 @@ func init() {
 			return <-ch
 		}),
 	))
-	AddGlobalValue("panic", func(env *Env) { panic(env.B(0)) }, "$f(v: value)")
-	AddGlobalValue("assert", func(env *Env) {
-		v := env.B(0)
-		if env.Size() <= 1 && v.IsFalse() {
+	AddGlobalValue("panic", func(e *Env) { panic(e.B(0)) }, "$f(v: value)")
+	AddGlobalValue("assert", func(e *Env) {
+		if v := e.B(0); e.Size() <= 1 && v.IsFalse() {
 			internal.Panic("assertion failed")
-		}
-		if env.Size() == 2 && !v.Equal(env.Get(1)) {
-			internal.Panic("assertion failed: %v and %v", v, env.Get(1))
-		}
-		if env.Size() == 3 && !v.Equal(env.Get(1)) {
-			internal.Panic("%s: %v and %v", env.Get(2).String(), v, env.Get(1))
+		} else if e.Size() == 2 && !v.Equal(e.B(1)) {
+			internal.Panic("assertion failed: %v and %v", v, e.B(1))
+		} else if e.Size() == 3 && !v.Equal(e.B(1)) {
+			internal.Panic("%s: %v and %v", e.B(2).String(), v, e.B(1))
 		}
 	}, "$f(v: value)", "\tpanic when value is falsy",
 		"$f(v1: value, v2: value, msg?: string)", "\tpanic when two values are not equal")
 	AddGlobalValue("int", func(env *Env) {
 		if v := env.B(0); v.Type() == typ.Number {
-			env.A = Int(v.Int())
+			env.A = Int64(v.Int64())
 		} else {
-			v, err := strconv.ParseInt(v.String(), int(env.Get(1).MaybeInt(0)), 64)
+			v, err := strconv.ParseInt(v.String(), env.Get(1).MaybeInt(0), 64)
 			internal.PanicErr(err)
-			env.A = Int(v)
+			env.A = Int64(v)
 		}
 	}, "$f(v: value, base?: int) -> int", "\tconvert `v` to an integer number, panic when failed or overflowed")
 	AddGlobalValue("float", func(env *Env) {
 		if v := env.B(0); v.Type() == typ.Number {
 			env.A = v
 		} else if v := parser.Num(v.String()); v.Type() == parser.FLOAT {
-			env.A = Float(v.Float())
+			env.A = Float64(v.Float())
 		} else {
-			env.A = Int(v.Int())
+			env.A = Int64(v.Int())
 		}
 	}, "$f(v: value) -> number", "\tconvert `v` to a float number, panic when failed")
 	AddGlobalValue("print", func(env *Env) {
@@ -293,7 +291,7 @@ func init() {
 		fmt.Fprint(env.Global.Stdout, prompt.MaybeStr(""))
 		var results []Value
 		var r io.Reader = env.Global.Stdin
-		for i := n.MaybeInt(1); i > 0; i-- {
+		for i := n.MaybeInt64(1); i > 0; i-- {
 			var s string
 			if _, err := fmt.Fscan(r, &s); err != nil {
 				break
@@ -304,7 +302,7 @@ func init() {
 	}, "$f() -> array", "\tread all user inputs and return as { input1, input2, ... }",
 		"$f(prompt: string, n?: int) -> array", "\tprint `prompt` then read all (or at most `n`) user inputs")
 	AddGlobalValue("time", func(e *Env) {
-		e.A = Float(float64(time.Now().UnixNano()) / 1e9)
+		e.A = Float64(float64(time.Now().UnixNano()) / 1e9)
 	}, "$f() -> float", "\tunix timestamp in seconds")
 	AddGlobalValue("sleep", func(e *Env) {
 		time.Sleep(time.Duration(e.B(0).MustFloat("") * float64(time.Second)))
@@ -312,8 +310,8 @@ func init() {
 	AddGlobalValue("Go_time", func(e *Env) {
 		if e.Size() > 0 {
 			e.A = Val(time.Date(
-				int(e.B(0).MaybeInt(1970)), time.Month(e.B(1).MaybeInt(1)), int(e.B(2).MaybeInt(1)),
-				int(e.B(3).MaybeInt(0)), int(e.B(4).MaybeInt(0)), int(e.B(5).MaybeInt(0)), int(e.B(6).MaybeInt(0)),
+				int(e.B(0).MaybeInt64(1970)), time.Month(e.B(1).MaybeInt64(1)), int(e.B(2).MaybeInt64(1)),
+				int(e.B(3).MaybeInt64(0)), int(e.B(4).MaybeInt64(0)), int(e.B(5).MaybeInt64(0)), int(e.B(6).MaybeInt64(0)),
 				time.UTC))
 		} else {
 			e.A = Val(time.Now())
@@ -327,14 +325,14 @@ func init() {
 	AddGlobalValue("clock", func(e *Env) {
 		x := time.Now()
 		s := *(*[2]int64)(unsafe.Pointer(&x))
-		e.A = Float(float64(s[1]) / 1e9)
+		e.A = Float64(float64(s[1]) / 1e9)
 	}, "$f() -> float", "\tseconds since startup (monotonic clock)")
-	AddGlobalValue("exit", func(e *Env) { os.Exit(int(e.B(0).MustInt(""))) }, "$f(code: int)")
-	AddGlobalValue("chr", func(e *Env) { e.A = Rune(rune(e.B(0).MustInt(""))) }, "$f(code: int) -> string")
-	AddGlobalValue("byte", func(e *Env) { e.A = Byte(byte(e.B(0).MustInt(""))) }, "$f(code: int) -> string")
+	AddGlobalValue("exit", func(e *Env) { os.Exit(int(e.B(0).MustInt64(""))) }, "$f(code: int)")
+	AddGlobalValue("chr", func(e *Env) { e.A = Rune(rune(e.B(0).MustInt64(""))) }, "$f(code: int) -> string")
+	AddGlobalValue("byte", func(e *Env) { e.A = Byte(byte(e.B(0).MustInt64(""))) }, "$f(code: int) -> string")
 	AddGlobalValue("ord", func(env *Env) {
 		r, _ := utf8.DecodeRuneInString(env.B(0).MustStr(""))
-		env.A = Int(int64(r))
+		env.A = Int64(int64(r))
 	}, "$f(s: string) -> int")
 
 	AddGlobalValue("re", Map(
@@ -354,8 +352,8 @@ func init() {
 			return Array(mm...)
 		}, "$f({re}: value, text: string) -> array"),
 		Str("findall"), Func3("", func(re, text, n Value) Value {
-			m := re.Recv("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(text.MustStr(""), int(n.MaybeInt(-1)))
-			mm := []Value{}
+			m := re.Recv("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(text.MustStr(""), int(n.MaybeInt64(-1)))
+			var mm []Value
 			for _, m := range m {
 				for _, m := range m {
 					mm = append(mm, Str(m))
@@ -385,8 +383,7 @@ func init() {
 			return Val(gjson.Parse(strings.TrimSpace(js.MustStr(""))))
 		}, "$f(j: string) -> value"),
 		Str("get"), Func3("", func(js, path, et Value) Value {
-			j := strings.TrimSpace(js.MustStr("json string"))
-			result := gjson.Get(j, path.MustStr("selector"))
+			result := gjson.Get(js.MustStr("json string"), path.MustStr("selector"))
 			if !result.Exists() {
 				return et
 			}
@@ -400,7 +397,7 @@ func init() {
 		Str("waitgroup"), Func("", func(e *Env) { e.A = Val(&sync.WaitGroup{}) }, "$f() -> *go.sync.WaitGroup"),
 		Str("map"), Func3("", func(list, f, opt Value) Value {
 			fun := f.MustFunc("mapping")
-			n, t := int(opt.MaybeInt(int64(runtime.NumCPU()))), list.MustTable("")
+			n, t := opt.MaybeInt(runtime.NumCPU()), list.MustTable("")
 			if n < 1 || n > runtime.NumCPU()*1e3 {
 				internal.Panic("invalid number of goroutines: %v", n)
 			}
@@ -463,9 +460,9 @@ func init() {
 					opt |= os.O_RDWR | os.O_CREATE
 				}
 			}
-			f, err := os.OpenFile(path, opt, fs.FileMode(perm.MaybeInt(0644)))
+			f, err := os.OpenFile(path, opt, fs.FileMode(perm.MaybeInt64(0644)))
 			internal.PanicErr(err)
-			env.B(0).MustTable("").Set(Int(0), Val(f))
+			env.B(0).MustTable("").Set(Int64(0), Val(f))
 
 			m := TableProto(ReadWriteSeekCloserProto,
 				Str("_f"), Val(f),
@@ -481,16 +478,16 @@ func init() {
 				}),
 				Str("truncate"), Func2("", func(rx, n Value) Value {
 					f := rx.Recv("_f").Interface().(*os.File)
-					internal.PanicErr(f.Truncate(n.MustInt("")))
+					internal.PanicErr(f.Truncate(n.MustInt64("")))
 					t, err := f.Seek(0, 2)
 					internal.PanicErr(err)
-					return Int(t)
+					return Int64(t)
 				}),
 			)
 			env.A = m
 		}, "open(path: string, flag: string, perm: int) -> table^"+ReadWriteSeekCloserProto.Name()),
 		Str("close"), Func("", func(env *Env) {
-			f, _ := env.B(0).MustTable("").Get(Int(0)).Interface().(*os.File)
+			f, _ := env.B(0).MustTable("").Get(Int64(0)).Interface().(*os.File)
 			if f != nil {
 				internal.PanicErr(f.Close())
 			} else {

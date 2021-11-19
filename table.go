@@ -81,8 +81,8 @@ func (m *Table) getImpl(k Value, funcRecv bool) (v Value) {
 	if k == Nil {
 		return Nil
 	}
-	if k.IsInt() {
-		if idx := k.Int(); idx >= 0 && idx < int64(len(m.items)) {
+	if k.IsInt64() {
+		if idx := k.Int64(); idx >= 0 && idx < int64(len(m.items)) {
 			v = m.items[idx]
 			goto FINAL
 		}
@@ -94,7 +94,7 @@ func (m *Table) getImpl(k Value, funcRecv bool) (v Value) {
 	}
 FINAL:
 	if funcRecv && v.Type() == typ.Func {
-		f := *v.Func()
+		f := *v.unsafeFunc()
 		f.Receiver = m.Value()
 		v = f.Value()
 	}
@@ -134,8 +134,8 @@ func (m *Table) Contains(k Value) bool {
 	if k == Nil {
 		return false
 	}
-	if k.IsInt() {
-		if idx := k.Int(); idx >= 0 && idx < int64(len(m.items)) {
+	if k.IsInt64() {
+		if idx := k.Int64(); idx >= 0 && idx < int64(len(m.items)) {
 			return m.items[idx] != Nil
 		}
 	}
@@ -160,8 +160,8 @@ func (m *Table) Set(k, v Value) (prev Value) {
 		}
 	}
 
-	if k.IsInt() {
-		idx := k.Int()
+	if k.IsInt64() {
+		idx := k.Int64()
 		if idx >= 0 && idx < int64(len(m.items)) {
 			prev, m.items[idx] = m.items[idx], v
 			if v == Nil && prev != Nil {
@@ -308,14 +308,14 @@ func (m *Table) Next(k Value) (Value, Value) {
 		if len(m.items) == 0 {
 			return nextHashPair(0)
 		}
-		return Int(0), m.items[0]
+		return Int64(0), m.items[0]
 	}
-	if k.IsInt() {
-		n := k.Int()
+	if k.IsInt64() {
+		n := k.Int64()
 		if n >= 0 && n < int64(len(m.items))-1 {
 			for n++; n < int64(len(m.items)); n++ {
 				if m.items[n] != Nil {
-					return Int(n), m.items[n]
+					return Int64(n), m.items[n]
 				}
 			}
 		}
@@ -388,14 +388,21 @@ func (m *Table) Name() string {
 		n = "table"
 	}
 	if m.parent != nil {
-		n += "^" + m.parent.Name()
+		pn := m.parent.Name()
+		if pn != "tablelib" {
+			n += "^" + pn
+		}
 	}
 	return n
 }
 
 func (m *Table) New() *Table {
-	if f := m.GetString("__new"); f.Type() == typ.Func {
-		return MustValue(f.Func().Call()).MustTable("table.__new")
+	if f := m.GetString("__new"); f.IsFunc() {
+		res, err := f.Func().Call()
+		if err != nil {
+			internal.Panic("table.__new: %v", err)
+		}
+		return res.MustTable("table.__new")
 	}
 	return m
 }

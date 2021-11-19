@@ -57,15 +57,13 @@ func init() {
 		Str("concurrent"), Func2("", func(t, m Value) Value {
 			x := NewTable(t.MustTable("").Len())
 			t.MustTable("").Foreach(func(k, v Value) bool {
-				if v.Type() == typ.Func {
+				if v.IsFunc() {
 					old := v.Func()
-					v = Func(v.Func().Name, func(env *Env) {
-						mu := env.B(0).Recv("_mu").Interface().(*sync.Mutex)
+					v = Func(v.Func().Name, func(e *Env) {
+						mu := e.B(0).Recv("_mu").Interface().(*sync.Mutex)
 						mu.Lock()
 						defer mu.Unlock()
-						a, err := old.Call(env.Stack()...)
-						internal.PanicErr(err)
-						env.A = a
+						e.A = MustValue(old.Call(e.Stack()...))
 					}, v.Func().docString)
 				}
 				x.Set(k, v)
@@ -91,10 +89,10 @@ func init() {
 			return m.MustTable("").RawSet(k, v)
 		}, "$f({t}: table, k: value, v: value) -> value", "\tset value by key, return previous value"),
 		Str("make"), Func1("", func(n Value) Value {
-			return NewTable(int(n.MustInt(""))).Value()
+			return NewTable(n.MustInt("")).Value()
 		}, "$f(n: int) -> table", "\treturn a table, preallocate enough hash space for n values"),
 		Str("makearray"), Func1("", func(n Value) Value {
-			return Array(make([]Value, n.MustInt(""))...)
+			return Array(make([]Value, n.MustInt64(""))...)
 		}, "$f(n: int) -> array", "\treturn a table array, preallocate space for n values"),
 		Str("clear"), Func("", func(env *Env) {
 			env.B(0).MustTable("").Clear()
@@ -106,21 +104,20 @@ func init() {
 			env.B(0).MustTable("").ClearMap()
 		}, "$f({t}: table)"),
 		Str("slice"), Func3("", func(t, s, e Value) Value {
-			start, end := int(s.MustInt("")), int(e.MustInt(""))
-			return Array(t.MustTable("").items[start:end]...)
+			return Array(t.MustTable("").items[s.MustInt(""):e.MustInt("")]...)
 		}, "$f({t}: array, start: int, end: int) -> array", "\tslice array, from start to end"),
 		Str("copy"), Func3("", func(t, s, e Value) Value {
 			if s == Nil && e == Nil {
 				return t.MustTable("").Copy().Value()
 			}
-			start, end := int(s.MustInt("")), int(e.MustInt(""))
+			start, end := s.MustInt(""), e.MustInt("")
 			a := t.MustTable("").items
 			if start >= 0 && start < len(a) && end >= 0 && end <= len(a) && start <= end {
 				return Array(append([]Value{}, a[start:end]...)...)
 			}
 			m, from := NewTable(0), t.Table()
 			for i := start; i < end; i++ {
-				m.Set(Int(int64(i-start)), from.Get(Int(int64(i))))
+				m.Set(Int(i-start), from.Get(Int(i)))
 			}
 			return m.Value()
 		},
@@ -139,16 +136,16 @@ func init() {
 			return Nil
 		}, "$f({t}: table, p: table)", "\tinsert `p` as `t`'s first parent"),
 		Str("arraylen"), Func1("", func(v Value) Value {
-			return Int(int64(v.MustTable("").ArrayLen()))
+			return Int(v.MustTable("").ArrayLen())
 		}, "$f({t}: array) -> int", "\treturn the length of array"),
 		Str("maplen"), Func1("", func(v Value) Value {
-			return Int(int64(v.MustTable("").MapLen()))
+			return Int(v.MustTable("").MapLen())
 		}, "$f({t}: table) -> int", "\treturn the size of table map"),
 		Str("arraysize"), Func1("", func(v Value) Value {
-			return Int(int64(len(v.MustTable("").items)))
+			return Int(len(v.MustTable("").items))
 		}, "$f({t}: array) -> int", "\treturn the true size of array (including nils)"),
 		Str("mapsize"), Func1("", func(v Value) Value {
-			return Int(int64(len(v.MustTable("").hashItems)))
+			return Int(len(v.MustTable("").hashItems))
 		}, "$f({t}: table) -> int", "\treturn the true size of table map (including empty nil entries)"),
 		Str("keys"), Func1("", func(m Value) Value {
 			a := make([]Value, 0)
@@ -192,7 +189,7 @@ func init() {
 		}, "$f({a}: array, f: function)", "\tfilter out all values where f(value) is false"),
 		Str("removeat"), Func2("", func(a, b Value) Value {
 			ma, idx := a.MustTable(""), b.MustInt("")
-			if idx < 0 || idx >= int64(len(ma.items)) {
+			if idx < 0 || idx >= len(ma.items) {
 				return Nil
 			}
 			old := ma.items[idx]
@@ -205,7 +202,7 @@ func init() {
 		Str("concat"), Func2("", func(a, b Value) Value {
 			ma, mb := a.MustTable(""), b.MustTable("")
 			for _, b := range mb.ArrayPart() {
-				ma.Set(Int(int64(len(ma.items))), b)
+				ma.Set(Int(len(ma.items)), b)
 			}
 			return ma.Value()
 		}, "$f({array1}: array, array2: array)", "\tput elements from array2 to array1's end"),
@@ -297,13 +294,13 @@ func init() {
 			return Str(src.String())
 		}),
 		Str("size"), Func1("", func(src Value) Value {
-			return Int(int64(src.MustStrLen("")))
+			return Int(src.MustStrLen(""))
 		}, "$f({text}: string) -> int"),
 		Str("len"), Func1("", func(src Value) Value {
-			return Int(int64(src.MustStrLen("")))
+			return Int(src.MustStrLen(""))
 		}, "$f({text}: string) -> int"),
 		Str("count"), Func1("", func(src Value) Value {
-			return Int(int64(utf8.RuneCountInString(src.MustStr(""))))
+			return Int(utf8.RuneCountInString(src.MustStr("")))
 		}, "$f({text}: string) -> int", "\treturn count of runes in text"),
 		Str("from"), Func1("", func(src Value) Value {
 			return Str(fmt.Sprint(src.Interface()))
@@ -321,7 +318,7 @@ func init() {
 			s := src.MustStr("text")
 			d := delim.MustStr("delimeter")
 			r := []Value{}
-			if n := n.MaybeInt(0); n == 0 {
+			if n := n.MaybeInt64(0); n == 0 {
 				for _, p := range strings.Split(s, d) {
 					r = append(r, Str(p))
 				}
@@ -347,7 +344,7 @@ func init() {
 		Str("replace"), Func("", func(e *Env) {
 			src := e.B(0).MustStr("text")
 			from, to := e.B(1).MustStr("old"), e.Get(2).MustStr("new")
-			e.A = Str(strings.Replace(src, from, to, int(e.Get(3).MaybeInt(-1))))
+			e.A = Str(strings.Replace(src, from, to, e.Get(3).MaybeInt(-1)))
 		}, "$f({text}: string, old: string, new: string) -> string"),
 		Str("match"), Func2("", func(pattern, str Value) Value {
 			m, err := filepath.Match(pattern.MustStr("pattern"), str.MustStr("text"))
@@ -355,26 +352,23 @@ func init() {
 			return Bool(m)
 		}, "$f({pattern}: string, text: string) -> bool"),
 		Str("find"), Func2("", func(src, substr Value) Value {
-			return Int(int64(strings.Index(src.MustStr(""), substr.MustStr(""))))
+			return Int(strings.Index(src.MustStr(""), substr.MustStr("")))
 		}, "$f({text}: string, sub: string) -> int", "\tfind index of first appearence of `sub` in `text`"),
 		Str("findany"), Func2("", func(src, substr Value) Value {
-			return Int(int64(strings.IndexAny(src.MustStr(""), substr.MustStr(""))))
+			return Int(strings.IndexAny(src.MustStr(""), substr.MustStr("")))
 		}, "$f({text}: string, charset: string) -> int", "\tfind index of first appearence of any char from `charset` in `text`"),
 		Str("rfind"), Func2("", func(src, substr Value) Value {
-			return Int(int64(strings.LastIndex(src.MustStr(""), substr.MustStr(""))))
+			return Int(strings.LastIndex(src.MustStr(""), substr.MustStr("")))
 		}, "$f({text}: string, sub: string) -> int", "\tsame as find(), but from right to left"),
 		Str("rfindany"), Func2("", func(src, substr Value) Value {
-			return Int(int64(strings.LastIndexAny(src.MustStr(""), substr.MustStr(""))))
+			return Int(strings.LastIndexAny(src.MustStr(""), substr.MustStr("")))
 		}, "$f({text}: string, charset: string) -> int", "\tsame as findany(), but from right to left"),
 		Str("sub"), Func3("", func(src, start, end Value) Value {
 			s := src.MustStr("")
-			st := start.MaybeInt(0)
-			en := end.MaybeInt(int64(len(s)))
-			for st < 0 && len(s) > 0 {
-				st += int64(len(s))
+			st, en := start.MaybeInt(0), end.MaybeInt(len(s))
+			for ; st < 0 && len(s) > 0; st += len(s) {
 			}
-			for en < 0 && len(s) > 0 {
-				en += int64(len(s))
+			for ; en < 0 && len(s) > 0; en += len(s) {
 			}
 			return Str(s[st:en])
 		}, "$f({text}: string, start: int, end: int) -> string"),
@@ -398,7 +392,7 @@ func init() {
 		}, "$f({text}: string, cutset: string) -> string", "\tremove chars both ocurred in `cutset` and right-side of `text`"),
 		Str("ord"), Func("", func(env *Env) {
 			r, sz := utf8.DecodeRuneInString(env.B(0).MustStr(""))
-			env.A = Array(Int(int64(r)), Int(int64(sz)))
+			env.A = Array(Int64(int64(r)), Int(sz))
 		}, "$f({text}: string) -> array", "\tdecode first UTF-8 char in `text`, return { unicode, width_in_bytes }"),
 		Str("startswith"), Func2("", func(t, p Value) Value {
 			return Bool(strings.HasPrefix(t.MustStr(""), p.MustStr("")))
@@ -414,7 +408,7 @@ func init() {
 		}, "$f({text}: string) -> string"),
 		Str("bytes"), Func1("", func(s Value) Value {
 			if s.Type() == typ.Number {
-				return Val(make([]byte, s.Int()))
+				return Val(make([]byte, s.Int64()))
 			}
 			return Val([]byte(s.MustStr("")))
 		}, "$f({text}: string) -> go.[]byte", "\tcreate a byte array from `text`",
@@ -453,70 +447,70 @@ func init() {
 		}),
 		Str("hex"), TableProto(encDecProto.Table().Parent(), Str("__name"), Str("hex")),
 		Str("base64"), Map(Str("__name"), Str("base64"),
-			Str("std"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase64Encoding("std", '='))),
-			Str("url"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase64Encoding("url", '='))),
-			Str("stdp"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase64Encoding("std", -1))),
-			Str("urlp"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase64Encoding("url", -1))),
+			Str("std"), TableProto(encDecProto.Table(), Str("_e"), Val(getEncB64(base64.StdEncoding, '='))),
+			Str("url"), TableProto(encDecProto.Table(), Str("_e"), Val(getEncB64(base64.URLEncoding, '='))),
+			Str("stdp"), TableProto(encDecProto.Table(), Str("_e"), Val(getEncB64(base64.StdEncoding, -1))),
+			Str("urlp"), TableProto(encDecProto.Table(), Str("_e"), Val(getEncB64(base64.URLEncoding, -1))),
 		),
 		Str("base32"), Map(Str("__name"), Str("base32"),
-			Str("std"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase32Encoding("std", '='))),
-			Str("hex"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase32Encoding("hex", '='))),
-			Str("stdp"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase32Encoding("std", -1))),
-			Str("hexp"), TableProto(encDecProto.Table(), Str("_e"), Val(getBase32Encoding("hex", -1))),
+			Str("std"), TableProto(encDecProto.Table(), Str("_e"), Val(getEncB32(base32.StdEncoding, '='))),
+			Str("hex"), TableProto(encDecProto.Table(), Str("_e"), Val(getEncB32(base32.HexEncoding, '='))),
+			Str("stdp"), TableProto(encDecProto.Table(), Str("_e"), Val(getEncB32(base32.StdEncoding, -1))),
+			Str("hexp"), TableProto(encDecProto.Table(), Str("_e"), Val(getEncB32(base32.HexEncoding, -1))),
 		),
 	))
 	AddGlobalValue("str", StrLib)
 
 	MathLib = TableMerge(MathLib, Map(
 		Str("__name"), Str("mathlib"),
-		Str("INF"), Float(math.Inf(1)),
-		Str("NEG_INF"), Float(math.Inf(-1)),
-		Str("PI"), Float(math.Pi),
-		Str("E"), Float(math.E),
-		Str("randomseed"), Func("", func(e *Env) { rand.Seed(e.B(0).MaybeInt(1)) }, "$f(seed: int)"),
+		Str("INF"), Float64(math.Inf(1)),
+		Str("NEG_INF"), Float64(math.Inf(-1)),
+		Str("PI"), Float64(math.Pi),
+		Str("E"), Float64(math.E),
+		Str("randomseed"), Func("", func(e *Env) { rand.Seed(e.B(0).MaybeInt64(1)) }, "$f(seed: int)"),
 		Str("random"), Func("", func(e *Env) {
 			switch len(e.Stack()) {
 			case 2:
-				ai, bi := e.B(0).MustInt(""), e.B(1).MustInt("")
-				e.A = Int(rand.Int63n(bi-ai+1) + ai)
+				ai, bi := e.B(0).MustInt64(""), e.B(1).MustInt64("")
+				e.A = Int64(rand.Int63n(bi-ai+1) + ai)
 			case 1:
-				e.A = Int(rand.Int63n(e.B(0).MustInt("")))
+				e.A = Int64(rand.Int63n(e.B(0).MustInt64("")))
 			default:
-				e.A = Float(rand.Float64())
+				e.A = Float64(rand.Float64())
 			}
 		}, "$f() -> float", "\treturn [0, 1)",
 			"$f(n: int) -> int", "\treturn [0, n)",
 			"$f(a: int, b: int) -> int", "\treturn [a, b]"),
-		Str("sqrt"), Func("", func(e *Env) { e.A = Float(math.Sqrt(e.B(0).MustFloat(""))) }),
-		Str("floor"), Func("", func(e *Env) { e.A = Float(math.Floor(e.B(0).MustFloat(""))) }),
-		Str("ceil"), Func("", func(e *Env) { e.A = Float(math.Ceil(e.B(0).MustFloat(""))) }),
+		Str("sqrt"), Func("", func(e *Env) { e.A = Float64(math.Sqrt(e.B(0).MustFloat(""))) }),
+		Str("floor"), Func("", func(e *Env) { e.A = Float64(math.Floor(e.B(0).MustFloat(""))) }),
+		Str("ceil"), Func("", func(e *Env) { e.A = Float64(math.Ceil(e.B(0).MustFloat(""))) }),
 		Str("min"), Func("", func(e *Env) { mathMinMax(e, false) }, "$f(a: number, b...: number) -> number"),
 		Str("max"), Func("", func(e *Env) { mathMinMax(e, true) }, "$f(a: number, b...: number) -> number"),
 		Str("pow"), Func2("", func(a, b Value) Value {
-			return Float(math.Pow(a.MustFloat("base"), b.MustFloat("exp")))
+			return Float64(math.Pow(a.MustFloat("base"), b.MustFloat("exp")))
 		}, "$f(a: float, b: float) -> float"),
 		Str("abs"), Func("", func(e *Env) {
-			if e.A = e.B(0).MustNum(""); e.A.IsInt() {
-				if i := e.A.Int(); i < 0 {
-					e.A = Int(-i)
+			if e.A = e.B(0).MustNum(""); e.A.IsInt64() {
+				if i := e.A.Int64(); i < 0 {
+					e.A = Int64(-i)
 				}
 			} else {
-				e.A = Float(math.Abs(e.A.Float()))
+				e.A = Float64(math.Abs(e.A.Float64()))
 			}
 		}),
-		Str("remainder"), Func("", func(e *Env) { e.A = Float(math.Remainder(e.B(0).MustFloat(""), e.B(1).MustFloat(""))) }),
-		Str("mod"), Func("", func(e *Env) { e.A = Float(math.Mod(e.B(0).MustFloat(""), e.B(1).MustFloat(""))) }),
-		Str("cos"), Func("", func(e *Env) { e.A = Float(math.Cos(e.B(0).MustFloat(""))) }),
-		Str("sin"), Func("", func(e *Env) { e.A = Float(math.Sin(e.B(0).MustFloat(""))) }),
-		Str("tan"), Func("", func(e *Env) { e.A = Float(math.Tan(e.B(0).MustFloat(""))) }),
-		Str("acos"), Func("", func(e *Env) { e.A = Float(math.Acos(e.B(0).MustFloat(""))) }),
-		Str("asin"), Func("", func(e *Env) { e.A = Float(math.Asin(e.B(0).MustFloat(""))) }),
-		Str("atan"), Func("", func(e *Env) { e.A = Float(math.Atan(e.B(0).MustFloat(""))) }),
-		Str("atan2"), Func("", func(e *Env) { e.A = Float(math.Atan2(e.B(0).MustFloat(""), e.B(1).MustFloat(""))) }),
-		Str("ldexp"), Func("", func(e *Env) { e.A = Float(math.Ldexp(e.B(0).MustFloat(""), int(e.B(1).MaybeInt(0)))) }),
+		Str("remainder"), Func("", func(e *Env) { e.A = Float64(math.Remainder(e.B(0).MustFloat(""), e.B(1).MustFloat(""))) }),
+		Str("mod"), Func("", func(e *Env) { e.A = Float64(math.Mod(e.B(0).MustFloat(""), e.B(1).MustFloat(""))) }),
+		Str("cos"), Func("", func(e *Env) { e.A = Float64(math.Cos(e.B(0).MustFloat(""))) }),
+		Str("sin"), Func("", func(e *Env) { e.A = Float64(math.Sin(e.B(0).MustFloat(""))) }),
+		Str("tan"), Func("", func(e *Env) { e.A = Float64(math.Tan(e.B(0).MustFloat(""))) }),
+		Str("acos"), Func("", func(e *Env) { e.A = Float64(math.Acos(e.B(0).MustFloat(""))) }),
+		Str("asin"), Func("", func(e *Env) { e.A = Float64(math.Asin(e.B(0).MustFloat(""))) }),
+		Str("atan"), Func("", func(e *Env) { e.A = Float64(math.Atan(e.B(0).MustFloat(""))) }),
+		Str("atan2"), Func("", func(e *Env) { e.A = Float64(math.Atan2(e.B(0).MustFloat(""), e.B(1).MustFloat(""))) }),
+		Str("ldexp"), Func("", func(e *Env) { e.A = Float64(math.Ldexp(e.B(0).MustFloat(""), e.B(1).MaybeInt(0))) }),
 		Str("modf"), Func("", func(e *Env) {
 			a, b := math.Modf(e.B(0).MustFloat(""))
-			e.A = Array(Float(a), Float(b))
+			e.A = Array(Float64(a), Float64(b))
 		}),
 	))
 	AddGlobalValue("math", MathLib)
@@ -589,22 +583,22 @@ func init() {
 }
 
 func mathMinMax(env *Env, max bool) {
-	if v := env.B(0).mustBe(typ.Number, "#%d arg", 1); v.IsInt() {
-		vi := v.Int()
+	if v := env.B(0).mustBe(typ.Number, "#%d arg", 1); v.IsInt64() {
+		vi := v.Int64()
 		for ii := 1; ii < len(env.Stack()); ii++ {
-			if x := env.Get(ii).mustBe(typ.Number, "#%d arg", ii+1).Int(); x >= vi == max {
+			if x := env.Get(ii).mustBe(typ.Number, "#%d arg", ii+1).Int64(); x >= vi == max {
 				vi = x
 			}
 		}
-		env.A = Int(vi)
+		env.A = Int64(vi)
 	} else {
-		vf := v.Float()
+		vf := v.Float64()
 		for i := 1; i < len(env.Stack()); i++ {
-			if x := env.Get(i).mustBe(typ.Number, "#%d arg", i+1).Float(); x >= vf == max {
+			if x := env.Get(i).mustBe(typ.Number, "#%d arg", i+1).Float64(); x >= vf == max {
 				vf = x
 			}
 		}
-		env.A = Float(vf)
+		env.A = Float64(vf)
 	}
 }
 
@@ -657,18 +651,18 @@ func sprintf(env *Env, p io.Writer) {
 		case typ.String:
 			fmt.Fprintf(p, tmp.String(), pop.String())
 		case typ.Number:
-			if pop.mustBe(typ.Number, "arg #%d", popi-1).IsInt() {
-				fmt.Fprintf(p, tmp.String(), pop.Int())
+			if pop.mustBe(typ.Number, "arg #%d", popi-1).IsInt64() {
+				fmt.Fprintf(p, tmp.String(), pop.Int64())
 			} else {
-				fmt.Fprintf(p, tmp.String(), pop.Float())
+				fmt.Fprintf(p, tmp.String(), pop.Float64())
 			}
 		case typ.Number + typ.String:
 			if pop.Type() == typ.String {
 				fmt.Fprintf(p, tmp.String(), pop.Str())
-			} else if pop.mustBe(typ.Number, "arg #%d", popi-1).IsInt() {
-				fmt.Fprintf(p, tmp.String(), pop.Int())
+			} else if pop.mustBe(typ.Number, "arg #%d", popi-1).IsInt64() {
+				fmt.Fprintf(p, tmp.String(), pop.Int64())
 			} else {
-				fmt.Fprintf(p, tmp.String(), pop.Float())
+				fmt.Fprintf(p, tmp.String(), pop.Float64())
 			}
 		case typ.Native:
 			fmt.Fprint(p, pop.Interface())
@@ -676,22 +670,14 @@ func sprintf(env *Env, p io.Writer) {
 	}
 }
 
-func getBase64Encoding(x string, padding rune) (enc *base64.Encoding) {
-	enc = base64.StdEncoding
-	if x == "url" {
-		enc = base64.URLEncoding
-	}
+func getEncB64(enc *base64.Encoding, padding rune) *base64.Encoding {
 	if padding != '=' {
 		enc = enc.WithPadding(padding)
 	}
-	return
+	return enc
 }
 
-func getBase32Encoding(x string, padding rune) (enc *base32.Encoding) {
-	enc = base32.StdEncoding
-	if x == "hex" {
-		enc = base32.HexEncoding
-	}
+func getEncB32(enc *base32.Encoding, padding rune) *base32.Encoding {
 	if padding != '=' {
 		enc = enc.WithPadding(padding)
 	}

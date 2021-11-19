@@ -27,7 +27,7 @@ var (
 			f := rx.Table().GetString("_f").Interface().(io.Reader)
 			switch n.Type() {
 			case typ.Number:
-				p := make([]byte, n.MaybeInt(0))
+				p := make([]byte, n.MaybeInt64(0))
 				rn, err := f.Read(p)
 				if err == nil || rn > 0 {
 					return Bytes(p[:rn])
@@ -44,7 +44,7 @@ var (
 		}, "read() string", "\tread all bytes, return nil if EOF reached", "read(n: int) string", "\tread n bytes"),
 		Str("readbuf"), Func2("readbuf", func(rx, n Value) Value {
 			rn, err := rx.Table().GetString("_f").Interface().(io.Reader).Read(n.Interface().([]byte))
-			return Array(Int(int64(rn)), Val(err)) // return in Go style
+			return Array(Int64(int64(rn)), Val(err)) // return in Go style
 		}, "$f(buf: bytes) array", "\tread into buf and return { bytes_read, error } in Go style"),
 		Str("readlines"), Func2("readlines", func(rx, cb Value) Value {
 			f := rx.Table().GetString("_f").Interface().(io.Reader)
@@ -92,18 +92,18 @@ var (
 			f := rx.Table().GetString("_f").Interface().(io.Writer)
 			wn, err := f.Write([]byte(buf.MustStr("")))
 			internal.PanicErr(err)
-			return Int(int64(wn))
+			return Int64(int64(wn))
 		}, "$f({w}: value, buf: string) int", "\twrite buf to w"),
 		Str("pipe"), Func3("pipe", func(dest, src, n Value) Value {
 			var wn int64
 			var err error
-			if n := n.MaybeInt(0); n > 0 {
+			if n := n.MaybeInt64(0); n > 0 {
 				wn, err = io.CopyN(NewWriter(dest), NewReader(src), n)
 			} else {
 				wn, err = io.Copy(NewWriter(dest), NewReader(src))
 			}
 			internal.PanicErr(err)
-			return Int(wn)
+			return Int64(wn)
 		}, "$f({w}: value, r: value) int", "\tcopy bytes from r to w, return number of bytes copied",
 			"$f({w}: value, r: value, n: int) int", "\tcopy at most n bytes from r to w"),
 	).Table()
@@ -111,9 +111,9 @@ var (
 	SeekerProto = Map(Str("__name"), Str("seeker"),
 		Str("seek"), Func3("seek", func(rx, off, where Value) Value {
 			f := rx.Table().GetString("_f").Interface().(io.Seeker)
-			wn, err := f.Seek(off.MustInt("offset"), int(where.MustInt("where")))
+			wn, err := f.Seek(off.MustInt64("offset"), int(where.MustInt64("where")))
 			internal.PanicErr(err)
-			return Int(int64(wn))
+			return Int64(int64(wn))
 		}, "")).Table()
 
 	CloserProto = Map(Str("__name"), Str("closer"),
@@ -182,18 +182,18 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			return rd.Read(p)
 		}
 	case typ.Table:
-		if rb := Value(m).Table().GetString("readbuf"); rb.Type() == typ.Func {
+		if rb := Value(m).Table().GetString("readbuf"); rb.IsFunc() {
 			v, err := rb.Func().Call(Val(p))
 			if err != nil {
 				return 0, err
 			}
 			t := v.MustTable("TableIO.Read: readbuf()")
-			n := t.Get(Int(0)).MustInt("TableIO.Read: (int, error)")
-			err, _ = t.Get(Int(1)).Interface().(error)
+			n := t.Get(Int64(0)).MustInt64("TableIO.Read: (int, error)")
+			err, _ = t.Get(Int64(1)).Interface().(error)
 			return int(n), err
 		}
-		if rb := Value(m).Table().GetString("read"); rb.Type() == typ.Func {
-			v, err := rb.Func().Call(Int(int64(len(p))))
+		if rb := Value(m).Table().GetString("read"); rb.IsFunc() {
+			v, err := rb.Func().Call(Int64(int64(len(p))))
 			if err != nil {
 				return 0, err
 			}
@@ -213,12 +213,12 @@ func (m ValueIO) Write(p []byte) (int, error) {
 			return rd.Write(p)
 		}
 	case typ.Table:
-		if rb := Value(m).Table().GetString("write"); rb.Type() == typ.Func {
+		if rb := Value(m).Table().GetString("write"); rb.IsFunc() {
 			v, err := rb.Func().Call(Bytes(p))
 			if err != nil {
 				return 0, err
 			}
-			return int(v.MustInt("TableIO.Write: (int, error)")), nil
+			return int(v.MustInt64("TableIO.Write: (int, error)")), nil
 		}
 	}
 	return 0, fmt.Errorf("writer not implemented")
@@ -231,7 +231,7 @@ func (m ValueIO) Close() error {
 			return rd.Close()
 		}
 	case typ.Table:
-		if rb := Value(m).Table().GetString("close"); rb.Type() == typ.Func {
+		if rb := Value(m).Table().GetString("close"); rb.IsFunc() {
 			v, err := rb.Func().Call()
 			if err != nil {
 				return err

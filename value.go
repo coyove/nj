@@ -39,7 +39,7 @@ var (
 	int64Marker2   = uintptr(int64Marker) * 2
 
 	Nil     = Value{}
-	Zero    = Int(0)
+	Zero    = Int64(0)
 	NullStr = Str("")
 	False   = Bool(false)
 	True    = Bool(true)
@@ -75,8 +75,10 @@ func (v Value) IsFalse() bool { return v.v == 0 || v.p == falseMarker }
 
 func (v Value) IsTrue() bool { return !v.IsFalse() }
 
-// IsInt tests whether value is an integer number
-func (v Value) IsInt() bool { return v.p == int64Marker }
+// IsInt64 tests whether value is an integer number
+func (v Value) IsInt64() bool { return v.p == int64Marker }
+
+func (v Value) IsFunc() bool { return v.Func() != nil }
 
 // Bool creates a boolean value
 func Bool(v bool) Value {
@@ -86,8 +88,8 @@ func Bool(v bool) Value {
 	return Value{uint64(typ.Bool), falseMarker}
 }
 
-// Float creates a number value
-func Float(f float64) Value {
+// Float64 creates a number value
+func Float64(f float64) Value {
 	if float64(int64(f)) == f {
 		// if math.Floor(f) == f {
 		return Value{v: uint64(int64(f)), p: int64Marker}
@@ -96,7 +98,12 @@ func Float(f float64) Value {
 }
 
 // Int creates a number value
-func Int(i int64) Value {
+func Int(i int) Value {
+	return Int64(int64(i))
+}
+
+// Int64 creates a number value
+func Int64(i int64) Value {
 	return Value{v: uint64(i), p: int64Marker}
 }
 
@@ -116,7 +123,7 @@ func Map(kvs ...Value) Value {
 	t := NewTable(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		k, v := kvs[i], kvs[i+1]
-		if v.Type() == typ.Func && v.Func().Name == internal.UnnamedFunc {
+		if v.IsFunc() && v.Func().Name == internal.UnnamedFunc {
 			v.Func().Name = k.String()
 		}
 		t.Set(k, v)
@@ -186,11 +193,11 @@ func Val(i interface{}) Value {
 	case bool:
 		return Bool(v)
 	case float64:
-		return Float(v)
+		return Float64(v)
 	case int:
-		return Int(int64(v))
+		return Int64(int64(v))
 	case int64:
-		return Int(v)
+		return Int64(v)
 	case string:
 		return Str(v)
 	case *Table:
@@ -209,7 +216,7 @@ func Val(i interface{}) Value {
 		if v.Type == gjson.String {
 			return Str(v.Str)
 		} else if v.Type == gjson.Number {
-			return Float(v.Float())
+			return Float64(v.Float())
 		} else if v.Type == gjson.True || v.Type == gjson.False {
 			return Bool(v.Bool())
 		} else if v.IsArray() {
@@ -226,9 +233,9 @@ func Val(i interface{}) Value {
 
 	rv := reflect.ValueOf(i)
 	if k := rv.Kind(); k >= reflect.Int && k <= reflect.Int64 {
-		return Int(rv.Int())
+		return Int64(rv.Int())
 	} else if k >= reflect.Uint && k <= reflect.Uintptr {
-		return Int(int64(rv.Uint()))
+		return Int64(int64(rv.Uint()))
 	} else if (k == reflect.Ptr || k == reflect.Interface) && rv.IsNil() {
 		return Nil
 	} else if k == reflect.Func {
@@ -337,16 +344,19 @@ func (v Value) StrLen() int {
 	return len(*(*string)(v.p))
 }
 
-// Int returns value as an int without checking Type()
-func (v Value) Int() int64 {
+// Int returns value as an integer without checking Type()
+func (v Value) Int() int { return int(v.Int64()) }
+
+// Int64 returns value as an integer without checking Type()
+func (v Value) Int64() int64 {
 	if v.p == int64Marker {
 		return int64(v.v)
 	}
 	return int64(math.Float64frombits(v.v))
 }
 
-// Float returns value as a float without checking Type()
-func (v Value) Float() float64 {
+// Float64 returns value as a float without checking Type()
+func (v Value) Float64() float64 {
 	if v.p == int64Marker {
 		return float64(int64(v.v))
 	}
@@ -359,8 +369,15 @@ func (v Value) Bool() bool { return v.p == trueMarker }
 // Table returns value as a table without checking Type()
 func (v Value) Table() *Table { return (*Table)(v.p) }
 
-// Func returns value as a function without checking Type()
-func (v Value) Func() *Function { return (*Function)(v.p) }
+// Func returns value as a function, non-function value yield nil
+func (v Value) Func() *Function {
+	if vt := v.Type(); vt == typ.Table {
+		return v.Table().GetString("__call").Func()
+	} else if vt != typ.Func {
+		return nil
+	}
+	return v.unsafeFunc()
+}
 
 // Interface returns value as an interface{}
 func (v Value) Interface() interface{} {
@@ -368,10 +385,10 @@ func (v Value) Interface() interface{} {
 	case typ.Bool:
 		return v.Bool()
 	case typ.Number:
-		if v.IsInt() {
-			return v.Int()
+		if v.IsInt64() {
+			return v.Int64()
 		}
-		return v.Float()
+		return v.Float64()
 	case typ.String:
 		return v.Str()
 	case typ.Table:
@@ -388,6 +405,8 @@ func (v Value) ptr() uintptr { return uintptr(v.p) }
 
 func (v Value) unsafeInt() int64 { return int64(v.v) }
 
+func (v Value) unsafeFunc() *Function { return (*Function)(v.p) }
+
 // ReflectValue returns value as a reflect.Value based on reflect.Type
 func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	if t == nil {
@@ -398,7 +417,7 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 		return reflect.ValueOf(ValueIO(v))
 	} else if vt := v.Type(); vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
 		return reflect.Zero(t)
-	} else if vt == typ.Func && t.Kind() == reflect.Func {
+	} else if v.IsFunc() && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
 			out, err := v.Func().Call(valReflectValues(args)...)
 			internal.PanicErr(err)
@@ -408,7 +427,7 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 				out.mustBe(typ.Table, "ReflectValue: expect multiple returned arguments", 0)
 				results = make([]reflect.Value, t.NumOut())
 				for i := range results {
-					results[i] = out.Table().Get(Int(int64(i))).ReflectValue(t.Out(i))
+					results[i] = out.Table().Get(Int64(int64(i))).ReflectValue(t.Out(i))
 				}
 			}
 			return
@@ -450,20 +469,20 @@ func (v Value) MustStrLen(msg string) int { return v.mustBe(typ.String, msg, 0).
 
 func (v Value) MustNum(msg string) Value { return v.mustBe(typ.Number, msg, 0) }
 
-func (v Value) MustInt(msg string) int64 { return v.mustBe(typ.Number, msg, 0).Int() }
+func (v Value) MustInt64(msg string) int64 { return v.mustBe(typ.Number, msg, 0).Int64() }
 
-func (v Value) MustFloat(msg string) float64 { return v.mustBe(typ.Number, msg, 0).Float() }
+func (v Value) MustInt(msg string) int { return v.mustBe(typ.Number, msg, 0).Int() }
+
+func (v Value) MustFloat(msg string) float64 { return v.mustBe(typ.Number, msg, 0).Float64() }
 
 func (v Value) MustTable(msg string) *Table { return v.mustBe(typ.Table, msg, 0).Table() }
 
 func (v Value) MustFunc(msg string) *Function {
-	if vt := v.Type(); vt == typ.Table {
-		return v.Table().GetString("__call").MustFunc(msg)
-	} else if vt == typ.Func {
-	} else {
+	f := v.Func()
+	if f == nil {
 		internal.Panic(msg+ifstr(msg != "", ": ", "")+"expect function or callable table, got %v", stringType(v))
 	}
-	return v.Func()
+	return f
 }
 
 func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
@@ -526,16 +545,16 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 	case typ.Bool:
 		p.WriteString(strconv.FormatBool(v.Bool()))
 	case typ.Number:
-		if v.IsInt() {
-			p.WriteString(strconv.FormatInt(v.Int(), 10))
+		if v.IsInt64() {
+			p.WriteString(strconv.FormatInt(v.Int64(), 10))
 		} else {
-			p.WriteString(strconv.FormatFloat(v.Float(), 'f', -1, 64))
+			p.WriteString(strconv.FormatFloat(v.Float64(), 'f', -1, 64))
 		}
 	case typ.String:
 		p.WriteString(ifquote(j, v.Str()))
 	case typ.Table:
 		m := v.Table()
-		if sf := m.GetString("__str"); sf.Type() == typ.Func {
+		if sf := m.GetString("__str"); sf.IsFunc() {
 			if v, err := sf.Func().Call(); err != nil {
 				p.WriteString(fmt.Sprintf("<table.__str: %v>", err))
 			} else {
@@ -568,16 +587,20 @@ func (v Value) MaybeStr(d string) string {
 	return d
 }
 
-func (v Value) MaybeInt(d int64) int64 {
+func (v Value) MaybeInt(d int) int {
+	return int(v.MaybeInt64(int64(d)))
+}
+
+func (v Value) MaybeInt64(d int64) int64 {
 	if v.Type() == typ.Number {
-		return v.Int()
+		return v.Int64()
 	}
 	return d
 }
 
 func (v Value) MaybeFloat(d float64) float64 {
 	if v.Type() == typ.Number {
-		return v.Float()
+		return v.Float64()
 	}
 	return d
 }
