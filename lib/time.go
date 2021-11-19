@@ -12,7 +12,7 @@ import (
 
 func init() {
 	nj.AddGlobalValue("strtime", func(env *nj.Env) {
-		f := env.Get(0).MaybeStr("")
+		f := env.Get(0).ToStr("")
 		switch strings.ToLower(f) {
 		case "ansic":
 			f = time.ANSIC

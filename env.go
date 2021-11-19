@@ -2,6 +2,9 @@ package nj
 
 import (
 	"bytes"
+
+	"github.com/coyove/nj/internal"
+	"github.com/coyove/nj/typ"
 )
 
 // Env is the environment for a function to run within.
@@ -115,4 +118,44 @@ func (env *Env) String() string {
 	buf.WriteString(env.A.String())
 	buf.WriteString(")")
 	return buf.String()
+}
+
+func (env *Env) Bool(idx int) bool { return env.mustBe(typ.Bool, idx).Bool() }
+
+func (env *Env) Str(idx int) string { return env.mustBe(typ.String, idx).String() }
+
+func (env *Env) StrLen(idx int) int { return env.mustBe(typ.String, idx).StrLen() }
+
+func (env *Env) Num(idx int) Value { return env.mustBe(typ.Number, idx) }
+
+func (env *Env) Int64(idx int) int64 { return env.mustBe(typ.Number, idx).Int64() }
+
+func (env *Env) Int(idx int) int { return env.mustBe(typ.Number, idx).Int() }
+
+func (env *Env) Float64(idx int) float64 { return env.mustBe(typ.Number, idx).Float64() }
+
+func (env *Env) Table(idx int) *Table { return env.mustBe(typ.Table, idx).Table() }
+
+func (env *Env) Func(idx int) *Function {
+	f := env.B(idx).Func()
+	if f == nil {
+		internal.Panic("argument %d expects function or callable table, got %v", idx+1, showType(env.B(idx)))
+	}
+	return f
+}
+
+func (env *Env) mustBe(t typ.ValueType, idx int) Value {
+	v := env.B(idx)
+	if v.Type() != t {
+		internal.Panic("argument %d expects %v, got %v", idx+1, t, showType(v))
+	}
+	return v
+}
+
+func (env *Env) Recv(k string) Value {
+	v := env.B(0)
+	if v.Type() != typ.Table {
+		internal.Panic("argument 1 should be receiver, got %v, did you misuse 'table.key' and 'table:key'?", showType(v))
+	}
+	return v.Table().Gets(k)
 }

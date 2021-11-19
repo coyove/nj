@@ -58,17 +58,18 @@ func (m *Table) ClearMap() { m.hashItems = m.hashItems[:0]; m.hashCount = 0 }
 
 func (m *Table) Parent() *Table { return m.parent }
 
-func (m *Table) SetParent(m2 *Table) { m.parent = m2 }
+func (m *Table) SetParent(m2 *Table) *Table { m.parent = m2; return m }
 
-func (m *Table) SetFirstParent(m2 *Table) {
+func (m *Table) SetFirstParent(m2 *Table) *Table {
 	if m.parent != nil {
 		m2 = m2.Copy()
 		m2.SetFirstParent(m.parent)
 	}
 	m.parent = m2
+	return m
 }
 
-func (m *Table) GetString(k string) (v Value) {
+func (m *Table) Gets(k string) (v Value) {
 	return m.getImpl(Str(k), true)
 }
 
@@ -142,7 +143,7 @@ func (m *Table) Contains(k Value) bool {
 	return m.findHash(k) >= 0
 }
 
-func (m *Table) SetString(k string, v Value) (prev Value) {
+func (m *Table) Sets(k string, v Value) (prev Value) {
 	return m.Set(Str(k), v)
 }
 
@@ -397,7 +398,7 @@ func (m *Table) Name() string {
 }
 
 func (m *Table) New() *Table {
-	if f := m.GetString("__new"); f.IsFunc() {
+	if f := m.Gets("__new"); f.IsFunc() {
 		res, err := f.Func().Call()
 		if err != nil {
 			internal.Panic("table.__new: %v", err)

@@ -30,11 +30,11 @@ func init() {
 	))
 	nj.AddGlobalValue("http", nj.Func("http", func(env *nj.Env) {
 		args := env.Get(0).Table()
-		to := args.GetString("timeout").MaybeFloat(1 << 30)
+		to := args.Gets("timeout").ToFloat64(1 << 30)
 
-		method := strings.ToUpper(args.Get(nj.Str("method")).MaybeStr("GET"))
+		method := strings.ToUpper(args.Get(nj.Str("method")).ToStr("GET"))
 
-		u, err := url.Parse(args.Get(nj.Str("url")).MaybeStr("bad://%url%"))
+		u, err := url.Parse(args.Get(nj.Str("url")).ToStr("bad://%url%"))
 		internal.PanicErr(err)
 
 		addKV := func(k string, add func(k, v string)) {
@@ -64,7 +64,7 @@ func init() {
 		var bodyReader io.Reader
 		dataFrom, urlForm, jsonForm := (*multipart.Writer)(nil), false, false
 
-		if j := args.GetString("json"); j != nj.Nil {
+		if j := args.Gets("json"); j != nj.Nil {
 			bodyReader = strings.NewReader(j.JSONString())
 			jsonForm = true
 		} else {
@@ -73,7 +73,7 @@ func init() {
 			urlForm = len(form) > 0
 			if urlForm {
 				bodyReader = strings.NewReader(form.Encode())
-			} else if rd := args.GetString("data"); rd != nj.Nil {
+			} else if rd := args.Gets("data"); rd != nj.Nil {
 				bodyReader = nj.NewReader(rd)
 			}
 		}
@@ -82,7 +82,7 @@ func init() {
 			// Check form-data
 			payload := bytes.Buffer{}
 			writer := multipart.NewWriter(&payload)
-			if x := args.GetString("multipart"); x.Type() == typ.Table {
+			if x := args.Gets("multipart"); x.Type() == typ.Table {
 				x.Table().Foreach(func(k, v nj.Value) bool {
 					key := k.MustStr("multipart key")
 					filename := ""
@@ -136,7 +136,7 @@ func init() {
 				return http.ErrUseLastResponse
 			}
 		}
-		if p := args.Get(nj.Str("proxy")).MaybeStr(""); p != "" {
+		if p := args.Get(nj.Str("proxy")).ToStr(""); p != "" {
 			client.Transport = &http.Transport{
 				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
 			}
@@ -147,7 +147,7 @@ func init() {
 		internal.PanicErr(err)
 
 		var buf nj.Value
-		if args.GetString("bodyreader").IsFalse() && args.GetString("br").IsFalse() {
+		if args.Gets("bodyreader").IsFalse() && args.Gets("br").IsFalse() {
 			resp.Body.Close()
 		} else {
 			buf = nj.TableProto(nj.ReadCloserProto, nj.Str("_f"), nj.Val(resp.Body))

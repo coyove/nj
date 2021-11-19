@@ -529,7 +529,7 @@ func TestACall(t *testing.T) {
 	end
 	a = new(m, {a=10})
     return a`, nil))
-	v, err := foo.Table().GetString("pow2").Func().Call()
+	v, err := foo.Table().Gets("pow2").Func().Call()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -543,7 +543,7 @@ func TestACall(t *testing.T) {
 			"m": TableProto(Map(
 				Str("a"), Int64(0),
 				Str("pow2"), Func1("pow2", func(self Value) Value {
-					i := self.Table().GetString("a").Int64()
+					i := self.Table().Gets("a").Int64()
 					return Int64(i * i)
 				}),
 			).Table()),

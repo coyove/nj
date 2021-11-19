@@ -107,7 +107,7 @@ func Int64(i int64) Value {
 	return Value{v: uint64(i), p: int64Marker}
 }
 
-// Array creates an array consists of given arguments
+// Array creates a table array consists of given arguments
 func Array(m ...Value) Value {
 	x := &Table{items: m}
 	for _, i := range x.items {
@@ -118,7 +118,7 @@ func Array(m ...Value) Value {
 	return x.Value()
 }
 
-// Map creates a map from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
+// Map creates a table map from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
 func Map(kvs ...Value) Value {
 	t := NewTable(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
@@ -131,7 +131,7 @@ func Map(kvs ...Value) Value {
 	return Value{v: uint64(typ.Table), p: unsafe.Pointer(t)}
 }
 
-// TableMerge merges key-value pairs from `src` into `dst`
+// TableMerge merges key-value pairs from `src` into `dst` if both of them are tables
 func TableMerge(dst Value, src Value) Value {
 	var t *Table
 	switch dst.Type() {
@@ -150,9 +150,7 @@ func TableMerge(dst Value, src Value) Value {
 
 // TableProto creates a table whose parent will be set to `p`
 func TableProto(p *Table, kvs ...Value) Value {
-	m := Map(kvs...)
-	m.Table().SetParent(p)
-	return m
+	return Map(kvs...).Table().SetParent(p).Value()
 }
 
 // Str creates a string value
@@ -305,7 +303,7 @@ func intf(i interface{}) Value {
 	return Value{v: uint64(typ.Native), p: unsafe.Pointer(&i)}
 }
 
-func stringType(v Value) string {
+func showType(v Value) string {
 	switch vt := v.Type(); vt {
 	case typ.Number, typ.Bool, typ.Native:
 		return v.JSONString()
@@ -372,7 +370,7 @@ func (v Value) Table() *Table { return (*Table)(v.p) }
 // Func returns value as a function, non-function value yield nil
 func (v Value) Func() *Function {
 	if vt := v.Type(); vt == typ.Table {
-		return v.Table().GetString("__call").Func()
+		return v.Table().Gets("__call").Func()
 	} else if vt != typ.Func {
 		return nil
 	}
@@ -473,14 +471,14 @@ func (v Value) MustInt64(msg string) int64 { return v.mustBe(typ.Number, msg, 0)
 
 func (v Value) MustInt(msg string) int { return v.mustBe(typ.Number, msg, 0).Int() }
 
-func (v Value) MustFloat(msg string) float64 { return v.mustBe(typ.Number, msg, 0).Float64() }
+func (v Value) MustFloat64(msg string) float64 { return v.mustBe(typ.Number, msg, 0).Float64() }
 
 func (v Value) MustTable(msg string) *Table { return v.mustBe(typ.Table, msg, 0).Table() }
 
 func (v Value) MustFunc(msg string) *Function {
 	f := v.Func()
 	if f == nil {
-		internal.Panic(msg+ifstr(msg != "", ": ", "")+"expect function or callable table, got %v", stringType(v))
+		internal.Panic(msg+ifstr(msg != "", ": ", "")+"expect function or callable table, got %v", showType(v))
 	}
 	return f
 }
@@ -491,18 +489,18 @@ func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
 			msg = fmt.Sprintf(msg, msgArg)
 		}
 		if msg != "" {
-			internal.Panic("%s: expect %v, got %v", msg, t, stringType(v))
+			internal.Panic("%s: expect %v, got %v", msg, t, showType(v))
 		}
-		internal.Panic("expect %v, got %v", t, stringType(v))
+		internal.Panic("expect %v, got %v", t, showType(v))
 	}
 	return v
 }
 
 func (v Value) Recv(k string) Value {
 	if v.Type() != typ.Table {
-		internal.Panic("method expects receiver, got %v, did you misuse 'table.key' and 'table:key'?", stringType(v))
+		internal.Panic("method expects receiver, got %v, did you misuse 'table.key' and 'table:key'?", showType(v))
 	}
-	return v.Table().GetString(k)
+	return v.Table().Gets(k)
 }
 
 // Equal tests whether two values are equal
@@ -554,7 +552,7 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 		p.WriteString(ifquote(j, v.Str()))
 	case typ.Table:
 		m := v.Table()
-		if sf := m.GetString("__str"); sf.IsFunc() {
+		if sf := m.Gets("__str"); sf.IsFunc() {
 			if v, err := sf.Func().Call(); err != nil {
 				p.WriteString(fmt.Sprintf("<table.__str: %v>", err))
 			} else {
@@ -580,34 +578,45 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 	return p
 }
 
-func (v Value) MaybeStr(d string) string {
+func (v Value) ToStr(d string) string {
 	if v.Type() == typ.String {
 		return v.Str()
 	}
 	return d
 }
 
-func (v Value) MaybeInt(d int) int {
-	return int(v.MaybeInt64(int64(d)))
+func (v Value) ToInt(d int) int {
+	return int(v.ToInt64(int64(d)))
 }
 
-func (v Value) MaybeInt64(d int64) int64 {
+func (v Value) ToInt64(d int64) int64 {
 	if v.Type() == typ.Number {
 		return v.Int64()
 	}
 	return d
 }
 
-func (v Value) MaybeFloat(d float64) float64 {
+func (v Value) ToFloat64(d float64) float64 {
 	if v.Type() == typ.Number {
 		return v.Float64()
 	}
 	return d
 }
 
-func (v Value) MaybeTableGetString(key string) Value {
+func (v Value) ToFunc() *Function {
+	return v.Func()
+}
+
+func (v Value) ToTable() *Table {
+	if v.Type() != typ.Table {
+		return nil
+	}
+	return v.Table()
+}
+
+func (v Value) ToTableGets(key string) Value {
 	if v.Type() != typ.Table {
 		return Nil
 	}
-	return v.Table().GetString(key)
+	return v.Table().Gets(key)
 }
