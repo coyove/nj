@@ -136,12 +136,30 @@ func (env *Env) Float64(idx int) float64 { return env.mustBe(typ.Number, idx).Fl
 
 func (env *Env) Table(idx int) *Table { return env.mustBe(typ.Table, idx).Table() }
 
+func (env *Env) Array(idx int) *Table {
+	t := env.mustBe(typ.Table, idx).Table()
+	if len(t.hashItems) > 0 {
+		internal.Panic("argument %d expects an array, got string keys in the table", idx+1)
+	}
+	return t
+}
+
+func (env *Env) Interface(idx int) interface{} { return env.Get(idx).Interface() }
+
 func (env *Env) Func(idx int) *Function {
 	f := env.B(idx).Func()
 	if f == nil {
 		internal.Panic("argument %d expects function or callable table, got %v", idx+1, showType(env.B(idx)))
 	}
 	return f
+}
+
+func (env *Env) Recv(k string) Value {
+	v := env.B(0)
+	if v.Type() != typ.Table {
+		internal.Panic("argument 1 should be table acting as receiver, got %v, did you misuse 'table.key' and 'table:key'?", showType(v))
+	}
+	return v.Table().Gets(k)
 }
 
 func (env *Env) mustBe(t typ.ValueType, idx int) Value {
@@ -152,10 +170,4 @@ func (env *Env) mustBe(t typ.ValueType, idx int) Value {
 	return v
 }
 
-func (env *Env) Recv(k string) Value {
-	v := env.B(0)
-	if v.Type() != typ.Table {
-		internal.Panic("argument 1 should be receiver, got %v, did you misuse 'table.key' and 'table:key'?", showType(v))
-	}
-	return v.Table().Gets(k)
-}
+func (env *Env) SetA(a Value) bool { env.A = a; return true }

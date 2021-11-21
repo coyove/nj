@@ -80,6 +80,8 @@ func (v Value) IsInt64() bool { return v.p == int64Marker }
 
 func (v Value) IsFunc() bool { return v.Func() != nil }
 
+func (v Value) IsNil() bool { return v == Nil }
+
 // Bool creates a boolean value
 func Bool(v bool) Value {
 	if v {
