@@ -29,7 +29,7 @@ func init() {
 		}),
 	))
 	nj.AddGlobalValue("http", nj.Func("http", func(env *nj.Env) {
-		args := env.Get(0).Table()
+		args := env.Get(0).Object()
 		to := args.Gets("timeout").ToFloat64(1 << 30)
 
 		method := strings.ToUpper(args.Get(nj.Str("method")).ToStr("GET"))
@@ -39,8 +39,8 @@ func init() {
 
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Get(nj.Str(k))
-			if x.Type() == typ.Table {
-				p := x.Table()
+			if x.Type() == typ.Object {
+				p := x.Object()
 				for k, v := p.Next(nj.Nil); k != nj.Nil; k, v = p.Next(k) {
 					add(k.String(), v.String())
 				}
@@ -82,8 +82,8 @@ func init() {
 			// Check form-data
 			payload := bytes.Buffer{}
 			writer := multipart.NewWriter(&payload)
-			if x := args.Gets("multipart"); x.Type() == typ.Table {
-				x.Table().Foreach(func(k, v nj.Value) bool {
+			if x := args.Gets("multipart"); x.Type() == typ.Object {
+				x.Object().Foreach(func(k, v nj.Value) bool {
 					key := k.MustStr("multipart key")
 					filename := ""
 					if strings.Contains(key, "/") {
@@ -150,7 +150,7 @@ func init() {
 		if args.Gets("bodyreader").IsFalse() && args.Gets("br").IsFalse() {
 			resp.Body.Close()
 		} else {
-			buf = nj.TableProto(nj.ReadCloserProto, nj.Str("_f"), nj.Val(resp.Body))
+			buf = nj.Proto(nj.ReadCloserProto, nj.Str("_f"), nj.Val(resp.Body))
 		}
 
 		hdr := map[string]string{}

@@ -1,9 +1,9 @@
 timer = {}
-function timer.reset(self)
-    self.c = 0
+function timer.reset()
+    this.c = 0
 end
-function timer.add(self, v)
-    self.c = self.c + v + self.X
+function timer.add(v)
+    this.c = this.c + v + this.X
 end
 T1, T2 = new(timer, c=0,X=10), new(timer, c=0,X=10)
 T1.add(2)
@@ -20,12 +20,11 @@ assert(T1.c == 132 and T2.c == 53)
 
 print(timer.add)
 
-dict={}
-function dict.__call(self) return new(new(self)) end
+function dict() return new(new(this)) end
 
-function dict.next(self)
-    local k, v = next(self, parent(self)._iter)
-    parent(self)._iter = k
+function dict.next()
+    local k, v = next(this, parent(this)._iter)
+    parent(this)._iter = k
     return k, v
 end
 
@@ -44,18 +43,17 @@ while true do
 end
 
 CarPrototype = {}
-function CarPrototype.getBrand(this) return this.brand end
-function CarPrototype.setBrand(this, brand) this.brand = brand; return this end
-function CarPrototype.__str(this) return ('%s %s').format(this.color, this.brand) end
+function CarPrototype.getBrand() return this.brand end
+function CarPrototype.setBrand(brand) this.brand = brand; return this end
+function CarPrototype.toString() return ('%s %s').format(this.color, this.brand) end
 
 Car = prototype(CarPrototype, {brand=''})
-function Car.__new(this) return table:copy(this) end
 
-carA = new(Car, color='red').setBrand('ferrari')
-carB = new(Car, color='orange').setBrand('mclaren')
+carA = new(table.copy(Car), color='red').setBrand('ferrari')
+carB = new(table.copy(Car), color='orange').setBrand('mclaren')
 
-assert(str(carA), "red ferrari")
-assert(str(carB), "orange mclaren")
+assert(carA.toString(), "red ferrari")
+assert(carB.toString(), "orange mclaren")
 
 cnt = 0
 k = 99
@@ -71,7 +69,7 @@ function worker()
     print("worker after 1s")
     return 'finished'
 end
-assert(sync:map({0}, worker)[0] == 'finished')
+assert(sync.map({0}, worker)[0] == 'finished')
 
 -- closure
 function foo(a)
@@ -98,13 +96,13 @@ function m.a() return 'a' end
 assert(m.a() == 'a')
 
 cls = {}
-cls.__str = lambda(o) return o.v end
-cls2 = {__str= lambda(o) return o.v + '2' end}
+cls.__str = lambda() return this.v end
+cls2 = {__str= lambda() return this.v + '2' end}
 cls2 = new(cls, cls2)
 obj = new(cls, v='obj')
 obj2 = new(cls2, v='obj')
-assert(str(obj), 'obj')
-assert(str(obj2), 'obj2')
+assert((obj).__str(), 'obj')
+assert((obj2).__str(), 'obj2')
 print(obj2)
 
 t = table(a=1, b=2)

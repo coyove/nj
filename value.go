@@ -78,7 +78,7 @@ func (v Value) IsTrue() bool { return !v.IsFalse() }
 // IsInt64 tests whether value is an integer number
 func (v Value) IsInt64() bool { return v.p == int64Marker }
 
-func (v Value) IsFunc() bool { return v.Func() != nil }
+func (v Value) IsObject() bool { return v.Type() == typ.Object }
 
 func (v Value) IsNil() bool { return v == Nil }
 
@@ -109,50 +109,38 @@ func Int64(i int64) Value {
 	return Value{v: uint64(i), p: int64Marker}
 }
 
-// Array creates a table array consists of given arguments
+// Array creates an array consists of given arguments
 func Array(m ...Value) Value {
-	x := &Table{items: m}
-	for _, i := range x.items {
-		if i != Nil {
-			x.count++
-		}
-	}
-	return x.Value()
+	return Value{v: uint64(typ.Array), p: unsafe.Pointer(&m)}
 }
 
-// Map creates a table map from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
+// Map creates a map from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
 func Map(kvs ...Value) Value {
-	t := NewTable(len(kvs) / 2)
+	t := NewObject(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
-		k, v := kvs[i], kvs[i+1]
-		if v.IsFunc() && v.Func().Name == internal.UnnamedFunc {
-			v.Func().Name = k.String()
-		}
-		t.Set(k, v)
+		t.Set(kvs[i], renameFuncName(kvs[i], kvs[i+1]))
 	}
-	return Value{v: uint64(typ.Table), p: unsafe.Pointer(t)}
+	return Value{v: uint64(typ.Object), p: unsafe.Pointer(t)}
 }
 
 // TableMerge merges key-value pairs from `src` into `dst` if both of them are tables
-func TableMerge(dst Value, src Value) Value {
-	var t *Table
+func TableMerge(dst Value, src *Object) Value {
+	var t *Object
 	switch dst.Type() {
-	case typ.Table:
-		t = dst.Table()
+	case typ.Object:
+		t = dst.Object()
 	case typ.Nil:
-		t = NewTable(1)
+		t = NewObject(1)
 	default:
 		return dst
 	}
-	if src.Type() == typ.Table {
-		t.Merge(src.Table())
-	}
+	t.Merge(src)
 	return t.Value()
 }
 
-// TableProto creates a table whose parent will be set to `p`
-func TableProto(p *Table, kvs ...Value) Value {
-	return Map(kvs...).Table().SetParent(p).Value()
+// Proto creates a table whose parent will be set to `p`
+func Proto(p *Object, kvs ...Value) Value {
+	return Map(kvs...).Object().SetParent(p).Value()
 }
 
 // Str creates a string value
@@ -200,12 +188,10 @@ func Val(i interface{}) Value {
 		return Int64(v)
 	case string:
 		return Str(v)
-	case *Table:
+	case *Object:
 		return v.Value()
 	case []Value:
 		return Array(v...)
-	case *Function:
-		return v.Value()
 	case Value:
 		return v
 	case internal.CatchedError:
@@ -224,7 +210,7 @@ func Val(i interface{}) Value {
 			v.ForEach(func(k, v gjson.Result) bool { x = append(x, Val(v)); return true })
 			return Array(x...)
 		} else if v.IsObject() {
-			x := NewTable(len(v.Raw) / 10)
+			x := NewObject(len(v.Raw) / 10)
 			v.ForEach(func(k, v gjson.Result) bool { x.Set(Val(k), Val(v)); return true })
 			return x.Value()
 		}
@@ -271,7 +257,7 @@ func Val(i interface{}) Value {
 				}
 			}
 		}
-		return (&Function{FuncBody: &FuncBody{Name: "<" + rv.Type().String() + ">", Native: nf}}).Value()
+		return (&Object{callable: &FuncBody{Name: "<" + rv.Type().String() + ">", Native: nf}}).Value()
 	}
 	return intf(i)
 }
@@ -279,7 +265,7 @@ func Val(i interface{}) Value {
 func ValRec(v interface{}) Value {
 	switch rv := reflect.ValueOf(v); rv.Kind() {
 	case reflect.Map:
-		m := NewTable(rv.Len() + 1)
+		m := NewObject(rv.Len() + 1)
 		for iter := rv.MapRange(); iter.Next(); {
 			m.Set(ValRec(iter.Key()), Val(iter.Value()))
 		}
@@ -314,8 +300,8 @@ func showType(v Value) string {
 			return v.JSONString()
 		}
 		return strconv.Quote(v.Str()[:32] + "...")
-	case typ.Table:
-		return "{" + v.Table().Name() + "}"
+	case typ.Object:
+		return "{" + v.Object().Name() + "}"
 	default:
 		return vt.String()
 	}
@@ -366,18 +352,13 @@ func (v Value) Float64() float64 {
 // Bool returns value as a boolean without checking Type()
 func (v Value) Bool() bool { return v.p == trueMarker }
 
-// Table returns value as a table without checking Type()
-func (v Value) Table() *Table { return (*Table)(v.p) }
+// Object returns value as a table without checking Type()
+func (v Value) Object() *Object { return (*Object)(v.p) }
+
+func (v Value) Array() []Value { return *(*[]Value)(v.p) }
 
 // Func returns value as a function, non-function value yield nil
-func (v Value) Func() *Function {
-	if vt := v.Type(); vt == typ.Table {
-		return v.Table().Gets("__call").Func()
-	} else if vt != typ.Func {
-		return nil
-	}
-	return v.unsafeFunc()
-}
+func (v Value) Func() *Object { return v.Object() }
 
 // Interface returns value as an interface{}
 func (v Value) Interface() interface{} {
@@ -391,8 +372,10 @@ func (v Value) Interface() interface{} {
 		return v.Float64()
 	case typ.String:
 		return v.Str()
-	case typ.Table:
-		return v.Table()
+	case typ.Object:
+		return v.Object()
+	case typ.Array:
+		return v.Array()
 	case typ.Func:
 		return v.Func()
 	case typ.Native:
@@ -405,8 +388,6 @@ func (v Value) ptr() uintptr { return uintptr(v.p) }
 
 func (v Value) unsafeInt() int64 { return int64(v.v) }
 
-func (v Value) unsafeFunc() *Function { return (*Function)(v.p) }
-
 // ReflectValue returns value as a reflect.Value based on reflect.Type
 func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	if t == nil {
@@ -417,37 +398,39 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 		return reflect.ValueOf(ValueIO(v))
 	} else if vt := v.Type(); vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
 		return reflect.Zero(t)
-	} else if v.IsFunc() && t.Kind() == reflect.Func {
+	} else if v.IsObject() && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
-			out, err := v.Func().Call(valReflectValues(args)...)
-			internal.PanicErr(err)
+			out := v.Func().Apply(valReflectValues(args)...)
 			if to := t.NumOut(); to == 1 {
 				results = []reflect.Value{out.ReflectValue(t.Out(0))}
 			} else if to > 1 {
-				out.mustBe(typ.Table, "ReflectValue: expect multiple returned arguments", 0)
+				out.mustBe(typ.Object, "ReflectValue: expect multiple returned arguments", 0)
 				results = make([]reflect.Value, t.NumOut())
 				for i := range results {
-					results[i] = out.Table().Get(Int64(int64(i))).ReflectValue(t.Out(i))
+					results[i] = out.Object().Get(Int64(int64(i))).ReflectValue(t.Out(i))
 				}
 			}
 			return
 		})
 	} else if vt == typ.Number && t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
 		return reflect.ValueOf(v.Interface()).Convert(t)
-	} else if vt == typ.Table {
-		switch a := v.Table(); t.Kind() {
+	} else if vt == typ.Array {
+		switch a := v.Array(); t.Kind() {
 		case reflect.Slice:
-			s := reflect.MakeSlice(t, len(a.ArrayPart()), len(a.ArrayPart()))
-			for i, a := range a.ArrayPart() {
+			s := reflect.MakeSlice(t, len(a), len(a))
+			for i, a := range a {
 				s.Index(i).Set(a.ReflectValue(t.Elem()))
 			}
 			return s
 		case reflect.Array:
 			s := reflect.New(t).Elem()
-			for i, a := range a.ArrayPart() {
+			for i, a := range a {
 				s.Index(i).Set(a.ReflectValue(t.Elem()))
 			}
 			return s
+		}
+	} else if vt == typ.Object {
+		switch a := v.Object(); t.Kind() {
 		case reflect.Map:
 			s := reflect.MakeMap(t)
 			kt, vt := t.Key(), t.Elem()
@@ -475,9 +458,9 @@ func (v Value) MustInt(msg string) int { return v.mustBe(typ.Number, msg, 0).Int
 
 func (v Value) MustFloat64(msg string) float64 { return v.mustBe(typ.Number, msg, 0).Float64() }
 
-func (v Value) MustTable(msg string) *Table { return v.mustBe(typ.Table, msg, 0).Table() }
+func (v Value) MustTable(msg string) *Object { return v.mustBe(typ.Object, msg, 0).Object() }
 
-func (v Value) MustFunc(msg string) *Function {
+func (v Value) MustFunc(msg string) *Object {
 	f := v.Func()
 	if f == nil {
 		internal.Panic(msg+ifstr(msg != "", ": ", "")+"expect function or callable table, got %v", showType(v))
@@ -499,10 +482,10 @@ func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
 }
 
 func (v Value) Recv(k string) Value {
-	if v.Type() != typ.Table {
+	if v.Type() != typ.Object {
 		internal.Panic("method expects receiver, got %v, did you misuse 'table.key' and 'table:key'?", showType(v))
 	}
-	return v.Table().Gets(k)
+	return v.Object().Gets(k)
 }
 
 // Equal tests whether two values are equal
@@ -552,9 +535,9 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 		}
 	case typ.String:
 		p.WriteString(ifquote(j, v.Str()))
-	case typ.Table:
-		m := v.Table()
-		if sf := m.Gets("__str"); sf.IsFunc() {
+	case typ.Object:
+		m := v.Object()
+		if sf := m.Gets("__str"); sf.IsObject() {
 			if v, err := sf.Func().Call(); err != nil {
 				p.WriteString(fmt.Sprintf("<table.__str: %v>", err))
 			} else {
@@ -605,20 +588,51 @@ func (v Value) ToFloat64(d float64) float64 {
 	return d
 }
 
-func (v Value) ToFunc() *Function {
+func (v Value) ToFunc() *Object {
 	return v.Func()
 }
 
-func (v Value) ToTable() *Table {
-	if v.Type() != typ.Table {
+func (v Value) ToTable() *Object {
+	if v.Type() != typ.Object {
 		return nil
 	}
-	return v.Table()
+	return v.Object()
 }
 
 func (v Value) ToTableGets(key string) Value {
-	if v.Type() != typ.Table {
+	if v.Type() != typ.Object {
 		return Nil
 	}
-	return v.Table().Gets(key)
+	return v.Object().Gets(key)
+}
+
+func (v Value) ForEach(f func(k, v Value) bool) {
+	switch v.Type() {
+	case typ.Object:
+		v.Object().Foreach(f)
+	case typ.Array:
+		for i, a := range v.Array() {
+			if !f(Int(i), a) {
+				break
+			}
+		}
+	default:
+		internal.Panic("can't iterate %v", v.Type())
+	}
+}
+
+func (v Value) Len() int {
+	switch v.Type() {
+	case typ.String:
+		return v.StrLen()
+	case typ.Array:
+		return len(v.Array())
+	case typ.Object:
+		return v.Object().Len()
+	case typ.Nil:
+		return 0
+	case typ.Number, typ.Bool:
+		internal.Panic("can't measure length of %v", v.Type())
+	}
+	return reflectLen(v.Interface())
 }

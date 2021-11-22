@@ -11,9 +11,9 @@ type Set struct{ m map[uint64]nj.Value }
 func init() {
 	nj.AddGlobalValue("set", func(env *nj.Env) {
 		s := Set{m: map[uint64]nj.Value{}}
-		for _, e := range env.Get(0).MustTable("").ArrayPart() {
-			s.Add(e)
-		}
+		// for _, e := range env.Get(0).MustTable("").ArrayPart() {
+		// 	s.Add(e)
+		// }
 		env.A = nj.Val(s)
 	},
 		"$f() -> go.Set",

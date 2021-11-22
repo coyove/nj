@@ -28,7 +28,7 @@ const (
 	OpJmp
 	OpLoadFunc
 	OpPush
-	OpPushVararg
+	OpPushUnpack
 	OpArray
 	OpMap
 	OpCall
@@ -43,14 +43,15 @@ const (
 	Bool   ValueType = 1
 	Number ValueType = 3
 	String ValueType = 7
-	Table  ValueType = 15
-	Func   ValueType = 17
-	Native ValueType = 19
+	Object ValueType = 15
+	Array  ValueType = 17
+	Func   ValueType = 19
+	Native ValueType = 21
 )
 
 func (t ValueType) String() string {
 	if t > Native {
 		return "?"
 	}
-	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "table", "?", "function", "?", "native"}[t]
+	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "object", "?", "array", "?", "function", "?", "native"}[t]
 }

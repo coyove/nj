@@ -48,51 +48,30 @@ func RemoveGlobalValue(k string) {
 func init() {
 	AddGlobalValue("VERSION", Int64(Version))
 	AddGlobalValue("globals", func(e *Env) {
-		r := NewTable(len(e.Global.Top.Locals))
+		r := NewObject(len(e.Global.Top.Locals))
 		for i, name := range e.Global.Top.Locals {
 			r.Set(Str(name), (*e.Global.Stack)[i])
 		}
 		e.A = r.Value()
 	}, "$f() -> table", "\tlist all global symbols and their values")
 	AddGlobalValue("doc", func(e *Env) {
-		e.A = Str(e.Func(0).DocString())
+		e.A = Str(e.Object(0).callable.DocString)
 	}, "$f(f: function) -> string", "\treturn `f`'s documentation")
 	AddGlobalValue("new", func(v, a Value) Value {
-		m := v.MustTable("").New()
-		if a.Type() != typ.Table {
-			return (&Table{parent: m}).Value()
+		m := v.MustTable("")
+		if a.Type() != typ.Object {
+			return (&Object{parent: m}).Value()
 		}
-		a.Table().SetParent(m)
+		a.Object().SetParent(m)
 		return a
 	})
 	AddGlobalValue("prototype", g["new"])
-	AddGlobalValue("len", func(e *Env) {
-		switch v := e.Get(0); v.Type() {
-		case typ.String:
-			e.A = Int(len(v.Str()))
-		case typ.Table:
-			e.A = Int(v.Table().Len())
-		case typ.Func:
-			e.A = Int64(int64(v.Func().NumParams))
-		case typ.Nil:
-			e.A = Zero
-		case typ.Number, typ.Bool:
-			internal.Panic("can't measure length of %v", v.Type())
-		default:
-			e.A = Int(reflectLen(v.Interface()))
-		}
-	})
-	AddGlobalValue("sizeof", func(e *Env) {
-		e.A = Int64(int64(ValueSize))
-		if v := e.Get(0); v.Type() == typ.Table {
-			e.A = Int(v.Table().Size())
-		}
-	})
+	AddGlobalValue("len", func(e *Env) { e.A = Int(e.Get(0).Len()) })
 	AddGlobalValue("eval", func(s, g Value) Value {
 		var m map[string]interface{}
-		if gt := g.ToTableGets("globals"); gt.Type() == typ.Table {
+		if gt := g.ToTableGets("globals"); gt.Type() == typ.Object {
 			m = map[string]interface{}{}
-			gt.Table().Foreach(func(k, v Value) bool {
+			gt.Object().Foreach(func(k, v Value) bool {
 				m[k.String()] = v.Interface()
 				return true
 			})
@@ -112,7 +91,7 @@ func init() {
 			panic(wrap(err))
 		}
 		if !g.ToTableGets("returnglobals").IsFalse() {
-			r := NewTable(len(p.Top.Locals))
+			r := NewObject(len(p.Top.Locals))
 			for i, name := range p.Top.Locals {
 				r.Set(Str(name), (*p.Stack)[i])
 			}
@@ -120,22 +99,16 @@ func init() {
 		}
 		return v
 	}, "$f(code: string, options?: table) -> value", "\tevaluate `code` and return the reuslt")
-	AddGlobalValue("closure", func(f, m Value) Value {
-		lambda := f.MustFunc("")
-		return Map(
-			Str("source"), m,
-			Str("lambda"), lambda.Value(),
-			Str("__str"), Func("<closure-"+lambda.Name+"__str>", func(e *Env) {
-				f := e.Get(0).Recv("lambda").MustFunc("")
-				src := e.Get(0).Recv("source")
-				e.A = Str("<closure-" + f.Pure().String() + "-" + src.String() + ">")
-			}),
-			Str("__call"), Func("<closure-"+lambda.Name+">", func(e *Env) {
-				f := e.Get(0).Recv("lambda").MustFunc("").Pure()
-				stk := append([]Value{e.Get(0).Recv("source")}, e.Stack()[1:]...)
-				e.A = MustValue(f.Call(stk...))
-			}),
-		)
+	AddGlobalValue("closure", func(e *Env) {
+		lambda := e.Object(0)
+		e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
+			f := e.Object(-1).Gets("_l").Object()
+			stk := append([]Value{e.Object(-1).Gets("_c")}, e.Stack()...)
+			e.A = f.Apply(stk...)
+		}).Object().Merge(nil,
+			Str("_l"), e.Get(0),
+			Str("_c"), e.Get(1),
+		).Value()
 	}, "$f(f: function, v: value) -> function",
 		"\tcreate a function out of `f`, when it is called, `v` will be injected into as the first argument:",
 		"\t\t closure(f, v)(args...) <=> f(v, args...)")
@@ -188,45 +161,39 @@ func init() {
 			env.A = Array(lines...)
 		}, "$f(skip: int) -> array", "\treturn { func_name0, line1, cursor1, n2, l2, c2, ... }"),
 		Str("disfunc"), Func("", func(e *Env) {
-			e.A = Str(e.Func(0).PrettyCode())
+			// e.A = Str(e.Func(0).ToCode())
 		}),
 	))
 	AddGlobalValue("type", func(e *Env) {
 		e.A = Str(e.Get(0).Type().String())
 	}, "$f(v: value) -> string", "\treturn value's type")
 	AddGlobalValue("apply", func(e *Env) {
-		fun := *e.Func(0)
-		fun.Receiver = e.Get(1)
-		e.A = MustValue(fun.Call(e.Stack()[2:]...))
+		fun := e.Object(0)
+		_ = fun.callable != nil && e.SetA(fun.callable.Apply(e.Get(1), e.Stack()[2:]...))
 	}, "$f(f: function, receiver: value, args...: value) -> value")
 	AddGlobalValue("pcall", func(e *Env) {
-		if a, err := e.Func(0).Call(e.Stack()[1:]...); err == nil {
-			e.A = a
-		} else {
-			e.A = wrapExecError(err)
-		}
+		a, err := e.Object(0).Call(e.Stack()[1:]...)
+		_ = err == nil && e.SetA(a) || e.SetA(wrapExecError(err))
 	}, "$f(f: function, args...: value) -> value", "\texecute `f`, catch panic and return as error if any")
-	AddGlobalValue("gcall", Map(
-		Str("__name"), Str("gcall"),
-		Str("__call"), Func("", func(e *Env) {
-			f := e.Func(1).Copy()
-			args := e.CopyStack()[2:]
-			w := make(chan Value, 1)
-			go func(f *Function, args []Value) {
-				if v, err := f.Call(args...); err != nil {
-					w <- wrapExecError(err)
-				} else {
-					w <- v
-				}
-			}(f, args)
-			e.A = TableProto(e.Table(0), Str("f"), f.Value(), Str("w"), intf(w))
-		}, "$f(f: function, args...: value) -> table^gcall", "\texecute `f` in goroutine"),
+	AddGlobalValue("gcall", Func("", func(e *Env) {
+		f := e.Object(0)
+		args := e.CopyStack()[2:]
+		w := make(chan Value, 1)
+		go func(f *Object, args []Value) {
+			if v, err := f.Call(args...); err != nil {
+				w <- wrapExecError(err)
+			} else {
+				w <- v
+			}
+		}(f, args)
+		e.A = Proto(e.Object(-1), Str("f"), f.Value(), Str("w"), intf(w))
+	}, "$f(f: function, args...: value) -> table^gcall", "\texecute `f` in goroutine").Object().Merge(nil,
 		Str("stop"), Func("", func(e *Env) {
-			e.Recv("f").MustFunc("").EmergStop()
+			e.Object(-1).Gets("f").Object().callable.EmergStop()
 		}),
 		Str("wait"), Func("", func(e *Env) {
-			ch := e.Recv("w").Interface().(chan Value)
-			if w := e.Get(1).ToFloat64(0); w > 0 {
+			ch := e.Object(-1).Gets("w").Interface().(chan Value)
+			if w := e.Get(0).ToFloat64(0); w > 0 {
 				select {
 				case <-time.After(time.Duration(w * float64(time.Second))):
 					panic("timeout")
@@ -274,7 +241,7 @@ func init() {
 		fmt.Fprintln(env.Global.Stdout)
 	}, "$f(args...: value)", "\tprint `args` to stdout with no space between them")
 	AddGlobalValue("printf", func(env *Env) {
-		sprintf(env, env.Global.Stdout)
+		sprintf(env, 0, env.Global.Stdout)
 	}, "$f(format: string, args...: value)")
 	AddGlobalValue("write", func(e *Env) {
 		w := NewWriter(e.Get(0))
@@ -337,36 +304,33 @@ func init() {
 		env.A = Int64(int64(r))
 	}, "$f(s: string) -> int")
 
-	AddGlobalValue("re", Map(
-		Str("__name"), Str("relib"),
-		Str("__call"), Func2("", func(re, r Value) Value {
-			return TableProto(re.MustTable(""), Str("_rx"), Val(regexp.MustCompile(r.MustStr(""))))
-		}, "$f(regex: string) -> table^relib", "\tcreate a regular expression object"),
-		Str("match"), Func2("", func(re, text Value) Value {
-			return Bool(re.Recv("_rx").Interface().(*regexp.Regexp).MatchString(text.MustStr("")))
-		}, "$f({re}: value, text: string) -> bool"),
-		Str("find"), Func2("", func(re, text Value) Value {
-			m := re.Recv("_rx").Interface().(*regexp.Regexp).FindStringSubmatch(text.MustStr(""))
-			mm := []Value{}
+	AddGlobalValue("re", Func("", func(e *Env) {
+		e.A = Proto(e.A.Object(), Str("_rx"), Val(regexp.MustCompile(e.Str(0))))
+	}, "$f(regex: string) -> table^relib", "\tcreate a regular expression object").Object().Merge(nil,
+		Str("match"), Func("", func(e *Env) {
+			e.A = Bool(e.A.Object().Gets("_rx").Interface().(*regexp.Regexp).MatchString(e.Str(0)))
+		}, "$f(text: string) -> bool"),
+		Str("find"), Func("", func(e *Env) {
+			m := e.A.Object().Gets("_rx").Interface().(*regexp.Regexp).FindStringSubmatch(e.Str(0))
+			var mm []Value
 			for _, m := range m {
 				mm = append(mm, Str(m))
 			}
-			return Array(mm...)
-		}, "$f({re}: value, text: string) -> array"),
-		Str("findall"), Func3("", func(re, text, n Value) Value {
-			m := re.Recv("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(text.MustStr(""), int(n.ToInt64(-1)))
+			e.A = Array(mm...)
+		}, "$f(text: string) -> array"),
+		Str("findall"), Func("", func(e *Env) {
+			m := e.A.Object().Gets("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).ToInt(-1))
 			var mm []Value
 			for _, m := range m {
 				for _, m := range m {
 					mm = append(mm, Str(m))
 				}
 			}
-			return Array(mm...)
-		}, "$f({re}: value, text: string) -> array"),
-		Str("replace"), Func3("", func(re, text, newtext Value) Value {
-			m := re.Recv("_rx").Interface().(*regexp.Regexp).ReplaceAllString(text.MustStr(""), newtext.MustStr(""))
-			return Str(m)
-		}, "$f({re}: value, old: string, new: string) -> string"),
+			e.A = Array(mm...)
+		}, "$f(text: string) -> array"),
+		Str("replace"), Func("", func(e *Env) {
+			e.A = Str(e.A.Object().Gets("_rx").Interface().(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
+		}, "$f(old: string, new: string) -> string"),
 	))
 
 	AddGlobalValue("error", func(msg Value) Value {
@@ -398,15 +362,16 @@ func init() {
 		Str("rwmutex"), Func("", func(e *Env) { e.A = Val(&sync.RWMutex{}) }, "$f() -> *go.sync.RWMutex"),
 		Str("waitgroup"), Func("", func(e *Env) { e.A = Val(&sync.WaitGroup{}) }, "$f() -> *go.sync.WaitGroup"),
 		Str("map"), Func("", func(e *Env) {
-			fun := e.Func(1)
-			n, t := e.Get(2).ToInt(runtime.NumCPU()), e.Table(0)
+			fun := e.Object(1)
+			n, t := e.Get(2).ToInt(runtime.NumCPU()), e.Get(0)
 			if n < 1 || n > runtime.NumCPU()*1e3 {
 				internal.Panic("invalid number of goroutines: %v", n)
 			}
 			var wg = sync.WaitGroup{}
 			var in = make(chan [2]Value, t.Len())
-			var out, outLock = t.Copy(), sync.Mutex{}
+			var outLock = sync.Mutex{}
 			var outError error
+			_ = t.Type() == typ.Array && e.SetA(Array(make([]Value, t.Len())...)) || e.SetA(NewObject(t.Len()).Value())
 			wg.Add(n)
 			for i := 0; i < n; i++ {
 				go func() {
@@ -421,74 +386,75 @@ func init() {
 							return
 						}
 						outLock.Lock()
-						out.RawSet(p[0], res)
+						if e.A.Type() == typ.Array {
+							e.A.Array()[p[0].Int()] = res
+						} else {
+							e.A.Object().RawSet(p[0], res)
+						}
 						outLock.Unlock()
 					}
 				}()
 			}
-			t.Foreach(func(k, v Value) bool { in <- [2]Value{k, v}; return true })
+			t.ForEach(func(k, v Value) bool { in <- [2]Value{k, v}; return true })
 			close(in)
 			wg.Wait()
 			internal.PanicErr(outError)
-			e.A = out.Value()
 		}, "$f(t: table, f: function, n: int) -> table",
 			"\tmap values in `t` into new values using f(k, v) concurrently on `n` goroutines (defaults to the number of CPUs)"),
 	))
 	AddGlobalValue("next", func(e *Env) {
-		e.A = Array(e.Table(0).Next(e.Get(1)))
+		e.A = Array(e.Object(0).Next(e.Get(1)))
 	}, "next(t: table, k: value) -> array", "\tfind next key-value pair after `k` in the table and return as { next_key, next_value }")
 	AddGlobalValue("parent", func(e *Env) {
-		e.A = e.Table(0).Parent().Value()
+		e.A = e.Object(0).Parent().Value()
 	}, "parent(t: table) -> table", "\tfind given table's parent, or nil if not existed")
 
-	AddGlobalValue("open", Map(
-		Str("__call"), Func("", func(e *Env) {
-			path, flag, perm := e.Str(1), e.Get(2).ToStr("r"), e.Get(3).ToInt64(0644)
-			var opt int
-			for _, f := range flag {
-				switch f {
-				case 'w':
-					opt &^= os.O_RDWR | os.O_RDONLY
-					opt |= os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-				case 'r':
-					opt &^= os.O_RDWR | os.O_WRONLY
-					opt |= os.O_RDONLY
-				case 'a':
-					opt |= os.O_APPEND | os.O_CREATE
-				case 'x':
-					opt |= os.O_EXCL
-				case '+':
-					opt &^= os.O_RDONLY | os.O_WRONLY
-					opt |= os.O_RDWR | os.O_CREATE
-				}
+	AddGlobalValue("open", Func("", func(e *Env) {
+		path, flag, perm := e.Str(0), e.Get(1).ToStr("r"), e.Get(2).ToInt64(0644)
+		var opt int
+		for _, f := range flag {
+			switch f {
+			case 'w':
+				opt &^= os.O_RDWR | os.O_RDONLY
+				opt |= os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+			case 'r':
+				opt &^= os.O_RDWR | os.O_WRONLY
+				opt |= os.O_RDONLY
+			case 'a':
+				opt |= os.O_APPEND | os.O_CREATE
+			case 'x':
+				opt |= os.O_EXCL
+			case '+':
+				opt &^= os.O_RDONLY | os.O_WRONLY
+				opt |= os.O_RDWR | os.O_CREATE
 			}
-			f, err := os.OpenFile(path, opt, fs.FileMode(perm))
-			internal.PanicErr(err)
-			e.Table(0).Set(Zero, Val(f))
+		}
+		f, err := os.OpenFile(path, opt, fs.FileMode(perm))
+		internal.PanicErr(err)
+		e.Object(-1).Set(Zero, Val(f))
 
-			m := TableProto(ReadWriteSeekCloserProto,
-				Str("_f"), Val(f),
-				Str("__name"), Str(f.Name()),
-				Str("sync"), Func("", func(e *Env) {
-					internal.PanicErr(e.Recv("_f").Interface().(*os.File).Sync())
-				}),
-				Str("stat"), Func("", func(e *Env) {
-					fi, err := e.Recv("_f").Interface().(*os.File).Stat()
-					internal.PanicErr(err)
-					e.A = Val(fi)
-				}),
-				Str("truncate"), Func("", func(e *Env) {
-					f := e.Recv("_f").Interface().(*os.File)
-					internal.PanicErr(f.Truncate(e.Int64(1)))
-					t, err := f.Seek(0, 2)
-					internal.PanicErr(err)
-					e.A = Int64(t)
-				}),
-			)
-			e.A = m
-		}, "open(path: string, flag: string, perm: int) -> table^"+ReadWriteSeekCloserProto.Name()),
+		e.A = Proto(ReadWriteSeekCloserProto,
+			Str("_f"), Val(f),
+			Str("__name"), Str(f.Name()),
+			Str("sync"), Func("", func(e *Env) {
+				internal.PanicErr(e.Object(-1).Gets("_f").Interface().(*os.File).Sync())
+			}),
+			Str("stat"), Func("", func(e *Env) {
+				fi, err := e.Object(-1).Gets("_f").Interface().(*os.File).Stat()
+				internal.PanicErr(err)
+				e.A = Val(fi)
+			}),
+			Str("truncate"), Func("", func(e *Env) {
+				f := e.Object(-1).Gets("_f").Interface().(*os.File)
+				internal.PanicErr(f.Truncate(e.Int64(1)))
+				t, err := f.Seek(0, 2)
+				internal.PanicErr(err)
+				e.A = Int64(t)
+			}),
+		)
+	}, "open(path: string, flag: string, perm: int) -> table^"+ReadWriteSeekCloserProto.Name()).Object().Merge(nil,
 		Str("close"), Func("", func(e *Env) {
-			f, _ := e.Table(0).Get(Zero).Interface().(*os.File)
+			f, _ := e.Object(-1).Get(Zero).Interface().(*os.File)
 			if f != nil {
 				internal.PanicErr(f.Close())
 			} else {

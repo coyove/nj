@@ -27,7 +27,7 @@ assert("x嘻" == str:from("嘻x嘻").ltrim("嘻"))
 
 -- json generator
 do
-	str.json_get = json:get
+	str.json_get = lambda(p) json.get(this, p) end
 	local j = json:stringify({
 	      a = 'A',
 	      ["b-2"] = true,

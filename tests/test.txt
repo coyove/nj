@@ -49,7 +49,8 @@ do
     for k, v in lst do
         if v%3 == 1 then continue end
         sum = sum + v
-        k, v = next(lst, k)
+        k = k + 1
+        v = lst[k]
     end
     assert(sum, 2 + 5 + 8)
     assert(k, 'not touched')

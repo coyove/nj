@@ -48,13 +48,15 @@ type symTable struct {
 	code packet
 
 	// toplevel symtable
-	funcs []*Function
+	funcs []*Object
 
 	// variable lookup
 	sym       map[string]*symbol
 	maskedSym []map[string]*symbol
 
 	forLoops []*breakLabel
+
+	this bool
 
 	vp uint16
 
@@ -147,6 +149,11 @@ func (table *symTable) get(varname string) uint16 {
 		return table.loadK(true)
 	case "false":
 		return table.loadK(false)
+	case "this":
+		if k, ok := table.sym[varname]; ok {
+			return k.addr
+		}
+		table.sym["this"] = &symbol{table.borrowAddress()}
 	case "$a":
 		return regA
 	}
@@ -434,7 +441,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		}
 	}
 
-	cls = &Program{Top: &Function{FuncBody: &FuncBody{}}}
+	cls = &Program{Top: &FuncBody{}}
 	cls.Top.Name = "main"
 	cls.Top.Code = table.code
 	cls.Top.StackSize = table.vp
@@ -451,7 +458,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		cls.Stdout, cls.Stdin, cls.Stderr = os.Stdout, os.Stdin, os.Stderr
 	}
 	for _, f := range cls.Functions {
-		f.LoadGlobal = cls
+		f.callable.LoadGlobal = cls
 	}
 	(*cls.Stack)[gi] = intf(cls)
 	return cls, err

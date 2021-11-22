@@ -115,11 +115,11 @@ var (
 		typ.OpNot:        parser.ANot,
 		typ.OpRet:        parser.AReturn,
 		typ.OpPush:       "push",
-		typ.OpPushVararg: "pushvararg",
+		typ.OpPushUnpack: "pushvararg",
 	}
 )
 
-func pkPrettify(c *Function, p *Program, toplevel bool) string {
+func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 	sb := &bytes.Buffer{}
 	sb.WriteString("+ START " + c.String() + "\n")
 
@@ -138,8 +138,8 @@ func pkPrettify(c *Function, p *Program, toplevel bool) string {
 						text = text[:60] + "..." + text[len(text)-60:]
 					}
 					suffix = "(" + text + ")"
-				case typ.Table:
-					suffix = "{" + v.Table().Name() + "}"
+				case typ.Object:
+					suffix = "{" + v.Object().Name() + "}"
 				case typ.Native:
 					suffix = "<" + v.String() + ">"
 				}
@@ -199,8 +199,8 @@ func pkPrettify(c *Function, p *Program, toplevel bool) string {
 				sb.WriteString("loadstatic " + readAddr(a, true) + " " + readAddr(b, true))
 			} else {
 				cls := p.Functions[a]
-				sb.WriteString("loadfunc " + cls.Name + "\n")
-				sb.WriteString(pkPrettify(cls, p, false))
+				sb.WriteString("loadfunc " + cls.callable.Name + "\n")
+				sb.WriteString(pkPrettify(cls.callable, p, false))
 			}
 		case typ.OpTailCall, typ.OpCall:
 			if b != regPhantom {

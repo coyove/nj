@@ -101,11 +101,11 @@ end
 return foo
 `, &CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
 		v, _ := cls.Run()
-		if v, _ := v.Func().Call(Int64(10)); v.Int64() != 11 {
+		if v := v.Func().Apply(Int64(10)); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v, _ := v.Func().Call(Int64(100)); v.Int64() != 111 {
+		if v := v.Func().Apply(Int64(100)); v.Int64() != 111 {
 			t.Fatal(v)
 		}
 	}
@@ -122,15 +122,15 @@ end
 return foo
 `, nil)
 		v, _ := cls.Run()
-		if v, _ := v.Func().Call(Array(Int64(1), Int64(2), Int64(3), Int64(4))); v.Int64() != 11 {
+		if v := v.Func().Apply(Array(Int64(1), Int64(2), Int64(3), Int64(4))); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v, _ := v.Func().Call(Array(Int64(10), Int64(20))); v.Int64() != 41 {
+		if v := v.Func().Apply(Array(Int64(10), Int64(20))); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 
-		if v, _ := v.Func().Call(); v.Int64() != 41 {
+		if v := v.Func().Apply(); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 	}
@@ -237,7 +237,7 @@ func BenchmarkGoMapUnc10(b *testing.B) { benchmarkGoMapUnconstrainted(b, 10) }
 
 func benchmarkRHMap(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
-	m := NewTable(n)
+	m := NewObject(n)
 	for i := 0; i < n; i++ {
 		m.Set(Int64(int64(i)), Int64(int64(i)))
 	}
@@ -251,7 +251,7 @@ func benchmarkRHMap(b *testing.B, n int) {
 
 func benchmarkRHMapUnconstrainted(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
-	m := NewTable(1)
+	m := NewObject(1)
 	for i := 0; i < b.N; i++ {
 		for i := 0; i < n; i++ {
 			x := rand.Intn(n)
@@ -308,7 +308,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		if v2.Table().Get(Int64(int64(i))).Int64() != int64(i) {
+		if v2.Object().Get(Int64(int64(i))).Int64() != int64(i) {
 			t.Fatal(v2)
 		}
 	}
@@ -391,7 +391,7 @@ return {a + add(), a + add(), a + add()}
 		panic(err)
 	}
 	fmt.Println(p2.PrettyCode())
-	if v1 := v.Table().ArrayPart(); v1[0].Int64() != 101 || v1[1].Int64() != 102 || v1[2].Int64() != 103 {
+	if v1 := v.Array(); v1[0].Int64() != 101 || v1[1].Int64() != 102 || v1[2].Int64() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())
 	}
 
@@ -441,7 +441,7 @@ func TestSmallString(t *testing.T) {
 
 func TestRHMap(t *testing.T) {
 	rand.Seed(time.Now().Unix())
-	m := Table{}
+	m := Object{}
 	m2 := map[int64]int64{}
 	counter := int64(0)
 	for i := 0; i < 1e6; i++ {
@@ -461,11 +461,11 @@ func TestRHMap(t *testing.T) {
 		}
 	}
 
-	fmt.Println(m.count, len(m.hashItems), len(m2))
+	fmt.Println(m.count, len(m.items), len(m2))
 
 	for k, v := range m2 {
 		if m.Get(Int64(k)).Int64() != v {
-			for _, e := range m.hashItems {
+			for _, e := range m.items {
 				if e.Key.Int64() == k {
 					t.Log(e)
 				}
@@ -509,19 +509,13 @@ func TestACall(t *testing.T) {
 	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	_, err := foo.Func().Call(Nil, Int64(1), Int64(2))
-	if err != nil {
-		t.Fatal(err)
-	}
+	foo.Func().Apply(Nil, Int64(1), Int64(2))
 
 	foo = MustRun(LoadString(`function foo(a, b, m...)
 	assert(a == 1 and len(m) == 0)
     end
     return foo`, nil))
-	_, err = foo.Func().Call(Int64(1))
-	if err != nil {
-		t.Fatal(err)
-	}
+	foo.Func().Apply(Int64(1))
 
 	foo = MustRun(LoadString(`m = {a=1}
 	function m.pow2(self)
@@ -529,10 +523,7 @@ func TestACall(t *testing.T) {
 	end
 	a = new(m, {a=10})
     return a`, nil))
-	v, err := foo.Table().Gets("pow2").Func().Call()
-	if err != nil {
-		t.Fatal(err)
-	}
+	v := foo.Object().Gets("pow2").Func().Apply()
 	if v.Int64() != 100 {
 		t.Fatal(v)
 	}
@@ -540,13 +531,13 @@ func TestACall(t *testing.T) {
 	foo = MustRun(LoadString(`m.a = 11
     return m.pow2()`, &CompileOptions{
 		GlobalKeyValues: map[string]interface{}{
-			"m": TableProto(Map(
+			"m": Proto(Map(
 				Str("a"), Int64(0),
 				Str("pow2"), Func1("pow2", func(self Value) Value {
-					i := self.Table().Gets("a").Int64()
+					i := self.Object().Gets("a").Int64()
 					return Int64(i * i)
 				}),
-			).Table()),
+			).Object()),
 		},
 	}))
 	if foo.Int64() != 121 {
@@ -570,10 +561,7 @@ func TestACall(t *testing.T) {
 			},
 		},
 	}))
-	v, err = foo.Func().Call(Int64(1), Int64(2), Int64(3))
-	if err != nil {
-		t.Fatal(err)
-	}
+	v = foo.Func().Apply(Int64(1), Int64(2), Int64(3))
 	if v.Int64() != 15 {
 		t.Fatal(v)
 	}
@@ -687,8 +675,8 @@ func BenchmarkFloat64_2(b *testing.B) {
 
 func BenchmarkReceiver(b *testing.B) {
 	x := Array(Func("", func(env *Env) {}))
-	fmt.Println(x.Table().Get(Int64(0)).String())
+	fmt.Println(x.Object().Get(Int64(0)).String())
 	for i := 0; i < b.N; i++ {
-		x.Table().Get(Int64(0))
+		x.Object().Get(Int64(0))
 	}
 }

@@ -13,13 +13,13 @@ import (
 type stacktrace struct {
 	cursor      uint32
 	stackOffset uint32
-	cls         *Function
+	cls         *FuncBody
 }
 
 // ExecError represents the runtime error
 type ExecError struct {
 	r      interface{}
-	native *Function
+	native *FuncBody
 	stacks []stacktrace
 }
 
@@ -72,12 +72,12 @@ func wrapExecError(err error) Value {
 }
 
 // internalExecCursorLoop executes 'K' under 'env' from the given start 'cursor'
-func internalExecCursorLoop(env Env, K *Function, cursor uint32) Value {
+func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 	stackEnv := env
 	stackEnv.stackOffset = uint32(len(*env.stack))
 
 	var retStack []stacktrace
-	var nativeCls *Function
+	var nativeCls *FuncBody
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -122,8 +122,15 @@ func internalExecCursorLoop(env Env, K *Function, cursor uint32) Value {
 				switch va.Type() {
 				case typ.Nil:
 					env.A = Array(Nil, Nil)
-				case typ.Table:
-					k, v := va.Table().Next(vb)
+				case typ.Array:
+					idx := 0
+					if vb != Nil {
+						idx = vb.MustInt("array iteration") + 1
+					}
+					a := va.Array()
+					_ = idx >= len(a) && env.SetA(Array(Nil, Nil)) || env.SetA(Array(Int(idx), a[idx]))
+				case typ.Object:
+					k, v := va.Object().Next(vb)
 					env.A = Array(k, v)
 				case typ.String:
 					idx := int64(0)
@@ -276,19 +283,30 @@ func internalExecCursorLoop(env Env, K *Function, cursor uint32) Value {
 		case typ.OpStore:
 			subject, v := env._get(opa), env._get(opb)
 			switch subject.Type() {
-			case typ.Table:
-				m := subject.Table()
-				env.A = m.Set(env.A, v)
+			case typ.Object:
+				subject.Object().Set(env.A, v)
+			case typ.Array:
+				if env.A.IsInt64() {
+					subject.Array()[env.A.Int64()] = v
+				} else {
+					internal.Panic("can't store %v into array[%v]", showType(v), showType(env.A))
+				}
 			case typ.Native:
 				reflectStore(subject.Interface(), env.A, v)
-				env.A = v
 			default:
 				internal.Panic("can't store %v into (%v)[%v]", showType(v), showType(subject), showType(env.A))
 			}
+			env.A = v
 		case typ.OpLoad:
 			switch a, idx := env._get(opa), env._get(opb); a.Type() {
-			case typ.Table:
-				env.A = a.Table().Get(idx)
+			case typ.Object:
+				env.A = a.Object().Get(idx)
+			case typ.Array:
+				if idx.IsInt64() {
+					env.A = a.Array()[idx.Int64()]
+				} else {
+					internal.Panic("can't load array[%v]", showType(idx))
+				}
 			case typ.Native, typ.Func:
 				env.A = reflectLoad(a.Interface(), idx)
 			case typ.String:
@@ -300,9 +318,9 @@ func internalExecCursorLoop(env Env, K *Function, cursor uint32) Value {
 					}
 					break
 				} else if idx.Type() == typ.String {
-					if f := StrLib.Table().Gets(idx.Str()); f != Nil {
-						if f.IsFunc() {
-							f.Func().Receiver = a
+					if f := StrLib.Object().Gets(idx.Str()); f != Nil {
+						if f.Type() == typ.Object {
+							f.Object().receiver = a
 						}
 						env.A = f
 						break
@@ -315,13 +333,13 @@ func internalExecCursorLoop(env Env, K *Function, cursor uint32) Value {
 			}
 		case typ.OpPush:
 			stackEnv.Push(env._get(opa))
-		case typ.OpPushVararg:
+		case typ.OpPushUnpack:
 			switch a := env._get(opa); a.Type() {
-			case typ.Table:
-				*stackEnv.stack = append(*stackEnv.stack, a.Table().ArrayPart()...)
+			case typ.Array:
+				*stackEnv.stack = append(*stackEnv.stack, a.Array()...)
 			case typ.Nil:
 			default:
-				a.MustTable("unpack arguments")
+				internal.Panic("arguments unpacking expects array, got %v", showType(a))
 			}
 		case typ.OpRet:
 			v := env._get(opa)
@@ -345,20 +363,22 @@ func internalExecCursorLoop(env Env, K *Function, cursor uint32) Value {
 			}
 		case typ.OpCall, typ.OpTailCall:
 			a := env._get(opa)
-			at := a.Type()
-			for at == typ.Table {
-				a = a.Table().Gets("__call")
-				at = a.Type()
-			}
-			if at != typ.Func {
+			if a.Type() != typ.Object {
 				internal.Panic("can't call %v", showType(a))
 			}
-			cls := a.unsafeFunc()
+			cls := a.Object().callable
+			if cls == nil {
+				env.A = a.Object().Apply()
+				continue
+			}
 			if opb != regPhantom {
 				stackEnv.Push(env._get(opb))
 			}
-			if cls.Receiver != Nil {
-				stackEnv.Prepend(cls.Receiver)
+			if a.Object().receiver != Nil {
+				// stackEnv.Prepend(a.Object().receiver)
+				stackEnv.A = a.Object().receiver
+			} else {
+				stackEnv.A = a
 			}
 			if cls.Variadic {
 				s, w := stackEnv.Stack(), int(cls.NumParams)-1
@@ -370,7 +390,6 @@ func internalExecCursorLoop(env Env, K *Function, cursor uint32) Value {
 				}
 			}
 			if cls.Native != nil {
-				stackEnv.A = Nil
 				stackEnv.Global = env.Global
 				stackEnv.CS = K
 				stackEnv.IP = cursor

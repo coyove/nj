@@ -7,7 +7,7 @@ end
 
 function itemCheck(n)
     if (len(n) == 0) then return 1 end
-    return itemCheck(n.left) + itemCheck(n.right) + 1
+    return itemCheck(n:left) + itemCheck(n:right) + 1
 end
 
 minDepth = 4 
@@ -17,6 +17,7 @@ stretchDepth = maxDepth + 1
 
 check_l = itemCheck(bottomUpTree(stretchDepth)) 
 print(str:from("stretch tree of depth %d\t check: %v").format(stretchDepth, check_l) )
+return
 
 longLivedTree = bottomUpTree(maxDepth) 
 result = table:makearray(maxDepth+1) 

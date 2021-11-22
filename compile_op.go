@@ -224,7 +224,7 @@ func (table *symTable) compileCall(nodes []parser.Node) uint16 {
 		for i := 1; i < len(tmp)-1; i++ {
 			table.writeInst(typ.OpPush, tmp[i], parser.Addr(0))
 		}
-		table.writeInst(typ.OpPushVararg, tmp[len(tmp)-1], parser.Addr(0))
+		table.writeInst(typ.OpPushUnpack, tmp[len(tmp)-1], parser.Addr(0))
 		isVariadic = true
 	} else {
 		table.collapse(tmp, true)
@@ -281,15 +281,19 @@ func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	newtable.compileNode(atoms[3])
 	newtable.patchGoto()
 
+	if a := newtable.sym["this"]; a != nil {
+		newtable.code.Code = append([]_inst{inst(typ.OpSet, a.addr, regA)}, newtable.code.Code...)
+	}
+
 	code := newtable.code
 	code.writeInst(typ.OpRet, table.loadK(nil), 0)
 	// code.writeInst(typ.OpRet, regA, 0)
 
-	cls := &Function{FuncBody: &FuncBody{}}
+	cls := &FuncBody{}
 	cls.Variadic = varargIdx >= 0
 	cls.NumParams = uint16(len(params.Nodes()))
 	cls.Name = atoms[1].Sym()
-	cls.docString = atoms[4].Str()
+	cls.DocString = atoms[4].Str()
 	cls.StackSize = newtable.vp
 	cls.Code = code
 	cls.Locals = newtable.symbolsToDebugLocals()
@@ -298,10 +302,10 @@ func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	if table.global != nil {
 		x := table.global
 		loadFuncIndex = uint16(len(x.funcs))
-		x.funcs = append(x.funcs, cls)
+		x.funcs = append(x.funcs, &Object{callable: cls})
 	} else {
 		loadFuncIndex = uint16(len(table.funcs))
-		table.funcs = append(table.funcs, cls)
+		table.funcs = append(table.funcs, &Object{callable: cls})
 	}
 	table.code.writeInst(typ.OpLoadFunc, loadFuncIndex, 0)
 	if strings.HasPrefix(cls.Name, "<lambda") {
