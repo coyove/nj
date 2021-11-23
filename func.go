@@ -33,10 +33,15 @@ type Program struct {
 	Stdin        io.Reader
 }
 
-// Func creates a function
+func dummyFunc(*Env) {}
+
+// Func creates a callable object
 func Func(name string, f func(*Env), doc ...string) Value {
 	if name == "" {
 		name = internal.UnnamedFunc
+	}
+	if f == nil {
+		f = dummyFunc
 	}
 	return (&Object{
 		callable: &FuncBody{

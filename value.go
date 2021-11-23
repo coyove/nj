@@ -7,7 +7,6 @@ import (
 	"math"
 	"reflect"
 	"strconv"
-	"strings"
 	"unicode/utf8"
 	"unsafe"
 
@@ -111,11 +110,11 @@ func Int64(i int64) Value {
 
 // Array creates an array consists of given arguments
 func Array(m ...Value) Value {
-	return Value{v: uint64(typ.Array), p: unsafe.Pointer(&m)}
+	return (&List{store: m}).Value()
 }
 
-// Map creates a map from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
-func Map(kvs ...Value) Value {
+// Obj creates a map from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
+func Obj(kvs ...Value) Value {
 	t := NewObject(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		t.Set(kvs[i], renameFuncName(kvs[i], kvs[i+1]))
@@ -140,7 +139,7 @@ func TableMerge(dst Value, src *Object) Value {
 
 // Proto creates a table whose parent will be set to `p`
 func Proto(p *Object, kvs ...Value) Value {
-	return Map(kvs...).Object().SetParent(p).Value()
+	return Obj(kvs...).Object().SetParent(p).Value()
 }
 
 // Str creates a string value
@@ -355,7 +354,7 @@ func (v Value) Bool() bool { return v.p == trueMarker }
 // Object returns value as a table without checking Type()
 func (v Value) Object() *Object { return (*Object)(v.p) }
 
-func (v Value) Array() []Value { return *(*[]Value)(v.p) }
+func (v Value) Array() *List { return (*List)(v.p) }
 
 // Func returns value as a function, non-function value yield nil
 func (v Value) Func() *Object { return v.Object() }
@@ -400,14 +399,14 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 		return reflect.Zero(t)
 	} else if v.IsObject() && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
-			out := v.Func().Apply(valReflectValues(args)...)
+			out := v.Func().MustCall(valReflectValues(args)...)
 			if to := t.NumOut(); to == 1 {
 				results = []reflect.Value{out.ReflectValue(t.Out(0))}
 			} else if to > 1 {
-				out.mustBe(typ.Object, "ReflectValue: expect multiple returned arguments", 0)
+				out.Is(typ.Array, "ReflectValue: expect multiple returned arguments")
 				results = make([]reflect.Value, t.NumOut())
 				for i := range results {
-					results[i] = out.Object().Get(Int64(int64(i))).ReflectValue(t.Out(i))
+					results[i] = out.Array().Get(Int(i)).ReflectValue(t.Out(i))
 				}
 			}
 			return
@@ -417,16 +416,12 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	} else if vt == typ.Array {
 		switch a := v.Array(); t.Kind() {
 		case reflect.Slice:
-			s := reflect.MakeSlice(t, len(a), len(a))
-			for i, a := range a {
-				s.Index(i).Set(a.ReflectValue(t.Elem()))
-			}
+			s := reflect.MakeSlice(t, a.Len(), a.Len())
+			a.Foreach(func(k, v Value) bool { s.Index(k.Int()).Set(v.ReflectValue(t.Elem())); return true })
 			return s
 		case reflect.Array:
 			s := reflect.New(t).Elem()
-			for i, a := range a {
-				s.Index(i).Set(a.ReflectValue(t.Elem()))
-			}
+			a.Foreach(func(k, v Value) bool { s.Index(k.Int()).Set(v.ReflectValue(t.Elem())); return true })
 			return s
 		}
 	} else if vt == typ.Object {
@@ -444,21 +439,21 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	return reflect.ValueOf(v.Interface())
 }
 
-func (v Value) MustBool(msg string) bool { return v.mustBe(typ.Bool, msg, 0).Bool() }
+func (v Value) MustBool(msg string) bool { return v.Is(typ.Bool, msg).Bool() }
 
-func (v Value) MustStr(msg string) string { return v.mustBe(typ.String, msg, 0).String() }
+func (v Value) MustStr(msg string) string { return v.Is(typ.String, msg).String() }
 
-func (v Value) MustStrLen(msg string) int { return v.mustBe(typ.String, msg, 0).StrLen() }
+func (v Value) MustStrLen(msg string) int { return v.Is(typ.String, msg).StrLen() }
 
-func (v Value) MustNum(msg string) Value { return v.mustBe(typ.Number, msg, 0) }
+func (v Value) MustNum(msg string) Value { return v.Is(typ.Number, msg) }
 
-func (v Value) MustInt64(msg string) int64 { return v.mustBe(typ.Number, msg, 0).Int64() }
+func (v Value) MustInt64(msg string) int64 { return v.Is(typ.Number, msg).Int64() }
 
-func (v Value) MustInt(msg string) int { return v.mustBe(typ.Number, msg, 0).Int() }
+func (v Value) MustInt(msg string) int { return v.Is(typ.Number, msg).Int() }
 
-func (v Value) MustFloat64(msg string) float64 { return v.mustBe(typ.Number, msg, 0).Float64() }
+func (v Value) MustFloat64(msg string) float64 { return v.Is(typ.Number, msg).Float64() }
 
-func (v Value) MustTable(msg string) *Object { return v.mustBe(typ.Object, msg, 0).Object() }
+func (v Value) MustTable(msg string) *Object { return v.Is(typ.Object, msg).Object() }
 
 func (v Value) MustFunc(msg string) *Object {
 	f := v.Func()
@@ -468,11 +463,8 @@ func (v Value) MustFunc(msg string) *Object {
 	return f
 }
 
-func (v Value) mustBe(t typ.ValueType, msg string, msgArg int) Value {
+func (v Value) Is(t typ.ValueType, msg string) Value {
 	if v.Type() != t {
-		if strings.Contains(msg, "%d") {
-			msg = fmt.Sprintf(msg, msgArg)
-		}
 		if msg != "" {
 			internal.Panic("%s: expect %v, got %v", msg, t, showType(v))
 		}
@@ -504,7 +496,7 @@ func (v Value) HashCode() uint64 {
 		}
 		return code
 	}
-	return v.v ^ uint64(uintptr(v.p))
+	return v.v * uint64(uintptr(v.p))
 }
 
 func (v Value) String() string {
@@ -536,16 +528,15 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 	case typ.String:
 		p.WriteString(ifquote(j, v.Str()))
 	case typ.Object:
-		m := v.Object()
-		if sf := m.Gets("__str"); sf.IsObject() {
-			if v, err := sf.Func().Call(); err != nil {
-				p.WriteString(fmt.Sprintf("<table.__str: %v>", err))
-			} else {
-				v.toString(p, lv+1, j)
-			}
-			return p
-		}
-		m.rawPrint(p, lv, j, false)
+		v.Object().rawPrint(p, lv, j, false)
+	case typ.Array:
+		p.WriteString("[")
+		v.Array().Foreach(func(i, v Value) bool {
+			v.toString(p, lv+1, j)
+			p.WriteString(",")
+			return true
+		})
+		closeBuffer(p, "]")
 	case typ.Func:
 		p.WriteString(ifquote(j, v.Func().String()))
 	case typ.Native:
@@ -592,7 +583,7 @@ func (v Value) ToFunc() *Object {
 	return v.Func()
 }
 
-func (v Value) ToTable() *Object {
+func (v Value) ToObject() *Object {
 	if v.Type() != typ.Object {
 		return nil
 	}
@@ -611,11 +602,7 @@ func (v Value) ForEach(f func(k, v Value) bool) {
 	case typ.Object:
 		v.Object().Foreach(f)
 	case typ.Array:
-		for i, a := range v.Array() {
-			if !f(Int(i), a) {
-				break
-			}
-		}
+		v.Array().Foreach(f)
 	default:
 		internal.Panic("can't iterate %v", v.Type())
 	}
@@ -626,7 +613,7 @@ func (v Value) Len() int {
 	case typ.String:
 		return v.StrLen()
 	case typ.Array:
-		return len(v.Array())
+		return v.Array().Len()
 	case typ.Object:
 		return v.Object().Len()
 	case typ.Nil:

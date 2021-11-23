@@ -32,7 +32,7 @@ package parser
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
-%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' ':' TIDiv
+%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' TIDiv
 
 /* Operators */
 %right 'T'
@@ -199,17 +199,17 @@ jmp_stat:
 declarator:
     TIdent                   { $$ = Sym($1) } |
     prefix_expr '[' expr ']' { $$ = __load($1, $3).At($2) } |
-    prefix_expr '.' TIdent   { $$ = __load($1, Str($3.Str)).At($2) } |
-    prefix_expr ':' TIdent   { $$ = __loadStatic($1, Str($3.Str)).At($2) }
+    prefix_expr '.' TIdent   { $$ = __load($1, Str($3.Str)).At($2) } 
 
 expr:
     prefix_expr                       { $$ = $1 } |
     TLambda func_params stats TEnd    { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
     TNumber                           { $$ = Num($1.Str) } |
     TString                           { $$ = Str($1.Str) } |
-    '{' '}'                           { $$ = Nodes((SArrayMap), emptyNode).At($1) } |
-    '{' expr_list comma '}'           { $$ = Nodes((SArray), $2).At($1) } |
-    '{' expr_assign_list comma'}'     { $$ = Nodes((SArrayMap), $2).At($1) } |
+    '[' ']'                           { $$ = Nodes(SArray, emptyNode).At($1) } |
+    '{' '}'                           { $$ = Nodes(SArrayMap, emptyNode).At($1) } |
+    '[' expr_list comma ']'           { $$ = Nodes(SArray, $2).At($1) } |
+    '{' expr_assign_list comma'}'     { $$ = Nodes(SArrayMap, $2).At($1) } |
     expr TOr expr                     { $$ = Nodes((SOr), $1,$3).At($2) } |
     expr TAnd expr                    { $$ = Nodes((SAnd), $1,$3).At($2) } |
     expr '>' expr                     { $$ = Nodes((SLess), $3,$1).At($2) } |
@@ -256,9 +256,9 @@ expr_list:
 
 expr_assign_list:
     TIdent '=' expr                            { $$ = Nodes(Str($1.Str), $3) } |
-    '[' expr ']' '=' expr                      { $$ = Nodes($2, $5) } |
+    '{' expr '}' '=' expr                      { $$ = Nodes($2, $5) } |
     expr_assign_list ',' TIdent '=' expr       { $$ = $1.append(Str($3.Str)).append($5) } |
-    expr_assign_list ',' '[' expr ']' '=' expr { $$ = $1.append($4).append($7) }
+    expr_assign_list ',' '{' expr '}' '=' expr { $$ = $1.append($4).append($7) }
 
 comma: 
     { $$ = emptyNode } | ',' { $$ = emptyNode }

@@ -22,38 +22,37 @@ var (
 )
 
 var (
-	ReaderProto = Map(Str("__name"), Str("reader"),
-		Str("read"), Func2("read", func(rx, n Value) Value {
-			f := rx.Object().Gets("_f").Interface().(io.Reader)
-			switch n.Type() {
+	ReaderProto = Proto(ObjectLib.Object(), Str("__name"), Str("reader"),
+		Str("read"), Func("", func(e *Env) {
+			f := e.Object(-1).Gets("_f").Interface().(io.Reader)
+			switch n := e.Get(0); n.Type() {
 			case typ.Number:
 				p := make([]byte, n.ToInt64(0))
 				rn, err := f.Read(p)
 				if err == nil || rn > 0 {
-					return Bytes(p[:rn])
+					e.A = Bytes(p[:rn])
+				} else if err == io.EOF {
+					e.A = Nil
+				} else {
+					panic(err)
 				}
-				if err == io.EOF {
-					return Nil
-				}
-				panic(err)
 			default:
 				buf, err := ioutil.ReadAll(f)
 				internal.PanicErr(err)
-				return Bytes(buf)
+				e.A = Bytes(buf)
 			}
-		}, "read() string", "\tread all bytes, return nil if EOF reached", "read(n: int) string", "\tread n bytes"),
-		Str("readbuf"), Func2("readbuf", func(rx, n Value) Value {
-			rn, err := rx.Object().Gets("_f").Interface().(io.Reader).Read(n.Interface().([]byte))
-			return Array(Int64(int64(rn)), Val(err)) // return in Go style
-		}, "$f(buf: bytes) array", "\tread into buf and return { bytes_read, error } in Go style"),
-		Str("readlines"), Func2("readlines", func(rx, cb Value) Value {
-			f := rx.Object().Gets("_f").Interface().(io.Reader)
-			delim := rx.Object().Gets("delim").ToStr("\n")
-			if cb == Nil {
+		}, "$f() -> string", "\tread all bytes, return nil if EOF reached",
+			"$f(n: int) -> string", "\tread `n` bytes"),
+		Str("readbuf"), Func("", func(e *Env) {
+			rn, err := e.Object(-1).Gets("_f").Interface().(io.Reader).Read(e.Interface(0).([]byte))
+			e.A = Array(Int(rn), Val(err)) // return in Go style
+		}, "$f(buf: bytes) array", "\tread into `buf` and return [int, go.error] in Go style"),
+		Str("readlines"), Func("", func(e *Env) {
+			f := e.Object(-1).Gets("_f").Interface().(io.Reader)
+			delim := e.Object(-1).Gets("delim").ToStr("\n")
+			if e.Get(0) == Nil {
 				buf, err := ioutil.ReadAll(f)
-				if err != nil {
-					panic(err)
-				}
+				internal.PanicErr(err)
 				parts := bytes.Split(buf, []byte(delim))
 				var res []Value
 				for i, line := range parts {
@@ -62,13 +61,15 @@ var (
 					}
 					res = append(res, Bytes(line))
 				}
-				return Array(res...)
+				e.A = Array(res...)
+				return
 			}
-			for rd := bufio.NewReader(f); ; {
+			for cb, rd := e.Object(0), bufio.NewReader(f); ; {
 				line, err := rd.ReadString(delim[0])
 				if len(line) > 0 {
-					if v := cb.MustFunc("callback").Apply(Str(line)); v != Nil {
-						return v
+					if v := cb.MustCall(Str(line)); v != Nil {
+						e.A = v
+						return
 					}
 				}
 				if err != nil {
@@ -78,14 +79,14 @@ var (
 					break
 				}
 			}
-			return Nil
+			e.A = Nil
 		},
 			"readlines() array", "\tread the whole file and return lines as a table array",
 			"readlines(f: function)", "\tfor every line read, f(line) will be called", "\tto exit the reading, return anything other than nil in f",
 		),
 	).Object()
 
-	WriterProto = Map(Str("__name"), Str("writer"),
+	WriterProto = Proto(ObjectLib.Object(), Str("__name"), Str("writer"),
 		Str("write"), Func("", func(e *Env) {
 			f := e.Object(-1).Gets("_f").Interface().(io.Writer)
 			wn, err := f.Write([]byte(e.Str(0)))
@@ -106,7 +107,7 @@ var (
 			"$f({w}: value, r: value, n: int) int", "\tcopy at most n bytes from r to w"),
 	).Object()
 
-	SeekerProto = Map(Str("__name"), Str("seeker"),
+	SeekerProto = Proto(ObjectLib.Object(), Str("__name"), Str("seeker"),
 		Str("seek"), Func3("seek", func(rx, off, where Value) Value {
 			f := rx.Object().Gets("_f").Interface().(io.Seeker)
 			wn, err := f.Seek(off.MustInt64("offset"), int(where.MustInt64("where")))
@@ -114,10 +115,9 @@ var (
 			return Int64(int64(wn))
 		}, "")).Object()
 
-	CloserProto = Map(Str("__name"), Str("closer"),
-		Str("close"), Func1("close", func(rx Value) Value {
-			internal.PanicErr(rx.Object().Gets("_f").Interface().(io.Closer).Close())
-			return Nil
+	CloserProto = Proto(ObjectLib.Object(), Str("__name"), Str("closer"),
+		Str("close"), Func("", func(e *Env) {
+			internal.PanicErr(e.Object(-1).Gets("_f").Interface().(io.Closer).Close())
 		}, "")).Object()
 
 	ReadWriterProto = ReaderProto.Copy().Merge(WriterProto, Str("__name"), Str("readwriter"))
@@ -185,8 +185,8 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			if err != nil {
 				return 0, err
 			}
-			t := v.MustTable("TableIO.Read: readbuf()")
-			n := t.Get(Int64(0)).MustInt64("TableIO.Read: (int, error)")
+			t := v.Is(typ.Array, "ValueIO.Read: use readbuf()").Array()
+			n := t.Get(Int64(0)).Is(typ.Number, "ValueIO.Read: (int, error)").Int()
 			err, _ = t.Get(Int64(1)).Interface().(error)
 			return int(n), err
 		}
@@ -198,7 +198,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			if v == Nil {
 				return 0, io.EOF
 			}
-			return copy(p, v.MustStr("TableIO.Read: read()")), nil
+			return copy(p, []byte(v.Is(typ.String, "ValueIO.Read: use read()").Str())), nil
 		}
 	}
 	return 0, fmt.Errorf("reader not implemented")
@@ -216,7 +216,7 @@ func (m ValueIO) Write(p []byte) (int, error) {
 			if err != nil {
 				return 0, err
 			}
-			return int(v.MustInt64("TableIO.Write: (int, error)")), nil
+			return int(v.MustInt64("ValueIO.Write: (int, error)")), nil
 		}
 	}
 	return 0, fmt.Errorf("writer not implemented")

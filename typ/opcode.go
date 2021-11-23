@@ -30,7 +30,7 @@ const (
 	OpPush
 	OpPushUnpack
 	OpArray
-	OpMap
+	OpCreateObject
 	OpCall
 	OpTailCall
 	OpRet

@@ -18,7 +18,7 @@ import (
 var HostWhitelist = map[string][]string{}
 
 func init() {
-	nj.AddGlobalValue("url", nj.Map(
+	nj.AddGlobalValue("url", nj.Obj(
 		nj.Str("escape"), nj.Func1("escape", func(a nj.Value) nj.Value {
 			return nj.Str(url.QueryEscape(a.MustStr("")))
 		}),

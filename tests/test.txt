@@ -1,7 +1,7 @@
 assert(G == "test")
 
 do
-	local j = { a= 1, b= 2, array={1, 2, {inner="inner"}}}
+	local j = { a= 1, b= 2, array=[1, 2, {inner="inner"}]}
 	-- assert(json('{"a":1}', "a") == 1)
 	assert(j.b == 2)
 	-- local n, a, b, c = json(j, "array")
@@ -37,14 +37,14 @@ do
     assert(sum == 174)
 
     sum = 0
-    for _, v in {1,2,3,4,5,6} do
+    for _, v in [1,2,3,4,5,6] do
         if v == 5 then continue end
         sum = sum + v
     end
     assert(sum == 16)
 
     sum = 0
-    lst = {1,2,3,4,5,6,7,8,9}
+    lst = [1,2,3,4,5,6,7,8,9]
     local k = 'not touched'
     for k, v in lst do
         if v%3 == 1 then continue end
@@ -57,16 +57,16 @@ do
 end
 
 do
-	local arr = {1,2,3}
+	local arr = [1,2,3]
 	for i =0,len(arr) do
 	    assert( i+1 == arr[i])
 	end
 end
 
-function f(a, b) assert(true); return { b, a } end
+function f(a, b) assert(true); return [ b, a ] end
     function g(a, b ,c)
     b, c = f(b, c)
-    return {c, b, a}
+    return [c, b, a]
     end
 
 do
@@ -80,7 +80,7 @@ function syntax_return_void2(en) return
 en end
 assert(syntax_return_void2(1) == nil)
 
-ex = { 1, 2 }
+ex = [ 1, 2 ]
 ex[0], ex[1], ex3 = ex3, ex[0], ex[1]
 assert(ex3 == 2 and ex[0] == nil and ex[1] == 1)
 
@@ -122,19 +122,19 @@ assert(a == 1)
 function add(a,b) return a + b end
 
 function fib2(a, b, n)
-    x = {}
+    x = []
     while n do
         c = add(a, b)
         a = b
         b = c
-        x[len(x)] = c
+        x.append(c)
         n=n-1
     end
     return x
 end
 
 do
-    fib_seq = { 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418, 317811, 514229, 832040, 1346269, 2178309, 3524578, 5702887, 9227465 }
+    fib_seq = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418, 317811, 514229, 832040, 1346269, 2178309, 3524578, 5702887, 9227465]
 
     local s = fib2(0, 1, 33)
     for i = 0,33 do
@@ -155,9 +155,9 @@ a = 2
 assert( 1 + 2 *3/4 == 2.5)
 assert( 1 /2+ 2.5 * (a + 1) * 5 == 38)
 assert((a + 1) % 2 == 1)
-assert(math:mod(a + 1.25, 2) == 1.25)
-assert(math:remainder(a + 1.25, 2) == -0.75)
-assert(math:mod(- a - 1.25, 2) == -1.25)
+assert(math.mod(a + 1.25, 2) == 1.25)
+assert(math.remainder(a + 1.25, 2) == -0.75)
+assert(math.mod(- a - 1.25, 2) == -1.25)
 
 do
     local mark = 0
@@ -190,7 +190,7 @@ findGlobal()
 assert(G_FLAG == 'ok')
 
 flag = "G_FLA" + "G"
-print(flag, {}, {a=2}, {["a"]=2})
+print(flag, {}, {a=2}, {{"a"}=2})
 
 function double(args...)
     for i=0,len(args) do

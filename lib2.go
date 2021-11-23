@@ -23,16 +23,16 @@ import (
 )
 
 var (
-	StrLib   Value
-	MathLib  Value
-	TableLib Value
-	ArrayLib Value
-	OSLib    Value
-	IOLib    Value
+	StrLib    Value
+	MathLib   Value
+	ObjectLib Value
+	ArrayLib  Value
+	OSLib     Value
+	IOLib     Value
 )
 
 func init() {
-	IOLib = TableMerge(IOLib, Map(
+	IOLib = TableMerge(IOLib, Obj(
 		Str("reader"), ReaderProto.Value(),
 		Str("writer"), WriterProto.Value(),
 		Str("seeker"), SeekerProto.Value(),
@@ -45,14 +45,13 @@ func init() {
 	).Object())
 	AddGlobalValue("io", IOLib)
 
-	TableLib = TableMerge(TableLib, Map(
-		Str("__call"), Func("", func(e *Env) {
-			if e.Get(1) == Nil {
-				e.A = Proto(e.Object(0))
-			} else {
-				e.A = e.Object(1).SetFirstParent(e.Object(0)).Value()
-			}
-		}),
+	ObjectLib = TableMerge(ObjectLib, Func("object", func(e *Env) {
+		if e.Get(0) == Nil {
+			e.A = Proto(e.Object(-1))
+		} else {
+			e.A = e.Object(0).SetFirstParent(e.Object(-1)).Value()
+		}
+	}).Object().Merge(nil,
 		Str("concurrent"), Func("", func(e *Env) {
 			// x := NewObject(e.Object(0).Len())
 			// e.Object(0).Foreach(func(k, v Value) bool {
@@ -70,7 +69,7 @@ func init() {
 			// })
 			// x.Sets("_mu", Val(&sync.Mutex{}))
 			// _ = e.Get(1).IsNil() && e.SetA(Proto(x)) || e.SetA(e.Object(1).SetFirstParent(x).Value())
-		}, "$f(src: table) -> table", "\tcreate a concurrently accessible table"),
+		}, "$f(src: table) -> object", "\tcreate a concurrently accessible table"),
 		Str("get"), Func("", func(e *Env) {
 			e.A = e.Object(0).Get(e.Get(1))
 		}, "$f({t}: table, k: value) -> value"),
@@ -80,39 +79,30 @@ func init() {
 		Str("rawget"), Func("", func(e *Env) {
 			e.A = e.Object(0).RawGet(e.Get(1))
 		}, "$f({t}: table, k: value) -> value"),
-		Str("rawset"), Func("", func(e *Env) {
-			e.A = e.Object(0).RawSet(e.Get(1), e.Get(2))
-		}, "$f({t}: table, k: value, v: value) -> value", "\tset value by key, return previous value"),
 		Str("make"), Func("", func(e *Env) {
 			e.A = NewObject(e.Int(0)).Value()
-		}, "$f(n: int) -> table", "\treturn a table, preallocate enough hash space for n values"),
-		Str("makearray"), Func("", func(e *Env) {
-			e.A = Array(make([]Value, e.Int(0))...)
-		}, "$f(n: int) -> array", "\treturn a table array, preallocate space for n values"),
+		}, "$f(n: int) -> object", "\treturn a table, preallocate enough hash space for n values"),
 		Str("clear"), Func("", func(e *Env) {
-			e.Object(0).Clear()
-		}, "$f({t}: table)"),
-		Str("slice"), Func("", func(e *Env) {
-			// e.A = Array(e.Table(0).items[e.Int(1):e.Int(2)]...)
-		}, "$f({t}: array, start: int, end: int) -> array", "\tslice array, from start to end"),
+			e.Object(-1).Clear()
+		}, "$f()"),
 		Str("copy"), Func("", func(e *Env) {
-			e.A = e.Object(0).Copy().Value()
-		}, "$f({t}: table) -> table", "\tcopy the table"),
+			e.A = e.Object(-1).Copy().Value()
+		}, "$f() -> object", "\tcopy the table"),
 		Str("parent"), Func("", func(e *Env) {
-			e.A = e.Object(0).Parent().Value()
-		}, "$f({t}: table) -> table", "\treturn table's parent if any"),
+			e.A = e.Object(-1).Parent().Value()
+		}, "$f() -> object", "\treturn object's parent if any"),
 		Str("setparent"), Func("", func(e *Env) {
-			e.Object(0).SetParent(e.Object(1))
-		}, "$f({t}: table, p: table)", "\tset table's parent"),
+			e.Object(-1).SetParent(e.Object(0))
+		}, "$f(p: table)", "\tset object's parent"),
 		Str("setfirstparent"), Func("", func(e *Env) {
-			e.Object(0).SetFirstParent(e.Object(1))
-		}, "$f({t}: table, p: table)", "\tinsert `p` as `t`'s first parent"),
+			e.Object(-1).SetFirstParent(e.Object(0))
+		}, "$f(p: table)", "\tinsert `p` as `t`'s first parent"),
 		Str("size"), Func("", func(e *Env) {
-			e.A = Int(e.Object(0).Size())
-		}, "$f({t}: array) -> int", "\treturn the true size of array (including nils)"),
+			e.A = Int(e.Object(-1).Size())
+		}, "$f() -> int", "\treturn the size of object"),
 		Str("len"), Func("", func(e *Env) {
-			e.A = Int(e.Object(0).Len())
-		}, "$f({t}: table) -> int", "\treturn the true size of table map (including empty nil entries)"),
+			e.A = Int(e.Object(-1).Len())
+		}, "$f() -> int", "\treturn the count of keys in object"),
 		Str("keys"), Func("", func(e *Env) {
 			a := make([]Value, 0)
 			e.Object(0).Foreach(func(k, v Value) bool { a = append(a, k); return true })
@@ -140,67 +130,79 @@ func init() {
 		Str("merge"), Func2("", func(a, b Value) Value {
 			return a.MustTable("").Merge(b.MustTable("")).Value()
 		}, "$f({table1}: table, table2: table)", "\tmerge elements from table2 to table1"),
-		Str("tostring"), Func1("", func(a Value) Value {
+		Str("tostring"), Func("", func(e *Env) {
 			p := &bytes.Buffer{}
-			a.MustTable("").rawPrint(p, 0, true, true)
-			return Bytes(p.Bytes())
-		}, "$f({t}: table) -> string", "\tprint raw elements in table, ignore __str"),
-		Str("name"), Func1("", func(a Value) Value {
-			return Str(a.MustTable("").Name())
-		}, "$f({t}: table) -> string", "\tprint table's name"),
+			e.Object(-1).rawPrint(p, 0, true, true)
+			e.A = Bytes(p.Bytes())
+		}, "$f() -> string", "\tprint raw elements in table"),
 		Str("pure"), Func1("", func(m Value) Value {
 			m2 := *m.MustTable("")
 			m2.parent = nil
 			return m2.Value()
-		}, "$f({t}: table) -> table", "\treturn a new table who shares all the data from t, but with no parent"),
+		}, "$f({t}: table) -> object", "\treturn a new table who shares all the data from t, but with no parent"),
 		Str("unwrap"), Func("", func(e *Env) {
 			v := e.Get(0)
 			_ = v.Type() == typ.Native && e.SetA(ValRec(v.Interface())) || e.SetA(v)
-		}, "unwrap(v: value) -> table", "\tunwrap Go's array, slice or map into table"),
-	).Object())
-	AddGlobalValue("table", TableLib)
+		}, "unwrap(v: value) -> object", "\tunwrap Go's array, slice or map into table"),
+		Str("next"), Func("", func(e *Env) {
+			e.A = Array(e.Object(-1).Next(e.Get(0)))
+		}, "$f(k: value) -> array", "\tfind next key-value pair after `k` in the object and return as [key, value]"),
+	))
+	AddGlobalValue("table", ObjectLib)
 
-	ArrayLib = TableMerge(ArrayLib, Map(
+	ArrayLib = TableMerge(ArrayLib, Obj(
+		Str("make"), Func("", func(e *Env) { e.A = Array(make([]Value, e.Int(0))...) }, "$f(n: int) -> array", "\tcreate an array of size `n`"),
+		Str("copy"), Func("", func(e *Env) { e.A = Array(append([]Value{}, e.Array(-1).store...)...) }, "$f() -> array", "\t copy the array"),
+		Str("len"), Func("", func(e *Env) { e.A = Int(e.Array(-1).Len()) }, "$f()"),
+		Str("size"), Func("", func(e *Env) { e.A = Int(e.Array(-1).Size()) }, "$f()"),
+		Str("clear"), Func("", func(e *Env) { e.Array(-1).Clear() }, "$f()"),
 		Str("append"), Func("", func(e *Env) {
-			ma := e.Array(0)
-			ma = append(ma, e.Stack()[1:]...)
-			e.A = Array(ma...)
-		}, "$f({a}: array, args...: value)", "\tappend values to array"),
+			ma := e.Array(-1)
+			ma.store = append(ma.store, e.Stack()...)
+		}, "$f(args...: value)", "\tappend values to array"),
+		Str("find"), Func("", func(e *Env) {
+			e.A = Int(-1)
+			src, ff := e.Array(-1), e.Get(0)
+			for i, v := range src.store {
+				if v.Equal(ff) {
+					e.A = Int(i)
+					break
+				}
+			}
+		}, "$f(v: value) -> int", "\tfind the index of first `v` in array"),
 		Str("filter"), Func("", func(e *Env) {
-			// ma, ff := e.Array(0), e.Func(1)
-			// a2 := make([]Value, 0, ma.ArrayLen())
-			// ma.Foreach(func(k, v Value) bool {
-			// 	if MustValue(ff.Call(v)).IsTrue() {
-			// 		a2 = append(a2, v)
-			// 	}
-			// 	return true
-			// })
-			// e.A = Array(a2...)
-		}, "$f({a}: array, f: function)", "\tfilter out all values where f(value) is false"),
+			src, ff := e.Array(-1), e.Object(0)
+			dest := make([]Value, 0, src.Len())
+			src.Foreach(func(k, v Value) bool {
+				if MustValue(ff.Call(v)).IsTrue() {
+					dest = append(dest, v)
+				}
+				return true
+			})
+			e.A = Array(dest...)
+		}, "$f(f: function) -> array", "\tfilter out all values where f(value) is false"),
+		Str("slice"), Func("", func(e *Env) {
+			e.A = Array(e.Array(-1).store[e.Int(0):e.Get(1).ToInt(e.Array(-1).Len())]...)
+		}, "$f(start: int, end?: int) -> array", "\tslice array, from start to end"),
 		Str("removeat"), Func("", func(e *Env) {
-			// ma, idx := e.Array(0), e.Int(1)
-			// if idx < 0 || idx >= len(ma.items) {
-			// 	e.A = Nil
-			// 	return
-			// }
-			// old := ma.items[idx]
-			// ma.items = append(ma.items[:idx], ma.items[idx+1:]...)
-			// if old != Nil {
-			// 	ma.count--
-			// }
-			// e.A = old
-		}, "$f({a}: array, index: int)", "\tremove value at `index`"),
+			ma, idx := e.Array(-1), e.Int(0)
+			if idx < 0 || idx >= ma.Len() {
+				e.A = Nil
+			} else {
+				old := ma.store[idx]
+				ma.store = append(ma.store[:idx], ma.store[idx+1:]...)
+				e.A = old
+			}
+		}, "$f(index: int)", "\tremove value at `index`"),
 		Str("concat"), Func("", func(e *Env) {
-			// ma, mb := e.Table(0), e.Table(1)
-			// for _, b := range mb.ArrayPart() {
-			// 	ma.Set(Int(len(ma.items)), b)
-			// }
-			// e.A = ma.Value()
-		}, "$f({array1}: array, array2: array)", "\tput elements from array2 to array1's end"),
+			ma := e.Array(-1)
+			ma.store = append(ma.store, e.Array(0).store...)
+			e.A = ma.Value()
+		}, "$f(array2: array)", "\tconcat two arrays"),
 	).Object())
 	AddGlobalValue("array", ArrayLib)
 
-	encDecProto := Proto(Map(
+	encDecProto := Proto(Obj(
 		Str("encoder"), Func("", func(e *Env) {
 			enc := Nil
 			buf := &bytes.Buffer{}
@@ -257,32 +259,17 @@ func init() {
 		i, ok := e.Interface(1).([]byte)
 		_ = ok && e.SetA(Bytes(i)) || e.SetA(Str(e.Get(1).String()))
 	}).Object().Merge(nil,
-		Str("size"), Func("", func(e *Env) {
-			e.A = Int(e.StrLen(-1))
-		}, "$f() -> int"),
-		Str("len"), Func("", func(e *Env) {
-			e.A = Int(e.StrLen(-1))
-		}, "$f() -> int"),
-		Str("count"), Func("", func(e *Env) {
-			e.A = Int(utf8.RuneCountInString(e.Str(-1)))
-		}, "$f() -> int", "\treturn count of runes in text"),
-		Str("from"), Func("", func(e *Env) {
-			e.A = Str(fmt.Sprint(e.Interface(0)))
-		}, "$f(v: value) -> string", "\tconvert value to string"),
-		Str("iequals"), Func("", func(e *Env) {
-			e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0)))
-		}, "$f(text2: string) -> bool"),
-		Str("contains"), Func("", func(e *Env) {
-			e.A = Bool(strings.Contains(e.Str(-1), e.Str(0)))
-		}, "$f(substr: string) bool"),
-		Str("containsany"), Func("", func(e *Env) {
-			e.A = Bool(strings.ContainsAny(e.Str(-1), e.Str(0)))
-		}, "$f(chars: string) bool"),
-		Str("split"), Func3("", func(src, delim, n Value) Value {
-			s := src.MustStr("text")
-			d := delim.MustStr("delimeter")
+		Str("size"), Func("", func(e *Env) { e.A = Int(e.StrLen(-1)) }, "$f() -> int"),
+		Str("len"), Func("", func(e *Env) { e.A = Int(e.StrLen(-1)) }, "$f() -> int"),
+		Str("count"), Func("", func(e *Env) { e.A = Int(utf8.RuneCountInString(e.Str(-1))) }, "$f() -> int", "\treturn count of runes in text"),
+		Str("from"), Func("", func(e *Env) { e.A = Str(fmt.Sprint(e.Interface(0))) }, "$f(v: value) -> string", "\tconvert value to string"),
+		Str("iequals"), Func("", func(e *Env) { e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0))) }, "$f(text2: string) -> bool"),
+		Str("contains"), Func("", func(e *Env) { e.A = Bool(strings.Contains(e.Str(-1), e.Str(0))) }, "$f(substr: string) -> bool"),
+		Str("containsany"), Func("", func(e *Env) { e.A = Bool(strings.ContainsAny(e.Str(-1), e.Str(0))) }, "$f(chars: string) -> bool"),
+		Str("split"), Func("", func(e *Env) {
+			s, d := e.Str(-1), e.Str(0)
 			var r []Value
-			if n := n.ToInt64(0); n == 0 {
+			if n := e.Get(1).ToInt64(0); n == 0 {
 				for _, p := range strings.Split(s, d) {
 					r = append(r, Str(p))
 				}
@@ -291,41 +278,40 @@ func init() {
 					r = append(r, Str(p))
 				}
 			}
-			return Array(r...)
-		}, "split({text}: string, delim: string, n?: int) array"),
-		Str("join"), Func2("", func(delim, array Value) Value {
-			// d := delim.MustStr("delimeter")
-			// buf := &bytes.Buffer{}
-			// for _, a := range array.MustTable("").ArrayPart() {
-			// 	buf.WriteString(a.String())
-			// 	buf.WriteString(d)
-			// }
-			// if buf.Len() > 0 {
-			// 	buf.Truncate(buf.Len() - len(d))
-			// }
-			// return Bytes(buf.Bytes())
-			return Nil
-		}, "$f({text}: string, a: array) -> string"),
+			e.A = Array(r...)
+		}, "$f(delim: string, n?: int) -> array"),
+		Str("join"), Func("", func(e *Env) {
+			d := e.Str(-1)
+			buf := &bytes.Buffer{}
+			for _, a := range e.Array(0).store {
+				buf.WriteString(a.String())
+				buf.WriteString(d)
+			}
+			if buf.Len() > 0 {
+				buf.Truncate(buf.Len() - len(d))
+			}
+			e.A = Bytes(buf.Bytes())
+		}, "$f(a: array) -> string"),
 		Str("replace"), Func("", func(e *Env) {
-			e.A = Str(strings.Replace(e.Str(0), e.Str(1), e.Str(2), e.Get(3).ToInt(-1)))
-		}, "$f({text}: string, old: string, new: string) -> string"),
-		Str("match"), Func2("", func(pattern, str Value) Value {
-			m, err := filepath.Match(pattern.MustStr("pattern"), str.MustStr("text"))
+			e.A = Str(strings.Replace(e.Str(-1), e.Str(0), e.Str(1), e.Get(2).ToInt(-1)))
+		}, "$f(old: string, new: string, count?: int) -> string"),
+		Str("match"), Func("", func(e *Env) {
+			m, err := filepath.Match(e.Str(-1), e.Str(0))
 			internal.PanicErr(err)
-			return Bool(m)
-		}, "$f({pattern}: string, text: string) -> bool"),
+			e.A = Bool(m)
+		}, "$f(text: string) -> bool"),
 		Str("find"), Func("", func(e *Env) {
-			e.A = Int(strings.Index(e.Str(0), e.Str(1)))
-		}, "$f({text}: string, sub: string) -> int", "\tfind index of first appearence of `sub` in `text`"),
+			e.A = Int(strings.Index(e.Str(-1), e.Str(0)))
+		}, "$f(sub: string) -> int", "\tfind index of first appearence of `sub` in text"),
 		Str("findany"), Func("", func(e *Env) {
-			e.A = Int(strings.IndexAny(e.Str(0), e.Str(1)))
-		}, "$f({text}: string, charset: string) -> int", "\tfind index of first appearence of any char from `charset` in `text`"),
+			e.A = Int(strings.IndexAny(e.Str(-1), e.Str(0)))
+		}, "$f(charset: string) -> int", "\tfind index of first appearence of any char from `charset` in text"),
 		Str("rfind"), Func("", func(e *Env) {
-			e.A = Int(strings.LastIndex(e.Str(0), e.Str(1)))
-		}, "$f({text}: string, sub: string) -> int", "\tsame as find(), but from right to left"),
+			e.A = Int(strings.LastIndex(e.Str(-1), e.Str(0)))
+		}, "$f(sub: string) -> int", "\tsame as find(), but from right to left"),
 		Str("rfindany"), Func("", func(e *Env) {
-			e.A = Int(strings.LastIndexAny(e.Str(0), e.Str(1)))
-		}, "$f({text}: string, charset: string) -> int", "\tsame as findany(), but from right to left"),
+			e.A = Int(strings.LastIndexAny(e.Str(-1), e.Str(0)))
+		}, "$f(charset: string) -> int", "\tsame as findany(), but from right to left"),
 		Str("sub"), Func("", func(e *Env) {
 			s := e.Str(-1)
 			st, en := e.Int(0), e.Get(1).ToInt(len(s))
@@ -353,19 +339,19 @@ func init() {
 		Str("ord"), Func("", func(e *Env) {
 			r, sz := utf8.DecodeRuneInString(e.Str(-1))
 			e.A = Array(Int64(int64(r)), Int(sz))
-		}, "$f() -> array", "\tdecode first UTF-8 char in `text`, return { unicode, width_in_bytes }"),
+		}, "$f() -> array", "\tdecode first UTF-8 char in `text`, return [unicode, width_in_bytes]"),
 		Str("startswith"), Func("", func(e *Env) {
-			e.A = Bool(strings.HasPrefix(e.Str(0), e.Str(1)))
-		}, "$f({text}: string, prefix: string) -> bool"),
+			e.A = Bool(strings.HasPrefix(e.Str(-1), e.Str(0)))
+		}, "$f(prefix: string) -> bool"),
 		Str("endswith"), Func("", func(e *Env) {
-			e.A = Bool(strings.HasSuffix(e.Str(0), e.Str(1)))
-		}, "$f({text}: string, suffix: string) -> bool"),
+			e.A = Bool(strings.HasSuffix(e.Str(-1), e.Str(0)))
+		}, "$f(suffix: string) -> bool"),
 		Str("upper"), Func("", func(e *Env) {
-			e.A = Str(strings.ToUpper(e.Str(0)))
-		}, "$f({text}: string) -> string"),
+			e.A = Str(strings.ToUpper(e.Str(-1)))
+		}, "$f() -> string"),
 		Str("lower"), Func("", func(e *Env) {
-			e.A = Str(strings.ToLower(e.Str(0)))
-		}, "$f({text}: string) -> string"),
+			e.A = Str(strings.ToLower(e.Str(-1)))
+		}, "$f() -> string"),
 		Str("bytes"), Func("", func(e *Env) {
 			_ = e.Get(0).IsInt64() && e.SetA(Val(make([]byte, e.Int(0)))) || e.SetA(Val([]byte(e.Str(0))))
 		}, "$f({text}: string) -> go.[]byte", "\tcreate a byte array from `text`",
@@ -403,13 +389,13 @@ func init() {
 			)
 		}),
 		Str("hex"), Proto(encDecProto.Object().Parent(), Str("__name"), Str("hex")),
-		Str("base64"), Map(Str("__name"), Str("base64"),
+		Str("base64"), Obj(Str("__name"), Str("base64"),
 			Str("std"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB64(base64.StdEncoding, '='))),
 			Str("url"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB64(base64.URLEncoding, '='))),
 			Str("stdp"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB64(base64.StdEncoding, -1))),
 			Str("urlp"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB64(base64.URLEncoding, -1))),
 		),
-		Str("base32"), Map(Str("__name"), Str("base32"),
+		Str("base32"), Obj(Str("__name"), Str("base32"),
 			Str("std"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB32(base32.StdEncoding, '='))),
 			Str("hex"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB32(base32.HexEncoding, '='))),
 			Str("stdp"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB32(base32.StdEncoding, -1))),
@@ -418,7 +404,7 @@ func init() {
 	))
 	AddGlobalValue("str", StrLib)
 
-	MathLib = TableMerge(MathLib, Map(
+	MathLib = TableMerge(MathLib, Obj(
 		Str("__name"), Str("mathlib"),
 		Str("INF"), Float64(math.Inf(1)),
 		Str("NEG_INF"), Float64(math.Inf(-1)),
@@ -472,8 +458,7 @@ func init() {
 	).Object())
 	AddGlobalValue("math", MathLib)
 
-	OSLib = TableMerge(OSLib, Map(
-		Str("__name"), Str("oslib"),
+	OSLib = TableMerge(OSLib, Obj(
 		Str("args"), ValRec(os.Args),
 		Str("environ"), Func("", func(e *Env) { e.A = ValRec(os.Environ()) }),
 		Str("shell"), Func("", func(e *Env) {

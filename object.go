@@ -19,6 +19,28 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
+type List struct {
+	store []Value
+}
+
+func (a *List) Len() int { return len(a.store) }
+
+func (a *List) Size() int { return cap(a.store) }
+
+func (a *List) Value() Value { return Value{v: uint64(typ.Array), p: unsafe.Pointer(a)} }
+
+func (a *List) Get(v Value) Value { return a.store[v.Int64()] }
+
+func (a *List) Clear() { a.store = a.store[:0] }
+
+func (a *List) Foreach(f func(k, v Value) bool) {
+	for i, a := range a.store {
+		if !f(Int(i), a) {
+			break
+		}
+	}
+}
+
 type Object struct {
 	parent   *Object
 	count    int64
@@ -72,16 +94,18 @@ func (m *Object) Get(k Value) (v Value) {
 	return m.getImpl(k, true)
 }
 
-func (m *Object) getImpl(k Value, recv bool) (v Value) {
+func (m *Object) getImpl(k Value, useObjProto bool) (v Value) {
 	if k == Nil {
 		return Nil
 	}
 	if idx := m.findHash(k); idx >= 0 {
 		v = m.items[idx].Val
 	} else if m.parent != nil {
-		v = m.parent.getImpl(k, recv)
+		v = m.parent.getImpl(k, true)
+	} else if useObjProto {
+		v = ObjectLib.Object().getImpl(k, false)
 	}
-	if recv && v.IsObject() {
+	if v.IsObject() {
 		f := *v.Object()
 		f.receiver = m.Value()
 		v = f.Value()
@@ -135,14 +159,6 @@ func (m *Object) Set(k, v Value) (prev Value) {
 		internal.Panic("table set with nil key")
 	}
 
-	if m.parent != nil && !m.Contains(k) {
-		for p := m.parent; p != nil; p = p.parent {
-			if p.Contains(k) {
-				return p.Set(k, v)
-			}
-		}
-	}
-
 	if len(m.items) <= 0 {
 		m.items = make([]hashItem, 8)
 	}
@@ -158,13 +174,6 @@ func (m *Object) Delete(k Value) (prev Value) {
 	return m.delHash(k)
 }
 
-func (m *Object) RawSet(k, v Value) (prev Value) {
-	old := m.parent
-	m.parent = nil
-	prev, m.parent = m.Set(k, v), old
-	return prev
-}
-
 func (m *Object) RawGet(k Value) (v Value) {
 	old := m.parent
 	m.parent = nil
@@ -177,7 +186,6 @@ func (m *Object) setHash(incoming hashItem) (prev Value, growed bool) {
 	idx := int(incoming.Key.HashCode() % uint64(num))
 
 	for idxStart := idx; ; {
-
 		e := &m.items[idx]
 		if e.Key == Nil {
 			m.items[idx] = incoming
@@ -289,25 +297,36 @@ func (m *Object) Map() map[Value]Value {
 }
 
 func (m *Object) String() string {
-	return m.Value().String()
+	p := &bytes.Buffer{}
+	m.rawPrint(p, 0, false, false)
+	return p.String()
 }
 
 func (m *Object) rawPrint(p *bytes.Buffer, lv int, j, showParent bool) {
-	if !j {
+	if m.callable != nil {
+		if j {
+			p.WriteString("{\"<f>\":\"")
+			p.WriteString(m.callable.String())
+			p.WriteString("\",")
+		} else {
+			p.WriteString(m.callable.String())
+			p.WriteString("{")
+		}
+	} else {
 		p.WriteString(m.Name())
+		p.WriteString("{")
 	}
-	p.WriteString("{")
 	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
 		k.toString(p, lv+1, j)
 		p.WriteString(ifstr(j, ":", "="))
 		v.toString(p, lv+1, j)
 		p.WriteString(",")
 	}
-	closeBuffer(p, "}")
 	if m.parent != nil && showParent {
-		p.WriteString("^")
+		p.WriteString(ifstr(j, "\"<parent>\":", "<parent>="))
 		m.parent.rawPrint(p, lv+1, j, true)
 	}
+	closeBuffer(p, "}")
 }
 
 func (m *Object) Value() Value {
@@ -320,6 +339,9 @@ func (m *Object) Value() Value {
 func (m *Object) Name() string {
 	if m.callable != nil {
 		return m.callable.Name
+	}
+	if m.parent != nil {
+		return m.parent.Name()
 	}
 	return "object"
 }
@@ -343,10 +365,10 @@ func (m *Object) Call(args ...Value) (v1 Value, err error) {
 	if m.callable != nil {
 		defer internal.CatchErrorFuncCall(&err, m.callable.Name)
 	}
-	return m.Apply(args...), nil
+	return m.MustCall(args...), nil
 }
 
-func (m *Object) Apply(args ...Value) Value {
+func (m *Object) MustCall(args ...Value) Value {
 	if m.callable == nil {
 		return m.Value()
 	}
@@ -362,13 +384,17 @@ func (m *Object) Merge(src *Object, kvs ...Value) *Object {
 	} else {
 		m.resizeHash((m.Len() + src.Len() + len(kvs)) * 2)
 		src.Foreach(func(k, v Value) bool { m.Set(k, renameFuncName(k, v)); return true })
-		m.callable = src.callable
+		if m.callable == nil {
+			m.callable = src.callable
+		}
 	}
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		m.Set(kvs[i], renameFuncName(kvs[i], kvs[i+1]))
 	}
 	return m
 }
+
+func (m *Object) IsCallable() bool { return m.callable != nil }
 
 func (m *Object) resizeHash(newSize int) {
 	if newSize < len(m.items) {
@@ -392,6 +418,13 @@ func renameFuncName(k, v Value) Value {
 		if cls := v.Object().callable; cls != nil && cls.Name == internal.UnnamedFunc {
 			cls.Name = k.String()
 		}
+	}
+	return v
+}
+
+func setObjectRecv(v, r Value) Value {
+	if v.IsObject() {
+		v.Object().receiver = r
 	}
 	return v
 }

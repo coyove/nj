@@ -8,14 +8,12 @@ import (
 	"log"
 	"math"
 	"math/rand"
-	"net/http"
 	"os"
 	"reflect"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -101,11 +99,11 @@ end
 return foo
 `, &CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
 		v, _ := cls.Run()
-		if v := v.Func().Apply(Int64(10)); v.Int64() != 11 {
+		if v := v.Func().MustCall(Int64(10)); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v := v.Func().Apply(Int64(100)); v.Int64() != 111 {
+		if v := v.Func().MustCall(Int64(100)); v.Int64() != 111 {
 			t.Fatal(v)
 		}
 	}
@@ -122,15 +120,15 @@ end
 return foo
 `, nil)
 		v, _ := cls.Run()
-		if v := v.Func().Apply(Array(Int64(1), Int64(2), Int64(3), Int64(4))); v.Int64() != 11 {
+		if v := v.Func().MustCall(Array(Int64(1), Int64(2), Int64(3), Int64(4))); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v := v.Func().Apply(Array(Int64(10), Int64(20))); v.Int64() != 41 {
+		if v := v.Func().MustCall(Array(Int64(10), Int64(20))); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 
-		if v := v.Func().Apply(); v.Int64() != 41 {
+		if v := v.Func().MustCall(); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 	}
@@ -293,12 +291,12 @@ func TestBigList(t *testing.T) {
 		for i := 0; i < n; i++ {
 			buf.WriteString(fmt.Sprintf("a%d = %d\n", i, i))
 		}
-		buf.WriteString("return {")
+		buf.WriteString("return [")
 		for i := 0; i < n; i++ {
 			buf.WriteString(fmt.Sprintf("a%d,", i))
 		}
 		buf.Truncate(buf.Len() - 1)
-		return buf.String() + "}"
+		return buf.String() + "]"
 	}
 
 	f, _ := LoadString(makeCode(n), nil)
@@ -308,7 +306,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		if v2.Object().Get(Int64(int64(i))).Int64() != int64(i) {
+		if v2.Array().Get(Int(i)).Int() != i {
 			t.Fatal(v2)
 		}
 	}
@@ -384,14 +382,14 @@ return add`, nil)
 
 	p2, _ := LoadString(`
 local a = 100
-return {a + add(), a + add(), a + add()}
+return [a + add(), a + add(), a + add()]
 `, &CompileOptions{GlobalKeyValues: map[string]interface{}{"add": add}})
 	v, err := p2.Run()
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println(p2.PrettyCode())
-	if v1 := v.Array(); v1[0].Int64() != 101 || v1[1].Int64() != 102 || v1[2].Int64() != 103 {
+	if v1 := v.Array().store; v1[0].Int64() != 101 || v1[1].Int64() != 102 || v1[2].Int64() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())
 	}
 
@@ -450,12 +448,12 @@ func TestRHMap(t *testing.T) {
 			x = counter
 			counter++
 		}
-		m.Set(Int64(int64(x)), Int64(int64(x)))
+		m.Set(Int64(x), Int64(x))
 		m2[x] = x
 	}
 	for k := range m2 {
 		delete(m2, k)
-		m.Set(Int64(k), Nil)
+		m.Delete(Int64(k))
 		if rand.Intn(10000) == 0 {
 			break
 		}
@@ -509,21 +507,21 @@ func TestACall(t *testing.T) {
 	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	foo.Func().Apply(Nil, Int64(1), Int64(2))
+	foo.Func().MustCall(Nil, Int64(1), Int64(2))
 
 	foo = MustRun(LoadString(`function foo(a, b, m...)
 	assert(a == 1 and len(m) == 0)
     end
     return foo`, nil))
-	foo.Func().Apply(Int64(1))
+	foo.Func().MustCall(Int64(1))
 
 	foo = MustRun(LoadString(`m = {a=1}
-	function m.pow2(self)
-		return self.a * self.a
+	function m.pow2()
+		return this.a * this.a
 	end
 	a = new(m, {a=10})
     return a`, nil))
-	v := foo.Object().Gets("pow2").Func().Apply()
+	v := foo.Object().Gets("pow2").Func().MustCall()
 	if v.Int64() != 100 {
 		t.Fatal(v)
 	}
@@ -531,11 +529,11 @@ func TestACall(t *testing.T) {
 	foo = MustRun(LoadString(`m.a = 11
     return m.pow2()`, &CompileOptions{
 		GlobalKeyValues: map[string]interface{}{
-			"m": Proto(Map(
+			"m": Proto(Obj(
 				Str("a"), Int64(0),
-				Str("pow2"), Func1("pow2", func(self Value) Value {
-					i := self.Object().Gets("a").Int64()
-					return Int64(i * i)
+				Str("pow2"), Func("", func(e *Env) {
+					i := e.Object(-1).Gets("a").Int64()
+					e.A = Int64(i * i)
 				}),
 			).Object()),
 		},
@@ -545,7 +543,7 @@ func TestACall(t *testing.T) {
 	}
 
 	foo = MustRun(LoadString(`function foo(m...)
-	return sum(table:concat(m, m)...) + sum2(table:slice(m, 0, 2)...)
+	return sum(m.concat(m)...) + sum2(m.slice(0, 2)...)
     end
     return foo`, &CompileOptions{
 		GlobalKeyValues: map[string]interface{}{
@@ -561,7 +559,7 @@ func TestACall(t *testing.T) {
 			},
 		},
 	}))
-	v = foo.Func().Apply(Int64(1), Int64(2), Int64(3))
+	v = foo.Func().MustCall(Int64(1), Int64(2), Int64(3))
 	if v.Int64() != 15 {
 		t.Fatal(v)
 	}
@@ -573,7 +571,7 @@ func TestReflectedValue(t *testing.T) {
 	if x[0] != true || x[1] != false {
 		t.Fatal(x)
 	}
-	v = Map(Str("a"), Int64(1), Str("b"), Int64(2))
+	v = Obj(Str("a"), Int64(1), Str("b"), Int64(2))
 	y := v.ReflectValue(reflect.TypeOf(map[string]byte{})).Interface().(map[string]byte)
 	if y["a"] != 1 || y["b"] != 2 {
 		t.Fatal(x)
@@ -595,25 +593,6 @@ func TestReflectedValue(t *testing.T) {
 	_, err := p.Run()
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	{
-		a := []interface{}{nil}
-		a[0] = a
-		b := map[int]interface{}{1: 2}
-		b[2] = b
-		c := make(chan int, 10)
-		d := struct {
-			A int
-			b string
-			c *sync.Mutex
-			D interface{}
-		}{A: 1, b: "zzz", D: true}
-		resp, _ := http.Get("http://example.com")
-		e := resp.Body
-		f, _ := os.Stat("main_test.go")
-		g := &ExecError{}
-		fmt.Println(Stringify(a), Stringify(b), Stringify(c), Stringify(d), Stringify(e), Stringify(f), Stringify(g))
 	}
 }
 

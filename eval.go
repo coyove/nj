@@ -128,7 +128,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 						idx = vb.MustInt("array iteration") + 1
 					}
 					a := va.Array()
-					_ = idx >= len(a) && env.SetA(Array(Nil, Nil)) || env.SetA(Array(Int(idx), a[idx]))
+					_ = idx >= a.Len() && env.SetA(Array(Nil, Nil)) || env.SetA(Array(Int(idx), a.store[idx]))
 				case typ.Object:
 					k, v := va.Object().Next(vb)
 					env.A = Array(k, v)
@@ -277,8 +277,8 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 		case typ.OpArray:
 			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
-		case typ.OpMap:
-			env.A = Map(stackEnv.Stack()...)
+		case typ.OpCreateObject:
+			env.A = Obj(stackEnv.Stack()...)
 			stackEnv.Clear()
 		case typ.OpStore:
 			subject, v := env._get(opa), env._get(opb)
@@ -287,7 +287,11 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 				subject.Object().Set(env.A, v)
 			case typ.Array:
 				if env.A.IsInt64() {
-					subject.Array()[env.A.Int64()] = v
+					if a, idx := subject.Array(), env.A.Int(); idx == len(a.store) {
+						a.store = append(a.store, v)
+					} else {
+						a.store[idx] = v
+					}
 				} else {
 					internal.Panic("can't store %v into array[%v]", showType(v), showType(env.A))
 				}
@@ -303,7 +307,13 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 				env.A = a.Object().Get(idx)
 			case typ.Array:
 				if idx.IsInt64() {
-					env.A = a.Array()[idx.Int64()]
+					env.A = a.Array().store[idx.Int64()]
+				} else if idx.Type() == typ.String {
+					if f := ArrayLib.Object().Gets(idx.Str()); f != Nil {
+						env.A = setObjectRecv(f, a)
+						break
+					}
+					internal.Panic("array method %q not found", idx.Str())
 				} else {
 					internal.Panic("can't load array[%v]", showType(idx))
 				}
@@ -319,10 +329,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 					break
 				} else if idx.Type() == typ.String {
 					if f := StrLib.Object().Gets(idx.Str()); f != Nil {
-						if f.Type() == typ.Object {
-							f.Object().receiver = a
-						}
-						env.A = f
+						env.A = setObjectRecv(f, a)
 						break
 					}
 					internal.Panic("string method %q not found", idx.Str())
@@ -336,7 +343,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 		case typ.OpPushUnpack:
 			switch a := env._get(opa); a.Type() {
 			case typ.Array:
-				*stackEnv.stack = append(*stackEnv.stack, a.Array()...)
+				*stackEnv.stack = append(*stackEnv.stack, a.Array().store...)
 			case typ.Nil:
 			default:
 				internal.Panic("arguments unpacking expects array, got %v", showType(a))
@@ -368,7 +375,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 			}
 			cls := a.Object().callable
 			if cls == nil {
-				env.A = a.Object().Apply()
+				env.A = a.Object().MustCall()
 				continue
 			}
 			if opb != regPhantom {

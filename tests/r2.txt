@@ -22,7 +22,7 @@ assert( "sep5")
 assert( 1 + (1 + (1 + (1 + a))) == 6)
 assert( "sep6")
 
-c = { 1,2,3,4 }
+c = [ 1,2,3,4 ]
 assert( 1 + (1 + (1 + (1 + a))) + len(c) , 10)
 assert( "sep7")
 
@@ -37,14 +37,14 @@ local a, b, c = foo1(1, 2, 3)
 assert(a == 1 and b + c == 5)
 
 function foo1(a, b, c, x)
-    local tmp = {a, b, c}
+    local tmp = [a, b, c]
 	if x then
-		for i = 0, len(x) do tmp[len(tmp)] = x[i]  end
+		for i = 0, len(x) do tmp.append(x[i]) end
 	end
     return tmp
 end
 
-local _, _, _, x,y = foo1(1,2,3,{"4",5})
+local _, _, _, x,y = foo1(1,2,3,["4",5])
 assert(x == "4" and y == 5)
 
 function remove(el, arr)
@@ -61,11 +61,11 @@ function remove(el, arr)
 end
 
 do
-	local r = remove(1, {1, 2, 3})
+	local r = remove(1, [1, 2, 3])
 	assert(r[0] == 2 and r[1] == 3)
-	local r = remove(2, {1, 2, 3})
+	local r = remove(2, [1, 2, 3])
 	assert(r[0] == 1 and r[1] == 3)
-	local r = remove(3, {1, 2, 3})
+	local r = remove(3, [1, 2, 3])
 	println(r)
 	assert(r[0] == 1 and r[1] == 2)
 end

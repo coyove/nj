@@ -22,9 +22,9 @@ print(timer.add)
 
 function dict() return new(new(this)) end
 
-function dict.next()
-    local k, v = next(this, parent(this)._iter)
-    parent(this)._iter = k
+function dict.next2()
+    local k, v = this.next(this.parent()._iter)
+    this.parent()._iter = k
     return k, v
 end
 
@@ -33,7 +33,7 @@ m[0] = 0
 m[true] = false
 m.zz = 'zz'
 while true do
-    k, v = m.next()
+    k, v = m.next2()
     print(k ,v)
     if k == nil then
         break
@@ -49,8 +49,8 @@ function CarPrototype.toString() return ('%s %s').format(this.color, this.brand)
 
 Car = prototype(CarPrototype, {brand=''})
 
-carA = new(table.copy(Car), color='red').setBrand('ferrari')
-carB = new(table.copy(Car), color='orange').setBrand('mclaren')
+carA = new(table(Car).copy(), color='red').setBrand('ferrari')
+carB = new(table(Car).copy(), color='orange').setBrand('mclaren')
 
 assert(carA.toString(), "red ferrari")
 assert(carB.toString(), "orange mclaren")
@@ -69,7 +69,7 @@ function worker()
     print("worker after 1s")
     return 'finished'
 end
-assert(sync.map({0}, worker)[0] == 'finished')
+assert(sync.map([0], worker)[0] == 'finished')
 
 -- closure
 function foo(a)
@@ -110,7 +110,7 @@ t2 = t.copy()
 t.b =3
 assert(t2.b, 2)
 
-t = table({1,2,3,4}).filter(lambda(v) return v >= 2 end)
+t = ([1,2,3,4]).filter(lambda(v) return v >= 2 end)
 assert(t[0] == 2 and t[2] == 4)
 
 
@@ -137,5 +137,5 @@ f2.close()
 assert(open("tests/b.txt").read(), "hello worldhello zzz")
 open.close()
 
-os:remove("tests/a.txt")
-os:remove("tests/b.txt")
+os.remove("tests/a.txt")
+os.remove("tests/b.txt")

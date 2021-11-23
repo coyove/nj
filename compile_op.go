@@ -209,7 +209,7 @@ func (table *symTable) compileList(nodes []parser.Node) uint16 {
 			table.writeInst(typ.OpPush, n[i], parser.Node{})
 			table.writeInst(typ.OpPush, n[i+1], parser.Node{})
 		}
-		table.code.writeInst(typ.OpMap, 0, 0)
+		table.code.writeInst(typ.OpCreateObject, 0, 0)
 	}
 	return regA
 }

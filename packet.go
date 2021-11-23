@@ -192,16 +192,12 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 			sb.WriteString(readAddr(a, false) + " = " + readAddr(b, true))
 		case typ.OpArray:
 			sb.WriteString("array")
-		case typ.OpMap:
-			sb.WriteString("map")
+		case typ.OpCreateObject:
+			sb.WriteString("createobject")
 		case typ.OpLoadFunc:
-			if b != 0 {
-				sb.WriteString("loadstatic " + readAddr(a, true) + " " + readAddr(b, true))
-			} else {
-				cls := p.Functions[a]
-				sb.WriteString("loadfunc " + cls.callable.Name + "\n")
-				sb.WriteString(pkPrettify(cls.callable, p, false))
-			}
+			cls := p.Functions[a]
+			sb.WriteString("loadfunc " + cls.callable.Name + "\n")
+			sb.WriteString(pkPrettify(cls.callable, p, false))
 		case typ.OpTailCall, typ.OpCall:
 			if b != regPhantom {
 				sb.WriteString("push " + readAddr(b, true) + " -> ")

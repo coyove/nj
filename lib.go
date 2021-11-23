@@ -55,15 +55,12 @@ func init() {
 		e.A = r.Value()
 	}, "$f() -> table", "\tlist all global symbols and their values")
 	AddGlobalValue("doc", func(e *Env) {
-		e.A = Str(e.Object(0).callable.DocString)
+		o := e.Object(0)
+		_ = o.callable == nil && e.SetA(Nil) || e.SetA(Str(strings.Replace(o.callable.DocString, "$f", o.callable.Name, -1)))
 	}, "$f(f: function) -> string", "\treturn `f`'s documentation")
-	AddGlobalValue("new", func(v, a Value) Value {
-		m := v.MustTable("")
-		if a.Type() != typ.Object {
-			return (&Object{parent: m}).Value()
-		}
-		a.Object().SetParent(m)
-		return a
+	AddGlobalValue("new", func(e *Env) {
+		m := e.Object(0)
+		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetParent(m).Value()) || e.SetA((&Object{parent: m}).Value())
 	})
 	AddGlobalValue("prototype", g["new"])
 	AddGlobalValue("len", func(e *Env) { e.A = Int(e.Get(0).Len()) })
@@ -104,7 +101,7 @@ func init() {
 		e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
 			f := e.Object(-1).Gets("_l").Object()
 			stk := append([]Value{e.Object(-1).Gets("_c")}, e.Stack()...)
-			e.A = f.Apply(stk...)
+			e.A = f.MustCall(stk...)
 		}).Object().Merge(nil,
 			Str("_l"), e.Get(0),
 			Str("_c"), e.Get(1),
@@ -114,7 +111,7 @@ func init() {
 		"\t\t closure(f, v)(args...) <=> f(v, args...)")
 
 	// Debug libraries
-	AddGlobalValue("debug", Map(
+	AddGlobalValue("debug", Obj(
 		Str("locals"), Func("", func(e *Env) {
 			var r []Value
 			start := e.stackOffset - uint32(e.CS.StackSize)
@@ -240,8 +237,8 @@ func init() {
 		}
 		fmt.Fprintln(env.Global.Stdout)
 	}, "$f(args...: value)", "\tprint `args` to stdout with no space between them")
-	AddGlobalValue("printf", func(env *Env) {
-		sprintf(env, 0, env.Global.Stdout)
+	AddGlobalValue("printf", func(e *Env) {
+		sprintf(e, 0, e.Global.Stdout)
 	}, "$f(format: string, args...: value)")
 	AddGlobalValue("write", func(e *Env) {
 		w := NewWriter(e.Get(0))
@@ -249,11 +246,11 @@ func init() {
 			fmt.Fprint(w, a.String())
 		}
 	}, "$f(writer: value, args...: value)", "\twrite `args` to `writer`")
-	AddGlobalValue("println", func(env *Env) {
-		for _, a := range env.Stack() {
-			fmt.Fprint(env.Global.Stdout, a.String(), " ")
+	AddGlobalValue("println", func(e *Env) {
+		for _, a := range e.Stack() {
+			fmt.Fprint(e.Global.Stdout, a.String(), " ")
 		}
-		fmt.Fprintln(env.Global.Stdout)
+		fmt.Fprintln(e.Global.Stdout)
 	}, "$f(args...: value)", "\tprint values, insert space between each of them")
 	AddGlobalValue("scanln", func(env *Env) {
 		prompt, n := env.B(0), env.Get(1)
@@ -304,9 +301,9 @@ func init() {
 		env.A = Int64(int64(r))
 	}, "$f(s: string) -> int")
 
-	AddGlobalValue("re", Func("", func(e *Env) {
+	AddGlobalValue("re", Func("RegExp", func(e *Env) {
 		e.A = Proto(e.A.Object(), Str("_rx"), Val(regexp.MustCompile(e.Str(0))))
-	}, "$f(regex: string) -> table^relib", "\tcreate a regular expression object").Object().Merge(nil,
+	}, "re(regex: string) -> RegExp", "\tcreate a regular expression object").Object().Merge(nil,
 		Str("match"), Func("", func(e *Env) {
 			e.A = Bool(e.A.Object().Gets("_rx").Interface().(*regexp.Regexp).MatchString(e.Str(0)))
 		}, "$f(text: string) -> bool"),
@@ -341,7 +338,7 @@ func init() {
 		e.A = Bool(ok)
 	}, "$f(v: value) -> bool", "\treturn whether value is an error")
 
-	AddGlobalValue("json", Map(
+	AddGlobalValue("json", Obj(
 		Str("stringify"), Func("", func(e *Env) {
 			e.A = Str(e.Get(0).JSONString())
 		}, "$f(v: value) -> string"),
@@ -357,7 +354,7 @@ func init() {
 		}, "$f(j: string, selector: string, default?: value) -> value"),
 	))
 
-	AddGlobalValue("sync", Map(
+	AddGlobalValue("sync", Obj(
 		Str("mutex"), Func("", func(e *Env) { e.A = Val(&sync.Mutex{}) }, "$f() -> *go.sync.Mutex"),
 		Str("rwmutex"), Func("", func(e *Env) { e.A = Val(&sync.RWMutex{}) }, "$f() -> *go.sync.RWMutex"),
 		Str("waitgroup"), Func("", func(e *Env) { e.A = Val(&sync.WaitGroup{}) }, "$f() -> *go.sync.WaitGroup"),
@@ -387,9 +384,9 @@ func init() {
 						}
 						outLock.Lock()
 						if e.A.Type() == typ.Array {
-							e.A.Array()[p[0].Int()] = res
+							e.A.Array().store[p[0].Int()] = res
 						} else {
-							e.A.Object().RawSet(p[0], res)
+							e.A.Object().Set(p[0], res)
 						}
 						outLock.Unlock()
 					}
@@ -402,12 +399,6 @@ func init() {
 		}, "$f(t: table, f: function, n: int) -> table",
 			"\tmap values in `t` into new values using f(k, v) concurrently on `n` goroutines (defaults to the number of CPUs)"),
 	))
-	AddGlobalValue("next", func(e *Env) {
-		e.A = Array(e.Object(0).Next(e.Get(1)))
-	}, "next(t: table, k: value) -> array", "\tfind next key-value pair after `k` in the table and return as { next_key, next_value }")
-	AddGlobalValue("parent", func(e *Env) {
-		e.A = e.Object(0).Parent().Value()
-	}, "parent(t: table) -> table", "\tfind given table's parent, or nil if not existed")
 
 	AddGlobalValue("open", Func("", func(e *Env) {
 		path, flag, perm := e.Str(0), e.Get(1).ToStr("r"), e.Get(2).ToInt64(0644)
@@ -433,9 +424,9 @@ func init() {
 		internal.PanicErr(err)
 		e.Object(-1).Set(Zero, Val(f))
 
-		e.A = Proto(ReadWriteSeekCloserProto,
+		e.A = Func("FileObject", nil).Object().Merge(nil,
 			Str("_f"), Val(f),
-			Str("__name"), Str(f.Name()),
+			Str("path"), Str(f.Name()),
 			Str("sync"), Func("", func(e *Env) {
 				internal.PanicErr(e.Object(-1).Gets("_f").Interface().(*os.File).Sync())
 			}),
@@ -451,8 +442,8 @@ func init() {
 				internal.PanicErr(err)
 				e.A = Int64(t)
 			}),
-		)
-	}, "open(path: string, flag: string, perm: int) -> table^"+ReadWriteSeekCloserProto.Name()).Object().Merge(nil,
+		).SetParent(ReadWriteSeekCloserProto).Value()
+	}, "$f(path: string, flag: string, perm: int) -> FileObject").Object().Merge(nil,
 		Str("close"), Func("", func(e *Env) {
 			f, _ := e.Object(-1).Get(Zero).Interface().(*os.File)
 			if f != nil {

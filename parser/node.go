@@ -294,7 +294,7 @@ func (n Node) append(n2 ...Node) Node {
 
 func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
 	if len(n.Nodes()) == 3 {
-		if s := n.Nodes()[0].Sym(); s == ALoad || s == ALoadStatic {
+		if s := n.Nodes()[0].Sym(); s == ALoad {
 			return __store(n.Nodes()[1], n.Nodes()[2], v)
 		}
 	}

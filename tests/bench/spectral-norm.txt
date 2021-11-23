@@ -30,24 +30,24 @@ function TimesTranspVec(k, args)
 end
 
 function ATimesTransp(v, u)
-    x = table:makearray(len(u)) 
+    x = array.make(len(u)) 
 
-    payload = table()
+    payload = []
     for i = 0, nCPU do
-        payload.append({x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u})
+        payload.append([x, i*len(v)/nCPU, (i+1)*len(v)/nCPU, u])
     end
-    sync:map(payload, TimesVec, n=nCPU)
+    sync.map(payload, TimesVec, n=nCPU)
 
     payload.clear()
     for i = 0, nCPU do
-        payload.append({v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x})
+        payload.append([v, i*len(v)/nCPU, (i+1)*len(v)/nCPU, x])
     end
-    sync:map(payload, TimesTranspVec, n=nCPU)
+    sync.map(payload, TimesTranspVec, n=nCPU)
 end
 
 n = 5500
-u = {} 
-v = {} 
+u = array.make(n) 
+v = array.make(n) 
  
 for idx = 0, n do
     u[idx] = 1 
