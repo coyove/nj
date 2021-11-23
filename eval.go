@@ -317,7 +317,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 				} else {
 					internal.Panic("can't load array[%v]", showType(idx))
 				}
-			case typ.Native, typ.Func:
+			case typ.Native:
 				env.A = reflectLoad(a.Interface(), idx)
 			case typ.String:
 				if idx.Type() == typ.Number {

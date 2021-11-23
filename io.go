@@ -181,7 +181,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Gets("readbuf"); rb.IsObject() {
-			v, err := rb.Func().Call(Val(p))
+			v, err := rb.Object().Call(Val(p))
 			if err != nil {
 				return 0, err
 			}
@@ -191,7 +191,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			return int(n), err
 		}
 		if rb := Value(m).Object().Gets("read"); rb.IsObject() {
-			v, err := rb.Func().Call(Int(len(p)))
+			v, err := rb.Object().Call(Int(len(p)))
 			if err != nil {
 				return 0, err
 			}
@@ -212,11 +212,11 @@ func (m ValueIO) Write(p []byte) (int, error) {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Gets("write"); rb.IsObject() {
-			v, err := rb.Func().Call(Bytes(p))
+			v, err := rb.Object().Call(Bytes(p))
 			if err != nil {
 				return 0, err
 			}
-			return int(v.MustInt64("ValueIO.Write: (int, error)")), nil
+			return v.Is(typ.Number, "ValueIO.Write: (int, error)").Int(), nil
 		}
 	}
 	return 0, fmt.Errorf("writer not implemented")
@@ -230,11 +230,10 @@ func (m ValueIO) Close() error {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Gets("close"); rb.IsObject() {
-			v, err := rb.Func().Call()
-			if err != nil {
+			if _, err := rb.Object().Call(); err != nil {
 				return err
 			}
-			return v.Interface().(error)
+			return nil
 		}
 	}
 	return fmt.Errorf("closer not implemented")

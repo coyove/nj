@@ -99,11 +99,11 @@ end
 return foo
 `, &CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
 		v, _ := cls.Run()
-		if v := v.Func().MustCall(Int64(10)); v.Int64() != 11 {
+		if v := v.Object().MustCall(Int64(10)); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v := v.Func().MustCall(Int64(100)); v.Int64() != 111 {
+		if v := v.Object().MustCall(Int64(100)); v.Int64() != 111 {
 			t.Fatal(v)
 		}
 	}
@@ -120,15 +120,15 @@ end
 return foo
 `, nil)
 		v, _ := cls.Run()
-		if v := v.Func().MustCall(Array(Int64(1), Int64(2), Int64(3), Int64(4))); v.Int64() != 11 {
+		if v := v.Object().MustCall(Array(Int64(1), Int64(2), Int64(3), Int64(4))); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v := v.Func().MustCall(Array(Int64(10), Int64(20))); v.Int64() != 41 {
+		if v := v.Object().MustCall(Array(Int64(10), Int64(20))); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 
-		if v := v.Func().MustCall(); v.Int64() != 41 {
+		if v := v.Object().MustCall(); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 	}
@@ -507,13 +507,13 @@ func TestACall(t *testing.T) {
 	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	foo.Func().MustCall(Nil, Int64(1), Int64(2))
+	foo.Object().MustCall(Nil, Int64(1), Int64(2))
 
 	foo = MustRun(LoadString(`function foo(a, b, m...)
 	assert(a == 1 and len(m) == 0)
     end
     return foo`, nil))
-	foo.Func().MustCall(Int64(1))
+	foo.Object().MustCall(Int64(1))
 
 	foo = MustRun(LoadString(`m = {a=1}
 	function m.pow2()
@@ -521,7 +521,7 @@ func TestACall(t *testing.T) {
 	end
 	a = new(m, {a=10})
     return a`, nil))
-	v := foo.Object().Gets("pow2").Func().MustCall()
+	v := foo.Object().Gets("pow2").Object().MustCall()
 	if v.Int64() != 100 {
 		t.Fatal(v)
 	}
@@ -559,7 +559,7 @@ func TestACall(t *testing.T) {
 			},
 		},
 	}))
-	v = foo.Func().MustCall(Int64(1), Int64(2), Int64(3))
+	v = foo.Object().MustCall(Int64(1), Int64(2), Int64(3))
 	if v.Int64() != 15 {
 		t.Fatal(v)
 	}

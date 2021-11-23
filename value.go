@@ -356,9 +356,6 @@ func (v Value) Object() *Object { return (*Object)(v.p) }
 
 func (v Value) Array() *List { return (*List)(v.p) }
 
-// Func returns value as a function, non-function value yield nil
-func (v Value) Func() *Object { return v.Object() }
-
 // Interface returns value as an interface{}
 func (v Value) Interface() interface{} {
 	switch v.Type() {
@@ -375,8 +372,6 @@ func (v Value) Interface() interface{} {
 		return v.Object()
 	case typ.Array:
 		return v.Array()
-	case typ.Func:
-		return v.Func()
 	case typ.Native:
 		return *(*interface{})(v.p)
 	}
@@ -399,7 +394,7 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 		return reflect.Zero(t)
 	} else if v.IsObject() && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
-			out := v.Func().MustCall(valReflectValues(args)...)
+			out := v.Object().MustCall(valReflectValues(args)...)
 			if to := t.NumOut(); to == 1 {
 				results = []reflect.Value{out.ReflectValue(t.Out(0))}
 			} else if to > 1 {
@@ -455,14 +450,6 @@ func (v Value) MustFloat64(msg string) float64 { return v.Is(typ.Number, msg).Fl
 
 func (v Value) MustTable(msg string) *Object { return v.Is(typ.Object, msg).Object() }
 
-func (v Value) MustFunc(msg string) *Object {
-	f := v.Func()
-	if f == nil {
-		internal.Panic(msg+ifstr(msg != "", ": ", "")+"expect function or callable table, got %v", showType(v))
-	}
-	return f
-}
-
 func (v Value) Is(t typ.ValueType, msg string) Value {
 	if v.Type() != t {
 		if msg != "" {
@@ -471,13 +458,6 @@ func (v Value) Is(t typ.ValueType, msg string) Value {
 		internal.Panic("expect %v, got %v", t, showType(v))
 	}
 	return v
-}
-
-func (v Value) Recv(k string) Value {
-	if v.Type() != typ.Object {
-		internal.Panic("method expects receiver, got %v, did you misuse 'table.key' and 'table:key'?", showType(v))
-	}
-	return v.Object().Gets(k)
 }
 
 // Equal tests whether two values are equal
@@ -537,8 +517,6 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 			return true
 		})
 		closeBuffer(p, "]")
-	case typ.Func:
-		p.WriteString(ifquote(j, v.Func().String()))
 	case typ.Native:
 		i := v.Interface()
 		if s, ok := i.(fmt.Stringer); ok {
@@ -577,10 +555,6 @@ func (v Value) ToFloat64(d float64) float64 {
 		return v.Float64()
 	}
 	return d
-}
-
-func (v Value) ToFunc() *Object {
-	return v.Func()
 }
 
 func (v Value) ToObject() *Object {

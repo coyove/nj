@@ -56,8 +56,6 @@ type symTable struct {
 
 	forLoops []*breakLabel
 
-	this bool
-
 	vp uint16
 
 	collectConstMode bool
