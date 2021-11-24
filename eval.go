@@ -274,7 +274,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 			} else {
 				internal.Panic("bitwise not "+errNeedNumber, showType(a))
 			}
-		case typ.OpArray:
+		case typ.OpCreateArray:
 			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
 		case typ.OpCreateObject:
@@ -363,11 +363,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 			stackEnv.stackOffset = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
 		case typ.OpLoadFunc:
-			if opb != 0 {
-				env.A = env._get(opa).MustTable("loadstatic").getImpl(env._get(opb), false)
-			} else {
-				env.A = env.Global.Functions[opa].ToValue()
-			}
+			env.A = env.Global.Functions[opa].ToValue()
 		case typ.OpCall, typ.OpTailCall:
 			a := env._get(opa)
 			if a.Type() != typ.Object {

@@ -190,7 +190,7 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 		switch bop {
 		case typ.OpSet:
 			sb.WriteString(readAddr(a, false) + " = " + readAddr(b, true))
-		case typ.OpArray:
+		case typ.OpCreateArray:
 			sb.WriteString("array")
 		case typ.OpCreateObject:
 			sb.WriteString("createobject")

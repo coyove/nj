@@ -29,7 +29,7 @@ const (
 	OpLoadFunc
 	OpPush
 	OpPushUnpack
-	OpArray
+	OpCreateArray
 	OpCreateObject
 	OpCall
 	OpTailCall

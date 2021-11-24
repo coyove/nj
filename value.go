@@ -363,10 +363,10 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 		return reflect.ValueOf(v.Interface())
 	} else if t == reflect.TypeOf(Value{}) {
 		return reflect.ValueOf(v)
-	} else if t.Implements(ioWriterType) || t.Implements(ioReaderType) || t.Implements(ioCloserType) {
-		return reflect.ValueOf(ValueIO(v))
 	} else if vt := v.Type(); vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
 		return reflect.Zero(t)
+	} else if t.Implements(ioWriterType) || t.Implements(ioReaderType) || t.Implements(ioCloserType) {
+		return reflect.ValueOf(ValueIO(v))
 	} else if v.IsObject() && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
 			out := v.Object().MustCall(valReflectValues(args)...)

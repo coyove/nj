@@ -102,7 +102,7 @@ func init() {
 	).ToValue()
 	AddGlobalValue("table", ObjectLib)
 
-	ArrayLib = TableMerge(ArrayLib, Obj(
+	ArrayLib = Func("arary", nil).Object().Merge(nil,
 		Str("make"), Func("", func(e *Env) { e.A = Array(make([]Value, e.Int(0))...) }, "$f(n: int) -> array", "\tcreate an array of size `n`"),
 		Str("len"), Func("", func(e *Env) { e.A = Int(e.Array(-1).Len()) }, "$f()"),
 		Str("size"), Func("", func(e *Env) { e.A = Int(e.Array(-1).Size()) }, "$f()"),
@@ -152,7 +152,7 @@ func init() {
 			a.Concat(e.Array(0))
 			e.A = a.ToValue()
 		}, "$f(array2: array) -> array", "\tconcat two arrays"),
-	).Object())
+	).ToValue()
 	AddGlobalValue("array", ArrayLib)
 
 	encDecProto := Proto(Obj(

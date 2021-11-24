@@ -202,7 +202,7 @@ func (table *symTable) compileList(nodes []parser.Node) uint16 {
 		for _, x := range nodes[1].Nodes() {
 			table.writeInst(typ.OpPush, x, parser.Node{})
 		}
-		table.code.writeInst(typ.OpArray, 0, 0)
+		table.code.writeInst(typ.OpCreateArray, 0, 0)
 	} else {
 		n := nodes[1].Nodes()
 		for i := 0; i < len(n); i += 2 {

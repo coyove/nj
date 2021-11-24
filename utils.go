@@ -2,15 +2,21 @@ package nj
 
 import (
 	"bytes"
+	"fmt"
 	"reflect"
 	"strconv"
-	"strings"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
 
 func reflectLoad(v interface{}, key Value) Value {
+	defer func() {
+		if r := recover(); r != nil {
+			panic(fmt.Errorf("reflectLoad %T.%s: %v", v, key, r))
+		}
+	}()
+
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
@@ -20,66 +26,37 @@ func reflectLoad(v interface{}, key Value) Value {
 		}
 	}
 
-	k := key.MustStr("index key")
+	k := key.Is(typ.String, "").Str()
 	f := rv.MethodByName(k)
 	if !f.IsValid() {
-		if rv.Kind() == reflect.Ptr {
-			rv = rv.Elem()
-		}
-		f = rv.FieldByName(k)
-		if !f.IsValid() || !(k[0] >= 'A' && k[0] <= 'Z') {
-			return reflectLoadCaseless(v, k)
+		f = reflect.Indirect(rv).FieldByName(k)
+		if !f.IsValid() {
+			return Nil
 		}
 	}
 	return Val(f.Interface())
 }
 
-func reflectLoadCaseless(v interface{}, k string) Value {
-	rv := reflect.ValueOf(v)
-	rt := reflect.TypeOf(v)
-	for i := 0; i < rt.NumMethod(); i++ {
-		if strings.EqualFold(rt.Method(i).Name, k) {
-			return Val(rv.Method(i).Interface())
-		}
-	}
-	if rv.Kind() == reflect.Ptr {
-		rv, rt = rv.Elem(), rt.Elem()
-	}
-	for i := 0; i < rt.NumField(); i++ {
-		if strings.EqualFold(rt.Field(i).Name, k) {
-			return Val(rv.Field(i).Interface())
-		}
-	}
-	return Nil
-}
-
 func reflectStore(subject interface{}, key, value Value) {
-	rv := reflect.ValueOf(subject)
-	switch rv.Kind() {
-	case reflect.Map:
-		rk := key.ReflectValue(rv.Type().Key())
-		if value == Nil {
-			rv.SetMapIndex(rk, reflect.Value{})
-		} else {
-			rv.SetMapIndex(rk, value.ReflectValue(rv.Type().Elem()))
+	defer func() {
+		if r := recover(); r != nil {
+			panic(fmt.Errorf("reflectStore %T.%s: %v", subject, key, r))
 		}
+	}()
+
+	rv := reflect.ValueOf(subject)
+	if rv.Kind() == reflect.Map {
+		rv.SetMapIndex(key.ReflectValue(rv.Type().Key()), value.ReflectValue(rv.Type().Elem()))
 		return
 	}
 
-	if rv.Kind() == reflect.Ptr {
-		rv = rv.Elem()
-	}
-
-	k := key.MustStr("index key")
+	rv = reflect.Indirect(rv)
+	k := key.Is(typ.String, "").Str()
 	f := rv.FieldByName(k)
 	if !f.IsValid() || !f.CanAddr() {
 		internal.Panic("reflect: %q not assignable in %v", k, subject)
 	}
-	if f.Type() == reflect.TypeOf(Value{}) {
-		f.Set(reflect.ValueOf(value))
-	} else {
-		f.Set(value.ReflectValue(f.Type()))
-	}
+	f.Set(value.ReflectValue(f.Type()))
 }
 
 func closeBuffer(p *bytes.Buffer, suffix string) {
