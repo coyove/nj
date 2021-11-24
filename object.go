@@ -105,7 +105,7 @@ func (m *Object) getImpl(k Value, useObjProto bool) (v Value) {
 	} else if useObjProto {
 		v = ObjectLib.Object().getImpl(k, false)
 	}
-	if v.IsObject() {
+	if v.IsObject() && v.Object().callable != nil {
 		f := *v.Object()
 		f.receiver = m.Value()
 		v = f.Value()
@@ -380,9 +380,9 @@ func (m *Object) MustCall(args ...Value) Value {
 
 func (m *Object) Merge(src *Object, kvs ...Value) *Object {
 	if src == nil {
-		m.resizeHash((m.Len() + len(kvs)) * 2)
+		m.resizeHash((m.Len()+len(kvs))*2 + 1)
 	} else {
-		m.resizeHash((m.Len() + src.Len() + len(kvs)) * 2)
+		m.resizeHash((m.Len()+src.Len()+len(kvs))*2 + 1)
 		src.Foreach(func(k, v Value) bool { m.Set(k, renameFuncName(k, v)); return true })
 		if m.callable == nil {
 			m.callable = src.callable

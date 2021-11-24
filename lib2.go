@@ -123,7 +123,7 @@ func init() {
 		Str("unwrap"), Func("", func(e *Env) {
 			v := e.Get(0)
 			_ = v.Type() == typ.Native && e.SetA(ValRec(v.Interface())) || e.SetA(v)
-		}, "unwrap(v: value) -> object", "\tunwrap Go's array, slice or map into table"),
+		}, "$f(v: value) -> object", "\tunwrap Go's array, slice or map into object"),
 		Str("next"), Func("", func(e *Env) {
 			e.A = Array(e.Object(-1).Next(e.Get(0)))
 		}, "$f(k: value) -> array", "\tfind next key-value pair after `k` in the object and return as [key, value]"),
@@ -235,7 +235,7 @@ func init() {
 		}),
 	)
 
-	StrLib = TableMerge(StrLib, Func("", func(e *Env) {
+	StrLib = TableMerge(StrLib, Func("String", func(e *Env) {
 		i, ok := e.Interface(1).([]byte)
 		_ = ok && e.SetA(Bytes(i)) || e.SetA(Str(e.Get(1).String()))
 	}).Object().Merge(nil,
@@ -245,7 +245,6 @@ func init() {
 		Str("from"), Func("", func(e *Env) { e.A = Str(fmt.Sprint(e.Interface(0))) }, "$f(v: value) -> string", "\tconvert value to string"),
 		Str("iequals"), Func("", func(e *Env) { e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0))) }, "$f(text2: string) -> bool"),
 		Str("contains"), Func("", func(e *Env) { e.A = Bool(strings.Contains(e.Str(-1), e.Str(0))) }, "$f(substr: string) -> bool"),
-		Str("containsany"), Func("", func(e *Env) { e.A = Bool(strings.ContainsAny(e.Str(-1), e.Str(0))) }, "$f(chars: string) -> bool"),
 		Str("split"), Func("", func(e *Env) {
 			s, d := e.Str(-1), e.Str(0)
 			var r []Value
@@ -282,16 +281,10 @@ func init() {
 		}, "$f(text: string) -> bool"),
 		Str("find"), Func("", func(e *Env) {
 			e.A = Int(strings.Index(e.Str(-1), e.Str(0)))
-		}, "$f(sub: string) -> int", "\tfind index of first appearence of `sub` in text"),
-		Str("findany"), Func("", func(e *Env) {
-			e.A = Int(strings.IndexAny(e.Str(-1), e.Str(0)))
-		}, "$f(charset: string) -> int", "\tfind index of first appearence of any char from `charset` in text"),
-		Str("rfind"), Func("", func(e *Env) {
+		}, "$f(sub: string) -> int", "\tfind the index of first appearence of `sub` in text"),
+		Str("findlast"), Func("", func(e *Env) {
 			e.A = Int(strings.LastIndex(e.Str(-1), e.Str(0)))
-		}, "$f(sub: string) -> int", "\tsame as find(), but from right to left"),
-		Str("rfindany"), Func("", func(e *Env) {
-			e.A = Int(strings.LastIndexAny(e.Str(-1), e.Str(0)))
-		}, "$f(charset: string) -> int", "\tsame as findany(), but from right to left"),
+		}, "$f(sub: string) -> int", "\tsame as find(), but starting from right to left"),
 		Str("sub"), Func("", func(e *Env) {
 			s := e.Str(-1)
 			st, en := e.Int(0), e.Get(1).ToInt(len(s))
@@ -304,18 +297,18 @@ func init() {
 		Str("trim"), Func("", func(e *Env) {
 			_ = e.Get(0).IsNil() && e.SetA(Str(strings.TrimSpace(e.Str(-1)))) || e.SetA(Str(strings.Trim(e.Str(-1), e.Str(0))))
 		}, "$f(cutset?: string) -> string", "\ttrim spaces (or any chars in `cutset`) at both sides of the text"),
-		Str("lremove"), Func("", func(e *Env) {
+		Str("trimprefix"), Func("", func(e *Env) {
 			e.A = Str(strings.TrimPrefix(e.Str(-1), e.Str(0)))
-		}, "$f(prefix: string) -> string", "\tremove `prefix` of the text"),
-		Str("rremove"), Func("", func(e *Env) {
+		}, "$f(prefix: string) -> string", "\ttrim `prefix` of the text"),
+		Str("trimsuffix"), Func("", func(e *Env) {
 			e.A = Str(strings.TrimSuffix(e.Str(-1), e.Str(0)))
-		}, "$f(suffix: string) -> string", "\tremove `suffix` of the text"),
-		Str("ltrim"), Func("", func(e *Env) {
+		}, "$f(suffix: string) -> string", "\ttrim `suffix` of the text"),
+		Str("trimleft"), Func("", func(e *Env) {
 			e.A = Str(strings.TrimLeft(e.Str(-1), e.Str(0)))
-		}, "$f(cutset: string) -> string", "\tremove chars both ocurred in `cutset` and left-side of `text`"),
-		Str("rtrim"), Func("", func(e *Env) {
+		}, "$f(cutset: string) -> string", "\ttrim the left side of the text using every char in `cutset`"),
+		Str("trimright"), Func("", func(e *Env) {
 			e.A = Str(strings.TrimRight(e.Str(-1), e.Str(0)))
-		}, "$f(cutset: string) -> string", "\tremove chars both ocurred in `cutset` and right-side of `text`"),
+		}, "$f(cutset: string) -> string", "\ttrim the right side of the text using every char in `cutset`"),
 		Str("ord"), Func("", func(e *Env) {
 			r, sz := utf8.DecodeRuneInString(e.Str(-1))
 			e.A = Array(Int64(int64(r)), Int(sz))
@@ -326,7 +319,7 @@ func init() {
 		Str("lower"), Func("", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }, "$f() -> string"),
 		Str("bytes"), Func("", func(e *Env) {
 			_ = e.Get(0).IsInt64() && e.SetA(Val(make([]byte, e.Int(0)))) || e.SetA(Val([]byte(e.Str(0))))
-		}, "$f({text}: string) -> go.[]byte", "\tcreate a byte array from `text`",
+		}, "$f() -> go.[]byte", "\tconvert text to []byte",
 			"$f(n: int) -> go.[]byte", "\tcreate an n-byte long array"),
 		Str("chars"), Func("", func(e *Env) {
 			var r []Value
@@ -350,7 +343,7 @@ func init() {
 			if v := e.Get(0); v != Nil {
 				b.WriteString(v.String())
 			}
-			e.A = Proto(ReadWriterProto,
+			e.A = Func("Buffer", nil).Object().SetParent(ReadWriterProto).Merge(nil,
 				Str("_f"), Val(b),
 				Str("reset"), Func("", func(e *Env) {
 					e.Object(-1).Gets("_f").Interface().(*bytes.Buffer).Reset()
@@ -358,7 +351,7 @@ func init() {
 				Str("value"), Func("", func(e *Env) {
 					e.A = Bytes(e.Object(-1).Gets("_f").Interface().(*bytes.Buffer).Bytes())
 				}),
-			)
+			).Value()
 		}),
 		Str("hex"), Proto(encDecProto.Object().Parent(), Str("__name"), Str("hex")),
 		Str("base64"), Obj(Str("__name"), Str("base64"),

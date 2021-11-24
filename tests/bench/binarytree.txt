@@ -7,7 +7,7 @@ end
 
 function itemCheck(n)
     if (len(n) == 0) then return 1 end
-    return itemCheck(n:left) + itemCheck(n:right) + 1
+    return itemCheck(n.left) + itemCheck(n.right) + 1
 end
 
 minDepth = 4 
@@ -16,11 +16,11 @@ if (minDepth + 2 > n) then maxDepth = minDepth + 2 end
 stretchDepth = maxDepth + 1 
 
 check_l = itemCheck(bottomUpTree(stretchDepth)) 
-print(str:from("stretch tree of depth %d\t check: %v").format(stretchDepth, check_l) )
+print(str.from("stretch tree of depth %d\t check: %v").format(stretchDepth, check_l) )
 return
 
 longLivedTree = bottomUpTree(maxDepth) 
-result = table:makearray(maxDepth+1) 
+result = array.makearray(maxDepth+1) 
 
 function worker(k, args)
     local depth, check = args[0], args[1]
@@ -30,17 +30,17 @@ function worker(k, args)
     for i = 0,iterations do
         check = check + itemCheck(bottomUpTree(depth)) 
     end
-    result[depth] = str:from("%d\t trees of depth %d\t check: %v").format(iterations, depth, check)
+    result[depth] = str.from("%d\t trees of depth %d\t check: %v").format(iterations, depth, check)
 end
 
 payload = table()
 for depth_l = minDepth,maxDepth,2 do
-    payload.append({depth_l, check_l})
+    payload.append([depth_l, check_l])
 end
-sync:map(payload, worker)
+sync.map(payload, worker)
 
 for depth = minDepth,maxDepth,2 do
     print(result[depth]) 
 end
 
-print(str:from("long lived tree of depth %d\t check: %v\n").format(maxDepth, itemCheck(longLivedTree)))
+print(str.from("long lived tree of depth %d\t check: %v\n").format(maxDepth, itemCheck(longLivedTree)))

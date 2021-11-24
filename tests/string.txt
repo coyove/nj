@@ -16,8 +16,8 @@ assert(err.Error() == "err")
 assert("eerrrr" == re("(e|r)").replace(err.Error(), "$1$1"))
 
 assert("x" == str.from("嘻x嘻").trim("嘻"))
-assert("嘻x" == str.from("嘻x嘻").rtrim("嘻"))
-assert("x嘻" == str.from("嘻x嘻").ltrim("嘻"))
+assert("嘻x" == str.from("嘻x嘻").trimright("嘻"))
+assert("x嘻" == str.from("嘻x嘻").trimleft("嘻"))
 
 -- json generator
 do
