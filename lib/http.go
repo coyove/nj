@@ -30,7 +30,7 @@ func init() {
 	))
 	nj.AddGlobalValue("http", nj.Func("http", func(env *nj.Env) {
 		args := env.Get(0).Object()
-		to := args.Gets("timeout").ToFloat64(1 << 30)
+		to := args.Prop("timeout").ToFloat64(1 << 30)
 
 		method := strings.ToUpper(args.Get(nj.Str("method")).ToStr("GET"))
 
@@ -64,7 +64,7 @@ func init() {
 		var bodyReader io.Reader
 		dataFrom, urlForm, jsonForm := (*multipart.Writer)(nil), false, false
 
-		if j := args.Gets("json"); j != nj.Nil {
+		if j := args.Prop("json"); j != nj.Nil {
 			bodyReader = strings.NewReader(j.JSONString())
 			jsonForm = true
 		} else {
@@ -73,7 +73,7 @@ func init() {
 			urlForm = len(form) > 0
 			if urlForm {
 				bodyReader = strings.NewReader(form.Encode())
-			} else if rd := args.Gets("data"); rd != nj.Nil {
+			} else if rd := args.Prop("data"); rd != nj.Nil {
 				bodyReader = nj.NewReader(rd)
 			}
 		}
@@ -82,7 +82,7 @@ func init() {
 			// Check form-data
 			payload := bytes.Buffer{}
 			writer := multipart.NewWriter(&payload)
-			if x := args.Gets("multipart"); x.Type() == typ.Object {
+			if x := args.Prop("multipart"); x.Type() == typ.Object {
 				x.Object().Foreach(func(k, v nj.Value) bool {
 					key := k.MustStr("multipart key")
 					filename := ""
@@ -147,7 +147,7 @@ func init() {
 		internal.PanicErr(err)
 
 		var buf nj.Value
-		if args.Gets("bodyreader").IsFalse() && args.Gets("br").IsFalse() {
+		if args.Prop("bodyreader").IsFalse() && args.Prop("br").IsFalse() {
 			resp.Body.Close()
 		} else {
 			buf = nj.Proto(nj.ReadCloserProto, nj.Str("_f"), nj.Val(resp.Body))

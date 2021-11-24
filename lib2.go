@@ -14,10 +14,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
-	"unsafe"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -34,53 +32,31 @@ var (
 
 func init() {
 	IOLib = TableMerge(IOLib, Obj(
-		Str("reader"), ReaderProto.Value(),
-		Str("writer"), WriterProto.Value(),
-		Str("seeker"), SeekerProto.Value(),
-		Str("closer"), CloserProto.Value(),
-		Str("readwriter"), ReadWriterProto.Value(),
-		Str("readcloser"), ReadCloserProto.Value(),
-		Str("writecloser"), WriteCloserProto.Value(),
-		Str("readwritecloser"), ReadWriteCloserProto.Value(),
-		Str("readwriteseekcloser"), ReadWriteSeekCloserProto.Value(),
+		Str("reader"), ReaderProto.ToValue(),
+		Str("writer"), WriterProto.ToValue(),
+		Str("seeker"), SeekerProto.ToValue(),
+		Str("closer"), CloserProto.ToValue(),
+		Str("readwriter"), ReadWriterProto.ToValue(),
+		Str("readcloser"), ReadCloserProto.ToValue(),
+		Str("writecloser"), WriteCloserProto.ToValue(),
+		Str("readwritecloser"), ReadWriteCloserProto.ToValue(),
+		Str("readwriteseekcloser"), ReadWriteSeekCloserProto.ToValue(),
 	).Object())
 	AddGlobalValue("io", IOLib)
 
-	ObjectLib = TableMerge(ObjectLib, Func("object", func(e *Env) {
-		if e.Get(0) == Nil {
-			e.A = Proto(e.Object(-1))
-		} else {
-			e.A = e.Object(0).SetFirstParent(e.Object(-1)).Value()
-		}
+	ObjectLib = Func("object", func(e *Env) {
+		_ = e.Get(0).IsNil() && e.SetA(Proto(e.Object(-1))) || e.SetA(e.Object(0).SetFirstParent(e.Object(-1)).ToValue())
 	}).Object().Merge(nil,
-		Str("concurrent"), Func("", func(e *Env) {
-			x := NewObject(e.Object(-1).Len())
-			ObjectLib.Object().Foreach(func(k, v Value) bool {
-				if v.IsObject() {
-					if old := v.Object(); old.IsCallable() {
-						v = Func(old.callable.Name, func(e *Env) {
-							mu := e.Object(-1).Gets("_mu").Interface().(*sync.Mutex)
-							mu.Lock()
-							defer mu.Unlock()
-							e.A = old.MustCall(e.Stack()...)
-						}, old.callable.DocString)
-					}
-				}
-				x.Set(k, v)
-				return true
-			})
-			x.Sets("_mu", Val(&sync.Mutex{}))
-			_ = e.Get(1).IsNil() && e.SetA(Proto(x)) || e.SetA(e.Object(1).SetFirstParent(x).Value())
-		}, "$f() -> object", "\tcreate a concurrently accessible object"),
-		Str("make"), Func("", func(e *Env) { e.A = NewObject(e.Get(0).ToInt(0)).Value() }, "$f(n: int) -> object", "\tcreate an object"),
+		Str("make"), Func("", func(e *Env) { e.A = NewObject(e.Get(0).ToInt(0)).ToValue() }, "$f(size?: int) -> object", "\tcreate an object"),
 		Str("get"), Func("", func(e *Env) { e.A = e.Object(-1).Get(e.Get(0)) }, "$f(k: value) -> value"),
 		Str("set"), Func("", func(e *Env) { e.A = e.Object(-1).Set(e.Get(0), e.Get(1)) }, "$f(k: value, v: value) -> value", "\tset value and return previous value"),
 		Str("rawget"), Func("", func(e *Env) { e.A = e.Object(-1).RawGet(e.Get(0)) }, "$f(k: value) -> value"),
+		Str("delete"), Func("", func(e *Env) { e.A = e.Object(-1).Delete(e.Get(0)) }, "$f(k: value) -> value", "\tdelete value and return previous value"),
 		Str("clear"), Func("", func(e *Env) { e.Object(-1).Clear() }, "$f()"),
-		Str("copy"), Func("", func(e *Env) { e.A = e.Object(-1).Copy().Value() }, "$f() -> object", "\tcopy the object"),
-		Str("parent"), Func("", func(e *Env) { e.A = e.Object(-1).Parent().Value() }, "$f() -> object", "\treturn object's parent if any"),
-		Str("setparent"), Func("", func(e *Env) { e.Object(-1).SetParent(e.Object(0)) }, "$f(p: table)", "\tset object's parent"),
-		Str("setfirstparent"), Func("", func(e *Env) { e.Object(-1).SetFirstParent(e.Object(0)) }, "$f(p: table)", "\tinsert `p` as `t`'s first parent"),
+		Str("copy"), Func("", func(e *Env) { e.A = e.Object(-1).Copy().ToValue() }, "$f() -> object", "\tcopy the object"),
+		Str("parent"), Func("", func(e *Env) { e.A = e.Object(-1).Parent().ToValue() }, "$f() -> object", "\treturn object's parent if any"),
+		Str("setparent"), Func("", func(e *Env) { e.Object(-1).SetParent(e.Object(0)) }, "$f(p: object)", "\tset object's parent to `p`"),
+		Str("setfirstparent"), Func("", func(e *Env) { e.Object(-1).SetFirstParent(e.Object(0)) }, "$f(p: object)", "\tinsert `p` as `t`'s first parent"),
 		Str("size"), Func("", func(e *Env) { e.A = Int(e.Object(-1).Size()) }, "$f() -> int", "\treturn the size of object"),
 		Str("len"), Func("", func(e *Env) { e.A = Int(e.Object(-1).Len()) }, "$f() -> int", "\treturn the count of keys in object"),
 		Str("keys"), Func("", func(e *Env) {
@@ -97,7 +73,7 @@ func init() {
 			a := make([]Value, 0)
 			e.Object(-1).Foreach(func(k, v Value) bool { a = append(a, Array(k, v)); return true })
 			e.A = Array(a...)
-		}, "$f() -> array", "return as [[key1, value1], [key2, value2], ...]"),
+		}, "$f() -> [[value, value]]", "return as [[key1, value1], [key2, value2], ...]"),
 		Str("foreach"), Func("", func(e *Env) {
 			f := e.Object(0)
 			e.Object(-1).Foreach(func(k, v Value) bool { return f.MustCall(k, v) == Nil })
@@ -107,44 +83,36 @@ func init() {
 			e.Object(-1).Foreach(func(k, v Value) bool { found = v.Equal(b); return !found })
 			e.A = Bool(found)
 		}, "$f(v: value) -> bool"),
-		Str("merge"), Func2("", func(a, b Value) Value {
-			return a.MustTable("").Merge(b.MustTable("")).Value()
-		}, "$f({table1}: table, table2: table)", "\tmerge elements from table2 to table1"),
+		Str("merge"), Func("", func(e *Env) {
+			e.A = e.Object(-1).Merge(e.Object(0)).ToValue()
+		}, "$f(obj2: object)", "\tmerge elements from `obj2`"),
 		Str("tostring"), Func("", func(e *Env) {
 			p := &bytes.Buffer{}
 			e.Object(-1).rawPrint(p, 0, true, true)
-			e.A = Bytes(p.Bytes())
-		}, "$f() -> string", "\tprint raw elements in table"),
-		Str("pure"), Func1("", func(m Value) Value {
-			m2 := *m.MustTable("")
+			e.A = UnsafeStr(p.Bytes())
+		}, "$f() -> string", "\tprint raw elements in object"),
+		Str("pure"), Func("", func(e *Env) {
+			m2 := *e.Object(-1)
 			m2.parent = nil
-			return m2.Value()
-		}, "$f({t}: table) -> object", "\treturn a new table who shares all the data from t, but with no parent"),
-		Str("unwrap"), Func("", func(e *Env) {
-			v := e.Get(0)
-			_ = v.Type() == typ.Native && e.SetA(ValRec(v.Interface())) || e.SetA(v)
-		}, "$f(v: value) -> object", "\tunwrap Go's array, slice or map into object"),
+			e.A = m2.ToValue()
+		}, "$f() -> object", "\treturn a new object who shares all the data from the original, but with no parent"),
 		Str("next"), Func("", func(e *Env) {
 			e.A = Array(e.Object(-1).Next(e.Get(0)))
-		}, "$f(k: value) -> array", "\tfind next key-value pair after `k` in the object and return as [key, value]"),
-	))
+		}, "$f(k: value) -> [value, value]", "\tfind next key-value pair after `k` in the object and return as [key, value]"),
+	).ToValue()
 	AddGlobalValue("table", ObjectLib)
 
 	ArrayLib = TableMerge(ArrayLib, Obj(
 		Str("make"), Func("", func(e *Env) { e.A = Array(make([]Value, e.Int(0))...) }, "$f(n: int) -> array", "\tcreate an array of size `n`"),
-		Str("copy"), Func("", func(e *Env) { e.A = Array(append([]Value{}, e.Array(-1).store...)...) }, "$f() -> array", "\t copy the array"),
 		Str("len"), Func("", func(e *Env) { e.A = Int(e.Array(-1).Len()) }, "$f()"),
 		Str("size"), Func("", func(e *Env) { e.A = Int(e.Array(-1).Size()) }, "$f()"),
 		Str("clear"), Func("", func(e *Env) { e.Array(-1).Clear() }, "$f()"),
-		Str("append"), Func("", func(e *Env) {
-			ma := e.Array(-1)
-			ma.store = append(ma.store, e.Stack()...)
-		}, "$f(args...: value)", "\tappend values to array"),
+		Str("append"), Func("", func(e *Env) { e.Array(-1).Append(e.Stack()...) }, "$f(args...: value)", "\tappend values to array"),
 		Str("find"), Func("", func(e *Env) {
 			e.A = Int(-1)
 			src, ff := e.Array(-1), e.Get(0)
-			for i, v := range src.store {
-				if v.Equal(ff) {
+			for i := 0; i < src.Len(); i++ {
+				if src.Get(i).Equal(ff) {
 					e.A = Int(i)
 					break
 				}
@@ -162,23 +130,28 @@ func init() {
 			e.A = Array(dest...)
 		}, "$f(f: function) -> array", "\tfilter out all values where f(value) is false"),
 		Str("slice"), Func("", func(e *Env) {
-			e.A = Array(e.Array(-1).store[e.Int(0):e.Get(1).ToInt(e.Array(-1).Len())]...)
+			e.A = e.Array(-1).Slice(e.Int(0), e.Get(1).ToInt(e.Array(-1).Len())).ToValue()
 		}, "$f(start: int, end?: int) -> array", "\tslice array, from start to end"),
 		Str("removeat"), Func("", func(e *Env) {
 			ma, idx := e.Array(-1), e.Int(0)
 			if idx < 0 || idx >= ma.Len() {
 				e.A = Nil
 			} else {
-				old := ma.store[idx]
-				ma.store = append(ma.store[:idx], ma.store[idx+1:]...)
+				old := ma.Get(idx)
+				ma.Slice(0, idx).Concat(ma.Slice(idx+1, ma.Len()))
 				e.A = old
 			}
 		}, "$f(index: int)", "\tremove value at `index`"),
+		Str("copy"), Func("", func(e *Env) {
+			a := e.Array(-1)
+			a.Copy(e.Int(0), e.Int(1), e.Array(2))
+			e.A = a.ToValue()
+		}, "$f(start: int, end: int, src: array) -> array", "\tcopy elements from `src` to `this[start:end]`"),
 		Str("concat"), Func("", func(e *Env) {
-			ma := e.Array(-1)
-			ma.store = append(ma.store, e.Array(0).store...)
-			e.A = ma.Value()
-		}, "$f(array2: array)", "\tconcat two arrays"),
+			a := e.Array(-1)
+			a.Concat(e.Array(0))
+			e.A = a.ToValue()
+		}, "$f(array2: array) -> array", "\tconcat two arrays"),
 	).Object())
 	AddGlobalValue("array", ArrayLib)
 
@@ -186,7 +159,7 @@ func init() {
 		Str("encoder"), Func("", func(e *Env) {
 			enc := Nil
 			buf := &bytes.Buffer{}
-			switch encoding := e.Object(-1).Gets("_e").Interface().(type) {
+			switch encoding := e.Object(-1).Prop("_e").Interface().(type) {
 			default:
 				enc = Val(hex.NewEncoder(buf))
 			case *base32.Encoding:
@@ -198,14 +171,17 @@ func init() {
 				Str("_f"), Val(enc),
 				Str("_b"), Val(buf),
 				Str("value"), Func("", func(e *Env) {
-					e.A = Bytes(e.Object(-1).Gets("_b").Interface().(*bytes.Buffer).Bytes())
+					e.A = Str(e.Object(-1).Prop("_b").Interface().(*bytes.Buffer).String())
+				}),
+				Str("bytes"), Func("", func(e *Env) {
+					e.A = Bytes(e.Object(-1).Prop("_b").Interface().(*bytes.Buffer).Bytes())
 				}),
 			)
 		}),
 		Str("decoder"), Func("", func(e *Env) {
 			src := NewReader(e.Get(0))
 			dec := Nil
-			switch encoding := e.Object(-1).Gets("_e").Interface().(type) {
+			switch encoding := e.Object(-1).Prop("_e").Interface().(type) {
 			case *base64.Encoding:
 				dec = Val(base64.NewDecoder(encoding, src))
 			case *base32.Encoding:
@@ -218,16 +194,18 @@ func init() {
 	).Object(),
 		Str("__name"), Str("encdecfast"),
 		Str("encode"), Func("", func(e *Env) {
-			x := struct {
-				a string
-				c int
-			}{a: e.Str(0), c: e.StrLen(0)}
-			e.A = Str(e.Object(-1).Gets("_e").Interface().(interface {
+			var x []byte
+			if e.Get(0).Type() == typ.String {
+				x = []byte(e.Str(0))
+			} else {
+				x = e.Interface(0).([]byte)
+			}
+			e.A = Str(e.Object(-1).Prop("_e").Interface().(interface {
 				EncodeToString([]byte) string
-			}).EncodeToString(*(*[]byte)(unsafe.Pointer(&x))))
+			}).EncodeToString(x))
 		}),
 		Str("decode"), Func("", func(e *Env) {
-			v, err := e.Object(-1).Gets("_e").Interface().(interface {
+			v, err := e.Object(-1).Prop("_e").Interface().(interface {
 				DecodeString(string) ([]byte, error)
 			}).DecodeString(e.Str(0))
 			internal.PanicErr(err)
@@ -235,9 +213,9 @@ func init() {
 		}),
 	)
 
-	StrLib = TableMerge(StrLib, Func("String", func(e *Env) {
-		i, ok := e.Interface(1).([]byte)
-		_ = ok && e.SetA(Bytes(i)) || e.SetA(Str(e.Get(1).String()))
+	StrLib = Func("String", func(e *Env) {
+		i, ok := e.Interface(0).([]byte)
+		_ = ok && e.SetA(UnsafeStr(i)) || e.SetA(Str(e.Get(0).String()))
 	}).Object().Merge(nil,
 		Str("size"), Func("", func(e *Env) { e.A = Int(e.StrLen(-1)) }, "$f() -> int"),
 		Str("len"), Func("", func(e *Env) { e.A = Int(e.StrLen(-1)) }, "$f() -> int"),
@@ -262,14 +240,15 @@ func init() {
 		Str("join"), Func("", func(e *Env) {
 			d := e.Str(-1)
 			buf := &bytes.Buffer{}
-			for _, a := range e.Array(0).store {
-				buf.WriteString(a.String())
+			e.Array(0).Foreach(func(k, v Value) bool {
+				buf.WriteString(v.String())
 				buf.WriteString(d)
-			}
+				return true
+			})
 			if buf.Len() > 0 {
 				buf.Truncate(buf.Len() - len(d))
 			}
-			e.A = Bytes(buf.Bytes())
+			e.A = UnsafeStr(buf.Bytes())
 		}, "$f(a: array) -> string"),
 		Str("replace"), Func("", func(e *Env) {
 			e.A = Str(strings.Replace(e.Str(-1), e.Str(0), e.Str(1), e.Get(2).ToInt(-1)))
@@ -336,7 +315,7 @@ func init() {
 		Str("format"), Func("", func(e *Env) {
 			buf := &bytes.Buffer{}
 			sprintf(e, -1, buf)
-			e.A = Bytes(buf.Bytes())
+			e.A = UnsafeStr(buf.Bytes())
 		}, "$f(args...: value) -> string"),
 		Str("buffer"), Func("", func(e *Env) {
 			b := &bytes.Buffer{}
@@ -346,12 +325,15 @@ func init() {
 			e.A = Func("Buffer", nil).Object().SetParent(ReadWriterProto).Merge(nil,
 				Str("_f"), Val(b),
 				Str("reset"), Func("", func(e *Env) {
-					e.Object(-1).Gets("_f").Interface().(*bytes.Buffer).Reset()
+					e.Object(-1).Prop("_f").Interface().(*bytes.Buffer).Reset()
 				}),
 				Str("value"), Func("", func(e *Env) {
-					e.A = Bytes(e.Object(-1).Gets("_f").Interface().(*bytes.Buffer).Bytes())
+					e.A = UnsafeStr(e.Object(-1).Prop("_f").Interface().(*bytes.Buffer).Bytes())
 				}),
-			).Value()
+				Str("bytes"), Func("", func(e *Env) {
+					e.A = Bytes(e.Object(-1).Prop("_f").Interface().(*bytes.Buffer).Bytes())
+				}),
+			).ToValue()
 		}),
 		Str("hex"), Proto(encDecProto.Object().Parent(), Str("__name"), Str("hex")),
 		Str("base64"), Obj(Str("__name"), Str("base64"),
@@ -366,10 +348,10 @@ func init() {
 			Str("stdp"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB32(base32.StdEncoding, -1))),
 			Str("hexp"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB32(base32.HexEncoding, -1))),
 		),
-	))
+	).ToValue()
 	AddGlobalValue("str", StrLib)
 
-	MathLib = TableMerge(MathLib, Obj(
+	MathLib = Obj(
 		Str("__name"), Str("mathlib"),
 		Str("INF"), Float64(math.Inf(1)),
 		Str("NEG_INF"), Float64(math.Inf(-1)),
@@ -420,20 +402,20 @@ func init() {
 			a, b := math.Modf(e.Float64(0))
 			e.A = Array(Float64(a), Float64(b))
 		}),
-	).Object())
+	)
 	AddGlobalValue("math", MathLib)
 
-	OSLib = TableMerge(OSLib, Obj(
-		Str("args"), ValRec(os.Args),
-		Str("environ"), Func("", func(e *Env) { e.A = ValRec(os.Environ()) }),
+	OSLib = Obj(
+		Str("args"), Val(os.Args),
+		Str("environ"), Func("", func(e *Env) { e.A = Val(os.Environ()) }),
 		Str("shell"), Func("", func(e *Env) {
 			p := exec.Command("sh", "-c", e.Str(0))
 			opt := e.Get(1)
 			timeout := time.Duration(1 << 62) // basically forever
-			if tmp := opt.ToTableGets("timeout"); tmp != Nil {
+			if tmp := opt.ToObject().Prop("timeout"); tmp != Nil {
 				timeout = time.Duration(tmp.MustFloat64("timeout") * float64(time.Second))
 			}
-			if tmp := opt.ToTableGets("env"); tmp != Nil {
+			if tmp := opt.ToObject().Prop("env"); tmp != Nil {
 				tmp.MustTable("env").Foreach(func(k, v Value) bool {
 					p.Env = append(p.Env, k.String()+"="+v.String())
 					return true
@@ -441,14 +423,14 @@ func init() {
 			}
 			stdout := &bytes.Buffer{}
 			p.Stdout, p.Stderr = stdout, stdout
-			p.Dir = opt.ToTableGets("dir").ToStr("")
-			if tmp := opt.ToTableGets("stdout"); tmp != Nil {
+			p.Dir = opt.ToObject().Prop("dir").ToStr("")
+			if tmp := opt.ToObject().Prop("stdout"); tmp != Nil {
 				p.Stdout = NewWriter(tmp)
 			}
-			if tmp := opt.ToTableGets("stderr"); tmp != Nil {
+			if tmp := opt.ToObject().Prop("stderr"); tmp != Nil {
 				p.Stderr = NewWriter(tmp)
 			}
-			if tmp := opt.ToTableGets("stdin"); tmp != Nil {
+			if tmp := opt.ToObject().Prop("stdin"); tmp != Nil {
 				p.Stdin = NewReader(tmp)
 			}
 
@@ -466,7 +448,7 @@ func init() {
 		Str("readdir"), Func("", func(e *Env) {
 			fi, err := ioutil.ReadDir(e.Str(0))
 			internal.PanicErr(err)
-			e.A = ValRec(fi)
+			e.A = Val(fi)
 		}),
 		Str("remove"), Func("", func(e *Env) {
 			path := e.Str(0)
@@ -482,7 +464,7 @@ func init() {
 			fi, err := os.Stat(e.Str(0))
 			_ = err == nil && e.SetA(Val(fi))
 		}),
-	).Object())
+	)
 	AddGlobalValue("os", OSLib)
 }
 

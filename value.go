@@ -110,7 +110,7 @@ func Int64(i int64) Value {
 
 // Array creates an array consists of given arguments
 func Array(m ...Value) Value {
-	return (&List{store: m}).Value()
+	return (&Sequence{meta: internalSequenceMeta, internal: m}).ToValue()
 }
 
 // Obj creates a map from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
@@ -134,12 +134,12 @@ func TableMerge(dst Value, src *Object) Value {
 		return dst
 	}
 	t.Merge(src)
-	return t.Value()
+	return t.ToValue()
 }
 
 // Proto creates a table whose parent will be set to `p`
 func Proto(p *Object, kvs ...Value) Value {
-	return Obj(kvs...).Object().SetParent(p).Value()
+	return Obj(kvs...).Object().SetParent(p).ToValue()
 }
 
 // Str creates a string value
@@ -155,6 +155,10 @@ func Str(s string) Value {
 	return Value{v: uint64(typ.String), p: unsafe.Pointer(&s)}
 }
 
+func UnsafeStr(s []byte) Value {
+	return Str(*(*string)(unsafe.Pointer(&s)))
+}
+
 // Byte creates a one-byte string value
 func Byte(s byte) Value {
 	x := [8]byte{s}
@@ -168,11 +172,12 @@ func Rune(r rune) Value {
 	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStrMarker) + uintptr(n)*8)}
 }
 
-// Bytes creates a string value from bytes
-func Bytes(b []byte) Value { return Str(*(*string)(unsafe.Pointer(&b))) }
+// Bytes creates a bytes array
+func Bytes(b []byte) Value {
+	return NewSequence(b, bytesSequenceMeta).ToValue()
+}
 
 // Val creates a `Value` from golang `interface{}`
-// `slice`, `array` and `map` will be left as is (except []Value), to convert them recursively, use ValRec instead
 func Val(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
@@ -187,8 +192,10 @@ func Val(i interface{}) Value {
 		return Int64(v)
 	case string:
 		return Str(v)
+	case []byte:
+		return Bytes(v)
 	case *Object:
-		return v.Value()
+		return v.ToValue()
 	case []Value:
 		return Array(v...)
 	case Value:
@@ -211,7 +218,7 @@ func Val(i interface{}) Value {
 		} else if v.IsObject() {
 			x := NewObject(len(v.Raw) / 10)
 			v.ForEach(func(k, v gjson.Result) bool { x.Set(Val(k), Val(v)); return true })
-			return x.Value()
+			return x.ToValue()
 		}
 		return Nil
 	}
@@ -223,6 +230,8 @@ func Val(i interface{}) Value {
 		return Int64(int64(rv.Uint()))
 	} else if (k == reflect.Ptr || k == reflect.Interface) && rv.IsNil() {
 		return Nil
+	} else if k == reflect.Array || k == reflect.Slice {
+		return NewSequence(i, GetGenericSequenceMeta(i)).ToValue()
 	} else if k == reflect.Func {
 		nf, _ := i.(func(*Env))
 		if nf == nil {
@@ -256,27 +265,9 @@ func Val(i interface{}) Value {
 				}
 			}
 		}
-		return (&Object{callable: &FuncBody{Name: "<" + rv.Type().String() + ">", Native: nf}}).Value()
+		return (&Object{callable: &FuncBody{Name: "<" + rv.Type().String() + ">", Native: nf}}).ToValue()
 	}
 	return intf(i)
-}
-
-func ValRec(v interface{}) Value {
-	switch rv := reflect.ValueOf(v); rv.Kind() {
-	case reflect.Map:
-		m := NewObject(rv.Len() + 1)
-		for iter := rv.MapRange(); iter.Next(); {
-			m.Set(ValRec(iter.Key()), Val(iter.Value()))
-		}
-		return m.Value()
-	case reflect.Array, reflect.Slice:
-		a := make([]Value, rv.Len())
-		for i := range a {
-			a[i] = ValRec(rv.Index(i))
-		}
-		return Array(a...)
-	}
-	return Val(v)
 }
 
 func valReflectValues(args []reflect.Value) (a []Value) {
@@ -288,22 +279,6 @@ func valReflectValues(args []reflect.Value) (a []Value) {
 
 func intf(i interface{}) Value {
 	return Value{v: uint64(typ.Native), p: unsafe.Pointer(&i)}
-}
-
-func showType(v Value) string {
-	switch vt := v.Type(); vt {
-	case typ.Number, typ.Bool, typ.Native:
-		return v.JSONString()
-	case typ.String:
-		if v.StrLen() <= 32 {
-			return v.JSONString()
-		}
-		return strconv.Quote(v.Str()[:32] + "...")
-	case typ.Object:
-		return "{" + v.Object().Name() + "}"
-	default:
-		return vt.String()
-	}
 }
 
 func (v Value) isSmallString() bool {
@@ -354,7 +329,7 @@ func (v Value) Bool() bool { return v.p == trueMarker }
 // Object returns value as a table without checking Type()
 func (v Value) Object() *Object { return (*Object)(v.p) }
 
-func (v Value) Array() *List { return (*List)(v.p) }
+func (v Value) Array() *Sequence { return (*Sequence)(v.p) }
 
 // Interface returns value as an interface{}
 func (v Value) Interface() interface{} {
@@ -371,7 +346,7 @@ func (v Value) Interface() interface{} {
 	case typ.Object:
 		return v.Object()
 	case typ.Array:
-		return v.Array()
+		return v.Array().Unwrap()
 	case typ.Native:
 		return *(*interface{})(v.p)
 	}
@@ -401,7 +376,7 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 				out.Is(typ.Array, "ReflectValue: expect multiple returned arguments")
 				results = make([]reflect.Value, t.NumOut())
 				for i := range results {
-					results[i] = out.Array().Get(Int(i)).ReflectValue(t.Out(i))
+					results[i] = out.Array().Get(i).ReflectValue(t.Out(i))
 				}
 			}
 			return
@@ -409,7 +384,11 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	} else if vt == typ.Number && t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
 		return reflect.ValueOf(v.Interface()).Convert(t)
 	} else if vt == typ.Array {
-		switch a := v.Array(); t.Kind() {
+		a := v.Array()
+		if t == reflect.TypeOf(a.Unwrap()) {
+			return reflect.ValueOf(a.Unwrap())
+		}
+		switch t.Kind() {
 		case reflect.Slice:
 			s := reflect.MakeSlice(t, a.Len(), a.Len())
 			a.Foreach(func(k, v Value) bool { s.Index(k.Int()).Set(v.ReflectValue(t.Elem())); return true })
@@ -476,7 +455,7 @@ func (v Value) HashCode() uint64 {
 		}
 		return code
 	}
-	return v.v * uint64(uintptr(v.p))
+	return v.v * uint64(^uintptr(v.p))
 }
 
 func (v Value) String() string {
@@ -568,7 +547,7 @@ func (v Value) ToTableGets(key string) Value {
 	if v.Type() != typ.Object {
 		return Nil
 	}
-	return v.Object().Gets(key)
+	return v.Object().Prop(key)
 }
 
 func (v Value) ForEach(f func(k, v Value) bool) {
@@ -592,8 +571,9 @@ func (v Value) Len() int {
 		return v.Object().Len()
 	case typ.Nil:
 		return 0
-	case typ.Number, typ.Bool:
-		internal.Panic("can't measure length of %v", v.Type())
+	case typ.Native:
+		internal.Panic("can't measure length of %T", v.Interface())
 	}
-	return reflectLen(v.Interface())
+	internal.Panic("can't measure length of %v", v.Type())
+	return -1
 }

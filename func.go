@@ -49,7 +49,7 @@ func Func(name string, f func(*Env), doc ...string) Value {
 			Native:    f,
 			DocString: strings.Join(doc, "\n"),
 		},
-	}).Value()
+	}).ToValue()
 }
 
 func Func1(name string, f func(Value) Value, doc ...string) Value {

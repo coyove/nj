@@ -66,5 +66,5 @@ for i = 0, len(v) do
     vv = vv + v[i] * v[i]
 end
 
-println(math:sqrt(vBv/vv)) 
+println(math.sqrt(vBv/vv)) 
     

@@ -19,28 +19,6 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
-type List struct {
-	store []Value
-}
-
-func (a *List) Len() int { return len(a.store) }
-
-func (a *List) Size() int { return cap(a.store) }
-
-func (a *List) Value() Value { return Value{v: uint64(typ.Array), p: unsafe.Pointer(a)} }
-
-func (a *List) Get(v Value) Value { return a.store[v.Int64()] }
-
-func (a *List) Clear() { a.store = a.store[:0] }
-
-func (a *List) Foreach(f func(k, v Value) bool) {
-	for i, a := range a.store {
-		if !f(Int(i), a) {
-			break
-		}
-	}
-}
-
 type Object struct {
 	parent   *Object
 	count    int64
@@ -59,16 +37,34 @@ func NewObject(size int) *Object {
 	if size >= 8 {
 		size *= 2
 	}
-	return &Object{items: make([]hashItem, int64(size))}
+	return &Object{items: make([]hashItem, size)}
 }
 
-func (m *Object) Parent() *Object { return m.parent }
+func (m *Object) Parent() *Object {
+	if m == nil {
+		return nil
+	}
+	return m.parent
+}
 
-func (m *Object) SetParent(m2 *Object) *Object { m.parent = m2; return m }
+func (m *Object) SetParent(m2 *Object) *Object {
+	m.parent = m2
+	return m
+}
 
-func (m *Object) Size() int { return len(m.items) }
+func (m *Object) Size() int {
+	if m == nil {
+		return 0
+	}
+	return len(m.items)
+}
 
-func (m *Object) Len() int { return int(m.count) }
+func (m *Object) Len() int {
+	if m == nil {
+		return 0
+	}
+	return int(m.count)
+}
 
 // Clear clears the table, where already allocated memory will be reused.
 func (m *Object) Clear() {
@@ -85,7 +81,7 @@ func (m *Object) SetFirstParent(m2 *Object) *Object {
 	return m
 }
 
-func (m *Object) Gets(k string) (v Value) {
+func (m *Object) Prop(k string) (v Value) {
 	return m.getImpl(Str(k), true)
 }
 
@@ -95,7 +91,7 @@ func (m *Object) Get(k Value) (v Value) {
 }
 
 func (m *Object) getImpl(k Value, useObjProto bool) (v Value) {
-	if k == Nil {
+	if m == nil || k == Nil {
 		return Nil
 	}
 	if idx := m.findHash(k); idx >= 0 {
@@ -107,8 +103,8 @@ func (m *Object) getImpl(k Value, useObjProto bool) (v Value) {
 	}
 	if v.IsObject() && v.Object().callable != nil {
 		f := *v.Object()
-		f.receiver = m.Value()
-		v = f.Value()
+		f.receiver = m.ToValue()
+		v = f.ToValue()
 	}
 	return v
 }
@@ -143,14 +139,10 @@ func (m *Object) findHash(k Value) int {
 }
 
 func (m *Object) Contains(k Value) bool {
-	if k == Nil {
+	if m == nil || k == Nil {
 		return false
 	}
 	return m.findHash(k) >= 0
-}
-
-func (m *Object) Sets(k string, v Value) (prev Value) {
-	return m.Set(Str(k), v)
 }
 
 // Set upserts a key-value pair into the table
@@ -175,6 +167,9 @@ func (m *Object) Delete(k Value) (prev Value) {
 }
 
 func (m *Object) RawGet(k Value) (v Value) {
+	if m == nil {
+		return Nil
+	}
 	old := m.parent
 	m.parent = nil
 	v, m.parent = m.Get(k), old
@@ -267,33 +262,27 @@ func (m *Object) Foreach(f func(k, v Value) bool) {
 	}
 }
 
-func (m *Object) Next(k Value) (Value, Value) {
-	nextHashPair := func(start int) (Value, Value) {
-		for i := start; i < len(m.items); i++ {
-			if i := &m.items[i]; i.Key != Nil {
-				return i.Key, i.Val
-			}
+func (m *Object) nextHashPair(start int) (Value, Value) {
+	for i := start; i < len(m.items); i++ {
+		if i := &m.items[i]; i.Key != Nil {
+			return i.Key, i.Val
 		}
+	}
+	return Nil, Nil
+}
+
+func (m *Object) Next(k Value) (Value, Value) {
+	if m == nil {
 		return Nil, Nil
 	}
 	if k == Nil {
-		return nextHashPair(0)
+		return m.nextHashPair(0)
 	}
 	idx := m.findHash(k)
 	if idx < 0 {
 		return Nil, Nil
 	}
-	return nextHashPair(idx + 1)
-}
-
-func (m *Object) Map() map[Value]Value {
-	g := make(map[Value]Value, len(m.items))
-	for _, i := range m.items {
-		if i.Key != Nil {
-			g[i.Key] = i.Val
-		}
-	}
-	return g
+	return m.nextHashPair(idx + 1)
 }
 
 func (m *Object) String() string {
@@ -303,6 +292,10 @@ func (m *Object) String() string {
 }
 
 func (m *Object) rawPrint(p *bytes.Buffer, lv int, j, showParent bool) {
+	if m == nil {
+		p.WriteString("nil")
+		return
+	}
 	if m.callable != nil {
 		if j {
 			p.WriteString("{\"<f>\":\"")
@@ -329,7 +322,7 @@ func (m *Object) rawPrint(p *bytes.Buffer, lv int, j, showParent bool) {
 	closeBuffer(p, "}")
 }
 
-func (m *Object) Value() Value {
+func (m *Object) ToValue() Value {
 	if m == nil {
 		return Nil
 	}
@@ -337,31 +330,31 @@ func (m *Object) Value() Value {
 }
 
 func (m *Object) Name() string {
-	if m.callable != nil {
-		return m.callable.Name
-	}
-	if m.parent != nil {
-		return m.parent.Name()
+	if m != nil {
+		if m.callable != nil {
+			return m.callable.Name
+		}
+		if m.parent != nil {
+			return m.parent.Name()
+		}
 	}
 	return "object"
 }
 
 // Copy returns a new table with a copy of dataset
 func (m *Object) Copy() *Object {
+	if m == nil {
+		return NewObject(1)
+	}
 	m2 := *m
 	m2.items = append([]hashItem{}, m.items...)
 	return &m2
 }
 
-// Shadow returns a new table with preallocated memory large enough to hold the original dataset
-func (m *Object) Shadow() *Object {
-	return &Object{
-		parent: m.parent,
-		items:  make([]hashItem, len(m.items)),
-	}
-}
-
 func (m *Object) Call(args ...Value) (v1 Value, err error) {
+	if m == nil {
+		return Nil, nil
+	}
 	if m.callable != nil {
 		defer internal.CatchErrorFuncCall(&err, m.callable.Name)
 	}
@@ -369,13 +362,16 @@ func (m *Object) Call(args ...Value) (v1 Value, err error) {
 }
 
 func (m *Object) MustCall(args ...Value) Value {
+	if m == nil {
+		return Nil
+	}
 	if m.callable == nil {
-		return m.Value()
+		return m.ToValue()
 	}
 	if m.receiver != Nil {
 		return m.callable.Apply(m.receiver, args...)
 	}
-	return m.callable.Apply(m.Value(), args...)
+	return m.callable.Apply(m.ToValue(), args...)
 }
 
 func (m *Object) Merge(src *Object, kvs ...Value) *Object {
@@ -394,7 +390,9 @@ func (m *Object) Merge(src *Object, kvs ...Value) *Object {
 	return m
 }
 
-func (m *Object) IsCallable() bool { return m.callable != nil }
+func (m *Object) IsCallable() bool {
+	return m.callable != nil
+}
 
 func (m *Object) resizeHash(newSize int) {
 	if newSize < len(m.items) {
@@ -411,20 +409,4 @@ func (m *Object) resizeHash(newSize int) {
 		}
 	}
 	m.items = tmp.items
-}
-
-func renameFuncName(k, v Value) Value {
-	if v.IsObject() {
-		if cls := v.Object().callable; cls != nil && cls.Name == internal.UnnamedFunc {
-			cls.Name = k.String()
-		}
-	}
-	return v
-}
-
-func setObjectRecv(v, r Value) Value {
-	if v.IsObject() {
-		v.Object().receiver = r
-	}
-	return v
 }

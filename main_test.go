@@ -306,7 +306,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		if v2.Array().Get(Int(i)).Int() != i {
+		if v2.Array().Get(i).Int() != i {
 			t.Fatal(v2)
 		}
 	}
@@ -354,8 +354,8 @@ func TestFalsyValue(t *testing.T) {
 	assert(!Bool(true).IsFalse())
 	assert(Bool(false).IsFalse())
 	assert(Str("").IsFalse())
-	assert(Bytes(nil).IsFalse())
-	assert(Bytes([]byte("")).IsFalse())
+	assert(Bytes(nil).IsTrue())
+	assert(Bytes([]byte("")).IsTrue())
 	assert(!Val([]byte("")).IsFalse())
 }
 
@@ -389,7 +389,7 @@ return [a + add(), a + add(), a + add()]
 		panic(err)
 	}
 	fmt.Println(p2.PrettyCode())
-	if v1 := v.Array().store; v1[0].Int64() != 101 || v1[1].Int64() != 102 || v1[2].Int64() != 103 {
+	if v1 := v.Array().Values(); v1[0].Int64() != 101 || v1[1].Int64() != 102 || v1[2].Int64() != 103 {
 		t.Fatal(v, v1, err, p2.PrettyCode())
 	}
 
@@ -521,7 +521,7 @@ func TestACall(t *testing.T) {
 	end
 	a = new(m, {a=10})
     return a`, nil))
-	v := foo.Object().Gets("pow2").Object().MustCall()
+	v := foo.Object().Prop("pow2").Object().MustCall()
 	if v.Int64() != 100 {
 		t.Fatal(v)
 	}
@@ -532,7 +532,7 @@ func TestACall(t *testing.T) {
 			"m": Proto(Obj(
 				Str("a"), Int64(0),
 				Str("pow2"), Func("", func(e *Env) {
-					i := e.Object(-1).Gets("a").Int64()
+					i := e.Object(-1).Prop("a").Int64()
 					e.A = Int64(i * i)
 				}),
 			).Object()),
@@ -597,59 +597,20 @@ func TestReflectedValue(t *testing.T) {
 }
 
 func TestHashcodeDist(t *testing.T) {
-	slots := [256]int{}
+	z := map[uint64]int{}
+	rand.Seed(time.Now().Unix())
 	for i := 0; i < 1e6; i++ {
 		v := Int64(int64(i)).HashCode()
-		slots[byte(v)]++
+		z[v]++
 	}
-	rand.Seed(time.Now().Unix())
-	tmp := make([]byte, 8)
-	for i := 0; i < 1e6; i++ {
-		rand.Read(tmp)
-		slots[byte(Bytes(tmp).HashCode())]++
-	}
-	tmp = make([]byte, 16)
-	for i := 0; i < 1e6; i++ {
-		rand.Read(tmp)
-		slots[byte(Bytes(tmp).HashCode())]++
-	}
-	avg := 0
-	for _, s := range slots {
-		avg += s
-	}
-	avg /= len(slots)
-	for i := range slots {
-		slots[i] -= avg
-	}
-	t.Log(slots)
-}
+	fmt.Println(len(z))
 
-func BenchmarkFloat64(b *testing.B) {
-	var foo func()
-	foo = func() {
-		if b != nil {
-			time.Now()
-		} else {
-			foo()
-		}
+	z = map[uint64]int{}
+	for i := 0; i < 1e6; i++ {
+		v := Int64(rand.Int63()).HashCode()
+		z[v]++
 	}
-	for i := 0; i < b.N; i++ {
-		foo()
-	}
-}
-
-func BenchmarkFloat64_2(b *testing.B) {
-	var foo func(...string)
-	foo = func(a ...string) {
-		if len(a) == 0 {
-			time.Now()
-		} else {
-			foo(a...)
-		}
-	}
-	for i := 0; i < b.N; i++ {
-		foo()
-	}
+	fmt.Println(len(z))
 }
 
 func BenchmarkReceiver(b *testing.B) {

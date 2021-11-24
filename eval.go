@@ -128,7 +128,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 						idx = vb.MustInt("array iteration") + 1
 					}
 					a := va.Array()
-					_ = idx >= a.Len() && env.SetA(Array(Nil, Nil)) || env.SetA(Array(Int(idx), a.store[idx]))
+					_ = idx >= a.Len() && env.SetA(Array(Nil, Nil)) || env.SetA(Array(Int(idx), a.Get(idx)))
 				case typ.Object:
 					k, v := va.Object().Next(vb)
 					env.A = Array(k, v)
@@ -287,10 +287,10 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 				subject.Object().Set(env.A, v)
 			case typ.Array:
 				if env.A.IsInt64() {
-					if a, idx := subject.Array(), env.A.Int(); idx == len(a.store) {
-						a.store = append(a.store, v)
+					if a, idx := subject.Array(), env.A.Int(); idx == a.Len() {
+						a.Append(v)
 					} else {
-						a.store[idx] = v
+						a.Set(idx, v)
 					}
 				} else {
 					internal.Panic("can't store %v into array[%v]", showType(v), showType(env.A))
@@ -307,9 +307,9 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 				env.A = a.Object().Get(idx)
 			case typ.Array:
 				if idx.IsInt64() {
-					env.A = a.Array().store[idx.Int64()]
+					env.A = a.Array().Get(idx.Int())
 				} else if idx.Type() == typ.String {
-					if f := ArrayLib.Object().Gets(idx.Str()); f != Nil {
+					if f := ArrayLib.Object().Prop(idx.Str()); f != Nil {
 						env.A = setObjectRecv(f, a)
 						break
 					}
@@ -328,7 +328,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 					}
 					break
 				} else if idx.Type() == typ.String {
-					if f := StrLib.Object().Gets(idx.Str()); f != Nil {
+					if f := StrLib.Object().Prop(idx.Str()); f != Nil {
 						env.A = setObjectRecv(f, a)
 						break
 					}
@@ -343,7 +343,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 		case typ.OpPushUnpack:
 			switch a := env._get(opa); a.Type() {
 			case typ.Array:
-				*stackEnv.stack = append(*stackEnv.stack, a.Array().store...)
+				*stackEnv.stack = append(*stackEnv.stack, a.Array().Values()...)
 			case typ.Nil:
 			default:
 				internal.Panic("arguments unpacking expects array, got %v", showType(a))
@@ -366,7 +366,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 			if opb != 0 {
 				env.A = env._get(opa).MustTable("loadstatic").getImpl(env._get(opb), false)
 			} else {
-				env.A = env.Global.Functions[opa].Value()
+				env.A = env.Global.Functions[opa].ToValue()
 			}
 		case typ.OpCall, typ.OpTailCall:
 			a := env._get(opa)
