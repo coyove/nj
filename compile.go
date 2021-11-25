@@ -249,6 +249,8 @@ var flatOpMapping = map[string]byte{
 	parser.AStore:   typ.OpStore,
 	parser.ALoad:    typ.OpLoad,
 	parser.AInc:     typ.OpInc,
+	parser.ANext:    typ.OpNext,
+	parser.ALen:     typ.OpLen,
 }
 
 func (table *symTable) writeInst(op byte, n0, n1 parser.Node) {
@@ -342,7 +344,7 @@ func (table *symTable) compileNode(node parser.Node) uint16 {
 		yx = table.compileBreak(nodes)
 	case parser.ACall, parser.ATailCall:
 		yx = table.compileCall(nodes)
-	case parser.AArray, parser.AArrayMap:
+	case parser.AArray, parser.AObject:
 		yx = table.compileList(nodes)
 	case parser.AOr, parser.AAnd:
 		yx = table.compileAndOr(nodes)

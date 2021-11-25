@@ -122,7 +122,7 @@ func init() {
 			src, ff := e.Array(-1), e.Object(0)
 			dest := make([]Value, 0, src.Len())
 			src.Foreach(func(k, v Value) bool {
-				if MustValue(ff.Call(v)).IsTrue() {
+				if ff.MustCall(v).IsTrue() {
 					dest = append(dest, v)
 				}
 				return true
@@ -131,7 +131,7 @@ func init() {
 		}, "$f(f: function) -> array", "\tfilter out all values where f(value) is false"),
 		Str("slice"), Func("", func(e *Env) {
 			e.A = e.Array(-1).Slice(e.Int(0), e.Get(1).ToInt(e.Array(-1).Len())).ToValue()
-		}, "$f(start: int, end?: int) -> array", "\tslice array, from start to end"),
+		}, "$f(start: int, end?: int) -> array", "\tslice array, from `start` to `end`"),
 		Str("removeat"), Func("", func(e *Env) {
 			ma, idx := e.Array(-1), e.Int(0)
 			if idx < 0 || idx >= ma.Len() {
@@ -413,10 +413,10 @@ func init() {
 			opt := e.Get(1)
 			timeout := time.Duration(1 << 62) // basically forever
 			if tmp := opt.ToObject().Prop("timeout"); tmp != Nil {
-				timeout = time.Duration(tmp.MustFloat64("timeout") * float64(time.Second))
+				timeout = time.Duration(tmp.Is(typ.Number, "timeout").Float64() * float64(time.Second))
 			}
 			if tmp := opt.ToObject().Prop("env"); tmp != Nil {
-				tmp.MustTable("env").Foreach(func(k, v Value) bool {
+				tmp.Is(typ.Object, "env").Object().Foreach(func(k, v Value) bool {
 					p.Env = append(p.Env, k.String()+"="+v.String())
 					return true
 				})

@@ -207,9 +207,9 @@ expr:
     TNumber                           { $$ = Num($1.Str) } |
     TString                           { $$ = Str($1.Str) } |
     '[' ']'                           { $$ = Nodes(SArray, emptyNode).At($1) } |
-    '{' '}'                           { $$ = Nodes(SArrayMap, emptyNode).At($1) } |
+    '{' '}'                           { $$ = Nodes(SObject, emptyNode).At($1) } |
     '[' expr_list comma ']'           { $$ = Nodes(SArray, $2).At($1) } |
-    '{' expr_assign_list comma'}'     { $$ = Nodes(SArrayMap, $2).At($1) } |
+    '{' expr_assign_list comma'}'     { $$ = Nodes(SObject, $2).At($1) } |
     expr TOr expr                     { $$ = Nodes((SOr), $1,$3).At($2) } |
     expr TAnd expr                    { $$ = Nodes((SAnd), $1,$3).At($2) } |
     expr '>' expr                     { $$ = Nodes((SLess), $3,$1).At($2) } |
@@ -231,6 +231,7 @@ expr:
     expr TRsh expr                    { $$ = Nodes((SBitRsh), $1,$3).At($2) } |
     expr TURsh expr                   { $$ = Nodes((SBitURsh), $1,$3).At($2) } |
     '~' expr %prec UNARY              { $$ = Nodes((SBitNot), $2).At($1) } |
+    '#' expr %prec UNARY              { $$ = Nodes((SLen), $2).At($1) } |
     TNot expr %prec UNARY             { $$ = Nodes((SNot), $2).At($1) } |
     '-' expr %prec UNARY              { $$ = Nodes((SSub), zero, $2).At($1) } |
     '+' expr %prec UNARY              { $$ = Nodes((SAdd), zero, $2).At($1) }
@@ -241,9 +242,9 @@ prefix_expr:
     prefix_expr TString                                { $$ = __call($1, Nodes(Str($2.Str))).At($2) } |
     prefix_expr TLParen ')'                            { $$ = __call($1, emptyNode).At($2) } |
     prefix_expr TLParen expr_list comma ')'            { $$ = __call($1, $3).At($2) } |
-    prefix_expr TLParen expr_assign_list comma ')'     { $$ = __call($1, Nodes(Nodes(SArrayMap, $3).At($2))).At($2) } |
+    prefix_expr TLParen expr_assign_list comma ')'     { $$ = __call($1, Nodes(Nodes(SObject, $3).At($2))).At($2) } |
     prefix_expr TLParen expr_list TDotDotDot comma ')' { $$ = __call($1, __dotdotdot($3)).At($2) } |
-    prefix_expr TLParen expr_list ',' expr_assign_list comma ')' { $$ = __call($1, $3.append(Nodes(SArrayMap, $5).At($2))).At($2) }
+    prefix_expr TLParen expr_list ',' expr_assign_list comma ')' { $$ = __call($1, $3.append(Nodes(SObject, $5).At($2))).At($2) }
 
 declarator_list:
     declarator { $$ = Nodes($1) } | declarator_list ',' declarator { $$ = $1.append($3) }

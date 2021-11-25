@@ -119,33 +119,38 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 				}
 				env._set(opa, env.A)
 			} else {
-				switch va.Type() {
-				case typ.Nil:
-					env.A = Array(Nil, Nil)
-				case typ.Array:
-					idx := 0
-					if vb != Nil {
-						idx = vb.MustInt("array iteration") + 1
-					}
-					a := va.Array()
-					_ = idx >= a.Len() && env.SetA(Array(Nil, Nil)) || env.SetA(Array(Int(idx), a.Get(idx)))
-				case typ.Object:
-					k, v := va.Object().Next(vb)
-					env.A = Array(k, v)
-				case typ.String:
-					idx := int64(0)
-					if vb != Nil {
-						idx = vb.MustInt64("string iteration")
-					}
-					if r, sz := utf8.DecodeRuneInString(va.Str()[idx:]); sz == 0 {
-						env.A = Array(Nil, Nil)
-					} else {
-						env.A = Array(Int64(int64(sz)+idx), Rune(r))
-					}
-				default:
-					internal.Panic("inc "+errNeedNumbers, showType(va), showType(vb))
-				}
+				internal.Panic("inc "+errNeedNumbers, showType(va), showType(vb))
 			}
+		case typ.OpNext:
+			va, vb := env._get(opa), env._get(opb)
+			switch va.Type() {
+			case typ.Nil:
+				env.A = Array(Nil, Nil)
+			case typ.Array:
+				idx := 0
+				if vb != Nil {
+					idx = vb.Is(typ.Number, "array iteration").Int() + 1
+				}
+				a := va.Array()
+				_ = idx >= a.Len() && env.SetA(Array(Nil, Nil)) || env.SetA(Array(Int(idx), a.Get(idx)))
+			case typ.Object:
+				k, v := va.Object().Next(vb)
+				env.A = Array(k, v)
+			case typ.String:
+				idx := int64(0)
+				if vb != Nil {
+					idx = vb.Is(typ.Number, "string iteration").Int64()
+				}
+				if r, sz := utf8.DecodeRuneInString(va.Str()[idx:]); sz == 0 {
+					env.A = Array(Nil, Nil)
+				} else {
+					env.A = Array(Int64(int64(sz)+idx), Rune(r))
+				}
+			default:
+				internal.Panic("can't iterate %v using %v", showType(va), showType(vb))
+			}
+		case typ.OpLen:
+			env.A = Int(env._get(opa).Len())
 		case typ.OpAdd:
 			va, vb := env._get(opa), env._get(opb)
 			switch va.Type() + vb.Type() {

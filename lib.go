@@ -64,22 +64,23 @@ func init() {
 	})
 	AddGlobalValue("prototype", g["new"])
 	AddGlobalValue("len", func(e *Env) { e.A = Int(e.Get(0).Len()) })
-	AddGlobalValue("eval", func(s, g Value) Value {
+	AddGlobalValue("eval", func(e *Env) {
 		var m map[string]interface{}
-		if gt := g.ToObject().Prop("globals"); gt.Type() == typ.Object {
+		if gt := e.Get(1).ToObject().Prop("globals"); gt.Type() == typ.Object {
 			m = map[string]interface{}{}
 			gt.Object().Foreach(func(k, v Value) bool {
 				m[k.String()] = v.Interface()
 				return true
 			})
 		}
-		if g.ToObject().Prop("compileonly").IsTrue() {
-			v, err := parser.Parse(s.MustStr(""), "")
+		if e.Get(1).ToObject().Prop("compileonly").IsTrue() {
+			v, err := parser.Parse(e.Str(0), "")
 			internal.PanicErr(err)
-			return Val(v)
+			e.A = Val(v)
+			return
 		}
 		wrap := func(err error) error { return fmt.Errorf("panic inside: %v", err) }
-		p, err := LoadString(s.MustStr(""), &CompileOptions{GlobalKeyValues: m})
+		p, err := LoadString(e.Str(0), &CompileOptions{GlobalKeyValues: m})
 		if err != nil {
 			panic(wrap(err))
 		}
@@ -87,15 +88,16 @@ func init() {
 		if err != nil {
 			panic(wrap(err))
 		}
-		if !g.ToObject().Prop("returnglobals").IsFalse() {
+		if !e.Get(1).ToObject().Prop("returnglobals").IsFalse() {
 			r := NewObject(len(p.Top.Locals))
 			for i, name := range p.Top.Locals {
 				r.Set(Str(name), (*p.Stack)[i])
 			}
-			return r.ToValue()
+			e.A = r.ToValue()
+		} else {
+			e.A = v
 		}
-		return v
-	}, "$f(code: string, options?: table) -> value", "\tevaluate `code` and return the reuslt")
+	}, "$f(code: string, options?: object) -> value", "\tevaluate `code` and return the reuslt")
 	AddGlobalValue("closure", func(e *Env) {
 		lambda := e.Object(0)
 		e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
@@ -272,7 +274,7 @@ func init() {
 		e.A = Float64(float64(time.Now().UnixNano()) / 1e9)
 	}, "$f() -> float", "\tunix timestamp in seconds")
 	AddGlobalValue("sleep", func(e *Env) {
-		time.Sleep(time.Duration(e.Get(0).MustFloat64("") * float64(time.Second)))
+		time.Sleep(time.Duration(e.Float64(0) * float64(time.Second)))
 	}, "$f(sec: float)")
 	AddGlobalValue("Go_time", func(e *Env) {
 		if e.Size() > 0 {
@@ -294,13 +296,10 @@ func init() {
 		s := *(*[2]int64)(unsafe.Pointer(&x))
 		e.A = Float64(float64(s[1]) / 1e9)
 	}, "$f() -> float", "\tseconds since startup (monotonic clock)")
-	AddGlobalValue("exit", func(e *Env) { os.Exit(int(e.Get(0).MustInt64(""))) }, "$f(code: int)")
-	AddGlobalValue("chr", func(e *Env) { e.A = Rune(rune(e.Get(0).MustInt64(""))) }, "$f(code: int) -> string")
-	AddGlobalValue("byte", func(e *Env) { e.A = Byte(byte(e.Get(0).MustInt64(""))) }, "$f(code: int) -> string")
-	AddGlobalValue("ord", func(env *Env) {
-		r, _ := utf8.DecodeRuneInString(env.B(0).MustStr(""))
-		env.A = Int64(int64(r))
-	}, "$f(s: string) -> int")
+	AddGlobalValue("exit", func(e *Env) { os.Exit(e.Int(0)) }, "$f(code: int)")
+	AddGlobalValue("chr", func(e *Env) { e.A = Rune(rune(e.Int(0))) }, "$f(code: int) -> string")
+	AddGlobalValue("byte", func(e *Env) { e.A = Byte(byte(e.Int(0))) }, "$f(code: int) -> string")
+	AddGlobalValue("ord", func(e *Env) { r, _ := utf8.DecodeRuneInString(e.Str(0)); e.A = Int64(int64(r)) }, "$f(s: string) -> int")
 
 	AddGlobalValue("re", Func("RegExp", func(e *Env) {
 		e.A = Proto(e.A.Object(), Str("_rx"), Val(regexp.MustCompile(e.Str(0))))
@@ -331,11 +330,11 @@ func init() {
 		}, "$f(old: string, new: string) -> string"),
 	))
 
-	AddGlobalValue("error", func(msg Value) Value {
-		return Val(errors.New(msg.MustStr("")))
+	AddGlobalValue("error", func(e *Env) {
+		e.A = Val(errors.New(e.Str(0)))
 	}, "$f(text: string) -> go.error", "\tcreate an error")
 	AddGlobalValue("iserror", func(e *Env) {
-		_, ok := e.Get(0).Interface().(error)
+		_, ok := e.Interface(0).(error)
 		e.A = Bool(ok)
 	}, "$f(v: value) -> bool", "\treturn whether value is an error")
 
@@ -343,15 +342,12 @@ func init() {
 		Str("stringify"), Func("", func(e *Env) {
 			e.A = Str(e.Get(0).JSONString())
 		}, "$f(v: value) -> string"),
-		Str("parse"), Func1("", func(js Value) Value {
-			return Val(gjson.Parse(strings.TrimSpace(js.MustStr(""))))
+		Str("parse"), Func("", func(e *Env) {
+			e.A = Val(gjson.Parse(strings.TrimSpace(e.Str(0))))
 		}, "$f(j: string) -> value"),
-		Str("get"), Func3("", func(js, path, et Value) Value {
-			result := gjson.Get(js.MustStr("json string"), path.MustStr("selector"))
-			if !result.Exists() {
-				return et
-			}
-			return Val(result)
+		Str("get"), Func("", func(e *Env) {
+			result := gjson.Get(e.Str(0), e.Str(1))
+			_ = !result.Exists() && e.SetA(e.Get(2)) || e.SetA(Val(result))
 		}, "$f(j: string, selector: string, default?: value) -> value"),
 	))
 

@@ -41,10 +41,12 @@ var (
 	ALoad, SLoad         = "load", staticSym("load")
 	AStore, SStore       = "store", staticSym("store")
 	AArray, SArray       = "array", staticSym("array")
-	AArrayMap, SArrayMap = "map", staticSym("map")
+	AObject, SObject     = "map", staticSym("map")
 	ACall, SCall         = "call", staticSym("call")
 	ATailCall, STailCall = "tailcall", staticSym("tailcall")
 	AReturn, SReturn     = "return", staticSym("return")
+	ALen, SLen           = "len", staticSym("len")
+	ANext, SNext         = "next", staticSym("next")
 	AAdd, SAdd           = "add", staticSym("add")
 	ASub, SSub           = "sub", staticSym("sub")
 	AMul, SMul           = "mul", staticSym("mul")
@@ -198,7 +200,7 @@ func __dotdotdot(expr Node) Node {
 
 func __forIn(key, value Token, expr, body Node, pos Token) Node {
 	k, v, e, tmp := Sym(key), Sym(value), randomVarname(), randomVarname()
-	next := Nodes((SInc), e, k).At(pos)
+	next := Nodes(SNext, e, k).At(pos)
 	moveNext := __chain(
 		__move(tmp, next).At(pos),
 		__move(k, __load(tmp, zero).At(pos)).At(pos),

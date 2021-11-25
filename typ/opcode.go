@@ -12,6 +12,8 @@ const (
 	OpIDiv
 	OpInc
 	OpMod
+	OpLen
+	OpNext
 	OpNot
 	OpEq
 	OpNeq

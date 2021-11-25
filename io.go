@@ -22,7 +22,7 @@ var (
 )
 
 var (
-	ReaderProto = Proto(ObjectLib.Object(), Str("__name"), Str("reader"),
+	ReaderProto = Func("Reader", nil).Object().Merge(nil,
 		Str("read"), Func("", func(e *Env) {
 			f := e.Object(-1).Prop("_f").Interface().(io.Reader)
 			switch n := e.Get(0); n.Type() {
@@ -84,7 +84,7 @@ var (
 			"$f() -> array", "\tread the whole file and return lines as an array",
 			"$f(f: function)", "\tfor every line read, f(line) will be called", "\tto exit the reading, return anything other than nil in `f`",
 		),
-	).Object()
+	)
 
 	WriterProto = Proto(ObjectLib.Object(), Str("__name"), Str("writer"),
 		Str("write"), Func("", func(e *Env) {
@@ -98,8 +98,8 @@ var (
 			}
 			internal.PanicErr(err)
 			e.A = Int(wn)
-		}, "$f({w}: value, buf: string) int", "\twrite buf to w"),
-		Str("pipe"), Func("pipe", func(e *Env) {
+		}, "$f(buf: string|bytes) int", "\twrite `buf` to writer"),
+		Str("pipe"), Func("", func(e *Env) {
 			var wn int64
 			var err error
 			if n := e.Get(1).ToInt64(0); n > 0 {
@@ -109,32 +109,31 @@ var (
 			}
 			internal.PanicErr(err)
 			e.A = Int64(wn)
-		}, "$f({w}: value, r: value) int", "\tcopy bytes from r to w, return number of bytes copied",
-			"$f({w}: value, r: value, n: int) int", "\tcopy at most n bytes from r to w"),
+		}, "$f(r: value, n?: int) -> int", "\tcopy (at most `n`) bytes from `r` to writer, return number of bytes copied"),
 	).Object()
 
-	SeekerProto = Proto(ObjectLib.Object(), Str("__name"), Str("seeker"),
-		Str("seek"), Func3("seek", func(rx, off, where Value) Value {
-			f := rx.Object().Prop("_f").Interface().(io.Seeker)
-			wn, err := f.Seek(off.MustInt64("offset"), int(where.MustInt64("where")))
+	SeekerProto = Func("Seeker", nil).Object().Merge(nil,
+		Str("seek"), Func("", func(e *Env) {
+			f := e.Object(-1).Prop("_f").Interface().(io.Seeker)
+			wn, err := f.Seek(e.Int64(0), e.Int(1))
 			internal.PanicErr(err)
-			return Int64(int64(wn))
-		}, "")).Object()
+			e.A = Int64(int64(wn))
+		}, ""))
 
-	CloserProto = Proto(ObjectLib.Object(), Str("__name"), Str("closer"),
+	CloserProto = Func("Closer", nil).Object().Merge(nil,
 		Str("close"), Func("", func(e *Env) {
 			internal.PanicErr(e.Object(-1).Prop("_f").Interface().(io.Closer).Close())
-		}, "")).Object()
+		}, ""))
 
-	ReadWriterProto = ReaderProto.Copy().Merge(WriterProto, Str("__name"), Str("readwriter"))
+	ReadWriterProto = Func("ReadWriter", nil).Object().Merge(ReaderProto).Merge(WriterProto)
 
-	ReadCloserProto = ReaderProto.Copy().Merge(CloserProto, Str("__name"), Str("readcloser"))
+	ReadCloserProto = Func("ReadCloser", nil).Object().Merge(ReaderProto).Merge(CloserProto)
 
-	WriteCloserProto = WriterProto.Copy().Merge(CloserProto, Str("__name"), Str("writecloser"))
+	WriteCloserProto = Func("WriteCloser", nil).Object().Merge(WriterProto).Merge(CloserProto)
 
-	ReadWriteCloserProto = ReadWriterProto.Copy().Merge(CloserProto, Str("__name"), Str("readwritecloser"))
+	ReadWriteCloserProto = Func("ReadWriteCloser", nil).Object().Merge(ReadWriterProto).Merge(CloserProto)
 
-	ReadWriteSeekCloserProto = ReadWriteCloserProto.Copy().Merge(SeekerProto, Str("__name"), Str("readwriteseekcloser"))
+	ReadWriteSeekCloserProto = Func("ReadWriteSeekCloserProto", nil).Object().Merge(ReadWriteCloserProto).Merge(SeekerProto)
 )
 
 // NewReader creates an io.Reader from value if possible

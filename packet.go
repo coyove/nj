@@ -109,11 +109,13 @@ var (
 		typ.OpBitLsh:  parser.ABitLsh,
 		typ.OpBitRsh:  parser.ABitRsh,
 		typ.OpBitURsh: parser.ABitURsh,
+		typ.OpNext:    parser.ANext,
 	}
 	uOp = map[byte]string{
 		typ.OpBitNot:     parser.ABitNot,
 		typ.OpNot:        parser.ANot,
 		typ.OpRet:        parser.AReturn,
+		typ.OpLen:        parser.ALen,
 		typ.OpPush:       "push",
 		typ.OpPushUnpack: "pushvararg",
 	}

@@ -413,22 +413,6 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	return reflect.ValueOf(v.Interface())
 }
 
-func (v Value) MustBool(msg string) bool { return v.Is(typ.Bool, msg).Bool() }
-
-func (v Value) MustStr(msg string) string { return v.Is(typ.String, msg).String() }
-
-func (v Value) MustStrLen(msg string) int { return v.Is(typ.String, msg).StrLen() }
-
-func (v Value) MustNum(msg string) Value { return v.Is(typ.Number, msg) }
-
-func (v Value) MustInt64(msg string) int64 { return v.Is(typ.Number, msg).Int64() }
-
-func (v Value) MustInt(msg string) int { return v.Is(typ.Number, msg).Int() }
-
-func (v Value) MustFloat64(msg string) float64 { return v.Is(typ.Number, msg).Float64() }
-
-func (v Value) MustTable(msg string) *Object { return v.Is(typ.Object, msg).Object() }
-
 func (v Value) Is(t typ.ValueType, msg string) Value {
 	if v.Type() != t {
 		if msg != "" {

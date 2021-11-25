@@ -105,7 +105,7 @@ func (table *symTable) writeInst3(bop byte, atoms []parser.Node) uint16 {
 	table.collapse(atoms[1:], true)
 
 	switch bop {
-	case typ.OpNot, typ.OpRet, typ.OpBitNot:
+	case typ.OpNot, typ.OpRet, typ.OpBitNot, typ.OpLen:
 		// unary splitInst
 		table.writeInst(bop, atoms[1], parser.Node{})
 	default:

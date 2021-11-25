@@ -19,13 +19,13 @@ var HostWhitelist = map[string][]string{}
 
 func init() {
 	nj.AddGlobalValue("url", nj.Obj(
-		nj.Str("escape"), nj.Func1("escape", func(a nj.Value) nj.Value {
-			return nj.Str(url.QueryEscape(a.MustStr("")))
+		nj.Str("escape"), nj.Func("escape", func(e *nj.Env) {
+			e.A = nj.Str(url.QueryEscape(e.Str(0)))
 		}),
-		nj.Str("unescape"), nj.Func1("unescape", func(a nj.Value) nj.Value {
-			v, err := url.QueryUnescape(a.MustStr(""))
+		nj.Str("unescape"), nj.Func("unescape", func(e *nj.Env) {
+			v, err := url.QueryUnescape(e.Str(0))
 			internal.PanicErr(err)
-			return nj.Str(v)
+			e.A = nj.Str(v)
 		}),
 	))
 	nj.AddGlobalValue("http", nj.Func("http", func(env *nj.Env) {
@@ -84,7 +84,7 @@ func init() {
 			writer := multipart.NewWriter(&payload)
 			if x := args.Prop("multipart"); x.Type() == typ.Object {
 				x.Object().Foreach(func(k, v nj.Value) bool {
-					key := k.MustStr("multipart key")
+					key := k.String()
 					filename := ""
 					if strings.Contains(key, "/") {
 						filename = key[strings.Index(key, "/")+1:]
