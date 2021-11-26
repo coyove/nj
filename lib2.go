@@ -85,7 +85,7 @@ func init() {
 		}, "$f(v: value) -> bool"),
 		Str("merge"), Func("", func(e *Env) {
 			e.A = e.Object(-1).Merge(e.Object(0)).ToValue()
-		}, "$f(obj2: object)", "\tmerge elements from `obj2`"),
+		}, "$f(o: object)", "\tmerge elements from `o`"),
 		Str("tostring"), Func("", func(e *Env) {
 			p := &bytes.Buffer{}
 			e.Object(-1).rawPrint(p, 0, true, true)
@@ -99,6 +99,43 @@ func init() {
 		Str("next"), Func("", func(e *Env) {
 			e.A = Array(e.Object(-1).Next(e.Get(0)))
 		}, "$f(k: value) -> [value, value]", "\tfind next key-value pair after `k` in the object and return as [key, value]"),
+		Str("apply"), Func("", func(e *Env) { e.A = e.Object(-1).MustApply(e.Get(0), e.Stack()[1:]...) }, "$f(this: value, args...: value) -> value"),
+		Str("call"), Func("", func(e *Env) { e.A = e.Object(-1).MustCall(e.Stack()...) }, "$f(args...: value) -> value"),
+		Str("try"), Func("", func(e *Env) {
+			a, err := e.Object(-1).Call(e.Stack()...)
+			_ = err == nil && e.SetA(a) || e.SetA(wrapExecError(err))
+		}, "$f(args...: value) -> value", "\texecute, catch panic and return as error if any"),
+		Str("go"), Func("GoroutineObject", func(e *Env) {
+			f := e.Object(-1)
+			args := e.CopyStack()
+			w := make(chan Value, 1)
+			go func(f *Object, args []Value) {
+				if v, err := f.Call(args...); err != nil {
+					w <- wrapExecError(err)
+				} else {
+					w <- v
+				}
+			}(f, args)
+			e.A = Obj(
+				Str("f"), f.ToValue(), Str("w"), intf(w),
+				Str("stop"), Func("", func(e *Env) {
+					e.Object(-1).Prop("f").Object().callable.EmergStop()
+				}),
+				Str("wait"), Func("", func(e *Env) {
+					ch := e.Object(-1).Prop("w").Interface().(chan Value)
+					if w := e.Get(0).ToFloat64(0); w > 0 {
+						select {
+						case <-time.After(time.Duration(w * float64(time.Second))):
+							panic("timeout")
+						case v := <-ch:
+							e.A = v
+						}
+					} else {
+						e.A = <-ch
+					}
+				}),
+			)
+		}, "$f(args...: value)", "\texecute `f` in goroutine"),
 	).ToValue()
 	AddGlobalValue("table", ObjectLib)
 
@@ -194,15 +231,9 @@ func init() {
 	).Object(),
 		Str("__name"), Str("encdecfast"),
 		Str("encode"), Func("", func(e *Env) {
-			var x []byte
-			if e.Get(0).Type() == typ.String {
-				x = []byte(e.Str(0))
-			} else {
-				x = e.Interface(0).([]byte)
-			}
 			e.A = Str(e.Object(-1).Prop("_e").Interface().(interface {
 				EncodeToString([]byte) string
-			}).EncodeToString(x))
+			}).EncodeToString(e.Get(0).ToBytes()))
 		}),
 		Str("decode"), Func("", func(e *Env) {
 			v, err := e.Object(-1).Prop("_e").Interface().(interface {
@@ -298,8 +329,8 @@ func init() {
 		Str("lower"), Func("", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }, "$f() -> string"),
 		Str("bytes"), Func("", func(e *Env) {
 			_ = e.Get(0).IsInt64() && e.SetA(Val(make([]byte, e.Int(0)))) || e.SetA(Val([]byte(e.Str(0))))
-		}, "$f() -> go.[]byte", "\tconvert text to []byte",
-			"$f(n: int) -> go.[]byte", "\tcreate an n-byte long array"),
+		}, "$f() -> bytes", "\tconvert text to byte array",
+			"$f(n: int) -> bytes", "\tcreate an n-byte long array"),
 		Str("chars"), Func("", func(e *Env) {
 			var r []Value
 			for s := e.Str(-1); len(s) > 0; {

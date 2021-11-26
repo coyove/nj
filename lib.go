@@ -166,45 +166,10 @@ func init() {
 	))
 	AddGlobalValue("type", func(e *Env) {
 		e.A = Str(e.Get(0).Type().String())
-	}, "$f(v: value) -> string", "\treturn value's type")
+	}, "$f(v: value) -> string", "\treturn `v`'s type")
 	AddGlobalValue("apply", func(e *Env) {
-		fun := e.Object(0)
-		_ = fun.callable != nil && e.SetA(fun.callable.Apply(e.Get(1), e.Stack()[2:]...))
-	}, "$f(f: function, receiver: value, args...: value) -> value")
-	AddGlobalValue("pcall", func(e *Env) {
-		a, err := e.Object(0).Call(e.Stack()[1:]...)
-		_ = err == nil && e.SetA(a) || e.SetA(wrapExecError(err))
-	}, "$f(f: function, args...: value) -> value", "\texecute `f`, catch panic and return as error if any")
-	AddGlobalValue("gcall", Func("GoroutineObject", func(e *Env) {
-		f := e.Object(0)
-		args := e.CopyStack()[1:]
-		w := make(chan Value, 1)
-		go func(f *Object, args []Value) {
-			if v, err := f.Call(args...); err != nil {
-				w <- wrapExecError(err)
-			} else {
-				w <- v
-			}
-		}(f, args)
-		e.A = Proto(e.Object(-1), Str("f"), f.ToValue(), Str("w"), intf(w))
-	}, "$f(f: function, args...: value) -> GoroutineObject", "\texecute `f` in goroutine").Object().Merge(nil,
-		Str("stop"), Func("", func(e *Env) {
-			e.Object(-1).Prop("f").Object().callable.EmergStop()
-		}),
-		Str("wait"), Func("", func(e *Env) {
-			ch := e.Object(-1).Prop("w").Interface().(chan Value)
-			if w := e.Get(0).ToFloat64(0); w > 0 {
-				select {
-				case <-time.After(time.Duration(w * float64(time.Second))):
-					panic("timeout")
-				case v := <-ch:
-					e.A = v
-				}
-			} else {
-				e.A = <-ch
-			}
-		}),
-	))
+		e.A = e.Object(0).MustApply(e.Get(1), e.Stack()[2:]...)
+	}, "$f(f: function, this: value, args...: value) -> value")
 	AddGlobalValue("panic", func(e *Env) { panic(e.Get(0)) }, "$f(v: value)")
 	AddGlobalValue("assert", func(e *Env) {
 		if v := e.Get(0); e.Size() <= 1 && v.IsFalse() {

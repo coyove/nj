@@ -495,29 +495,29 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 	return p
 }
 
-func (v Value) ToStr(d string) string {
+func (v Value) ToStr(defaultValue string) string {
 	if v.Type() == typ.String {
 		return v.Str()
 	}
-	return d
+	return defaultValue
 }
 
-func (v Value) ToInt(d int) int {
-	return int(v.ToInt64(int64(d)))
+func (v Value) ToInt(defaultValue int) int {
+	return int(v.ToInt64(int64(defaultValue)))
 }
 
-func (v Value) ToInt64(d int64) int64 {
+func (v Value) ToInt64(defaultValue int64) int64 {
 	if v.Type() == typ.Number {
 		return v.Int64()
 	}
-	return d
+	return defaultValue
 }
 
-func (v Value) ToFloat64(d float64) float64 {
+func (v Value) ToFloat64(defaultValue float64) float64 {
 	if v.Type() == typ.Number {
 		return v.Float64()
 	}
-	return d
+	return defaultValue
 }
 
 func (v Value) ToObject() *Object {
@@ -527,11 +527,15 @@ func (v Value) ToObject() *Object {
 	return v.Object()
 }
 
-func (v Value) ToTableGets(key string) Value {
-	if v.Type() != typ.Object {
-		return Nil
+func (v Value) ToBytes() []byte {
+	switch v.Type() {
+	case typ.String:
+		return []byte(v.Str())
+	case typ.Array:
+		buf, _ := v.Array().Unwrap().([]byte)
+		return buf
 	}
-	return v.Object().Prop(key)
+	return nil
 }
 
 func (v Value) ForEach(f func(k, v Value) bool) {

@@ -374,6 +374,26 @@ func (m *Object) MustCall(args ...Value) Value {
 	return m.callable.Apply(m.ToValue(), args...)
 }
 
+func (m *Object) Apply(this Value, args ...Value) (v1 Value, err error) {
+	if m == nil {
+		return Nil, nil
+	}
+	if m.callable != nil {
+		defer internal.CatchErrorFuncCall(&err, m.callable.Name)
+	}
+	return m.MustApply(this, args...), nil
+}
+
+func (m *Object) MustApply(this Value, args ...Value) Value {
+	if m == nil {
+		return Nil
+	}
+	if m.callable == nil {
+		return m.ToValue()
+	}
+	return m.callable.Apply(this, args...)
+}
+
 func (m *Object) Merge(src *Object, kvs ...Value) *Object {
 	if src == nil {
 		m.resizeHash((m.Len()+len(kvs))*2 + 1)

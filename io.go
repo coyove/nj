@@ -86,16 +86,9 @@ var (
 		),
 	)
 
-	WriterProto = Proto(ObjectLib.Object(), Str("__name"), Str("writer"),
+	WriterProto = Func("Writer", nil).Object().Merge(nil,
 		Str("write"), Func("", func(e *Env) {
-			f := e.Object(-1).Prop("_f").Interface().(io.Writer)
-			var wn int
-			var err error
-			if e.Get(0).Type() == typ.String {
-				wn, err = f.Write([]byte(e.Str(0)))
-			} else {
-				wn, err = f.Write(e.Array(0).Unwrap().([]byte))
-			}
+			wn, err := e.Object(-1).Prop("_f").Interface().(io.Writer).Write(e.Get(0).ToBytes())
 			internal.PanicErr(err)
 			e.A = Int(wn)
 		}, "$f(buf: string|bytes) int", "\twrite `buf` to writer"),
@@ -110,7 +103,7 @@ var (
 			internal.PanicErr(err)
 			e.A = Int64(wn)
 		}, "$f(r: value, n?: int) -> int", "\tcopy (at most `n`) bytes from `r` to writer, return number of bytes copied"),
-	).Object()
+	)
 
 	SeekerProto = Func("Seeker", nil).Object().Merge(nil,
 		Str("seek"), Func("", func(e *Env) {
@@ -186,7 +179,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("readbuf"); rb.IsObject() {
-			v, err := rb.Object().Call(Val(p))
+			v, err := rb.Object().Call(Bytes(p))
 			if err != nil {
 				return 0, err
 			}
