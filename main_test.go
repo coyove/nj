@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/coyove/nj/internal"
-	_parser "github.com/coyove/nj/parser"
 )
 
 func init() {
@@ -214,7 +213,8 @@ a = 0
 
 func BenchmarkCompiling(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_parser.Parse("(a+1)", "")
+		// _parser.Parse("(a+1)", "")
+		LoadString("(a+1)", nil)
 	}
 }
 

@@ -79,6 +79,8 @@ func (v Value) IsInt64() bool { return v.p == int64Marker }
 
 func (v Value) IsObject() bool { return v.Type() == typ.Object }
 
+func (v Value) IsCallable() bool { return v.Type() == typ.Object && v.Object().IsCallable() }
+
 func (v Value) IsNil() bool { return v == Nil }
 
 // Bool creates a boolean value
@@ -113,7 +115,7 @@ func Array(m ...Value) Value {
 	return (&Sequence{meta: internalSequenceMeta, internal: m}).ToValue()
 }
 
-// Obj creates a map from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
+// Obj creates an object from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
 func Obj(kvs ...Value) Value {
 	t := NewObject(len(kvs) / 2)
 	for i := 0; i < len(kvs)/2*2; i += 2 {
@@ -122,9 +124,9 @@ func Obj(kvs ...Value) Value {
 	return Value{v: uint64(typ.Object), p: unsafe.Pointer(t)}
 }
 
-// Proto creates an object whose parent will be set to `p`
+// Proto creates an object whose prototype will be set to `p`
 func Proto(p *Object, kvs ...Value) Value {
-	return Obj(kvs...).Object().SetParent(p).ToValue()
+	return Obj(kvs...).Object().SetProto(p).ToValue()
 }
 
 // Str creates a string value
@@ -140,6 +142,7 @@ func Str(s string) Value {
 	return Value{v: uint64(typ.String), p: unsafe.Pointer(&s)}
 }
 
+// UnsafeStr creates a string value from []byte, its content may change if []byte changed
 func UnsafeStr(s []byte) Value {
 	return Str(*(*string)(unsafe.Pointer(&s)))
 }
@@ -385,14 +388,10 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 			return s
 		}
 	} else if vt == typ.Object {
-		switch a := v.Object(); t.Kind() {
-		case reflect.Map:
+		if t.Kind() == reflect.Map {
 			s := reflect.MakeMap(t)
 			kt, vt := t.Key(), t.Elem()
-			a.Foreach(func(k, v Value) bool {
-				s.SetMapIndex(k.ReflectValue(kt), v.ReflectValue(vt))
-				return true
-			})
+			v.Object().Foreach(func(k, v Value) bool { s.SetMapIndex(k.ReflectValue(kt), v.ReflectValue(vt)); return true })
 			return s
 		}
 	}

@@ -23,8 +23,8 @@ print(timer.add)
 function dict() return new(new(this)) end
 
 function dict.next2()
-    local k, v = this.next(this.parent()._iter)
-    this.parent()._iter = k
+    local k, v = this.next(this.proto()._iter)
+    this.proto()._iter = k
     return k, v
 end
 

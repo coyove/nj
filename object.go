@@ -27,7 +27,7 @@ type Object struct {
 	callable *FuncBody
 }
 
-// hashItem represents an entry in the Map.
+// hashItem represents an entry in the object.
 type hashItem struct {
 	Key, Val Value
 	Distance int // How far item is from its best position.
@@ -40,14 +40,14 @@ func NewObject(size int) *Object {
 	return &Object{items: make([]hashItem, size)}
 }
 
-func (m *Object) Parent() *Object {
+func (m *Object) Proto() *Object {
 	if m == nil {
 		return nil
 	}
 	return m.parent
 }
 
-func (m *Object) SetParent(m2 *Object) *Object {
+func (m *Object) SetProto(m2 *Object) *Object {
 	m.parent = m2
 	return m
 }
@@ -255,8 +255,8 @@ func (m *Object) delHash(k Value) (prev Value) {
 }
 
 func (m *Object) Foreach(f func(k, v Value) bool) {
-	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
-		if !f(k, v) {
+	for _, p := range m.items {
+		if p.Key != Nil && !f(p.Key, p.Val) {
 			return
 		}
 	}
@@ -264,8 +264,8 @@ func (m *Object) Foreach(f func(k, v Value) bool) {
 
 func (m *Object) nextHashPair(start int) (Value, Value) {
 	for i := start; i < len(m.items); i++ {
-		if i := &m.items[i]; i.Key != Nil {
-			return i.Key, i.Val
+		if p := &m.items[i]; p.Key != Nil {
+			return p.Key, p.Val
 		}
 	}
 	return Nil, Nil
@@ -291,7 +291,7 @@ func (m *Object) String() string {
 	return p.String()
 }
 
-func (m *Object) rawPrint(p *bytes.Buffer, lv int, j, showParent bool) {
+func (m *Object) rawPrint(p *bytes.Buffer, lv int, j, showProto bool) {
 	if m == nil {
 		p.WriteString(ifstr(j, "null", "nil"))
 		return
@@ -303,22 +303,26 @@ func (m *Object) rawPrint(p *bytes.Buffer, lv int, j, showParent bool) {
 			p.WriteString("\",")
 		} else {
 			p.WriteString(m.callable.String())
+			if m.count == 0 {
+				return
+			}
 			p.WriteString("{")
 		}
 	} else {
 		if !j {
-			p.WriteString(m.Name())
+			p.WriteString("object")
 		}
 		p.WriteString("{")
 	}
-	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
+	m.Foreach(func(k, v Value) bool {
 		k.toString(p, lv+1, j)
 		p.WriteString(ifstr(j, ":", "="))
 		v.toString(p, lv+1, j)
 		p.WriteString(",")
-	}
-	if m.parent != nil && showParent {
-		p.WriteString(ifstr(j, "\"<parent>\":", "<parent>="))
+		return true
+	})
+	if m.parent != nil && showProto && m.parent != ObjectLib.Object() {
+		p.WriteString(ifstr(j, "\"<proto>\":", "<proto>="))
 		m.parent.rawPrint(p, lv+1, j, true)
 	}
 	closeBuffer(p, "}")
@@ -364,13 +368,9 @@ func (m *Object) Call(args ...Value) (v1 Value, err error) {
 }
 
 func (m *Object) MustCall(args ...Value) Value {
-	if m == nil {
-		return Nil
-	}
 	if m.callable == nil {
 		return m.ToValue()
-	}
-	if m.receiver != Nil {
+	} else if m.receiver != Nil {
 		return m.callable.Apply(m.receiver, args...)
 	}
 	return m.callable.Apply(m.ToValue(), args...)
@@ -387,9 +387,6 @@ func (m *Object) Apply(this Value, args ...Value) (v1 Value, err error) {
 }
 
 func (m *Object) MustApply(this Value, args ...Value) Value {
-	if m == nil {
-		return Nil
-	}
 	if m.callable == nil {
 		return m.ToValue()
 	}

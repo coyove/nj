@@ -53,12 +53,12 @@ function renderRow(y0)
     return row 
 end
 
-size = 1600
+size = 16000
 nCPU = 4
 bytesPerRow = size >> 3 
 
-initial_r = table.makearray(size) 
-initial_i = table.makearray(size) 
+initial_r = array.make(size) 
+initial_i = array.make(size) 
 
 inv = 2 / size 
 for xy =0, size do
@@ -67,7 +67,7 @@ for xy =0, size do
     initial_i[xy] = i - 1.0 
 end
 
-rows = table.makearray(size) 
+rows = array.make(size) 
 y = -1 
 mux = sync.mutex() 
 wg = sync.waitgroup() 
@@ -87,14 +87,12 @@ function worker()
 end 
 
 for i = 0,nCPU do
-    go.new(worker).start()
+    worker.go()
 end
 wg.Wait() 
 -- return
 
-write(stdout(), "P4\n" + (size) + " " + (size) + "\n") 
--- print("P4\n" + (size) + " " + (size) + "\n") 
+write(__G.Stdout, "P4\n" + (size) + " " + (size) + "\n") 
 for i = 0, len(rows) do
-    write(stdout(), rows[i]) 
-    -- print(rows[i]) 
+    write(__G.Stdout, rows[i]) 
 end

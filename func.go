@@ -26,6 +26,7 @@ type Program struct {
 	Top          *FuncBody
 	Symbols      map[string]*symbol
 	MaxStackSize int64
+	Options      *CompileOptions
 	Stack        *[]Value
 	Functions    []*Object
 	Stdout       io.Writer
@@ -155,6 +156,14 @@ func (p *Program) Set(k string, v Value) (ok bool) {
 	}
 	(*p.Stack)[addr.addr] = v
 	return true
+}
+
+func (p *Program) LocalsObject() *Object {
+	r := NewObject(len(p.Top.Locals))
+	for i, name := range p.Top.Locals {
+		r.Set(Str(name), (*p.Stack)[i])
+	}
+	return r
 }
 
 func (f *FuncBody) Copy() *FuncBody {

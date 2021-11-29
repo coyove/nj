@@ -134,8 +134,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 				a := va.Array()
 				_ = idx >= a.Len() && env.SetA(Array(Nil, Nil)) || env.SetA(Array(Int(idx), a.Get(idx)))
 			case typ.Object:
-				k, v := va.Object().Next(vb)
-				env.A = Array(k, v)
+				env.A = Array(va.Object().Next(vb))
 			case typ.String:
 				idx := int64(0)
 				if vb != Nil {
@@ -383,7 +382,6 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 				stackEnv.Push(env._get(opb))
 			}
 			if a.Object().receiver != Nil {
-				// stackEnv.Prepend(a.Object().receiver)
 				stackEnv.A = a.Object().receiver
 			} else {
 				stackEnv.A = a

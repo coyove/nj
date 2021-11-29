@@ -40,10 +40,7 @@ func init() {
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Get(nj.Str(k))
 			if x.Type() == typ.Object {
-				p := x.Object()
-				for k, v := p.Next(nj.Nil); k != nj.Nil; k, v = p.Next(k) {
-					add(k.String(), v.String())
-				}
+				x.Object().Foreach(func(k, v nj.Value) bool { add(k.String(), v.String()); return true })
 			}
 		}
 

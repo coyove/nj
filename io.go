@@ -24,25 +24,15 @@ var (
 var (
 	ReaderProto = Func("Reader", nil).Object().Merge(nil,
 		Str("read"), Func("", func(e *Env) {
-			f := e.Object(-1).Prop("_f").Interface().(io.Reader)
-			switch n := e.Get(0); n.Type() {
-			case typ.Number:
-				p := make([]byte, n.ToInt64(0))
-				rn, err := f.Read(p)
-				if err == nil || rn > 0 {
-					e.A = UnsafeStr(p[:rn])
-				} else if err == io.EOF {
-					e.A = Nil
-				} else {
-					panic(err)
-				}
-			default:
-				buf, err := ioutil.ReadAll(f)
-				internal.PanicErr(err)
-				e.A = UnsafeStr(buf)
-			}
-		}, "$f() -> string", "\tread all bytes, return nil if EOF reached",
-			"$f(n: int) -> string", "\tread `n` bytes"),
+			buf := ioRead(e)
+			_ = buf == nil && e.SetA(Nil) || e.SetA(UnsafeStr(buf))
+		}, "$f() -> string", "\tread all bytes as string, return nil if EOF reached",
+			"$f(n: int) -> string", "\tread `n` bytes as string"),
+		Str("readbytes"), Func("", func(e *Env) {
+			buf := ioRead(e)
+			_ = buf == nil && e.SetA(Nil) || e.SetA(Bytes(buf))
+		}, "$f() -> bytes", "\tread all bytes, return nil if EOF reached",
+			"$f(n: int) -> bytes", "\tread `n` bytes"),
 		Str("readbuf"), Func("", func(e *Env) {
 			rn, err := e.Object(-1).Prop("_f").Interface().(io.Reader).Read(e.Array(0).Unwrap().([]byte))
 			e.A = Array(Int(rn), Val(err)) // return in Go style
@@ -67,7 +57,7 @@ var (
 			for cb, rd := e.Object(0), bufio.NewReader(f); ; {
 				line, err := rd.ReadString(delim[0])
 				if len(line) > 0 {
-					if v := cb.MustCall(Str(line)); v != Nil {
+					if v := cb.MustCall(Str(line)); v == False {
 						e.A = v
 						return
 					}
@@ -82,7 +72,7 @@ var (
 			e.A = Nil
 		},
 			"$f() -> array", "\tread the whole file and return lines as an array",
-			"$f(f: function)", "\tfor every line read, f(line) will be called", "\tto exit the reading, return anything other than nil in `f`",
+			"$f(f: function)", "\tfor every line read, `f(line)` will be called", "\tto exit the reading, return `false` in `f`",
 		),
 	)
 
@@ -102,7 +92,7 @@ var (
 			}
 			internal.PanicErr(err)
 			e.A = Int64(wn)
-		}, "$f(r: value, n?: int) -> int", "\tcopy (at most `n`) bytes from `r` to writer, return number of bytes copied"),
+		}, "$f(r: Reader, n?: int) -> int", "\tcopy (at most `n`) bytes from `r` to writer, return number of bytes copied"),
 	)
 
 	SeekerProto = Func("Seeker", nil).Object().Merge(nil,
@@ -110,13 +100,13 @@ var (
 			f := e.Object(-1).Prop("_f").Interface().(io.Seeker)
 			wn, err := f.Seek(e.Int64(0), e.Int(1))
 			internal.PanicErr(err)
-			e.A = Int64(int64(wn))
-		}, ""))
+			e.A = Int64(wn)
+		}, "$f(offset: int, whence: int) -> int"))
 
 	CloserProto = Func("Closer", nil).Object().Merge(nil,
 		Str("close"), Func("", func(e *Env) {
 			internal.PanicErr(e.Object(-1).Prop("_f").Interface().(io.Closer).Close())
-		}, ""))
+		}, "$f()"))
 
 	ReadWriterProto = Func("ReadWriter", nil).Object().Merge(ReaderProto).Merge(WriterProto)
 
@@ -188,15 +178,23 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			err, _ = t.Get(1).Interface().(error)
 			return int(n), err
 		}
+		if rb := Value(m).Object().Prop("readbytes"); rb.IsObject() {
+			v, err := rb.Object().Call(Int(len(p)))
+			if err != nil {
+				return 0, err
+			} else if v == Nil {
+				return 0, io.EOF
+			}
+			return copy(p, v.ToBytes()), nil
+		}
 		if rb := Value(m).Object().Prop("read"); rb.IsObject() {
 			v, err := rb.Object().Call(Int(len(p)))
 			if err != nil {
 				return 0, err
-			}
-			if v == Nil {
+			} else if v == Nil {
 				return 0, io.EOF
 			}
-			return copy(p, []byte(v.Is(typ.String, "ValueIO.Read: use read()").Str())), nil
+			return copy(p, v.ToStr("")), nil
 		}
 	}
 	return 0, fmt.Errorf("reader not implemented")
@@ -235,4 +233,22 @@ func (m ValueIO) Close() error {
 		}
 	}
 	return fmt.Errorf("closer not implemented")
+}
+
+func ioRead(e *Env) []byte {
+	f := e.Object(-1).Prop("_f").Interface().(io.Reader)
+	if n := e.Get(0); n.Type() == typ.Number {
+		p := make([]byte, n.ToInt64(0))
+		rn, err := f.Read(p)
+		if err == nil || rn > 0 {
+			return p[:rn]
+		} else if err == io.EOF {
+			return nil
+		} else {
+			panic(err)
+		}
+	}
+	buf, err := ioutil.ReadAll(f)
+	internal.PanicErr(err)
+	return buf
 }

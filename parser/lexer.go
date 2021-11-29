@@ -33,7 +33,7 @@ func (e *Error) Error() string {
 	if pos.Line == EOF {
 		return e.Message
 	} else {
-		msg := fmt.Sprintf("%q at line %d: %s", e.Token, pos.Line, e.Message)
+		msg := fmt.Sprintf("%q at %s:%d: %s", e.Token, pos.Source, pos.Line, e.Message)
 		if e.Message == "syntax error: unexpected TLParen" {
 			msg += ", is there any space(' ') or newline('\\n') before it?"
 		}

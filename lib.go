@@ -44,11 +44,7 @@ func RemoveGlobalValue(k string) {
 func init() {
 	AddGlobalValue("VERSION", Int64(Version))
 	AddGlobalValue("globals", func(e *Env) {
-		r := NewObject(len(e.Global.Top.Locals))
-		for i, name := range e.Global.Top.Locals {
-			r.Set(Str(name), (*e.Global.Stack)[i])
-		}
-		e.A = r.ToValue()
+		e.A = e.Global.LocalsObject().ToValue()
 	}, "$f() -> object", "\tlist all global symbols and their values")
 	AddGlobalValue("doc", func(e *Env) {
 		o := e.Object(0)
@@ -56,43 +52,31 @@ func init() {
 	}, "$f(f: function) -> string", "\treturn `f`'s documentation")
 	AddGlobalValue("new", func(e *Env) {
 		m := e.Object(0)
-		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetParent(m).ToValue()) || e.SetA((&Object{parent: m}).ToValue())
+		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetProto(m).ToValue()) || e.SetA((&Object{parent: m}).ToValue())
 	})
 	AddGlobalValue("prototype", g["new"])
 	AddGlobalValue("len", func(e *Env) { e.A = Int(e.Get(0).Len()) })
+	AddGlobalValue("loadfile", func(e *Env) {
+		e.A = MustRun(LoadFile(e.Str(0), e.Global.Options))
+	}, "$f(path: string) -> value", "\tload and eval file at `path`, globals will be inherited in loaded file")
 	AddGlobalValue("eval", func(e *Env) {
+		opts := e.Get(1).ToObject()
 		var m map[string]interface{}
-		if gt := e.Get(1).ToObject().Prop("globals"); gt.Type() == typ.Object {
+		if gt := opts.Prop("globals"); gt.Type() == typ.Object {
 			m = map[string]interface{}{}
-			gt.Object().Foreach(func(k, v Value) bool {
-				m[k.String()] = v.Interface()
-				return true
-			})
+			gt.Object().Foreach(func(k, v Value) bool { m[k.String()] = v.Interface(); return true })
 		}
-		if e.Get(1).ToObject().Prop("compileonly").IsTrue() {
+		if opts.Prop("ast").IsTrue() {
 			v, err := parser.Parse(e.Str(0), "")
 			internal.PanicErr(err)
 			e.A = Val(v)
 			return
 		}
-		wrap := func(err error) error { return fmt.Errorf("panic inside: %v", err) }
 		p, err := LoadString(e.Str(0), &CompileOptions{GlobalKeyValues: m})
-		if err != nil {
-			panic(wrap(err))
-		}
+		internal.PanicErr(err)
 		v, err := p.Run()
-		if err != nil {
-			panic(wrap(err))
-		}
-		if !e.Get(1).ToObject().Prop("returnglobals").IsFalse() {
-			r := NewObject(len(p.Top.Locals))
-			for i, name := range p.Top.Locals {
-				r.Set(Str(name), (*p.Stack)[i])
-			}
-			e.A = r.ToValue()
-		} else {
-			e.A = v
-		}
+		internal.PanicErr(err)
+		_ = opts.Prop("returnglobals").IsTrue() && e.SetA(p.LocalsObject().ToValue()) || e.SetA(v)
 	}, "$f(code: string, options?: object) -> value", "\tevaluate `code` and return the reuslt")
 	AddGlobalValue("closure", func(e *Env) {
 		lambda := e.Object(0)
@@ -118,14 +102,14 @@ func init() {
 				r = append(r, Int64(int64(idx)), Str(name), (*e.stack)[idx])
 			}
 			e.A = Array(r...)
-		}, "$f() -> array", "\treturn { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
+		}, "$f() -> array", "\treturn [index1, name1, value1, i2, n2, v2, i3, n3, v3, ...]"),
 		Str("globals"), Func("", func(e *Env) {
 			var r []Value
 			for i, name := range e.Global.Top.Locals {
 				r = append(r, Int(i), Str(name), (*e.Global.Stack)[i])
 			}
 			e.A = Array(r...)
-		}, "$f() -> array", "\treturn { index1, name1, value1, i2, n2, v2, i3, n3, v3, ... }"),
+		}, "$f() -> array", "\treturn [index1, name1, value1, i2, n2, v2, i3, n3, v3, ...]"),
 		Str("set"), Func("set", func(e *Env) {
 			(*e.Global.Stack)[e.Int64(0)] = e.Get(1)
 		}, "$f(idx: int, v: value)"),
@@ -154,7 +138,7 @@ func init() {
 				lines = append(lines, Str(r.cls.Name), Int64(int64(src)), Int64(int64(r.cursor-1)))
 			}
 			env.A = Array(lines...)
-		}, "$f(skip: int) -> array", "\treturn { func_name0, line1, cursor1, n2, l2, c2, ... }"),
+		}, "$f(skip: int) -> array", "\treturn [func_name0, line1, cursor1, n2, l2, c2, ...]"),
 		Str("disfunc"), Func("", func(e *Env) {
 			o := e.Object(0)
 			_ = o.IsCallable() && e.SetA(Str(o.callable.ToCode())) || e.SetA(Nil)
@@ -209,7 +193,7 @@ func init() {
 		for _, a := range e.Stack()[1:] {
 			fmt.Fprint(w, a.String())
 		}
-	}, "$f(writer: value, args...: value)", "\twrite `args` to `writer`")
+	}, "$f(writer: Writer, args...: value)", "\twrite `args` to `writer`")
 	AddGlobalValue("println", func(e *Env) {
 		for _, a := range e.Stack() {
 			fmt.Fprint(e.Global.Stdout, a.String(), " ")
@@ -229,7 +213,7 @@ func init() {
 			results = append(results, Str(s))
 		}
 		env.A = Array(results...)
-	}, "$f() -> array", "\tread all user inputs and return as { input1, input2, ... }",
+	}, "$f() -> array", "\tread all user inputs and return as [input1, input2, ...]",
 		"$f(prompt: string, n?: int) -> array", "\tprint `prompt` then read all (or at most `n`) user inputs")
 	AddGlobalValue("time", func(e *Env) {
 		e.A = Float64(float64(time.Now().UnixNano()) / 1e9)
@@ -309,7 +293,7 @@ func init() {
 		Str("get"), Func("", func(e *Env) {
 			result := gjson.Get(e.Str(0), e.Str(1))
 			_ = !result.Exists() && e.SetA(e.Get(2)) || e.SetA(Val(result))
-		}, "$f(j: string, selector: string, default?: value) -> value"),
+		}, "$f(j: string, path: string, default?: value) -> value"),
 	))
 
 	AddGlobalValue("sync", Obj(
@@ -358,7 +342,7 @@ func init() {
 			close(in)
 			wg.Wait()
 			internal.PanicErr(outError)
-		}, "$f(a: object|array, f: function, n: int) -> objec|array",
+		}, "$f(a: object|array, f: function, n: int) -> object|array",
 			"\tmap values in `a` into new values using f(k, v) concurrently on `n` goroutines (defaults to the number of CPUs)"),
 	))
 
@@ -404,7 +388,7 @@ func init() {
 				internal.PanicErr(err)
 				e.A = Int64(t)
 			}),
-		).SetParent(ReadWriteSeekCloserProto).ToValue()
+		).SetProto(ReadWriteSeekCloserProto).ToValue()
 	}, "$f(path: string, flag: string, perm: int) -> FileObject").Object().Merge(nil,
 		Str("close"), Func("", func(e *Env) {
 			f, _ := e.Object(-1).Get(Zero).Interface().(*os.File)

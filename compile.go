@@ -460,6 +460,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		f.callable.LoadGlobal = cls
 	}
 	(*cls.Stack)[gi] = intf(cls)
+	cls.Options = opt
 	return cls, err
 }
 
@@ -468,19 +469,15 @@ func LoadFile(path string, opt *CompileOptions) (*Program, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	n, err := parser.Parse(*(*string)(unsafe.Pointer(&code)), path)
-	if err != nil {
-		return nil, err
-	}
-	if internal.IsDebug() {
-		n.Dump(os.Stderr, "  ")
-	}
-	return compileNodeTopLevel(*(*string)(unsafe.Pointer(&code)), n, opt)
+	return loadCode(*(*string)(unsafe.Pointer(&code)), path, opt)
 }
 
 func LoadString(code string, opt *CompileOptions) (*Program, error) {
-	n, err := parser.Parse(code, "")
+	return loadCode(code, "<memory>", opt)
+}
+
+func loadCode(code, name string, opt *CompileOptions) (*Program, error) {
+	n, err := parser.Parse(code, name)
 	if err != nil {
 		return nil, err
 	}
@@ -499,10 +496,7 @@ func Run(p *Program, err error) (Value, error) {
 
 func MustRun(p *Program, err error) Value {
 	internal.PanicErr(err)
-	return MustValue(p.Run())
-}
-
-func MustValue(v Value, err error) Value {
+	v, err := p.Run()
 	internal.PanicErr(err)
 	return v
 }

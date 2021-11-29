@@ -54,9 +54,9 @@ func init() {
 		Str("delete"), Func("", func(e *Env) { e.A = e.Object(-1).Delete(e.Get(0)) }, "$f(k: value) -> value", "\tdelete value and return previous value"),
 		Str("clear"), Func("", func(e *Env) { e.Object(-1).Clear() }, "$f()"),
 		Str("copy"), Func("", func(e *Env) { e.A = e.Object(-1).Copy().ToValue() }, "$f() -> object", "\tcopy the object"),
-		Str("parent"), Func("", func(e *Env) { e.A = e.Object(-1).Parent().ToValue() }, "$f() -> object", "\treturn object's parent if any"),
-		Str("setparent"), Func("", func(e *Env) { e.Object(-1).SetParent(e.Object(0)) }, "$f(p: object)", "\tset object's parent to `p`"),
-		Str("setfirstparent"), Func("", func(e *Env) { e.Object(-1).SetFirstParent(e.Object(0)) }, "$f(p: object)", "\tinsert `p` as `t`'s first parent"),
+		Str("proto"), Func("", func(e *Env) { e.A = e.Object(-1).Proto().ToValue() }, "$f() -> object", "\treturn object's parent if any"),
+		Str("setproto"), Func("", func(e *Env) { e.Object(-1).SetProto(e.Object(0)) }, "$f(p: object)", "\tset object's prototype to `p`"),
+		Str("setfirstproto"), Func("", func(e *Env) { e.Object(-1).SetFirstParent(e.Object(0)) }, "$f(p: object)", "\tinsert `p` as `t`'s first prototype"),
 		Str("size"), Func("", func(e *Env) { e.A = Int(e.Object(-1).Size()) }, "$f() -> int", "\treturn the size of object"),
 		Str("len"), Func("", func(e *Env) { e.A = Int(e.Object(-1).Len()) }, "$f() -> int", "\treturn the count of keys in object"),
 		Str("keys"), Func("", func(e *Env) {
@@ -206,7 +206,7 @@ func init() {
 			internal.PanicErr(err)
 			e.A = Bytes(v)
 		}),
-	).SetParent(Func("EncoderDecoder", nil).Object().Merge(nil,
+	).SetProto(Func("EncoderDecoder", nil).Object().Merge(nil,
 		Str("encoder"), Func("", func(e *Env) {
 			enc := Nil
 			buf := &bytes.Buffer{}
@@ -353,7 +353,7 @@ func init() {
 			if v := e.Get(0); v != Nil {
 				b.WriteString(v.String())
 			}
-			e.A = Func("Buffer", nil).Object().SetParent(ReadWriterProto).Merge(nil,
+			e.A = Func("Buffer", nil).Object().SetProto(ReadWriterProto).Merge(nil,
 				Str("_f"), Val(b),
 				Str("reset"), Func("", func(e *Env) {
 					e.Object(-1).Prop("_f").Interface().(*bytes.Buffer).Reset()
@@ -366,19 +366,19 @@ func init() {
 				}),
 			).ToValue()
 		}),
-		Str("hex"), Func("hex", nil).Object().SetParent(encDecProto.Parent()).ToValue(),
+		Str("hex"), Func("hex", nil).Object().SetProto(encDecProto.Proto()).ToValue(),
 		Str("base64"), Func("base64", nil).Object().Merge(nil,
 			Str("std"), Proto(encDecProto, Str("_e"), Val(getEncB64(base64.StdEncoding, '='))),
 			Str("url"), Proto(encDecProto, Str("_e"), Val(getEncB64(base64.URLEncoding, '='))),
 			Str("stdp"), Proto(encDecProto, Str("_e"), Val(getEncB64(base64.StdEncoding, -1))),
 			Str("urlp"), Proto(encDecProto, Str("_e"), Val(getEncB64(base64.URLEncoding, -1))),
-		).SetParent(encDecProto).ToValue(),
+		).SetProto(encDecProto).ToValue(),
 		Str("base32"), Func("base32", nil).Object().Merge(nil,
 			Str("std"), Proto(encDecProto, Str("_e"), Val(getEncB32(base32.StdEncoding, '='))),
 			Str("hex"), Proto(encDecProto, Str("_e"), Val(getEncB32(base32.HexEncoding, '='))),
 			Str("stdp"), Proto(encDecProto, Str("_e"), Val(getEncB32(base32.StdEncoding, -1))),
 			Str("hexp"), Proto(encDecProto, Str("_e"), Val(getEncB32(base32.HexEncoding, -1))),
-		).SetParent(encDecProto).ToValue(),
+		).SetProto(encDecProto).ToValue(),
 	).ToValue()
 	AddGlobalValue("str", StrLib)
 
@@ -492,7 +492,7 @@ func init() {
 		}),
 		Str("pstat"), Func("", func(e *Env) {
 			fi, err := os.Stat(e.Str(0))
-			_ = err == nil && e.SetA(Val(fi))
+			_ = err == nil && e.SetA(Val(fi)) || e.SetA(Nil)
 		}),
 	)
 	AddGlobalValue("os", OSLib)
