@@ -65,21 +65,22 @@ println("Author is:", author)
 
 -- Print all global values, mainly functions
 -- use doc(function) to view its documentation
-local g = debug:globals()
+local g = debug.globals()
 
-print(("version %s, total global values: %d").format(VERSION, table:arraylen(g)/3))
+print(("version %s, total global values: %d").format(VERSION, #g/3))
 
 function pp(name, f, ident)
-    if type(f) == "table" then
+    if type(f) == "object" then
+        if f.iscallable() then
+            local d = doc(f)
+            print(ident, name, " ", d.trimleft(name))
+            print()
+        end
         for k, v in f do pp(name + "." + str(k), v, ident) end
-    elseif type(f) == "function" then
-        local d = doc(f)
-        print(ident, name, " ", d.ltrim(name))
-        print()
     else
         print(ident, name, "=", f)
         print()
-    end	
+    end		
 end
 
 for i=0,len(g),3 do
@@ -87,7 +88,7 @@ for i=0,len(g),3 do
     else
         local name = g[i + 1]
         if len(name) > 32 then
-            name = name.sub(0,16) + '...' + name.sub(len(name)-16,len(name))
+            name = name.sub(0, 16) + '...' + name.sub(#name-16, #name)
         end
         pp(i//3 + ": " + name, g[i + 2], "")
     end

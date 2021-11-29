@@ -125,22 +125,22 @@ func (n Node) Sym() string {
 	return *(*string)(n.ptr)
 }
 
-func (n Node) Int() int64 { return *(*int64)(unsafe.Pointer(&n)) }
+func (n Node) Int64() int64 { return *(*int64)(unsafe.Pointer(&n)) }
 
-func (n Node) Float() float64 { return *(*float64)(unsafe.Pointer(&n)) }
+func (n Node) Float64() float64 { return *(*float64)(unsafe.Pointer(&n)) }
 
 func (n Node) Num() (float64, int64, bool) {
 	if n.Type() == INT {
-		return float64(n.Int()), n.Int(), true
+		return float64(n.Int64()), n.Int64(), true
 	}
-	return n.Float(), int64(n.Float()), false
+	return n.Float64(), int64(n.Float64()), false
 }
 
 func (n Node) IsNegativeNumber() bool {
 	if n.Type() == FLOAT {
-		return n.Float() < 0
+		return n.Float64() < 0
 	}
-	return n.Int() < 0
+	return n.Int64() < 0
 }
 
 func (n Node) Nodes() []Node {
@@ -267,9 +267,9 @@ func (n Node) Dump(w io.Writer, ident string) {
 func (n Node) String() string {
 	switch n.Type() {
 	case INT:
-		return strconv.FormatInt(n.Int(), 10)
+		return strconv.FormatInt(n.Int64(), 10)
 	case FLOAT:
-		return strconv.FormatFloat(n.Float(), 'f', -1, 64)
+		return strconv.FormatFloat(n.Float64(), 'f', -1, 64)
 	case STR:
 		return strconv.Quote(n.Str())
 	case SYM:

@@ -119,6 +119,14 @@ func showType(v Value) string {
 		return strconv.Quote(v.Str()[:32] + "...")
 	case typ.Object:
 		return "{" + v.Object().Name() + "}"
+	case typ.Array:
+		if a := v.Array().any; a != nil {
+			if _, ok := a.([]byte); ok {
+				return "bytes"
+			}
+			return reflect.TypeOf(a).String()
+		}
+		fallthrough
 	default:
 		return vt.String()
 	}

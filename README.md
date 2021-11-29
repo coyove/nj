@@ -4,6 +4,8 @@ NJ is a simple script engine written in golang with Lua-like syntax.
 
 ## Differ from Lua
 
+- Functions are callable objects:
+	- `function foo() end; print(type(foo))` prints `object`.
 - Functions should be declared in the topmost scope:
 	- `do function foo() ... end end` is invalid.
 	- `if true then function foo() function bar() ... end end` is invalid.
@@ -18,16 +20,16 @@ NJ is a simple script engine written in golang with Lua-like syntax.
 	- `function foo(a, b...) end`.
 	- `args = [1, 2, 3]; foo(args...)`.
 - Simple keyword arguments syntax sugar:
-	- `foo(a, b=2, c=3)` will be converted to `foo(a, { b=2, c=3 })`.
+	- `foo(a, b=2, c=3)` will be converted to `foo(a, {b=2, c=3})`.
 	- There is no real keyword argument in NJ, e.g.: `function foo(a) return type(a) end`:
 		- `foo(1)` returns "number".
-		- `foo(a=1) <=> foo({a=1})` returns "table".
-- Returning multiple arguments will be translated into returning a `table`, e.g.:
+		- `foo(a=1) <=> foo({a=1})` returns "object".
+- Returning multiple arguments will be translated into returning an array, e.g.:
 	- `function f() return 1, 2 end; local a, b = f()`.
 	- `function f() return [1, 2] end; local tmp = f(); local a, b = tmp[0], tmp[1]`.
 	- `local a, b, c = d <=> local a, b, c = d[0], d[1], d[2]`.
 - Everything starts at ZERO. For-loops start inclusively and end exclusively, e.g.:
-	- `a={1, 2}; assert(a[0] == 1)`.
+	- `a=[1, 2]; assert(a[0] == 1)`.
 	- `for i=0,n do ... end` ranges `[0, n-1]`.
 	- `for i=n-1,-1,-1 do ... end` ranges `[n-1, 0]`.
 - Functions loaded from `table` will have a self-like parameter at first, to not-to-have it, use `:` operator, e.g.:

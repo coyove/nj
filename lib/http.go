@@ -157,10 +157,10 @@ func init() {
 		for k := range resp.Header {
 			hdr[k] = resp.Header.Get(k)
 		}
-		env.A = nj.Array(nj.Int64(int64(resp.StatusCode)), nj.Val(hdr), buf, nj.Val(client.Jar))
-	}, "$f(options: table) -> array",
-		"\tperform an HTTP request and return { code, headers, body_reader, cookie_jar }",
-		"\t'url' is a mandatory parameter in options, others are optional and pretty self explanatory:",
+		env.A = nj.Array(nj.Int(resp.StatusCode), nj.Val(hdr), buf, nj.Val(client.Jar))
+	}, "$f(options: object) -> array",
+		"\tperform an HTTP request and return [code, headers, body_reader, cookie_jar]",
+		"\t'url' is a mandatory parameter in `options`, others are optional and pretty self explanatory:",
 		"\thttp({url='...'})",
 		"\thttp({url='...', noredirect=true})",
 		"\thttp({url='...', bodyreader=true})",

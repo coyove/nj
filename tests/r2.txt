@@ -72,7 +72,7 @@ end
 
 function bad(n) panic("bad" + n) end
 do
-	local err = pcall(bad, "boy")
+	local err = bad.try("boy")
 	assert(err == "badboy")
 end
 

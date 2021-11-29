@@ -30,12 +30,8 @@ func AddGlobalValue(k string, v interface{}, doc ...string) {
 	switch v := v.(type) {
 	case func(*Env):
 		g[k] = Func(k, v, doc...)
-	case func(Value) Value:
-		g[k] = Func1(k, v, doc...)
-	case func(Value, Value) Value:
-		g[k] = Func2(k, v, doc...)
-	case func(Value, Value, Value) Value:
-		g[k] = Func3(k, v, doc...)
+	case Value:
+		g[k] = renameFuncName(Str(k), v)
 	default:
 		g[k] = Val(v)
 	}
@@ -194,9 +190,9 @@ func init() {
 		if v := e.Get(0); v.Type() == typ.Number {
 			e.A = v
 		} else if v := parser.Num(v.String()); v.Type() == parser.FLOAT {
-			e.A = Float64(v.Float())
+			e.A = Float64(v.Float64())
 		} else {
-			e.A = Int64(v.Int())
+			e.A = Int64(v.Int64())
 		}
 	}, "$f(v: value) -> number", "\tconvert `v` to a float number, panic when failed")
 	AddGlobalValue("print", func(env *Env) {
@@ -354,15 +350,19 @@ func init() {
 					}
 				}()
 			}
-			t.ForEach(func(k, v Value) bool { in <- [2]Value{k, v}; return true })
+			if e.A.Type() == typ.Array {
+				t.Array().Foreach(func(k int, v Value) bool { in <- [2]Value{Int(k), v}; return true })
+			} else {
+				t.Object().Foreach(func(k, v Value) bool { in <- [2]Value{k, v}; return true })
+			}
 			close(in)
 			wg.Wait()
 			internal.PanicErr(outError)
-		}, "$f(a: object, f: function, n: int) -> object",
+		}, "$f(a: object|array, f: function, n: int) -> objec|array",
 			"\tmap values in `a` into new values using f(k, v) concurrently on `n` goroutines (defaults to the number of CPUs)"),
 	))
 
-	AddGlobalValue("open", Func("", func(e *Env) {
+	AddGlobalValue("open", Func("open", func(e *Env) {
 		path, flag, perm := e.Str(0), e.Get(1).ToStr("r"), e.Get(2).ToInt64(0644)
 		var opt int
 		for _, f := range flag {

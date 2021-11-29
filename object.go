@@ -66,7 +66,7 @@ func (m *Object) Len() int {
 	return int(m.count)
 }
 
-// Clear clears the table, where already allocated memory will be reused.
+// Clear clears all keys in the object, where already allocated memory will be reused.
 func (m *Object) Clear() {
 	m.items = m.items[:0]
 	m.count = 0
@@ -145,10 +145,10 @@ func (m *Object) Contains(k Value) bool {
 	return m.findHash(k) >= 0
 }
 
-// Set upserts a key-value pair into the table
+// Set upserts a key-value pair into the object
 func (m *Object) Set(k, v Value) (prev Value) {
 	if k == Nil {
-		internal.Panic("table set with nil key")
+		internal.Panic("object set with nil key")
 	}
 
 	if len(m.items) <= 0 {
@@ -158,10 +158,10 @@ func (m *Object) Set(k, v Value) (prev Value) {
 	return
 }
 
-// Delete deletes a key-value pair from the table
+// Delete deletes a key-value pair from the object
 func (m *Object) Delete(k Value) (prev Value) {
 	if k == Nil {
-		internal.Panic("table delete with nil key")
+		internal.Panic("object delete with nil key")
 	}
 	return m.delHash(k)
 }
@@ -293,7 +293,7 @@ func (m *Object) String() string {
 
 func (m *Object) rawPrint(p *bytes.Buffer, lv int, j, showParent bool) {
 	if m == nil {
-		p.WriteString("nil")
+		p.WriteString(ifstr(j, "null", "nil"))
 		return
 	}
 	if m.callable != nil {
@@ -306,7 +306,9 @@ func (m *Object) rawPrint(p *bytes.Buffer, lv int, j, showParent bool) {
 			p.WriteString("{")
 		}
 	} else {
-		p.WriteString(m.Name())
+		if !j {
+			p.WriteString(m.Name())
+		}
 		p.WriteString("{")
 	}
 	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
@@ -341,7 +343,7 @@ func (m *Object) Name() string {
 	return "object"
 }
 
-// Copy returns a new table with a copy of dataset
+// Copy returns a new object with a copy of dataset
 func (m *Object) Copy() *Object {
 	if m == nil {
 		return NewObject(1)
@@ -411,6 +413,9 @@ func (m *Object) Merge(src *Object, kvs ...Value) *Object {
 }
 
 func (m *Object) IsCallable() bool {
+	if m == nil {
+		return false
+	}
 	return m.callable != nil
 }
 

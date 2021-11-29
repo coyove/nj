@@ -11,7 +11,7 @@ type Set struct{ m map[uint64]nj.Value }
 func init() {
 	nj.AddGlobalValue("set", func(env *nj.Env) {
 		s := Set{m: map[uint64]nj.Value{}}
-		env.Array(0).Foreach(func(k, v nj.Value) bool {
+		env.Array(0).Foreach(func(k int, v nj.Value) bool {
 			s.Add(v)
 			return true
 		})

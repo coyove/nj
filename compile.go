@@ -308,9 +308,9 @@ func (table *symTable) compileStaticNode(node parser.Node) (uint16, bool) {
 	case parser.STR:
 		return table.loadK(node.Str()), true
 	case parser.FLOAT:
-		return table.loadK(node.Float()), true
+		return table.loadK(node.Float64()), true
 	case parser.INT:
-		return table.loadK(node.Int()), true
+		return table.loadK(node.Int64()), true
 	case parser.SYM:
 		return table.get(node.Sym()), true
 	}
@@ -368,9 +368,9 @@ func (table *symTable) collectConsts(node parser.Node) {
 	case parser.STR:
 		table.loadK(node.Str())
 	case parser.FLOAT:
-		table.loadK(node.Float())
+		table.loadK(node.Float64())
 	case parser.INT:
-		table.loadK(node.Int())
+		table.loadK(node.Int64())
 	case parser.NODES:
 		for _, n := range node.Nodes() {
 			table.collectConsts(n)

@@ -33,7 +33,7 @@ function worker(k, args)
     result[depth] = str.from("%d\t trees of depth %d\t check: %v").format(iterations, depth, check)
 end
 
-payload = table()
+payload = []
 for depth_l = minDepth,maxDepth,2 do
     payload.append([depth_l, check_l])
 end

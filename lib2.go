@@ -31,7 +31,7 @@ var (
 )
 
 func init() {
-	IOLib = TableMerge(IOLib, Obj(
+	IOLib = Obj(
 		Str("reader"), ReaderProto.ToValue(),
 		Str("writer"), WriterProto.ToValue(),
 		Str("seeker"), SeekerProto.ToValue(),
@@ -41,7 +41,7 @@ func init() {
 		Str("writecloser"), WriteCloserProto.ToValue(),
 		Str("readwritecloser"), ReadWriteCloserProto.ToValue(),
 		Str("readwriteseekcloser"), ReadWriteSeekCloserProto.ToValue(),
-	).Object())
+	)
 	AddGlobalValue("io", IOLib)
 
 	ObjectLib = Func("object", func(e *Env) {
@@ -99,6 +99,7 @@ func init() {
 		Str("next"), Func("", func(e *Env) {
 			e.A = Array(e.Object(-1).Next(e.Get(0)))
 		}, "$f(k: value) -> [value, value]", "\tfind next key-value pair after `k` in the object and return as [key, value]"),
+		Str("iscallable"), Func("", func(e *Env) { e.A = Bool(e.Object(-1).IsCallable()) }, "$f() -> bool"),
 		Str("apply"), Func("", func(e *Env) { e.A = e.Object(-1).MustApply(e.Get(0), e.Stack()[1:]...) }, "$f(this: value, args...: value) -> value"),
 		Str("call"), Func("", func(e *Env) { e.A = e.Object(-1).MustCall(e.Stack()...) }, "$f(args...: value) -> value"),
 		Str("try"), Func("", func(e *Env) {
@@ -137,7 +138,7 @@ func init() {
 			)
 		}, "$f(args...: value)", "\texecute `f` in goroutine"),
 	).ToValue()
-	AddGlobalValue("table", ObjectLib)
+	AddGlobalValue("object", ObjectLib)
 
 	ArrayLib = Func("arary", nil).Object().Merge(nil,
 		Str("make"), Func("", func(e *Env) { e.A = Array(make([]Value, e.Int(0))...) }, "$f(n: int) -> array", "\tcreate an array of size `n`"),
@@ -158,7 +159,7 @@ func init() {
 		Str("filter"), Func("", func(e *Env) {
 			src, ff := e.Array(-1), e.Object(0)
 			dest := make([]Value, 0, src.Len())
-			src.Foreach(func(k, v Value) bool {
+			src.Foreach(func(k int, v Value) bool {
 				if ff.MustCall(v).IsTrue() {
 					dest = append(dest, v)
 				}
@@ -192,7 +193,20 @@ func init() {
 	).ToValue()
 	AddGlobalValue("array", ArrayLib)
 
-	encDecProto := Proto(Obj(
+	encDecProto := Func("EncodeDecode", nil).Object().Merge(nil,
+		Str("encode"), Func("", func(e *Env) {
+			e.A = Str(e.Object(-1).Prop("_e").Interface().(interface {
+				EncodeToString([]byte) string
+			}).EncodeToString(e.Get(0).ToBytes()))
+		}),
+		Str("decode"), Func("", func(e *Env) {
+			v, err := e.Object(-1).Prop("_e").Interface().(interface {
+				DecodeString(string) ([]byte, error)
+			}).DecodeString(e.Str(0))
+			internal.PanicErr(err)
+			e.A = Bytes(v)
+		}),
+	).SetParent(Func("EncoderDecoder", nil).Object().Merge(nil,
 		Str("encoder"), Func("", func(e *Env) {
 			enc := Nil
 			buf := &bytes.Buffer{}
@@ -228,30 +242,16 @@ func init() {
 			}
 			e.A = Proto(ReaderProto, Str("_f"), Val(dec))
 		}),
-	).Object(),
-		Str("__name"), Str("encdecfast"),
-		Str("encode"), Func("", func(e *Env) {
-			e.A = Str(e.Object(-1).Prop("_e").Interface().(interface {
-				EncodeToString([]byte) string
-			}).EncodeToString(e.Get(0).ToBytes()))
-		}),
-		Str("decode"), Func("", func(e *Env) {
-			v, err := e.Object(-1).Prop("_e").Interface().(interface {
-				DecodeString(string) ([]byte, error)
-			}).DecodeString(e.Str(0))
-			internal.PanicErr(err)
-			e.A = Bytes(v)
-		}),
-	)
+	))
 
 	StrLib = Func("String", func(e *Env) {
 		i, ok := e.Interface(0).([]byte)
 		_ = ok && e.SetA(UnsafeStr(i)) || e.SetA(Str(e.Get(0).String()))
 	}).Object().Merge(nil,
+		Str("from"), Func("", func(e *Env) { e.A = Str(fmt.Sprint(e.Interface(0))) }, "$f(v: value) -> string", "\tconvert `v` to string"),
 		Str("size"), Func("", func(e *Env) { e.A = Int(e.StrLen(-1)) }, "$f() -> int"),
 		Str("len"), Func("", func(e *Env) { e.A = Int(e.StrLen(-1)) }, "$f() -> int"),
 		Str("count"), Func("", func(e *Env) { e.A = Int(utf8.RuneCountInString(e.Str(-1))) }, "$f() -> int", "\treturn count of runes in text"),
-		Str("from"), Func("", func(e *Env) { e.A = Str(fmt.Sprint(e.Interface(0))) }, "$f(v: value) -> string", "\tconvert value to string"),
 		Str("iequals"), Func("", func(e *Env) { e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0))) }, "$f(text2: string) -> bool"),
 		Str("contains"), Func("", func(e *Env) { e.A = Bool(strings.Contains(e.Str(-1), e.Str(0))) }, "$f(substr: string) -> bool"),
 		Str("split"), Func("", func(e *Env) {
@@ -271,7 +271,7 @@ func init() {
 		Str("join"), Func("", func(e *Env) {
 			d := e.Str(-1)
 			buf := &bytes.Buffer{}
-			e.Array(0).Foreach(func(k, v Value) bool {
+			e.Array(0).Foreach(func(k int, v Value) bool {
 				buf.WriteString(v.String())
 				buf.WriteString(d)
 				return true
@@ -366,24 +366,23 @@ func init() {
 				}),
 			).ToValue()
 		}),
-		Str("hex"), Proto(encDecProto.Object().Parent(), Str("__name"), Str("hex")),
-		Str("base64"), Obj(Str("__name"), Str("base64"),
-			Str("std"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB64(base64.StdEncoding, '='))),
-			Str("url"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB64(base64.URLEncoding, '='))),
-			Str("stdp"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB64(base64.StdEncoding, -1))),
-			Str("urlp"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB64(base64.URLEncoding, -1))),
-		),
-		Str("base32"), Obj(Str("__name"), Str("base32"),
-			Str("std"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB32(base32.StdEncoding, '='))),
-			Str("hex"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB32(base32.HexEncoding, '='))),
-			Str("stdp"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB32(base32.StdEncoding, -1))),
-			Str("hexp"), Proto(encDecProto.Object(), Str("_e"), Val(getEncB32(base32.HexEncoding, -1))),
-		),
+		Str("hex"), Func("hex", nil).Object().SetParent(encDecProto.Parent()).ToValue(),
+		Str("base64"), Func("base64", nil).Object().Merge(nil,
+			Str("std"), Proto(encDecProto, Str("_e"), Val(getEncB64(base64.StdEncoding, '='))),
+			Str("url"), Proto(encDecProto, Str("_e"), Val(getEncB64(base64.URLEncoding, '='))),
+			Str("stdp"), Proto(encDecProto, Str("_e"), Val(getEncB64(base64.StdEncoding, -1))),
+			Str("urlp"), Proto(encDecProto, Str("_e"), Val(getEncB64(base64.URLEncoding, -1))),
+		).SetParent(encDecProto).ToValue(),
+		Str("base32"), Func("base32", nil).Object().Merge(nil,
+			Str("std"), Proto(encDecProto, Str("_e"), Val(getEncB32(base32.StdEncoding, '='))),
+			Str("hex"), Proto(encDecProto, Str("_e"), Val(getEncB32(base32.HexEncoding, '='))),
+			Str("stdp"), Proto(encDecProto, Str("_e"), Val(getEncB32(base32.StdEncoding, -1))),
+			Str("hexp"), Proto(encDecProto, Str("_e"), Val(getEncB32(base32.HexEncoding, -1))),
+		).SetParent(encDecProto).ToValue(),
 	).ToValue()
 	AddGlobalValue("str", StrLib)
 
 	MathLib = Obj(
-		Str("__name"), Str("mathlib"),
 		Str("INF"), Float64(math.Inf(1)),
 		Str("NEG_INF"), Float64(math.Inf(-1)),
 		Str("PI"), Float64(math.Pi),
@@ -565,7 +564,7 @@ func sprintf(env *Env, start int, p io.Writer) {
 		case typ.Bool:
 			fmt.Fprint(p, env.Bool(popi))
 		case typ.String:
-			fmt.Fprintf(p, tmp.String(), env.Str(popi))
+			fmt.Fprintf(p, tmp.String(), env.Get(popi).String())
 		case typ.Number + typ.String:
 			if pop := env.Get(popi); pop.Type() == typ.String {
 				fmt.Fprintf(p, tmp.String(), pop.Str())

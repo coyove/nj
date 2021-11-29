@@ -52,18 +52,6 @@ func Func(name string, f func(*Env), doc ...string) Value {
 	}).ToValue()
 }
 
-func Func1(name string, f func(Value) Value, doc ...string) Value {
-	return Func(name, func(e *Env) { e.A = f(e.B(0)) }, doc...)
-}
-
-func Func2(name string, f func(Value, Value) Value, doc ...string) Value {
-	return Func(name, func(e *Env) { e.A = f(e.B(0), e.B(1)) }, doc...)
-}
-
-func Func3(name string, f func(Value, Value, Value) Value, doc ...string) Value {
-	return Func(name, func(e *Env) { e.A = f(e.B(0), e.B(1), e.B(2)) }, doc...)
-}
-
 func (c *FuncBody) String() string {
 	p := bytes.Buffer{}
 	if c.Name != "" {

@@ -122,22 +122,7 @@ func Obj(kvs ...Value) Value {
 	return Value{v: uint64(typ.Object), p: unsafe.Pointer(t)}
 }
 
-// TableMerge merges key-value pairs from `src` into `dst` if both of them are tables
-func TableMerge(dst Value, src *Object) Value {
-	var t *Object
-	switch dst.Type() {
-	case typ.Object:
-		t = dst.Object()
-	case typ.Nil:
-		t = NewObject(1)
-	default:
-		return dst
-	}
-	t.Merge(src)
-	return t.ToValue()
-}
-
-// Proto creates a table whose parent will be set to `p`
+// Proto creates an object whose parent will be set to `p`
 func Proto(p *Object, kvs ...Value) Value {
 	return Obj(kvs...).Object().SetParent(p).ToValue()
 }
@@ -326,9 +311,10 @@ func (v Value) Float64() float64 {
 // Bool returns value as a boolean without checking Type()
 func (v Value) Bool() bool { return v.p == trueMarker }
 
-// Object returns value as a table without checking Type()
+// Object returns value as an object without checking Type()
 func (v Value) Object() *Object { return (*Object)(v.p) }
 
+// Array returns value as a sequence without checking Type()
 func (v Value) Array() *Sequence { return (*Sequence)(v.p) }
 
 // Interface returns value as an interface{}
@@ -391,11 +377,11 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 		switch t.Kind() {
 		case reflect.Slice:
 			s := reflect.MakeSlice(t, a.Len(), a.Len())
-			a.Foreach(func(k, v Value) bool { s.Index(k.Int()).Set(v.ReflectValue(t.Elem())); return true })
+			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(v.ReflectValue(t.Elem())); return true })
 			return s
 		case reflect.Array:
 			s := reflect.New(t).Elem()
-			a.Foreach(func(k, v Value) bool { s.Index(k.Int()).Set(v.ReflectValue(t.Elem())); return true })
+			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(v.ReflectValue(t.Elem())); return true })
 			return s
 		}
 	} else if vt == typ.Object {
@@ -474,7 +460,7 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 		v.Object().rawPrint(p, lv, j, false)
 	case typ.Array:
 		p.WriteString("[")
-		v.Array().Foreach(func(i, v Value) bool {
+		v.Array().Foreach(func(i int, v Value) bool {
 			v.toString(p, lv+1, j)
 			p.WriteString(",")
 			return true
@@ -496,8 +482,14 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 }
 
 func (v Value) ToStr(defaultValue string) string {
-	if v.Type() == typ.String {
+	switch v.Type() {
+	case typ.String:
 		return v.Str()
+	case typ.Array:
+		buf, ok := v.Array().Unwrap().([]byte)
+		if ok {
+			return *(*string)(unsafe.Pointer(&buf))
+		}
 	}
 	return defaultValue
 }
@@ -538,17 +530,6 @@ func (v Value) ToBytes() []byte {
 	return nil
 }
 
-func (v Value) ForEach(f func(k, v Value) bool) {
-	switch v.Type() {
-	case typ.Object:
-		v.Object().Foreach(f)
-	case typ.Array:
-		v.Array().Foreach(f)
-	default:
-		internal.Panic("can't iterate %v", v.Type())
-	}
-}
-
 func (v Value) Len() int {
 	switch v.Type() {
 	case typ.String:
@@ -562,6 +543,6 @@ func (v Value) Len() int {
 	case typ.Native:
 		internal.Panic("can't measure length of %T", v.Interface())
 	}
-	internal.Panic("can't measure length of %v", v.Type())
+	internal.Panic("can't measure length of %v", showType(v))
 	return -1
 }

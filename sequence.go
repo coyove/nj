@@ -172,9 +172,9 @@ func (a *Sequence) Concat(b *Sequence) {
 	a.meta.Concat(a, b)
 }
 
-func (a *Sequence) Foreach(f func(k, v Value) bool) {
+func (a *Sequence) Foreach(f func(k int, v Value) bool) {
 	for i := 0; i < a.Len(); i++ {
-		if !f(Int(i), a.Get(i)) {
+		if !f(i, a.Get(i)) {
 			break
 		}
 	}
