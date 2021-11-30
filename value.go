@@ -7,6 +7,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"time"
 	"unicode/utf8"
 	"unsafe"
 
@@ -463,13 +464,7 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 	case typ.Object:
 		v.Object().rawPrint(p, lv, j, false)
 	case typ.Array:
-		p.WriteString("[")
-		v.Array().Foreach(func(i int, v Value) bool {
-			v.toString(p, lv+1, j)
-			p.WriteString(",")
-			return true
-		})
-		closeBuffer(p, "]")
+		p.Write(v.Array().Marshal(j))
 	case typ.Native:
 		i := v.Interface()
 		if s, ok := i.(fmt.Stringer); ok {
@@ -532,6 +527,16 @@ func (v Value) ToBytes() []byte {
 		return buf
 	}
 	return nil
+}
+
+func (v Value) ToDuration(defaultValue time.Duration) time.Duration {
+	if v.Type() != typ.Number {
+		return defaultValue
+	}
+	if v.IsInt64() {
+		return time.Duration(v.Int64()) * time.Second
+	}
+	return time.Duration(v.Float64() * float64(time.Second))
 }
 
 func (v Value) Len() int {

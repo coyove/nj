@@ -2,9 +2,13 @@ package nj
 
 import (
 	"bytes"
+	"encoding/base32"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -129,5 +133,111 @@ func showType(v Value) string {
 		fallthrough
 	default:
 		return vt.String()
+	}
+}
+
+func getEncB64(enc *base64.Encoding, padding rune) *base64.Encoding {
+	if padding != '=' {
+		enc = enc.WithPadding(padding)
+	}
+	return enc
+}
+
+func getEncB32(enc *base32.Encoding, padding rune) *base32.Encoding {
+	if padding != '=' {
+		enc = enc.WithPadding(padding)
+	}
+	return enc
+}
+
+func mathMinMax(e *Env, max bool) {
+	if v := e.Num(0); v.IsInt64() {
+		vi := v.Int64()
+		for ii := 1; ii < len(e.Stack()); ii++ {
+			if x := e.Int64(ii); x >= vi == max {
+				vi = x
+			}
+		}
+		e.A = Int64(vi)
+	} else {
+		vf := v.Float64()
+		for i := 1; i < len(e.Stack()); i++ {
+			if x := e.Float64(i); x >= vf == max {
+				vf = x
+			}
+		}
+		e.A = Float64(vf)
+	}
+}
+
+func sprintf(env *Env, start int, p io.Writer) {
+	f := env.Str(start)
+	tmp := bytes.Buffer{}
+	popi := start
+	for len(f) > 0 {
+		idx := strings.Index(f, "%")
+		if idx == -1 {
+			fmt.Fprint(p, f)
+			break
+		} else if idx == len(f)-1 {
+			internal.Panic("unexpected '%%' at end")
+		}
+		fmt.Fprint(p, f[:idx])
+		if f[idx+1] == '%' {
+			p.Write([]byte("%"))
+			f = f[idx+2:]
+			continue
+		}
+		tmp.Reset()
+		tmp.WriteByte('%')
+		expecting := typ.Nil
+		for f = f[idx+1:]; len(f) > 0 && expecting == typ.Nil; {
+			switch f[0] {
+			case 'b', 'd', 'o', 'O', 'c', 'e', 'E', 'f', 'F', 'g', 'G':
+				expecting = typ.Number
+			case 's', 'q', 'U':
+				expecting = typ.String
+			case 'x', 'X':
+				expecting = typ.String + typ.Number
+			case 'v':
+				expecting = typ.Native
+			case 't':
+				expecting = typ.Bool
+			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
+			default:
+				internal.Panic("unexpected verb: '%c'", f[0])
+			}
+			tmp.WriteByte(f[0])
+			f = f[1:]
+		}
+
+		popi++
+		switch expecting {
+		case typ.Bool:
+			fmt.Fprint(p, env.Bool(popi))
+		case typ.String:
+			if pop := env.Get(popi); pop.IsBytes() {
+				fmt.Fprintf(p, tmp.String(), pop.Array().Unwrap())
+			} else {
+				fmt.Fprintf(p, tmp.String(), pop.String())
+			}
+		case typ.Number + typ.String:
+			if pop := env.Get(popi); pop.Type() == typ.String {
+				fmt.Fprintf(p, tmp.String(), pop.Str())
+				continue
+			} else if pop.IsBytes() {
+				fmt.Fprintf(p, tmp.String(), pop.Array().Unwrap())
+				continue
+			}
+			fallthrough
+		case typ.Number:
+			if pop := env.Num(popi); pop.IsInt64() {
+				fmt.Fprintf(p, tmp.String(), pop.Int64())
+			} else {
+				fmt.Fprintf(p, tmp.String(), pop.Float64())
+			}
+		case typ.Native:
+			fmt.Fprint(p, env.Interface(popi))
+		}
 	}
 }

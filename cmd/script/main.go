@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/coyove/nj"
-	_ "github.com/coyove/nj/lib"
+	"github.com/coyove/nj/lib"
 )
 
 var (
@@ -39,7 +39,7 @@ func main() {
 	flag.Parse()
 
 	if *apiServer != "" {
-		http.HandleFunc("/", nj.WebREPLHandler(nil, nil))
+		http.HandleFunc("/", lib.WebREPLHandler(nil, nil))
 		log.Println("listen", *apiServer)
 		http.ListenAndServe(*apiServer, nil)
 		return

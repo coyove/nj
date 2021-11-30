@@ -1,4 +1,4 @@
-package nj
+package lib
 
 import (
 	"bytes"
@@ -8,12 +8,14 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/coyove/nj"
 )
 
-//go:embed typ/index.html
+//go:embed index.html
 var indexBytes []byte
 
-func WebREPLHandler(opt *CompileOptions, cb func(*Program)) func(w http.ResponseWriter, r *http.Request) {
+func WebREPLHandler(opt *nj.CompileOptions, cb func(*nj.Program)) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() { recover() }()
 
@@ -27,7 +29,7 @@ func WebREPLHandler(opt *CompileOptions, cb func(*Program)) func(w http.Response
 		start := time.Now()
 		bufOut := &limitedWriter{limit: 32 * 1024}
 
-		p, err := LoadString(c, opt)
+		p, err := nj.LoadString(c, opt)
 		if err != nil {
 			writeJSON(w, map[string]interface{}{"error": err.Error()})
 			return

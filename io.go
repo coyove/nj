@@ -244,9 +244,8 @@ func ioRead(e *Env) []byte {
 			return p[:rn]
 		} else if err == io.EOF {
 			return nil
-		} else {
-			panic(err)
 		}
+		panic(err)
 	}
 	buf, err := ioutil.ReadAll(f)
 	internal.PanicErr(err)

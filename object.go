@@ -52,6 +52,15 @@ func (m *Object) SetProto(m2 *Object) *Object {
 	return m
 }
 
+func (m *Object) SetFirstProto(m2 *Object) *Object {
+	if m.parent != nil {
+		m2 = m2.Copy()
+		m2.SetFirstProto(m.parent)
+	}
+	m.parent = m2
+	return m
+}
+
 func (m *Object) Size() int {
 	if m == nil {
 		return 0
@@ -70,15 +79,6 @@ func (m *Object) Len() int {
 func (m *Object) Clear() {
 	m.items = m.items[:0]
 	m.count = 0
-}
-
-func (m *Object) SetFirstParent(m2 *Object) *Object {
-	if m.parent != nil {
-		m2 = m2.Copy()
-		m2.SetFirstParent(m.parent)
-	}
-	m.parent = m2
-	return m
 }
 
 func (m *Object) Prop(k string) (v Value) {
@@ -255,6 +255,9 @@ func (m *Object) delHash(k Value) (prev Value) {
 }
 
 func (m *Object) Foreach(f func(k, v Value) bool) {
+	if m == nil {
+		return
+	}
 	for _, p := range m.items {
 		if p.Key != Nil && !f(p.Key, p.Val) {
 			return

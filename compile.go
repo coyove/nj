@@ -396,7 +396,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		return idx
 	}
 
-	for k, v := range g {
+	for k, v := range globals {
 		push(k, v)
 	}
 

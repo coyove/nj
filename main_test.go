@@ -284,7 +284,7 @@ func benchmarkGoMapUnconstrainted(b *testing.B, n int) {
 }
 
 func TestBigList(t *testing.T) {
-	n := maxAddress/2 - len(g)
+	n := maxAddress/2 - len(globals)
 
 	makeCode := func(n int) string {
 		buf := bytes.Buffer{}

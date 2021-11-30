@@ -64,11 +64,13 @@ func (e *ExecError) Error() string {
 }
 
 func wrapExecError(err error) Value {
-	if err, ok := err.(*ExecError); ok {
+	switch err := err.(type) {
+	case *ExecError:
 		return ValueOf(err.r)
-	} else {
-		return ValueOf(err)
+	case internal.CatchedError:
+		return intf(err)
 	}
+	return ValueOf(err)
 }
 
 // internalExecCursorLoop executes 'K' under 'env' from the given start 'cursor'
