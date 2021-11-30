@@ -73,13 +73,13 @@ func wrapExecError(err error) Value {
 	return ValueOf(err)
 }
 
-// internalExecCursorLoop executes 'K' under 'env' from the given start 'cursor'
-func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
+func internalExecCursorLoop(env Env, K *FuncBody, retStack []stacktrace) Value {
 	stackEnv := env
 	stackEnv.stackOffset = uint32(len(*env.stack))
 
-	var retStack []stacktrace
 	var nativeCls *FuncBody
+	var cursor uint32
+	retStackSize := len(retStack)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -356,7 +356,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 			}
 		case typ.OpRet:
 			v := env._get(opa)
-			if len(retStack) == 0 {
+			if len(retStack) == retStackSize {
 				return v
 			}
 			// Return to upper stack
@@ -370,7 +370,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 			retStack = retStack[:len(retStack)-1]
 		case typ.OpLoadFunc:
 			env.A = env.Global.Functions[opa].ToValue()
-		case typ.OpCall, typ.OpTailCall:
+		case typ.OpCall, typ.OpTailCall, typ.OpTryCall:
 			a := env._get(opa)
 			if a.Type() != typ.Object {
 				internal.Panic("can't call %v", showType(a))
@@ -406,6 +406,17 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 				cls.Native(&stackEnv)
 				nativeCls = nil
 				env.A = stackEnv.A
+				stackEnv.Clear()
+			} else if bop == typ.OpTryCall {
+				stackEnv.Global = cls.LoadGlobal
+				stackEnv.growZero(int(cls.StackSize), int(cls.NumParams))
+				env.A = func() Value {
+					return internalExecCursorLoop(stackEnv, cls, append(retStack, stacktrace{
+						cls:         K,
+						cursor:      cursor,
+						stackOffset: uint32(env.stackOffset),
+					}))
+				}()
 				stackEnv.Clear()
 			} else {
 				stackEnv.growZero(int(cls.StackSize), int(cls.NumParams))

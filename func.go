@@ -59,7 +59,7 @@ func (p *Program) Run() (v1 Value, err error) {
 		Global: p,
 		stack:  p.Stack,
 	}
-	v1 = internalExecCursorLoop(newEnv, p.Top, 0)
+	v1 = internalExecCursorLoop(newEnv, p.Top, nil)
 	return
 }
 
@@ -164,7 +164,7 @@ func (c *FuncBody) Apply(this Value, args ...Value) (v1 Value) {
 			}
 		}
 		newEnv.growZero(int(c.StackSize), int(c.NumParams))
-		v1 = internalExecCursorLoop(newEnv, c, 0)
+		v1 = internalExecCursorLoop(newEnv, c, nil)
 	}
 	return
 }
