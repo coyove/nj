@@ -35,7 +35,7 @@ var (
 			"$f(n: int) -> bytes", "\tread `n` bytes"),
 		Str("readbuf"), Func("", func(e *Env) {
 			rn, err := e.Object(-1).Prop("_f").Interface().(io.Reader).Read(e.Array(0).Unwrap().([]byte))
-			e.A = Array(Int(rn), Val(err)) // return in Go style
+			e.A = Array(Int(rn), ValueOf(err)) // return in Go style
 		}, "$f(buf: bytes) -> [int, go.error]", "\tread into `buf` and return in Go style"),
 		Str("readlines"), Func("", func(e *Env) {
 			f := e.Object(-1).Prop("_f").Interface().(io.Reader)

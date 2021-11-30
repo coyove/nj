@@ -24,7 +24,7 @@ type Object struct {
 	count    int64
 	items    []hashItem
 	receiver Value
-	callable *FuncBody
+	Callable *FuncBody
 }
 
 // hashItem represents an entry in the object.
@@ -101,7 +101,7 @@ func (m *Object) getImpl(k Value, useObjProto bool) (v Value) {
 	} else if useObjProto {
 		v = ObjectLib.Object().getImpl(k, false)
 	}
-	if v.IsObject() && v.Object().callable != nil {
+	if v.IsObject() && v.Object().Callable != nil {
 		f := *v.Object()
 		f.receiver = m.ToValue()
 		v = f.ToValue()
@@ -296,13 +296,13 @@ func (m *Object) rawPrint(p *bytes.Buffer, lv int, j, showProto bool) {
 		p.WriteString(ifstr(j, "null", "nil"))
 		return
 	}
-	if m.callable != nil {
+	if m.Callable != nil {
 		if j {
 			p.WriteString("{\"<f>\":\"")
-			p.WriteString(m.callable.String())
+			p.WriteString(m.Callable.String())
 			p.WriteString("\",")
 		} else {
-			p.WriteString(m.callable.String())
+			p.WriteString(m.Callable.String())
 			if m.count == 0 {
 				return
 			}
@@ -337,8 +337,8 @@ func (m *Object) ToValue() Value {
 
 func (m *Object) Name() string {
 	if m != nil {
-		if m.callable != nil {
-			return m.callable.Name
+		if m.Callable != nil {
+			return m.Callable.Name
 		}
 		if m.parent != nil {
 			return m.parent.Name()
@@ -361,36 +361,36 @@ func (m *Object) Call(args ...Value) (v1 Value, err error) {
 	if m == nil {
 		return Nil, nil
 	}
-	if m.callable != nil {
-		defer internal.CatchErrorFuncCall(&err, m.callable.Name)
+	if m.Callable != nil {
+		defer internal.CatchErrorFuncCall(&err, m.Callable.Name)
 	}
 	return m.MustCall(args...), nil
 }
 
 func (m *Object) MustCall(args ...Value) Value {
-	if m.callable == nil {
+	if m.Callable == nil {
 		return m.ToValue()
 	} else if m.receiver != Nil {
-		return m.callable.Apply(m.receiver, args...)
+		return m.Callable.Apply(m.receiver, args...)
 	}
-	return m.callable.Apply(m.ToValue(), args...)
+	return m.Callable.Apply(m.ToValue(), args...)
 }
 
 func (m *Object) Apply(this Value, args ...Value) (v1 Value, err error) {
 	if m == nil {
 		return Nil, nil
 	}
-	if m.callable != nil {
-		defer internal.CatchErrorFuncCall(&err, m.callable.Name)
+	if m.Callable != nil {
+		defer internal.CatchErrorFuncCall(&err, m.Callable.Name)
 	}
 	return m.MustApply(this, args...), nil
 }
 
 func (m *Object) MustApply(this Value, args ...Value) Value {
-	if m.callable == nil {
+	if m.Callable == nil {
 		return m.ToValue()
 	}
-	return m.callable.Apply(this, args...)
+	return m.Callable.Apply(this, args...)
 }
 
 func (m *Object) Merge(src *Object, kvs ...Value) *Object {
@@ -399,8 +399,8 @@ func (m *Object) Merge(src *Object, kvs ...Value) *Object {
 	} else {
 		m.resizeHash((m.Len()+src.Len()+len(kvs))*2 + 1)
 		src.Foreach(func(k, v Value) bool { m.Set(k, renameFuncName(k, v)); return true })
-		if m.callable == nil {
-			m.callable = src.callable
+		if m.Callable == nil {
+			m.Callable = src.Callable
 		}
 	}
 	for i := 0; i < len(kvs)/2*2; i += 2 {
@@ -413,7 +413,7 @@ func (m *Object) IsCallable() bool {
 	if m == nil {
 		return false
 	}
-	return m.callable != nil
+	return m.Callable != nil
 }
 
 func (m *Object) resizeHash(newSize int) {

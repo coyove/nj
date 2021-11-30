@@ -356,7 +356,7 @@ func TestFalsyValue(t *testing.T) {
 	assert(Str("").IsFalse())
 	assert(Bytes(nil).IsTrue())
 	assert(Bytes([]byte("")).IsTrue())
-	assert(!Val([]byte("")).IsFalse())
+	assert(!ValueOf([]byte("")).IsFalse())
 }
 
 func TestPlainReturn(t *testing.T) {

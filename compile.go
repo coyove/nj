@@ -402,12 +402,12 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 
 	if opt != nil {
 		for k, v := range opt.GlobalKeyValues {
-			push(k, Val(v))
+			push(k, ValueOf(v))
 		}
 	}
 
 	gi := push("__G", Nil)
-	push("COMPILE_OPTIONS", Val(opt))
+	push("COMPILE_OPTIONS", ValueOf(opt))
 	push("SOURCE_CODE", Str(source))
 
 	table.vp = uint16(coreStack.Size())
@@ -457,7 +457,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		cls.Stdout, cls.Stdin, cls.Stderr = os.Stdout, os.Stdin, os.Stderr
 	}
 	for _, f := range cls.Functions {
-		f.callable.LoadGlobal = cls
+		f.Callable.LoadGlobal = cls
 	}
 	(*cls.Stack)[gi] = intf(cls)
 	cls.Options = opt

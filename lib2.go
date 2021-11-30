@@ -120,7 +120,7 @@ func init() {
 			e.A = Obj(
 				Str("f"), f.ToValue(), Str("w"), intf(w),
 				Str("stop"), Func("", func(e *Env) {
-					e.Object(-1).Prop("f").Object().callable.EmergStop()
+					e.Object(-1).Prop("f").Object().Callable.EmergStop()
 				}),
 				Str("wait"), Func("", func(e *Env) {
 					ch := e.Object(-1).Prop("w").Interface().(chan Value)
@@ -212,15 +212,15 @@ func init() {
 			buf := &bytes.Buffer{}
 			switch encoding := e.Object(-1).Prop("_e").Interface().(type) {
 			default:
-				enc = Val(hex.NewEncoder(buf))
+				enc = ValueOf(hex.NewEncoder(buf))
 			case *base32.Encoding:
-				enc = Val(base32.NewEncoder(encoding, buf))
+				enc = ValueOf(base32.NewEncoder(encoding, buf))
 			case *base64.Encoding:
-				enc = Val(base64.NewEncoder(encoding, buf))
+				enc = ValueOf(base64.NewEncoder(encoding, buf))
 			}
 			e.A = Proto(WriteCloserProto,
-				Str("_f"), Val(enc),
-				Str("_b"), Val(buf),
+				Str("_f"), ValueOf(enc),
+				Str("_b"), ValueOf(buf),
 				Str("value"), Func("", func(e *Env) {
 					e.A = Str(e.Object(-1).Prop("_b").Interface().(*bytes.Buffer).String())
 				}),
@@ -234,13 +234,13 @@ func init() {
 			dec := Nil
 			switch encoding := e.Object(-1).Prop("_e").Interface().(type) {
 			case *base64.Encoding:
-				dec = Val(base64.NewDecoder(encoding, src))
+				dec = ValueOf(base64.NewDecoder(encoding, src))
 			case *base32.Encoding:
-				dec = Val(base32.NewDecoder(encoding, src))
+				dec = ValueOf(base32.NewDecoder(encoding, src))
 			default:
-				dec = Val(hex.NewDecoder(src))
+				dec = ValueOf(hex.NewDecoder(src))
 			}
-			e.A = Proto(ReaderProto, Str("_f"), Val(dec))
+			e.A = Proto(ReaderProto, Str("_f"), ValueOf(dec))
 		}),
 	))
 
@@ -328,7 +328,7 @@ func init() {
 		Str("upper"), Func("", func(e *Env) { e.A = Str(strings.ToUpper(e.Str(-1))) }, "$f() -> string"),
 		Str("lower"), Func("", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }, "$f() -> string"),
 		Str("bytes"), Func("", func(e *Env) {
-			_ = e.Get(0).IsInt64() && e.SetA(Val(make([]byte, e.Int(0)))) || e.SetA(Val([]byte(e.Str(0))))
+			_ = e.Get(0).IsInt64() && e.SetA(ValueOf(make([]byte, e.Int(0)))) || e.SetA(ValueOf([]byte(e.Str(0))))
 		}, "$f() -> bytes", "\tconvert text to byte array",
 			"$f(n: int) -> bytes", "\tcreate an n-byte long array"),
 		Str("chars"), Func("", func(e *Env) {
@@ -354,7 +354,7 @@ func init() {
 				b.WriteString(v.String())
 			}
 			e.A = Func("Buffer", nil).Object().SetProto(ReadWriterProto).Merge(nil,
-				Str("_f"), Val(b),
+				Str("_f"), ValueOf(b),
 				Str("reset"), Func("", func(e *Env) {
 					e.Object(-1).Prop("_f").Interface().(*bytes.Buffer).Reset()
 				}),
@@ -368,16 +368,16 @@ func init() {
 		}),
 		Str("hex"), Func("hex", nil).Object().SetProto(encDecProto.Proto()).ToValue(),
 		Str("base64"), Func("base64", nil).Object().Merge(nil,
-			Str("std"), Proto(encDecProto, Str("_e"), Val(getEncB64(base64.StdEncoding, '='))),
-			Str("url"), Proto(encDecProto, Str("_e"), Val(getEncB64(base64.URLEncoding, '='))),
-			Str("stdp"), Proto(encDecProto, Str("_e"), Val(getEncB64(base64.StdEncoding, -1))),
-			Str("urlp"), Proto(encDecProto, Str("_e"), Val(getEncB64(base64.URLEncoding, -1))),
+			Str("std"), Proto(encDecProto, Str("_e"), ValueOf(getEncB64(base64.StdEncoding, '='))),
+			Str("url"), Proto(encDecProto, Str("_e"), ValueOf(getEncB64(base64.URLEncoding, '='))),
+			Str("std2"), Proto(encDecProto, Str("_e"), ValueOf(getEncB64(base64.StdEncoding, -1))),
+			Str("url2"), Proto(encDecProto, Str("_e"), ValueOf(getEncB64(base64.URLEncoding, -1))),
 		).SetProto(encDecProto).ToValue(),
 		Str("base32"), Func("base32", nil).Object().Merge(nil,
-			Str("std"), Proto(encDecProto, Str("_e"), Val(getEncB32(base32.StdEncoding, '='))),
-			Str("hex"), Proto(encDecProto, Str("_e"), Val(getEncB32(base32.HexEncoding, '='))),
-			Str("stdp"), Proto(encDecProto, Str("_e"), Val(getEncB32(base32.StdEncoding, -1))),
-			Str("hexp"), Proto(encDecProto, Str("_e"), Val(getEncB32(base32.HexEncoding, -1))),
+			Str("std"), Proto(encDecProto, Str("_e"), ValueOf(getEncB32(base32.StdEncoding, '='))),
+			Str("hex"), Proto(encDecProto, Str("_e"), ValueOf(getEncB32(base32.HexEncoding, '='))),
+			Str("std2"), Proto(encDecProto, Str("_e"), ValueOf(getEncB32(base32.StdEncoding, -1))),
+			Str("hex2"), Proto(encDecProto, Str("_e"), ValueOf(getEncB32(base32.HexEncoding, -1))),
 		).SetProto(encDecProto).ToValue(),
 	).ToValue()
 	AddGlobalValue("str", StrLib)
@@ -428,16 +428,13 @@ func init() {
 		Str("atan"), Func("", func(e *Env) { e.A = Float64(math.Atan(e.Float64(0))) }),
 		Str("atan2"), Func("", func(e *Env) { e.A = Float64(math.Atan2(e.Float64(0), e.Float64(1))) }),
 		Str("ldexp"), Func("", func(e *Env) { e.A = Float64(math.Ldexp(e.Float64(0), e.Int(0))) }),
-		Str("modf"), Func("", func(e *Env) {
-			a, b := math.Modf(e.Float64(0))
-			e.A = Array(Float64(a), Float64(b))
-		}),
+		Str("modf"), Func("", func(e *Env) { a, b := math.Modf(e.Float64(0)); e.A = Array(Float64(a), Float64(b)) }),
 	)
 	AddGlobalValue("math", MathLib)
 
 	OSLib = Obj(
-		Str("args"), Val(os.Args),
-		Str("environ"), Func("", func(e *Env) { e.A = Val(os.Environ()) }),
+		Str("args"), ValueOf(os.Args),
+		Str("environ"), Func("", func(e *Env) { e.A = ValueOf(os.Environ()) }),
 		Str("shell"), Func("", func(e *Env) {
 			p := exec.Command("sh", "-c", e.Str(0))
 			opt := e.Get(1)
@@ -478,7 +475,7 @@ func init() {
 		Str("readdir"), Func("", func(e *Env) {
 			fi, err := ioutil.ReadDir(e.Str(0))
 			internal.PanicErr(err)
-			e.A = Val(fi)
+			e.A = ValueOf(fi)
 		}),
 		Str("remove"), Func("", func(e *Env) {
 			path := e.Str(0)
@@ -492,7 +489,7 @@ func init() {
 		}),
 		Str("pstat"), Func("", func(e *Env) {
 			fi, err := os.Stat(e.Str(0))
-			_ = err == nil && e.SetA(Val(fi)) || e.SetA(Nil)
+			_ = err == nil && e.SetA(ValueOf(fi)) || e.SetA(Nil)
 		}),
 	)
 	AddGlobalValue("os", OSLib)
@@ -564,10 +561,17 @@ func sprintf(env *Env, start int, p io.Writer) {
 		case typ.Bool:
 			fmt.Fprint(p, env.Bool(popi))
 		case typ.String:
-			fmt.Fprintf(p, tmp.String(), env.Get(popi).String())
+			if pop := env.Get(popi); pop.IsBytes() {
+				fmt.Fprintf(p, tmp.String(), pop.Array().Unwrap())
+			} else {
+				fmt.Fprintf(p, tmp.String(), pop.String())
+			}
 		case typ.Number + typ.String:
 			if pop := env.Get(popi); pop.Type() == typ.String {
 				fmt.Fprintf(p, tmp.String(), pop.Str())
+				continue
+			} else if pop.IsBytes() {
+				fmt.Fprintf(p, tmp.String(), pop.Array().Unwrap())
 				continue
 			}
 			fallthrough

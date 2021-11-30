@@ -22,7 +22,7 @@ func reflectLoad(v interface{}, key Value) Value {
 	case reflect.Map:
 		v := rv.MapIndex(key.ReflectValue(rv.Type().Key()))
 		if v.IsValid() {
-			return Val(v.Interface())
+			return ValueOf(v.Interface())
 		}
 	}
 
@@ -34,7 +34,7 @@ func reflectLoad(v interface{}, key Value) Value {
 			return Nil
 		}
 	}
-	return Val(f.Interface())
+	return ValueOf(f.Interface())
 }
 
 func reflectStore(subject interface{}, key, value Value) {
@@ -94,7 +94,7 @@ func or(a, b interface{}) interface{} {
 
 func renameFuncName(k, v Value) Value {
 	if v.IsObject() {
-		if cls := v.Object().callable; cls != nil && cls.Name == internal.UnnamedFunc {
+		if cls := v.Object().Callable; cls != nil && cls.Name == internal.UnnamedFunc {
 			cls.Name = k.String()
 		}
 	}

@@ -45,43 +45,12 @@ func Func(name string, f func(*Env), doc ...string) Value {
 		f = dummyFunc
 	}
 	return (&Object{
-		callable: &FuncBody{
+		Callable: &FuncBody{
 			Name:      name,
 			Native:    f,
 			DocString: strings.Join(doc, "\n"),
 		},
 	}).ToValue()
-}
-
-func (c *FuncBody) String() string {
-	p := bytes.Buffer{}
-	if c.Name != "" {
-		p.WriteString(c.Name)
-	} else {
-		p.WriteString("function")
-	}
-	p.WriteString("(")
-	// if c.Receiver != Nil {
-	// 	p.WriteString("{" + c.Receiver.Type().String() + "},")
-	// }
-	for i := 0; i < int(c.NumParams); i++ {
-		fmt.Fprintf(&p, "a%d,", i)
-	}
-	if c.Variadic {
-		p.Truncate(p.Len() - 1)
-		p.WriteString("...")
-	} else if p.Bytes()[p.Len()-1] == ',' {
-		p.Truncate(p.Len() - 1)
-	}
-	p.WriteString(")")
-	return p.String()
-}
-
-func (c *FuncBody) ToCode() string {
-	if c.Native != nil {
-		return "[Native Code]"
-	}
-	return pkPrettify(c, c.LoadGlobal, false)
 }
 
 func (p *Program) Run() (v1 Value, err error) {
@@ -99,42 +68,8 @@ func (p *Program) Run() (v1 Value, err error) {
 func (p *Program) EmergStop() {
 	p.Top.EmergStop()
 	for _, f := range p.Functions {
-		f.callable.EmergStop()
+		f.Callable.EmergStop()
 	}
-}
-
-// EmergStop terminates the execution of Func
-// After calling, Func will become unavailable for any further operations
-func (c *FuncBody) EmergStop() {
-	for i := range c.Code.Code {
-		c.Code.Code[i] = inst(typ.OpRet, regA, 0)
-	}
-}
-
-func (c *FuncBody) Apply(this Value, args ...Value) (v1 Value) {
-	newEnv := Env{
-		A:      this,
-		Global: c.LoadGlobal,
-		stack:  &args,
-	}
-
-	if c.Native != nil {
-		c.Native(&newEnv)
-		v1 = newEnv.A
-	} else {
-		if c.Variadic {
-			s := *newEnv.stack
-			if len(s) > int(c.NumParams)-1 {
-				s[c.NumParams-1] = Array(append([]Value{}, s[c.NumParams-1:]...)...)
-			} else {
-				newEnv.grow(int(c.NumParams))
-				newEnv._set(c.NumParams-1, Array())
-			}
-		}
-		newEnv.growZero(int(c.StackSize), int(c.NumParams))
-		v1 = internalExecCursorLoop(newEnv, c, 0)
-	}
-	return
 }
 
 func (p *Program) PrettyCode() string {
@@ -166,8 +101,70 @@ func (p *Program) LocalsObject() *Object {
 	return r
 }
 
+func (c *FuncBody) String() string {
+	p := bytes.Buffer{}
+	if c.Name != "" {
+		p.WriteString(c.Name)
+	} else {
+		p.WriteString("function")
+	}
+	p.WriteString("(")
+	for i := 0; i < int(c.NumParams); i++ {
+		fmt.Fprintf(&p, "a%d,", i)
+	}
+	if c.Variadic {
+		p.Truncate(p.Len() - 1)
+		p.WriteString("...")
+	} else if p.Bytes()[p.Len()-1] == ',' {
+		p.Truncate(p.Len() - 1)
+	}
+	p.WriteString(")")
+	return p.String()
+}
+
+func (c *FuncBody) ToCode() string {
+	if c.Native != nil {
+		return "[Native Code]"
+	}
+	return pkPrettify(c, c.LoadGlobal, false)
+}
+
 func (f *FuncBody) Copy() *FuncBody {
 	f2 := *f
 	f2.Code.Code = append([]_inst{}, f2.Code.Code...)
 	return &f2
+}
+
+// EmergStop terminates the execution of Func
+// After calling, FuncBody will become unavailable for any further operations
+func (c *FuncBody) EmergStop() {
+	for i := range c.Code.Code {
+		c.Code.Code[i] = inst(typ.OpRet, regA, 0)
+	}
+}
+
+func (c *FuncBody) Apply(this Value, args ...Value) (v1 Value) {
+	newEnv := Env{
+		A:      this,
+		Global: c.LoadGlobal,
+		stack:  &args,
+	}
+
+	if c.Native != nil {
+		c.Native(&newEnv)
+		v1 = newEnv.A
+	} else {
+		if c.Variadic {
+			s := *newEnv.stack
+			if len(s) > int(c.NumParams)-1 {
+				s[c.NumParams-1] = Array(append([]Value{}, s[c.NumParams-1:]...)...)
+			} else {
+				newEnv.grow(int(c.NumParams))
+				newEnv._set(c.NumParams-1, Array())
+			}
+		}
+		newEnv.growZero(int(c.StackSize), int(c.NumParams))
+		v1 = internalExecCursorLoop(newEnv, c, 0)
+	}
+	return
 }

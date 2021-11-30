@@ -70,18 +70,17 @@ var genericSequenceMetaCache sync.Map
 
 func GetGenericSequenceMeta(v interface{}) *SequenceMeta {
 	rt := reflect.TypeOf(v)
-	n := rt.String()
-	if v, ok := genericSequenceMetaCache.Load(n); ok {
+	if v, ok := genericSequenceMetaCache.Load(rt); ok {
 		return v.(*SequenceMeta)
 	}
-	a := &SequenceMeta{n, sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgAppend, sgSlice, sgCopy, sgConcat}
+	a := &SequenceMeta{rt.String(), sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgAppend, sgSlice, sgCopy, sgConcat}
 	if rt.Kind() == reflect.Array {
 		a.Clear = func(a *Sequence) { panic("sequence(" + a.meta.Name + ").clear") }
 		a.Append = func(a *Sequence, v ...Value) { panic("sequence(" + a.meta.Name + ").append") }
 		a.Copy = func(a *Sequence, start, end int, from *Sequence) { panic("sequence(" + a.meta.Name + ").copy") }
 		a.Concat = func(a *Sequence, b *Sequence) { panic("sequence(" + a.meta.Name + ").concat") }
 	}
-	genericSequenceMetaCache.Store(n, a)
+	genericSequenceMetaCache.Store(rt, a)
 	return a
 }
 
@@ -201,7 +200,7 @@ func sgValues(a *Sequence) []Value {
 }
 
 func sgGet(a *Sequence, idx int) Value {
-	return Val(reflect.ValueOf(a.any).Index(idx).Interface())
+	return ValueOf(reflect.ValueOf(a.any).Index(idx).Interface())
 }
 
 func sgSet(a *Sequence, idx int, v Value) {

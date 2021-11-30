@@ -15,7 +15,7 @@ func init() {
 			s.Add(v)
 			return true
 		})
-		env.A = nj.Val(s)
+		env.A = nj.ValueOf(s)
 	},
 		"$f() -> go.Set",
 		"$f(a: array) -> go.Set",

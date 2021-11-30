@@ -65,9 +65,9 @@ func (e *ExecError) Error() string {
 
 func wrapExecError(err error) Value {
 	if err, ok := err.(*ExecError); ok {
-		return Val(err.r)
+		return ValueOf(err.r)
 	} else {
-		return Val(err)
+		return ValueOf(err)
 	}
 }
 
@@ -373,7 +373,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, cursor uint32) Value {
 			if a.Type() != typ.Object {
 				internal.Panic("can't call %v", showType(a))
 			}
-			cls := a.Object().callable
+			cls := a.Object().Callable
 			if cls == nil {
 				env.A = a.Object().MustCall()
 				continue

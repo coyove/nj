@@ -302,10 +302,10 @@ func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	if table.global != nil {
 		x := table.global
 		loadFuncIndex = uint16(len(x.funcs))
-		x.funcs = append(x.funcs, &Object{callable: cls})
+		x.funcs = append(x.funcs, &Object{Callable: cls})
 	} else {
 		loadFuncIndex = uint16(len(table.funcs))
-		table.funcs = append(table.funcs, &Object{callable: cls})
+		table.funcs = append(table.funcs, &Object{Callable: cls})
 	}
 	table.code.writeInst(typ.OpLoadFunc, loadFuncIndex, 0)
 	if strings.HasPrefix(cls.Name, "<lambda") {

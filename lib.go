@@ -33,7 +33,7 @@ func AddGlobalValue(k string, v interface{}, doc ...string) {
 	case Value:
 		g[k] = renameFuncName(Str(k), v)
 	default:
-		g[k] = Val(v)
+		g[k] = ValueOf(v)
 	}
 }
 
@@ -48,7 +48,7 @@ func init() {
 	}, "$f() -> object", "\tlist all global symbols and their values")
 	AddGlobalValue("doc", func(e *Env) {
 		o := e.Object(0)
-		_ = o.callable == nil && e.SetA(Nil) || e.SetA(Str(strings.Replace(o.callable.DocString, "$f", o.callable.Name, -1)))
+		_ = o.Callable == nil && e.SetA(Nil) || e.SetA(Str(strings.Replace(o.Callable.DocString, "$f", o.Callable.Name, -1)))
 	}, "$f(f: function) -> string", "\treturn `f`'s documentation")
 	AddGlobalValue("new", func(e *Env) {
 		m := e.Object(0)
@@ -69,7 +69,7 @@ func init() {
 		if opts.Prop("ast").IsTrue() {
 			v, err := parser.Parse(e.Str(0), "")
 			internal.PanicErr(err)
-			e.A = Val(v)
+			e.A = ValueOf(v)
 			return
 		}
 		p, err := LoadString(e.Str(0), &CompileOptions{GlobalKeyValues: m})
@@ -141,7 +141,7 @@ func init() {
 		}, "$f(skip: int) -> array", "\treturn [func_name0, line1, cursor1, n2, l2, c2, ...]"),
 		Str("disfunc"), Func("", func(e *Env) {
 			o := e.Object(0)
-			_ = o.IsCallable() && e.SetA(Str(o.callable.ToCode())) || e.SetA(Nil)
+			_ = o.IsCallable() && e.SetA(Str(o.Callable.ToCode())) || e.SetA(Nil)
 		}),
 	))
 	AddGlobalValue("type", func(e *Env) {
@@ -223,12 +223,12 @@ func init() {
 	}, "$f(sec: float)")
 	AddGlobalValue("Go_time", func(e *Env) {
 		if e.Size() > 0 {
-			e.A = Val(time.Date(
+			e.A = ValueOf(time.Date(
 				int(e.Get(0).ToInt64(1970)), time.Month(e.Get(1).ToInt64(1)), int(e.Get(2).ToInt64(1)),
 				int(e.Get(3).ToInt64(0)), int(e.Get(4).ToInt64(0)), int(e.Get(5).ToInt64(0)), int(e.Get(6).ToInt64(0)),
 				time.UTC))
 		} else {
-			e.A = Val(time.Now())
+			e.A = ValueOf(time.Now())
 		}
 	},
 		"$f() -> go.time.Time",
@@ -247,7 +247,7 @@ func init() {
 	AddGlobalValue("ord", func(e *Env) { r, _ := utf8.DecodeRuneInString(e.Str(0)); e.A = Int64(int64(r)) }, "$f(s: string) -> int")
 
 	AddGlobalValue("re", Func("RegExp", func(e *Env) {
-		e.A = Proto(e.A.Object(), Str("_rx"), Val(regexp.MustCompile(e.Str(0))))
+		e.A = Proto(e.A.Object(), Str("_rx"), ValueOf(regexp.MustCompile(e.Str(0))))
 	}, "re(regex: string) -> RegExp", "\tcreate a regular expression object").Object().Merge(nil,
 		Str("match"), Func("", func(e *Env) {
 			e.A = Bool(e.A.Object().Prop("_rx").Interface().(*regexp.Regexp).MatchString(e.Str(0)))
@@ -276,7 +276,7 @@ func init() {
 	))
 
 	AddGlobalValue("error", func(e *Env) {
-		e.A = Val(errors.New(e.Str(0)))
+		e.A = ValueOf(errors.New(e.Str(0)))
 	}, "$f(text: string) -> go.error", "\tcreate an error")
 	AddGlobalValue("iserror", func(e *Env) {
 		_, ok := e.Interface(0).(error)
@@ -288,18 +288,22 @@ func init() {
 			e.A = Str(e.Get(0).JSONString())
 		}, "$f(v: value) -> string"),
 		Str("parse"), Func("", func(e *Env) {
-			e.A = Val(gjson.Parse(strings.TrimSpace(e.Str(0))))
+			e.A = ValueOf(gjson.Parse(strings.TrimSpace(e.Str(0))))
 		}, "$f(j: string) -> value"),
 		Str("get"), Func("", func(e *Env) {
 			result := gjson.Get(e.Str(0), e.Str(1))
-			_ = !result.Exists() && e.SetA(e.Get(2)) || e.SetA(Val(result))
+			_ = !result.Exists() && e.SetA(e.Get(2)) || e.SetA(ValueOf(result))
 		}, "$f(j: string, path: string, default?: value) -> value"),
 	))
 
 	AddGlobalValue("sync", Obj(
-		Str("mutex"), Func("", func(e *Env) { e.A = Val(&sync.Mutex{}) }, "$f() -> *go.sync.Mutex"),
-		Str("rwmutex"), Func("", func(e *Env) { e.A = Val(&sync.RWMutex{}) }, "$f() -> *go.sync.RWMutex"),
-		Str("waitgroup"), Func("", func(e *Env) { e.A = Val(&sync.WaitGroup{}) }, "$f() -> *go.sync.WaitGroup"),
+		Str("mutex"), Func("", func(e *Env) { e.A = ValueOf(&sync.Mutex{}) }, "$f() -> *go.sync.Mutex"),
+		Str("rwmutex"), Func("", func(e *Env) { e.A = ValueOf(&sync.RWMutex{}) }, "$f() -> *go.sync.RWMutex"),
+		Str("waitgroup"), Func("", func(e *Env) { e.A = ValueOf(&sync.WaitGroup{}) }, "$f() -> *go.sync.WaitGroup"),
+		Str("after"), Func("", func(e *Env) {
+			f, args := e.Object(1), e.CopyStack()[2:]
+			e.A = ValueOf(time.AfterFunc(time.Duration(e.Float64(0)*float64(time.Second)), func() { f.Call(args...) }))
+		}, "$f(secs: float, f: function, args...: value) -> *go.time.Timer"),
 		Str("map"), Func("", func(e *Env) {
 			fun := e.Object(1)
 			n, t := e.Get(2).ToInt(runtime.NumCPU()), e.Get(0)
@@ -343,7 +347,7 @@ func init() {
 			wg.Wait()
 			internal.PanicErr(outError)
 		}, "$f(a: object|array, f: function, n: int) -> object|array",
-			"\tmap values in `a` into new values using f(k, v) concurrently on `n` goroutines (defaults to the number of CPUs)"),
+			"\tmap values in `a` into new values using `f(k, v)` concurrently on `n` goroutines (defaults to the number of CPUs)"),
 	))
 
 	AddGlobalValue("open", Func("open", func(e *Env) {
@@ -368,10 +372,10 @@ func init() {
 		}
 		f, err := os.OpenFile(path, opt, fs.FileMode(perm))
 		internal.PanicErr(err)
-		e.Object(-1).Set(Zero, Val(f))
+		e.Object(-1).Set(Zero, ValueOf(f))
 
 		e.A = Func("FileObject", nil).Object().Merge(nil,
-			Str("_f"), Val(f),
+			Str("_f"), ValueOf(f),
 			Str("path"), Str(f.Name()),
 			Str("sync"), Func("", func(e *Env) {
 				internal.PanicErr(e.Object(-1).Prop("_f").Interface().(*os.File).Sync())
@@ -379,7 +383,7 @@ func init() {
 			Str("stat"), Func("", func(e *Env) {
 				fi, err := e.Object(-1).Prop("_f").Interface().(*os.File).Stat()
 				internal.PanicErr(err)
-				e.A = Val(fi)
+				e.A = ValueOf(fi)
 			}),
 			Str("truncate"), Func("", func(e *Env) {
 				f := e.Object(-1).Prop("_f").Interface().(*os.File)

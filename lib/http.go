@@ -147,14 +147,14 @@ func init() {
 		if args.Prop("bodyreader").IsFalse() && args.Prop("br").IsFalse() {
 			resp.Body.Close()
 		} else {
-			buf = nj.Proto(nj.ReadCloserProto, nj.Str("_f"), nj.Val(resp.Body))
+			buf = nj.Proto(nj.ReadCloserProto, nj.Str("_f"), nj.ValueOf(resp.Body))
 		}
 
 		hdr := map[string]string{}
 		for k := range resp.Header {
 			hdr[k] = resp.Header.Get(k)
 		}
-		env.A = nj.Array(nj.Int(resp.StatusCode), nj.Val(hdr), buf, nj.Val(client.Jar))
+		env.A = nj.Array(nj.Int(resp.StatusCode), nj.ValueOf(hdr), buf, nj.ValueOf(client.Jar))
 	}, "$f(options: object) -> array",
 		"\tperform an HTTP request and return [code, headers, body_reader, cookie_jar]",
 		"\t'url' is a mandatory parameter in `options`, others are optional and pretty self explanatory:",

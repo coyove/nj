@@ -198,8 +198,8 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 			sb.WriteString("createobject")
 		case typ.OpLoadFunc:
 			cls := p.Functions[a]
-			sb.WriteString("loadfunc " + cls.callable.Name + "\n")
-			sb.WriteString(pkPrettify(cls.callable, p, false))
+			sb.WriteString("loadfunc " + cls.Callable.Name + "\n")
+			sb.WriteString(pkPrettify(cls.Callable, p, false))
 		case typ.OpTailCall, typ.OpCall:
 			if b != regPhantom {
 				sb.WriteString("push " + readAddr(b, true) + " -> ")

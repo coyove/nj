@@ -72,16 +72,23 @@ func (v Value) Type() typ.ValueType {
 // IsFalse tests whether value is falsy: nil, false, empty string or 0
 func (v Value) IsFalse() bool { return v.v == 0 || v.p == falseMarker }
 
+// IsTrue returns the same way as !IsFalse()
 func (v Value) IsTrue() bool { return !v.IsFalse() }
 
 // IsInt64 tests whether value is an integer number
 func (v Value) IsInt64() bool { return v.p == int64Marker }
 
+// IsObject tests whether value is an object
 func (v Value) IsObject() bool { return v.Type() == typ.Object }
 
+// IsCallable tests whether value is a function (callable object)
 func (v Value) IsCallable() bool { return v.Type() == typ.Object && v.Object().IsCallable() }
 
+// IsNil tests whether value is nil
 func (v Value) IsNil() bool { return v == Nil }
+
+// IsBytes tests whether value is a byte sequence
+func (v Value) IsBytes() bool { return v.Type() == typ.Array && v.Array().meta == bytesSequenceMeta }
 
 // Bool creates a boolean value
 func Bool(v bool) Value {
@@ -165,8 +172,8 @@ func Bytes(b []byte) Value {
 	return NewSequence(b, bytesSequenceMeta).ToValue()
 }
 
-// Val creates a `Value` from golang `interface{}`
-func Val(i interface{}) Value {
+// ValueOf creates a `Value` from golang `interface{}`
+func ValueOf(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
 		return Value{}
@@ -189,9 +196,9 @@ func Val(i interface{}) Value {
 	case Value:
 		return v
 	case internal.CatchedError:
-		return Val(v.Original)
+		return ValueOf(v.Original)
 	case reflect.Value:
-		return Val(v.Interface())
+		return ValueOf(v.Interface())
 	case gjson.Result:
 		if v.Type == gjson.String {
 			return Str(v.Str)
@@ -201,11 +208,11 @@ func Val(i interface{}) Value {
 			return Bool(v.Bool())
 		} else if v.IsArray() {
 			x := make([]Value, 0, len(v.Raw)/10)
-			v.ForEach(func(k, v gjson.Result) bool { x = append(x, Val(v)); return true })
+			v.ForEach(func(k, v gjson.Result) bool { x = append(x, ValueOf(v)); return true })
 			return Array(x...)
 		} else if v.IsObject() {
 			x := NewObject(len(v.Raw) / 10)
-			v.ForEach(func(k, v gjson.Result) bool { x.Set(Val(k), Val(v)); return true })
+			v.ForEach(func(k, v gjson.Result) bool { x.Set(ValueOf(k), ValueOf(v)); return true })
 			return x.ToValue()
 		}
 		return Nil
@@ -246,23 +253,17 @@ func Val(i interface{}) Value {
 					}
 				}
 				if outs := rv.Call(ins); len(outs) == 0 {
+					env.A = Nil
 				} else if len(outs) == 1 {
-					env.A = Val(outs[0].Interface())
+					env.A = ValueOf(outs[0].Interface())
 				} else {
-					env.A = Array(valReflectValues(outs)...)
+					env.A = NewSequence(outs, GetGenericSequenceMeta(outs)).ToValue()
 				}
 			}
 		}
-		return (&Object{callable: &FuncBody{Name: "<" + rv.Type().String() + ">", Native: nf}}).ToValue()
+		return (&Object{Callable: &FuncBody{Name: "<" + rv.Type().String() + ">", Native: nf}}).ToValue()
 	}
 	return intf(i)
-}
-
-func valReflectValues(args []reflect.Value) (a []Value) {
-	for i := range args {
-		a = append(a, Val(args[i].Interface()))
-	}
-	return
 }
 
 func intf(i interface{}) Value {
@@ -358,7 +359,11 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 		return reflect.ValueOf(ValueIO(v))
 	} else if v.IsObject() && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
-			out := v.Object().MustCall(valReflectValues(args)...)
+			var a []Value
+			for i := range args {
+				a = append(a, ValueOf(args[i].Interface()))
+			}
+			out := v.Object().MustCall(a...)
 			if to := t.NumOut(); to == 1 {
 				results = []reflect.Value{out.ReflectValue(t.Out(0))}
 			} else if to > 1 {
