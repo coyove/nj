@@ -100,7 +100,7 @@ func init() {
 		e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
 			f := e.Object(-1).Prop("_l").Object()
 			stk := append([]Value{e.Object(-1).Prop("_c")}, e.Stack()...)
-			e.A = f.MustCall(stk...)
+			e.A = f.MustCall(e, stk...)
 		}).Object().Merge(nil, Str("_l"), e.Get(0), Str("_c"), e.Get(1)).ToValue()
 	}, "$f(f: function, v: value) -> function",
 		"\tcreate a function out of `f`, when it is called, `v` will be injected into as the first argument:",
@@ -128,28 +128,28 @@ func init() {
 			(*e.Global.Stack)[e.Int64(0)] = e.Get(1)
 		}, "$f(idx: int, v: value)"),
 		Str("trace"), Func("", func(env *Env) {
-			stacks := append(env.Stacktrace, stacktrace{cls: env.CS, cursor: env.IP})
+			stacks := env.Runtime.GetFullStacktrace()
 			lines := make([]Value, 0, len(stacks))
 			for i := len(stacks) - 1 - env.Get(0).ToInt(0); i >= 0; i-- {
 				r := stacks[i]
 				src := uint32(0)
-				for i := 0; i < len(r.cls.Code.Pos); {
+				for i := 0; i < len(r.Callable.Code.Pos); {
 					var opx uint32 = math.MaxUint32
-					ii, op, line := r.cls.Code.Pos.read(i)
-					if ii < len(r.cls.Code.Pos)-1 {
-						_, opx, _ = r.cls.Code.Pos.read(ii)
+					ii, op, line := r.Callable.Code.Pos.read(i)
+					if ii < len(r.Callable.Code.Pos)-1 {
+						_, opx, _ = r.Callable.Code.Pos.read(ii)
 					}
-					if r.cursor >= op && r.cursor < opx {
+					if r.Cursor >= op && r.Cursor < opx {
 						src = line
 						break
 					}
-					if r.cursor < op && i == 0 {
+					if r.Cursor < op && i == 0 {
 						src = line
 						break
 					}
 					i = ii
 				}
-				lines = append(lines, Str(r.cls.Name), Int64(int64(src)), Int64(int64(r.cursor-1)))
+				lines = append(lines, Str(r.Callable.Name), Int64(int64(src)), Int64(int64(r.Cursor-1)))
 			}
 			env.A = Array(lines...)
 		}, "$f(skip?: int) -> array", "\treturn [func_name0, line1, cursor1, n2, l2, c2, ...]"),
@@ -162,7 +162,7 @@ func init() {
 		e.A = Str(e.Get(0).Type().String())
 	}, "$f(v: value) -> string", "\treturn `v`'s type")
 	AddGlobalValue("apply", func(e *Env) {
-		e.A = e.Object(0).MustApply(e.Get(1), e.Stack()[2:]...)
+		e.A = e.Object(0).MustApply(e, e.Get(1), e.Stack()[2:]...)
 	}, "$f(f: function, this: value, args...: value) -> value")
 	AddGlobalValue("panic", func(e *Env) { panic(e.Get(0)) }, "$f(v: value)")
 	AddGlobalValue("assert", func(e *Env) {
@@ -298,8 +298,8 @@ func init() {
 		Str("rwmutex"), Func("", func(e *Env) { e.A = ValueOf(&sync.RWMutex{}) }, "$f() -> *go.sync.RWMutex"),
 		Str("waitgroup"), Func("", func(e *Env) { e.A = ValueOf(&sync.WaitGroup{}) }, "$f() -> *go.sync.WaitGroup"),
 		Str("after"), Func("", func(e *Env) {
-			f, args := e.Object(1), e.CopyStack()[2:]
-			e.A = ValueOf(time.AfterFunc(e.Num(0).ToDuration(0), func() { f.Call(args...) }))
+			f, args, e2 := e.Object(1), e.CopyStack()[2:], *e
+			e.A = ValueOf(time.AfterFunc(e.Num(0).ToDuration(0), func() { f.Call(&e2, args...) }))
 		}, "$f(secs: float, f: function, args...: value) -> *go.time.Timer"),
 		Str("map"), Func("", func(e *Env) {
 			fun := e.Object(1)
@@ -320,7 +320,7 @@ func init() {
 						if outError != nil {
 							return
 						}
-						res, err := fun.Call(p[0], p[1])
+						res, err := fun.Call(e, p[0], p[1])
 						if err != nil {
 							outError = err
 							return
@@ -446,7 +446,7 @@ func init() {
 		}, "$f() -> [[value, value]]", "return as [[key1, value1], [key2, value2], ...]"),
 		Str("foreach"), Func("", func(e *Env) {
 			f := e.Object(0)
-			e.Object(-1).Foreach(func(k, v Value) bool { return f.MustCall(k, v) == Nil })
+			e.Object(-1).Foreach(func(k, v Value) bool { return f.MustCall(e, k, v) == Nil })
 		}, "$f(f: function)"),
 		Str("contains"), Func("", func(e *Env) {
 			found, b := false, e.Get(0)
@@ -470,18 +470,19 @@ func init() {
 			e.A = Array(e.Object(-1).Next(e.Get(0)))
 		}, "$f(k: value) -> [value, value]", "\tfind next key-value pair after `k` in the object and return as [key, value]"),
 		Str("iscallable"), Func("", func(e *Env) { e.A = Bool(e.Object(-1).IsCallable()) }, "$f() -> bool"),
-		Str("apply"), Func("", func(e *Env) { e.A = e.Object(-1).MustApply(e.Get(0), e.Stack()[1:]...) }, "$f(this: value, args...: value) -> value"),
-		Str("call"), Func("", func(e *Env) { e.A = e.Object(-1).MustCall(e.Stack()...) }, "$f(args...: value) -> value"),
+		Str("apply"), Func("", func(e *Env) { e.A = e.Object(-1).MustApply(e, e.Get(0), e.Stack()[1:]...) }, "$f(this: value, args...: value) -> value"),
+		Str("call"), Func("", func(e *Env) { e.A = e.Object(-1).MustCall(e, e.Stack()...) }, "$f(args...: value) -> value"),
 		Str("try"), Func("", func(e *Env) {
-			a, err := e.Object(-1).Call(e.Stack()...)
+			a, err := e.Object(-1).Call(e, e.Stack()...)
 			_ = err == nil && e.SetA(a) || e.SetA(wrapExecError(err))
 		}, "$f(args...: value) -> value", "\texecute, catch panic and return as error if any"),
 		Str("go"), Func("", func(e *Env) {
 			f := e.Object(-1)
 			args := e.CopyStack()
 			w := make(chan Value, 1)
+			e2 := *e
 			go func(f *Object, args []Value) {
-				if v, err := f.Call(args...); err != nil {
+				if v, err := f.Call(&e2, args...); err != nil {
 					w <- wrapExecError(err)
 				} else {
 					w <- v
@@ -527,7 +528,7 @@ func init() {
 			src, ff := e.Array(-1), e.Object(0)
 			dest := make([]Value, 0, src.Len())
 			src.Foreach(func(k int, v Value) bool {
-				if ff.MustCall(v).IsTrue() {
+				if ff.MustCall(e, v).IsTrue() {
 					dest = append(dest, v)
 				}
 				return true

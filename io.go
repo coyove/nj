@@ -57,7 +57,7 @@ var (
 			for cb, rd := e.Object(0), bufio.NewReader(f); ; {
 				line, err := rd.ReadString(delim[0])
 				if len(line) > 0 {
-					if v := cb.MustCall(Str(line)); v == False {
+					if v := cb.MustCall(nil, Str(line)); v == False {
 						e.A = v
 						return
 					}
@@ -169,7 +169,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("readbuf"); rb.IsObject() {
-			v, err := rb.Object().Call(Bytes(p))
+			v, err := rb.Object().Call(nil, Bytes(p))
 			if err != nil {
 				return 0, err
 			}
@@ -179,7 +179,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			return int(n), err
 		}
 		if rb := Value(m).Object().Prop("readbytes"); rb.IsObject() {
-			v, err := rb.Object().Call(Int(len(p)))
+			v, err := rb.Object().Call(nil, Int(len(p)))
 			if err != nil {
 				return 0, err
 			} else if v == Nil {
@@ -188,7 +188,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			return copy(p, v.ToBytes()), nil
 		}
 		if rb := Value(m).Object().Prop("read"); rb.IsObject() {
-			v, err := rb.Object().Call(Int(len(p)))
+			v, err := rb.Object().Call(nil, Int(len(p)))
 			if err != nil {
 				return 0, err
 			} else if v == Nil {
@@ -208,7 +208,7 @@ func (m ValueIO) Write(p []byte) (int, error) {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("write"); rb.IsObject() {
-			v, err := rb.Object().Call(Bytes(p))
+			v, err := rb.Object().Call(nil, Bytes(p))
 			if err != nil {
 				return 0, err
 			}
@@ -226,7 +226,7 @@ func (m ValueIO) Close() error {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("close"); rb.IsObject() {
-			if _, err := rb.Object().Call(); err != nil {
+			if _, err := rb.Object().Call(nil); err != nil {
 				return err
 			}
 			return nil

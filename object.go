@@ -360,40 +360,40 @@ func (m *Object) Copy() *Object {
 	return &m2
 }
 
-func (m *Object) Call(args ...Value) (v1 Value, err error) {
+func (m *Object) Call(e *Env, args ...Value) (v1 Value, err error) {
 	if m == nil {
 		return Nil, nil
 	}
 	if m.Callable != nil {
 		defer internal.CatchErrorFuncCall(&err, m.Callable.Name)
 	}
-	return m.MustCall(args...), nil
+	return m.MustCall(e, args...), nil
 }
 
-func (m *Object) MustCall(args ...Value) Value {
+func (m *Object) MustCall(e *Env, args ...Value) Value {
 	if m.Callable == nil {
 		return m.ToValue()
 	} else if m.receiver != Nil {
-		return m.Callable.Apply(m.receiver, args...)
+		return m.Callable.execute(e.GetRuntime(), m.receiver, args...)
 	}
-	return m.Callable.Apply(m.ToValue(), args...)
+	return m.Callable.execute(e.GetRuntime(), m.ToValue(), args...)
 }
 
-func (m *Object) Apply(this Value, args ...Value) (v1 Value, err error) {
+func (m *Object) Apply(e *Env, this Value, args ...Value) (v1 Value, err error) {
 	if m == nil {
 		return Nil, nil
 	}
 	if m.Callable != nil {
 		defer internal.CatchErrorFuncCall(&err, m.Callable.Name)
 	}
-	return m.MustApply(this, args...), nil
+	return m.MustApply(e, this, args...), nil
 }
 
-func (m *Object) MustApply(this Value, args ...Value) Value {
+func (m *Object) MustApply(e *Env, this Value, args ...Value) Value {
 	if m.Callable == nil {
 		return m.ToValue()
 	}
-	return m.Callable.Apply(this, args...)
+	return m.Callable.execute(e.GetRuntime(), this, args...)
 }
 
 func (m *Object) Merge(src *Object, kvs ...Value) *Object {

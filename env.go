@@ -15,11 +15,24 @@ type Env struct {
 	A           Value
 	stack       *[]Value
 	stackOffset uint32
+	Runtime
+}
 
-	// Debug info for native functions to read
+type Runtime struct {
 	IP         uint32
 	CS         *FuncBody
-	Stacktrace []stacktrace
+	Stacktrace []Stacktrace
+}
+
+func (r *Runtime) GetFullStacktrace() []Stacktrace {
+	return append(r.Stacktrace, Stacktrace{Callable: r.CS, Cursor: r.IP})
+}
+
+func (env *Env) GetRuntime() Runtime {
+	if env == nil {
+		return Runtime{}
+	}
+	return Runtime{Stacktrace: env.GetFullStacktrace()}
 }
 
 func (env *Env) growZero(newSize, zeroSize int) {

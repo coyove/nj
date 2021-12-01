@@ -10,17 +10,17 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
-type stacktrace struct {
-	cursor      uint32
-	stackOffset uint32
-	cls         *FuncBody
+type Stacktrace struct {
+	Cursor      uint32
+	StackOffset uint32
+	Callable    *FuncBody
 }
 
 // ExecError represents the runtime error
 type ExecError struct {
 	r      interface{}
 	native *FuncBody
-	stacks []stacktrace
+	stacks []Stacktrace
 }
 
 func (e *ExecError) GetRootPanic() interface{} {
@@ -33,24 +33,24 @@ func (e *ExecError) Error() string {
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
 		src := uint32(0)
-		for i := 0; i < len(r.cls.Code.Pos); {
+		for i := 0; i < len(r.Callable.Code.Pos); {
 			var opx uint32 = math.MaxUint32
-			ii, op, line := r.cls.Code.Pos.read(i)
-			if ii < len(r.cls.Code.Pos)-1 {
-				_, opx, _ = r.cls.Code.Pos.read(ii)
+			ii, op, line := r.Callable.Code.Pos.read(i)
+			if ii < len(r.Callable.Code.Pos)-1 {
+				_, opx, _ = r.Callable.Code.Pos.read(ii)
 			}
-			if r.cursor >= op && r.cursor < opx {
+			if r.Cursor >= op && r.Cursor < opx {
 				src = line
 				break
 			}
-			if r.cursor < op && i == 0 {
+			if r.Cursor < op && i == 0 {
 				src = line
 				break
 			}
 			i = ii
 		}
 		// the recorded cursor was advanced by 1 already
-		msg.WriteString(fmt.Sprintf("%s at line %d (cursor: %d)\n", r.cls.Name, src, r.cursor-1))
+		msg.WriteString(fmt.Sprintf("%s at line %d (cursor: %d)\n", r.Callable.Name, src, r.Cursor-1))
 	}
 	if e.r != nil {
 		msg.WriteString("root panic:\n")
@@ -73,31 +73,31 @@ func wrapExecError(err error) Value {
 	return ValueOf(err)
 }
 
-func internalExecCursorLoop(env Env, K *FuncBody, retStack []stacktrace) Value {
+func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 	stackEnv := env
 	stackEnv.stackOffset = uint32(len(*env.stack))
 
 	var nativeCls *FuncBody
 	var cursor uint32
-	retStackSize := len(retStack)
+	retStackStartSize := len(retStack)
 
 	defer func() {
 		if r := recover(); r != nil {
-			rr := stacktrace{
-				cursor: cursor,
-				cls:    K,
+			rr := Stacktrace{
+				Cursor:   cursor,
+				Callable: K,
 			}
 
 			if re, ok := r.(*ExecError); ok {
 				retStack = append(retStack, rr)
-				re.stacks = append(retStack, re.stacks...)
+				re.stacks = append(retStack, re.stacks...)[retStackStartSize:]
 				panic(re)
 			} else {
 				e := &ExecError{}
 				e.r = r // root panic
 				e.native = nativeCls
-				e.stacks = make([]stacktrace, len(retStack)+1)
-				copy(e.stacks, retStack)
+				e.stacks = make([]Stacktrace, len(retStack)-retStackStartSize+1)
+				copy(e.stacks, retStack[retStackStartSize:])
 				e.stacks[len(e.stacks)-1] = rr
 				panic(e)
 			}
@@ -356,28 +356,28 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []stacktrace) Value {
 			}
 		case typ.OpRet:
 			v := env._get(opa)
-			if len(retStack) == retStackSize {
+			if len(retStack) == retStackStartSize {
 				return v
 			}
 			// Return to upper stack
 			r := retStack[len(retStack)-1]
-			cursor = r.cursor
-			K = r.cls
-			env.stackOffset = r.stackOffset
+			cursor = r.Cursor
+			K = r.Callable
+			env.stackOffset = r.StackOffset
 			env.A = v
-			*env.stack = (*env.stack)[:env.stackOffset+uint32(r.cls.StackSize)]
+			*env.stack = (*env.stack)[:env.stackOffset+uint32(r.Callable.StackSize)]
 			stackEnv.stackOffset = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
 		case typ.OpLoadFunc:
 			env.A = env.Global.Functions[opa].ToValue()
-		case typ.OpCall, typ.OpTailCall, typ.OpTryCall:
+		case typ.OpCall, typ.OpTailCall:
 			a := env._get(opa)
 			if a.Type() != typ.Object {
 				internal.Panic("can't call %v", showType(a))
 			}
 			cls := a.Object().Callable
 			if cls == nil {
-				env.A = a.Object().MustCall()
+				env.A = a
 				continue
 			}
 			if opb != regPhantom {
@@ -407,24 +407,13 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []stacktrace) Value {
 				nativeCls = nil
 				env.A = stackEnv.A
 				stackEnv.Clear()
-			} else if bop == typ.OpTryCall {
-				stackEnv.Global = cls.LoadGlobal
-				stackEnv.growZero(int(cls.StackSize), int(cls.NumParams))
-				env.A = func() Value {
-					return internalExecCursorLoop(stackEnv, cls, append(retStack, stacktrace{
-						cls:         K,
-						cursor:      cursor,
-						stackOffset: uint32(env.stackOffset),
-					}))
-				}()
-				stackEnv.Clear()
 			} else {
 				stackEnv.growZero(int(cls.StackSize), int(cls.NumParams))
 
-				last := stacktrace{
-					cls:         K,
-					cursor:      cursor,
-					stackOffset: uint32(env.stackOffset),
+				last := Stacktrace{
+					Callable:    K,
+					Cursor:      cursor,
+					StackOffset: uint32(env.stackOffset),
 				}
 
 				// Switch 'env' to 'stackEnv' and clear 'stackEnv'

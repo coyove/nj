@@ -143,7 +143,7 @@ func (c *FuncBody) EmergStop() {
 	}
 }
 
-func (c *FuncBody) Apply(this Value, args ...Value) (v1 Value) {
+func (c *FuncBody) execute(r Runtime, this Value, args ...Value) (v1 Value) {
 	newEnv := Env{
 		A:      this,
 		Global: c.LoadGlobal,
@@ -164,7 +164,7 @@ func (c *FuncBody) Apply(this Value, args ...Value) (v1 Value) {
 			}
 		}
 		newEnv.growZero(int(c.StackSize), int(c.NumParams))
-		v1 = internalExecCursorLoop(newEnv, c, nil)
+		v1 = internalExecCursorLoop(newEnv, c, r.Stacktrace)
 	}
 	return
 }

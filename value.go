@@ -364,7 +364,7 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 			for i := range args {
 				a = append(a, ValueOf(args[i].Interface()))
 			}
-			out := v.Object().MustCall(a...)
+			out := v.Object().MustCall(nil, a...)
 			if to := t.NumOut(); to == 1 {
 				results = []reflect.Value{out.ReflectValue(t.Out(0))}
 			} else if to > 1 {
