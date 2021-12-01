@@ -14,6 +14,14 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
+var (
+	ioWriterType = reflect.TypeOf((*io.Writer)(nil)).Elem()
+	ioReaderType = reflect.TypeOf((*io.Reader)(nil)).Elem()
+	ioCloserType = reflect.TypeOf((*io.Closer)(nil)).Elem()
+	errType      = reflect.TypeOf((*error)(nil)).Elem()
+	valueType    = reflect.TypeOf(Value{})
+)
+
 func reflectLoad(v interface{}, key Value) Value {
 	defer func() {
 		if r := recover(); r != nil {

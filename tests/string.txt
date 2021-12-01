@@ -11,9 +11,9 @@ local a, b = re([["(\d+)"]]).findall("a\"12\" \"2\"3")
 assert(a[0] == [["12"]] and a[1] == "12" and b[0] == [["2"]] and b[1] == "2")
 
 local err = error("err")
-print("reflectLoad: ", err.Error())
-assert(err.Error() == "err")
-assert("eerrrr" == re("(e|r)").replace(err.Error(), "$1$1"))
+print("reflectLoad: ", err.error())
+assert(err.error() == "err")
+assert("eerrrr" == re("(e|r)").replace(err.error(), "$1$1"))
 
 assert("x" == str.from("嘻x嘻").trim("嘻"))
 assert("嘻x" == str.from("嘻x嘻").trimright("嘻"))

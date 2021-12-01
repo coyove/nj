@@ -5,7 +5,6 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -41,6 +40,7 @@ var (
 	ArrayLib  Value
 	OSLib     Value
 	IOLib     Value
+	ErrorLib  Value
 )
 
 func AddGlobalValue(k string, v interface{}, doc ...string) {
@@ -165,6 +165,7 @@ func init() {
 		e.A = e.Object(0).MustApply(e, e.Get(1), e.Stack()[2:]...)
 	}, "$f(f: function, this: value, args...: value) -> value")
 	AddGlobalValue("panic", func(e *Env) { panic(e.Get(0)) }, "$f(v: value)")
+	AddGlobalValue("throw", func(e *Env) { panic(e.Get(0)) }, "$f(v: value)")
 	AddGlobalValue("assert", func(e *Env) {
 		if v := e.Get(0); e.Size() <= 1 && v.IsFalse() {
 			internal.Panic("assertion failed")
@@ -205,7 +206,8 @@ func init() {
 	AddGlobalValue("write", func(e *Env) {
 		w := NewWriter(e.Get(0))
 		for _, a := range e.Stack()[1:] {
-			fmt.Fprint(w, a.String())
+			_, err := fmt.Fprint(w, a.String())
+			e.A = Error(err)
 		}
 	}, "$f(writer: Writer, args...: value)", "\twrite `args` to `writer`")
 	AddGlobalValue("println", func(e *Env) {
@@ -276,9 +278,6 @@ func init() {
 			e.A = Str(e.A.Object().Prop("_rx").Interface().(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
 		}, "$f(old: string, new: string) -> string"),
 	))
-
-	AddGlobalValue("error", func(e *Env) { e.A = ValueOf(errors.New(e.Str(0))) }, "$f(text: string) -> go.error", "\tcreate an error")
-	AddGlobalValue("iserror", func(e *Env) { _, ok := e.Interface(0).(error); e.A = Bool(ok) }, "$f(v: value) -> bool")
 
 	AddGlobalValue("json", Obj(
 		Str("stringify"), Func("", func(e *Env) {
@@ -474,8 +473,8 @@ func init() {
 		Str("call"), Func("", func(e *Env) { e.A = e.Object(-1).MustCall(e, e.Stack()...) }, "$f(args...: value) -> value"),
 		Str("try"), Func("", func(e *Env) {
 			a, err := e.Object(-1).Call(e, e.Stack()...)
-			_ = err == nil && e.SetA(a) || e.SetA(wrapExecError(err))
-		}, "$f(args...: value) -> value", "\texecute, catch panic and return as error if any"),
+			_ = err == nil && e.SetA(a) || e.SetA(Error(err))
+		}, "$f(args...: value) -> value", "\trun function, catch panic and return as error if any"),
 		Str("go"), Func("", func(e *Env) {
 			f := e.Object(-1)
 			args := e.CopyStack()
@@ -483,7 +482,7 @@ func init() {
 			e2 := *e
 			go func(f *Object, args []Value) {
 				if v, err := f.Call(&e2, args...); err != nil {
-					w <- wrapExecError(err)
+					w <- Error(err)
 				} else {
 					w <- v
 				}
@@ -557,6 +556,14 @@ func init() {
 		Str("untype"), Func("", func(e *Env) { e.A = Array(e.Array(-1).Values()...) }),
 	).ToValue()
 	AddGlobalValue("array", ArrayLib)
+
+	ErrorLib = Func("Error", func(e *Env) {
+		e.A = Error(&ExecError{root: e.Get(0)})
+	}).Object().Merge(nil,
+		Str("error"), Func("", func(e *Env) { e.A = ValueOf(e.Array(-1).any.(*ExecError).root) }),
+		Str("getcause"), Func("", func(e *Env) { e.A = intf(e.Array(-1).any.(*ExecError).root) }),
+	).SetProto(ArrayLib.Object()).ToValue()
+	AddGlobalValue("error", ErrorLib)
 
 	encDecProto := Func("EncodeDecode", nil).Object().Merge(nil,
 		Str("encode"), Func("", func(e *Env) {

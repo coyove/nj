@@ -2,6 +2,7 @@ package nj
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"reflect"
 	"sync"
@@ -13,6 +14,7 @@ import (
 
 type SequenceMeta struct {
 	Name         string
+	Proto        *Object
 	Len          func(*Sequence) int
 	Size         func(*Sequence) int
 	Clear        func(*Sequence)
@@ -31,12 +33,14 @@ var (
 	internalSequenceMeta     *SequenceMeta
 	bytesSequenceMeta        *SequenceMeta
 	stringsSequenceMeta      *SequenceMeta
+	errorSequenceMeta        *SequenceMeta
 	genericSequenceMetaCache sync.Map
 )
 
 func init() {
 	internalSequenceMeta = &SequenceMeta{
 		"internal",
+		ArrayLib.Object(),
 		func(a *Sequence) int { return len(a.internal) },
 		func(a *Sequence) int { return cap(a.internal) },
 		func(a *Sequence) { a.internal = a.internal[:0] },
@@ -78,18 +82,19 @@ func init() {
 	}
 	bytesSequenceMeta = &SequenceMeta{
 		"bytes",
+		ArrayLib.Object(),
 		func(a *Sequence) int { return len((a.any).([]byte)) },
 		func(a *Sequence) int { return cap((a.any).([]byte)) },
 		func(a *Sequence) { a.any = a.any.([]byte)[:0] },
-		func(a *Sequence) []Value { panic("sequence(bytes).values: can't convert bytes") },
+		func(a *Sequence) []Value { a.notSupported("Values"); return nil },
 		func(a *Sequence, idx int) Value { return Int64(int64(a.any.([]byte)[idx])) },
 		func(a *Sequence, idx int, v Value) {
-			a.any.([]byte)[idx] = byte(v.Is(typ.Number, "sequence(bytes).set").Int())
+			a.any.([]byte)[idx] = byte(v.Is(typ.Number, "sequence(bytes).Set").Int())
 		},
 		func(a *Sequence, v ...Value) {
 			p := a.any.([]byte)
 			for _, b := range v {
-				p = append(p, byte(b.Is(typ.Number, "sequence(bytes).append").Int()))
+				p = append(p, byte(b.Is(typ.Number, "sequence(bytes).Append").Int()))
 			}
 			a.any = p
 		},
@@ -104,7 +109,7 @@ func init() {
 			if from.meta == internalSequenceMeta {
 				buf := a.any.([]byte)
 				for i := start; i < end; i++ {
-					buf[i] = byte(from.Get(i-start).Is(typ.Number, "sequence(bytes).copy").Int())
+					buf[i] = byte(from.Get(i-start).Is(typ.Number, "sequence(bytes).Copy").Int())
 				}
 			} else {
 				copy(a.any.([]byte)[start:end], from.any.([]byte))
@@ -114,17 +119,26 @@ func init() {
 			if b.meta == internalSequenceMeta {
 				buf := a.any.([]byte)
 				for i := 0; i < b.Len(); i++ {
-					buf[i] = byte(b.Get(i).Is(typ.Number, "sequence(bytes).concat").Int())
+					buf[i] = byte(b.Get(i).Is(typ.Number, "sequence(bytes).Concat").Int())
 				}
 				a.any = buf
 			} else {
 				a.any = append(a.any.([]byte), b.any.([]byte)...)
 			}
 		},
-		internalSequenceMeta.Marshal,
+		func(a *Sequence, toJSON bool) []byte {
+			if !toJSON {
+				return internalSequenceMeta.Marshal(a, toJSON)
+			}
+			buf := a.any.([]byte)
+			tmp := make([]byte, base64.StdEncoding.EncodedLen(len(buf)))
+			base64.StdEncoding.Encode(tmp, buf)
+			return tmp
+		},
 	}
 	stringsSequenceMeta = &SequenceMeta{
 		"[]string",
+		ArrayLib.Object(),
 		func(a *Sequence) int { return len((a.any).([]string)) },
 		func(a *Sequence) int { return cap((a.any).([]string)) },
 		func(a *Sequence) { a.any = a.any.([]byte)[:0] },
@@ -137,12 +151,12 @@ func init() {
 		},
 		func(a *Sequence, idx int) Value { return Str(a.any.([]string)[idx]) },
 		func(a *Sequence, idx int, v Value) {
-			a.any.([]string)[idx] = v.Is(typ.String, "sequence(string).set").Str()
+			a.any.([]string)[idx] = v.Is(typ.String, "sequence(string).Set").Str()
 		},
 		func(a *Sequence, v ...Value) {
 			p := a.any.([]string)
 			for _, b := range v {
-				p = append(p, b.Is(typ.String, "sequence(string).append").Str())
+				p = append(p, b.Is(typ.String, "sequence(string).Append").Str())
 			}
 			a.any = p
 		},
@@ -157,7 +171,7 @@ func init() {
 			if from.meta == internalSequenceMeta {
 				buf := a.any.([]string)
 				for i := start; i < end; i++ {
-					buf[i] = from.Get(i-start).Is(typ.String, "sequence(string).copy").Str()
+					buf[i] = from.Get(i-start).Is(typ.String, "sequence(string).Copy").Str()
 				}
 			} else {
 				copy(a.any.([]byte)[start:end], from.any.([]byte))
@@ -167,7 +181,7 @@ func init() {
 			if b.meta == internalSequenceMeta {
 				buf := a.any.([]string)
 				for i := 0; i < b.Len(); i++ {
-					buf[i] = b.Get(i).Is(typ.String, "sequence(string).concat").Str()
+					buf[i] = b.Get(i).Is(typ.String, "sequence(string).Concat").Str()
 				}
 				a.any = buf
 			} else {
@@ -175,6 +189,24 @@ func init() {
 			}
 		},
 		internalSequenceMeta.Marshal,
+	}
+	errorSequenceMeta = &SequenceMeta{
+		"error",
+		ErrorLib.Object(),
+		func(a *Sequence) int { return 1 },
+		func(a *Sequence) int { return 1 },
+		func(a *Sequence) { a.notSupported("Clear") },
+		func(a *Sequence) []Value { a.notSupported("Values"); return nil },
+		func(a *Sequence, idx int) Value { return a.ToValue() },
+		func(a *Sequence, idx int, v Value) { a.notSupported("Set") },
+		func(a *Sequence, v ...Value) { a.notSupported("Append") },
+		func(a *Sequence, start, end int) *Sequence { a.notSupported("Slice"); return nil },
+		func(a *Sequence, start, end int) { a.notSupported("SliceInplace") },
+		func(a *Sequence, start, end int, from *Sequence) { a.notSupported("Copy") },
+		func(a *Sequence, b *Sequence) { a.notSupported("Concat") },
+		func(a *Sequence, toJSON bool) []byte {
+			return []byte(ifquote(toJSON, a.any.(*ExecError).Error()))
+		},
 	}
 }
 
@@ -189,13 +221,13 @@ func GetGenericSequenceMeta(v interface{}) *SequenceMeta {
 	if v, ok := genericSequenceMetaCache.Load(rt); ok {
 		return v.(*SequenceMeta)
 	}
-	a := &SequenceMeta{rt.String(), sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgAppend, sgSlice, sgSliceInplace, sgCopy, sgConcat, sgMarshal}
+	a := &SequenceMeta{rt.String(), ArrayLib.Object(), sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgAppend, sgSlice, sgSliceInplace, sgCopy, sgConcat, sgMarshal}
 	if rt.Kind() == reflect.Array {
-		a.SliceInplace = func(a *Sequence, start int, end int) { panic("sequence(" + a.meta.Name + ").sliceinplace") }
-		a.Clear = func(a *Sequence) { panic("sequence(" + a.meta.Name + ").clear") }
-		a.Append = func(a *Sequence, v ...Value) { panic("sequence(" + a.meta.Name + ").append") }
-		a.Copy = func(a *Sequence, start, end int, from *Sequence) { panic("sequence(" + a.meta.Name + ").copy") }
-		a.Concat = func(a *Sequence, b *Sequence) { panic("sequence(" + a.meta.Name + ").concat") }
+		a.SliceInplace = func(a *Sequence, start int, end int) { a.notSupported("SliceInplace") }
+		a.Clear = func(a *Sequence) { a.notSupported("Clear") }
+		a.Append = func(a *Sequence, v ...Value) { a.notSupported("Append") }
+		a.Copy = func(a *Sequence, start, end int, from *Sequence) { a.notSupported("Copy") }
+		a.Concat = func(a *Sequence, b *Sequence) { a.notSupported("Concat") }
 	}
 	genericSequenceMetaCache.Store(rt, a)
 	return a
@@ -205,6 +237,16 @@ type Sequence struct {
 	meta     *SequenceMeta
 	internal []Value
 	any      interface{}
+}
+
+// Error creates a builtin error
+func Error(err error) Value {
+	if err == nil {
+		return Nil
+	} else if _, ok := err.(*ExecError); ok {
+		return NewSequence(err, errorSequenceMeta).ToValue()
+	}
+	return NewSequence(&ExecError{root: err}, errorSequenceMeta).ToValue()
 }
 
 func NewSequence(any interface{}, meta *SequenceMeta) *Sequence {
@@ -304,6 +346,10 @@ func (a *Sequence) Foreach(f func(k int, v Value) bool) {
 			break
 		}
 	}
+}
+
+func (a *Sequence) notSupported(method string) {
+	panic("sequence(" + a.meta.Name + ")." + method + " not available")
 }
 
 func sgLen(a *Sequence) int {

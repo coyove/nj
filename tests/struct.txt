@@ -88,7 +88,9 @@ assert(bar(5), 12)
 bar = foo(2)(3)
 assert(bar(4), 10)
 assert(bar(5), 12)
-assert(bar.try(6), 14)
+assert(bar.try(6).error(), 14)
+local x, _, _ = bar.try(6)
+assert(x.error(), 15)
 
 -- syntax test
 m = {}

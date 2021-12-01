@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"reflect"
 	"strings"
 
 	"github.com/coyove/nj/internal"
@@ -14,12 +13,6 @@ import (
 )
 
 type ValueIO Value
-
-var (
-	ioWriterType = reflect.TypeOf((*io.Writer)(nil)).Elem()
-	ioReaderType = reflect.TypeOf((*io.Reader)(nil)).Elem()
-	ioCloserType = reflect.TypeOf((*io.Closer)(nil)).Elem()
-)
 
 var (
 	ReaderProto = Func("Reader", nil).Object().Merge(nil,
@@ -175,8 +168,8 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			}
 			t := v.Is(typ.Array, "ValueIO.Read: use readbuf()").Array()
 			n := t.Get(0).Is(typ.Number, "ValueIO.Read: (int, error)").Int()
-			err, _ = t.Get(1).Interface().(error)
-			return int(n), err
+			ee, _ := t.Get(1).Interface().(*ExecError)
+			return int(n), ee.GetCause()
 		}
 		if rb := Value(m).Object().Prop("readbytes"); rb.IsObject() {
 			v, err := rb.Object().Call(nil, Int(len(p)))

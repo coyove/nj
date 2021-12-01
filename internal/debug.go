@@ -9,6 +9,8 @@ import (
 
 const UnnamedFunc = "<native>"
 
+type TransparentError struct{}
+
 func Panic(msg string, args ...interface{}) {
 	panic(fmt.Errorf(msg, args...))
 }
@@ -19,24 +21,12 @@ func PanicErr(err error) {
 	}
 }
 
-type CatchedError struct {
-	Original interface{}
-}
-
-func (e CatchedError) Error() string {
-	return fmt.Sprint(e.Original)
-}
-
 func IsDebug() bool {
 	return os.Getenv("njd") != ""
 }
 
 func processSpecialError(err *error, r interface{}) bool {
-	if x, ok := r.(interface{ IsValue() }); ok {
-		*err = CatchedError{x}
-		return true
-	}
-	if x, ok := r.(interface{ GetRootPanic() interface{} }); ok {
+	if x, ok := r.(interface{ TransparentError() TransparentError }); ok {
 		*err = x.(error)
 		return true
 	}

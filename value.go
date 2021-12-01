@@ -196,8 +196,8 @@ func ValueOf(i interface{}) Value {
 		return Array(v...)
 	case Value:
 		return v
-	case internal.CatchedError:
-		return ValueOf(v.Original)
+	case error:
+		return Error(v)
 	case reflect.Value:
 		return ValueOf(v.Interface())
 	case gjson.Result:
@@ -352,13 +352,15 @@ func (v Value) unsafeInt() int64 { return int64(v.v) }
 func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	if t == nil {
 		return reflect.ValueOf(v.Interface())
-	} else if t == reflect.TypeOf(Value{}) {
+	} else if t == valueType {
 		return reflect.ValueOf(v)
 	} else if vt := v.Type(); vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
 		return reflect.Zero(t)
 	} else if t.Implements(ioWriterType) || t.Implements(ioReaderType) || t.Implements(ioCloserType) {
 		return reflect.ValueOf(ValueIO(v))
-	} else if v.IsObject() && t.Kind() == reflect.Func {
+	} else if t.Implements(errType) {
+		return reflect.ValueOf(v.ToError())
+	} else if vt == typ.Object && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
 			var a []Value
 			for i := range args {
@@ -537,6 +539,13 @@ func (v Value) ToDuration(defaultValue time.Duration) time.Duration {
 		return time.Duration(v.Int64()) * time.Second
 	}
 	return time.Duration(v.Float64() * float64(time.Second))
+}
+
+func (v Value) ToError() error {
+	if v.Type() != typ.Array || v.Array().meta != errorSequenceMeta {
+		return nil
+	}
+	return v.Array().any.(*ExecError)
 }
 
 func (v Value) Len() int {

@@ -18,13 +18,23 @@ type Stacktrace struct {
 
 // ExecError represents the runtime error
 type ExecError struct {
-	r      interface{}
+	root   interface{}
 	native *FuncBody
 	stacks []Stacktrace
 }
 
-func (e *ExecError) GetRootPanic() interface{} {
-	return e.r
+func (e *ExecError) TransparentError() internal.TransparentError {
+	panic(nil)
+}
+
+func (e *ExecError) GetCause() error {
+	if e == nil {
+		return nil
+	}
+	if err, ok := e.root.(error); ok {
+		return err
+	}
+	return e
 }
 
 func (e *ExecError) Error() string {
@@ -52,25 +62,15 @@ func (e *ExecError) Error() string {
 		// the recorded cursor was advanced by 1 already
 		msg.WriteString(fmt.Sprintf("%s at line %d (cursor: %d)\n", r.Callable.Name, src, r.Cursor-1))
 	}
-	if e.r != nil {
+	if e.root != nil {
 		msg.WriteString("root panic:\n")
 		if e.native != nil {
 			msg.WriteString(e.native.Name)
 			msg.WriteString("() ")
 		}
-		msg.WriteString(fmt.Sprintf("%v\n", e.r))
+		msg.WriteString(fmt.Sprintf("%v\n", e.root))
 	}
 	return msg.String()
-}
-
-func wrapExecError(err error) Value {
-	switch err := err.(type) {
-	case *ExecError:
-		return ValueOf(err.r)
-	case internal.CatchedError:
-		return intf(err)
-	}
-	return ValueOf(err)
 }
 
 func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
@@ -94,7 +94,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 				panic(re)
 			} else {
 				e := &ExecError{}
-				e.r = r // root panic
+				e.root = r // root panic
 				e.native = nativeCls
 				e.stacks = make([]Stacktrace, len(retStack)-retStackStartSize+1)
 				copy(e.stacks, retStack[retStackStartSize:])
@@ -309,13 +309,15 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 			env.A = v
 		case typ.OpLoad:
 			switch a, idx := env._get(opa), env._get(opb); a.Type() {
+			case typ.Nil, typ.Number, typ.Bool:
+				env.A = Nil
 			case typ.Object:
 				env.A = a.Object().Get(idx)
 			case typ.Array:
 				if idx.IsInt64() {
 					env.A = a.Array().Get(idx.Int())
 				} else if idx.Type() == typ.String {
-					if f := ArrayLib.Object().Prop(idx.Str()); f != Nil {
+					if f := a.Array().meta.Proto.Prop(idx.Str()); f != Nil {
 						env.A = setObjectRecv(f, a)
 						break
 					}

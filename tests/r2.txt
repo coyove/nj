@@ -73,7 +73,7 @@ end
 function bad(n) panic("bad" + n) end
 do
 	local err = bad.try("boy")
-	assert(err == "badboy")
+	assert(err.error() == "badboy")
 end
 
 function foo(args...)
