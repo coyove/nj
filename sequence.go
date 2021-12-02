@@ -26,7 +26,7 @@ type SequenceMeta struct {
 	SliceInplace func(*Sequence, int, int)
 	Copy         func(*Sequence, int, int, *Sequence)
 	Concat       func(*Sequence, *Sequence)
-	Marshal      func(*Sequence, bool) []byte
+	Marshal      func(*Sequence, typ.MarshalType) []byte
 }
 
 var (
@@ -68,11 +68,11 @@ func init() {
 				a.internal = append(a.internal, b.internal...)
 			}
 		},
-		func(a *Sequence, marshalToJSON bool) []byte {
+		func(a *Sequence, mt typ.MarshalType) []byte {
 			p := &bytes.Buffer{}
 			p.WriteString("[")
 			a.Foreach(func(i int, v Value) bool {
-				v.toString(p, 1, marshalToJSON)
+				v.toString(p, 1, mt)
 				p.WriteString(",")
 				return true
 			})
@@ -99,8 +99,7 @@ func init() {
 			a.any = p
 		},
 		func(a *Sequence, start, end int) *Sequence {
-			p := a.any.([]byte)[start:end]
-			return &Sequence{meta: a.meta, any: p}
+			return &Sequence{meta: a.meta, any: a.any.([]byte)[start:end]}
 		},
 		func(a *Sequence, start, end int) {
 			a.any = a.any.([]byte)[start:end]
@@ -126,9 +125,9 @@ func init() {
 				a.any = append(a.any.([]byte), b.any.([]byte)...)
 			}
 		},
-		func(a *Sequence, toJSON bool) []byte {
-			if !toJSON {
-				return internalSequenceMeta.Marshal(a, toJSON)
+		func(a *Sequence, mt typ.MarshalType) []byte {
+			if mt != typ.MarshalToJSON {
+				return internalSequenceMeta.Marshal(a, mt)
 			}
 			buf := a.any.([]byte)
 			tmp := make([]byte, base64.StdEncoding.EncodedLen(len(buf)))
@@ -195,17 +194,17 @@ func init() {
 		ErrorLib.Object(),
 		func(a *Sequence) int { return 1 },
 		func(a *Sequence) int { return 1 },
-		func(a *Sequence) { a.notSupported("Clear") },
-		func(a *Sequence) []Value { a.notSupported("Values"); return nil },
+		sgClearNotSupported,
+		sgValuesNotSupported,
 		func(a *Sequence, idx int) Value { return a.ToValue() },
 		func(a *Sequence, idx int, v Value) { a.notSupported("Set") },
-		func(a *Sequence, v ...Value) { a.notSupported("Append") },
-		func(a *Sequence, start, end int) *Sequence { a.notSupported("Slice"); return nil },
-		func(a *Sequence, start, end int) { a.notSupported("SliceInplace") },
-		func(a *Sequence, start, end int, from *Sequence) { a.notSupported("Copy") },
-		func(a *Sequence, b *Sequence) { a.notSupported("Concat") },
-		func(a *Sequence, toJSON bool) []byte {
-			return []byte(ifquote(toJSON, a.any.(*ExecError).Error()))
+		sgAppendNotSupported,
+		sgSliceNotSupported,
+		sgSliceInplaceNotSupported,
+		sgCopyNotSupported,
+		sgConcatNotSupported,
+		func(a *Sequence, mt typ.MarshalType) []byte {
+			return []byte(ifquote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error()))
 		},
 	}
 }
@@ -223,11 +222,11 @@ func GetGenericSequenceMeta(v interface{}) *SequenceMeta {
 	}
 	a := &SequenceMeta{rt.String(), ArrayLib.Object(), sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgAppend, sgSlice, sgSliceInplace, sgCopy, sgConcat, sgMarshal}
 	if rt.Kind() == reflect.Array {
-		a.SliceInplace = func(a *Sequence, start int, end int) { a.notSupported("SliceInplace") }
-		a.Clear = func(a *Sequence) { a.notSupported("Clear") }
-		a.Append = func(a *Sequence, v ...Value) { a.notSupported("Append") }
-		a.Copy = func(a *Sequence, start, end int, from *Sequence) { a.notSupported("Copy") }
-		a.Concat = func(a *Sequence, b *Sequence) { a.notSupported("Concat") }
+		a.SliceInplace = sgSliceInplaceNotSupported
+		a.Clear = sgClearNotSupported
+		a.Append = sgAppendNotSupported
+		a.Copy = sgCopyNotSupported
+		a.Concat = sgConcatNotSupported
 	}
 	genericSequenceMetaCache.Store(rt, a)
 	return a
@@ -240,13 +239,17 @@ type Sequence struct {
 }
 
 // Error creates a builtin error
-func Error(err error) Value {
+func Error(e *Env, err error) Value {
 	if err == nil {
 		return Nil
 	} else if _, ok := err.(*ExecError); ok {
 		return NewSequence(err, errorSequenceMeta).ToValue()
 	}
-	return NewSequence(&ExecError{root: err}, errorSequenceMeta).ToValue()
+	ee := &ExecError{root: err}
+	if e != nil {
+		ee.stacks = e.GetFullStacktrace()
+	}
+	return NewSequence(ee, errorSequenceMeta).ToValue()
 }
 
 func NewSequence(any interface{}, meta *SequenceMeta) *Sequence {
@@ -336,8 +339,8 @@ func (a *Sequence) Concat(b *Sequence) {
 	a.meta.Concat(a, b)
 }
 
-func (a *Sequence) Marshal(toJSON bool) []byte {
-	return a.meta.Marshal(a, toJSON)
+func (a *Sequence) Marshal(mt typ.MarshalType) []byte {
+	return a.meta.Marshal(a, mt)
 }
 
 func (a *Sequence) Foreach(f func(k int, v Value) bool) {
@@ -357,7 +360,7 @@ func sgLen(a *Sequence) int {
 }
 
 func sgSize(a *Sequence) int {
-	return reflect.ValueOf(a.any).Len()
+	return reflect.ValueOf(a.any).Cap()
 }
 
 func sgClear(a *Sequence) {
@@ -423,10 +426,40 @@ func sgConcat(a *Sequence, b *Sequence) {
 	}
 }
 
-func sgMarshal(a *Sequence, marshalToJSON bool) []byte {
-	if !marshalToJSON {
-		return internalSequenceMeta.Marshal(a, marshalToJSON)
+func sgMarshal(a *Sequence, mt typ.MarshalType) []byte {
+	if mt != typ.MarshalToJSON {
+		return internalSequenceMeta.Marshal(a, mt)
 	}
 	buf, _ := json.Marshal(a.any)
 	return buf
+}
+
+func sgSliceNotSupported(a *Sequence, start int, end int) *Sequence {
+	a.notSupported("Slice")
+	return nil
+}
+
+func sgSliceInplaceNotSupported(a *Sequence, start int, end int) {
+	a.notSupported("SliceInplace")
+}
+
+func sgClearNotSupported(a *Sequence) {
+	a.notSupported("Clear")
+}
+
+func sgValuesNotSupported(a *Sequence) []Value {
+	a.notSupported("Values")
+	return nil
+}
+
+func sgAppendNotSupported(a *Sequence, v ...Value) {
+	a.notSupported("Append")
+}
+
+func sgCopyNotSupported(a *Sequence, start, end int, from *Sequence) {
+	a.notSupported("Copy")
+}
+
+func sgConcatNotSupported(a *Sequence, b *Sequence) {
+	a.notSupported("Concat")
 }

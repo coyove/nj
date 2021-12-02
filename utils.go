@@ -115,7 +115,7 @@ func renameFuncName(k, v Value) Value {
 
 func setObjectRecv(v, r Value) Value {
 	if v.IsObject() {
-		v.Object().receiver = r
+		v.Object().this = r
 	}
 	return v
 }

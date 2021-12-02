@@ -176,4 +176,16 @@ func (env *Env) mustBe(t typ.ValueType, idx int) (v Value) {
 	return v
 }
 
-func (env *Env) SetA(a Value) bool { env.A = a; return true }
+func (env *Env) SetA(a Value) bool {
+	env.A = a
+	return true
+}
+
+func (e *Env) Call(m *Object, args ...Value) (res Value) {
+	return CallObject(m, e, nil, m.this, args...)
+}
+
+func (e *Env) Call2(m *Object, args ...Value) (res Value, err error) {
+	res = CallObject(m, e, &err, m.this, args...)
+	return
+}

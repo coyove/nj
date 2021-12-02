@@ -44,13 +44,13 @@ func Func(name string, f func(*Env), doc ...string) Value {
 	if f == nil {
 		f = dummyFunc
 	}
-	return (&Object{
-		Callable: &FuncBody{
-			Name:      name,
-			Native:    f,
-			DocString: strings.Join(doc, "\n"),
-		},
-	}).ToValue()
+	obj := NewObject(0)
+	obj.Callable = &FuncBody{
+		Name:      name,
+		Native:    f,
+		DocString: strings.Join(doc, "\n"),
+	}
+	return obj.ToValue()
 }
 
 func (p *Program) Run() (v1 Value, err error) {
@@ -99,6 +99,30 @@ func (p *Program) LocalsObject() *Object {
 		r.Set(Str(name), (*p.Stack)[i])
 	}
 	return r
+}
+
+func Call(m *Object, args ...Value) (res Value) {
+	return CallObject(m, nil, nil, m.this, args...)
+}
+
+func Call2(m *Object, args ...Value) (res Value, err error) {
+	res = CallObject(m, nil, &err, m.this, args...)
+	return
+}
+
+func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res Value) {
+	if m.Callable == nil {
+		if err == nil {
+			internal.Panic("%v not callable", showType(m.ToValue()))
+		} else {
+			*err = fmt.Errorf("not callable")
+		}
+		return
+	}
+	if err != nil {
+		defer internal.CatchErrorFuncCall(err, m.Callable.Name)
+	}
+	return m.Callable.execute(e.GetRuntime(), this, args...)
 }
 
 func (c *FuncBody) String() string {

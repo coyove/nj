@@ -19,17 +19,15 @@ var (
 		Str("read"), Func("", func(e *Env) {
 			buf := ioRead(e)
 			_ = buf == nil && e.SetA(Nil) || e.SetA(UnsafeStr(buf))
-		}, "$f() -> string", "\tread all bytes as string, return nil if EOF reached",
-			"$f(n: int) -> string", "\tread `n` bytes as string"),
+		}, "$f(n?: int) -> string", "\tread all (or at most `n`) bytes as string, return nil if EOF reached"),
 		Str("readbytes"), Func("", func(e *Env) {
 			buf := ioRead(e)
 			_ = buf == nil && e.SetA(Nil) || e.SetA(Bytes(buf))
-		}, "$f() -> bytes", "\tread all bytes, return nil if EOF reached",
-			"$f(n: int) -> bytes", "\tread `n` bytes"),
+		}, "$f(n?: int) -> bytes", "\tread all (or at most `n`) bytes, return nil if EOF reached"),
 		Str("readbuf"), Func("", func(e *Env) {
 			rn, err := e.Object(-1).Prop("_f").Interface().(io.Reader).Read(e.Array(0).Unwrap().([]byte))
 			e.A = Array(Int(rn), ValueOf(err)) // return in Go style
-		}, "$f(buf: bytes) -> [int, go.error]", "\tread into `buf` and return in Go style"),
+		}, "$f(buf: bytes) -> [int, Error]", "\tread into `buf` and return in Go style"),
 		Str("readlines"), Func("", func(e *Env) {
 			f := e.Object(-1).Prop("_f").Interface().(io.Reader)
 			delim := e.Object(-1).Prop("delim").ToStr("\n")
@@ -50,7 +48,7 @@ var (
 			for cb, rd := e.Object(0), bufio.NewReader(f); ; {
 				line, err := rd.ReadString(delim[0])
 				if len(line) > 0 {
-					if v := cb.MustCall(nil, Str(line)); v == False {
+					if v := Call(cb, Str(line)); v == False {
 						e.A = v
 						return
 					}
@@ -74,7 +72,7 @@ var (
 			wn, err := e.Object(-1).Prop("_f").Interface().(io.Writer).Write(e.Get(0).ToBytes())
 			internal.PanicErr(err)
 			e.A = Int(wn)
-		}, "$f(buf: string|bytes) int", "\twrite `buf` to writer"),
+		}, "$f(buf: string|bytes) -> int", "\twrite `buf` to writer"),
 		Str("pipe"), Func("", func(e *Env) {
 			var wn int64
 			var err error
@@ -162,7 +160,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("readbuf"); rb.IsObject() {
-			v, err := rb.Object().Call(nil, Bytes(p))
+			v, err := Call2(rb.Object(), Bytes(p))
 			if err != nil {
 				return 0, err
 			}
@@ -172,7 +170,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			return int(n), ee.GetCause()
 		}
 		if rb := Value(m).Object().Prop("readbytes"); rb.IsObject() {
-			v, err := rb.Object().Call(nil, Int(len(p)))
+			v, err := Call2(rb.Object(), Int(len(p)))
 			if err != nil {
 				return 0, err
 			} else if v == Nil {
@@ -181,7 +179,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			return copy(p, v.ToBytes()), nil
 		}
 		if rb := Value(m).Object().Prop("read"); rb.IsObject() {
-			v, err := rb.Object().Call(nil, Int(len(p)))
+			v, err := Call2(rb.Object(), Int(len(p)))
 			if err != nil {
 				return 0, err
 			} else if v == Nil {
@@ -201,7 +199,7 @@ func (m ValueIO) Write(p []byte) (int, error) {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("write"); rb.IsObject() {
-			v, err := rb.Object().Call(nil, Bytes(p))
+			v, err := Call2(rb.Object(), Bytes(p))
 			if err != nil {
 				return 0, err
 			}
@@ -219,7 +217,7 @@ func (m ValueIO) Close() error {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("close"); rb.IsObject() {
-			if _, err := rb.Object().Call(nil); err != nil {
+			if _, err := Call2(rb.Object()); err != nil {
 				return err
 			}
 			return nil

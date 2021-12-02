@@ -125,11 +125,7 @@ func Array(m ...Value) Value {
 
 // Obj creates an object from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
 func Obj(kvs ...Value) Value {
-	t := NewObject(len(kvs) / 2)
-	for i := 0; i < len(kvs)/2*2; i += 2 {
-		t.Set(kvs[i], renameFuncName(kvs[i], kvs[i+1]))
-	}
-	return Value{v: uint64(typ.Object), p: unsafe.Pointer(t)}
+	return NewObject(0).Merge(nil, kvs...).ToValue()
 }
 
 // Proto creates an object whose prototype will be set to `p`
@@ -197,7 +193,7 @@ func ValueOf(i interface{}) Value {
 	case Value:
 		return v
 	case error:
-		return Error(v)
+		return Error(nil, v)
 	case reflect.Value:
 		return ValueOf(v.Interface())
 	case gjson.Result:
@@ -262,7 +258,7 @@ func ValueOf(i interface{}) Value {
 				}
 			}
 		}
-		return (&Object{Callable: &FuncBody{Name: "<" + rv.Type().String() + ">", Native: nf}}).ToValue()
+		return Func("<"+rv.Type().String()+">", nf)
 	}
 	return intf(i)
 }
@@ -366,7 +362,7 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 			for i := range args {
 				a = append(a, ValueOf(args[i].Interface()))
 			}
-			out := v.Object().MustCall(nil, a...)
+			out := Call(v.Object(), a...)
 			if to := t.NumOut(); to == 1 {
 				results = []reflect.Value{out.ReflectValue(t.Out(0))}
 			} else if to > 1 {
@@ -436,20 +432,20 @@ func (v Value) HashCode() uint64 {
 }
 
 func (v Value) String() string {
-	return v.toString(&bytes.Buffer{}, 0, false).String()
+	return v.toString(&bytes.Buffer{}, 0, typ.MarshalToString).String()
 }
 
 func (v Value) JSONString() string {
-	return v.toString(&bytes.Buffer{}, 0, true).String()
+	return v.toString(&bytes.Buffer{}, 0, typ.MarshalToJSON).String()
 }
 
 func (v Value) MarshalJSON() ([]byte, error) {
-	return v.toString(&bytes.Buffer{}, 0, true).Bytes(), nil
+	return v.toString(&bytes.Buffer{}, 0, typ.MarshalToJSON).Bytes(), nil
 }
 
-func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
+func (v Value) toString(p *bytes.Buffer, lv int, j typ.MarshalType) *bytes.Buffer {
 	if lv > 10 {
-		p.WriteString(ifstr(j, "{}", "..."))
+		p.WriteString(ifstr(j == typ.MarshalToJSON, "{}", "..."))
 		return p
 	}
 	switch v.Type() {
@@ -462,7 +458,7 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 			p.WriteString(strconv.FormatFloat(v.Float64(), 'f', -1, 64))
 		}
 	case typ.String:
-		p.WriteString(ifquote(j, v.Str()))
+		p.WriteString(ifquote(j == typ.MarshalToJSON, v.Str()))
 	case typ.Object:
 		v.Object().rawPrint(p, lv, j, false)
 	case typ.Array:
@@ -470,14 +466,14 @@ func (v Value) toString(p *bytes.Buffer, lv int, j bool) *bytes.Buffer {
 	case typ.Native:
 		i := v.Interface()
 		if s, ok := i.(fmt.Stringer); ok {
-			p.WriteString(ifquote(j, s.String()))
+			p.WriteString(ifquote(j == typ.MarshalToJSON, s.String()))
 		} else if s, ok := i.(error); ok {
-			p.WriteString(ifquote(j, s.Error()))
+			p.WriteString(ifquote(j == typ.MarshalToJSON, s.Error()))
 		} else {
-			p.WriteString(ifquote(j, "<"+reflect.TypeOf(i).String()+">"))
+			p.WriteString(ifquote(j == typ.MarshalToJSON, "<"+reflect.TypeOf(i).String()+">"))
 		}
 	default:
-		p.WriteString(ifstr(j, "null", "nil"))
+		p.WriteString(ifstr(j == typ.MarshalToJSON, "null", "nil"))
 	}
 	return p
 }

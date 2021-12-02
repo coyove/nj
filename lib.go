@@ -69,7 +69,7 @@ func init() {
 	}, "$f(f: function) -> string", "\treturn `f`'s documentation")
 	AddGlobalValue("new", func(e *Env) {
 		m := e.Object(0)
-		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetProto(m).ToValue()) || e.SetA((&Object{parent: m}).ToValue())
+		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetProto(m).ToValue()) || e.SetA(NewObject(0).SetProto(m).ToValue())
 	})
 	AddGlobalValue("prototype", globals["new"])
 	AddGlobalValue("len", func(e *Env) { e.A = Int(e.Get(0).Len()) })
@@ -100,7 +100,7 @@ func init() {
 		e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
 			f := e.Object(-1).Prop("_l").Object()
 			stk := append([]Value{e.Object(-1).Prop("_c")}, e.Stack()...)
-			e.A = f.MustCall(e, stk...)
+			e.A = e.Call(f, stk...)
 		}).Object().Merge(nil, Str("_l"), e.Get(0), Str("_c"), e.Get(1)).ToValue()
 	}, "$f(f: function, v: value) -> function",
 		"\tcreate a function out of `f`, when it is called, `v` will be injected into as the first argument:",
@@ -162,7 +162,7 @@ func init() {
 		e.A = Str(e.Get(0).Type().String())
 	}, "$f(v: value) -> string", "\treturn `v`'s type")
 	AddGlobalValue("apply", func(e *Env) {
-		e.A = e.Object(0).MustApply(e, e.Get(1), e.Stack()[2:]...)
+		e.A = CallObject(e.Object(0), e, nil, e.Get(1), e.Stack()[2:]...)
 	}, "$f(f: function, this: value, args...: value) -> value")
 	AddGlobalValue("panic", func(e *Env) { panic(e.Get(0)) }, "$f(v: value)")
 	AddGlobalValue("throw", func(e *Env) { panic(e.Get(0)) }, "$f(v: value)")
@@ -207,7 +207,7 @@ func init() {
 		w := NewWriter(e.Get(0))
 		for _, a := range e.Stack()[1:] {
 			_, err := fmt.Fprint(w, a.String())
-			e.A = Error(err)
+			e.A = Error(e, err)
 		}
 	}, "$f(writer: Writer, args...: value)", "\twrite `args` to `writer`")
 	AddGlobalValue("println", func(e *Env) {
@@ -237,17 +237,15 @@ func init() {
 	AddGlobalValue("sleep", func(e *Env) { time.Sleep(e.Num(0).ToDuration(0)) }, "$f(sec: float)")
 	AddGlobalValue("Go_time", func(e *Env) {
 		if e.Size() > 0 {
-			e.A = ValueOf(time.Date(
-				e.Get(0).ToInt(1970), time.Month(e.Get(1).ToInt64(1)), e.Get(2).ToInt(1),
-				e.Get(3).ToInt(0), e.Get(4).ToInt(0), e.Get(5).ToInt(0), e.Get(6).ToInt(0),
-				time.UTC))
+			e.A = ValueOf(time.Date(e.Int(0), time.Month(e.Int(1)), e.Int(2),
+				e.Get(3).ToInt(0), e.Get(4).ToInt(0), e.Get(5).ToInt(0), e.Get(6).ToInt(0), time.UTC))
 		} else {
 			e.A = ValueOf(time.Now())
 		}
 	},
 		"$f() -> go.time.Time",
 		"\treturn time.Time of current time",
-		"$f(year: int, month: int, day: int, h: int, m: int, s: int, nanoseconds: int) -> go.time.Time",
+		"$f(year: int, month: int, day: int, h?: int, m?: int, s?: int, nanoseconds?: int) -> go.time.Time",
 		"\treturn time.Time constructed by the given arguments",
 	)
 	AddGlobalValue("clock", func(e *Env) {
@@ -296,10 +294,6 @@ func init() {
 		Str("mutex"), Func("", func(e *Env) { e.A = ValueOf(&sync.Mutex{}) }, "$f() -> *go.sync.Mutex"),
 		Str("rwmutex"), Func("", func(e *Env) { e.A = ValueOf(&sync.RWMutex{}) }, "$f() -> *go.sync.RWMutex"),
 		Str("waitgroup"), Func("", func(e *Env) { e.A = ValueOf(&sync.WaitGroup{}) }, "$f() -> *go.sync.WaitGroup"),
-		Str("after"), Func("", func(e *Env) {
-			f, args, e2 := e.Object(1), e.CopyStack()[2:], *e
-			e.A = ValueOf(time.AfterFunc(e.Num(0).ToDuration(0), func() { f.Call(&e2, args...) }))
-		}, "$f(secs: float, f: function, args...: value) -> *go.time.Timer"),
 		Str("map"), Func("", func(e *Env) {
 			fun := e.Object(1)
 			n, t := e.Get(2).ToInt(runtime.NumCPU()), e.Get(0)
@@ -319,7 +313,7 @@ func init() {
 						if outError != nil {
 							return
 						}
-						res, err := fun.Call(e, p[0], p[1])
+						res, err := e.Call2(fun, p[0], p[1])
 						if err != nil {
 							outError = err
 							return
@@ -445,7 +439,7 @@ func init() {
 		}, "$f() -> [[value, value]]", "return as [[key1, value1], [key2, value2], ...]"),
 		Str("foreach"), Func("", func(e *Env) {
 			f := e.Object(0)
-			e.Object(-1).Foreach(func(k, v Value) bool { return f.MustCall(e, k, v) == Nil })
+			e.Object(-1).Foreach(func(k, v Value) bool { return e.Call(f, k, v) == Nil })
 		}, "$f(f: function)"),
 		Str("contains"), Func("", func(e *Env) {
 			found, b := false, e.Get(0)
@@ -457,32 +451,45 @@ func init() {
 		}, "$f(o: object)", "\tmerge elements from `o` to this"),
 		Str("tostring"), Func("", func(e *Env) {
 			p := &bytes.Buffer{}
-			e.Object(-1).rawPrint(p, 0, true, true)
+			e.Object(-1).rawPrint(p, 0, typ.MarshalToJSON, true)
 			e.A = UnsafeStr(p.Bytes())
 		}, "$f() -> string", "\tprint raw elements in object"),
 		Str("pure"), Func("", func(e *Env) {
 			m2 := *e.Object(-1)
 			m2.parent = nil
 			e.A = m2.ToValue()
-		}, "$f() -> object", "\treturn a new object who shares all the data from the original, but with no parent"),
+		}, "$f() -> object", "\treturn a new object who shares all the data from the original, but with no prototype"),
 		Str("next"), Func("", func(e *Env) {
 			e.A = Array(e.Object(-1).Next(e.Get(0)))
 		}, "$f(k: value) -> [value, value]", "\tfind next key-value pair after `k` in the object and return as [key, value]"),
 		Str("iscallable"), Func("", func(e *Env) { e.A = Bool(e.Object(-1).IsCallable()) }, "$f() -> bool"),
-		Str("apply"), Func("", func(e *Env) { e.A = e.Object(-1).MustApply(e, e.Get(0), e.Stack()[1:]...) }, "$f(this: value, args...: value) -> value"),
-		Str("call"), Func("", func(e *Env) { e.A = e.Object(-1).MustCall(e, e.Stack()...) }, "$f(args...: value) -> value"),
+		Str("apply"), Func("", func(e *Env) {
+			e.A = CallObject(e.Object(-1), e, nil, e.Get(0), e.Stack()[1:]...)
+		}, "$f(this: value, args...: value) -> value"),
+		Str("call"), Func("", func(e *Env) { e.A = e.Call(e.Object(-1), e.Stack()...) }, "$f(args...: value) -> value"),
 		Str("try"), Func("", func(e *Env) {
-			a, err := e.Object(-1).Call(e, e.Stack()...)
-			_ = err == nil && e.SetA(a) || e.SetA(Error(err))
+			a, err := e.Call2(e.Object(-1), e.Stack()...)
+			_ = err == nil && e.SetA(a) || e.SetA(Error(e, err))
 		}, "$f(args...: value) -> value", "\trun function, catch panic and return as error if any"),
+		Str("after"), Func("", func(e *Env) {
+			f, args, e2 := e.Object(-1), e.CopyStack()[1:], *e
+			e2.Stacktrace = append([]Stacktrace{}, e2.Stacktrace...)
+			e.A = Func("Timer", nil).Object().Merge(nil,
+				Str("t"), ValueOf(time.AfterFunc(e.Num(0).ToDuration(0), func() { e2.Call(f, args...) })),
+				Str("stop"), Func("", func(e *Env) {
+					e.A = Bool(e.Object(-1).Prop("t").Interface().(*time.Timer).Stop())
+				}),
+			).ToValue()
+		}, "$f(secs: float, args...: value) -> Timer"),
 		Str("go"), Func("", func(e *Env) {
 			f := e.Object(-1)
 			args := e.CopyStack()
 			w := make(chan Value, 1)
 			e2 := *e
+			e2.Stacktrace = append([]Stacktrace{}, e2.Stacktrace...)
 			go func(f *Object, args []Value) {
-				if v, err := f.Call(&e2, args...); err != nil {
-					w <- Error(err)
+				if v, err := e2.Call2(f, args...); err != nil {
+					w <- Error(&e2, err)
 				} else {
 					w <- v
 				}
@@ -503,7 +510,7 @@ func init() {
 					}
 				}),
 			).ToValue()
-		}, "$f(args...: value)", "\texecute `f` in goroutine"),
+		}, "$f(args...: value) -> Goroutine", "\texecute `f` in goroutine"),
 	).ToValue()
 	AddGlobalValue("object", ObjectLib)
 
@@ -514,20 +521,20 @@ func init() {
 		Str("clear"), Func("", func(e *Env) { e.Array(-1).Clear() }, "$f()"),
 		Str("append"), Func("", func(e *Env) { e.Array(-1).Append(e.Stack()...) }, "$f(args...: value)", "\tappend values to array"),
 		Str("find"), Func("", func(e *Env) {
-			e.A = Int(-1)
-			src, ff := e.Array(-1), e.Get(0)
+			a, src, ff := -1, e.Array(-1), e.Get(0)
 			for i := 0; i < src.Len(); i++ {
 				if src.Get(i).Equal(ff) {
-					e.A = Int(i)
+					a = i
 					break
 				}
 			}
+			e.A = Int(a)
 		}, "$f(v: value) -> int", "\tfind the index of first `v` in array"),
 		Str("filter"), Func("", func(e *Env) {
 			src, ff := e.Array(-1), e.Object(0)
 			dest := make([]Value, 0, src.Len())
 			src.Foreach(func(k int, v Value) bool {
-				if ff.MustCall(e, v).IsTrue() {
+				if e.Call(ff, v).IsTrue() {
 					dest = append(dest, v)
 				}
 				return true
@@ -558,7 +565,7 @@ func init() {
 	AddGlobalValue("array", ArrayLib)
 
 	ErrorLib = Func("Error", func(e *Env) {
-		e.A = Error(&ExecError{root: e.Get(0)})
+		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.GetFullStacktrace()})
 	}).Object().Merge(nil,
 		Str("error"), Func("", func(e *Env) { e.A = ValueOf(e.Array(-1).any.(*ExecError).root) }),
 		Str("getcause"), Func("", func(e *Env) { e.A = intf(e.Array(-1).any.(*ExecError).root) }),

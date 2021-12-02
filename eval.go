@@ -379,17 +379,12 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 			}
 			cls := a.Object().Callable
 			if cls == nil {
-				env.A = a
-				continue
+				internal.Panic("%v not callable", showType(a))
 			}
 			if opb != regPhantom {
 				stackEnv.Push(env._get(opb))
 			}
-			if a.Object().receiver != Nil {
-				stackEnv.A = a.Object().receiver
-			} else {
-				stackEnv.A = a
-			}
+			stackEnv.A = a.Object().this
 			if cls.Variadic {
 				s, w := stackEnv.Stack(), int(cls.NumParams)-1
 				if len(s) > w {

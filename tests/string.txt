@@ -39,3 +39,19 @@ function str.reverse()
 end
 assert(("abc")==(str.from("cba").reverse()))
 assert(("あbc")==(str.from("cbあ").reverse()))
+
+function foo(x)
+	local a= x.split(",").copy(1, 2,["x","y","z"]) 
+	assert(a.istyped())
+	return a
+end
+
+function array.equals(rhs)
+	if #rhs != #this then return false end
+	for i, v in rhs do
+		if v != this[i] then return false end
+	end
+	return true
+end
+
+assert(foo("1,2,3").equals(["1","x","3"]))

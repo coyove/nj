@@ -299,13 +299,15 @@ func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	cls.Locals = newtable.symbolsToDebugLocals()
 
 	var loadFuncIndex uint16
+	obj := NewObject(0)
+	obj.Callable = cls
 	if table.global != nil {
 		x := table.global
 		loadFuncIndex = uint16(len(x.funcs))
-		x.funcs = append(x.funcs, &Object{Callable: cls})
+		x.funcs = append(x.funcs, obj)
 	} else {
 		loadFuncIndex = uint16(len(table.funcs))
-		table.funcs = append(table.funcs, &Object{Callable: cls})
+		table.funcs = append(table.funcs, obj)
 	}
 	table.code.writeInst(typ.OpLoadFunc, loadFuncIndex, 0)
 	if strings.HasPrefix(cls.Name, "<lambda") {

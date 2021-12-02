@@ -23,7 +23,7 @@ type Object struct {
 	parent   *Object
 	count    int64
 	items    []hashItem
-	receiver Value
+	this     Value
 	Callable *FuncBody
 }
 
@@ -37,7 +37,12 @@ func NewObject(size int) *Object {
 	if size >= 8 {
 		size *= 2
 	}
-	return &Object{items: make([]hashItem, size)}
+	obj := &Object{}
+	if size > 0 {
+		obj.items = make([]hashItem, size)
+	}
+	obj.this = obj.ToValue()
+	return obj
 }
 
 func (m *Object) Proto() *Object {
@@ -103,7 +108,7 @@ func (m *Object) getImpl(k Value, useObjProto bool) (v Value) {
 	}
 	if v.IsObject() && v.Object().Callable != nil {
 		f := *v.Object()
-		f.receiver = m.ToValue()
+		f.this = m.ToValue()
 		v = f.ToValue()
 	}
 	return v
@@ -290,17 +295,17 @@ func (m *Object) Next(k Value) (Value, Value) {
 
 func (m *Object) String() string {
 	p := &bytes.Buffer{}
-	m.rawPrint(p, 0, false, false)
+	m.rawPrint(p, 0, typ.MarshalToString, false)
 	return p.String()
 }
 
-func (m *Object) rawPrint(p *bytes.Buffer, lv int, j, showProto bool) {
+func (m *Object) rawPrint(p *bytes.Buffer, lv int, j typ.MarshalType, showProto bool) {
 	if m == nil {
-		p.WriteString(ifstr(j, "null", "nil"))
+		p.WriteString(ifstr(j == typ.MarshalToJSON, "null", "nil"))
 		return
 	}
 	if m.Callable != nil {
-		if j {
+		if j == typ.MarshalToJSON {
 			p.WriteString("{\"<f>\":\"")
 			p.WriteString(m.Callable.String())
 			p.WriteString("\",")
@@ -312,20 +317,20 @@ func (m *Object) rawPrint(p *bytes.Buffer, lv int, j, showProto bool) {
 			p.WriteString("{")
 		}
 	} else {
-		if !j {
+		if j == typ.MarshalToString {
 			p.WriteString("object")
 		}
 		p.WriteString("{")
 	}
 	m.Foreach(func(k, v Value) bool {
 		k.toString(p, lv+1, j)
-		p.WriteString(ifstr(j, ":", "="))
+		p.WriteString(ifstr(j == typ.MarshalToJSON, ":", "="))
 		v.toString(p, lv+1, j)
 		p.WriteString(",")
 		return true
 	})
 	if m.parent != nil && showProto && m.parent != ObjectLib.Object() {
-		p.WriteString(ifstr(j, "\"<proto>\":", "<proto>="))
+		p.WriteString(ifstr(j == typ.MarshalToJSON, "\"<proto>\":", "<proto>="))
 		m.parent.rawPrint(p, lv+1, j, true)
 	}
 	closeBuffer(p, "}")
@@ -353,58 +358,19 @@ func (m *Object) Name() string {
 // Copy returns a new object with a copy of dataset
 func (m *Object) Copy() *Object {
 	if m == nil {
-		return NewObject(1)
+		return NewObject(0)
 	}
 	m2 := *m
 	m2.items = append([]hashItem{}, m.items...)
 	return &m2
 }
 
-func (m *Object) Call(e *Env, args ...Value) (v1 Value, err error) {
-	if m == nil {
-		return Nil, nil
-	}
-	if m.Callable != nil {
-		defer internal.CatchErrorFuncCall(&err, m.Callable.Name)
-	}
-	return m.MustCall(e, args...), nil
-}
-
-func (m *Object) MustCall(e *Env, args ...Value) Value {
-	if m.Callable == nil {
-		return m.ToValue()
-	} else if m.receiver != Nil {
-		return m.Callable.execute(e.GetRuntime(), m.receiver, args...)
-	}
-	return m.Callable.execute(e.GetRuntime(), m.ToValue(), args...)
-}
-
-func (m *Object) Apply(e *Env, this Value, args ...Value) (v1 Value, err error) {
-	if m == nil {
-		return Nil, nil
-	}
-	if m.Callable != nil {
-		defer internal.CatchErrorFuncCall(&err, m.Callable.Name)
-	}
-	return m.MustApply(e, this, args...), nil
-}
-
-func (m *Object) MustApply(e *Env, this Value, args ...Value) Value {
-	if m.Callable == nil {
-		return m.ToValue()
-	}
-	return m.Callable.execute(e.GetRuntime(), this, args...)
-}
-
 func (m *Object) Merge(src *Object, kvs ...Value) *Object {
 	if src == nil {
-		m.resizeHash((m.Len()+len(kvs))*2 + 1)
+		m.resizeHash(m.Len()*2 + len(kvs) + 1)
 	} else {
-		m.resizeHash((m.Len()+src.Len()+len(kvs))*2 + 1)
-		src.Foreach(func(k, v Value) bool { m.Set(k, renameFuncName(k, v)); return true })
-		if m.Callable == nil {
-			m.Callable = src.Callable
-		}
+		m.resizeHash((m.Len()+src.Len())*2 + len(kvs) + 1)
+		src.Foreach(func(k, v Value) bool { m.Set(k, v); return true })
 	}
 	for i := 0; i < len(kvs)/2*2; i += 2 {
 		m.Set(kvs[i], renameFuncName(kvs[i], kvs[i+1]))
