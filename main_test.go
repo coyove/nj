@@ -32,22 +32,22 @@ func runFile(t *testing.T, path string) {
 	}
 
 	b, err := LoadFile(path, &CompileOptions{
-		GlobalKeyValues: map[string]interface{}{
-			"nativeVarargTest": func(a ...int) int {
+		Globals: NewObject(0).
+			SetProp("nativeVarargTest", ValueOf(func(a ...int) int {
 				return len(a)
-			},
-			"nativeVarargTest2": func(b string, a ...int) string {
+			})).
+			SetProp("nativeVarargTest2", ValueOf(func(b string, a ...int) string {
 				return b + strconv.Itoa(len(a))
-			},
-			"intAlias": func(d time.Duration) time.Time {
+			})).
+			SetProp("intAlias", ValueOf(func(d time.Duration) time.Time {
 				return time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).Add(d)
-			},
-			"boolConvert": func(v bool) {
+			})).
+			SetProp("boolConvert", ValueOf(func(v bool) {
 				if !v {
 					panic("bad")
 				}
-			},
-			"findGlobal": func(env *Env) {
+			})).
+			SetProp("findGlobal", ValueOf(func(env *Env) {
 				v, err := env.Global.Get("G_FLAG")
 				fmt.Println(err)
 				if v.IsFalse() {
@@ -55,9 +55,8 @@ func runFile(t *testing.T, path string) {
 				}
 				env.Global.Set("G_FLAG", Str("ok"))
 				fmt.Println("find global")
-			},
-			"G": "test",
-		},
+			})).
+			SetProp("G", Str("test")),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +95,7 @@ a=a+n
 return a
 end
 return foo
-`, &CompileOptions{GlobalKeyValues: map[string]interface{}{"init": 1}})
+`, &CompileOptions{Globals: NewObject(0).SetProp("init", Int(1))})
 		v, _ := cls.Run()
 		if v := Call(v.Object(), Int64(10)); v.Int64() != 11 {
 			t.Fatal(v)
@@ -383,7 +382,7 @@ return add`, nil)
 	p2, _ := LoadString(`
 local a = 100
 return [a + add(), a + add(), a + add()]
-`, &CompileOptions{GlobalKeyValues: map[string]interface{}{"add": add}})
+`, &CompileOptions{Globals: NewObject(0).SetProp("add", ValueOf(add))})
 	v, err := p2.Run()
 	if err != nil {
 		panic(err)
@@ -528,15 +527,14 @@ func TestACall(t *testing.T) {
 
 	foo = MustRun(LoadString(`m.a = 11
     return m.pow2()`, &CompileOptions{
-		GlobalKeyValues: map[string]interface{}{
-			"m": Proto(Obj(
+		Globals: NewObject(0).
+			SetProp("m", Proto(Obj(
 				Str("a"), Int64(0),
 				Str("pow2"), Func("", func(e *Env) {
 					i := e.Object(-1).Prop("a").Int64()
 					e.A = Int64(i * i)
 				}),
-			).Object()),
-		},
+			).Object())),
 	}))
 	if foo.Int64() != 121 {
 		t.Fatal(foo)
@@ -546,18 +544,17 @@ func TestACall(t *testing.T) {
 	return sum(m.concat(m)...) + sum2(m.slice(0, 2)...)
     end
     return foo`, &CompileOptions{
-		GlobalKeyValues: map[string]interface{}{
-			"sum": func(a ...int) int {
+		Globals: NewObject(0).
+			SetProp("sum", ValueOf(func(a ...int) int {
 				s := 0
 				for _, a := range a {
 					s += a
 				}
 				return s
-			},
-			"sum2": func(a, b int) int {
+			})).
+			SetProp("sum2", ValueOf(func(a, b int) int {
 				return a + b
-			},
-		},
+			})),
 	}))
 	v = Call(foo.Object(), Int64(1), Int64(2), Int64(3))
 	if v.Int64() != 15 {
@@ -581,15 +578,15 @@ func TestReflectedValue(t *testing.T) {
 	p[0] = 99
 	return v, v + 1, nil
 	end
-	bar(foo)`, &CompileOptions{GlobalKeyValues: map[string]interface{}{
-		"bar": func(cb func(a int, p []byte) (int, int, error)) {
+	bar(foo)`, &CompileOptions{Globals: NewObject(0).
+		SetProp("bar", ValueOf(func(cb func(a int, p []byte) (int, int, error)) {
 			buf := []byte{0}
 			a, b, _ := cb(10, buf)
 			if a != 10 || b != 11 || buf[0] != 99 {
 				t.Fatal(a, b)
 			}
-		},
-	}})
+		})),
+	})
 	_, err := p.Run()
 	if err != nil {
 		t.Fatal(err)

@@ -211,12 +211,17 @@ func init() {
 
 func GetGenericSequenceMeta(v interface{}) *SequenceMeta {
 	switch v.(type) {
+	case []Value:
+		return internalSequenceMeta
 	case []byte:
 		return bytesSequenceMeta
 	case []string:
 		return stringsSequenceMeta
 	}
 	rt := reflect.TypeOf(v)
+	if rt.Kind() != reflect.Slice && rt.Kind() != reflect.Array {
+		internal.Panic("not generic sequence: %v", rt.String())
+	}
 	if v, ok := genericSequenceMetaCache.Load(rt); ok {
 		return v.(*SequenceMeta)
 	}
@@ -238,7 +243,7 @@ type Sequence struct {
 	any      interface{}
 }
 
-// Error creates a builtin error
+// Error creates a builtin error, env can be nil
 func Error(e *Env, err error) Value {
 	if err == nil {
 		return Nil
@@ -351,8 +356,12 @@ func (a *Sequence) Foreach(f func(k int, v Value) bool) {
 	}
 }
 
+func (a *Sequence) Typed() bool {
+	return a.meta != internalSequenceMeta
+}
+
 func (a *Sequence) notSupported(method string) {
-	panic("sequence(" + a.meta.Name + ")." + method + " not available")
+	panic("sequence(" + a.meta.Name + ")." + method + " not allowed")
 }
 
 func sgLen(a *Sequence) int {

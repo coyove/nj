@@ -29,7 +29,7 @@ var (
 	}()
 	baseStart  = uintptr(unsafe.Pointer(&baseMarker[0]))
 	baseLength = uintptr(len(baseMarker))
-	baseEnd    = uintptr(unsafe.Pointer(&baseMarker[0])) + baseLength
+	// baseEnd    = uintptr(unsafe.Pointer(&baseMarker[0])) + baseLength
 
 	int64Marker    = unsafe.Pointer(&baseMarker[int(typ.Number)])
 	float64Marker  = unsafe.Pointer(&baseMarker[int(typ.Number)+8])
@@ -541,7 +541,7 @@ func (v Value) ToError() error {
 	if v.Type() != typ.Array || v.Array().meta != errorSequenceMeta {
 		return nil
 	}
-	return v.Array().any.(*ExecError)
+	return v.Array().Unwrap().(*ExecError)
 }
 
 func (v Value) Len() int {

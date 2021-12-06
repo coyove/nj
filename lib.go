@@ -37,6 +37,7 @@ var (
 	StrLib    Value
 	MathLib   Value
 	ObjectLib Value
+	FuncLib   Value
 	ArrayLib  Value
 	OSLib     Value
 	IOLib     Value
@@ -63,10 +64,6 @@ func init() {
 	AddGlobalValue("globals", func(e *Env) {
 		e.A = e.Global.LocalsObject().ToValue()
 	}, "$f() -> object", "\tlist all global symbols and their values")
-	AddGlobalValue("doc", func(e *Env) {
-		o := e.Object(0)
-		_ = o.Callable == nil && e.SetA(Nil) || e.SetA(Str(strings.Replace(o.Callable.DocString, "$f", o.Callable.Name, -1)))
-	}, "$f(f: function) -> string", "\treturn `f`'s documentation")
 	AddGlobalValue("new", func(e *Env) {
 		m := e.Object(0)
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetProto(m).ToValue()) || e.SetA(NewObject(0).SetProto(m).ToValue())
@@ -78,18 +75,13 @@ func init() {
 	}, "$f(path: string) -> value", "\tload and eval file at `path`, globals will be inherited in loaded file")
 	AddGlobalValue("eval", func(e *Env) {
 		opts := e.Get(1).ToObject()
-		var m map[string]interface{}
-		if gt := opts.Prop("globals"); gt.Type() == typ.Object {
-			m = map[string]interface{}{}
-			gt.Object().Foreach(func(k, v Value) bool { m[k.String()] = v.Interface(); return true })
-		}
 		if opts.Prop("ast").IsTrue() {
 			v, err := parser.Parse(e.Str(0), "")
 			internal.PanicErr(err)
 			e.A = ValueOf(v)
 			return
 		}
-		p, err := LoadString(e.Str(0), &CompileOptions{GlobalKeyValues: m})
+		p, err := LoadString(e.Str(0), &CompileOptions{Globals: opts.Prop("globals").ToObject()})
 		internal.PanicErr(err)
 		v, err := p.Run()
 		internal.PanicErr(err)
@@ -262,19 +254,19 @@ func init() {
 		e.A = Proto(e.A.Object(), Str("_rx"), ValueOf(regexp.MustCompile(e.Str(0))))
 	}, "re(regex: string) -> RegExp", "\tcreate a regular expression object").Object().Merge(nil,
 		Str("match"), Func("", func(e *Env) {
-			e.A = Bool(e.A.Object().Prop("_rx").Interface().(*regexp.Regexp).MatchString(e.Str(0)))
-		}, "$f(text: string) -> bool"),
+			e.A = Bool(e.Object(-1).Prop("_rx").Interface().(*regexp.Regexp).MatchString(e.Str(0)))
+		}, "RegExp.$f(text: string) -> bool"),
 		Str("find"), Func("", func(e *Env) {
-			m := e.A.Object().Prop("_rx").Interface().(*regexp.Regexp).FindStringSubmatch(e.Str(0))
+			m := e.Object(-1).Prop("_rx").Interface().(*regexp.Regexp).FindStringSubmatch(e.Str(0))
 			e.A = NewSequence(m, stringsSequenceMeta).ToValue()
-		}, "$f(text: string) -> array"),
+		}, "RegExp.$f(text: string) -> array"),
 		Str("findall"), Func("", func(e *Env) {
-			m := e.A.Object().Prop("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).ToInt(-1))
+			m := e.Object(-1).Prop("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).ToInt(-1))
 			e.A = NewSequence(m, GetGenericSequenceMeta(m)).ToValue()
-		}, "$f(text: string) -> array"),
+		}, "RegExp.$f(text: string) -> array"),
 		Str("replace"), Func("", func(e *Env) {
-			e.A = Str(e.A.Object().Prop("_rx").Interface().(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
-		}, "$f(old: string, new: string) -> string"),
+			e.A = Str(e.Object(-1).Prop("_rx").Interface().(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
+		}, "RegExp.$f(old: string, new: string) -> string"),
 	))
 
 	AddGlobalValue("json", Obj(
@@ -364,26 +356,26 @@ func init() {
 		internal.PanicErr(err)
 		e.Object(-1).Set(Zero, ValueOf(f))
 
-		e.A = Func("FileObject", nil).Object().Merge(nil,
+		e.A = Func("File", nil).Object().Merge(nil,
 			Str("_f"), ValueOf(f),
 			Str("path"), Str(f.Name()),
 			Str("sync"), Func("", func(e *Env) {
 				internal.PanicErr(e.Object(-1).Prop("_f").Interface().(*os.File).Sync())
-			}),
+			}, "File.$f()"),
 			Str("stat"), Func("", func(e *Env) {
 				fi, err := e.Object(-1).Prop("_f").Interface().(*os.File).Stat()
 				internal.PanicErr(err)
 				e.A = ValueOf(fi)
-			}),
+			}, "File.$f() -> go.os.FileInfo"),
 			Str("truncate"), Func("", func(e *Env) {
 				f := e.Object(-1).Prop("_f").Interface().(*os.File)
 				internal.PanicErr(f.Truncate(e.Int64(1)))
 				t, err := f.Seek(0, 2)
 				internal.PanicErr(err)
 				e.A = Int64(t)
-			}),
+			}, "File.$f() -> int"),
 		).SetProto(ReadWriteSeekCloserProto).ToValue()
-	}, "$f(path: string, flag: string, perm: int) -> FileObject").Object().Merge(nil,
+	}, "$f(path: string, flag: string, perm: int) -> File").Object().Merge(nil,
 		Str("close"), Func("", func(e *Env) {
 			f, _ := e.Object(-1).Get(Zero).Interface().(*os.File)
 			if f != nil {
@@ -408,69 +400,106 @@ func init() {
 	AddGlobalValue("io", IOLib)
 
 	ObjectLib = Func("object", func(e *Env) {
-		_ = e.Get(0).IsNil() && e.SetA(Proto(e.Object(-1))) || e.SetA(e.Object(0).SetFirstProto(e.Object(-1)).ToValue())
+		switch e.Get(0).Type() {
+		case typ.Number:
+			e.A = NewObject(e.Int(0)).ToValue()
+		case typ.Nil:
+			e.A = NewObject(0).ToValue()
+		default:
+			e.A = e.Object(0).SetFirstProto(e.Object(-1)).ToValue()
+		}
 	}).Object().Merge(nil,
-		Str("make"), Func("", func(e *Env) { e.A = NewObject(e.Get(0).ToInt(0)).ToValue() }, "$f(size?: int) -> object", "\tcreate an object"),
-		Str("get"), Func("", func(e *Env) { e.A = e.Object(-1).Get(e.Get(0)) }, "$f(k: value) -> value"),
-		Str("set"), Func("", func(e *Env) { e.A = e.Object(-1).Set(e.Get(0), e.Get(1)) }, "$f(k: value, v: value) -> value", "\tset value and return previous value"),
-		Str("rawget"), Func("", func(e *Env) { e.A = e.Object(-1).RawGet(e.Get(0)) }, "$f(k: value) -> value"),
-		Str("delete"), Func("", func(e *Env) { e.A = e.Object(-1).Delete(e.Get(0)) }, "$f(k: value) -> value", "\tdelete value and return previous value"),
-		Str("clear"), Func("", func(e *Env) { e.Object(-1).Clear() }, "$f()"),
-		Str("copy"), Func("", func(e *Env) { e.A = e.Object(-1).Copy().ToValue() }, "$f() -> object", "\tcopy the object"),
-		Str("proto"), Func("", func(e *Env) { e.A = e.Object(-1).Proto().ToValue() }, "$f() -> object", "\treturn object's parent if any"),
-		Str("setproto"), Func("", func(e *Env) { e.Object(-1).SetProto(e.Object(0)) }, "$f(p: object)", "\tset object's prototype to `p`"),
-		Str("setfirstproto"), Func("", func(e *Env) { e.Object(-1).SetFirstProto(e.Object(0)) }, "$f(p: object)", "\tinsert `p` as `t`'s first prototype"),
-		Str("size"), Func("", func(e *Env) { e.A = Int(e.Object(-1).Size()) }, "$f() -> int", "\treturn the size of object"),
-		Str("len"), Func("", func(e *Env) { e.A = Int(e.Object(-1).Len()) }, "$f() -> int", "\treturn the count of keys in object"),
+		Str("get"), Func("", func(e *Env) {
+			e.A = e.Object(-1).Get(e.Get(0))
+		}, "object.$f(k: value) -> value"),
+		Str("set"), Func("", func(e *Env) {
+			e.A = e.Object(-1).Set(e.Get(0), e.Get(1))
+		}, "object.$f(k: value, v: value) -> value", "\tset value and return previous value"),
+		Str("rawget"), Func("", func(e *Env) {
+			e.A = e.Object(-1).RawGet(e.Get(0))
+		}, "object.$f(k: value) -> value"),
+		Str("delete"), Func("", func(e *Env) {
+			e.A = e.Object(-1).Delete(e.Get(0))
+		}, "object.$f(k: value) -> value", "\tdelete value and return previous value"),
+		Str("clear"), Func("", func(e *Env) { e.Object(-1).Clear() }, "object.$f()"),
+		Str("copy"), Func("", func(e *Env) {
+			e.A = e.Object(-1).Copy().ToValue()
+		}, "object.$f() -> object", "\tcopy the object"),
+		Str("proto"), Func("", func(e *Env) {
+			e.A = e.Object(-1).Proto().ToValue()
+		}, "object.$f() -> object", "\treturn object's prototype if any"),
+		Str("setproto"), Func("", func(e *Env) {
+			e.Object(-1).SetProto(e.Object(0))
+		}, "object.$f(p: object)", "\tset object's prototype to `p`"),
+		Str("setfirstproto"), Func("", func(e *Env) {
+			e.Object(-1).SetFirstProto(e.Object(0))
+		}, "object.$f(p: object)", "\tinsert `p` as `t`'s first prototype"),
+		Str("size"), Func("", func(e *Env) {
+			e.A = Int(e.Object(-1).Size())
+		}, "object.$f() -> int", "\treturn the underlay size of object, which always >= object.len()"),
+		Str("len"), Func("", func(e *Env) {
+			e.A = Int(e.Object(-1).Len())
+		}, "object.$f() -> int", "\treturn the count of keys in object"),
 		Str("keys"), Func("", func(e *Env) {
 			a := make([]Value, 0)
 			e.Object(-1).Foreach(func(k, v Value) bool { a = append(a, k); return true })
 			e.A = Array(a...)
-		}, "$f() -> array"),
+		}, "object.$f() -> array"),
 		Str("values"), Func("", func(e *Env) {
 			a := make([]Value, 0)
 			e.Object(-1).Foreach(func(k, v Value) bool { a = append(a, v); return true })
 			e.A = Array(a...)
-		}, "$f() -> array"),
+		}, "object.$f() -> array"),
 		Str("items"), Func("", func(e *Env) {
 			a := make([]Value, 0)
 			e.Object(-1).Foreach(func(k, v Value) bool { a = append(a, Array(k, v)); return true })
 			e.A = Array(a...)
-		}, "$f() -> [[value, value]]", "return as [[key1, value1], [key2, value2], ...]"),
+		}, "object.$f() -> [[value, value]]", "return as [[key1, value1], [key2, value2], ...]"),
 		Str("foreach"), Func("", func(e *Env) {
 			f := e.Object(0)
 			e.Object(-1).Foreach(func(k, v Value) bool { return e.Call(f, k, v) == Nil })
-		}, "$f(f: function)"),
+		}, "object.$f(f: function)"),
 		Str("contains"), Func("", func(e *Env) {
 			found, b := false, e.Get(0)
 			e.Object(-1).Foreach(func(k, v Value) bool { found = v.Equal(b); return !found })
 			e.A = Bool(found)
-		}, "$f(v: value) -> bool"),
+		}, "object.$f(v: value) -> bool"),
 		Str("merge"), Func("", func(e *Env) {
 			e.A = e.Object(-1).Merge(e.Object(0)).ToValue()
-		}, "$f(o: object)", "\tmerge elements from `o` to this"),
+		}, "object.$f(o: object)", "\tmerge elements from `o` to this"),
 		Str("tostring"), Func("", func(e *Env) {
 			p := &bytes.Buffer{}
 			e.Object(-1).rawPrint(p, 0, typ.MarshalToJSON, true)
 			e.A = UnsafeStr(p.Bytes())
-		}, "$f() -> string", "\tprint raw elements in object"),
+		}, "object.$f() -> string", "\tprint raw elements in object"),
 		Str("pure"), Func("", func(e *Env) {
 			m2 := *e.Object(-1)
 			m2.parent = nil
 			e.A = m2.ToValue()
-		}, "$f() -> object", "\treturn a new object who shares all the data from the original, but with no prototype"),
+		}, "object.$f() -> object", "\treturn a new object who shares all the data from the original, but with no prototype"),
 		Str("next"), Func("", func(e *Env) {
 			e.A = Array(e.Object(-1).Next(e.Get(0)))
-		}, "$f(k: value) -> [value, value]", "\tfind next key-value pair after `k` in the object and return as [key, value]"),
-		Str("iscallable"), Func("", func(e *Env) { e.A = Bool(e.Object(-1).IsCallable()) }, "$f() -> bool"),
+		}, "object.$f(k: value) -> [value, value]", "\tfind next key-value pair after `k` in the object and return as [key, value]"),
+		Str("iscallable"), Func("", func(e *Env) {
+			e.A = Bool(e.Object(-1).IsCallable())
+		}, "object.$f() -> bool"),
+	).ToValue()
+	FuncLib = Func("function", nil).Object().Merge(nil,
+		Str("doc"), Func("", func(e *Env) {
+			o := e.Object(-1)
+			_ = o.Callable == nil && e.SetA(Nil) || e.SetA(Str(strings.Replace(o.Callable.DocString, "$f", o.Callable.Name, -1)))
+		}, "function.$f() -> string", "\treturn function documentation"),
 		Str("apply"), Func("", func(e *Env) {
 			e.A = CallObject(e.Object(-1), e, nil, e.Get(0), e.Stack()[1:]...)
-		}, "$f(this: value, args...: value) -> value"),
-		Str("call"), Func("", func(e *Env) { e.A = e.Call(e.Object(-1), e.Stack()...) }, "$f(args...: value) -> value"),
+		}, "function.$f(this: value, args...: value) -> value"),
+		Str("call"), Func("", func(e *Env) {
+			e.A = e.Call(e.Object(-1), e.Stack()...)
+		}, "function.$f(args...: value) -> value"),
 		Str("try"), Func("", func(e *Env) {
 			a, err := e.Call2(e.Object(-1), e.Stack()...)
 			_ = err == nil && e.SetA(a) || e.SetA(Error(e, err))
-		}, "$f(args...: value) -> value", "\trun function, catch panic and return as error if any"),
+		}, "function.$f(args...: value) -> value|Error",
+			"\trun function, return Error if any panic occurred (if function tends to return n results, these values will all be Error now)"),
 		Str("after"), Func("", func(e *Env) {
 			f, args, e2 := e.Object(-1), e.CopyStack()[1:], *e
 			e2.Stacktrace = append([]Stacktrace{}, e2.Stacktrace...)
@@ -480,7 +509,7 @@ func init() {
 					e.A = Bool(e.Object(-1).Prop("t").Interface().(*time.Timer).Stop())
 				}),
 			).ToValue()
-		}, "$f(secs: float, args...: value) -> Timer"),
+		}, "function.$f(secs: float, args...: value) -> Timer"),
 		Str("go"), Func("", func(e *Env) {
 			f := e.Object(-1)
 			args := e.CopyStack()
@@ -510,16 +539,22 @@ func init() {
 					}
 				}),
 			).ToValue()
-		}, "$f(args...: value) -> Goroutine", "\texecute `f` in goroutine"),
-	).ToValue()
+		}, "function.$f(args...: value) -> Goroutine", "\texecute `f` in goroutine"),
+	).SetProto(ObjectLib.Object()).ToValue()
+
 	AddGlobalValue("object", ObjectLib)
+	AddGlobalValue("func", FuncLib)
 
 	ArrayLib = Func("array", nil).Object().Merge(nil,
-		Str("make"), Func("", func(e *Env) { e.A = Array(make([]Value, e.Int(0))...) }, "$f(n: int) -> array", "\tcreate an array of size `n`"),
-		Str("len"), Func("", func(e *Env) { e.A = Int(e.Array(-1).Len()) }, "$f()"),
-		Str("size"), Func("", func(e *Env) { e.A = Int(e.Array(-1).Size()) }, "$f()"),
-		Str("clear"), Func("", func(e *Env) { e.Array(-1).Clear() }, "$f()"),
-		Str("append"), Func("", func(e *Env) { e.Array(-1).Append(e.Stack()...) }, "$f(args...: value)", "\tappend values to array"),
+		Str("make"), Func("", func(e *Env) {
+			e.A = Array(make([]Value, e.Int(0))...)
+		}, "array.$f(n: int) -> array", "\tcreate an array of size `n`"),
+		Str("len"), Func("", func(e *Env) { e.A = Int(e.Array(-1).Len()) }, "array.$f()"),
+		Str("size"), Func("", func(e *Env) { e.A = Int(e.Array(-1).Size()) }, "array.$f()"),
+		Str("clear"), Func("", func(e *Env) { e.Array(-1).Clear() }, "array.$f()"),
+		Str("append"), Func("", func(e *Env) {
+			e.Array(-1).Append(e.Stack()...)
+		}, "array.$f(args...: value)", "\tappend values to array"),
 		Str("find"), Func("", func(e *Env) {
 			a, src, ff := -1, e.Array(-1), e.Get(0)
 			for i := 0; i < src.Len(); i++ {
@@ -529,7 +564,7 @@ func init() {
 				}
 			}
 			e.A = Int(a)
-		}, "$f(v: value) -> int", "\tfind the index of first `v` in array"),
+		}, "array.$f(v: value) -> int", "\tfind the index of first `v` in array"),
 		Str("filter"), Func("", func(e *Env) {
 			src, ff := e.Array(-1), e.Object(0)
 			dest := make([]Value, 0, src.Len())
@@ -540,10 +575,16 @@ func init() {
 				return true
 			})
 			e.A = Array(dest...)
-		}, "$f(f: function) -> array", "\tfilter out all values where f(value) is false"),
+		}, "array.$f(f: function) -> array", "\tfilter out all values where f(value) is false"),
 		Str("slice"), Func("", func(e *Env) {
-			e.A = e.Array(-1).Slice(e.Int(0), e.Get(1).ToInt(e.Array(-1).Len())).ToValue()
-		}, "$f(start: int, end?: int) -> array", "\tslice array, from `start` to `end`"),
+			a := e.Array(-1)
+			st, en := e.Int(0), e.Get(1).ToInt(a.Len())
+			for ; st < 0 && a.Len() > 0; st += a.Len() {
+			}
+			for ; en < 0 && a.Len() > 0; en += a.Len() {
+			}
+			e.A = a.Slice(st, en).ToValue()
+		}, "array.$f(start: int, end?: int) -> array", "\tslice array, from `start` to `end`"),
 		Str("removeat"), Func("", func(e *Env) {
 			ma, idx := e.Array(-1), e.Int(0)
 			if idx < 0 || idx >= ma.Len() {
@@ -554,21 +595,27 @@ func init() {
 				ma.SliceInplace(0, ma.Len()-1)
 				e.A = old
 			}
-		}, "$f(index: int)", "\tremove value at `index`"),
+		}, "array.$f(index: int)", "\tremove value at `index`"),
 		Str("copy"), Func("", func(e *Env) {
 			e.Array(-1).Copy(e.Int(0), e.Int(1), e.Array(2))
-		}, "$f(start: int, end: int, src: array) -> array", "\tcopy elements from `src` to `this[start:end]`"),
-		Str("concat"), Func("", func(e *Env) { e.Array(-1).Concat(e.Array(0)) }, "$f(a: array) -> array", "\tconcat two arrays"),
-		Str("istyped"), Func("", func(e *Env) { e.A = Bool(e.Array(-1).meta != internalSequenceMeta) }),
-		Str("untype"), Func("", func(e *Env) { e.A = Array(e.Array(-1).Values()...) }),
+		}, "array.$f(start: int, end: int, src: array) -> array", "\tcopy elements from `src` to `this[start:end]`"),
+		Str("concat"), Func("", func(e *Env) {
+			e.Array(-1).Concat(e.Array(0))
+		}, "array.$f(a: array) -> array", "\tconcat two arrays"),
+		Str("istyped"), Func("", func(e *Env) {
+			e.A = Bool(e.Array(-1).meta != internalSequenceMeta)
+		}, "array.$f() -> bool"),
+		Str("untype"), Func("", func(e *Env) {
+			e.A = Array(e.Array(-1).Values()...)
+		}, "array.$f() -> array"),
 	).ToValue()
 	AddGlobalValue("array", ArrayLib)
 
 	ErrorLib = Func("Error", func(e *Env) {
 		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.GetFullStacktrace()})
 	}).Object().Merge(nil,
-		Str("error"), Func("", func(e *Env) { e.A = ValueOf(e.Array(-1).any.(*ExecError).root) }),
-		Str("getcause"), Func("", func(e *Env) { e.A = intf(e.Array(-1).any.(*ExecError).root) }),
+		Str("error"), Func("", func(e *Env) { e.A = ValueOf(e.Array(-1).Unwrap().(*ExecError).root) }),
+		Str("getcause"), Func("", func(e *Env) { e.A = intf(e.Array(-1).Unwrap().(*ExecError).root) }),
 	).SetProto(ArrayLib.Object()).ToValue()
 	AddGlobalValue("error", ErrorLib)
 
@@ -625,12 +672,24 @@ func init() {
 		i, ok := e.Interface(0).([]byte)
 		_ = ok && e.SetA(UnsafeStr(i)) || e.SetA(Str(e.Get(0).String()))
 	}).Object().Merge(nil,
-		Str("from"), Func("", func(e *Env) { e.A = Str(fmt.Sprint(e.Interface(0))) }, "$f(v: value) -> string", "\tconvert `v` to string"),
-		Str("size"), Func("", func(e *Env) { e.A = Int(e.StrLen(-1)) }, "$f() -> int"),
-		Str("len"), Func("", func(e *Env) { e.A = Int(e.StrLen(-1)) }, "$f() -> int"),
-		Str("count"), Func("", func(e *Env) { e.A = Int(utf8.RuneCountInString(e.Str(-1))) }, "$f() -> int", "\treturn count of runes in text"),
-		Str("iequals"), Func("", func(e *Env) { e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0))) }, "$f(text2: string) -> bool"),
-		Str("contains"), Func("", func(e *Env) { e.A = Bool(strings.Contains(e.Str(-1), e.Str(0))) }, "$f(substr: string) -> bool"),
+		Str("from"), Func("", func(e *Env) {
+			e.A = Str(fmt.Sprint(e.Interface(0)))
+		}, "$f(v: value) -> string", "\tconvert `v` to string"),
+		Str("size"), Func("", func(e *Env) {
+			e.A = Int(e.StrLen(-1))
+		}, "str.$f() -> int", "\tsame as len()"),
+		Str("len"), Func("", func(e *Env) {
+			e.A = Int(e.StrLen(-1))
+		}, "str.$f() -> int", "\tsame as size()"),
+		Str("count"), Func("", func(e *Env) {
+			e.A = Int(utf8.RuneCountInString(e.Str(-1)))
+		}, "str.$f() -> int", "\treturn the count of runes"),
+		Str("iequals"), Func("", func(e *Env) {
+			e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0)))
+		}, "str.$f(text2: string) -> bool", "\tcase insensitive equal"),
+		Str("contains"), Func("", func(e *Env) {
+			e.A = Bool(strings.Contains(e.Str(-1), e.Str(0)))
+		}, "str.$f(substr: string) -> bool"),
 		Str("split"), Func("", func(e *Env) {
 			s, d := e.Str(-1), e.Str(0)
 			if n := e.Get(1).ToInt(0); n == 0 {
@@ -638,7 +697,7 @@ func init() {
 			} else {
 				e.A = NewSequence(strings.SplitN(s, d, n), stringsSequenceMeta).ToValue()
 			}
-		}, "$f(delim: string, n?: int) -> array"),
+		}, "str.$f(delim: string, n?: int) -> array"),
 		Str("join"), Func("", func(e *Env) {
 			d := e.Str(-1)
 			buf := &bytes.Buffer{}
@@ -651,21 +710,21 @@ func init() {
 				buf.Truncate(buf.Len() - len(d))
 			}
 			e.A = UnsafeStr(buf.Bytes())
-		}, "$f(a: array) -> string"),
+		}, "str.$f(a: array) -> string"),
 		Str("replace"), Func("", func(e *Env) {
 			e.A = Str(strings.Replace(e.Str(-1), e.Str(0), e.Str(1), e.Get(2).ToInt(-1)))
-		}, "$f(old: string, new: string, count?: int) -> string"),
+		}, "str.$f(old: string, new: string, count?: int) -> string"),
 		Str("match"), Func("", func(e *Env) {
 			m, err := filepath.Match(e.Str(-1), e.Str(0))
 			internal.PanicErr(err)
 			e.A = Bool(m)
-		}, "$f(text: string) -> bool"),
+		}, "str.$f(text: string) -> bool"),
 		Str("find"), Func("", func(e *Env) {
 			e.A = Int(strings.Index(e.Str(-1), e.Str(0)))
-		}, "$f(sub: string) -> int", "\tfind the index of first appearence of `sub` in text"),
+		}, "str.$f(sub: string) -> int", "\tfind the index of first appearence of `sub` in text"),
 		Str("findlast"), Func("", func(e *Env) {
 			e.A = Int(strings.LastIndex(e.Str(-1), e.Str(0)))
-		}, "$f(sub: string) -> int", "\tsame as find(), but starting from right to left"),
+		}, "str.$f(sub: string) -> int", "\tsame as find(), but starting from right to left"),
 		Str("sub"), Func("", func(e *Env) {
 			s := e.Str(-1)
 			st, en := e.Int(0), e.Get(1).ToInt(len(s))
@@ -674,33 +733,33 @@ func init() {
 			for ; en < 0 && len(s) > 0; en += len(s) {
 			}
 			e.A = Str(s[st:en])
-		}, "$f(start: int, end?: int) -> string"),
+		}, "str.$f(start: int, end?: int) -> string"),
 		Str("trim"), Func("", func(e *Env) {
 			_ = e.Get(0).IsNil() && e.SetA(Str(strings.TrimSpace(e.Str(-1)))) || e.SetA(Str(strings.Trim(e.Str(-1), e.Str(0))))
-		}, "$f(cutset?: string) -> string", "\ttrim spaces (or any chars in `cutset`) at both sides of the text"),
+		}, "str.$f(cutset?: string) -> string", "\ttrim spaces (or any chars in `cutset`) at both sides of the text"),
 		Str("trimprefix"), Func("", func(e *Env) {
 			e.A = Str(strings.TrimPrefix(e.Str(-1), e.Str(0)))
-		}, "$f(prefix: string) -> string", "\ttrim `prefix` of the text"),
+		}, "str.$f(prefix: string) -> string", "\ttrim `prefix` of the text"),
 		Str("trimsuffix"), Func("", func(e *Env) {
 			e.A = Str(strings.TrimSuffix(e.Str(-1), e.Str(0)))
-		}, "$f(suffix: string) -> string", "\ttrim `suffix` of the text"),
+		}, "str.$f(suffix: string) -> string", "\ttrim `suffix` of the text"),
 		Str("trimleft"), Func("", func(e *Env) {
 			e.A = Str(strings.TrimLeft(e.Str(-1), e.Str(0)))
-		}, "$f(cutset: string) -> string", "\ttrim the left side of the text using every char in `cutset`"),
+		}, "str.$f(cutset: string) -> string", "\ttrim the left side of the text using every char in `cutset`"),
 		Str("trimright"), Func("", func(e *Env) {
 			e.A = Str(strings.TrimRight(e.Str(-1), e.Str(0)))
-		}, "$f(cutset: string) -> string", "\ttrim the right side of the text using every char in `cutset`"),
+		}, "str.$f(cutset: string) -> string", "\ttrim the right side of the text using every char in `cutset`"),
 		Str("ord"), Func("", func(e *Env) {
 			r, sz := utf8.DecodeRuneInString(e.Str(-1))
 			e.A = Array(Int64(int64(r)), Int(sz))
-		}, "$f() -> [int, int]", "\tdecode first UTF-8 char, return [unicode, bytescount]"),
-		Str("startswith"), Func("", func(e *Env) { e.A = Bool(strings.HasPrefix(e.Str(-1), e.Str(0))) }, "$f(prefix: string) -> bool"),
-		Str("endswith"), Func("", func(e *Env) { e.A = Bool(strings.HasSuffix(e.Str(-1), e.Str(0))) }, "$f(suffix: string) -> bool"),
-		Str("upper"), Func("", func(e *Env) { e.A = Str(strings.ToUpper(e.Str(-1))) }, "$f() -> string"),
-		Str("lower"), Func("", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }, "$f() -> string"),
+		}, "str.$f() -> [int, int]", "\tdecode first UTF-8 char, return [unicode, bytescount]"),
+		Str("startswith"), Func("", func(e *Env) { e.A = Bool(strings.HasPrefix(e.Str(-1), e.Str(0))) }, "str.$f(prefix: string) -> bool"),
+		Str("endswith"), Func("", func(e *Env) { e.A = Bool(strings.HasSuffix(e.Str(-1), e.Str(0))) }, "str.$f(suffix: string) -> bool"),
+		Str("upper"), Func("", func(e *Env) { e.A = Str(strings.ToUpper(e.Str(-1))) }, "str.$f() -> string"),
+		Str("lower"), Func("", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }, "str.$f() -> string"),
 		Str("bytes"), Func("", func(e *Env) {
 			_ = e.Get(0).IsInt64() && e.SetA(ValueOf(make([]byte, e.Int(0)))) || e.SetA(ValueOf([]byte(e.Str(0))))
-		}, "$f() -> bytes", "\tconvert text to byte array",
+		}, "str.$f() -> bytes", "\tconvert text to byte array",
 			"$f(n: int) -> bytes", "\tcreate an n-byte long array"),
 		Str("chars"), Func("", func(e *Env) {
 			var r []Value
@@ -713,12 +772,12 @@ func init() {
 				s = s[sz:]
 			}
 			e.A = Array(r...)
-		}, "$f() -> array", "\tbreak `text` into chars, e.g.: chars('a中c') => ['a', '中', 'c']"),
+		}, "str.$f() -> array", "\tbreak `text` into chars, e.g.: chars('a中c') => ['a', '中', 'c']"),
 		Str("format"), Func("", func(e *Env) {
 			buf := &bytes.Buffer{}
 			sprintf(e, -1, buf)
 			e.A = UnsafeStr(buf.Bytes())
-		}, "$f(args...: value) -> string"),
+		}, "str.$f(args...: value) -> string"),
 		Str("buffer"), Func("", func(e *Env) {
 			b := &bytes.Buffer{}
 			if v := e.Get(0); v != Nil {
@@ -728,15 +787,15 @@ func init() {
 				Str("_f"), ValueOf(b),
 				Str("reset"), Func("", func(e *Env) {
 					e.Object(-1).Prop("_f").Interface().(*bytes.Buffer).Reset()
-				}),
+				}, "Buffer.$f()"),
 				Str("value"), Func("", func(e *Env) {
 					e.A = UnsafeStr(e.Object(-1).Prop("_f").Interface().(*bytes.Buffer).Bytes())
-				}),
+				}, "Buffer.$f() -> string"),
 				Str("bytes"), Func("", func(e *Env) {
 					e.A = Bytes(e.Object(-1).Prop("_f").Interface().(*bytes.Buffer).Bytes())
-				}),
+				}, "Buffer.$f() -> bytes"),
 			).ToValue()
-		}),
+		}, "$f(v?: string) -> Buffer"),
 		Str("hex"), Func("hex", nil).Object().SetProto(encDecProto.Proto()).ToValue(),
 		Str("base64"), Func("base64", nil).Object().Merge(nil,
 			Str("std"), Proto(encDecProto, Str("_e"), ValueOf(getEncB64(base64.StdEncoding, '='))),
@@ -769,17 +828,13 @@ func init() {
 			default:
 				e.A = Float64(rand.Float64())
 			}
-		}, "$f() -> float", "\treturn [0, 1)",
-			"$f(n: int) -> int", "\treturn [0, n)",
-			"$f(a: int, b: int) -> int", "\treturn [a, b]"),
-		Str("sqrt"), Func("", func(e *Env) { e.A = Float64(math.Sqrt(e.Float64(0))) }),
-		Str("floor"), Func("", func(e *Env) { e.A = Float64(math.Floor(e.Float64(0))) }),
-		Str("ceil"), Func("", func(e *Env) { e.A = Float64(math.Ceil(e.Float64(0))) }),
+		}, "$f() -> float", "\treturn [0, 1)", "$f(n: int) -> int", "\treturn [0, n)", "$f(a: int, b: int) -> int", "\treturn [a, b]"),
+		Str("sqrt"), Func("", func(e *Env) { e.A = Float64(math.Sqrt(e.Float64(0))) }, "$f(v: float) -> float"),
+		Str("floor"), Func("", func(e *Env) { e.A = Float64(math.Floor(e.Float64(0))) }, "$f(v: float) -> float"),
+		Str("ceil"), Func("", func(e *Env) { e.A = Float64(math.Ceil(e.Float64(0))) }, "$f(v: float) -> float"),
 		Str("min"), Func("", func(e *Env) { mathMinMax(e, false) }, "$f(a: number, b...: number) -> number"),
 		Str("max"), Func("", func(e *Env) { mathMinMax(e, true) }, "$f(a: number, b...: number) -> number"),
-		Str("pow"), Func("", func(e *Env) {
-			e.A = Float64(math.Pow(e.Float64(0), e.Float64(1)))
-		}, "$f(a: float, b: float) -> float"),
+		Str("pow"), Func("", func(e *Env) { e.A = Float64(math.Pow(e.Float64(0), e.Float64(1))) }, "$f(a: float, b: float) -> float"),
 		Str("abs"), Func("", func(e *Env) {
 			if e.A = e.Num(0); e.A.IsInt64() {
 				if i := e.A.Int64(); i < 0 {

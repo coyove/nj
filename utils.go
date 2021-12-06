@@ -132,11 +132,11 @@ func showType(v Value) string {
 	case typ.Object:
 		return "{" + v.Object().Name() + "}"
 	case typ.Array:
-		if a := v.Array().any; a != nil {
-			if _, ok := a.([]byte); ok {
+		if a := v.Array(); a.Typed() {
+			if _, ok := a.Unwrap().([]byte); ok {
 				return "bytes"
 			}
-			return reflect.TypeOf(a).String()
+			return reflect.TypeOf(a.Unwrap()).String()
 		}
 		fallthrough
 	default:

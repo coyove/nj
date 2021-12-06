@@ -33,10 +33,10 @@ type breakLabel struct {
 }
 
 type CompileOptions struct {
-	GlobalKeyValues map[string]interface{}
-	Stdout          io.Writer
-	Stderr          io.Writer
-	Stdin           io.Reader
+	Globals *Object
+	Stdout  io.Writer
+	Stderr  io.Writer
+	Stdin   io.Reader
 }
 
 // symTable is responsible for recording the state of compilation
@@ -400,10 +400,8 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		push(k, v)
 	}
 
-	if opt != nil {
-		for k, v := range opt.GlobalKeyValues {
-			push(k, ValueOf(v))
-		}
+	if opt != nil && opt.Globals != nil {
+		opt.Globals.Foreach(func(k, v Value) bool { push(k.String(), v); return true })
 	}
 
 	gi := push("__G", Nil)

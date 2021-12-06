@@ -33,13 +33,13 @@ type hashItem struct {
 	Distance int // How far item is from its best position.
 }
 
-func NewObject(size int) *Object {
-	if size >= 8 {
-		size *= 2
+func NewObject(perallocateSize int) *Object {
+	if perallocateSize >= 8 {
+		perallocateSize *= 2
 	}
 	obj := &Object{}
-	if size > 0 {
-		obj.items = make([]hashItem, size)
+	if perallocateSize > 0 {
+		obj.items = make([]hashItem, perallocateSize)
 	}
 	obj.this = obj.ToValue()
 	return obj
@@ -89,6 +89,20 @@ func (m *Object) Clear() {
 func (m *Object) Prop(k string) (v Value) {
 	return m.getImpl(Str(k), true)
 }
+
+func (m *Object) SetProp(k string, v interface{}) *Object { m.Set(Str(k), ValueOf(v)); return m }
+
+func (m *Object) SetIntProp(k string, v int) *Object { m.Set(Str(k), Int(v)); return m }
+
+func (m *Object) SetInt64Prop(k string, v int64) *Object { m.Set(Str(k), Int64(v)); return m }
+
+func (m *Object) SetFloat64Prop(k string, v float64) *Object { m.Set(Str(k), Float64(v)); return m }
+
+func (m *Object) SetBoolProp(k string, v bool) *Object { m.Set(Str(k), Bool(v)); return m }
+
+func (m *Object) SetStrProp(k string, v string) *Object { m.Set(Str(k), Str(v)); return m }
+
+func (m *Object) SetObjectProp(k string, v *Object) *Object { m.Set(Str(k), v.ToValue()); return m }
 
 // Get retrieves the value for a given key.
 func (m *Object) Get(k Value) (v Value) {

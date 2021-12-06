@@ -19,15 +19,15 @@ var (
 		Str("read"), Func("", func(e *Env) {
 			buf := ioRead(e)
 			_ = buf == nil && e.SetA(Nil) || e.SetA(UnsafeStr(buf))
-		}, "$f(n?: int) -> string", "\tread all (or at most `n`) bytes as string, return nil if EOF reached"),
+		}, "Reader.$f(n?: int) -> string", "\tread all (or at most `n`) bytes as string, return nil if EOF reached"),
 		Str("readbytes"), Func("", func(e *Env) {
 			buf := ioRead(e)
 			_ = buf == nil && e.SetA(Nil) || e.SetA(Bytes(buf))
-		}, "$f(n?: int) -> bytes", "\tread all (or at most `n`) bytes, return nil if EOF reached"),
+		}, "Reader.$f(n?: int) -> bytes", "\tread all (or at most `n`) bytes, return nil if EOF reached"),
 		Str("readbuf"), Func("", func(e *Env) {
 			rn, err := e.Object(-1).Prop("_f").Interface().(io.Reader).Read(e.Array(0).Unwrap().([]byte))
 			e.A = Array(Int(rn), ValueOf(err)) // return in Go style
-		}, "$f(buf: bytes) -> [int, Error]", "\tread into `buf` and return in Go style"),
+		}, "Reader.$f(buf: bytes) -> [int, Error]", "\tread into `buf` and return in Go style"),
 		Str("readlines"), Func("", func(e *Env) {
 			f := e.Object(-1).Prop("_f").Interface().(io.Reader)
 			delim := e.Object(-1).Prop("delim").ToStr("\n")
@@ -62,8 +62,8 @@ var (
 			}
 			e.A = Nil
 		},
-			"$f() -> array", "\tread the whole file and return lines as an array",
-			"$f(f: function)", "\tfor every line read, `f(line)` will be called", "\tto exit the reading, return `false` in `f`",
+			"Reader.$f() -> array", "\tread the whole file and return lines as an array",
+			"Reader.$f(f: function)", "\tfor every line read, `f(line)` will be called", "\tto exit the reading, return `false` in `f`",
 		),
 	)
 
@@ -72,7 +72,7 @@ var (
 			wn, err := e.Object(-1).Prop("_f").Interface().(io.Writer).Write(e.Get(0).ToBytes())
 			internal.PanicErr(err)
 			e.A = Int(wn)
-		}, "$f(buf: string|bytes) -> int", "\twrite `buf` to writer"),
+		}, "Writer.$f(buf: string|bytes) -> int", "\twrite `buf` to writer"),
 		Str("pipe"), Func("", func(e *Env) {
 			var wn int64
 			var err error
@@ -83,7 +83,7 @@ var (
 			}
 			internal.PanicErr(err)
 			e.A = Int64(wn)
-		}, "$f(r: Reader, n?: int) -> int", "\tcopy (at most `n`) bytes from `r` to writer, return number of bytes copied"),
+		}, "Writer.$f(r: Reader, n?: int) -> int", "\tcopy (at most `n`) bytes from `r` to writer, return number of bytes copied"),
 	)
 
 	SeekerProto = Func("Seeker", nil).Object().Merge(nil,
@@ -92,12 +92,12 @@ var (
 			wn, err := f.Seek(e.Int64(0), e.Int(1))
 			internal.PanicErr(err)
 			e.A = Int64(wn)
-		}, "$f(offset: int, whence: int) -> int"))
+		}, "Seeker.$f(offset: int, whence: int) -> int"))
 
 	CloserProto = Func("Closer", nil).Object().Merge(nil,
 		Str("close"), Func("", func(e *Env) {
 			internal.PanicErr(e.Object(-1).Prop("_f").Interface().(io.Closer).Close())
-		}, "$f()"))
+		}, "Closer.$f()"))
 
 	ReadWriterProto = Func("ReadWriter", nil).Object().Merge(ReaderProto).Merge(WriterProto)
 
@@ -217,10 +217,8 @@ func (m ValueIO) Close() error {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("close"); rb.IsObject() {
-			if _, err := Call2(rb.Object()); err != nil {
-				return err
-			}
-			return nil
+			_, err := Call2(rb.Object())
+			return err
 		}
 	}
 	return fmt.Errorf("closer not implemented")
