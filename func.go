@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -15,6 +14,7 @@ type FuncBody struct {
 	StackSize  uint16
 	NumParams  uint16
 	Variadic   bool
+	Dummy      bool
 	Native     func(env *Env)
 	Name       string
 	DocString  string
@@ -37,18 +37,19 @@ type Program struct {
 func dummyFunc(*Env) {}
 
 // Func creates a callable object
-func Func(name string, f func(*Env), doc ...string) Value {
+func Func(name string, f func(*Env), doc string) Value {
 	if name == "" {
 		name = internal.UnnamedFunc
-	}
-	if f == nil {
-		f = dummyFunc
 	}
 	obj := NewObject(0)
 	obj.Callable = &FuncBody{
 		Name:      name,
 		Native:    f,
-		DocString: strings.Join(doc, "\n"),
+		DocString: doc,
+	}
+	if f == nil {
+		obj.Callable.Native = dummyFunc
+		obj.Callable.Dummy = true
 	}
 	obj.SetPrototype(&FuncLib)
 	return obj.ToValue()

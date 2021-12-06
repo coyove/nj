@@ -533,7 +533,7 @@ func TestACall(t *testing.T) {
 				SetMethod("pow2", func(e *Env) {
 					i := e.Object(-1).Prop("a").Int64()
 					e.A = Int64(i * i)
-				})).ToValue()),
+				}, "")).ToValue()),
 	}))
 	if foo.Int64() != 121 {
 		t.Fatal(foo)
@@ -607,12 +607,4 @@ func TestHashcodeDist(t *testing.T) {
 		z[v]++
 	}
 	fmt.Println(len(z))
-}
-
-func BenchmarkReceiver(b *testing.B) {
-	x := Array(Func("", func(env *Env) {}))
-	fmt.Println(x.Object().Get(Int64(0)).String())
-	for i := 0; i < b.N; i++ {
-		x.Object().Get(Int64(0))
-	}
 }

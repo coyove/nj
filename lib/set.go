@@ -16,19 +16,17 @@ func init() {
 			return true
 		})
 		env.A = nj.ValueOf(s)
-	},
-		"$f() -> go.Set",
-		"$f(a: array) -> go.Set",
-		"\tcreate a unique set:",
-		"\t\tgo.Set.add(...v: value) -> int",
-		"\t\tgo.Set.delete(v: value) -> value",
-		"\t\tgo.Set.union(set2: value)",
-		"\t\tgo.Set.intersect(set2: value)",
-		"\t\tgo.Set.subtract(set2: value)",
-		"\t\tgo.Set.contains(v: value) -> bool",
-		"\t\tgo.Set.values() -> array",
-		"\t\tgo.Set.size() -> int",
-	)
+	}, "$f() -> go.Set\n"+
+		"$f(a: array) -> go.Set\n"+
+		"\tcreate a unique set:\n"+
+		"\t\tgo.Set.add(...v: value) -> int\n"+
+		"\t\tgo.Set.delete(v: value) -> value\n"+
+		"\t\tgo.Set.union(set2: value)\n"+
+		"\t\tgo.Set.intersect(set2: value)\n"+
+		"\t\tgo.Set.subtract(set2: value)\n"+
+		"\t\tgo.Set.contains(v: value) -> bool\n"+
+		"\t\tgo.Set.values() -> array\n"+
+		"\t\tgo.Set.size() -> int")
 }
 
 func (s Set) Add(v ...nj.Value) int {

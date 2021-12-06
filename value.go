@@ -248,7 +248,7 @@ func ValueOf(i interface{}) Value {
 				}
 			}
 		}
-		return Func("<"+rv.Type().String()+">", nf)
+		return Func("<"+rv.Type().String()+">", nf, "")
 	}
 	return intf(i)
 }

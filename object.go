@@ -47,7 +47,7 @@ func NewObject(preallocateSize int) *Object {
 
 func NamedObject(name string, preallocateSize int) *Object {
 	obj := NewObject(preallocateSize)
-	obj.Callable = &FuncBody{Name: name, Native: dummyFunc}
+	obj.Callable = &FuncBody{Name: name, Dummy: true, Native: dummyFunc}
 	return obj
 }
 
@@ -93,8 +93,8 @@ func (m *Object) Prop(k string) (v Value) { return m.getImpl(Str(k), true) }
 
 func (m *Object) SetProp(k string, v Value) *Object { m.Set(Str(k), v); return m }
 
-func (m *Object) SetMethod(k string, v func(*Env), d ...string) *Object {
-	m.Set(Str(k), Func(k, v, d...))
+func (m *Object) SetMethod(k string, v func(*Env), d string) *Object {
+	m.Set(Str(k), Func(k, v, d))
 	return m
 }
 
@@ -384,7 +384,7 @@ func (m *Object) IsCallable() bool {
 	if m == nil {
 		return false
 	}
-	return m.Callable != nil
+	return m.Callable != nil && !m.Callable.Dummy
 }
 
 func (m *Object) resizeHash(newSize int) {

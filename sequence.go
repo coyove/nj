@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"sync"
 	"unsafe"
@@ -30,15 +31,15 @@ type SequenceMeta struct {
 }
 
 var (
-	internalSequenceMeta     *SequenceMeta
-	bytesSequenceMeta        *SequenceMeta
-	stringsSequenceMeta      *SequenceMeta
-	errorSequenceMeta        *SequenceMeta
+	internalSequenceMeta     = &SequenceMeta{}
+	bytesSequenceMeta        = &SequenceMeta{}
+	stringsSequenceMeta      = &SequenceMeta{}
+	errorSequenceMeta        = &SequenceMeta{}
 	genericSequenceMetaCache sync.Map
 )
 
 func init() {
-	internalSequenceMeta = &SequenceMeta{
+	*internalSequenceMeta = SequenceMeta{
 		"internal",
 		&ArrayLib,
 		func(a *Sequence) int { return len(a.internal) },
@@ -80,7 +81,7 @@ func init() {
 			return p.Bytes()
 		},
 	}
-	bytesSequenceMeta = &SequenceMeta{
+	*bytesSequenceMeta = SequenceMeta{
 		"bytes",
 		&ArrayLib,
 		func(a *Sequence) int { return len((a.any).([]byte)) },
@@ -127,7 +128,7 @@ func init() {
 		},
 		func(a *Sequence, mt typ.MarshalType) []byte {
 			if mt != typ.MarshalToJSON {
-				return internalSequenceMeta.Marshal(a, mt)
+				return sgMarshal(a, mt)
 			}
 			buf := a.any.([]byte)
 			tmp := make([]byte, base64.StdEncoding.EncodedLen(len(buf)))
@@ -135,7 +136,7 @@ func init() {
 			return tmp
 		},
 	}
-	stringsSequenceMeta = &SequenceMeta{
+	*stringsSequenceMeta = SequenceMeta{
 		"[]string",
 		&ArrayLib,
 		func(a *Sequence) int { return len((a.any).([]string)) },
@@ -187,9 +188,9 @@ func init() {
 				a.any = append(a.any.([]byte), b.any.([]byte)...)
 			}
 		},
-		internalSequenceMeta.Marshal,
+		sgMarshal,
 	}
-	errorSequenceMeta = &SequenceMeta{
+	*errorSequenceMeta = SequenceMeta{
 		"error",
 		&ErrorLib,
 		func(a *Sequence) int { return 1 },
@@ -437,7 +438,7 @@ func sgConcat(a *Sequence, b *Sequence) {
 
 func sgMarshal(a *Sequence, mt typ.MarshalType) []byte {
 	if mt != typ.MarshalToJSON {
-		return internalSequenceMeta.Marshal(a, mt)
+		return []byte(fmt.Sprint(a.any))
 	}
 	buf, _ := json.Marshal(a.any)
 	return buf

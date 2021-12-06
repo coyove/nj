@@ -72,7 +72,7 @@ print(("version %s, total global values: %d").format(VERSION, #g/3))
 function pp(name, f, ident)
     if type(f) == "object" then
         if f.iscallable() then
-            local d = doc(f)
+            local d = f.doc()
             print(ident, name, " ", d.trimleft(name))
             print()
         end

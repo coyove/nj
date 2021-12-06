@@ -18,15 +18,15 @@ import (
 var HostWhitelist = map[string][]string{}
 
 func init() {
-	nj.Globals.SetProp("url", nj.Func("url", nil).Object().
+	nj.Globals.SetProp("url", nj.Func("url", nil, "").Object().
 		SetMethod("escape", func(e *nj.Env) {
 			e.A = nj.Str(url.QueryEscape(e.Str(0)))
-		}).
+		}, "").
 		SetMethod("unescape", func(e *nj.Env) {
 			v, err := url.QueryUnescape(e.Str(0))
 			internal.PanicErr(err)
 			e.A = nj.Str(v)
-		}).
+		}, "").
 		ToValue())
 	nj.Globals.SetProp("http", nj.Func("http", func(env *nj.Env) {
 		args := env.Get(0).Object()
@@ -155,17 +155,17 @@ func init() {
 			hdr[k] = resp.Header.Get(k)
 		}
 		env.A = nj.Array(nj.Int(resp.StatusCode), nj.ValueOf(hdr), buf, nj.ValueOf(client.Jar))
-	}, "$f(options: object) -> array",
-		"\tperform an HTTP request and return [code, headers, body_reader, cookie_jar]",
-		"\t'url' is a mandatory parameter in `options`, others are optional and pretty self explanatory:",
-		"\thttp({url='...'})",
-		"\thttp({url='...', noredirect=true})",
-		"\thttp({url='...', bodyreader=true})",
-		"\thttp({method='POST', url='...'})",
-		"\thttp({method='POST', url='...'}, json={...})",
-		"\thttp({method='POST', url='...', query={key=value}})",
-		"\thttp({method='POST', url='...', header={key=value}, form={key=value}})",
-		"\thttp({method='POST', url='...', multipart={file={reader}}})",
+	}, "$f(options: object) -> array\n"+
+		"\tperform an HTTP request and return [code, headers, body_reader, cookie_jar]\n"+
+		"\t'url' is a mandatory parameter in `options`, others are optional and pretty self explanatory:\n"+
+		"\thttp({url='...'})\n"+
+		"\thttp({url='...', noredirect=true})\n"+
+		"\thttp({url='...', bodyreader=true})\n"+
+		"\thttp({method='POST', url='...'})\n"+
+		"\thttp({method='POST', url='...'}, json={...})\n"+
+		"\thttp({method='POST', url='...', query={key=value}})\n"+
+		"\thttp({method='POST', url='...', header={key=value}, form={key=value}})\n"+
+		"\thttp({method='POST', url='...', multipart={file={reader}}})\n"+
 		"\thttp({method='POST', url='...', proxy='http://127.0.0.1:8080'})",
 	))
 }

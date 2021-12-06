@@ -123,10 +123,8 @@ func init() {
 
 		r := tt.Format(f)
 		env.A = nj.Str(r)
-	},
-		"$f(format: string) -> string",
-		"$f(format: string, t: go.time.Time) -> string",
-		"$f(format: string, unix_sec: float) -> string",
-		"\tformat doc: https://www.php.net/manual/datetime.format.php",
-	)
+	}, "$f(format: string) -> string\n"+
+		"$f(format: string, t: go.time.Time) -> string\n"+
+		"$f(format: string, unix_sec: float) -> string\n"+
+		"\tformat doc: https://www.php.net/manual/datetime.format.php")
 }

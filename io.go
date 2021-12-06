@@ -19,15 +19,15 @@ var (
 			SetMethod("read", func(e *Env) {
 			buf := ioRead(e)
 			_ = buf == nil && e.SetA(Nil) || e.SetA(UnsafeStr(buf))
-		}, "Reader.$f(n?: int) -> string", "\tread all (or at most `n`) bytes as string, return nil if EOF reached").
+		}, "Reader.$f(n?: int) -> string\n\tread all (or at most `n`) bytes as string, return nil if EOF reached").
 		SetMethod("readbytes", func(e *Env) {
 			buf := ioRead(e)
 			_ = buf == nil && e.SetA(Nil) || e.SetA(Bytes(buf))
-		}, "Reader.$f(n?: int) -> bytes", "\tread all (or at most `n`) bytes, return nil if EOF reached").
+		}, "Reader.$f(n?: int) -> bytes\n\tread all (or at most `n`) bytes, return nil if EOF reached").
 		SetMethod("readbuf", func(e *Env) {
 			rn, err := e.Object(-1).Prop("_f").Interface().(io.Reader).Read(e.Array(0).Unwrap().([]byte))
 			e.A = Array(Int(rn), ValueOf(err)) // return in Go style
-		}, "Reader.$f(buf: bytes) -> [int, Error]", "\tread into `buf` and return in Go style").
+		}, "Reader.$f(buf: bytes) -> [int, Error]\n\tread into `buf` and return in Go style").
 		SetMethod("readlines", func(e *Env) {
 			f := e.Object(-1).Prop("_f").Interface().(io.Reader)
 			delim := e.Object(-1).Prop("delim").ToStr("\n")
@@ -61,16 +61,15 @@ var (
 				}
 			}
 			e.A = Nil
-		},
-			"Reader.$f() -> array", "\tread the whole file and return lines as an array",
-			"Reader.$f(f: function)", "\tfor every line read, `f(line)` will be called", "\tto exit the reading, return `false` in `f`")
+		}, "Reader.$f() -> array\n\tread the whole file and return lines as an array\n"+
+			"Reader.$f(f: function)\n\tfor every line read, `f(line)` will be called\n\tto exit the reading, return `false` in `f`")
 
 	WriterProto = NamedObject("Writer", 0).
 			SetMethod("write", func(e *Env) {
 			wn, err := e.Object(-1).Prop("_f").Interface().(io.Writer).Write(e.Get(0).ToBytes())
 			internal.PanicErr(err)
 			e.A = Int(wn)
-		}, "Writer.$f(buf: string|bytes) -> int", "\twrite `buf` to writer").
+		}, "Writer.$f(buf: string|bytes) -> int\n\twrite `buf` to writer").
 		SetMethod("pipe", func(e *Env) {
 			var wn int64
 			var err error
@@ -81,7 +80,7 @@ var (
 			}
 			internal.PanicErr(err)
 			e.A = Int64(wn)
-		}, "Writer.$f(r: Reader, n?: int) -> int", "\tcopy (at most `n`) bytes from `r` to writer, return number of bytes copied")
+		}, "Writer.$f(r: Reader, n?: int) -> int\n\tcopy (at most `n`) bytes from `r` to writer, return number of bytes copied")
 
 	SeekerProto = NamedObject("Seeker", 0).
 			SetMethod("seek", func(e *Env) {
