@@ -18,17 +18,17 @@ import (
 var HostWhitelist = map[string][]string{}
 
 func init() {
-	nj.AddGlobalValue("url", nj.Obj(
-		nj.Str("escape"), nj.Func("escape", func(e *nj.Env) {
+	nj.Globals.SetProp("url", nj.Func("url", nil).Object().
+		SetMethod("escape", func(e *nj.Env) {
 			e.A = nj.Str(url.QueryEscape(e.Str(0)))
-		}),
-		nj.Str("unescape"), nj.Func("unescape", func(e *nj.Env) {
+		}).
+		SetMethod("unescape", func(e *nj.Env) {
 			v, err := url.QueryUnescape(e.Str(0))
 			internal.PanicErr(err)
 			e.A = nj.Str(v)
-		}),
-	))
-	nj.AddGlobalValue("http", nj.Func("http", func(env *nj.Env) {
+		}).
+		ToValue())
+	nj.Globals.SetProp("http", nj.Func("http", func(env *nj.Env) {
 		args := env.Get(0).Object()
 		to := args.Prop("timeout").ToFloat64(1 << 30)
 
@@ -147,7 +147,7 @@ func init() {
 		if args.Prop("bodyreader").IsFalse() && args.Prop("br").IsFalse() {
 			resp.Body.Close()
 		} else {
-			buf = nj.Proto(nj.ReadCloserProto, nj.Str("_f"), nj.ValueOf(resp.Body))
+			buf = nj.NewObject(1).SetProp("_f", nj.ValueOf(resp.Body)).SetPrototype(nj.ReadCloserProto).ToValue()
 		}
 
 		hdr := map[string]string{}

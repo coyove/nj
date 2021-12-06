@@ -123,16 +123,6 @@ func Array(m ...Value) Value {
 	return (&Sequence{meta: internalSequenceMeta, internal: m}).ToValue()
 }
 
-// Obj creates an object from `kvs`, which should be laid out as: key1, value1, key2, value2, ...
-func Obj(kvs ...Value) Value {
-	return NewObject(0).Merge(nil, kvs...).ToValue()
-}
-
-// Proto creates an object whose prototype will be set to `p`
-func Proto(p *Object, kvs ...Value) Value {
-	return Obj(kvs...).Object().SetProto(p).ToValue()
-}
-
 // Str creates a string value
 func Str(s string) Value {
 	if len(s) <= 8 { // payload 8b

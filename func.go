@@ -50,7 +50,7 @@ func Func(name string, f func(*Env), doc ...string) Value {
 		Native:    f,
 		DocString: strings.Join(doc, "\n"),
 	}
-	obj.SetProto(FuncLib.Object())
+	obj.SetPrototype(&FuncLib)
 	return obj.ToValue()
 }
 

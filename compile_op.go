@@ -301,7 +301,7 @@ func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	var loadFuncIndex uint16
 	obj := NewObject(0)
 	obj.Callable = cls
-	obj.SetProto(FuncLib.Object())
+	obj.SetPrototype(&FuncLib)
 	if table.global != nil {
 		x := table.global
 		loadFuncIndex = uint16(len(x.funcs))

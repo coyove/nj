@@ -23,7 +23,7 @@ import (
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	log.SetFlags(log.Lshortfile | log.Ltime)
-	AddGlobalValue("G", 1)
+	Globals.SetProp("G", Int(1))
 }
 
 func runFile(t *testing.T, path string) {
@@ -283,7 +283,7 @@ func benchmarkGoMapUnconstrainted(b *testing.B, n int) {
 }
 
 func TestBigList(t *testing.T) {
-	n := maxAddress/2 - len(globals)
+	n := maxAddress/2 - Globals.Len()
 
 	makeCode := func(n int) string {
 		buf := bytes.Buffer{}
@@ -528,13 +528,12 @@ func TestACall(t *testing.T) {
 	foo = MustRun(LoadString(`m.a = 11
     return m.pow2()`, &CompileOptions{
 		Globals: NewObject(0).
-			SetProp("m", Proto(Obj(
-				Str("a"), Int64(0),
-				Str("pow2"), Func("", func(e *Env) {
+			SetProp("m", NewObject(0).SetPrototype(NewObject(0).
+				SetProp("a", Int64(0)).
+				SetMethod("pow2", func(e *Env) {
 					i := e.Object(-1).Prop("a").Int64()
 					e.A = Int64(i * i)
-				}),
-			).Object())),
+				})).ToValue()),
 	}))
 	if foo.Int64() != 121 {
 		t.Fatal(foo)
@@ -568,7 +567,7 @@ func TestReflectedValue(t *testing.T) {
 	if x[0] != true || x[1] != false {
 		t.Fatal(x)
 	}
-	v = Obj(Str("a"), Int64(1), Str("b"), Int64(2))
+	v = NewObject(2).SetProp("a", Int64(1)).SetProp("b", Int64(2)).ToValue()
 	y := v.ReflectValue(reflect.TypeOf(map[string]byte{})).Interface().(map[string]byte)
 	if y["a"] != 1 || y["b"] != 2 {
 		t.Fatal(x)

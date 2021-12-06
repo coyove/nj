@@ -40,7 +40,7 @@ var (
 func init() {
 	internalSequenceMeta = &SequenceMeta{
 		"internal",
-		ArrayLib.Object(),
+		&ArrayLib,
 		func(a *Sequence) int { return len(a.internal) },
 		func(a *Sequence) int { return cap(a.internal) },
 		func(a *Sequence) { a.internal = a.internal[:0] },
@@ -82,7 +82,7 @@ func init() {
 	}
 	bytesSequenceMeta = &SequenceMeta{
 		"bytes",
-		ArrayLib.Object(),
+		&ArrayLib,
 		func(a *Sequence) int { return len((a.any).([]byte)) },
 		func(a *Sequence) int { return cap((a.any).([]byte)) },
 		func(a *Sequence) { a.any = a.any.([]byte)[:0] },
@@ -137,7 +137,7 @@ func init() {
 	}
 	stringsSequenceMeta = &SequenceMeta{
 		"[]string",
-		ArrayLib.Object(),
+		&ArrayLib,
 		func(a *Sequence) int { return len((a.any).([]string)) },
 		func(a *Sequence) int { return cap((a.any).([]string)) },
 		func(a *Sequence) { a.any = a.any.([]byte)[:0] },
@@ -191,7 +191,7 @@ func init() {
 	}
 	errorSequenceMeta = &SequenceMeta{
 		"error",
-		ErrorLib.Object(),
+		&ErrorLib,
 		func(a *Sequence) int { return 1 },
 		func(a *Sequence) int { return 1 },
 		sgClearNotSupported,
@@ -225,7 +225,7 @@ func GetGenericSequenceMeta(v interface{}) *SequenceMeta {
 	if v, ok := genericSequenceMetaCache.Load(rt); ok {
 		return v.(*SequenceMeta)
 	}
-	a := &SequenceMeta{rt.String(), ArrayLib.Object(), sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgAppend, sgSlice, sgSliceInplace, sgCopy, sgConcat, sgMarshal}
+	a := &SequenceMeta{rt.String(), &ArrayLib, sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgAppend, sgSlice, sgSliceInplace, sgCopy, sgConcat, sgMarshal}
 	if rt.Kind() == reflect.Array {
 		a.SliceInplace = sgSliceInplaceNotSupported
 		a.Clear = sgClearNotSupported

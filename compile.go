@@ -396,15 +396,16 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		return idx
 	}
 
-	for k, v := range globals {
-		push(k, v)
-	}
+	Globals.Foreach(func(k, v Value) bool {
+		push(k.String(), v)
+		return true
+	})
 
 	if opt != nil && opt.Globals != nil {
 		opt.Globals.Foreach(func(k, v Value) bool { push(k.String(), v); return true })
 	}
 
-	gi := push("__G", Nil)
+	gi := push("PROGRAM", Nil)
 	push("COMPILE_OPTIONS", ValueOf(opt))
 	push("SOURCE_CODE", Str(source))
 

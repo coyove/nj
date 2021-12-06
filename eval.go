@@ -284,7 +284,12 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
 			stackEnv.Clear()
 		case typ.OpCreateObject:
-			env.A = Obj(stackEnv.Stack()...)
+			stk := stackEnv.Stack()
+			o := NewObject(len(stk))
+			for i := 0; i < len(stk); i += 2 {
+				o.Set(stk[i], stk[i+1])
+			}
+			env.A = o.ToValue()
 			stackEnv.Clear()
 		case typ.OpStore:
 			subject, v := env._get(opa), env._get(opb)
@@ -336,7 +341,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 					}
 					break
 				} else if idx.Type() == typ.String {
-					if f := StrLib.Object().Prop(idx.Str()); f != Nil {
+					if f := StrLib.Prop(idx.Str()); f != Nil {
 						env.A = setObjectRecv(f, a)
 						break
 					}

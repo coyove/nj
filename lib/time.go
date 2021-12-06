@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	nj.AddGlobalValue("strtime", func(env *nj.Env) {
+	nj.Globals.SetMethod("strtime", func(env *nj.Env) {
 		f := env.Get(0).ToStr("")
 		switch strings.ToLower(f) {
 		case "ansic":

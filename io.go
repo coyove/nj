@@ -15,20 +15,20 @@ import (
 type ValueIO Value
 
 var (
-	ReaderProto = Func("Reader", nil).Object().Merge(nil,
-		Str("read"), Func("", func(e *Env) {
+	ReaderProto = NamedObject("Reader", 0).
+			SetMethod("read", func(e *Env) {
 			buf := ioRead(e)
 			_ = buf == nil && e.SetA(Nil) || e.SetA(UnsafeStr(buf))
-		}, "Reader.$f(n?: int) -> string", "\tread all (or at most `n`) bytes as string, return nil if EOF reached"),
-		Str("readbytes"), Func("", func(e *Env) {
+		}, "Reader.$f(n?: int) -> string", "\tread all (or at most `n`) bytes as string, return nil if EOF reached").
+		SetMethod("readbytes", func(e *Env) {
 			buf := ioRead(e)
 			_ = buf == nil && e.SetA(Nil) || e.SetA(Bytes(buf))
-		}, "Reader.$f(n?: int) -> bytes", "\tread all (or at most `n`) bytes, return nil if EOF reached"),
-		Str("readbuf"), Func("", func(e *Env) {
+		}, "Reader.$f(n?: int) -> bytes", "\tread all (or at most `n`) bytes, return nil if EOF reached").
+		SetMethod("readbuf", func(e *Env) {
 			rn, err := e.Object(-1).Prop("_f").Interface().(io.Reader).Read(e.Array(0).Unwrap().([]byte))
 			e.A = Array(Int(rn), ValueOf(err)) // return in Go style
-		}, "Reader.$f(buf: bytes) -> [int, Error]", "\tread into `buf` and return in Go style"),
-		Str("readlines"), Func("", func(e *Env) {
+		}, "Reader.$f(buf: bytes) -> [int, Error]", "\tread into `buf` and return in Go style").
+		SetMethod("readlines", func(e *Env) {
 			f := e.Object(-1).Prop("_f").Interface().(io.Reader)
 			delim := e.Object(-1).Prop("delim").ToStr("\n")
 			if e.Get(0) == Nil {
@@ -63,17 +63,15 @@ var (
 			e.A = Nil
 		},
 			"Reader.$f() -> array", "\tread the whole file and return lines as an array",
-			"Reader.$f(f: function)", "\tfor every line read, `f(line)` will be called", "\tto exit the reading, return `false` in `f`",
-		),
-	)
+			"Reader.$f(f: function)", "\tfor every line read, `f(line)` will be called", "\tto exit the reading, return `false` in `f`")
 
-	WriterProto = Func("Writer", nil).Object().Merge(nil,
-		Str("write"), Func("", func(e *Env) {
+	WriterProto = NamedObject("Writer", 0).
+			SetMethod("write", func(e *Env) {
 			wn, err := e.Object(-1).Prop("_f").Interface().(io.Writer).Write(e.Get(0).ToBytes())
 			internal.PanicErr(err)
 			e.A = Int(wn)
-		}, "Writer.$f(buf: string|bytes) -> int", "\twrite `buf` to writer"),
-		Str("pipe"), Func("", func(e *Env) {
+		}, "Writer.$f(buf: string|bytes) -> int", "\twrite `buf` to writer").
+		SetMethod("pipe", func(e *Env) {
 			var wn int64
 			var err error
 			if n := e.Get(1).ToInt64(0); n > 0 {
@@ -83,31 +81,30 @@ var (
 			}
 			internal.PanicErr(err)
 			e.A = Int64(wn)
-		}, "Writer.$f(r: Reader, n?: int) -> int", "\tcopy (at most `n`) bytes from `r` to writer, return number of bytes copied"),
-	)
+		}, "Writer.$f(r: Reader, n?: int) -> int", "\tcopy (at most `n`) bytes from `r` to writer, return number of bytes copied")
 
-	SeekerProto = Func("Seeker", nil).Object().Merge(nil,
-		Str("seek"), Func("", func(e *Env) {
+	SeekerProto = NamedObject("Seeker", 0).
+			SetMethod("seek", func(e *Env) {
 			f := e.Object(-1).Prop("_f").Interface().(io.Seeker)
 			wn, err := f.Seek(e.Int64(0), e.Int(1))
 			internal.PanicErr(err)
 			e.A = Int64(wn)
-		}, "Seeker.$f(offset: int, whence: int) -> int"))
+		}, "Seeker.$f(offset: int, whence: int) -> int")
 
-	CloserProto = Func("Closer", nil).Object().Merge(nil,
-		Str("close"), Func("", func(e *Env) {
+	CloserProto = NamedObject("Closer", 0).
+			SetMethod("close", func(e *Env) {
 			internal.PanicErr(e.Object(-1).Prop("_f").Interface().(io.Closer).Close())
-		}, "Closer.$f()"))
+		}, "Closer.$f()")
 
-	ReadWriterProto = Func("ReadWriter", nil).Object().Merge(ReaderProto).Merge(WriterProto)
+	ReadWriterProto = NamedObject("ReadWriter", 0).Merge(ReaderProto).Merge(WriterProto)
 
-	ReadCloserProto = Func("ReadCloser", nil).Object().Merge(ReaderProto).Merge(CloserProto)
+	ReadCloserProto = NamedObject("ReadCloser", 0).Merge(ReaderProto).Merge(CloserProto)
 
-	WriteCloserProto = Func("WriteCloser", nil).Object().Merge(WriterProto).Merge(CloserProto)
+	WriteCloserProto = NamedObject("WriteCloser", 0).Merge(WriterProto).Merge(CloserProto)
 
-	ReadWriteCloserProto = Func("ReadWriteCloser", nil).Object().Merge(ReadWriterProto).Merge(CloserProto)
+	ReadWriteCloserProto = NamedObject("ReadWriteCloser", 0).Merge(ReadWriterProto).Merge(CloserProto)
 
-	ReadWriteSeekCloserProto = Func("ReadWriteSeekCloserProto", nil).Object().Merge(ReadWriteCloserProto).Merge(SeekerProto)
+	ReadWriteSeekCloserProto = NamedObject("ReadWriteSeekCloserProto", 0).Merge(ReadWriteCloserProto).Merge(SeekerProto)
 )
 
 // NewReader creates an io.Reader from value if possible

@@ -33,15 +33,21 @@ type hashItem struct {
 	Distance int // How far item is from its best position.
 }
 
-func NewObject(perallocateSize int) *Object {
-	if perallocateSize >= 8 {
-		perallocateSize *= 2
+func NewObject(preallocateSize int) *Object {
+	if preallocateSize >= 8 {
+		preallocateSize *= 2
 	}
 	obj := &Object{}
-	if perallocateSize > 0 {
-		obj.items = make([]hashItem, perallocateSize)
+	if preallocateSize > 0 {
+		obj.items = make([]hashItem, preallocateSize)
 	}
 	obj.this = obj.ToValue()
+	return obj
+}
+
+func NamedObject(name string, preallocateSize int) *Object {
+	obj := NewObject(preallocateSize)
+	obj.Callable = &FuncBody{Name: name, Native: dummyFunc}
 	return obj
 }
 
@@ -52,7 +58,7 @@ func (m *Object) Proto() *Object {
 	return m.parent
 }
 
-func (m *Object) SetProto(m2 *Object) *Object {
+func (m *Object) SetPrototype(m2 *Object) *Object {
 	m.parent = m2
 	return m
 }
@@ -81,33 +87,19 @@ func (m *Object) Len() int {
 }
 
 // Clear clears all keys in the object, where already allocated memory will be reused.
-func (m *Object) Clear() {
-	m.items = m.items[:0]
-	m.count = 0
+func (m *Object) Clear() { m.items = m.items[:0]; m.count = 0 }
+
+func (m *Object) Prop(k string) (v Value) { return m.getImpl(Str(k), true) }
+
+func (m *Object) SetProp(k string, v Value) *Object { m.Set(Str(k), v); return m }
+
+func (m *Object) SetMethod(k string, v func(*Env), d ...string) *Object {
+	m.Set(Str(k), Func(k, v, d...))
+	return m
 }
-
-func (m *Object) Prop(k string) (v Value) {
-	return m.getImpl(Str(k), true)
-}
-
-func (m *Object) SetProp(k string, v interface{}) *Object { m.Set(Str(k), ValueOf(v)); return m }
-
-func (m *Object) SetIntProp(k string, v int) *Object { m.Set(Str(k), Int(v)); return m }
-
-func (m *Object) SetInt64Prop(k string, v int64) *Object { m.Set(Str(k), Int64(v)); return m }
-
-func (m *Object) SetFloat64Prop(k string, v float64) *Object { m.Set(Str(k), Float64(v)); return m }
-
-func (m *Object) SetBoolProp(k string, v bool) *Object { m.Set(Str(k), Bool(v)); return m }
-
-func (m *Object) SetStrProp(k string, v string) *Object { m.Set(Str(k), Str(v)); return m }
-
-func (m *Object) SetObjectProp(k string, v *Object) *Object { m.Set(Str(k), v.ToValue()); return m }
 
 // Get retrieves the value for a given key.
-func (m *Object) Get(k Value) (v Value) {
-	return m.getImpl(k, true)
-}
+func (m *Object) Get(k Value) (v Value) { return m.getImpl(k, true) }
 
 func (m *Object) getImpl(k Value, useObjProto bool) (v Value) {
 	if m == nil || k == Nil {
@@ -118,7 +110,7 @@ func (m *Object) getImpl(k Value, useObjProto bool) (v Value) {
 	} else if m.parent != nil {
 		v = m.parent.getImpl(k, true)
 	} else if useObjProto {
-		v = ObjectLib.Object().getImpl(k, false)
+		v = ObjectLib.getImpl(k, false)
 	}
 	if v.IsObject() && v.Object().Callable != nil {
 		f := *v.Object()
@@ -343,7 +335,7 @@ func (m *Object) rawPrint(p *bytes.Buffer, lv int, j typ.MarshalType, showProto 
 		p.WriteString(",")
 		return true
 	})
-	if m.parent != nil && showProto && m.parent != ObjectLib.Object() {
+	if m.parent != nil && showProto && m.parent != &ObjectLib {
 		p.WriteString(ifstr(j == typ.MarshalToJSON, "\"<proto>\":", "<proto>="))
 		m.parent.rawPrint(p, lv+1, j, true)
 	}
@@ -379,16 +371,12 @@ func (m *Object) Copy() *Object {
 	return &m2
 }
 
-func (m *Object) Merge(src *Object, kvs ...Value) *Object {
+func (m *Object) Merge(src *Object) *Object {
 	if src == nil {
-		m.resizeHash(m.Len()*2 + len(kvs) + 1)
-	} else {
-		m.resizeHash((m.Len()+src.Len())*2 + len(kvs) + 1)
-		src.Foreach(func(k, v Value) bool { m.Set(k, v); return true })
+		return m
 	}
-	for i := 0; i < len(kvs)/2*2; i += 2 {
-		m.Set(kvs[i], renameFuncName(kvs[i], kvs[i+1]))
-	}
+	m.resizeHash((m.Len()+src.Len())*2 + 1)
+	src.Foreach(func(k, v Value) bool { m.Set(k, v); return true })
 	return m
 }
 
