@@ -12,7 +12,7 @@ import (
 
 func init() {
 	nj.Globals.SetMethod("strtime", func(env *nj.Env) {
-		f := env.Get(0).ToStr("")
+		f := env.Get(0).Safe().Str("")
 		switch strings.ToLower(f) {
 		case "ansic":
 			f = time.ANSIC

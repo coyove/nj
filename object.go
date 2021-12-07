@@ -42,6 +42,7 @@ func NewObject(preallocateSize int) *Object {
 		obj.items = make([]hashItem, preallocateSize)
 	}
 	obj.this = obj.ToValue()
+	obj.parent = &ObjectLib
 	return obj
 }
 
@@ -51,7 +52,7 @@ func NamedObject(name string, preallocateSize int) *Object {
 	return obj
 }
 
-func (m *Object) Proto() *Object {
+func (m *Object) Prototype() *Object {
 	if m == nil {
 		return nil
 	}
@@ -59,15 +60,6 @@ func (m *Object) Proto() *Object {
 }
 
 func (m *Object) SetPrototype(m2 *Object) *Object {
-	m.parent = m2
-	return m
-}
-
-func (m *Object) SetFirstProto(m2 *Object) *Object {
-	if m.parent != nil {
-		m2 = m2.Copy()
-		m2.SetFirstProto(m.parent)
-	}
 	m.parent = m2
 	return m
 }
@@ -89,7 +81,7 @@ func (m *Object) Len() int {
 // Clear clears all keys in the object, where already allocated memory will be reused.
 func (m *Object) Clear() { m.items = m.items[:0]; m.count = 0 }
 
-func (m *Object) Prop(k string) (v Value) { return m.getImpl(Str(k), true) }
+func (m *Object) Prop(k string) (v Value) { return m.Get(Str(k)) }
 
 func (m *Object) SetProp(k string, v Value) *Object { m.Set(Str(k), v); return m }
 
@@ -99,20 +91,16 @@ func (m *Object) SetMethod(k string, v func(*Env), d string) *Object {
 }
 
 // Get retrieves the value for a given key.
-func (m *Object) Get(k Value) (v Value) { return m.getImpl(k, true) }
-
-func (m *Object) getImpl(k Value, useObjProto bool) (v Value) {
+func (m *Object) Get(k Value) (v Value) {
 	if m == nil || k == Nil {
 		return Nil
 	}
 	if idx := m.findHash(k); idx >= 0 {
 		v = m.items[idx].Val
 	} else if m.parent != nil {
-		v = m.parent.getImpl(k, true)
-	} else if useObjProto {
-		v = ObjectLib.getImpl(k, false)
+		v = m.parent.Get(k)
 	}
-	if v.IsObject() && v.Object().Callable != nil {
+	if v.IsObject() && v.Object().IsCallable() {
 		f := *v.Object()
 		f.this = m.ToValue()
 		v = f.ToValue()
@@ -165,8 +153,7 @@ func (m *Object) Set(k, v Value) (prev Value) {
 	if len(m.items) <= 0 {
 		m.items = make([]hashItem, 8)
 	}
-	prev, _ = m.setHash(hashItem{Key: k, Val: v, Distance: 0})
-	return
+	return m.setHash(hashItem{Key: k, Val: v, Distance: 0})
 }
 
 // Delete deletes a key-value pair from the object
@@ -174,63 +161,6 @@ func (m *Object) Delete(k Value) (prev Value) {
 	if k == Nil {
 		internal.Panic("object delete with nil key")
 	}
-	return m.delHash(k)
-}
-
-func (m *Object) RawGet(k Value) (v Value) {
-	if m == nil {
-		return Nil
-	}
-	old := m.parent
-	m.parent = nil
-	v, m.parent = m.Get(k), old
-	return v
-}
-
-func (m *Object) setHash(incoming hashItem) (prev Value, growed bool) {
-	num := len(m.items)
-	idx := int(incoming.Key.HashCode() % uint64(num))
-
-	for idxStart := idx; ; {
-		e := &m.items[idx]
-		if e.Key == Nil {
-			m.items[idx] = incoming
-			m.count++
-			return Nil, false
-		}
-
-		if e.Key.Equal(incoming.Key) {
-			prev = e.Val
-			e.Val, e.Distance = incoming.Val, incoming.Distance
-			return prev, false
-		}
-
-		// Swap if the incoming item is further from its best idx.
-		if e.Distance < incoming.Distance {
-			incoming, m.items[idx] = m.items[idx], incoming
-		}
-
-		incoming.Distance++ // One step further away from best idx.
-		idx = (idx + 1) % num
-
-		// Grow if distances become big or we went all the way around.
-		if num < 8 {
-			if idx == idxStart {
-				m.resizeHash(num + 1)
-				prev, _ = m.setHash(incoming)
-				return prev, true
-			}
-		} else {
-			if int(m.count) >= num/2 || idx == idxStart {
-				m.resizeHash(num*2 + 1)
-				prev, _ = m.setHash(incoming)
-				return prev, true
-			}
-		}
-	}
-}
-
-func (m *Object) delHash(k Value) (prev Value) {
 	idx := m.findHash(k)
 	if idx < 0 {
 		return Nil
@@ -254,15 +184,64 @@ func (m *Object) delHash(k Value) (prev Value) {
 		}
 
 		f.Distance--
-
 		m.items[idx] = *f
-
 		idx = next
 	}
 
 	m.items[idx] = hashItem{}
 	m.count--
 	return prev
+}
+
+func (m *Object) RawGet(k Value) (v Value) {
+	if m == nil {
+		return Nil
+	}
+	old := m.parent
+	m.parent = nil
+	v, m.parent = m.Get(k), old
+	return v
+}
+
+func (m *Object) setHash(incoming hashItem) (prev Value) {
+	num := len(m.items)
+	idx := int(incoming.Key.HashCode() % uint64(num))
+
+	for idxStart := idx; ; {
+		e := &m.items[idx]
+		if e.Key == Nil {
+			m.items[idx] = incoming
+			m.count++
+			return Nil
+		}
+
+		if e.Key.Equal(incoming.Key) {
+			prev = e.Val
+			e.Val, e.Distance = incoming.Val, incoming.Distance
+			return prev
+		}
+
+		// Swap if the incoming item is further from its best idx.
+		if e.Distance < incoming.Distance {
+			incoming, m.items[idx] = m.items[idx], incoming
+		}
+
+		incoming.Distance++ // One step further away from best idx.
+		idx = (idx + 1) % num
+
+		// Grow if distances become big or we went all the way around.
+		if num < 8 {
+			if idx == idxStart {
+				m.resizeHash(num + 1)
+				return m.setHash(incoming)
+			}
+		} else {
+			if int(m.count) >= num/2 || idx == idxStart {
+				m.resizeHash(num*2 + 1)
+				return m.setHash(incoming)
+			}
+		}
+	}
 }
 
 func (m *Object) Foreach(f func(k, v Value) bool) {
@@ -372,11 +351,10 @@ func (m *Object) Copy() *Object {
 }
 
 func (m *Object) Merge(src *Object) *Object {
-	if src == nil {
-		return m
+	if src != nil && src.Len() > 0 {
+		m.resizeHash((m.Len()+src.Len())*2 + 1)
+		src.Foreach(func(k, v Value) bool { m.Set(k, v); return true })
 	}
-	m.resizeHash((m.Len()+src.Len())*2 + 1)
-	src.Foreach(func(k, v Value) bool { m.Set(k, v); return true })
 	return m
 }
 

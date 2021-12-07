@@ -51,7 +51,7 @@ func Func(name string, f func(*Env), doc string) Value {
 		obj.Callable.Native = dummyFunc
 		obj.Callable.Dummy = true
 	}
-	obj.SetPrototype(&FuncLib)
+	obj.SetPrototype(FuncLib)
 	return obj.ToValue()
 }
 
@@ -113,7 +113,7 @@ func Call2(m *Object, args ...Value) (res Value, err error) {
 }
 
 func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res Value) {
-	if m.Callable == nil {
+	if !m.IsCallable() {
 		if err == nil {
 			internal.Panic("%v not callable", showType(m.ToValue()))
 		} else {

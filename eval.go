@@ -383,7 +383,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 				internal.Panic("can't call %v", showType(a))
 			}
 			cls := a.Object().Callable
-			if cls == nil {
+			if cls == nil || cls.Dummy {
 				internal.Panic("%v not callable", showType(a))
 			}
 			if opb != regPhantom {

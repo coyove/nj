@@ -47,7 +47,7 @@ function CarPrototype.getBrand() return this.brand end
 function CarPrototype.setBrand(brand) this.brand = brand; return this end
 function CarPrototype.toString() return ('%s %s').format(this.color, this.brand) end
 
-Car = prototype(CarPrototype, {brand=''})
+Car = new(CarPrototype, {brand=''})
 
 carA = new(Car.copy(), color='red').setBrand('ferrari')
 carB = new(Car.copy(), color='orange').setBrand('mclaren')

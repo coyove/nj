@@ -43,25 +43,23 @@ NJ is a simple script engine written in golang with Lua-like syntax.
 ## Run
 
 ```golang
-program, err := nj.LoadString("return 1")
+program, err := LoadString("return 1")
 v, err := program.Run() // v == 1
 ```
 
 ### Global Values
 
 ```golang
-nj.AddGlobalValue("G", func() int { return 1 })
+Globals.SetProp("G", ValueOf(func() int { return 1 }))
 
-program, _ := nj.LoadString("return G() + 1")
+program, _ := LoadString("return G() + 1")
 v, err := program.Run() // v == 2
 
-program, _ = nj.LoadString("return G() + 2")
+program, _ = LoadString("return G() + 2")
 v, err = program.Run() // v == 3
 
-program, _ = nj.LoadString("return G + 2", &CompileOptions{
-	GlobalKeyValues: {
-		"G": 10, // override the global 'G'
-	},
+program, _ = LoadString("return G + 2", &CompileOptions{
+	Globals: NewObject(0).SetProp("G", 10), // override the global 'G'
 })
 v, err = program.Run() // v == 12
 ```

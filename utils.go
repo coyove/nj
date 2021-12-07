@@ -2,8 +2,6 @@ package nj
 
 import (
 	"bytes"
-	"encoding/base32"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"reflect"
@@ -104,15 +102,6 @@ func or(a, b interface{}) interface{} {
 	return b
 }
 
-func renameFuncName(k, v Value) Value {
-	if v.IsObject() {
-		if cls := v.Object().Callable; cls != nil && cls.Name == internal.UnnamedFunc {
-			cls.Name = k.String()
-		}
-	}
-	return v
-}
-
 func setObjectRecv(v, r Value) Value {
 	if v.IsObject() {
 		v.Object().this = r
@@ -142,20 +131,6 @@ func showType(v Value) string {
 	default:
 		return vt.String()
 	}
-}
-
-func getEncB64(enc *base64.Encoding, padding rune) *base64.Encoding {
-	if padding != '=' {
-		enc = enc.WithPadding(padding)
-	}
-	return enc
-}
-
-func getEncB32(enc *base32.Encoding, padding rune) *base32.Encoding {
-	if padding != '=' {
-		enc = enc.WithPadding(padding)
-	}
-	return enc
 }
 
 func mathMinMax(e *Env, max bool) {

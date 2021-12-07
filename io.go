@@ -30,7 +30,7 @@ var (
 		}, "Reader.$f(buf: bytes) -> [int, Error]\n\tread into `buf` and return in Go style").
 		SetMethod("readlines", func(e *Env) {
 			f := e.Object(-1).Prop("_f").Interface().(io.Reader)
-			delim := e.Object(-1).Prop("delim").ToStr("\n")
+			delim := e.Object(-1).Prop("delim").Safe().Str("\n")
 			if e.Get(0) == Nil {
 				buf, err := ioutil.ReadAll(f)
 				internal.PanicErr(err)
@@ -66,14 +66,14 @@ var (
 
 	WriterProto = NamedObject("Writer", 0).
 			SetMethod("write", func(e *Env) {
-			wn, err := e.Object(-1).Prop("_f").Interface().(io.Writer).Write(e.Get(0).ToBytes())
+			wn, err := e.Object(-1).Prop("_f").Interface().(io.Writer).Write(e.Get(0).Safe().Bytes())
 			internal.PanicErr(err)
 			e.A = Int(wn)
 		}, "Writer.$f(buf: string|bytes) -> int\n\twrite `buf` to writer").
 		SetMethod("pipe", func(e *Env) {
 			var wn int64
 			var err error
-			if n := e.Get(1).ToInt64(0); n > 0 {
+			if n := e.Get(1).Safe().Int64(0); n > 0 {
 				wn, err = io.CopyN(NewWriter(e.Get(-1)), NewReader(e.Get(0)), n)
 			} else {
 				wn, err = io.Copy(NewWriter(e.Get(-1)), NewReader(e.Get(0)))
@@ -108,15 +108,12 @@ var (
 
 // NewReader creates an io.Reader from value if possible
 func NewReader(v Value) io.Reader {
-	switch v.Type() {
-	case typ.Native:
-		switch rd := v.Interface().(type) {
-		case io.Reader:
-			return rd
-		case []byte:
-			return bytes.NewReader(rd)
-		}
-	case typ.String:
+	switch rd := v.Interface().(type) {
+	case io.Reader:
+		return rd
+	case []byte:
+		return bytes.NewReader(rd)
+	case string:
 		return strings.NewReader(v.Str())
 	}
 	return ValueIO(v)
@@ -124,26 +121,21 @@ func NewReader(v Value) io.Reader {
 
 // NewWriter creates an io.Writer from value if possible
 func NewWriter(v Value) io.Writer {
-	switch v.Type() {
-	case typ.Native:
-		switch rd := v.Interface().(type) {
-		case io.Writer:
-			return rd
-		case []byte:
-			w := bytes.NewBuffer(rd)
-			w.Reset()
-			return w
-		}
+	switch rd := v.Interface().(type) {
+	case io.Writer:
+		return rd
+	case []byte:
+		w := bytes.NewBuffer(rd)
+		w.Reset()
+		return w
 	}
 	return ValueIO(v)
 }
 
 // NewCloser creates an io.Closer from value if possible
 func NewCloser(v Value) io.Closer {
-	if v.Type() == typ.Native {
-		if rd, ok := v.Interface().(io.Closer); ok {
-			return rd
-		}
+	if rd, ok := v.Interface().(io.Closer); ok {
+		return rd
 	}
 	return ValueIO(v)
 }
@@ -172,7 +164,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			} else if v == Nil {
 				return 0, io.EOF
 			}
-			return copy(p, v.ToBytes()), nil
+			return copy(p, v.Safe().Bytes()), nil
 		}
 		if rb := Value(m).Object().Prop("read"); rb.IsObject() {
 			v, err := Call2(rb.Object(), Int(len(p)))
@@ -181,7 +173,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			} else if v == Nil {
 				return 0, io.EOF
 			}
-			return copy(p, v.ToStr("")), nil
+			return copy(p, v.Safe().Str("")), nil
 		}
 	}
 	return 0, fmt.Errorf("reader not implemented")
@@ -223,7 +215,7 @@ func (m ValueIO) Close() error {
 func ioRead(e *Env) []byte {
 	f := e.Object(-1).Prop("_f").Interface().(io.Reader)
 	if n := e.Get(0); n.Type() == typ.Number {
-		p := make([]byte, n.ToInt64(0))
+		p := make([]byte, n.Safe().Int64(0))
 		rn, err := f.Read(p)
 		if err == nil || rn > 0 {
 			return p[:rn]

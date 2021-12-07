@@ -30,11 +30,11 @@ func init() {
 		ToValue())
 	nj.Globals.SetProp("http", nj.Func("http", func(env *nj.Env) {
 		args := env.Get(0).Object()
-		to := args.Prop("timeout").ToFloat64(1 << 30)
+		to := args.Prop("timeout").Safe().Float64(1 << 30)
 
-		method := strings.ToUpper(args.Get(nj.Str("method")).ToStr("GET"))
+		method := strings.ToUpper(args.Get(nj.Str("method")).Safe().Str("GET"))
 
-		u, err := url.Parse(args.Get(nj.Str("url")).ToStr("bad://%url%"))
+		u, err := url.Parse(args.Get(nj.Str("url")).Safe().Str("bad://%url%"))
 		internal.PanicErr(err)
 
 		addKV := func(k string, add func(k, v string)) {
@@ -133,7 +133,7 @@ func init() {
 				return http.ErrUseLastResponse
 			}
 		}
-		if p := args.Get(nj.Str("proxy")).ToStr(""); p != "" {
+		if p := args.Get(nj.Str("proxy")).Safe().Str(""); p != "" {
 			client.Transport = &http.Transport{
 				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
 			}

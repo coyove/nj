@@ -345,7 +345,7 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 	} else if t.Implements(ioWriterType) || t.Implements(ioReaderType) || t.Implements(ioCloserType) {
 		return reflect.ValueOf(ValueIO(v))
 	} else if t.Implements(errType) {
-		return reflect.ValueOf(v.ToError())
+		return reflect.ValueOf(v.Safe().Error())
 	} else if vt == typ.Object && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
 			var a []Value
@@ -468,72 +468,6 @@ func (v Value) toString(p *bytes.Buffer, lv int, j typ.MarshalType) *bytes.Buffe
 	return p
 }
 
-func (v Value) ToStr(defaultValue string) string {
-	switch v.Type() {
-	case typ.String:
-		return v.Str()
-	case typ.Array:
-		buf, ok := v.Array().Unwrap().([]byte)
-		if ok {
-			return *(*string)(unsafe.Pointer(&buf))
-		}
-	}
-	return defaultValue
-}
-
-func (v Value) ToInt(defaultValue int) int {
-	return int(v.ToInt64(int64(defaultValue)))
-}
-
-func (v Value) ToInt64(defaultValue int64) int64 {
-	if v.Type() == typ.Number {
-		return v.Int64()
-	}
-	return defaultValue
-}
-
-func (v Value) ToFloat64(defaultValue float64) float64 {
-	if v.Type() == typ.Number {
-		return v.Float64()
-	}
-	return defaultValue
-}
-
-func (v Value) ToObject() *Object {
-	if v.Type() != typ.Object {
-		return nil
-	}
-	return v.Object()
-}
-
-func (v Value) ToBytes() []byte {
-	switch v.Type() {
-	case typ.String:
-		return []byte(v.Str())
-	case typ.Array:
-		buf, _ := v.Array().Unwrap().([]byte)
-		return buf
-	}
-	return nil
-}
-
-func (v Value) ToDuration(defaultValue time.Duration) time.Duration {
-	if v.Type() != typ.Number {
-		return defaultValue
-	}
-	if v.IsInt64() {
-		return time.Duration(v.Int64()) * time.Second
-	}
-	return time.Duration(v.Float64() * float64(time.Second))
-}
-
-func (v Value) ToError() error {
-	if v.Type() != typ.Array || v.Array().meta != errorSequenceMeta {
-		return nil
-	}
-	return v.Array().Unwrap().(*ExecError)
-}
-
 func (v Value) Len() int {
 	switch v.Type() {
 	case typ.String:
@@ -549,4 +483,81 @@ func (v Value) Len() int {
 	}
 	internal.Panic("can't measure length of %v", showType(v))
 	return -1
+}
+
+func (v Value) Safe() SafeValue { return SafeValue(v) }
+
+type SafeValue Value
+
+func (v SafeValue) Str(defaultValue string) string {
+	switch Value(v).Type() {
+	case typ.String:
+		return Value(v).Str()
+	case typ.Array:
+		buf, ok := Value(v).Array().Unwrap().([]byte)
+		if ok {
+			return *(*string)(unsafe.Pointer(&buf))
+		}
+	}
+	return defaultValue
+}
+
+func (v SafeValue) Int(defaultValue int) int {
+	return int(v.Int64(int64(defaultValue)))
+}
+
+func (v SafeValue) Int64(defaultValue int64) int64 {
+	if Value(v).Type() == typ.Number {
+		return Value(v).Int64()
+	}
+	return defaultValue
+}
+
+func (v SafeValue) Float64(defaultValue float64) float64 {
+	if Value(v).Type() == typ.Number {
+		return Value(v).Float64()
+	}
+	return defaultValue
+}
+
+func (v SafeValue) Array() *Sequence {
+	if Value(v).Type() != typ.Array {
+		return nil
+	}
+	return Value(v).Array()
+}
+
+func (v SafeValue) Object() *Object {
+	if Value(v).Type() != typ.Object {
+		return nil
+	}
+	return Value(v).Object()
+}
+
+func (v SafeValue) Bytes() []byte {
+	switch Value(v).Type() {
+	case typ.String:
+		return []byte(Value(v).Str())
+	case typ.Array:
+		buf, _ := Value(v).Array().Unwrap().([]byte)
+		return buf
+	}
+	return nil
+}
+
+func (v SafeValue) Duration(defaultValue time.Duration) time.Duration {
+	if Value(v).Type() != typ.Number {
+		return defaultValue
+	}
+	if Value(v).IsInt64() {
+		return time.Duration(Value(v).Int64()) * time.Second
+	}
+	return time.Duration(Value(v).Float64() * float64(time.Second))
+}
+
+func (v SafeValue) Error() error {
+	if Value(v).Type() != typ.Array || Value(v).Array().meta != errorSequenceMeta {
+		return nil
+	}
+	return Value(v).Array().Unwrap().(*ExecError)
 }
