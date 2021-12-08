@@ -90,7 +90,7 @@ func (v Value) IsCallable() bool { return v.Type() == typ.Object && v.Object().I
 func (v Value) IsNil() bool { return v == Nil }
 
 // IsBytes tests whether value is a byte sequence
-func (v Value) IsBytes() bool { return v.Type() == typ.Array && v.Array().meta == bytesSequenceMeta }
+func (v Value) IsBytes() bool { return v.Type() == typ.Array && v.Array().meta == bytesArrayMeta }
 
 // Bool creates a boolean value
 func Bool(v bool) Value {
@@ -117,11 +117,6 @@ func Int(i int) Value {
 // Int64 creates a number value
 func Int64(i int64) Value {
 	return Value{v: uint64(i), p: int64Marker}
-}
-
-// Array creates an array consists of given arguments
-func Array(m ...Value) Value {
-	return (&Sequence{meta: internalSequenceMeta, internal: m}).ToValue()
 }
 
 // Str creates a string value
@@ -157,7 +152,7 @@ func Rune(r rune) Value {
 
 // Bytes creates a bytes array
 func Bytes(b []byte) Value {
-	return NewSequence(b, bytesSequenceMeta).ToValue()
+	return NewTypedArray(b, bytesArrayMeta).ToValue()
 }
 
 // ValueOf creates a `Value` from golang `interface{}`
@@ -180,7 +175,7 @@ func ValueOf(i interface{}) Value {
 	case *Object:
 		return v.ToValue()
 	case []Value:
-		return Array(v...)
+		return NewArray(v...).ToValue()
 	case Value:
 		return v
 	case error:
@@ -199,7 +194,7 @@ func ValueOf(i interface{}) Value {
 		} else if v.IsArray() {
 			x := make([]Value, 0, len(v.Raw)/10)
 			v.ForEach(func(k, v gjson.Result) bool { x = append(x, ValueOf(v)); return true })
-			return Array(x...)
+			return NewArray(x...).ToValue()
 		} else if v.IsObject() {
 			x := NewObject(len(v.Raw) / 10)
 			v.ForEach(func(k, v gjson.Result) bool { x.Set(ValueOf(k), ValueOf(v)); return true })
@@ -216,7 +211,7 @@ func ValueOf(i interface{}) Value {
 	} else if (k == reflect.Ptr || k == reflect.Interface) && rv.IsNil() {
 		return Nil
 	} else if k == reflect.Array || k == reflect.Slice {
-		return NewSequence(i, GetGenericSequenceMeta(i)).ToValue()
+		return NewTypedArray(i, GetTypedArrayMeta(i)).ToValue()
 	} else if k == reflect.Func {
 		nf, _ := i.(func(*Env))
 		if nf == nil {
@@ -247,7 +242,7 @@ func ValueOf(i interface{}) Value {
 				} else if len(outs) == 1 {
 					env.A = ValueOf(outs[0].Interface())
 				} else {
-					env.A = NewSequence(outs, GetGenericSequenceMeta(outs)).ToValue()
+					env.A = NewTypedArray(outs, GetTypedArrayMeta(outs)).ToValue()
 				}
 			}
 		}
@@ -309,7 +304,7 @@ func (v Value) Bool() bool { return v.p == trueMarker }
 func (v Value) Object() *Object { return (*Object)(v.p) }
 
 // Array returns value as a sequence without checking Type()
-func (v Value) Array() *Sequence { return (*Sequence)(v.p) }
+func (v Value) Array() *Array { return (*Array)(v.p) }
 
 // Interface returns value as an interface{}
 func (v Value) Interface() interface{} {
@@ -523,7 +518,7 @@ func (v SafeValue) Float64(defaultValue float64) float64 {
 	return defaultValue
 }
 
-func (v SafeValue) Array() *Sequence {
+func (v SafeValue) Array() *Array {
 	if Value(v).Type() != typ.Array {
 		return nil
 	}
@@ -559,7 +554,7 @@ func (v SafeValue) Duration(defaultValue time.Duration) time.Duration {
 }
 
 func (v SafeValue) Error() error {
-	if Value(v).Type() != typ.Array || Value(v).Array().meta != errorSequenceMeta {
+	if Value(v).Type() != typ.Array || Value(v).Array().meta != errorArrayMeta {
 		return nil
 	}
 	return Value(v).Array().Unwrap().(*ExecError)

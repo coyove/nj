@@ -152,7 +152,7 @@ func (env *Env) Float64(idx int) float64 { return env.mustBe(typ.Number, idx).Fl
 
 func (env *Env) Object(idx int) *Object { return env.mustBe(typ.Object, idx).Object() }
 
-func (env *Env) Array(idx int) *Sequence { return env.mustBe(typ.Array, idx).Array() }
+func (env *Env) Array(idx int) *Array { return env.mustBe(typ.Array, idx).Array() }
 
 func (env *Env) Interface(idx int) interface{} {
 	if idx == -1 {

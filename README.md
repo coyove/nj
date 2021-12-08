@@ -4,6 +4,17 @@ NJ is a simple script engine written in golang with Lua-like syntax.
 
 ## Differ from Lua
 
+- There is no `table`, instead there are `array` and `object` respectively:
+	- `a=[1, 2, 3]`.
+	- `a={a=1, b=2}`.
+	- Empty array and empty object are `true` when used as booleans.
+- There are `typed` array and `untyped` array:
+	- Untyped arrays are generic arrays, where any values can be stored inside.
+	- Typed arrays are special arrays from Go, say `[]byte`:
+		- `a = str.bytes(16)` creates a 16-byte long `[]byte`.
+		- `a.append(1)` appends 1 to it.
+		- `a.append(true)` will panic.
+		- `a.untype().append(true)` will `untype` the array into a (new) generic array.
 - Functions are callable objects:
 	- `function foo() end; print(type(foo))` prints `object`.
 	- `function foo() end; print(foo.iscallable())` prints `true`.

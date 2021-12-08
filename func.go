@@ -183,10 +183,10 @@ func (c *FuncBody) execute(r Runtime, this Value, args ...Value) (v1 Value) {
 		if c.Variadic {
 			s := *newEnv.stack
 			if len(s) > int(c.NumParams)-1 {
-				s[c.NumParams-1] = Array(append([]Value{}, s[c.NumParams-1:]...)...)
+				s[c.NumParams-1] = NewArray(append([]Value{}, s[c.NumParams-1:]...)...).ToValue()
 			} else {
 				newEnv.grow(int(c.NumParams))
-				newEnv._set(c.NumParams-1, Array())
+				newEnv._set(c.NumParams-1, NewArray().ToValue())
 			}
 		}
 		newEnv.growZero(int(c.StackSize), int(c.NumParams))

@@ -154,7 +154,7 @@ func init() {
 		for k := range resp.Header {
 			hdr[k] = resp.Header.Get(k)
 		}
-		env.A = nj.Array(nj.Int(resp.StatusCode), nj.ValueOf(hdr), buf, nj.ValueOf(client.Jar))
+		env.A = nj.NewArray(nj.Int(resp.StatusCode), nj.ValueOf(hdr), buf, nj.ValueOf(client.Jar)).ToValue()
 	}, "$f(options: object) -> array\n"+
 		"\tperform an HTTP request and return [code, headers, body_reader, cookie_jar]\n"+
 		"\t'url' is a mandatory parameter in `options`, others are optional and pretty self explanatory:\n"+

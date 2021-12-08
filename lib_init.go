@@ -89,14 +89,14 @@ func init() {
 				idx := start + uint32(i)
 				r = append(r, Int64(int64(idx)), Str(name), (*e.stack)[idx])
 			}
-			e.A = Array(r...)
+			e.A = NewArray(r...).ToValue()
 		}, "$f() -> array\n\treturn [index1, name1, value1, i2, n2, v2, i3, n3, v3, ...]").
 		SetMethod("globals", func(e *Env) {
 			var r []Value
 			for i, name := range e.Global.Top.Locals {
 				r = append(r, Int(i), Str(name), (*e.Global.Stack)[i])
 			}
-			e.A = Array(r...)
+			e.A = NewArray(r...).ToValue()
 		}, "$f() -> array\n\treturn [index1, name1, value1, i2, n2, v2, i3, n3, v3, ...]").
 		SetMethod("set", func(e *Env) {
 			(*e.Global.Stack)[e.Int64(0)] = e.Get(1)
@@ -125,7 +125,7 @@ func init() {
 				}
 				lines = append(lines, Str(r.Callable.Name), Int64(int64(src)), Int64(int64(r.Cursor-1)))
 			}
-			env.A = Array(lines...)
+			env.A = NewArray(lines...).ToValue()
 		}, "$f(skip?: int) -> array\n\treturn [func_name0, line1, cursor1, n2, l2, c2, ...]").
 		SetMethod("disfunc", func(e *Env) {
 			o := e.Object(0)
@@ -204,7 +204,7 @@ func init() {
 			}
 			results = append(results, Str(s))
 		}
-		env.A = Array(results...)
+		env.A = NewArray(results...).ToValue()
 	}, "$f() -> array\n\tread all user inputs and return as [input1, input2, ...]\n"+
 		"$f(prompt: string, n?: int) -> array\n\tprint `prompt` then read all (or at most `n`) user inputs")
 	Globals.SetMethod("time", func(e *Env) {
@@ -240,11 +240,11 @@ func init() {
 		}, "RegExp.$f(text: string) -> bool").
 		SetMethod("find", func(e *Env) {
 			m := e.This("_rx").(*regexp.Regexp).FindStringSubmatch(e.Str(0))
-			e.A = NewSequence(m, stringsSequenceMeta).ToValue()
+			e.A = NewTypedArray(m, stringsArrayMeta).ToValue()
 		}, "RegExp.$f(text: string) -> array").
 		SetMethod("findall", func(e *Env) {
 			m := e.This("_rx").(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).Safe().Int(-1))
-			e.A = NewSequence(m, GetGenericSequenceMeta(m)).ToValue()
+			e.A = NewTypedArray(m, GetTypedArrayMeta(m)).ToValue()
 		}, "RegExp.$f(text: string) -> array").
 		SetMethod("replace", func(e *Env) {
 			e.A = Str(e.This("_rx").(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
@@ -278,7 +278,7 @@ func init() {
 			var in = make(chan [2]Value, t.Len())
 			var outLock = sync.Mutex{}
 			var outError error
-			_ = t.Type() == typ.Array && e.SetA(Array(make([]Value, t.Len())...)) || e.SetA(NewObject(t.Len()).ToValue())
+			_ = t.Type() == typ.Array && e.SetA(NewArray(make([]Value, t.Len())...).ToValue()) || e.SetA(NewObject(t.Len()).ToValue())
 			wg.Add(n)
 			for i := 0; i < n; i++ {
 				go func() {
@@ -434,17 +434,17 @@ func init() {
 		SetMethod("keys", func(e *Env) {
 			a := make([]Value, 0)
 			e.Object(-1).Foreach(func(k, v Value) bool { a = append(a, k); return true })
-			e.A = Array(a...)
+			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> array").
 		SetMethod("values", func(e *Env) {
 			a := make([]Value, 0)
 			e.Object(-1).Foreach(func(k, v Value) bool { a = append(a, v); return true })
-			e.A = Array(a...)
+			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> array").
 		SetMethod("items", func(e *Env) {
 			a := make([]Value, 0)
-			e.Object(-1).Foreach(func(k, v Value) bool { a = append(a, Array(k, v)); return true })
-			e.A = Array(a...)
+			e.Object(-1).Foreach(func(k, v Value) bool { a = append(a, NewArray(k, v).ToValue()); return true })
+			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> [[value, value]]\n\treturn as [[key1, value1], [key2, value2], ...]").
 		SetMethod("foreach", func(e *Env) {
 			f := e.Object(0)
@@ -471,7 +471,7 @@ func init() {
 			e.A = m2.SetPrototype(&ObjectProto).ToValue()
 		}, "object.$f() -> object\n\treturn a new object which shares all data from the original, but with no prototype").
 		SetMethod("next", func(e *Env) {
-			e.A = Array(e.Object(-1).Next(e.Get(0)))
+			e.A = NewArray(e.Object(-1).Next(e.Get(0))).ToValue()
 		}, "object.$f(k: value) -> [value, value]\n\tfind next key-value pair after `k` in the object and return as [key, value]").
 		SetMethod("iscallable", func(e *Env) {
 			e.A = Bool(e.Object(-1).IsCallable())
@@ -544,7 +544,7 @@ func init() {
 
 	*ArrayProto = *NamedObject("array", 0).
 		SetMethod("make", func(e *Env) {
-			e.A = Array(make([]Value, e.Int(0))...)
+			e.A = NewArray(make([]Value, e.Int(0))...).ToValue()
 		}, "array.$f(n: int) -> array\n\tcreate an array of size `n`").
 		SetMethod("len", func(e *Env) { e.A = Int(e.Array(-1).Len()) }, "array.$f()").
 		SetMethod("size", func(e *Env) { e.A = Int(e.Array(-1).Size()) }, "array.$f()").
@@ -571,7 +571,7 @@ func init() {
 				}
 				return true
 			})
-			e.A = Array(dest...)
+			e.A = NewArray(dest...).ToValue()
 		}, "array.$f(f: function) -> array\n\tfilter out all values where f(value) is false").
 		SetMethod("slice", func(e *Env) {
 			a := e.Array(-1)
@@ -600,13 +600,13 @@ func init() {
 			e.Array(-1).Concat(e.Array(0))
 		}, "array.$f(a: array) -> array\n\tconcat two arrays").
 		SetMethod("istyped", func(e *Env) {
-			e.A = Bool(e.Array(-1).meta != internalSequenceMeta)
+			e.A = Bool(e.Array(-1).meta != internalArrayMeta)
 		}, "array.$f() -> bool").
 		SetMethod("type", func(e *Env) {
 			e.A = Str(e.Array(-1).meta.Name)
 		}, "array.$f() -> string").
 		SetMethod("untype", func(e *Env) {
-			e.A = Array(e.Array(-1).Values()...)
+			e.A = NewArray(e.Array(-1).Values()...).ToValue()
 		}, "array.$f() -> array")
 	Globals.SetProp("array", ArrayProto.ToValue())
 
@@ -643,9 +643,9 @@ func init() {
 		SetMethod("split", func(e *Env) {
 			s, d := e.Str(-1), e.Str(0)
 			if n := e.Get(1).Safe().Int(0); n == 0 {
-				e.A = NewSequence(strings.Split(s, d), stringsSequenceMeta).ToValue()
+				e.A = NewTypedArray(strings.Split(s, d), stringsArrayMeta).ToValue()
 			} else {
-				e.A = NewSequence(strings.SplitN(s, d, n), stringsSequenceMeta).ToValue()
+				e.A = NewTypedArray(strings.SplitN(s, d, n), stringsArrayMeta).ToValue()
 			}
 		}, "str.$f(delim: string, n?: int) -> array").
 		SetMethod("join", func(e *Env) {
@@ -701,7 +701,7 @@ func init() {
 		}, "str.$f(cutset: string) -> string\n\ttrim the right side of the text using every char in `cutset`").
 		SetMethod("ord", func(e *Env) {
 			r, sz := utf8.DecodeRuneInString(e.Str(-1))
-			e.A = Array(Int64(int64(r)), Int(sz))
+			e.A = NewArray(Int64(int64(r)), Int(sz)).ToValue()
 		}, "str.$f() -> [int, int]\n\tdecode first UTF-8 char, return [unicode, width]").
 		SetMethod("startswith", func(e *Env) { e.A = Bool(strings.HasPrefix(e.Str(-1), e.Str(0))) }, "str.$f(prefix: string) -> bool").
 		SetMethod("endswith", func(e *Env) { e.A = Bool(strings.HasSuffix(e.Str(-1), e.Str(0))) }, "str.$f(suffix: string) -> bool").
@@ -724,7 +724,7 @@ func init() {
 				}
 				s = s[sz:]
 			}
-			e.A = Array(r...)
+			e.A = NewArray(r...).ToValue()
 		}, "str.$f(code?: bool) -> array\n\tbreak string into chars or unicodes, e.g.:\n"+
 			"\t\t('a中c').chars() => ['a', '中', 'c']\n\t\t('a中c').chars(true) => [97, 20013, 99]").
 		SetMethod("format", func(e *Env) {
@@ -795,7 +795,7 @@ func init() {
 		SetMethod("atan", func(e *Env) { e.A = Float64(math.Atan(e.Float64(0))) }, "").
 		SetMethod("atan2", func(e *Env) { e.A = Float64(math.Atan2(e.Float64(0), e.Float64(1))) }, "").
 		SetMethod("ldexp", func(e *Env) { e.A = Float64(math.Ldexp(e.Float64(0), e.Int(0))) }, "").
-		SetMethod("modf", func(e *Env) { a, b := math.Modf(e.Float64(0)); e.A = Array(Float64(a), Float64(b)) }, "").
+		SetMethod("modf", func(e *Env) { a, b := math.Modf(e.Float64(0)); e.A = NewArray(Float64(a), Float64(b)).ToValue() }, "").
 		SetPrototype(StaticObjectProto).
 		ToValue())
 

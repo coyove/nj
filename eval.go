@@ -127,25 +127,25 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 			va, vb := env._get(opa), env._get(opb)
 			switch va.Type() {
 			case typ.Nil:
-				env.A = Array(Nil, Nil)
+				env.A = NewArray(Nil, Nil).ToValue()
 			case typ.Array:
 				idx := 0
 				if vb != Nil {
 					idx = vb.Is(typ.Number, "array iteration").Int() + 1
 				}
 				a := va.Array()
-				_ = idx >= a.Len() && env.SetA(Array(Nil, Nil)) || env.SetA(Array(Int(idx), a.Get(idx)))
+				_ = idx >= a.Len() && env.SetA(NewArray(Nil, Nil).ToValue()) || env.SetA(NewArray(Int(idx), a.Get(idx)).ToValue())
 			case typ.Object:
-				env.A = Array(va.Object().Next(vb))
+				env.A = NewArray(va.Object().Next(vb)).ToValue()
 			case typ.String:
 				idx := int64(0)
 				if vb != Nil {
 					idx = vb.Is(typ.Number, "string iteration").Int64()
 				}
 				if r, sz := utf8.DecodeRuneInString(va.Str()[idx:]); sz == 0 {
-					env.A = Array(Nil, Nil)
+					env.A = NewArray(Nil, Nil).ToValue()
 				} else {
-					env.A = Array(Int64(int64(sz)+idx), Rune(r))
+					env.A = NewArray(Int64(int64(sz)+idx), Rune(r)).ToValue()
 				}
 			default:
 				internal.Panic("can't iterate %v using %v", showType(va), showType(vb))
@@ -281,7 +281,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 				internal.Panic("bitwise not "+errNeedNumber, showType(a))
 			}
 		case typ.OpCreateArray:
-			env.A = Array(append([]Value{}, stackEnv.Stack()...)...)
+			env.A = NewArray(append([]Value{}, stackEnv.Stack()...)...).ToValue()
 			stackEnv.Clear()
 		case typ.OpCreateObject:
 			stk := stackEnv.Stack()
@@ -393,10 +393,10 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 			if cls.Variadic {
 				s, w := stackEnv.Stack(), int(cls.NumParams)-1
 				if len(s) > w {
-					s[w] = Array(append([]Value{}, s[w:]...)...)
+					s[w] = NewArray(append([]Value{}, s[w:]...)...).ToValue()
 				} else {
 					stackEnv.grow(w + 1)
-					stackEnv._set(uint16(w), Array())
+					stackEnv._set(uint16(w), NewArray().ToValue())
 				}
 			}
 			if cls.Native != nil {
