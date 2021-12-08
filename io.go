@@ -25,11 +25,11 @@ var (
 			_ = buf == nil && e.SetA(Nil) || e.SetA(Bytes(buf))
 		}, "Reader.$f(n?: int) -> bytes\n\tread all (or at most `n`) bytes, return nil if EOF reached").
 		SetMethod("readbuf", func(e *Env) {
-			rn, err := e.Object(-1).Prop("_f").Interface().(io.Reader).Read(e.Array(0).Unwrap().([]byte))
+			rn, err := e.This("_f").(io.Reader).Read(e.Array(0).Unwrap().([]byte))
 			e.A = Array(Int(rn), ValueOf(err)) // return in Go style
 		}, "Reader.$f(buf: bytes) -> [int, Error]\n\tread into `buf` and return in Go style").
 		SetMethod("readlines", func(e *Env) {
-			f := e.Object(-1).Prop("_f").Interface().(io.Reader)
+			f := e.This("_f").(io.Reader)
 			delim := e.Object(-1).Prop("delim").Safe().Str("\n")
 			if e.Get(0) == Nil {
 				buf, err := ioutil.ReadAll(f)
@@ -66,7 +66,7 @@ var (
 
 	WriterProto = NamedObject("Writer", 0).
 			SetMethod("write", func(e *Env) {
-			wn, err := e.Object(-1).Prop("_f").Interface().(io.Writer).Write(e.Get(0).Safe().Bytes())
+			wn, err := e.This("_f").(io.Writer).Write(e.Get(0).Safe().Bytes())
 			internal.PanicErr(err)
 			e.A = Int(wn)
 		}, "Writer.$f(buf: string|bytes) -> int\n\twrite `buf` to writer").
@@ -84,7 +84,7 @@ var (
 
 	SeekerProto = NamedObject("Seeker", 0).
 			SetMethod("seek", func(e *Env) {
-			f := e.Object(-1).Prop("_f").Interface().(io.Seeker)
+			f := e.This("_f").(io.Seeker)
 			wn, err := f.Seek(e.Int64(0), e.Int(1))
 			internal.PanicErr(err)
 			e.A = Int64(wn)
@@ -92,7 +92,7 @@ var (
 
 	CloserProto = NamedObject("Closer", 0).
 			SetMethod("close", func(e *Env) {
-			internal.PanicErr(e.Object(-1).Prop("_f").Interface().(io.Closer).Close())
+			internal.PanicErr(e.This("_f").(io.Closer).Close())
 		}, "Closer.$f()")
 
 	ReadWriterProto = NamedObject("ReadWriter", 0).Merge(ReaderProto).Merge(WriterProto)
@@ -213,7 +213,7 @@ func (m ValueIO) Close() error {
 }
 
 func ioRead(e *Env) []byte {
-	f := e.Object(-1).Prop("_f").Interface().(io.Reader)
+	f := e.This("_f").(io.Reader)
 	if n := e.Get(0); n.Type() == typ.Number {
 		p := make([]byte, n.Safe().Int64(0))
 		rn, err := f.Read(p)

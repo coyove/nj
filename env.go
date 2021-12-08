@@ -161,6 +161,10 @@ func (env *Env) Interface(idx int) interface{} {
 	return env.Get(idx).Interface()
 }
 
+func (env *Env) This(k string) interface{} {
+	return env.Object(-1).Prop(k).Interface()
+}
+
 func (env *Env) mustBe(t typ.ValueType, idx int) (v Value) {
 	if idx == -1 {
 		v = env.A

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -223,4 +224,15 @@ func sprintf(env *Env, start int, p io.Writer) {
 			fmt.Fprint(p, env.Interface(popi))
 		}
 	}
+}
+
+func fileInfo(fi os.FileInfo) *Object {
+	return NewObject(0).
+		SetProp("filename", Str(fi.Name())).
+		SetProp("size", Int64(fi.Size())).
+		SetProp("mode", Int64(int64(fi.Mode()))).
+		SetProp("modestr", Str(fi.Mode().String())).
+		SetProp("modtime", ValueOf(fi.ModTime())).
+		SetProp("isdir", Bool(fi.IsDir())).
+		SetPrototype(FileInfoProto)
 }

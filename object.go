@@ -42,7 +42,7 @@ func NewObject(preallocateSize int) *Object {
 		obj.items = make([]hashItem, preallocateSize)
 	}
 	obj.this = obj.ToValue()
-	obj.parent = &ObjectLib
+	obj.parent = &ObjectProto
 	return obj
 }
 
@@ -100,7 +100,7 @@ func (m *Object) Get(k Value) (v Value) {
 	} else if m.parent != nil {
 		v = m.parent.Get(k)
 	}
-	if v.IsObject() && v.Object().IsCallable() {
+	if m.parent != StaticObjectProto && v.IsObject() && v.Object().IsCallable() {
 		f := *v.Object()
 		f.this = m.ToValue()
 		v = f.ToValue()
@@ -303,7 +303,7 @@ func (m *Object) rawPrint(p *bytes.Buffer, lv int, j typ.MarshalType, showProto 
 		}
 	} else {
 		if j == typ.MarshalToString {
-			p.WriteString("object")
+			p.WriteString(m.Name())
 		}
 		p.WriteString("{")
 	}
@@ -314,7 +314,7 @@ func (m *Object) rawPrint(p *bytes.Buffer, lv int, j typ.MarshalType, showProto 
 		p.WriteString(",")
 		return true
 	})
-	if m.parent != nil && showProto && m.parent != &ObjectLib {
+	if m.parent != nil && showProto && m.parent != &ObjectProto {
 		p.WriteString(ifstr(j == typ.MarshalToJSON, "\"<proto>\":", "<proto>="))
 		m.parent.rawPrint(p, lv+1, j, true)
 	}

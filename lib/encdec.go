@@ -26,11 +26,11 @@ func getEncB32(enc *base32.Encoding, padding rune) *base32.Encoding {
 
 var encDecProto = nj.NamedObject("EncodeDecode", 0).
 	SetMethod("encode", func(e *nj.Env) {
-		i := e.Object(-1).Prop("_e").Interface()
+		i := e.This("_e")
 		e.A = nj.Str(i.(interface{ EncodeToString([]byte) string }).EncodeToString(e.Get(0).Safe().Bytes()))
 	}, "").
 	SetMethod("decode", func(e *nj.Env) {
-		i := e.Object(-1).Prop("_e").Interface()
+		i := e.This("_e")
 		v, err := i.(interface{ DecodeString(string) ([]byte, error) }).DecodeString(e.Str(0))
 		internal.PanicErr(err)
 		e.A = nj.Bytes(v)
@@ -39,7 +39,7 @@ var encDecProto = nj.NamedObject("EncodeDecode", 0).
 		SetMethod("encoder", func(e *nj.Env) {
 			enc := nj.Nil
 			buf := &bytes.Buffer{}
-			switch encoding := e.Object(-1).Prop("_e").Interface().(type) {
+			switch encoding := e.This("_e").(type) {
 			default:
 				enc = nj.ValueOf(hex.NewEncoder(buf))
 			case *base32.Encoding:
@@ -51,10 +51,10 @@ var encDecProto = nj.NamedObject("EncodeDecode", 0).
 				SetProp("_f", nj.ValueOf(enc)).
 				SetProp("_b", nj.ValueOf(buf)).
 				SetMethod("value", func(e *nj.Env) {
-					e.A = nj.Str(e.Object(-1).Prop("_b").Interface().(*bytes.Buffer).String())
+					e.A = nj.Str(e.This("_b").(*bytes.Buffer).String())
 				}, "").
 				SetMethod("bytes", func(e *nj.Env) {
-					e.A = nj.Bytes(e.Object(-1).Prop("_b").Interface().(*bytes.Buffer).Bytes())
+					e.A = nj.Bytes(e.This("_b").(*bytes.Buffer).Bytes())
 				}, "").
 				SetPrototype(nj.WriteCloserProto).
 				ToValue()
@@ -62,7 +62,7 @@ var encDecProto = nj.NamedObject("EncodeDecode", 0).
 		SetMethod("decoder", func(e *nj.Env) {
 			src := nj.NewReader(e.Get(0))
 			dec := nj.Nil
-			switch encoding := e.Object(-1).Prop("_e").Interface().(type) {
+			switch encoding := e.This("_e").(type) {
 			case *base64.Encoding:
 				dec = nj.ValueOf(base64.NewDecoder(encoding, src))
 			case *base32.Encoding:

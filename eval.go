@@ -322,7 +322,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 				if idx.IsInt64() {
 					env.A = a.Array().Get(idx.Int())
 				} else if idx.Type() == typ.String {
-					if f := a.Array().meta.Proto.Prop(idx.Str()); f != Nil {
+					if f := a.Array().meta.Proto.Get(idx); f != Nil {
 						env.A = setObjectRecv(f, a)
 						break
 					}
@@ -341,7 +341,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 					}
 					break
 				} else if idx.Type() == typ.String {
-					if f := StrLib.Prop(idx.Str()); f != Nil {
+					if f := StrProto.Get(idx); f != Nil {
 						env.A = setObjectRecv(f, a)
 						break
 					}

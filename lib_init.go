@@ -29,12 +29,14 @@ import (
 const Version int64 = 362
 
 var (
-	ObjectLib Object
-	StrLib    = NewObject(0)
-	FuncLib   = NewObject(0)
-	ArrayLib  = NewObject(0)
-	ErrorLib  = NewObject(0)
-	Globals   = NewObject(0)
+	ObjectProto       Object
+	StaticObjectProto = NewObject(0)
+	StrProto          = NewObject(0)
+	FuncProto         = NewObject(0)
+	ArrayProto        = NewObject(0)
+	ErrorProto        = NewObject(0)
+	FileInfoProto     = NamedObject("FileInfo", 0)
+	Globals           = NewObject(0)
 )
 
 func init() {
@@ -129,7 +131,9 @@ func init() {
 			o := e.Object(0)
 			_ = o.IsCallable() && e.SetA(Str(o.Callable.ToCode())) || e.SetA(Nil)
 		}, "").
+		SetPrototype(StaticObjectProto).
 		ToValue())
+
 	Globals.SetMethod("type", func(e *Env) {
 		e.A = Str(e.Get(0).Type().String())
 	}, "$f(v: value) -> string\n\treturn `v`'s type")
@@ -232,18 +236,18 @@ func init() {
 		e.A = NewObject(1).SetPrototype(e.A.Object()).SetProp("_rx", ValueOf(regexp.MustCompile(e.Str(0)))).ToValue()
 	}, "re(regex: string) -> RegExp\n\tcreate a regular expression object").Object().
 		SetMethod("match", func(e *Env) {
-			e.A = Bool(e.Object(-1).Prop("_rx").Interface().(*regexp.Regexp).MatchString(e.Str(0)))
+			e.A = Bool(e.This("_rx").(*regexp.Regexp).MatchString(e.Str(0)))
 		}, "RegExp.$f(text: string) -> bool").
 		SetMethod("find", func(e *Env) {
-			m := e.Object(-1).Prop("_rx").Interface().(*regexp.Regexp).FindStringSubmatch(e.Str(0))
+			m := e.This("_rx").(*regexp.Regexp).FindStringSubmatch(e.Str(0))
 			e.A = NewSequence(m, stringsSequenceMeta).ToValue()
 		}, "RegExp.$f(text: string) -> array").
 		SetMethod("findall", func(e *Env) {
-			m := e.Object(-1).Prop("_rx").Interface().(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).Safe().Int(-1))
+			m := e.This("_rx").(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).Safe().Int(-1))
 			e.A = NewSequence(m, GetGenericSequenceMeta(m)).ToValue()
 		}, "RegExp.$f(text: string) -> array").
 		SetMethod("replace", func(e *Env) {
-			e.A = Str(e.Object(-1).Prop("_rx").Interface().(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
+			e.A = Str(e.This("_rx").(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
 		}, "RegExp.$f(old: string, new: string) -> string").
 		ToValue())
 
@@ -308,6 +312,7 @@ func init() {
 			internal.PanicErr(outError)
 		}, "$f(a: object|array, f: function, n: int) -> object|array\n"+
 			"\tmap values in `a` into new values using `f(k, v)` concurrently on `n` goroutines (defaults to the number of CPUs)").
+		SetPrototype(StaticObjectProto).
 		ToValue())
 
 	Globals.SetProp("open", Func("open", func(e *Env) {
@@ -338,15 +343,15 @@ func init() {
 			SetProp("_f", ValueOf(f)).
 			SetProp("path", Str(f.Name())).
 			SetMethod("sync", func(e *Env) {
-				internal.PanicErr(e.Object(-1).Prop("_f").Interface().(*os.File).Sync())
+				internal.PanicErr(e.This("_f").(*os.File).Sync())
 			}, "File.$f()").
 			SetMethod("stat", func(e *Env) {
-				fi, err := e.Object(-1).Prop("_f").Interface().(*os.File).Stat()
+				fi, err := e.This("_f").(*os.File).Stat()
 				internal.PanicErr(err)
 				e.A = ValueOf(fi)
 			}, "File.$f() -> go.os.FileInfo").
 			SetMethod("truncate", func(e *Env) {
-				f := e.Object(-1).Prop("_f").Interface().(*os.File)
+				f := e.This("_f").(*os.File)
 				internal.PanicErr(f.Truncate(e.Int64(1)))
 				t, err := f.Seek(0, 2)
 				internal.PanicErr(err)
@@ -374,9 +379,10 @@ func init() {
 		SetProp("writecloser", WriteCloserProto.ToValue()).
 		SetProp("readwritecloser", ReadWriteCloserProto.ToValue()).
 		SetProp("readwriteseekcloser", ReadWriteSeekCloserProto.ToValue()).
+		SetPrototype(StaticObjectProto).
 		ToValue())
 
-	ObjectLib = *NamedObject("object", 0).
+	ObjectProto = *NamedObject("object", 0).
 		SetMethod("new", func(e *Env) {
 			switch e.Get(0).Type() {
 			case typ.Number:
@@ -385,6 +391,13 @@ func init() {
 				e.A = NewObject(0).ToValue()
 			default:
 				e.A = e.Object(0).SetPrototype(e.Object(-1)).ToValue()
+			}
+		}, "").
+		SetMethod("newstatic", func(e *Env) {
+			if e.Get(0).Type() == typ.Number {
+				e.A = NewObject(e.Int(0)).SetPrototype(StaticObjectProto).ToValue()
+			} else {
+				e.A = NewObject(0).SetPrototype(StaticObjectProto).ToValue()
 			}
 		}, "").
 		SetMethod("get", func(e *Env) {
@@ -455,18 +468,20 @@ func init() {
 		}, "object.$f() -> string\n\tprint raw elements in object").
 		SetMethod("pure", func(e *Env) {
 			m2 := *e.Object(-1)
-			m2.parent = nil
-			e.A = m2.ToValue()
-		}, "object.$f() -> object\n\treturn a new object who shares all the data from the original, but with no prototype").
+			e.A = m2.SetPrototype(&ObjectProto).ToValue()
+		}, "object.$f() -> object\n\treturn a new object which shares all data from the original, but with no prototype").
 		SetMethod("next", func(e *Env) {
 			e.A = Array(e.Object(-1).Next(e.Get(0)))
 		}, "object.$f(k: value) -> [value, value]\n\tfind next key-value pair after `k` in the object and return as [key, value]").
 		SetMethod("iscallable", func(e *Env) {
 			e.A = Bool(e.Object(-1).IsCallable())
+		}, "object.$f() -> bool").
+		SetMethod("isstatic", func(e *Env) {
+			e.A = Bool(e.Object(-1).Prototype() == StaticObjectProto)
 		}, "object.$f() -> bool")
-	ObjectLib.SetPrototype(nil) // objectlib is the topmost object, it should not have any prototype
+	ObjectProto.SetPrototype(nil) // objectlib is the topmost object, it should not have any prototype
 
-	*FuncLib = *NamedObject("function", 0).
+	*FuncProto = *NamedObject("function", 0).
 		SetMethod("doc", func(e *Env) {
 			o := e.Object(-1)
 			_ = !o.IsCallable() && e.SetA(Nil) || e.SetA(Str(strings.Replace(o.Callable.DocString, "$f", o.Callable.Name, -1)))
@@ -489,7 +504,7 @@ func init() {
 			e.A = NamedObject("Timer", 0).
 				SetProp("t", ValueOf(t)).
 				SetMethod("stop", func(e *Env) {
-					e.A = Bool(e.Object(-1).Prop("t").Interface().(*time.Timer).Stop())
+					e.A = Bool(e.This("t").(*time.Timer).Stop())
 				}, "").
 				ToValue()
 		}, "function.$f(secs: float, args...: value) -> Timer").
@@ -516,18 +531,18 @@ func init() {
 					select {
 					case <-time.After(e.Get(0).Safe().Duration(1 << 62)):
 						panic("timeout")
-					case v := <-e.Object(-1).Prop("w").Interface().(chan Value):
+					case v := <-e.This("w").(chan Value):
 						e.A = v
 					}
 				}, "").
 				ToValue()
 		}, "function.$f(args...: value) -> Goroutine\n\texecute `f` in goroutine").
-		SetPrototype(&ObjectLib)
+		SetPrototype(&ObjectProto)
 
-	Globals.SetProp("object", ObjectLib.ToValue())
-	Globals.SetProp("func", FuncLib.ToValue())
+	Globals.SetProp("object", ObjectProto.ToValue())
+	Globals.SetProp("func", FuncProto.ToValue())
 
-	*ArrayLib = *NamedObject("array", 0).
+	*ArrayProto = *NamedObject("array", 0).
 		SetMethod("make", func(e *Env) {
 			e.A = Array(make([]Value, e.Int(0))...)
 		}, "array.$f(n: int) -> array\n\tcreate an array of size `n`").
@@ -566,7 +581,7 @@ func init() {
 			for ; en < 0 && a.Len() > 0; en += a.Len() {
 			}
 			e.A = a.Slice(st, en).ToValue()
-		}, "array.$f(start: int, end?: int) -> array\n\tslice array, from `start` to `end`").
+		}, "array.$f(start: int, end?: int) -> array\n\tslice from `start` to `end`").
 		SetMethod("removeat", func(e *Env) {
 			ma, idx := e.Array(-1), e.Int(0)
 			if idx < 0 || idx >= ma.Len() {
@@ -587,20 +602,23 @@ func init() {
 		SetMethod("istyped", func(e *Env) {
 			e.A = Bool(e.Array(-1).meta != internalSequenceMeta)
 		}, "array.$f() -> bool").
+		SetMethod("type", func(e *Env) {
+			e.A = Str(e.Array(-1).meta.Name)
+		}, "array.$f() -> string").
 		SetMethod("untype", func(e *Env) {
 			e.A = Array(e.Array(-1).Values()...)
 		}, "array.$f() -> array")
-	Globals.SetProp("array", ArrayLib.ToValue())
+	Globals.SetProp("array", ArrayProto.ToValue())
 
-	*ErrorLib = *Func("Error", func(e *Env) {
+	*ErrorProto = *Func("Error", func(e *Env) {
 		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.GetFullStacktrace()})
 	}, "").Object().
 		SetMethod("error", func(e *Env) { e.A = ValueOf(e.Array(-1).Unwrap().(*ExecError).root) }, "").
 		SetMethod("getcause", func(e *Env) { e.A = intf(e.Array(-1).Unwrap().(*ExecError).root) }, "").
-		SetPrototype(FuncLib)
-	Globals.SetProp("error", ErrorLib.ToValue())
+		SetPrototype(FuncProto)
+	Globals.SetProp("error", ErrorProto.ToValue())
 
-	*StrLib = *Func("str", func(e *Env) {
+	*StrProto = *Func("str", func(e *Env) {
 		i, ok := e.Interface(0).([]byte)
 		_ = ok && e.SetA(UnsafeStr(i)) || e.SetA(Str(e.Get(0).String()))
 	}, "").Object().
@@ -618,7 +636,7 @@ func init() {
 		}, "str.$f() -> int\n\treturn the count of runes").
 		SetMethod("iequals", func(e *Env) {
 			e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0)))
-		}, "str.$f(text2: string) -> bool\n\tcase insensitive equal").
+		}, "str.$f(text: string) -> bool\n\tcase insensitive equal").
 		SetMethod("contains", func(e *Env) {
 			e.A = Bool(strings.Contains(e.Str(-1), e.Str(0)))
 		}, "str.$f(substr: string) -> bool").
@@ -646,7 +664,7 @@ func init() {
 		SetMethod("replace", func(e *Env) {
 			e.A = Str(strings.Replace(e.Str(-1), e.Str(0), e.Str(1), e.Get(2).Safe().Int(-1)))
 		}, "str.$f(old: string, new: string, count?: int) -> string").
-		SetMethod("match", func(e *Env) {
+		SetMethod("glob", func(e *Env) {
 			m, err := filepath.Match(e.Str(-1), e.Str(0))
 			internal.PanicErr(err)
 			e.A = Bool(m)
@@ -684,26 +702,31 @@ func init() {
 		SetMethod("ord", func(e *Env) {
 			r, sz := utf8.DecodeRuneInString(e.Str(-1))
 			e.A = Array(Int64(int64(r)), Int(sz))
-		}, "str.$f() -> [int, int]\n\tdecode first UTF-8 char, return [unicode, bytescount]").
+		}, "str.$f() -> [int, int]\n\tdecode first UTF-8 char, return [unicode, width]").
 		SetMethod("startswith", func(e *Env) { e.A = Bool(strings.HasPrefix(e.Str(-1), e.Str(0))) }, "str.$f(prefix: string) -> bool").
 		SetMethod("endswith", func(e *Env) { e.A = Bool(strings.HasSuffix(e.Str(-1), e.Str(0))) }, "str.$f(suffix: string) -> bool").
 		SetMethod("upper", func(e *Env) { e.A = Str(strings.ToUpper(e.Str(-1))) }, "str.$f() -> string").
 		SetMethod("lower", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }, "str.$f() -> string").
 		SetMethod("bytes", func(e *Env) {
 			_ = e.Get(0).IsInt64() && e.SetA(ValueOf(make([]byte, e.Int(0)))) || e.SetA(ValueOf([]byte(e.Str(0))))
-		}, "str.$f() -> bytes\n\tconvert text to byte array\n$f(n: int) -> bytes\n\tcreate an n-byte long array").
+		}, "str.$f() -> bytes\n\tconvert string to bytes\n$f(n: int) -> bytes\n\tcreate an n-byte long array").
 		SetMethod("chars", func(e *Env) {
 			var r []Value
-			for s := e.Str(-1); len(s) > 0; {
-				_, sz := utf8.DecodeRuneInString(s)
+			for s, code := e.Str(-1), e.Get(0).IsTrue(); len(s) > 0; {
+				rn, sz := utf8.DecodeRuneInString(s)
 				if sz == 0 {
 					break
 				}
-				r = append(r, Str(s[:sz]))
+				if code {
+					r = append(r, Int64(int64(rn)))
+				} else {
+					r = append(r, Str(s[:sz]))
+				}
 				s = s[sz:]
 			}
 			e.A = Array(r...)
-		}, "str.$f() -> array\n\tbreak `text` into chars, e.g.: chars('a中c') => ['a', '中', 'c']").
+		}, "str.$f(code?: bool) -> array\n\tbreak string into chars or unicodes, e.g.:\n"+
+			"\t\t('a中c').chars() => ['a', '中', 'c']\n\t\t('a中c').chars(true) => [97, 20013, 99]").
 		SetMethod("format", func(e *Env) {
 			buf := &bytes.Buffer{}
 			sprintf(e, -1, buf)
@@ -718,17 +741,17 @@ func init() {
 				SetPrototype(ReadWriterProto).
 				SetProp("_f", ValueOf(b)).
 				SetMethod("reset", func(e *Env) {
-					e.Object(-1).Prop("_f").Interface().(*bytes.Buffer).Reset()
+					e.This("_f").(*bytes.Buffer).Reset()
 				}, "Buffer.$f()").
 				SetMethod("value", func(e *Env) {
-					e.A = UnsafeStr(e.Object(-1).Prop("_f").Interface().(*bytes.Buffer).Bytes())
+					e.A = UnsafeStr(e.This("_f").(*bytes.Buffer).Bytes())
 				}, "Buffer.$f() -> string").
 				SetMethod("bytes", func(e *Env) {
-					e.A = Bytes(e.Object(-1).Prop("_f").Interface().(*bytes.Buffer).Bytes())
+					e.A = Bytes(e.This("_f").(*bytes.Buffer).Bytes())
 				}, "Buffer.$f() -> bytes").
 				ToValue()
 		}, "$f(v?: string) -> Buffer")
-	Globals.SetProp("str", StrLib.ToValue())
+	Globals.SetProp("str", StrProto.ToValue())
 
 	Globals.SetProp("math", NewObject(0).
 		SetProp("INF", Float64(math.Inf(1))).
@@ -773,9 +796,11 @@ func init() {
 		SetMethod("atan2", func(e *Env) { e.A = Float64(math.Atan2(e.Float64(0), e.Float64(1))) }, "").
 		SetMethod("ldexp", func(e *Env) { e.A = Float64(math.Ldexp(e.Float64(0), e.Int(0))) }, "").
 		SetMethod("modf", func(e *Env) { a, b := math.Modf(e.Float64(0)); e.A = Array(Float64(a), Float64(b)) }, "").
+		SetPrototype(StaticObjectProto).
 		ToValue())
 
 	Globals.SetProp("os", NewObject(0).
+		SetProp("pid", Int(os.Getpid())).
 		SetProp("args", ValueOf(os.Args)).
 		SetMethod("environ", func(e *Env) {
 			if env := os.Environ(); e.Get(0).IsTrue() {
@@ -793,21 +818,21 @@ func init() {
 		SetMethod("shell", func(e *Env) {
 			win := runtime.GOOS == "windows"
 			p := exec.Command(ifstr(win, "cmd", "sh"), ifstr(win, "/c", "-c"), e.Str(0))
-			opt := e.Get(1)
-			opt.Safe().Object().Prop("env").Safe().Object().Foreach(func(k, v Value) bool {
+			opt := e.Get(1).Safe().Object()
+			opt.Prop("env").Safe().Object().Foreach(func(k, v Value) bool {
 				p.Env = append(p.Env, k.String()+"="+v.String())
 				return true
 			})
 			stdout := &bytes.Buffer{}
 			p.Stdout, p.Stderr = stdout, stdout
-			p.Dir = opt.Safe().Object().Prop("dir").Safe().Str("")
-			if tmp := opt.Safe().Object().Prop("stdout"); tmp != Nil {
+			p.Dir = opt.Prop("dir").Safe().Str("")
+			if tmp := opt.Prop("stdout"); tmp != Nil {
 				p.Stdout = NewWriter(tmp)
 			}
-			if tmp := opt.Safe().Object().Prop("stderr"); tmp != Nil {
+			if tmp := opt.Prop("stderr"); tmp != Nil {
 				p.Stderr = NewWriter(tmp)
 			}
-			if tmp := opt.Safe().Object().Prop("stdin"); tmp != Nil {
+			if tmp := opt.Prop("stdin"); tmp != Nil {
 				p.Stdin = NewReader(tmp)
 			}
 
@@ -816,7 +841,7 @@ func init() {
 			select {
 			case r := <-out:
 				internal.PanicErr(r)
-			case <-time.After(opt.Safe().Object().Prop("timeout").Safe().Duration(time.Duration(1 << 62))):
+			case <-time.After(opt.Prop("timeout").Safe().Duration(1 << 62)):
 				p.Process.Kill()
 				panic("timeout")
 			}
@@ -841,5 +866,6 @@ func init() {
 			fi, err := os.Stat(e.Str(0))
 			_ = err == nil && e.SetA(ValueOf(fi)) || e.SetA(Nil)
 		}, "").
+		SetPrototype(StaticObjectProto).
 		ToValue())
 }

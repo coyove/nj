@@ -51,7 +51,7 @@ func Func(name string, f func(*Env), doc string) Value {
 		obj.Callable.Native = dummyFunc
 		obj.Callable.Dummy = true
 	}
-	obj.SetPrototype(FuncLib)
+	obj.SetPrototype(FuncProto)
 	return obj.ToValue()
 }
 

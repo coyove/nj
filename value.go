@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"os"
 	"reflect"
 	"strconv"
 	"time"
@@ -186,6 +187,8 @@ func ValueOf(i interface{}) Value {
 		return Error(nil, v)
 	case reflect.Value:
 		return ValueOf(v.Interface())
+	case os.FileInfo:
+		return fileInfo(v).ToValue()
 	case gjson.Result:
 		if v.Type == gjson.String {
 			return Str(v.Str)
