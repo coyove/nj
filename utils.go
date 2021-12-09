@@ -6,8 +6,10 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -235,4 +237,63 @@ func fileInfo(fi os.FileInfo) *Object {
 		SetProp("modtime", ValueOf(fi.ModTime())).
 		SetProp("isdir", Bool(fi.IsDir())).
 		SetPrototype(FileInfoProto)
+}
+
+func multiMap(e *Env, fun *Object, t Value, n int) Value {
+	if t.Type() == typ.Array && t.Array().Typed() {
+		internal.Panic("can't map typed array")
+	}
+
+	if n < 1 || n > runtime.NumCPU()*1e3 {
+		internal.Panic("invalid number of goroutines: %v", n)
+	}
+
+	type payload struct {
+		k Value
+		v *Value
+	}
+
+	work := func(fun *Object, outError *error, p payload) {
+		res, err := e.Call2(fun, p.k, *p.v)
+		if err != nil {
+			*outError = err
+		} else {
+			*p.v = res
+		}
+	}
+
+	var outError error
+	if n == 1 {
+		if t.Type() == typ.Array {
+			t.Array().Foreach(func(k Value, v *Value) bool { work(fun, &outError, payload{k, v}); return outError == nil })
+		} else {
+			t.Object().Foreach(func(k Value, v *Value) bool { work(fun, &outError, payload{k, v}); return outError == nil })
+		}
+	} else {
+		var in = make(chan payload, t.Len())
+		var wg sync.WaitGroup
+		wg.Add(n)
+		for i := 0; i < n; i++ {
+			go func() {
+				defer wg.Done()
+				for p := range in {
+					if outError != nil {
+						return
+					}
+					work(fun, &outError, p)
+				}
+			}()
+		}
+
+		if t.Type() == typ.Array {
+			t.Array().Foreach(func(k Value, v *Value) bool { in <- payload{k, v}; return true })
+		} else {
+			t.Object().Foreach(func(k Value, v *Value) bool { in <- payload{k, v}; return true })
+		}
+		close(in)
+
+		wg.Wait()
+	}
+	internal.PanicErr(outError)
+	return t
 }

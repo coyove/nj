@@ -6,7 +6,7 @@ function bottomUpTree(depth)
 end
 
 function itemCheck(n)
-    if (len(n) == 0) then return 1 end
+    if (#(n) == 0) then return 1 end
     return itemCheck(n.left) + itemCheck(n.right) + 1
 end
 

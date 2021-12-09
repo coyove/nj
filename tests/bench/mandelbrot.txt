@@ -53,8 +53,7 @@ function renderRow(y0)
     return row 
 end
 
-size = 16000
-nCPU = 4
+size = 1600
 bytesPerRow = size >> 3 
 
 initial_r = array.make(size) 
@@ -67,32 +66,9 @@ for xy =0, size do
     initial_i[xy] = i - 1.0 
 end
 
-rows = array.make(size) 
-y = -1 
-mux = sync.mutex() 
-wg = sync.waitgroup() 
-wg.Add(nCPU)
+rows = renderRow.map(array.make(size), os.numcpus)
 
-function worker()
-    while (y < size) do
-        mux.Lock() 
-        y = y + 1 
-        local y0 = y 
-        mux.Unlock() 
-        if (y0 < size) then
-            rows[y0] = renderRow(y0) 
-        end 
-    end
-    wg.Done() 
-end 
-
-for i = 0,nCPU do
-    worker.go()
-end
-wg.Wait() 
--- return
-
-write(__G.Stdout, "P4\n" + (size) + " " + (size) + "\n") 
-for i = 0, len(rows) do
-    write(__G.Stdout, rows[i]) 
+write(PROGRAM.Stdout, "P4\n" + (size) + " " + (size) + "\n") 
+for i = 0, #(rows) do
+    write(PROGRAM.Stdout, rows[i]) 
 end

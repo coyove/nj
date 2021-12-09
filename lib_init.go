@@ -15,7 +15,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 	"unsafe"
@@ -263,13 +262,6 @@ func init() {
 		}, "$f(j: string, path: string, default?: value) -> value").
 		ToValue())
 
-	Globals.SetProp("sync", NamedObject("sync", 0).
-		SetMethod("mutex", func(e *Env) { e.A = ValueOf(&sync.Mutex{}) }, "$f() -> *go.sync.Mutex").
-		SetMethod("rwmutex", func(e *Env) { e.A = ValueOf(&sync.RWMutex{}) }, "$f() -> *go.sync.RWMutex").
-		SetMethod("waitgroup", func(e *Env) { e.A = ValueOf(&sync.WaitGroup{}) }, "$f() -> *go.sync.WaitGroup").
-		SetPrototype(StaticObjectProto).
-		ToValue())
-
 	Globals.SetProp("open", Func("open", func(e *Env) {
 		path, flag, perm := e.Str(0), e.Get(1).Safe().Str("r"), e.Get(2).Safe().Int64(0644)
 		var opt int
@@ -492,50 +484,11 @@ func init() {
 				}, "").
 				ToValue()
 		}, "function.$f(args...: value) -> Goroutine\n\texecute `f` in goroutine").
-		SetMethod("multimap", func(e *Env) {
-			fun := e.Object(-1)
-			n, t := e.Get(1).Safe().Int(runtime.NumCPU()), e.Get(0)
-			if n < 1 || n > runtime.NumCPU()*1e3 {
-				internal.Panic("invalid number of goroutines: %v", n)
-			}
-			var in = make(chan [2]Value, t.Len())
-			var wg sync.WaitGroup
-			var outLock sync.Mutex
-			var outError error
-			_ = t.Type() == typ.Array && e.SetA(NewArray(make([]Value, t.Len())...).ToValue()) || e.SetA(NewObject(t.Len()).ToValue())
-			wg.Add(n)
-			for i := 0; i < n; i++ {
-				go func() {
-					defer wg.Done()
-					for p := range in {
-						if outError != nil {
-							return
-						}
-						res, err := e.Call2(fun, p[0], p[1])
-						if err != nil {
-							outError = err
-							return
-						}
-						outLock.Lock()
-						if e.A.Type() == typ.Array {
-							e.A.Array().Set(p[0].Int(), res)
-						} else {
-							e.A.Object().Set(p[0], res)
-						}
-						outLock.Unlock()
-					}
-				}()
-			}
-			if e.A.Type() == typ.Array {
-				t.Array().Foreach(func(k int, v Value) bool { in <- [2]Value{Int(k), v}; return true })
-			} else {
-				t.Object().Foreach(func(k Value, v *Value) bool { in <- [2]Value{k, *v}; return true })
-			}
-			close(in)
-			wg.Wait()
-			internal.PanicErr(outError)
+		SetMethod("map", func(e *Env) {
+			e.A = multiMap(e, e.Object(-1), e.Get(0), e.Get(1).Safe().Int(1))
 		}, "function.$f(a: object|array, n?: int) -> object|array\n"+
-			"\tmap values in `a` into new values using `f(k, v)` concurrently on `n` goroutines (defaults to the number of CPUs)").
+			"\tmap values in `a` into new values using `f(k, v)`,\n"+
+			"\tsetting `n` higher than 1 will spread the load to n workers").
 		SetPrototype(&ObjectProto)
 
 	Globals.SetProp("object", ObjectProto.ToValue())
@@ -564,7 +517,7 @@ func init() {
 		SetMethod("filter", func(e *Env) {
 			src, ff := e.Array(-1), e.Object(0)
 			dest := make([]Value, 0, src.Len())
-			src.Foreach(func(k int, v Value) bool {
+			src.ForeachIndex(func(k int, v Value) bool {
 				if e.Call(ff, v).IsTrue() {
 					dest = append(dest, v)
 				}
@@ -650,7 +603,7 @@ func init() {
 		SetMethod("join", func(e *Env) {
 			d := e.Str(-1)
 			buf := &bytes.Buffer{}
-			e.Array(0).Foreach(func(k int, v Value) bool {
+			e.Array(0).ForeachIndex(func(k int, v Value) bool {
 				buf.WriteString(v.String())
 				buf.WriteString(d)
 				return true
@@ -800,6 +753,7 @@ func init() {
 
 	Globals.SetProp("os", NewObject(0).
 		SetProp("pid", Int(os.Getpid())).
+		SetProp("numcpus", Int(runtime.NumCPU())).
 		SetProp("args", ValueOf(os.Args)).
 		SetMethod("environ", func(e *Env) {
 			if env := os.Environ(); e.Get(0).IsTrue() {

@@ -248,8 +248,8 @@ func (m *Object) Foreach(f func(k Value, v *Value) bool) {
 	if m == nil {
 		return
 	}
-	for _, p := range m.items {
-		if p.Key != Nil && !f(p.Key, &p.Val) {
+	for i := range m.items {
+		if m.items[i].Key != Nil && !f(m.items[i].Key, &m.items[i].Val) {
 			return
 		}
 	}

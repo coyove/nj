@@ -40,7 +40,7 @@ func init() {
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Get(nj.Str(k))
 			if x.Type() == typ.Object {
-				x.Object().Foreach(func(k, v nj.Value) bool { add(k.String(), v.String()); return true })
+				x.Object().Foreach(func(k nj.Value, v *nj.Value) bool { add(k.String(), v.String()); return true })
 			}
 		}
 
@@ -80,7 +80,7 @@ func init() {
 			payload := bytes.Buffer{}
 			writer := multipart.NewWriter(&payload)
 			if x := args.Prop("multipart"); x.Type() == typ.Object {
-				x.Object().Foreach(func(k, v nj.Value) bool {
+				x.Object().Foreach(func(k nj.Value, v *nj.Value) bool {
 					key := k.String()
 					filename := ""
 					if strings.Contains(key, "/") {
@@ -90,12 +90,12 @@ func init() {
 					if filename != "" {
 						part, err := writer.CreateFormFile(key, filename)
 						internal.PanicErr(err)
-						_, err = io.Copy(part, nj.NewReader(v))
+						_, err = io.Copy(part, nj.NewReader(*v))
 						internal.PanicErr(err)
 					} else {
 						part, err := writer.CreateFormField(key)
 						internal.PanicErr(err)
-						_, err = io.Copy(part, nj.NewReader(v))
+						_, err = io.Copy(part, nj.NewReader(*v))
 						internal.PanicErr(err)
 					}
 					return true

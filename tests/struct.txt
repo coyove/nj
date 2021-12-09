@@ -69,7 +69,7 @@ function worker()
     print("worker after 1s")
     return 'finished'
 end
-assert(worker.multimap([0])[0] == 'finished')
+assert(worker.map([0], os.numcpus)[0] == 'finished')
 
 -- closure
 function foo(a)

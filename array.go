@@ -72,7 +72,7 @@ func init() {
 		func(a *Array, mt typ.MarshalType) []byte {
 			p := &bytes.Buffer{}
 			p.WriteString("[")
-			a.Foreach(func(i int, v Value) bool {
+			a.ForeachIndex(func(i int, v Value) bool {
 				v.toString(p, 1, mt)
 				p.WriteString(",")
 				return true
@@ -354,9 +354,20 @@ func (a *Array) Marshal(mt typ.MarshalType) []byte {
 	return a.meta.Marshal(a, mt)
 }
 
-func (a *Array) Foreach(f func(k int, v Value) bool) {
+func (a *Array) ForeachIndex(f func(k int, v Value) bool) {
 	for i := 0; i < a.Len(); i++ {
 		if !f(i, a.Get(i)) {
+			break
+		}
+	}
+}
+
+func (a *Array) Foreach(f func(k Value, v *Value) bool) {
+	if a.meta != internalArrayMeta {
+		internal.Panic("can't iterate typed array using untyped foreach")
+	}
+	for i := 0; i < a.Len(); i++ {
+		if !f(Int(i), &a.internal[i]) {
 			break
 		}
 	}
