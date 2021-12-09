@@ -551,6 +551,12 @@ func init() {
 		SetMethod("concat", func(e *Env) {
 			e.Array(-1).Concat(e.Array(0))
 		}, "array.$f(a: array) -> array\n\tconcat two arrays").
+		SetMethod("sort", func(e *Env) {
+			// a, rev := e.Array(-1), e.Get(0).IsTrue()
+			// sort.Slice(a.Unwrap(), func(i, j int) bool {
+			// 	a.Get(i)
+			// })
+		}, "array.$f(reverse?: bool)\n\tconcat two arrays").
 		SetMethod("istyped", func(e *Env) {
 			e.A = Bool(e.Array(-1).meta != internalArrayMeta)
 		}, "array.$f() -> bool").
@@ -593,11 +599,10 @@ func init() {
 			e.A = Bool(strings.Contains(e.Str(-1), e.Str(0)))
 		}, "str.$f(substr: string) -> bool").
 		SetMethod("split", func(e *Env) {
-			s, d := e.Str(-1), e.Str(0)
 			if n := e.Get(1).Safe().Int(0); n == 0 {
-				e.A = NewTypedArray(strings.Split(s, d), stringsArrayMeta).ToValue()
+				e.A = NewTypedArray(strings.Split(e.Str(-1), e.Str(0)), stringsArrayMeta).ToValue()
 			} else {
-				e.A = NewTypedArray(strings.SplitN(s, d, n), stringsArrayMeta).ToValue()
+				e.A = NewTypedArray(strings.SplitN(e.Str(-1), e.Str(0), n), stringsArrayMeta).ToValue()
 			}
 		}, "str.$f(delim: string, n?: int) -> array").
 		SetMethod("join", func(e *Env) {

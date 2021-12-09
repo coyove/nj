@@ -15,12 +15,32 @@ import (
 
 const EOF = 0xffffffff
 
-var numberChars = func() (x [256]bool) {
+var numberChars [256]bool
+
+func init() {
 	for _, r := range "0123456789abcdefABCDEF.xX_" {
-		x[byte(r)] = true
+		numberChars[byte(r)] = true
 	}
-	return
-}()
+	update := func(idx int, name string) { yyToknames[idx-yyPrivate+1] = name }
+	for name, idx := range reservedWords {
+		update(int(idx), name)
+	}
+	update(TLParen, "'('")
+	update(TLsh, "'<<'")
+	update(TRsh, "'>>'")
+	update(TURsh, "'>>>'")
+	update(TEqeq, "'=='")
+	update(TNeq, "'!='")
+	update(TLte, "'<='")
+	update(TGte, "'>='")
+	update(TIDiv, "'//'")
+	update(TDotDotDot, "'...'")
+	update(TLabel, "goto label")
+	update(TReturnVoid, "return")
+	update(TIdent, "identifier")
+	update(TNumber, "number")
+	update(TString, "string")
+}
 
 type Error struct {
 	Pos     Position
@@ -34,10 +54,10 @@ func (e *Error) Error() string {
 		return e.Message
 	} else {
 		msg := fmt.Sprintf("%q at %s:%d: %s", e.Token, pos.Source, pos.Line, e.Message)
-		if e.Message == "syntax error: unexpected TLParen" {
-			msg += ", is there any space(' ') or newline('\\n') before it?"
-		}
-		return msg
+		// if e.Message == "syntax error: unexpected '('" {
+		// 	msg += ", is there any space(' ') or newline('\\n') before it?"
+		// }
+		return (msg)
 	}
 }
 
@@ -167,7 +187,7 @@ func (sc *Scanner) scanString(quote uint32) (string, error) {
 	for len(s) > 0 {
 		c, multibyte, ss, err := strconv.UnquoteChar(s, byte(quote))
 		if err != nil {
-			return "", err
+			return "", sc.Error(buf.String(), "escape: "+err.Error())
 		}
 		s = ss
 		if c < utf8.RuneSelf || !multibyte {

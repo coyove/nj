@@ -219,7 +219,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 					env.A = Bool(va.Float64() < vb.Float64())
 				}
 			case typ.String + typ.String:
-				env.A = Bool(va.Str() < vb.Str())
+				env.A = Bool(lessStr(va, vb))
 			default:
 				internal.Panic("comparison "+errNeedNumbersOrStrings, showType(va), showType(vb))
 			}
@@ -232,7 +232,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 					env.A = Bool(va.Float64() <= vb.Float64())
 				}
 			case typ.String + typ.String:
-				env.A = Bool(va.Str() <= vb.Str())
+				env.A = Bool(!lessStr(vb, va))
 			default:
 				internal.Panic("comparison "+errNeedNumbersOrStrings, showType(va), showType(vb))
 			}

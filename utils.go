@@ -297,3 +297,13 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 	internal.PanicErr(outError)
 	return t
 }
+
+func lessStr(a, b Value) bool {
+	if a.isSmallString() && b.isSmallString() {
+		if a.v == b.v {
+			return uintptr(a.p) < uintptr(b.p) // a is shorter than b
+		}
+		return a.v < b.v
+	}
+	return a.Str() < b.Str()
+}

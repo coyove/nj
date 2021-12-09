@@ -499,6 +499,15 @@ func TestRHMap(t *testing.T) {
 	}
 }
 
+func TestStrLess(t *testing.T) {
+	a := Str("a")
+	b := Str("a\x00")
+	t.Log(a.v, b.v)
+	if !lessStr(a, b) {
+		t.FailNow()
+	}
+}
+
 func TestACall(t *testing.T) {
 	foo := MustRun(LoadString(`function foo(m...)
 	print(m)

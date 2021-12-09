@@ -31,8 +31,8 @@ package parser
 %token<token> TDo TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TLambda TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot TLParen
 
 /* Literals */
-%token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString 
-%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' TIDiv
+%token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString TIDiv
+%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~'
 
 /* Operators */
 %right 'T'
