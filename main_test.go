@@ -110,7 +110,7 @@ return foo
 a = 1
 function foo(x) 
 if not x then return a end
-for i=0,len(x) do
+for i=0,#(x) do
 a=a+x[i]
 end
 return a
@@ -509,7 +509,7 @@ func TestACall(t *testing.T) {
 	Call(foo.Object(), Nil, Int64(1), Int64(2))
 
 	foo = MustRun(LoadString(`function foo(a, b, m...)
-	assert(a == 1 and len(m) == 0)
+	assert(a == 1 and #(m) == 0)
     end
     return foo`, nil))
 	Call(foo.Object(), Int64(1))

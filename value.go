@@ -383,7 +383,7 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 		if t.Kind() == reflect.Map {
 			s := reflect.MakeMap(t)
 			kt, vt := t.Key(), t.Elem()
-			v.Object().Foreach(func(k, v Value) bool { s.SetMapIndex(k.ReflectValue(kt), v.ReflectValue(vt)); return true })
+			v.Object().Foreach(func(k Value, v *Value) bool { s.SetMapIndex(k.ReflectValue(kt), v.ReflectValue(vt)); return true })
 			return s
 		}
 	}

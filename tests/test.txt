@@ -58,7 +58,7 @@ end
 
 do
 	local arr = [1,2,3]
-	for i =0,len(arr) do
+	for i =0,#(arr) do
 	    assert( i+1 == arr[i])
 	end
 end
@@ -193,14 +193,14 @@ flag = "G_FLA" + "G"
 print(flag, {}, {a=2}, {{"a"}=2})
 
 function double(args...)
-    for i=0,len(args) do
+    for i=0,#(args) do
         args[i] = args[i] * 2
     end
     return args
 end
 
 x = double()
-assert(len(x) == 0)
+assert(#(x) == 0)
 x = double(1)
 assert(x[0] == 2)
 x = double(1, 2, 3)
@@ -208,7 +208,7 @@ assert(x[0] + x[1] + x[2] == 12)
 print(x)
 
 function double(k, args...)
-    for i=0,len(args) do
+    for i=0,#(args) do
         args[i] = args[i] * k
     end
     return args

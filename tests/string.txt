@@ -32,7 +32,7 @@ end
 function str.reverse()
 	x = str.buffer()
 	local s = this.chars()
-	for i=len(s)-1,-1,-1 do
+	for i=#(s)-1,-1,-1 do
 		x.write(s[i])
 	end
 	return x.value()

@@ -73,7 +73,7 @@ function pp(name, f, ident)
     if type(f) == "object" then
         if f.iscallable() then
             local d = f.doc()
-            print(ident, name, " ", d.trimleft(name))
+            print(ident, name, " ", d.trimprefix(name + "."))
             print()
         end
         for k, v in f do pp(name + "." + str(k), v, ident) end

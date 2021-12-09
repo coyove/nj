@@ -396,13 +396,13 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		return idx
 	}
 
-	Globals.Foreach(func(k, v Value) bool {
-		push(k.String(), v)
+	Globals.Foreach(func(k Value, v *Value) bool {
+		push(k.String(), *v)
 		return true
 	})
 
 	if opt != nil && opt.Globals != nil {
-		opt.Globals.Foreach(func(k, v Value) bool { push(k.String(), v); return true })
+		opt.Globals.Foreach(func(k Value, v *Value) bool { push(k.String(), *v); return true })
 	}
 
 	gi := push("PROGRAM", Nil)

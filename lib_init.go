@@ -48,7 +48,6 @@ func init() {
 		m := e.Object(0)
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
 	}, "$f(p: object) -> object")
-	Globals.SetMethod("len", func(e *Env) { e.A = Int(e.Get(0).Len()) }, "")
 	Globals.SetMethod("loadfile", func(e *Env) {
 		e.A = MustRun(LoadFile(e.Str(0), e.Global.Options))
 	}, "$f(path: string) -> value\n\tload and eval file at `path`, globals will be inherited in loaded file")
@@ -268,50 +267,6 @@ func init() {
 		SetMethod("mutex", func(e *Env) { e.A = ValueOf(&sync.Mutex{}) }, "$f() -> *go.sync.Mutex").
 		SetMethod("rwmutex", func(e *Env) { e.A = ValueOf(&sync.RWMutex{}) }, "$f() -> *go.sync.RWMutex").
 		SetMethod("waitgroup", func(e *Env) { e.A = ValueOf(&sync.WaitGroup{}) }, "$f() -> *go.sync.WaitGroup").
-		SetMethod("map", func(e *Env) {
-			fun := e.Object(1)
-			n, t := e.Get(2).Safe().Int(runtime.NumCPU()), e.Get(0)
-			if n < 1 || n > runtime.NumCPU()*1e3 {
-				internal.Panic("invalid number of goroutines: %v", n)
-			}
-			var wg = sync.WaitGroup{}
-			var in = make(chan [2]Value, t.Len())
-			var outLock = sync.Mutex{}
-			var outError error
-			_ = t.Type() == typ.Array && e.SetA(NewArray(make([]Value, t.Len())...).ToValue()) || e.SetA(NewObject(t.Len()).ToValue())
-			wg.Add(n)
-			for i := 0; i < n; i++ {
-				go func() {
-					defer wg.Done()
-					for p := range in {
-						if outError != nil {
-							return
-						}
-						res, err := e.Call2(fun, p[0], p[1])
-						if err != nil {
-							outError = err
-							return
-						}
-						outLock.Lock()
-						if e.A.Type() == typ.Array {
-							e.A.Array().Set(p[0].Int(), res)
-						} else {
-							e.A.Object().Set(p[0], res)
-						}
-						outLock.Unlock()
-					}
-				}()
-			}
-			if e.A.Type() == typ.Array {
-				t.Array().Foreach(func(k int, v Value) bool { in <- [2]Value{Int(k), v}; return true })
-			} else {
-				t.Object().Foreach(func(k, v Value) bool { in <- [2]Value{k, v}; return true })
-			}
-			close(in)
-			wg.Wait()
-			internal.PanicErr(outError)
-		}, "$f(a: object|array, f: function, n: int) -> object|array\n"+
-			"\tmap values in `a` into new values using `f(k, v)` concurrently on `n` goroutines (defaults to the number of CPUs)").
 		SetPrototype(StaticObjectProto).
 		ToValue())
 
@@ -433,26 +388,26 @@ func init() {
 		}, "object.$f() -> string\n\treturn object's name").
 		SetMethod("keys", func(e *Env) {
 			a := make([]Value, 0)
-			e.Object(-1).Foreach(func(k, v Value) bool { a = append(a, k); return true })
+			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, k); return true })
 			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> array").
 		SetMethod("values", func(e *Env) {
 			a := make([]Value, 0)
-			e.Object(-1).Foreach(func(k, v Value) bool { a = append(a, v); return true })
+			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, *v); return true })
 			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> array").
 		SetMethod("items", func(e *Env) {
 			a := make([]Value, 0)
-			e.Object(-1).Foreach(func(k, v Value) bool { a = append(a, NewArray(k, v).ToValue()); return true })
+			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, NewArray(k, *v).ToValue()); return true })
 			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> [[value, value]]\n\treturn as [[key1, value1], [key2, value2], ...]").
 		SetMethod("foreach", func(e *Env) {
 			f := e.Object(0)
-			e.Object(-1).Foreach(func(k, v Value) bool { return e.Call(f, k, v) == Nil })
+			e.Object(-1).Foreach(func(k Value, v *Value) bool { return e.Call(f, k, *v) != False })
 		}, "object.$f(f: function)").
 		SetMethod("find", func(e *Env) {
 			found, b := false, e.Get(0)
-			e.Object(-1).Foreach(func(k, v Value) bool { found = v.Equal(b); return !found })
+			e.Object(-1).Foreach(func(k Value, v *Value) bool { found = v.Equal(b); return !found })
 			e.A = Bool(found)
 		}, "object.$f(val: value) -> bool").
 		SetMethod("contains", func(e *Env) {
@@ -460,7 +415,7 @@ func init() {
 		}, "object.$f(key: value) -> bool").
 		SetMethod("merge", func(e *Env) {
 			e.A = e.Object(-1).Merge(e.Object(0)).ToValue()
-		}, "object.$f(o: object)\n\tmerge elements from `o` to this").
+		}, "object.$f(o: object)\n\tmerge elements from `o`").
 		SetMethod("tostring", func(e *Env) {
 			p := &bytes.Buffer{}
 			e.Object(-1).rawPrint(p, 0, typ.MarshalToJSON, true)
@@ -484,7 +439,7 @@ func init() {
 	*FuncProto = *NamedObject("function", 0).
 		SetMethod("doc", func(e *Env) {
 			o := e.Object(-1)
-			_ = !o.IsCallable() && e.SetA(Nil) || e.SetA(Str(strings.Replace(o.Callable.DocString, "$f", o.Callable.Name, -1)))
+			e.A = Str(strings.Replace(o.Callable.DocString, "$f", o.Callable.Name, -1))
 		}, "function.$f() -> string\n\treturn function documentation").
 		SetMethod("apply", func(e *Env) {
 			e.A = CallObject(e.Object(-1), e, nil, e.Get(0), e.Stack()[1:]...)
@@ -537,6 +492,50 @@ func init() {
 				}, "").
 				ToValue()
 		}, "function.$f(args...: value) -> Goroutine\n\texecute `f` in goroutine").
+		SetMethod("multimap", func(e *Env) {
+			fun := e.Object(-1)
+			n, t := e.Get(1).Safe().Int(runtime.NumCPU()), e.Get(0)
+			if n < 1 || n > runtime.NumCPU()*1e3 {
+				internal.Panic("invalid number of goroutines: %v", n)
+			}
+			var in = make(chan [2]Value, t.Len())
+			var wg sync.WaitGroup
+			var outLock sync.Mutex
+			var outError error
+			_ = t.Type() == typ.Array && e.SetA(NewArray(make([]Value, t.Len())...).ToValue()) || e.SetA(NewObject(t.Len()).ToValue())
+			wg.Add(n)
+			for i := 0; i < n; i++ {
+				go func() {
+					defer wg.Done()
+					for p := range in {
+						if outError != nil {
+							return
+						}
+						res, err := e.Call2(fun, p[0], p[1])
+						if err != nil {
+							outError = err
+							return
+						}
+						outLock.Lock()
+						if e.A.Type() == typ.Array {
+							e.A.Array().Set(p[0].Int(), res)
+						} else {
+							e.A.Object().Set(p[0], res)
+						}
+						outLock.Unlock()
+					}
+				}()
+			}
+			if e.A.Type() == typ.Array {
+				t.Array().Foreach(func(k int, v Value) bool { in <- [2]Value{Int(k), v}; return true })
+			} else {
+				t.Object().Foreach(func(k Value, v *Value) bool { in <- [2]Value{k, *v}; return true })
+			}
+			close(in)
+			wg.Wait()
+			internal.PanicErr(outError)
+		}, "function.$f(a: object|array, n?: int) -> object|array\n"+
+			"\tmap values in `a` into new values using `f(k, v)` concurrently on `n` goroutines (defaults to the number of CPUs)").
 		SetPrototype(&ObjectProto)
 
 	Globals.SetProp("object", ObjectProto.ToValue())
@@ -819,7 +818,7 @@ func init() {
 			win := runtime.GOOS == "windows"
 			p := exec.Command(ifstr(win, "cmd", "sh"), ifstr(win, "/c", "-c"), e.Str(0))
 			opt := e.Get(1).Safe().Object()
-			opt.Prop("env").Safe().Object().Foreach(func(k, v Value) bool {
+			opt.Prop("env").Safe().Object().Foreach(func(k Value, v *Value) bool {
 				p.Env = append(p.Env, k.String()+"="+v.String())
 				return true
 			})

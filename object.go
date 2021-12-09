@@ -244,12 +244,12 @@ func (m *Object) setHash(incoming hashItem) (prev Value) {
 	}
 }
 
-func (m *Object) Foreach(f func(k, v Value) bool) {
+func (m *Object) Foreach(f func(k Value, v *Value) bool) {
 	if m == nil {
 		return
 	}
 	for _, p := range m.items {
-		if p.Key != Nil && !f(p.Key, p.Val) {
+		if p.Key != Nil && !f(p.Key, &p.Val) {
 			return
 		}
 	}
@@ -307,7 +307,7 @@ func (m *Object) rawPrint(p *bytes.Buffer, lv int, j typ.MarshalType, showProto 
 		}
 		p.WriteString("{")
 	}
-	m.Foreach(func(k, v Value) bool {
+	m.Foreach(func(k Value, v *Value) bool {
 		k.toString(p, lv+1, j)
 		p.WriteString(ifstr(j == typ.MarshalToJSON, ":", "="))
 		v.toString(p, lv+1, j)
@@ -353,7 +353,7 @@ func (m *Object) Copy() *Object {
 func (m *Object) Merge(src *Object) *Object {
 	if src != nil && src.Len() > 0 {
 		m.resizeHash((m.Len()+src.Len())*2 + 1)
-		src.Foreach(func(k, v Value) bool { m.Set(k, v); return true })
+		src.Foreach(func(k Value, v *Value) bool { m.Set(k, *v); return true })
 	}
 	return m
 }
