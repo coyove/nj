@@ -251,6 +251,7 @@ var flatOpMapping = map[string]byte{
 	parser.AInc:     typ.OpInc,
 	parser.ANext:    typ.OpNext,
 	parser.ALen:     typ.OpLen,
+	parser.AIs:      typ.OpIsProto,
 }
 
 func (table *symTable) writeInst(op byte, n0, n1 parser.Node) {

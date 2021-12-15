@@ -30,7 +30,10 @@ const Version int64 = 362
 var (
 	ObjectProto       Object
 	StaticObjectProto = NewObject(0)
+	BoolProto         = NewObject(0)
 	StrProto          = NewObject(0)
+	IntProto          = NewObject(0)
+	FloatProto        = NewObject(0)
 	FuncProto         = NewObject(0)
 	ArrayProto        = NewObject(0)
 	ErrorProto        = NewObject(0)
@@ -150,7 +153,9 @@ func init() {
 		}
 	}, "$f(v: value)\n\tpanic when value is falsy\n"+
 		"$f(v1: value, v2: value, msg?: string)\n\tpanic when two values are not equal")
-	Globals.SetMethod("int", func(e *Env) {
+	*BoolProto = *Func("bool", func(e *Env) { e.A = Bool(e.Get(0).IsTrue()) }, "$f(v: value) -> bool").Object()
+	Globals.SetProp("bool", BoolProto.ToValue())
+	*IntProto = *Func("int", func(e *Env) {
 		if v := e.Get(0); v.Type() == typ.Number {
 			e.A = Int64(v.Int64())
 		} else {
@@ -158,8 +163,9 @@ func init() {
 			internal.PanicErr(err)
 			e.A = Int64(v)
 		}
-	}, "$f(v: value, base?: int) -> int\n\tconvert `v` to an integer number, panic when failed or overflowed")
-	Globals.SetMethod("float", func(e *Env) {
+	}, "$f(v: value, base?: int) -> int\n\tconvert `v` to an integer number, panic when failed or overflowed").Object()
+	Globals.SetProp("int", IntProto.ToValue())
+	*FloatProto = *Func("float", func(e *Env) {
 		if v := e.Get(0); v.Type() == typ.Number {
 			e.A = v
 		} else if v := parser.Num(v.String()); v.Type() == parser.FLOAT {
@@ -167,7 +173,8 @@ func init() {
 		} else {
 			e.A = Int64(v.Int64())
 		}
-	}, "$f(v: value) -> number\n\tconvert `v` to a float number, panic when failed")
+	}, "$f(v: value) -> number\n\tconvert `v` to a float number, panic when failed").Object()
+	Globals.SetProp("float", FloatProto.ToValue())
 	Globals.SetMethod("print", func(env *Env) {
 		for _, a := range env.Stack() {
 			fmt.Fprint(env.Global.Stdout, a.String())

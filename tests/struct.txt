@@ -105,6 +105,7 @@ obj = new(cls, v='obj')
 obj2 = new(cls2, v='obj')
 assert((obj).__str(), 'obj')
 assert((obj2).__str(), 'obj2')
+assert(obj2 is cls)
 print(obj2)
 
 t = {a=1, b=2}

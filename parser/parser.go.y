@@ -28,7 +28,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TLambda TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot TLParen
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TLambda TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot TLParen TIs
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString TIDiv
@@ -46,6 +46,7 @@ package parser
 %left TLsh TRsh TURsh 
 %left '+' '-' 
 %left '*' '/' '%' TIDiv
+%left TIs
 %right UNARY /* not # -(unary) */
 
 %% 
@@ -230,6 +231,7 @@ expr:
     expr TLsh expr                    { $$ = Nodes((SBitLsh), $1,$3).At($2) } |
     expr TRsh expr                    { $$ = Nodes((SBitRsh), $1,$3).At($2) } |
     expr TURsh expr                   { $$ = Nodes((SBitURsh), $1,$3).At($2) } |
+    expr TIs expr                     { $$ = Nodes((SIs), $1,$3).At($2) } |
     '~' expr %prec UNARY              { $$ = Nodes((SBitNot), $2).At($1) } |
     '#' expr %prec UNARY              { $$ = Nodes((SLen), $2).At($1) } |
     TNot expr %prec UNARY             { $$ = Nodes((SNot), $2).At($1) } |

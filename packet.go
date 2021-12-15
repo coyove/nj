@@ -110,6 +110,7 @@ var (
 		typ.OpBitRsh:  parser.ABitRsh,
 		typ.OpBitURsh: parser.ABitURsh,
 		typ.OpNext:    parser.ANext,
+		typ.OpIsProto: parser.AIs,
 	}
 	uOp = map[byte]string{
 		typ.OpBitNot:     parser.ABitNot,

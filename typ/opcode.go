@@ -35,5 +35,6 @@ const (
 	OpCreateObject
 	OpCall
 	OpTailCall
+	OpIsProto
 	OpRet
 )

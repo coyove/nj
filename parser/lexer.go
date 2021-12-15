@@ -237,6 +237,7 @@ var reservedWords = map[string]uint32{
 	"do":       TDo,
 	"in":       TIn,
 	"goto":     TGoto,
+	"is":       TIs,
 }
 
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
