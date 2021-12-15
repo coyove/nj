@@ -364,7 +364,7 @@ func (a *Array) ForeachIndex(f func(k int, v Value) bool) {
 
 func (a *Array) Foreach(f func(k Value, v *Value) bool) {
 	if a.meta != internalArrayMeta {
-		internal.Panic("can't iterate typed array using untyped foreach")
+		internal.Panic("can't iterate typed array using untyped foreach, use ForeachIndex instead")
 	}
 	for i := 0; i < a.Len(); i++ {
 		if !f(Int(i), &a.internal[i]) {

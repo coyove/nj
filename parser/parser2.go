@@ -71,7 +71,7 @@ var (
 	ALabel, SLabel       = "label", staticSym("label")
 	AGoto, SGoto         = "goto", staticSym("goto")
 	AUnpack, SUnpack     = "unpack", staticSym("unpack")
-	AIs, SIs             = "is", staticSym("is")
+	AIs, SIs             = "isproto", staticSym("isproto")
 )
 
 func __chain(args ...Node) Node { return Nodes(append([]Node{SBegin}, args...)...) }

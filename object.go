@@ -88,11 +88,21 @@ func (m *Object) Len() int {
 }
 
 // Clear clears all keys in the object, where already allocated memory will be reused.
-func (m *Object) Clear() { m.items = m.items[:0]; m.count = 0 }
+func (m *Object) Clear() {
+	for i := range m.items {
+		m.items[i] = hashItem{}
+	}
+	m.count = 0
+}
 
-func (m *Object) Prop(k string) (v Value) { return m.Get(Str(k)) }
+func (m *Object) Prop(k string) (v Value) {
+	return m.Get(Str(k))
+}
 
-func (m *Object) SetProp(k string, v Value) *Object { m.Set(Str(k), v); return m }
+func (m *Object) SetProp(k string, v Value) *Object {
+	m.Set(Str(k), v)
+	return m
+}
 
 func (m *Object) SetMethod(k string, v func(*Env), d string) *Object {
 	m.Set(Str(k), Func(k, v, d))

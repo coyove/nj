@@ -499,6 +499,7 @@ func init() {
 		SetPrototype(&ObjectProto)
 
 	Globals.SetProp("object", ObjectProto.ToValue())
+	Globals.SetProp("staticobject", StaticObjectProto.ToValue())
 	Globals.SetProp("func", FuncProto.ToValue())
 
 	*ArrayProto = *NamedObject("array", 0).
