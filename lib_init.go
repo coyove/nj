@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -560,11 +561,15 @@ func init() {
 			e.Array(-1).Concat(e.Array(0))
 		}, "array.$f(a: array) -> array\n\tconcat two arrays").
 		SetMethod("sort", func(e *Env) {
-			// a, rev := e.Array(-1), e.Get(0).IsTrue()
-			// sort.Slice(a.Unwrap(), func(i, j int) bool {
-			// 	a.Get(i)
-			// })
-		}, "array.$f(reverse?: bool)\n\tconcat two arrays").
+			a, rev := e.Array(-1), e.Get(0).IsTrue()
+			if kf := e.Get(1); kf.IsCallable() {
+				sort.Slice(a.Unwrap(), func(i, j int) bool {
+					return Less(e.Call(kf.Object(), a.Get(i)), e.Call(kf.Object(), a.Get(j))) != rev
+				})
+			} else {
+				sort.Slice(a.Unwrap(), func(i, j int) bool { return Less(a.Get(i), a.Get(j)) != rev })
+			}
+		}, "array.$f(reverse?: bool, key?: function)\n\tsort array elements").
 		SetMethod("istyped", func(e *Env) {
 			e.A = Bool(e.Array(-1).meta != internalArrayMeta)
 		}, "array.$f() -> bool").

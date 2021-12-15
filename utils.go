@@ -307,3 +307,20 @@ func lessStr(a, b Value) bool {
 	}
 	return a.Str() < b.Str()
 }
+
+func Less(a, b Value) bool {
+	at, bt := a.Type(), b.Type()
+	if at != bt {
+		return at < bt
+	}
+	switch at {
+	case typ.Number:
+		if a.IsInt64() && b.IsInt64() {
+			return a.unsafeInt() < b.unsafeInt()
+		}
+		return a.Float64() < b.Float64()
+	case typ.String:
+		return lessStr(a, b)
+	}
+	return a.ptr() < b.ptr()
+}
