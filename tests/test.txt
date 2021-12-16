@@ -98,7 +98,7 @@ function callstr(a)
     return a + "a"
 end
 
-assert(callstr"a" == "aa")
+assert(callstr("a") == "aa")
 
 a = 0
 assert(a == 0)

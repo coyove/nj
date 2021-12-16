@@ -3,6 +3,7 @@ package parser
 import (
 	"math/rand"
 	"strconv"
+	"strings"
 	"unsafe"
 )
 
@@ -102,15 +103,28 @@ func __label(name Node) Node { return Nodes(SLabel, name) }
 
 func __ret(v Node) Node { return Nodes(SReturn, v) }
 
-func __func(name Token, pp Node, stats Node) Node {
+func __func(name Token, paramList Node, stats Node) Node {
 	__findTailCall(stats.Nodes())
 	funcname := Sym(name)
-	p := name
-	paramList := pp.Nodes()[0]
+	docString := name.Str + "("
+	for _, p := range paramList.Nodes() {
+		if p.Type() == SYM {
+			docString += p.Sym() + ","
+		} else {
+			docString += p.Nodes()[1].Sym() + "..."
+		}
+	}
+	docString = strings.TrimSuffix(docString, ",") + ")"
+
+	// [chain "doc string" ...]
+	if len(stats.Nodes()) > 1 {
+		if first := stats.Nodes()[1]; first.Type() == STR {
+			docString += "\n" + first.Str()
+		}
+	}
 	return __chain(
-		__set(funcname, SNil).At(p),
-		__move(funcname,
-			Nodes((SFunc), funcname, paramList, stats, pp.Nodes()[1]).At(p)).At(p),
+		__set(funcname, SNil).At(name),
+		__move(funcname, Nodes(SFunc, funcname, paramList, stats, Str(docString)).At(name)).At(name),
 	)
 }
 

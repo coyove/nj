@@ -19,7 +19,6 @@ package parser
 %type<expr> jmp_stat
 %type<expr> func_stat
 %type<expr> func_params
-%type<expr> func_docstring
 %type<expr> comma
 
 %union {
@@ -172,15 +171,12 @@ func_stat:
     TFunc TIdent '.' TIdent func_params stats TEnd { $$ = __store(Sym($2), Str($4.Str), __func(__markupFuncName($2, $4), $5, $6)) }
 
 func_params:
-    TLParen ')' func_docstring                       { $$ = Nodes(emptyNode, $3) } | 
-    TLParen ident_list ')' func_docstring            { $$ = Nodes($2, $4) } |
-    TLParen ident_list TDotDotDot ')' func_docstring { $$ = Nodes(__dotdotdot($2), $5) } |
-    '(' ')' func_docstring                           { $$ = Nodes(emptyNode, $3) } | 
-    '(' ident_list ')' func_docstring                { $$ = Nodes($2, $4) } |
-    '(' ident_list TDotDotDot ')' func_docstring     { $$ = Nodes(__dotdotdot($2), $5) }
-
-func_docstring:
-    { $$ = nullStr } | TString { $$ = Str($1.Str) }
+    TLParen ')'                        { $$ = emptyNode } | 
+    TLParen ident_list ')'             { $$ = $2 } |
+    TLParen ident_list TDotDotDot ')'  { $$ = __dotdotdot($2) } |
+    '(' ')'                            { $$ = emptyNode } | 
+    '(' ident_list ')'                 { $$ = $2 } |
+    '(' ident_list TDotDotDot ')'      { $$ = __dotdotdot($2) }
 
 jmp_stat:
     TBreak               { $$ = Nodes(SBreak).At($1) } |
@@ -206,7 +202,6 @@ expr:
     prefix_expr                       { $$ = $1 } |
     TLambda func_params stats TEnd    { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
     TNumber                           { $$ = Num($1.Str) } |
-    TString                           { $$ = Str($1.Str) } |
     '[' ']'                           { $$ = Nodes(SArray, emptyNode).At($1) } |
     '{' '}'                           { $$ = Nodes(SObject, emptyNode).At($1) } |
     '[' expr_list comma ']'           { $$ = Nodes(SArray, $2).At($1) } |
@@ -239,9 +234,9 @@ expr:
     '+' expr %prec UNARY              { $$ = Nodes((SAdd), zero, $2).At($1) }
 
 prefix_expr:
+    TString                                            { $$ = Str($1.Str) } |
     '(' expr ')'                                       { $$ = $2 } |
     declarator                                         { $$ = $1 } |
-    prefix_expr TString                                { $$ = __call($1, Nodes(Str($2.Str))).At($2) } |
     prefix_expr TLParen ')'                            { $$ = __call($1, emptyNode).At($2) } |
     prefix_expr TLParen expr_list comma ')'            { $$ = __call($1, $3).At($2) } |
     prefix_expr TLParen expr_assign_list comma ')'     { $$ = __call($1, Nodes(Nodes(SObject, $3).At($2))).At($2) } |
