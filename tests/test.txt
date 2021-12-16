@@ -1,5 +1,14 @@
 assert(G == "test")
 
+assert(-1, -1)
+assert(([1,0,2])[1]-1, -1)
+assert(({a=0}).a-1, -1)
+assert((0)-1, -1)
+assert((2)+-1, 1)
+assert(({a=-1}).a, -1)
+a = 1
+assert(a-2, -1)
+
 do
 	local j = { a= 1, b= 2, array=[1, 2, {inner="inner"}]}
 	-- assert(json('{"a":1}', "a") == 1)
@@ -157,7 +166,7 @@ assert( 1 /2+ 2.5 * (a + 1) * 5 == 38)
 assert((a + 1) % 2 == 1)
 assert(math.mod(a + 1.25, 2) == 1.25)
 assert(math.remainder(a + 1.25, 2) == -0.75)
-assert(math.mod(- a - 1.25, 2) == -1.25)
+assert(math.mod((- a) - 1.25, 2) == -1.25)
 
 do
     local mark = 0

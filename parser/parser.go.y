@@ -27,7 +27,7 @@ package parser
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TLambda TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot TLParen TIs
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TLambda TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot TLParen TLBracket TIs
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString TIDiv
@@ -76,7 +76,7 @@ stat:
     ';'            { $$ = emptyNode }
 
 assign_stat:
-    prefix_expr {
+    expr {
         $$ = $1
     } | 
     TLocal ident_list {
@@ -194,18 +194,13 @@ jmp_stat:
     }
 
 declarator:
-    TIdent                   { $$ = Sym($1) } |
-    prefix_expr '[' expr ']' { $$ = __load($1, $3).At($2) } |
-    prefix_expr '.' TIdent   { $$ = __load($1, Str($3.Str)).At($2) } 
+    TIdent                         { $$ = Sym($1) } |
+    prefix_expr TLBracket expr ']' { $$ = __load($1, $3).At($2) } |
+    prefix_expr '.' TIdent         { $$ = __load($1, Str($3.Str)).At($2) } 
 
 expr:
     prefix_expr                       { $$ = $1 } |
-    TLambda func_params stats TEnd    { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
     TNumber                           { $$ = Num($1.Str) } |
-    '[' ']'                           { $$ = Nodes(SArray, emptyNode).At($1) } |
-    '{' '}'                           { $$ = Nodes(SObject, emptyNode).At($1) } |
-    '[' expr_list comma ']'           { $$ = Nodes(SArray, $2).At($1) } |
-    '{' expr_assign_list comma'}'     { $$ = Nodes(SObject, $2).At($1) } |
     expr TOr expr                     { $$ = Nodes((SOr), $1,$3).At($2) } |
     expr TAnd expr                    { $$ = Nodes((SAnd), $1,$3).At($2) } |
     expr '>' expr                     { $$ = Nodes((SLess), $3,$1).At($2) } |
@@ -229,13 +224,17 @@ expr:
     expr TIs expr                     { $$ = Nodes((SIs), $1,$3).At($2) } |
     '~' expr %prec UNARY              { $$ = Nodes((SBitNot), $2).At($1) } |
     '#' expr %prec UNARY              { $$ = Nodes((SLen), $2).At($1) } |
-    TNot expr %prec UNARY             { $$ = Nodes((SNot), $2).At($1) } |
-    '-' expr %prec UNARY              { $$ = Nodes((SSub), zero, $2).At($1) } |
-    '+' expr %prec UNARY              { $$ = Nodes((SAdd), zero, $2).At($1) }
+    TNot expr %prec UNARY             { $$ = Nodes((SNot), $2).At($1) }
 
 prefix_expr:
+    TLambda func_params stats TEnd    { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
     TString                                            { $$ = Str($1.Str) } |
     '(' expr ')'                                       { $$ = $2 } |
+    '(' '-' expr ')'                                   { $$ = Nodes(SSub, zero, $3).At($1) } |
+    '[' ']'                           { $$ = Nodes(SArray, emptyNode).At($1) } |
+    '{' '}'                           { $$ = Nodes(SObject, emptyNode).At($1) } |
+    '[' expr_list comma ']'           { $$ = Nodes(SArray, $2).At($1) } |
+    '{' expr_assign_list comma'}'     { $$ = Nodes(SObject, $2).At($1) } |
     declarator                                         { $$ = $1 } |
     prefix_expr TLParen ')'                            { $$ = __call($1, emptyNode).At($2) } |
     prefix_expr TLParen expr_list comma ')'            { $$ = __call($1, $3).At($2) } |

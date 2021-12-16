@@ -24,7 +24,6 @@ var (
 	zero      = Int(0)
 	one       = Int(1)
 	emptyNode = Nodes()
-	nullStr   = Str("")
 )
 
 var (

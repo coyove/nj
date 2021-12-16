@@ -26,6 +26,7 @@ func init() {
 		update(int(idx), name)
 	}
 	update(TLParen, "'('")
+	update(TLBracket, "'['")
 	update(TLsh, "'<<'")
 	update(TRsh, "'>>'")
 	update(TURsh, "'>>>'")
@@ -111,6 +112,17 @@ func (sc *Scanner) Next() uint32 {
 		sc.Pos.Column++
 	}
 	return ch
+}
+
+func (sc *Scanner) isLastTokenSymbolClosed() bool {
+	last := sc.lastToken
+	// foo(... foo()(... foo[bar](...
+	// arr[... arr()[... arr[bar][...
+	return last.Type == TEnd || last.Type == TIdent || last.Type == ')' || last.Type == ']'
+}
+
+func (sc *Scanner) isLastTokenSymbolOrNumberClosed() bool {
+	return sc.isLastTokenSymbolClosed() || sc.lastToken.Type == TNumber
 }
 
 func (sc *Scanner) skipComments() {
@@ -299,7 +311,7 @@ skipspaces:
 		case EOF:
 			tok.Type = EOF
 		case '-':
-			if sc.Peek() == '-' {
+			if p := sc.Peek(); p == '-' {
 				sc.Next()
 				if sc.Peek() == '[' {
 					sc.Next()
@@ -312,6 +324,11 @@ skipspaces:
 				}
 				sc.skipComments()
 				goto redo
+			} else if numberChars[byte(p)] && (metSpaces || !sc.isLastTokenSymbolOrNumberClosed()) {
+				// "n -1" are two statements, "n-1" is a substract expression
+				tok.Type = TNumber
+				tok.Str = sc.scanNumber()
+				goto finally
 			}
 			tok.Type = ch
 			tok.Str = "-"
@@ -324,7 +341,13 @@ skipspaces:
 				tok.Type = TString
 				tok.Str, err = sc.scanBlockString()
 			} else {
-				tok.Type = ch
+				if (sc.isLastTokenSymbolClosed() ||
+					sc.lastToken.Type == TString) && // TString in prefix_expr
+					!metSpaces {
+					tok.Type = TLBracket
+				} else {
+					tok.Type = ch
+				}
 				tok.Str = "["
 			}
 		case '=', '!', '~', '<', '>':
@@ -368,9 +391,7 @@ skipspaces:
 				tok.Str = "."
 			}
 		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|', '@', '&':
-			last := sc.lastToken
-			call := last.Type == TIdent || last.Type == ')' || last.Type == ']' // 3 cases: foo(... foo()(... foo[bar](...
-			if ch == '(' && call && !metSpaces {
+			if ch == '(' && sc.isLastTokenSymbolClosed() && !metSpaces {
 				tok.Type = TLParen
 				tok.Str = "("
 			} else {

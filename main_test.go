@@ -397,7 +397,7 @@ return [a + add(), a + add(), a + add()]
 func TestNumberLexer(t *testing.T) {
 	assert := func(src string, v Value) {
 		_, fn, ln, _ := runtime.Caller(1)
-		r := MustRun(LoadString("return "+src, nil))
+		r := MustRun(LoadString(src, nil))
 		if r != v {
 			t.Fatal(fn, ln, r, v)
 		}
@@ -406,7 +406,11 @@ func TestNumberLexer(t *testing.T) {
 	assert("1+ 2 ", Int64(3))
 	assert("-1+ 2 ", Int64(1))
 	assert("1- 2 ", Int64(-1))
+	assert("(1+1)- 2 ", Zero)
 	assert("1 - 2 ", Int64(-1))
+	assert("1 - -2 ", Int64(3))
+	assert("1- -2 ", Int64(3))
+	assert("1-2 ", Int64(-1))
 	assert("1.5 +2", Float64(3.5))
 	assert("1.5+ 2 ", Float64(3.5))
 	assert("12.5e-1+ 2 ", Float64(3.25))
@@ -417,6 +421,16 @@ func TestNumberLexer(t *testing.T) {
 	assert("0xE+1 ", Int64(15))
 	assert(".5E+1 ", Int64(5))
 	assert("0x1_2_e+1", Int64(0x12f))
+	assert("([[1]])[0]", Int(49))
+	assert("'1'[0]", Int(49))
+	assert("([ [1] ])[0][0]", Int(1))
+	assert("([ [1]])[0][0]", Int(1))
+	assert("[0,1,2][1]", Int(1))
+	assert("[[%d]]['format'](1)", Str("1"))
+	assert("lambda()end (1)", Int(1))
+	assert("lambda()end [1][0]", Int(1))
+	assert("lambda()1 end()", Int(1))
+	assert("lambda() -1 end()", Int(-1))
 }
 
 func TestSmallString(t *testing.T) {
