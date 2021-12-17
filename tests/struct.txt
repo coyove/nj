@@ -3,9 +3,7 @@ function makecls(f, c)
         o = debug.self()
         return o._f(o._c, x...)
     end.copy()
-    b = {_f=f, _c=c}
-    b.setproto(func)
-    a.setproto(b)
+    a.setproto({_f=f, _c=c}['setproto'](func))
     return a
 end
 
@@ -15,6 +13,7 @@ assert(a(1), 1)
 assert(b(2), 2)
 assert(a(1), 2)
 assert(b(2), 4)
+assert(a is callable)
 
 timer = {}
 function timer.reset()
@@ -91,13 +90,13 @@ assert(worker.map([0], os.numcpus)[0] == 'finished')
 
 -- closure
 function foo(a)
-    return closure(lambda(a, b)
-        return closure(lambda(m, c)
-            m.a = m.a + 1
-            if c == 6 then panic(m.a + m.b + c) end
-            return m.a + m.b + c
-        end, a=a, b=b)
-    end, a)
+    return lambda(a, b)
+        return lambda(ab, c)
+            ab.a = ab.a + 1
+            if c == 6 then panic(ab.a + ab.b + c) end
+            return ab.a + ab.b + c
+        end.closure(a=a, b=b)
+    end.closure(a)
 end
 bar = foo(2)(3)
 assert(bar(4), 10)
@@ -127,7 +126,7 @@ assert(obj2 is cls)
 print(obj2)
 
 t = {a=1, b=2}
-t2 = t.copy()
+t2 = t.copy(true)
 t.b =3
 assert(t2.b, 2)
 

@@ -68,23 +68,6 @@ func init() {
 		internal.PanicErr(err)
 		_ = opts.Prop("returnglobals").IsTrue() && e.SetA(p.LocalsObject().ToValue()) || e.SetA(v)
 	}, "$f(code: string, options?: object) -> value\n\tevaluate `code` and return the reuslt")
-	Globals.SetMethod("closure", func(e *Env) {
-		lambda := e.Object(0)
-		e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
-			o := e.Native.Object
-			f := o.Prop("_l").Object()
-			stk := append([]Value{o.Prop("_c")}, e.Stack()...)
-			e.A = e.Call(f, stk...)
-		}, "").Object().
-			SetPrototype(
-				NewObject(2).
-					SetProp("_l", e.Get(0)).
-					SetProp("_c", e.Get(1)).
-					SetPrototype(FuncProto),
-			).ToValue()
-	}, "$f(f: function, v: value) -> function\n"+
-		"\tcreate a function out of `f`, when it is called, `v` will be injected into as the first argument:\n"+
-		"\t\tclosure(f, v)(args...) <=> f(v, args...)")
 
 	// Debug libraries
 	Globals.SetProp("debug", NamedObject("debug", 0).
@@ -92,13 +75,21 @@ func init() {
 			e.A = e.CS.Object.ToValue()
 		}, "").
 		SetMethod("locals", func(e *Env) {
-			var r []Value
 			start := e.stackOffset - uint32(e.CS.StackSize)
-			for i, name := range e.CS.Locals {
-				idx := start + uint32(i)
-				r = append(r, Int64(int64(idx)), Str(name), (*e.stack)[idx])
+			if e.Get(0).IsTrue() {
+				r := NewObject(0)
+				for i, name := range e.CS.Locals {
+					r.SetProp(name, (*e.stack)[start+uint32(i)])
+				}
+				e.A = r.ToValue()
+			} else {
+				var r []Value
+				for i, name := range e.CS.Locals {
+					idx := start + uint32(i)
+					r = append(r, Int64(int64(idx)), Str(name), (*e.stack)[idx])
+				}
+				e.A = NewArray(r...).ToValue()
 			}
-			e.A = NewArray(r...).ToValue()
 		}, "$f() -> array\n\treturn [index1, name1, value1, i2, n2, v2, i3, n3, v3, ...]").
 		SetMethod("globals", func(e *Env) {
 			var r []Value
@@ -376,8 +367,8 @@ func init() {
 		}, "object.$f(k: value) -> value\n\tdelete value and return previous value").
 		SetMethod("clear", func(e *Env) { e.Object(-1).Clear() }, "object.$f()").
 		SetMethod("copy", func(e *Env) {
-			e.A = e.Object(-1).Copy().ToValue()
-		}, "object.$f() -> object\n\tcopy the object").
+			e.A = e.Object(-1).Copy(e.Get(0).IsTrue()).ToValue()
+		}, "object.$f(copydata?: bool) -> object\n\tcopy the object (and its key-value data if flag is set)").
 		SetMethod("proto", func(e *Env) {
 			e.A = e.Object(-1).Prototype().ToValue()
 		}, "object.$f() -> object\n\treturn object's prototype if any").
@@ -429,7 +420,7 @@ func init() {
 			e.A = UnsafeStr(p.Bytes())
 		}, "object.$f() -> string\n\tprint raw elements in object").
 		SetMethod("pure", func(e *Env) {
-			m2 := *e.Object(-1)
+			m2 := e.Object(-1).Copy(false)
 			e.A = m2.SetPrototype(&ObjectProto).ToValue()
 		}, "object.$f() -> object\n\treturn a new object which shares all data from the original, but with no prototype").
 		SetMethod("next", func(e *Env) {
@@ -504,11 +495,30 @@ func init() {
 		}, "function.$f(a: object|array, n?: int) -> object|array\n"+
 			"\tmap values in `a` into new values using `f(k, v)`,\n"+
 			"\tsetting `n` higher than 1 will spread the load to n workers").
+		SetMethod("closure", func(e *Env) {
+			lambda := e.Object(-1)
+			c := e.CopyStack()
+			e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
+				o := e.Native.Object
+				f := o.Prop("_l").Object()
+				stk := append(o.Prop("_c").Array().Values(), e.Stack()...)
+				e.A = e.Call(f, stk...)
+			}, "").Object().
+				SetPrototype(
+					NewObject(2).
+						SetProp("_l", lambda.ToValue()).
+						SetProp("_c", NewArray(c...).ToValue()).
+						SetPrototype(FuncProto),
+				).ToValue()
+		}, "function.$f(args...: value) -> function\n"+
+			"\tcreate a closure, when it is called, `args` will be prepended to the argument list:\n"+
+			"\t\tf.closure(a1, a2, ...)(args...) <=> f(a1, a2, ..., args...)").
 		SetPrototype(&ObjectProto)
 
 	Globals.SetProp("object", ObjectProto.ToValue())
 	Globals.SetProp("staticobject", StaticObjectProto.ToValue())
 	Globals.SetProp("func", FuncProto.ToValue())
+	Globals.SetProp("callable", FuncProto.ToValue())
 
 	*ArrayProto = *NamedObject("array", 0).
 		SetMethod("make", func(e *Env) {

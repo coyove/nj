@@ -118,7 +118,7 @@ func (sc *Scanner) isLastTokenSymbolClosed() bool {
 	last := sc.lastToken
 	// foo(... foo()(... foo[bar](...
 	// arr[... arr()[... arr[bar][...
-	return last.Type == TEnd || last.Type == TIdent || last.Type == ')' || last.Type == ']'
+	return last.Type == TEnd || last.Type == TIdent || last.Type == ')' || last.Type == ']' || last.Type == '}'
 }
 
 func (sc *Scanner) isLastTokenSymbolOrNumberClosed() bool {

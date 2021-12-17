@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -21,6 +22,7 @@ var (
 	output    = flag.String("o", "ret", "separated by comma: (none|compileonly|opcode|bytes|ret|timing)+")
 	input     = flag.String("i", "f", "input source, 'f': file, '-': stdin, others: string")
 	version   = flag.Bool("v", false, "print version and usage")
+	repl      = flag.Bool("repl", false, "repl mode")
 	timeout   = flag.Int("t", 0, "max execution time in ms")
 	stackSize = flag.Int("ss", 1e6, "max stack size (counted by 16 bytes)")
 	apiServer = flag.String("serve", "", "start as language playground")
@@ -43,6 +45,10 @@ func main() {
 		log.Println("listen", *apiServer)
 		http.ListenAndServe(*apiServer, nil)
 		return
+	}
+
+	if *repl {
+		runRepl()
 	}
 
 	log.SetFlags(0)
@@ -142,5 +148,37 @@ func main() {
 	if _ret {
 		fmt.Print(i)
 		fmt.Print(" ", err, "\n")
+	}
+}
+
+func runRepl() {
+	var code []string
+	var globals *nj.Object
+	rd := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("> ")
+		s, err := rd.ReadString('\n')
+		if err != nil {
+			fmt.Println("Exit")
+			break
+		}
+		s = strings.TrimSpace(s)
+		code = append(code, s)
+		if s == "" || strings.HasSuffix(s, ";") {
+			text := strings.TrimSuffix(strings.Join(code, "\n"), ";")
+			p, err := nj.LoadString(text, &nj.CompileOptions{Globals: globals})
+			if err != nil {
+				fmt.Println(err)
+			} else {
+				res, err := p.Run()
+				if err != nil {
+					fmt.Println("ERR", err)
+				} else {
+					fmt.Println("=", res)
+				}
+				globals = p.LocalsObject()
+			}
+			code = code[:0]
+		}
 	}
 }

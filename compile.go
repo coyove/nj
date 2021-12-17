@@ -389,16 +389,18 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	coreStack.Push(Nil)
 
 	push := func(k string, v Value) uint16 {
-		idx := uint16(coreStack.Size())
-		table.put(k, idx)
-		coreStack.Push(v)
+		idx, ok := table.get(k)
+		if ok {
+			coreStack.Set(int(idx), v)
+		} else {
+			idx = uint16(coreStack.Size())
+			table.put(k, idx)
+			coreStack.Push(v)
+		}
 		return idx
 	}
 
-	Globals.Foreach(func(k Value, v *Value) bool {
-		push(k.String(), *v)
-		return true
-	})
+	Globals.Foreach(func(k Value, v *Value) bool { push(k.String(), *v); return true })
 
 	if opt != nil && opt.Globals != nil {
 		opt.Globals.Foreach(func(k Value, v *Value) bool { push(k.String(), *v); return true })

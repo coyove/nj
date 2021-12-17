@@ -120,7 +120,7 @@ func (m *Object) Get(k Value) (v Value) {
 		v = m.parent.Get(k)
 	}
 	if m.parent != StaticObjectProto && v.IsObject() && v.Object().IsCallable() {
-		f := *v.Object()
+		f := v.Object().Copy(false)
 		f.this = m.ToValue()
 		v = f.ToValue()
 	}
@@ -359,13 +359,14 @@ func (m *Object) Name() string {
 	return "object"
 }
 
-// Copy returns a new object with a copy of dataset
-func (m *Object) Copy() *Object {
+func (m *Object) Copy(copyData bool) *Object {
 	if m == nil {
 		return NewObject(0)
 	}
 	m2 := *m
-	m2.items = append([]hashItem{}, m.items...)
+	if copyData {
+		m2.items = append([]hashItem{}, m.items...)
+	}
 	if m.Callable != nil {
 		c2 := *m.Callable
 		m2.Callable = &c2
