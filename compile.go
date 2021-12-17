@@ -44,6 +44,7 @@ type symTable struct {
 	options *CompileOptions
 
 	global *symTable
+	parent *symTable
 
 	code packet
 
@@ -136,29 +137,29 @@ func (table *symTable) freeAddr(a interface{}) {
 	}
 }
 
-func (table *symTable) get(varname string) uint16 {
+func (table *symTable) get(varname string) (uint16, bool) {
 	depth := uint16(0)
 	regNil := table.loadK(nil)
 
 	switch varname {
 	case "nil":
-		return regNil
+		return regNil, true
 	case "true":
-		return table.loadK(true)
+		return table.loadK(true), true
 	case "false":
-		return table.loadK(false)
+		return table.loadK(false), true
 	case "this":
 		if k, ok := table.sym[varname]; ok {
-			return k.addr
+			return k.addr, true
 		}
 		table.sym["this"] = &symbol{table.borrowAddress()}
 	case "$a":
-		return regA
+		return regA, true
 	}
 
-	calc := func(k *symbol) uint16 {
+	calc := func(k *symbol) (uint16, bool) {
 		addr := (depth << 15) | (uint16(k.addr) & regLocalMask)
-		return addr
+		return addr, true
 	}
 
 	for table != nil {
@@ -180,7 +181,7 @@ func (table *symTable) get(varname string) uint16 {
 		table = table.global
 	}
 
-	return regNil
+	return regNil, false
 }
 
 func (table *symTable) put(varname string, addr uint16) {
@@ -227,7 +228,7 @@ func (table *symTable) loadK(v interface{}) uint16 {
 	return idx
 }
 
-var flatOpMapping = map[string]byte{
+var operatorMapping = map[string]byte{
 	parser.AAdd:     typ.OpAdd,
 	parser.ASub:     typ.OpSub,
 	parser.AMul:     typ.OpMul,
@@ -252,6 +253,7 @@ var flatOpMapping = map[string]byte{
 	parser.ANext:    typ.OpNext,
 	parser.ALen:     typ.OpLen,
 	parser.AIs:      typ.OpIsProto,
+	parser.AReturn:  typ.OpRet,
 }
 
 func (table *symTable) writeInst(op byte, n0, n1 parser.Node) {
@@ -313,7 +315,8 @@ func (table *symTable) compileStaticNode(node parser.Node) (uint16, bool) {
 	case parser.INT:
 		return table.loadK(node.Int64()), true
 	case parser.SYM:
-		return table.get(node.Sym()), true
+		idx, _ := table.get(node.Sym())
+		return idx, true
 	}
 	return 0, false
 }
@@ -335,8 +338,6 @@ func (table *symTable) compileNode(node parser.Node) uint16 {
 		yx = table.compileChain(node)
 	case parser.ASet, parser.AMove:
 		yx = table.compileSetMove(nodes)
-	case parser.AReturn:
-		yx = table.compileReturn(nodes)
 	case parser.AIf:
 		yx = table.compileIf(nodes)
 	case parser.AFor:
@@ -356,10 +357,7 @@ func (table *symTable) compileNode(node parser.Node) uint16 {
 	case parser.AGoto, parser.ALabel:
 		yx = table.compileGoto(nodes)
 	default:
-		if _, ok := flatOpMapping[name]; ok {
-			return table.compileFlat(nodes)
-		}
-		internal.Panic("DEBUG: compileNode unknown symbol: %q in %v", name, node)
+		yx = table.compileOperator(nodes)
 	}
 	return yx
 }

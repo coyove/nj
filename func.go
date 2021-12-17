@@ -20,6 +20,7 @@ type FuncBody struct {
 	DocString  string
 	LoadGlobal *Program
 	Locals     []string
+	Object     *Object
 }
 
 type Program struct {
@@ -46,6 +47,7 @@ func Func(name string, f func(*Env), doc string) Value {
 		Name:      name,
 		Native:    f,
 		DocString: doc,
+		Object:    obj,
 	}
 	if f == nil {
 		obj.Callable.Native = dummyFunc
@@ -177,6 +179,7 @@ func (c *FuncBody) execute(r Runtime, this Value, args ...Value) (v1 Value) {
 	}
 
 	if c.Native != nil {
+		newEnv.Native = c
 		c.Native(&newEnv)
 		v1 = newEnv.A
 	} else {

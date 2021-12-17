@@ -42,34 +42,29 @@ func (table *symTable) compileChain(chain parser.Node) uint16 {
 	return yx
 }
 
-func (table *symTable) compileSetMove(atoms []parser.Node) uint16 {
-	aDest := atoms[1].Sym()
-	newYX := table.get(aDest)
-	if atoms[0].Sym() == parser.AMove {
+func (table *symTable) compileSetMove(nodes []parser.Node) uint16 {
+	dest := nodes[1].Sym()
+	destAddr, declared := table.get(dest)
+	if nodes[0].Sym() == parser.AMove {
 		// a = b
-		if newYX == table.loadK(nil) {
+		if !declared {
 			// a is not declared yet
-			newYX = table.borrowAddress()
+			destAddr = table.borrowAddress()
 
 			// Do not use t.put() because it may put the symbol into masked tables
 			// e.g.: do a = 1 end
-			table.sym[aDest] = &symbol{addr: newYX}
+			table.sym[dest] = &symbol{addr: destAddr}
 		}
 	} else {
 		// local a = b
-		newYX = table.borrowAddress()
-		defer table.put(aDest, newYX) // execute in defer in case of: a = 1 do local a = a end
+		destAddr = table.borrowAddress()
+		defer table.put(dest, destAddr) // execute in defer in case of: a = 1 do local a = a end
 	}
 
-	fromYX := table.compileNode(atoms[2])
-	table.code.writeInst(typ.OpSet, newYX, fromYX)
-	table.code.writePos(atoms[0].Pos())
-	return newYX
-}
-
-func (table *symTable) compileReturn(atoms []parser.Node) uint16 {
-	table.writeInst(typ.OpRet, atoms[1], parser.Node{})
-	return regA
+	srcAddr := table.compileNode(nodes[2])
+	table.code.writeInst(typ.OpSet, destAddr, srcAddr)
+	table.code.writePos(nodes[0].Pos())
+	return destAddr
 }
 
 // writeInst3 accepts 3 arguments at most, 2 arguments will be encoded into opCode itself, the 3rd one will be in regA
@@ -117,11 +112,11 @@ func (table *symTable) writeInst3(bop byte, atoms []parser.Node) uint16 {
 	return regA
 }
 
-func (table *symTable) compileFlat(atoms []parser.Node) uint16 {
+func (table *symTable) compileOperator(atoms []parser.Node) uint16 {
 	head := atoms[0].Sym()
-	op, ok := flatOpMapping[head]
+	op, ok := operatorMapping[head]
 	if !ok {
-		internal.Panic("DEBUG compileFlat invalid symbol: %v", atoms[0])
+		internal.Panic("DEBUG invalid symbol: %v", atoms[0])
 	}
 	yx := table.writeInst3(op, atoms)
 	if p := atoms[0].Pos(); p.Line > 0 {
@@ -195,8 +190,8 @@ func (table *symTable) compileIf(atoms []parser.Node) uint16 {
 	return regA
 }
 
+// [list [a, b, c, ...]]
 func (table *symTable) compileList(nodes []parser.Node) uint16 {
-	// [list [a, b, c, ...]]
 	table.collapse(nodes[1].Nodes(), true)
 	if nodes[0].Sym() == parser.AArray {
 		for _, x := range nodes[1].Nodes() {
@@ -219,6 +214,7 @@ func (table *symTable) compileCall(nodes []parser.Node) uint16 {
 	tmp := append([]parser.Node{nodes[1]}, nodes[2].Nodes()...)
 	isVariadic := false
 	if last := &tmp[len(tmp)-1]; len(last.Nodes()) == 2 && last.Nodes()[0].Sym() == parser.AUnpack {
+		// [call callee [a b .. [unpack vararg]]]
 		*last = last.Nodes()[1]
 		table.collapse(tmp, true)
 		for i := 1; i < len(tmp)-1; i++ {
@@ -248,7 +244,7 @@ func (table *symTable) compileCall(nodes []parser.Node) uint16 {
 	return regA
 }
 
-// [function Name [paramlist] [chain ...] docstring]
+// [function name [paramlist] [chain ...] docstring]
 func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	params := atoms[2]
 	newtable := newSymTable(table.options)
@@ -258,6 +254,7 @@ func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	} else {
 		newtable.global = table.global
 	}
+	newtable.parent = table
 
 	varargIdx := -1
 	for i, p := range params.Nodes() {
@@ -301,6 +298,7 @@ func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	var loadFuncIndex uint16
 	obj := NewObject(0)
 	obj.Callable = cls
+	cls.Object = obj
 	obj.SetPrototype(FuncProto)
 	if table.global != nil {
 		x := table.global
@@ -318,7 +316,7 @@ func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	return regA
 }
 
-// [break]
+// [break|continue]
 func (table *symTable) compileBreak(atoms []parser.Node) uint16 {
 	if len(table.forLoops) == 0 {
 		internal.Panic("%v: outside loop", atoms[0])
@@ -397,7 +395,7 @@ func (table *symTable) patchGoto() {
 func (table *symTable) compileFreeAddr(atoms []parser.Node) uint16 {
 	for i := 1; i < len(atoms); i++ {
 		s := atoms[i].Sym()
-		yx := table.get(s)
+		yx, _ := table.get(s)
 		table.freeAddr(yx)
 		if len(table.maskedSym) > 0 {
 			delete(table.maskedSym[len(table.maskedSym)-1], s)
@@ -408,23 +406,23 @@ func (table *symTable) compileFreeAddr(atoms []parser.Node) uint16 {
 	return regA
 }
 
-// collapse will accept a list of nodes, for every expression inside,
+// collapse will accept a list of expressions, for each of them,
 // it will be collapsed into a temp variable and be replaced with a ADR node,
-// For the last expression, it will be collapsed but not use a temp variable unless optLast == false
-func (table *symTable) collapse(atoms []parser.Node, optLast bool) {
+// the last expression will be collapsed and not using a temp variable if optLast is true.
+func (table *symTable) collapse(nodes []parser.Node, optLast bool) {
 	var lastCompound struct {
 		n parser.Node
 		i int
 	}
 
-	for i, atom := range atoms {
+	for i, atom := range nodes {
 		if !atom.Valid() {
 			break
 		}
 
 		if atom.Type() == parser.NODES {
 			yx := table.compileNodeInto(atom, true, 0)
-			atoms[i] = parser.Addr(yx)
+			nodes[i] = parser.Addr(yx)
 
 			lastCompound.n = atom
 			lastCompound.i = i
@@ -437,7 +435,7 @@ func (table *symTable) collapse(atoms []parser.Node, optLast bool) {
 			if op == typ.OpSet {
 				table.code.truncateLast()
 				table.freeAddr(old)
-				atoms[lastCompound.i] = parser.Addr(opb)
+				nodes[lastCompound.i] = parser.Addr(opb)
 			}
 		}
 	}

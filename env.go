@@ -21,6 +21,7 @@ type Env struct {
 type Runtime struct {
 	IP         uint32
 	CS         *FuncBody
+	Native     *FuncBody
 	Stacktrace []Stacktrace
 }
 

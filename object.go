@@ -48,7 +48,7 @@ func NewObject(preallocateSize int) *Object {
 
 func NamedObject(name string, preallocateSize int) *Object {
 	obj := NewObject(preallocateSize)
-	obj.Callable = &FuncBody{Name: name, Dummy: true, Native: dummyFunc}
+	obj.Callable = &FuncBody{Name: name, Dummy: true, Native: dummyFunc, Object: obj}
 	return obj
 }
 
@@ -366,6 +366,11 @@ func (m *Object) Copy() *Object {
 	}
 	m2 := *m
 	m2.items = append([]hashItem{}, m.items...)
+	if m.Callable != nil {
+		c2 := *m.Callable
+		m2.Callable = &c2
+		m2.Callable.Object = &m2
+	}
 	return &m2
 }
 

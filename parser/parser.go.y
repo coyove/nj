@@ -227,14 +227,14 @@ expr:
     TNot expr %prec UNARY             { $$ = Nodes((SNot), $2).At($1) }
 
 prefix_expr:
-    TLambda func_params stats TEnd    { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
+    TLambda func_params stats TEnd                     { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
     TString                                            { $$ = Str($1.Str) } |
     '(' expr ')'                                       { $$ = $2 } |
     '(' '-' expr ')'                                   { $$ = Nodes(SSub, zero, $3).At($1) } |
-    '[' ']'                           { $$ = Nodes(SArray, emptyNode).At($1) } |
-    '{' '}'                           { $$ = Nodes(SObject, emptyNode).At($1) } |
-    '[' expr_list comma ']'           { $$ = Nodes(SArray, $2).At($1) } |
-    '{' expr_assign_list comma'}'     { $$ = Nodes(SObject, $2).At($1) } |
+    '[' ']'                                            { $$ = Nodes(SArray, emptyNode).At($1) } |
+    '{' '}'                                            { $$ = Nodes(SObject, emptyNode).At($1) } |
+    '[' expr_list comma ']'                            { $$ = Nodes(SArray, $2).At($1) } |
+    '{' expr_assign_list comma'}'                      { $$ = Nodes(SObject, $2).At($1) } |
     declarator                                         { $$ = $1 } |
     prefix_expr TLParen ')'                            { $$ = __call($1, emptyNode).At($2) } |
     prefix_expr TLParen expr_list comma ')'            { $$ = __call($1, $3).At($2) } |

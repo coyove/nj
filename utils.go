@@ -122,6 +122,9 @@ func showType(v Value) string {
 		}
 		return strconv.Quote(v.Str()[:32] + "...")
 	case typ.Object:
+		if v.Object().IsCallable() {
+			return v.Object().String()
+		}
 		return "{" + v.Object().Name() + "}"
 	case typ.Array:
 		if a := v.Array(); a.Typed() {

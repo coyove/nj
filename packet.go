@@ -134,18 +134,7 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 		suffix := ""
 		if rValue {
 			if a > regLocalMask || toplevel {
-				switch v := (*p.Stack)[a&regLocalMask]; v.Type() {
-				case typ.Number, typ.Bool, typ.String:
-					text := v.JSONString()
-					if len(text) > 120 {
-						text = text[:60] + "..." + text[len(text)-60:]
-					}
-					suffix = "(" + text + ")"
-				case typ.Object:
-					suffix = "{" + v.Object().Name() + "}"
-				case typ.Native:
-					suffix = "<" + v.String() + ">"
-				}
+				suffix = showType((*p.Stack)[a&regLocalMask])
 			}
 		}
 

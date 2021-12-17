@@ -55,9 +55,9 @@ function offsetMomentum()
         pz = pz + sysV[i][2] * m 
     end
 
-    sysV[0][0] = -px / solarMass 
-    sysV[0][1] = -py / solarMass 
-    sysV[0][2] = -pz / solarMass 
+    sysV[0][0] = (-px) / solarMass 
+    sysV[0][1] = (-py) / solarMass 
+    sysV[0][2] = (-pz) / solarMass 
 end
 
 sqrt = math.sqrt 
@@ -103,7 +103,7 @@ function advance(dt)
             mag = dt / (dSquared * distance) 
 
             mi = sysVi[3] * mag 
-            m = -sysVj[3] * mag 
+            m = (-sysVj[3]) * mag 
 
             _vx = _vx + dx * m 
             _vy = _vy + dy * m 

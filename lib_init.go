@@ -71,19 +71,26 @@ func init() {
 	Globals.SetMethod("closure", func(e *Env) {
 		lambda := e.Object(0)
 		e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
-			f := e.Object(-1).Prop("_l").Object()
-			stk := append([]Value{e.Object(-1).Prop("_c")}, e.Stack()...)
+			o := e.Native.Object
+			f := o.Prop("_l").Object()
+			stk := append([]Value{o.Prop("_c")}, e.Stack()...)
 			e.A = e.Call(f, stk...)
 		}, "").Object().
-			SetProp("_l", e.Get(0)).
-			SetProp("_c", e.Get(1)).
-			ToValue()
+			SetPrototype(
+				NewObject(2).
+					SetProp("_l", e.Get(0)).
+					SetProp("_c", e.Get(1)).
+					SetPrototype(FuncProto),
+			).ToValue()
 	}, "$f(f: function, v: value) -> function\n"+
 		"\tcreate a function out of `f`, when it is called, `v` will be injected into as the first argument:\n"+
 		"\t\tclosure(f, v)(args...) <=> f(v, args...)")
 
 	// Debug libraries
 	Globals.SetProp("debug", NamedObject("debug", 0).
+		SetMethod("self", func(e *Env) {
+			e.A = e.CS.Object.ToValue()
+		}, "").
 		SetMethod("locals", func(e *Env) {
 			var r []Value
 			start := e.stackOffset - uint32(e.CS.StackSize)

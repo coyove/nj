@@ -1,3 +1,21 @@
+function makecls(f, c)
+    a = lambda(x...)
+        o = debug.self()
+        return o._f(o._c, x...)
+    end.copy()
+    b = {_f=f, _c=c}
+    b.setproto(func)
+    a.setproto(b)
+    return a
+end
+
+a = makecls(lambda(x, step) x.c=x.c+step return x.c end, c=0)
+b = makecls(lambda(x, step) x.c=x.c+step return x.c end, c=0)
+assert(a(1), 1)
+assert(b(2), 2)
+assert(a(1), 2)
+assert(b(2), 4)
+
 timer = {}
 function timer.reset()
     this.c = 0
