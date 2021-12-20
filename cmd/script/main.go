@@ -162,19 +162,19 @@ func runRepl() {
 			fmt.Println("Exit")
 			break
 		}
-		s = strings.TrimSpace(s)
+		s = strings.TrimSuffix(s, "\n")
 		code = append(code, s)
 		if s == "" || strings.HasSuffix(s, ";") {
 			text := strings.TrimSuffix(strings.Join(code, "\n"), ";")
 			p, err := nj.LoadString(text, &nj.CompileOptions{Globals: globals})
 			if err != nil {
-				fmt.Println(err)
+				fmt.Println("x", err)
 			} else {
 				res, err := p.Run()
 				if err != nil {
-					fmt.Println("ERR", err)
+					fmt.Println("x", err)
 				} else {
-					fmt.Println("=", res)
+					fmt.Println("=>", res)
 				}
 				globals = p.LocalsObject()
 			}

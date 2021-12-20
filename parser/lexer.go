@@ -180,7 +180,7 @@ func (sc *Scanner) scanString(quote uint32) (string, error) {
 
 	ch := sc.Next()
 	for ch != quote || lastIsSlash {
-		if ch == '\n' {
+		if ch == '\n' || ch == EOF {
 			return "", sc.Error(buf.String(), "unterminated string")
 		}
 		lastIsSlash = ch == '\\'
@@ -274,33 +274,38 @@ skipspaces:
 		tok.Str = sc.scanIdent(0)
 
 		if typ, ok := reservedWords[tok.Str]; ok {
-			crlf := false
-			oldOffset := sc.offset
-			for n := sc.Peek(); unicode.IsSpace(rune(n)) || n == 'e' || n == EOF; n = sc.Peek() {
-				if n == '\n' || n == EOF {
+			tok.Type = typ
+			if typ == TReturn {
+				crlf, tail := false, strings.TrimLeftFunc(sc.text[sc.offset:], unicode.IsSpace)
+				if tail == "" {
+					// return <EOF>
 					crlf = true
-					break
-				}
-				if n == 'e' {
-					if strings.HasPrefix(sc.text[sc.offset:], "end") {
-						if tail := sc.text[sc.offset+3:]; tail == "" || unicode.IsSpace(rune(tail[0])) {
-							crlf = true
+				} else if strings.HasPrefix(tail, ";") {
+					// return ;
+					crlf = true
+				} else if strings.HasPrefix(tail, "--") {
+					// return --comments
+					crlf = true
+				} else {
+					for k := range reservedWords {
+						if k == "lambda" {
+							// return lambda() end
+							continue
+						}
+						if strings.HasPrefix(tail, k) {
+							tmp := tail[len(k):]
+							r, _ := utf8.DecodeRuneInString(tmp)
+							crlf = tmp == "" || unicode.IsSpace(r)
+						}
+						if crlf {
+							// return <spaces> <keyword> (<spaces>|<EOF>)
+							break
 						}
 					}
-					break
 				}
-				sc.Next()
-			}
-
-			// 'return' without an arg, but with a CrLf afterward will be considered
-			// as 'return nil'. This rule realizes the following syntax:
-			//   1. return end
-			//   2. return \n end
-			if tok.Str == "return" && crlf {
-				tok.Type = TReturnVoid
-			} else {
-				sc.offset = oldOffset
-				tok.Type = typ
+				if crlf {
+					tok.Type = TReturnVoid
+				}
 			}
 		}
 	case ch >= '0' && ch <= '9':
@@ -313,16 +318,14 @@ skipspaces:
 		case '-':
 			if p := sc.Peek(); p == '-' {
 				sc.Next()
-				if sc.Peek() == '[' {
-					sc.Next()
-					if sc.Peek() == '[' { // --[[ block comment ]]
-						sc.Next()
-						if err = sc.skipBlockComments(); err != nil {
-							goto finally
-						}
+				if strings.HasPrefix(sc.text[sc.offset:], "[[") {
+					// --[[ block comment ]]
+					if err = sc.skipBlockComments(); err != nil {
+						goto finally
 					}
+				} else {
+					sc.skipComments()
 				}
-				sc.skipComments()
 				goto redo
 			} else if numberChars[byte(p)] && (metSpaces || !sc.isLastTokenSymbolOrNumberClosed()) {
 				// "n -1" are two statements, "n-1" is a substract expression
@@ -390,12 +393,12 @@ skipspaces:
 				tok.Type = '.'
 				tok.Str = "."
 			}
-		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|', '@', '&':
+		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|', '&':
 			if ch == '(' && sc.isLastTokenSymbolClosed() && !metSpaces {
 				tok.Type = TLParen
 				tok.Str = "("
 			} else {
-				const pat = "(){}];,#^|@&"
+				const pat = "(){}];,#^|&"
 				idx := strings.IndexByte(pat, byte(ch))
 				tok.Type = ch
 				tok.Str = pat[idx : idx+1]

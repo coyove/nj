@@ -29,13 +29,6 @@ func (r *Runtime) GetFullStacktrace() []Stacktrace {
 	return append(r.Stacktrace, Stacktrace{Callable: r.CS, Cursor: r.IP})
 }
 
-func (env *Env) GetRuntime() Runtime {
-	if env == nil {
-		return Runtime{}
-	}
-	return Runtime{Stacktrace: env.GetFullStacktrace()}
-}
-
 func (env *Env) growZero(newSize, zeroSize int) {
 	old := len(*env.stack)
 	env.grow(newSize)

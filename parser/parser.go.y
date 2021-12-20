@@ -20,6 +20,7 @@ package parser
 %type<expr> func_stat
 %type<expr> func_params
 %type<expr> comma
+%type<expr> assign
 
 %union {
     token Token
@@ -252,12 +253,15 @@ expr_list:
     expr { $$ = Nodes($1) } | expr_list ',' expr { $$ = $1.append($3) }
 
 expr_assign_list:
-    TIdent '=' expr                            { $$ = Nodes(Str($1.Str), $3) } |
-    '{' expr '}' '=' expr                      { $$ = Nodes($2, $5) } |
-    expr_assign_list ',' TIdent '=' expr       { $$ = $1.append(Str($3.Str)).append($5) } |
-    expr_assign_list ',' '{' expr '}' '=' expr { $$ = $1.append($4).append($7) }
+    TIdent assign expr                            { $$ = Nodes(Str($1.Str), $3) } |
+    '(' expr ')' assign expr                      { $$ = Nodes($2, $5) } |
+    expr_assign_list ',' TIdent assign expr       { $$ = $1.append(Str($3.Str)).append($5) } |
+    expr_assign_list ',' '(' expr ')' assign expr { $$ = $1.append($4).append($7) }
 
 comma: 
     { $$ = emptyNode } | ',' { $$ = emptyNode }
+
+assign: 
+    '=' { $$ = emptyNode } | ':' { $$ = emptyNode }
 
 %%

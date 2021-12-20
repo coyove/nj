@@ -126,7 +126,8 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 	if err != nil {
 		defer internal.CatchErrorFuncCall(err, m.Callable.Name)
 	}
-	return m.Callable.execute(e.GetRuntime(), this, args...)
+	r := Runtime{Stacktrace: e.GetFullStacktrace()}
+	return m.Callable.execute(r, this, args...)
 }
 
 func (c *FuncBody) String() string {

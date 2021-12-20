@@ -87,7 +87,7 @@ function syntax_return_void() return end
 function syntax_return_value(en) return en end
 function syntax_return_void2(en) return
 en end
-assert(syntax_return_void2(1) == nil)
+assert(syntax_return_void2(1), 1)
 
 ex = [ 1, 2 ]
 ex[0], ex[1], ex3 = ex3, ex[0], ex[1]
@@ -199,7 +199,7 @@ findGlobal()
 assert(G_FLAG == 'ok')
 
 flag = "G_FLA" + "G"
-print(flag, {}, {a=2}, {{"a"}=2})
+print(flag, {}, {a=2}, {("a")=2})
 
 function double(args...)
     for i=0,#(args) do

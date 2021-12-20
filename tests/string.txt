@@ -24,7 +24,7 @@ do
 	str.json_get = lambda(p) json.get(this, p) end
 	local j = json.stringify({
 	      a = 'A',
-	      {"b-2"} = true,
+	      ("b-2") = true,
 	})
     assert(j.json_get('a'), 'A')
 end
