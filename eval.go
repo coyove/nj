@@ -94,7 +94,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 			} else {
 				e := &ExecError{}
 				e.root = r // root panic
-				e.native = stackEnv.Native
+				e.native = stackEnv.NativeSelf
 				e.stacks = make([]Stacktrace, len(retStack)-retStackStartSize+1)
 				copy(e.stacks, retStack[retStackStartSize:])
 				e.stacks[len(e.stacks)-1] = rr
@@ -420,12 +420,12 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 			}
 			if cls.Native != nil {
 				stackEnv.Global = env.Global
-				stackEnv.CS = K
-				stackEnv.IP = cursor
-				stackEnv.Stacktrace = retStack
-				stackEnv.Native = cls
+				stackEnv.runtime.Current = Stacktrace{Callable: K, Cursor: cursor}
+				stackEnv.runtime.Stacktrace = retStack
+				stackEnv.NativeSelf = cls
 				cls.Native(&stackEnv)
-				stackEnv.Runtime = Runtime{}
+				stackEnv.NativeSelf = nil
+				stackEnv.runtime = Runtime{}
 				env.A = stackEnv.A
 				stackEnv.Clear()
 			} else {

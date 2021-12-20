@@ -126,7 +126,7 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 	if err != nil {
 		defer internal.CatchErrorFuncCall(err, m.Callable.Name)
 	}
-	r := Runtime{Stacktrace: e.GetFullStacktrace()}
+	r := Runtime{Stacktrace: e.Runtime().StacktraceWithCurrent()}
 	return m.Callable.execute(r, this, args...)
 }
 
@@ -174,13 +174,14 @@ func (c *FuncBody) EmergStop() {
 
 func (c *FuncBody) execute(r Runtime, this Value, args ...Value) (v1 Value) {
 	newEnv := Env{
-		A:      this,
-		Global: c.LoadGlobal,
-		stack:  &args,
+		A:       this,
+		Global:  c.LoadGlobal,
+		stack:   &args,
+		runtime: r,
 	}
 
 	if c.Native != nil {
-		newEnv.Native = c
+		newEnv.NativeSelf = c
 		c.Native(&newEnv)
 		v1 = newEnv.A
 	} else {
