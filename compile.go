@@ -33,20 +33,22 @@ type breakLabel struct {
 }
 
 type CompileOptions struct {
-	Globals *Object
-	Stdout  io.Writer
-	Stderr  io.Writer
-	Stdin   io.Reader
+	MaxStackSize int64
+	Globals      *Object
+	Stdout       io.Writer
+	Stderr       io.Writer
+	Stdin        io.Reader
 }
 
 // symTable is responsible for recording the state of compilation
 type symTable struct {
+	name    string
 	options *CompileOptions
 
 	global *symTable
 	parent *symTable
 
-	code packet
+	codeSeg Packet
 
 	// toplevel symtable
 	funcs []*Object
@@ -274,19 +276,19 @@ func (table *symTable) writeInst(op byte, n0, n1 parser.Node) {
 	}
 
 	if !n0.Valid() {
-		table.code.writeInst(op, 0, 0)
+		table.codeSeg.writeInst(op, 0, 0)
 		return
 	}
 
 	n0a := getAddr(n0, n1.Valid())
 	if !n1.Valid() {
-		table.code.writeInst(op, n0a, 0)
+		table.codeSeg.writeInst(op, n0a, 0)
 		table.freeAddr(tmp)
 		return
 	}
 
 	n1a := getAddr(n1, true)
-	table.code.writeInst(op, n0a, n1a)
+	table.codeSeg.writeInst(op, n0a, n1a)
 	table.freeAddr(tmp)
 }
 
@@ -300,7 +302,7 @@ func (table *symTable) compileNodeInto(compound parser.Node, newVar bool, existe
 		yx = existedVar
 	}
 
-	table.code.writeInst(typ.OpSet, yx, newYX)
+	table.codeSeg.writeInst(typ.OpSet, yx, newYX)
 	return yx
 }
 
@@ -377,11 +379,13 @@ func (table *symTable) collectConsts(node parser.Node) {
 	}
 }
 
-func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls *Program, err error) {
+func compileNodeTopLevel(name, source string, n parser.Node, opt *CompileOptions) (cls *Program, err error) {
 	defer internal.CatchError(&err)
 
 	table := newSymTable(opt)
 	table.collectConstMode = true
+	table.name = name
+	table.codeSeg.Pos.Name = name
 	coreStack := &Env{stack: new([]Value)}
 
 	// Load nil first so it will be at the top
@@ -419,7 +423,7 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 	table.collectConstMode = false
 
 	table.compileNode(n)
-	table.code.writeInst(typ.OpRet, regA, 0)
+	table.codeSeg.writeInst(typ.OpRet, regA, 0)
 	table.patchGoto()
 
 	coreStack.grow(int(table.vp))
@@ -440,27 +444,25 @@ func compileNodeTopLevel(source string, n parser.Node, opt *CompileOptions) (cls
 		}
 	}
 
-	cls = &Program{Top: &FuncBody{}}
-	cls.Top.Name = "main"
-	cls.Top.Code = table.code
-	cls.Top.StackSize = table.vp
-	cls.Top.Locals = table.symbolsToDebugLocals()
-	cls.Top.LoadGlobal = cls
-	cls.Stack = coreStack.stack
-	cls.Symbols = table.sym
+	cls = &Program{top: &function{}}
+	cls.top.Name = "main"
+	cls.top.CodeSeg = table.codeSeg
+	cls.top.StackSize = table.vp
+	cls.top.Locals = table.symbolsToDebugLocals()
+	cls.top.LoadGlobal = cls
+	cls.stack = coreStack.stack
+	cls.symbols = table.sym
 	cls.Functions = table.funcs
 	if opt != nil {
-		cls.Stdout = or(opt.Stdout, os.Stdout).(io.Writer)
-		cls.Stdin = or(opt.Stdin, os.Stdin).(io.Reader)
-		cls.Stderr = or(opt.Stderr, os.Stderr).(io.Writer)
-	} else {
-		cls.Stdout, cls.Stdin, cls.Stderr = os.Stdout, os.Stdin, os.Stderr
+		cls.Options = *opt
 	}
+	cls.Options.Stdout = or(cls.Options.Stdout, os.Stdout).(io.Writer)
+	cls.Options.Stdin = or(cls.Options.Stdin, os.Stdin).(io.Reader)
+	cls.Options.Stderr = or(cls.Options.Stderr, os.Stderr).(io.Writer)
 	for _, f := range cls.Functions {
-		f.Callable.LoadGlobal = cls
+		f.fun.LoadGlobal = cls
 	}
-	(*cls.Stack)[gi] = intf(cls)
-	cls.Options = opt
+	(*cls.stack)[gi] = intf(cls)
 	return cls, err
 }
 
@@ -484,7 +486,7 @@ func loadCode(code, name string, opt *CompileOptions) (*Program, error) {
 	if internal.IsDebug() {
 		n.Dump(os.Stderr, "  ")
 	}
-	return compileNodeTopLevel(code, n, opt)
+	return compileNodeTopLevel(name, code, n, opt)
 }
 
 func Run(p *Program, err error) (Value, error) {

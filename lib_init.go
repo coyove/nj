@@ -52,7 +52,7 @@ func init() {
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
 	}, "$f(p: object) -> object")
 	Globals.SetMethod("loadfile", func(e *Env) {
-		e.A = MustRun(LoadFile(e.Str(0), e.Global.Options))
+		e.A = MustRun(LoadFile(e.Str(0), &e.Global.Options))
 	}, "$f(path: string) -> value\n\tload and eval file at `path`, globals will be inherited in loaded file")
 	Globals.SetMethod("eval", func(e *Env) {
 		opts := e.Get(1).Safe().Object()
@@ -72,7 +72,7 @@ func init() {
 	// Debug libraries
 	Globals.SetProp("debug", NamedObject("debug", 0).
 		SetMethod("self", func(e *Env) {
-			e.A = e.Runtime().Stack1.Callable.Object.ToValue()
+			e.A = e.Runtime().Stack1.Callable.obj.ToValue()
 		}, "").
 		SetMethod("locals", func(e *Env) {
 			locals := e.Runtime().Stack1.Callable.Locals
@@ -94,13 +94,13 @@ func init() {
 		}, "$f() -> array\n\treturn [index1, name1, value1, i2, n2, v2, i3, n3, v3, ...]").
 		SetMethod("globals", func(e *Env) {
 			var r []Value
-			for i, name := range e.Global.Top.Locals {
-				r = append(r, Int(i), Str(name), (*e.Global.Stack)[i])
+			for i, name := range e.Global.top.Locals {
+				r = append(r, Int(i), Str(name), (*e.Global.stack)[i])
 			}
 			e.A = NewArray(r...).ToValue()
 		}, "$f() -> array\n\treturn [index1, name1, value1, i2, n2, v2, i3, n3, v3, ...]").
 		SetMethod("set", func(e *Env) {
-			(*e.Global.Stack)[e.Int64(0)] = e.Get(1)
+			(*e.Global.stack)[e.Int64(0)] = e.Get(1)
 		}, "$f(idx: int, v: value)").
 		SetMethod("trace", func(env *Env) {
 			stacks := env.Runtime().Stacktrace()
@@ -108,11 +108,11 @@ func init() {
 			for i := len(stacks) - 1 - env.Get(0).Safe().Int(0); i >= 0; i-- {
 				r := stacks[i]
 				src := uint32(0)
-				for i := 0; i < r.Callable.Code.Pos.len(); {
+				for i := 0; i < r.Callable.CodeSeg.Pos.Len(); {
 					var opx uint32 = math.MaxUint32
-					ii, op, line := r.Callable.Code.Pos.read(i)
-					if ii < r.Callable.Code.Pos.len()-1 {
-						_, opx, _ = r.Callable.Code.Pos.read(ii)
+					ii, op, line := r.Callable.CodeSeg.Pos.Read(i)
+					if ii < r.Callable.CodeSeg.Pos.Len()-1 {
+						_, opx, _ = r.Callable.CodeSeg.Pos.Read(ii)
 					}
 					if r.Cursor >= op && r.Cursor < opx {
 						src = line
@@ -130,7 +130,7 @@ func init() {
 		}, "$f(skip?: int) -> array\n\treturn [func_name0, line1, cursor1, n2, l2, c2, ...]").
 		SetMethod("disfunc", func(e *Env) {
 			o := e.Object(0)
-			_ = o.IsCallable() && e.SetA(Str(o.Callable.ToCode())) || e.SetA(Nil)
+			_ = o.IsCallable() && e.SetA(Str(o.fun.GoString())) || e.SetA(Nil)
 		}, "").
 		SetPrototype(StaticObjectProto).
 		ToValue())
@@ -175,33 +175,39 @@ func init() {
 		}
 	}, "$f(v: value) -> number\n\tconvert `v` to a float number, panic when failed").Object()
 	Globals.SetProp("float", FloatProto.ToValue())
+	Globals.SetMethod("bytes", func(e *Env) {
+		_ = e.Get(0).IsInt64() && e.SetA(ValueOf(make([]byte, e.Int(0)))) || e.SetA(ValueOf([]byte(e.Str(0))))
+	}, "$f(s: str) -> bytes\n\tconvert string to bytes\n$f(n: int) -> bytes\n\tcreate an n-byte long array")
+	Globals.SetProp("stdout", ValueOf(os.Stdout))
+	Globals.SetProp("stdin", ValueOf(os.Stdin))
+	Globals.SetProp("stderr", ValueOf(os.Stderr))
 	Globals.SetMethod("print", func(env *Env) {
 		for _, a := range env.Stack() {
-			fmt.Fprint(env.Global.Stdout, a.String())
+			fmt.Fprint(env.Global.Options.Stdout, a.String())
 		}
-		fmt.Fprintln(env.Global.Stdout)
+		fmt.Fprintln(env.Global.Options.Stdout)
 	}, "$f(args...: value)\n\tprint `args` to stdout")
 	Globals.SetMethod("printf", func(e *Env) {
-		sprintf(e, 0, e.Global.Stdout)
+		sprintf(e, 0, e.Global.Options.Stdout)
 	}, "$f(format: string, args...: value)")
 	Globals.SetMethod("write", func(e *Env) {
 		w := NewWriter(e.Get(0))
 		for _, a := range e.Stack()[1:] {
 			_, err := fmt.Fprint(w, a.String())
-			e.A = Error(e, err)
+			internal.PanicErr(err)
 		}
-	}, "$f(writer: Writer, args...: value)\n\twrite `args` to `writer`")
+	}, "$f(w: Writer, args...: value)\n\twrite `args` to `w`")
 	Globals.SetMethod("println", func(e *Env) {
 		for _, a := range e.Stack() {
-			fmt.Fprint(e.Global.Stdout, a.String(), " ")
+			fmt.Fprint(e.Global.Options.Stdout, a.String(), " ")
 		}
-		fmt.Fprintln(e.Global.Stdout)
+		fmt.Fprintln(e.Global.Options.Stdout)
 	}, "$f(args...: value)\n\tsame as `print`, but values are separated by spaces")
 	Globals.SetMethod("scanln", func(env *Env) {
 		prompt, n := env.B(0), env.Get(1)
-		fmt.Fprint(env.Global.Stdout, prompt.Safe().Str(""))
+		fmt.Fprint(env.Global.Options.Stdout, prompt.Safe().Str(""))
 		var results []Value
-		var r io.Reader = env.Global.Stdin
+		var r io.Reader = env.Global.Options.Stdin
 		for i := n.Safe().Int64(1); i > 0; i-- {
 			var s string
 			if _, err := fmt.Fscan(r, &s); err != nil {
@@ -323,7 +329,7 @@ func init() {
 		}, "$f()\n\tclose last opened file").ToValue(),
 	)
 
-	Globals.SetProp("io", NewObject(0).
+	Globals.SetProp("io", NamedObject("io", 0).
 		SetProp("reader", ReaderProto.ToValue()).
 		SetProp("writer", WriterProto.ToValue()).
 		SetProp("seeker", SeekerProto.ToValue()).
@@ -338,22 +344,11 @@ func init() {
 
 	ObjectProto = *NamedObject("object", 0).
 		SetMethod("new", func(e *Env) {
-			switch e.Get(0).Type() {
-			case typ.Number:
-				e.A = NewObject(e.Int(0)).ToValue()
-			case typ.Nil:
-				e.A = NewObject(0).ToValue()
-			default:
-				e.A = e.Object(0).SetPrototype(e.Object(-1)).ToValue()
-			}
-		}, "").
+			e.A = NewObject(e.Get(0).Safe().Int(0)).ToValue()
+		}, "object.$f(sz?: int) -> object").
 		SetMethod("newstatic", func(e *Env) {
-			if e.Get(0).Type() == typ.Number {
-				e.A = NewObject(e.Int(0)).SetPrototype(StaticObjectProto).ToValue()
-			} else {
-				e.A = NewObject(0).SetPrototype(StaticObjectProto).ToValue()
-			}
-		}, "").
+			e.A = NewObject(e.Get(0).Safe().Int(0)).SetPrototype(StaticObjectProto).ToValue()
+		}, "object.$f(sz?: int) -> staticobject").
 		SetMethod("get", func(e *Env) {
 			e.A = e.Object(-1).Get(e.Get(0))
 		}, "object.$f(k: value) -> value").
@@ -426,19 +421,13 @@ func init() {
 		}, "object.$f() -> object\n\treturn a new object which shares all data from the original, but with no prototype").
 		SetMethod("next", func(e *Env) {
 			e.A = NewArray(e.Object(-1).Next(e.Get(0))).ToValue()
-		}, "object.$f(k: value) -> [value, value]\n\tfind next key-value pair after `k` in the object and return as [key, value]").
-		SetMethod("iscallable", func(e *Env) {
-			e.A = Bool(e.Object(-1).IsCallable())
-		}, "object.$f() -> bool").
-		SetMethod("isstatic", func(e *Env) {
-			e.A = Bool(e.Object(-1).Prototype() == StaticObjectProto)
-		}, "object.$f() -> bool")
+		}, "object.$f(k: value) -> [value, value]\n\tfind next key-value pair after `k` in the object and return as [key, value]")
 	ObjectProto.SetPrototype(nil) // objectlib is the topmost object, it should not have any prototype
 
 	*FuncProto = *NamedObject("function", 0).
 		SetMethod("doc", func(e *Env) {
 			o := e.Object(-1)
-			e.A = Str(strings.Replace(o.Callable.DocString, "$f", o.Callable.Name, -1))
+			e.A = Str(strings.Replace(o.fun.DocString, "$f", o.fun.Name, -1))
 		}, "function.$f() -> string\n\treturn function documentation").
 		SetMethod("apply", func(e *Env) {
 			e.A = CallObject(e.Object(-1), e, nil, e.Get(0), e.Stack()[1:]...)
@@ -452,8 +441,7 @@ func init() {
 		}, "function.$f(args...: value) -> value|Error\n"+
 			"\trun function, return Error if any panic occurred (if function tends to return n results, these values will all be Error by then)").
 		SetMethod("after", func(e *Env) {
-			f, args, e2 := e.Object(-1), e.CopyStack()[1:], *e
-			e2.runtime.StackN = append([]Stacktrace{}, e2.runtime.StackN...)
+			f, args, e2 := e.Object(-1), e.CopyStack()[1:], EnvForAsyncCall(e)
 			t := time.AfterFunc(e.Num(0).Safe().Duration(0), func() { e2.Call(f, args...) })
 			e.A = NamedObject("Timer", 0).
 				SetProp("t", ValueOf(t)).
@@ -466,11 +454,10 @@ func init() {
 			f := e.Object(-1)
 			args := e.CopyStack()
 			w := make(chan Value, 1)
-			e2 := *e
-			e2.runtime.StackN = append([]Stacktrace{}, e2.runtime.StackN...)
+			e2 := EnvForAsyncCall(e)
 			go func(f *Object, args []Value) {
 				if v, err := e2.Call2(f, args...); err != nil {
-					w <- Error(&e2, err)
+					w <- Error(e2, err)
 				} else {
 					w <- v
 				}
@@ -478,9 +465,6 @@ func init() {
 			e.A = NamedObject("Goroutine", 0).
 				SetProp("f", f.ToValue()).
 				SetProp("w", intf(w)).
-				SetMethod("stop", func(e *Env) {
-					e.Object(-1).Prop("f").Object().Callable.EmergStop()
-				}, "").
 				SetMethod("wait", func(e *Env) {
 					select {
 					case <-time.After(e.Get(0).Safe().Duration(1 << 62)):
@@ -500,20 +484,17 @@ func init() {
 			lambda := e.Object(-1)
 			c := e.CopyStack()
 			e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
-				o := e.runtime.Callable0.Object
+				o := e.runtime.Callable0.obj
 				f := o.Prop("_l").Object()
 				stk := append(o.Prop("_c").Array().Values(), e.Stack()...)
 				e.A = e.Call(f, stk...)
 			}, "").Object().
-				SetPrototype(
-					NewObject(2).
-						SetProp("_l", lambda.ToValue()).
-						SetProp("_c", NewArray(c...).ToValue()).
-						SetPrototype(FuncProto),
-				).ToValue()
+				SetProp("_l", lambda.ToValue()).
+				SetProp("_c", NewArray(c...).ToValue()).
+				ToValue()
 		}, "function.$f(args...: value) -> function\n"+
 			"\tcreate a closure, when it is called, `args` will be prepended to the argument list:\n"+
-			"\t\tf.closure(a1, a2, ...)(args...) <=> f(a1, a2, ..., args...)").
+			"\t\tf.closure(args...)(args2...) <=> f(args..., args2...)").
 		SetPrototype(&ObjectProto)
 
 	Globals.SetProp("object", ObjectProto.ToValue())
@@ -591,7 +572,7 @@ func init() {
 		SetMethod("istyped", func(e *Env) {
 			e.A = Bool(e.Array(-1).meta != internalArrayMeta)
 		}, "array.$f() -> bool").
-		SetMethod("type", func(e *Env) {
+		SetMethod("typename", func(e *Env) {
 			e.A = Str(e.Array(-1).meta.Name)
 		}, "array.$f() -> string").
 		SetMethod("untype", func(e *Env) {
@@ -604,7 +585,7 @@ func init() {
 	}, "").Object().
 		SetMethod("error", func(e *Env) { e.A = ValueOf(e.Array(-1).Unwrap().(*ExecError).root) }, "").
 		SetMethod("getcause", func(e *Env) { e.A = intf(e.Array(-1).Unwrap().(*ExecError).root) }, "").
-		SetPrototype(FuncProto)
+		SetMethod("trace", func(e *Env) { e.A = ValueOf(e.Array(-1).Unwrap().(*ExecError).stacks) }, "")
 	Globals.SetProp("error", ErrorProto.ToValue())
 
 	*StrProto = *Func("str", func(e *Env) {
@@ -695,9 +676,6 @@ func init() {
 		SetMethod("endswith", func(e *Env) { e.A = Bool(strings.HasSuffix(e.Str(-1), e.Str(0))) }, "str.$f(suffix: string) -> bool").
 		SetMethod("upper", func(e *Env) { e.A = Str(strings.ToUpper(e.Str(-1))) }, "str.$f() -> string").
 		SetMethod("lower", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }, "str.$f() -> string").
-		SetMethod("bytes", func(e *Env) {
-			_ = e.Get(0).IsInt64() && e.SetA(ValueOf(make([]byte, e.Int(0)))) || e.SetA(ValueOf([]byte(e.Str(0))))
-		}, "str.$f() -> bytes\n\tconvert string to bytes\n$f(n: int) -> bytes\n\tcreate an n-byte long array").
 		SetMethod("chars", func(e *Env) {
 			var r []Value
 			for s, code := e.Str(-1), e.Get(0).IsTrue(); len(s) > 0; {
@@ -741,7 +719,7 @@ func init() {
 		}, "$f(v?: string) -> Buffer")
 	Globals.SetProp("str", StrProto.ToValue())
 
-	Globals.SetProp("math", NewObject(0).
+	Globals.SetProp("math", NamedObject("math", 0).
 		SetProp("INF", Float64(math.Inf(1))).
 		SetProp("NEG_INF", Float64(math.Inf(-1))).
 		SetProp("PI", Float64(math.Pi)).
@@ -787,7 +765,7 @@ func init() {
 		SetPrototype(StaticObjectProto).
 		ToValue())
 
-	Globals.SetProp("os", NewObject(0).
+	Globals.SetProp("os", NamedObject("os", 0).
 		SetProp("pid", Int(os.Getpid())).
 		SetProp("numcpus", Int(runtime.NumCPU())).
 		SetProp("args", ValueOf(os.Args)).

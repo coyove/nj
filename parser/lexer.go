@@ -276,8 +276,11 @@ skipspaces:
 		if typ, ok := reservedWords[tok.Str]; ok {
 			tok.Type = typ
 			if typ == TReturn {
-				crlf, tail := false, strings.TrimLeftFunc(sc.text[sc.offset:], unicode.IsSpace)
-				if tail == "" {
+				crlf := false
+				if tail := strings.TrimLeft(sc.text[sc.offset:], " \t\r"); strings.HasPrefix(tail, "\n") {
+					// return \n
+					crlf = true
+				} else if tail = strings.TrimLeftFunc(tail, unicode.IsSpace); tail == "" {
 					// return <EOF>
 					crlf = true
 				} else if strings.HasPrefix(tail, ";") {

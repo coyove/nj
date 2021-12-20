@@ -1,5 +1,11 @@
 package typ
 
+type Inst struct {
+	Opcode byte
+	A      uint16
+	B      int32
+}
+
 const (
 	_ = iota
 	OpSet

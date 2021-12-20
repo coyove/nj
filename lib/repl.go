@@ -38,16 +38,16 @@ func WebREPLHandler(opt *nj.CompileOptions, cb func(*nj.Program)) func(w http.Re
 		go func() {
 			time.Sleep(time.Second * 2)
 			if !finished {
-				p.EmergStop()
+				p.Stop()
 			}
 		}()
-		p.MaxStackSize = 100
-		p.Stdout = bufOut
-		p.Stderr = bufOut
+		p.Options.MaxStackSize = 100
+		p.Options.Stdout = bufOut
+		p.Options.Stderr = bufOut
 		if cb != nil {
 			cb(p)
 		}
-		code := p.PrettyCode()
+		code := p.GoString()
 		v, err := p.Run()
 		finished = true
 		if err != nil {

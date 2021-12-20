@@ -110,7 +110,7 @@ func main() {
 
 	defer func() {
 		if _opcode {
-			log.Println(b.PrettyCode())
+			log.Println(b.GoString())
 		}
 		if _timing {
 			log.Printf("Time elapsed: %v\n", time.Since(start))
@@ -125,7 +125,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	b.MaxStackSize = int64(*stackSize)
+	b.Options.MaxStackSize = int64(*stackSize)
 
 	if _compileonly {
 		return
@@ -137,7 +137,7 @@ func main() {
 		go func() {
 			time.Sleep(time.Second * time.Duration(*timeout))
 			if !finished {
-				b.EmergStop()
+				b.Stop()
 				log.Fatalln("timeout")
 			}
 		}()

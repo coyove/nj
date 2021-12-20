@@ -20,7 +20,7 @@ type Env struct {
 
 type Runtime struct {
 	// Stacktrace layout: [N, N-1, ..., 2], 1, 0 (current)
-	Callable0 *FuncBody
+	Callable0 *function
 	Stack1    Stacktrace
 	StackN    []Stacktrace
 }
@@ -32,7 +32,7 @@ func (r Runtime) Stacktrace() []Stacktrace {
 	})
 }
 
-func (r Runtime) Push(k *FuncBody) Runtime {
+func (r Runtime) Push(k *function) Runtime {
 	if r.Stack1.Callable == nil {
 		internal.Panic("DEBUG shouldn't happen")
 	}
@@ -58,7 +58,7 @@ func (env *Env) grow(newSize int) {
 	s := *env.stack
 	sz := int(env.stackOffset) + newSize
 	if sz > cap(s) {
-		if env.Global != nil && env.Global.MaxStackSize > 0 && int64(sz) > env.Global.MaxStackSize {
+		if env.Global != nil && env.Global.Options.MaxStackSize > 0 && int64(sz) > env.Global.Options.MaxStackSize {
 			panic("stack overflow")
 		}
 		old := s
@@ -121,7 +121,7 @@ func (env *Env) _get(yx uint16) Value {
 		return env.A
 	}
 	if yx > regLocalMask {
-		return (*env.Global.Stack)[yx&regLocalMask]
+		return (*env.Global.stack)[yx&regLocalMask]
 	}
 	return (*env.stack)[uint32(yx)+(env.stackOffset)]
 }
@@ -130,7 +130,7 @@ func (env *Env) _set(yx uint16, v Value) {
 	if yx == regA {
 		env.A = v
 	} else if yx > regLocalMask {
-		(*env.Global.Stack)[yx&regLocalMask] = v
+		(*env.Global.stack)[yx&regLocalMask] = v
 	} else {
 		(*env.stack)[uint32(yx)+(env.stackOffset)] = v
 	}

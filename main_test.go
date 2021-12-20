@@ -63,7 +63,7 @@ func runFile(t *testing.T, path string) {
 	}
 
 	if internal.IsDebug() {
-		fmt.Println(b.PrettyCode())
+		fmt.Println(b.GoString())
 	}
 	// log.Println(b.Symbols)
 
@@ -143,7 +143,7 @@ end
 foo()
 `, nil)
 	fmt.Println(err)
-	if s := cls.PrettyCode(); !strings.Contains(s, "tailcall") {
+	if s := cls.GoString(); !strings.Contains(s, "tailcall") {
 		t.Fatal(s)
 	}
 
@@ -387,9 +387,9 @@ return [a + add(), a + add(), a + add()]
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(p2.PrettyCode())
+	fmt.Println(p2.GoString())
 	if v1 := v.Array().Values(); v1[0].Int64() != 101 || v1[1].Int64() != 102 || v1[2].Int64() != 103 {
-		t.Fatal(v, v1, err, p2.PrettyCode())
+		t.Fatal(v, v1, err, p2.GoString())
 	}
 
 }

@@ -20,11 +20,11 @@ import (
 )
 
 type Object struct {
-	parent   *Object
-	count    int64
-	items    []hashItem
-	this     Value
-	Callable *FuncBody
+	parent *Object
+	fun    *function
+	count  int64
+	items  []hashItem
+	this   Value
 }
 
 // hashItem represents an entry in the object.
@@ -48,7 +48,7 @@ func NewObject(preallocateSize int) *Object {
 
 func NamedObject(name string, preallocateSize int) *Object {
 	obj := NewObject(preallocateSize)
-	obj.Callable = &FuncBody{Name: name, Dummy: true, Native: dummyFunc, Object: obj}
+	obj.fun = &function{Name: name, Dummy: true, Native: dummyFunc, obj: obj}
 	return obj
 }
 
@@ -308,13 +308,13 @@ func (m *Object) rawPrint(p *bytes.Buffer, lv int, j typ.MarshalType, showProto 
 		p.WriteString(ifstr(j == typ.MarshalToJSON, "null", "nil"))
 		return
 	}
-	if m.Callable != nil {
+	if m.fun != nil {
 		if j == typ.MarshalToJSON {
 			p.WriteString("{\"<f>\":\"")
-			p.WriteString(m.Callable.String())
+			p.WriteString(m.fun.String())
 			p.WriteString("\",")
 		} else {
-			p.WriteString(m.Callable.String())
+			p.WriteString(m.fun.String())
 			if m.count == 0 {
 				return
 			}
@@ -349,8 +349,8 @@ func (m *Object) ToValue() Value {
 
 func (m *Object) Name() string {
 	if m != nil {
-		if m.Callable != nil {
-			return m.Callable.Name
+		if m.fun != nil {
+			return m.fun.Name
 		}
 		if m.parent != nil {
 			return m.parent.Name()
@@ -367,10 +367,10 @@ func (m *Object) Copy(copyData bool) *Object {
 	if copyData {
 		m2.items = append([]hashItem{}, m.items...)
 	}
-	if m.Callable != nil {
-		c2 := *m.Callable
-		m2.Callable = &c2
-		m2.Callable.Object = &m2
+	if m.fun != nil {
+		c2 := *m.fun
+		m2.fun = &c2
+		m2.fun.obj = &m2
 	}
 	return &m2
 }
@@ -383,11 +383,18 @@ func (m *Object) Merge(src *Object) *Object {
 	return m
 }
 
+func (m *Object) Callable() function {
+	if m == nil || m.fun == nil || m.fun.Dummy {
+		return function{}
+	}
+	return *m.fun
+}
+
 func (m *Object) IsCallable() bool {
 	if m == nil {
 		return false
 	}
-	return m.Callable != nil && !m.Callable.Dummy
+	return m.fun != nil && !m.fun.Dummy
 }
 
 func (m *Object) resizeHash(newSize int) {

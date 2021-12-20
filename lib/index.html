@@ -67,11 +67,11 @@ println("Author is:", author)
 -- use doc(function) to view its documentation
 local g = debug.globals()
 
-print(("version %s, total global values: %d").format(VERSION, #g/3))
+print("version %s, total global values: %d".format(VERSION, #g/3))
 
 function pp(name, f, ident)
-    if type(f) == "object" then
-        if f.iscallable() then
+    if f is object then
+        if f is callable then
             local d = f.doc()
             print(ident, name, " ", d.trimprefix(name + "."))
             print()
@@ -83,11 +83,11 @@ function pp(name, f, ident)
     end		
 end
 
-for i=0,len(g),3 do
+for i=0,#g,3 do
     if g[i+1] == '' then
     else
         local name = g[i + 1]
-        if len(name) > 32 then
+        if #name > 32 then
             name = name.sub(0, 16) + '...' + name.sub(#name-16, #name)
         end
         pp(i//3 + ": " + name, g[i + 2], "")

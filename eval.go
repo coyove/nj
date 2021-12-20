@@ -13,13 +13,13 @@ import (
 type Stacktrace struct {
 	Cursor      uint32
 	StackOffset uint32
-	Callable    *FuncBody
+	Callable    *function
 }
 
 // ExecError represents the runtime error
 type ExecError struct {
 	root   interface{}
-	native *FuncBody
+	native *function
 	stacks []Stacktrace
 }
 
@@ -46,11 +46,12 @@ func (e *ExecError) Error() string {
 			msg.WriteString(fmt.Sprintf("%s (native)\n", r.Callable.Name))
 		} else {
 			src := uint32(0)
-			for i := 0; i < r.Callable.Code.Pos.len(); {
+			posv := r.Callable.CodeSeg.Pos
+			for i := 0; i < posv.Len(); {
 				var opx uint32 = math.MaxUint32
-				ii, op, line := r.Callable.Code.Pos.read(i)
-				if ii < r.Callable.Code.Pos.len()-1 {
-					_, opx, _ = r.Callable.Code.Pos.read(ii)
+				ii, op, line := posv.Read(i)
+				if ii < posv.Len()-1 {
+					_, opx, _ = posv.Read(ii)
 				}
 				if r.Cursor >= op && r.Cursor < opx {
 					src = line
@@ -63,7 +64,7 @@ func (e *ExecError) Error() string {
 				i = ii
 			}
 			// the recorded cursor was advanced by 1 already
-			msg.WriteString(fmt.Sprintf("%s at line %d (cursor: %d)\n", r.Callable.Name, src, r.Cursor-1))
+			msg.WriteString(fmt.Sprintf("%s at %s:%d (cursor: %d)\n", r.Callable.Name, posv.Name, src, r.Cursor-1))
 		}
 	}
 	if e.root != nil {
@@ -77,7 +78,7 @@ func (e *ExecError) Error() string {
 	return msg.String()
 }
 
-func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
+func internalExecCursorLoop(env Env, K *function, retStack []Stacktrace) Value {
 	stackEnv := env
 	stackEnv.stackOffset = uint32(len(*env.stack))
 
@@ -108,8 +109,8 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 	}()
 
 	for {
-		v := K.Code.Code[cursor]
-		bop, opa, opb := v.op, v.a, uint16(v.b)
+		v := K.CodeSeg.Code[cursor]
+		bop, opa, opb := v.Opcode, v.A, uint16(v.B)
 		cursor++
 
 		switch bop {
@@ -405,7 +406,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 			if a.Type() != typ.Object {
 				internal.Panic("can't call %v", showType(a))
 			}
-			cls := a.Object().Callable
+			cls := a.Object().fun
 			if cls == nil || cls.Dummy {
 				internal.Panic("%v not callable", showType(a))
 			}
@@ -454,10 +455,10 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 				stackEnv.stackOffset = uint32(len(*env.stack))
 			}
 		case typ.OpJmp:
-			cursor = uint32(int32(cursor) + v.b)
+			cursor = uint32(int32(cursor) + v.B)
 		case typ.OpIfNot:
 			if env.A.IsFalse() {
-				cursor = uint32(int32(cursor) + v.b)
+				cursor = uint32(int32(cursor) + v.B)
 			}
 		}
 	}

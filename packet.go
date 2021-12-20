@@ -2,7 +2,6 @@ package nj
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"strconv"
 
@@ -11,89 +10,59 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
-func inst(op byte, a, b uint16) _inst {
-	return _inst{op: op, a: a, b: int32(b)}
+func inst(op byte, a, b uint16) typ.Inst {
+	return typ.Inst{Opcode: op, A: a, B: int32(b)}
 }
 
-func jmpInst(op byte, dist int) _inst {
+func jmpInst(op byte, dist int) typ.Inst {
 	if dist < -(1<<30) || dist >= 1<<30 {
 		panic("long jump")
 	}
-	return _inst{op: op, b: int32(dist)}
+	return typ.Inst{Opcode: op, B: int32(dist)}
 }
 
-func splitInst(i _inst) (op byte, a, b uint16) {
-	return i.op, i.a, uint16(i.b)
+type Packet struct {
+	Code []typ.Inst
+	Pos  internal.VByte32
 }
 
-type posVByte struct {
-	fn string
-	b  []byte
-}
-
-func (p *posVByte) len() int {
-	return len(p.b)
-}
-
-func (p *posVByte) append(idx uint32, line uint32) {
-	v := func(v uint64) {
-		p.b = append(p.b, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-		n := binary.PutUvarint(p.b[p.len()-10:], v)
-		p.b = p.b[:p.len()-10+n]
-	}
-	v(uint64(idx))
-	v(uint64(line))
-}
-
-func (p *posVByte) read(i int) (next int, idx, line uint32) {
-	rd := p.b[i:]
-	a, n := binary.Uvarint(rd)
-	b, n2 := binary.Uvarint(rd[n:])
-	if n == 0 || n2 == 0 {
-		next = p.len() + 1
-		return
-	}
-	return i + n + n2, uint32(a), uint32(b)
-}
-
-type _inst struct {
-	op byte
-	a  uint16
-	b  int32
-}
-
-type packet struct {
-	Code []_inst
-	Pos  posVByte
-}
-
-func (b *packet) writeInst(op byte, opa, opb uint16) {
+func (b *Packet) writeInst(op byte, opa, opb uint16) {
 	if opa == opb && op == typ.OpSet {
 		return
 	}
 	b.Code = append(b.Code, inst(op, opa, opb))
+	if b.Len() >= 4e9 {
+		panic("too much code")
+	}
 }
 
-func (b *packet) writeJmpInst(op byte, d int) {
+func (b *Packet) writeJmpInst(op byte, d int) {
 	b.Code = append(b.Code, jmpInst(op, d))
+	if b.Len() >= 4e9 {
+		panic("too much code")
+	}
 }
 
-func (b *packet) writePos(p parser.Position) {
+func (b *Packet) writePos(p parser.Position) {
 	if p.Line == 0 {
 		// Debug Code, used to detect a null meta struct
 		internal.Panic("DEBUG: null line")
 	}
-	b.Pos.append(uint32(len(b.Code)), p.Line)
+	b.Pos.Append(uint32(len(b.Code)), p.Line)
 }
 
-func (b *packet) truncateLast() {
+func (b *Packet) truncLast() {
 	if len(b.Code) > 0 {
 		b.Code = b.Code[:len(b.Code)-1]
 	}
 }
 
-func (b *packet) Len() int {
+func (b *Packet) Len() int {
 	return len(b.Code)
+}
+
+func (b *Packet) LastInst() typ.Inst {
+	return b.Code[len(b.Code)-1]
 }
 
 var (
@@ -129,7 +98,7 @@ var (
 	}
 )
 
-func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
+func pkPrettify(c *function, p *Program, toplevel bool) string {
 	sb := &bytes.Buffer{}
 	sb.WriteString("+ START " + c.String() + "\n")
 
@@ -141,7 +110,7 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 		suffix := ""
 		if rValue {
 			if a > regLocalMask || toplevel {
-				suffix = ":" + showType((*p.Stack)[a&regLocalMask])
+				suffix = ":" + showType((*p.stack)[a&regLocalMask])
 			}
 		}
 
@@ -151,22 +120,18 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 		return fmt.Sprintf("$%d", a&regLocalMask) + suffix
 	}
 
-	oldpos := c.Code.Pos
+	oldpos := c.CodeSeg.Pos
 	lastLine := uint32(0)
 
-	for i, inst := range c.Code.Code {
+	for i, inst := range c.CodeSeg.Code {
 		cursor := uint32(i) + 1
-		bop, a, b := splitInst(inst)
+		bop, a, b := inst.Opcode, inst.A, uint16(inst.B)
 
-		if c.Code.Pos.len() > 0 {
-			next, op, line := c.Code.Pos.read(0)
+		if c.CodeSeg.Pos.Len() > 0 {
+			op, line := c.CodeSeg.Pos.Pop()
 			// log.Println(cursor, splitInst, unsafe.Pointer(&Pos))
-			for uint32(cursor) > op {
-				c.Code.Pos.b = c.Code.Pos.b[next:]
-				if c.Code.Pos.len() == 0 {
-					break
-				}
-				if next, op, line = c.Code.Pos.read(0); uint32(cursor) <= op {
+			for uint32(cursor) > op && c.CodeSeg.Pos.Len() > 0 {
+				if op, line = c.CodeSeg.Pos.Pop(); uint32(cursor) <= op {
 					break
 				}
 			}
@@ -178,7 +143,6 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 					lastLine = line
 				}
 				sb.WriteString(fmt.Sprintf("|%-4s % 4d| ", x, cursor-1))
-				c.Code.Pos.b = c.Code.Pos.b[next:]
 			} else {
 				sb.WriteString(fmt.Sprintf("|     % 4d| ", cursor-1))
 			}
@@ -195,8 +159,8 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 			sb.WriteString("createobject")
 		case typ.OpLoadFunc:
 			cls := p.Functions[a]
-			sb.WriteString("loadfunc " + cls.Callable.Name + "\n")
-			sb.WriteString(pkPrettify(cls.Callable, p, false))
+			sb.WriteString("loadfunc " + cls.fun.Name + "\n")
+			sb.WriteString(pkPrettify(cls.fun, p, false))
 		case typ.OpTailCall, typ.OpCall:
 			if b != regPhantom {
 				sb.WriteString("push " + readAddr(b, true) + " -> ")
@@ -206,7 +170,7 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 			}
 			sb.WriteString("call " + readAddr(a, true))
 		case typ.OpIfNot, typ.OpJmp:
-			pos := inst.b
+			pos := inst.B
 			pos2 := uint32(int32(cursor) + pos)
 			if bop == typ.OpIfNot {
 				sb.WriteString("if not $a ")
@@ -227,7 +191,7 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 		sb.WriteString("\n")
 	}
 
-	c.Code.Pos = oldpos
+	c.CodeSeg.Pos = oldpos
 
 	sb.WriteString("+ END " + c.String())
 	return sb.String()
