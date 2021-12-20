@@ -16,26 +16,33 @@ type Env struct {
 	stack       *[]Value
 	stackOffset uint32
 	runtime     Runtime
-
-	NativeSelf *FuncBody
 }
 
 type Runtime struct {
-	Current    Stacktrace
-	Stacktrace []Stacktrace
+	// Stacktrace layout: [N, N-1, ..., 2], 1, 0 (current)
+	Callable0 *FuncBody
+	Stack1    Stacktrace
+	StackN    []Stacktrace
 }
 
-func (r Runtime) StacktraceWithCurrent() []Stacktrace {
-	if r.Current.Callable == nil {
-		return r.Stacktrace
+func (r Runtime) Stacktrace() []Stacktrace {
+	return append(r.StackN, r.Stack1, Stacktrace{
+		Callable: r.Callable0,
+		Cursor:   typ.NativeCallCursor,
+	})
+}
+
+func (r Runtime) Push(k *FuncBody) Runtime {
+	if r.Stack1.Callable == nil {
+		internal.Panic("DEBUG shouldn't happen")
 	}
-	return append(r.Stacktrace, r.Current)
+	r.StackN = append(r.StackN, r.Stack1)
+	r.Stack1 = Stacktrace{Callable: r.Callable0, Cursor: typ.NativeCallCursor}
+	r.Callable0 = k
+	return r
 }
 
 func (env *Env) Runtime() Runtime {
-	if env == nil {
-		return Runtime{}
-	}
 	return env.runtime
 }
 

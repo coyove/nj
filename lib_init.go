@@ -72,11 +72,11 @@ func init() {
 	// Debug libraries
 	Globals.SetProp("debug", NamedObject("debug", 0).
 		SetMethod("self", func(e *Env) {
-			e.A = e.Runtime().Current.Callable.Object.ToValue()
+			e.A = e.Runtime().Stack1.Callable.Object.ToValue()
 		}, "").
 		SetMethod("locals", func(e *Env) {
-			locals := e.Runtime().Current.Callable.Locals
-			start := e.stackOffset - uint32(e.Runtime().Current.Callable.StackSize)
+			locals := e.Runtime().Stack1.Callable.Locals
+			start := e.stackOffset - uint32(e.Runtime().Stack1.Callable.StackSize)
 			if e.Get(0).IsTrue() {
 				r := NewObject(0)
 				for i, name := range locals {
@@ -103,15 +103,15 @@ func init() {
 			(*e.Global.Stack)[e.Int64(0)] = e.Get(1)
 		}, "$f(idx: int, v: value)").
 		SetMethod("trace", func(env *Env) {
-			stacks := env.Runtime().StacktraceWithCurrent()
+			stacks := env.Runtime().Stacktrace()
 			lines := make([]Value, 0, len(stacks))
 			for i := len(stacks) - 1 - env.Get(0).Safe().Int(0); i >= 0; i-- {
 				r := stacks[i]
 				src := uint32(0)
-				for i := 0; i < len(r.Callable.Code.Pos); {
+				for i := 0; i < r.Callable.Code.Pos.len(); {
 					var opx uint32 = math.MaxUint32
 					ii, op, line := r.Callable.Code.Pos.read(i)
-					if ii < len(r.Callable.Code.Pos)-1 {
+					if ii < r.Callable.Code.Pos.len()-1 {
 						_, opx, _ = r.Callable.Code.Pos.read(ii)
 					}
 					if r.Cursor >= op && r.Cursor < opx {
@@ -453,7 +453,7 @@ func init() {
 			"\trun function, return Error if any panic occurred (if function tends to return n results, these values will all be Error by then)").
 		SetMethod("after", func(e *Env) {
 			f, args, e2 := e.Object(-1), e.CopyStack()[1:], *e
-			e2.runtime.Stacktrace = append([]Stacktrace{}, e2.runtime.Stacktrace...)
+			e2.runtime.StackN = append([]Stacktrace{}, e2.runtime.StackN...)
 			t := time.AfterFunc(e.Num(0).Safe().Duration(0), func() { e2.Call(f, args...) })
 			e.A = NamedObject("Timer", 0).
 				SetProp("t", ValueOf(t)).
@@ -467,7 +467,7 @@ func init() {
 			args := e.CopyStack()
 			w := make(chan Value, 1)
 			e2 := *e
-			e2.runtime.Stacktrace = append([]Stacktrace{}, e2.runtime.Stacktrace...)
+			e2.runtime.StackN = append([]Stacktrace{}, e2.runtime.StackN...)
 			go func(f *Object, args []Value) {
 				if v, err := e2.Call2(f, args...); err != nil {
 					w <- Error(&e2, err)
@@ -500,7 +500,7 @@ func init() {
 			lambda := e.Object(-1)
 			c := e.CopyStack()
 			e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
-				o := e.NativeSelf.Object
+				o := e.runtime.Callable0.Object
 				f := o.Prop("_l").Object()
 				stk := append(o.Prop("_c").Array().Values(), e.Stack()...)
 				e.A = e.Call(f, stk...)
@@ -599,8 +599,8 @@ func init() {
 		}, "array.$f() -> array")
 	Globals.SetProp("array", ArrayProto.ToValue())
 
-	*ErrorProto = *Func("Error", func(e *Env) {
-		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.Runtime().StacktraceWithCurrent()})
+	*ErrorProto = *Func("error", func(e *Env) {
+		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.Runtime().Stacktrace()})
 	}, "").Object().
 		SetMethod("error", func(e *Env) { e.A = ValueOf(e.Array(-1).Unwrap().(*ExecError).root) }, "").
 		SetMethod("getcause", func(e *Env) { e.A = intf(e.Array(-1).Unwrap().(*ExecError).root) }, "").

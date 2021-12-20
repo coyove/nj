@@ -18,3 +18,5 @@ func (t ValueType) String() string {
 	}
 	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "object", "?", "array", "?", "native"}[t]
 }
+
+const NativeCallCursor = uint32(4212345678)

@@ -260,7 +260,10 @@ func Error(e *Env, err error) Value {
 	} else if _, ok := err.(*ExecError); ok {
 		return NewTypedArray(err, errorArrayMeta).ToValue()
 	}
-	ee := &ExecError{root: err, stacks: e.Runtime().StacktraceWithCurrent()}
+	ee := &ExecError{root: err}
+	if e != nil {
+		ee.stacks = e.Runtime().Stacktrace()
+	}
 	return NewTypedArray(ee, errorArrayMeta).ToValue()
 }
 

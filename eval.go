@@ -42,25 +42,29 @@ func (e *ExecError) Error() string {
 	msg.WriteString("stacktrace:\n")
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
-		src := uint32(0)
-		for i := 0; i < len(r.Callable.Code.Pos); {
-			var opx uint32 = math.MaxUint32
-			ii, op, line := r.Callable.Code.Pos.read(i)
-			if ii < len(r.Callable.Code.Pos)-1 {
-				_, opx, _ = r.Callable.Code.Pos.read(ii)
+		if r.Cursor == typ.NativeCallCursor {
+			msg.WriteString(fmt.Sprintf("%s (native)\n", r.Callable.Name))
+		} else {
+			src := uint32(0)
+			for i := 0; i < r.Callable.Code.Pos.len(); {
+				var opx uint32 = math.MaxUint32
+				ii, op, line := r.Callable.Code.Pos.read(i)
+				if ii < r.Callable.Code.Pos.len()-1 {
+					_, opx, _ = r.Callable.Code.Pos.read(ii)
+				}
+				if r.Cursor >= op && r.Cursor < opx {
+					src = line
+					break
+				}
+				if r.Cursor < op && i == 0 {
+					src = line
+					break
+				}
+				i = ii
 			}
-			if r.Cursor >= op && r.Cursor < opx {
-				src = line
-				break
-			}
-			if r.Cursor < op && i == 0 {
-				src = line
-				break
-			}
-			i = ii
+			// the recorded cursor was advanced by 1 already
+			msg.WriteString(fmt.Sprintf("%s at line %d (cursor: %d)\n", r.Callable.Name, src, r.Cursor-1))
 		}
-		// the recorded cursor was advanced by 1 already
-		msg.WriteString(fmt.Sprintf("%s at line %d (cursor: %d)\n", r.Callable.Name, src, r.Cursor-1))
 	}
 	if e.root != nil {
 		msg.WriteString("root panic:\n")
@@ -94,7 +98,7 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 			} else {
 				e := &ExecError{}
 				e.root = r // root panic
-				e.native = stackEnv.NativeSelf
+				e.native = stackEnv.runtime.Callable0
 				e.stacks = make([]Stacktrace, len(retStack)-retStackStartSize+1)
 				copy(e.stacks, retStack[retStackStartSize:])
 				e.stacks[len(e.stacks)-1] = rr
@@ -420,11 +424,10 @@ func internalExecCursorLoop(env Env, K *FuncBody, retStack []Stacktrace) Value {
 			}
 			if cls.Native != nil {
 				stackEnv.Global = env.Global
-				stackEnv.runtime.Current = Stacktrace{Callable: K, Cursor: cursor}
-				stackEnv.runtime.Stacktrace = retStack
-				stackEnv.NativeSelf = cls
+				stackEnv.runtime.Callable0 = cls
+				stackEnv.runtime.Stack1 = Stacktrace{Callable: K, Cursor: cursor}
+				stackEnv.runtime.StackN = retStack
 				cls.Native(&stackEnv)
-				stackEnv.NativeSelf = nil
 				stackEnv.runtime = Runtime{}
 				env.A = stackEnv.A
 				stackEnv.Clear()

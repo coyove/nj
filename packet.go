@@ -26,24 +26,31 @@ func splitInst(i _inst) (op byte, a, b uint16) {
 	return i.op, i.a, uint16(i.b)
 }
 
-type posVByte []byte
+type posVByte struct {
+	fn string
+	b  []byte
+}
+
+func (p *posVByte) len() int {
+	return len(p.b)
+}
 
 func (p *posVByte) append(idx uint32, line uint32) {
 	v := func(v uint64) {
-		*p = append(*p, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-		n := binary.PutUvarint((*p)[len(*p)-10:], v)
-		*p = (*p)[:len(*p)-10+n]
+		p.b = append(p.b, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+		n := binary.PutUvarint(p.b[p.len()-10:], v)
+		p.b = p.b[:p.len()-10+n]
 	}
 	v(uint64(idx))
 	v(uint64(line))
 }
 
-func (p posVByte) read(i int) (next int, idx, line uint32) {
-	rd := p[i:]
+func (p *posVByte) read(i int) (next int, idx, line uint32) {
+	rd := p.b[i:]
 	a, n := binary.Uvarint(rd)
 	b, n2 := binary.Uvarint(rd[n:])
 	if n == 0 || n2 == 0 {
-		next = len(p) + 1
+		next = p.len() + 1
 		return
 	}
 	return i + n + n2, uint32(a), uint32(b)
@@ -134,7 +141,7 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 		suffix := ""
 		if rValue {
 			if a > regLocalMask || toplevel {
-				suffix = showType((*p.Stack)[a&regLocalMask])
+				suffix = ":" + showType((*p.Stack)[a&regLocalMask])
 			}
 		}
 
@@ -151,12 +158,12 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 		cursor := uint32(i) + 1
 		bop, a, b := splitInst(inst)
 
-		if len(c.Code.Pos) > 0 {
+		if c.Code.Pos.len() > 0 {
 			next, op, line := c.Code.Pos.read(0)
 			// log.Println(cursor, splitInst, unsafe.Pointer(&Pos))
 			for uint32(cursor) > op {
-				c.Code.Pos = c.Code.Pos[next:]
-				if len(c.Code.Pos) == 0 {
+				c.Code.Pos.b = c.Code.Pos.b[next:]
+				if c.Code.Pos.len() == 0 {
 					break
 				}
 				if next, op, line = c.Code.Pos.read(0); uint32(cursor) <= op {
@@ -171,7 +178,7 @@ func pkPrettify(c *FuncBody, p *Program, toplevel bool) string {
 					lastLine = line
 				}
 				sb.WriteString(fmt.Sprintf("|%-4s % 4d| ", x, cursor-1))
-				c.Code.Pos = c.Code.Pos[next:]
+				c.Code.Pos.b = c.Code.Pos.b[next:]
 			} else {
 				sb.WriteString(fmt.Sprintf("|     % 4d| ", cursor-1))
 			}

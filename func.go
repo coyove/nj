@@ -126,8 +126,40 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 	if err != nil {
 		defer internal.CatchErrorFuncCall(err, m.Callable.Name)
 	}
-	r := Runtime{Stacktrace: e.Runtime().StacktraceWithCurrent()}
-	return m.Callable.execute(r, this, args...)
+
+	c := m.Callable
+	newEnv := Env{
+		A:      this,
+		Global: c.LoadGlobal,
+		stack:  &args,
+	}
+
+	if c.Native != nil {
+		if e == nil {
+			newEnv.runtime.Callable0 = c
+		} else {
+			newEnv.runtime = e.runtime.Push(c)
+		}
+		c.Native(&newEnv)
+		return newEnv.A
+	}
+
+	if c.Variadic {
+		s := *newEnv.stack
+		if len(s) > int(c.NumParams)-1 {
+			s[c.NumParams-1] = NewArray(append([]Value{}, s[c.NumParams-1:]...)...).ToValue()
+		} else {
+			newEnv.grow(int(c.NumParams))
+			newEnv._set(c.NumParams-1, NewArray().ToValue())
+		}
+	}
+	newEnv.growZero(int(c.StackSize), int(c.NumParams))
+
+	var stk []Stacktrace
+	if e != nil {
+		stk = e.runtime.Stacktrace()
+	}
+	return internalExecCursorLoop(newEnv, c, stk)
 }
 
 func (c *FuncBody) String() string {
@@ -170,32 +202,4 @@ func (c *FuncBody) EmergStop() {
 	for i := range c.Code.Code {
 		c.Code.Code[i] = inst(typ.OpRet, regA, 0)
 	}
-}
-
-func (c *FuncBody) execute(r Runtime, this Value, args ...Value) (v1 Value) {
-	newEnv := Env{
-		A:       this,
-		Global:  c.LoadGlobal,
-		stack:   &args,
-		runtime: r,
-	}
-
-	if c.Native != nil {
-		newEnv.NativeSelf = c
-		c.Native(&newEnv)
-		v1 = newEnv.A
-	} else {
-		if c.Variadic {
-			s := *newEnv.stack
-			if len(s) > int(c.NumParams)-1 {
-				s[c.NumParams-1] = NewArray(append([]Value{}, s[c.NumParams-1:]...)...).ToValue()
-			} else {
-				newEnv.grow(int(c.NumParams))
-				newEnv._set(c.NumParams-1, NewArray().ToValue())
-			}
-		}
-		newEnv.growZero(int(c.StackSize), int(c.NumParams))
-		v1 = internalExecCursorLoop(newEnv, c, r.Stacktrace)
-	}
-	return
 }
