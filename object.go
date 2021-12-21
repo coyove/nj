@@ -48,7 +48,7 @@ func NewObject(preallocateSize int) *Object {
 
 func NamedObject(name string, preallocateSize int) *Object {
 	obj := NewObject(preallocateSize)
-	obj.fun = &function{Name: name, Dummy: true, Native: dummyFunc, obj: obj}
+	obj.fun = &function{Name: name, Dummy: true, Native: func(*Env) {}, obj: obj}
 	return obj
 }
 

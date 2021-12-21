@@ -32,18 +32,10 @@ type breakLabel struct {
 	labelPos     []int
 }
 
-type CompileOptions struct {
-	MaxStackSize int64
-	Globals      *Object
-	Stdout       io.Writer
-	Stderr       io.Writer
-	Stdin        io.Reader
-}
-
 // symTable is responsible for recording the state of compilation
 type symTable struct {
 	name    string
-	options *CompileOptions
+	options *Environment
 
 	global *symTable
 	parent *symTable
@@ -71,7 +63,7 @@ type symTable struct {
 	labelPos    map[string]int
 }
 
-func newSymTable(opt *CompileOptions) *symTable {
+func newSymTable(opt *Environment) *symTable {
 	t := &symTable{
 		sym:          make(map[string]*symbol),
 		constMap:     make(map[interface{}]uint16),
@@ -379,10 +371,10 @@ func (table *symTable) collectConsts(node parser.Node) {
 	}
 }
 
-func compileNodeTopLevel(name, source string, n parser.Node, opt *CompileOptions) (cls *Program, err error) {
+func compileNodeTopLevel(name, source string, n parser.Node, env *Environment) (cls *Program, err error) {
 	defer internal.CatchError(&err)
 
-	table := newSymTable(opt)
+	table := newSymTable(env)
 	table.collectConstMode = true
 	table.name = name
 	table.codeSeg.Pos.Name = name
@@ -406,12 +398,12 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *CompileOptions
 
 	Globals.Foreach(func(k Value, v *Value) bool { push(k.String(), *v); return true })
 
-	if opt != nil && opt.Globals != nil {
-		opt.Globals.Foreach(func(k Value, v *Value) bool { push(k.String(), *v); return true })
+	if env != nil && env.Globals != nil {
+		env.Globals.Foreach(func(k Value, v *Value) bool { push(k.String(), *v); return true })
 	}
 
 	gi := push("PROGRAM", Nil)
-	push("COMPILE_OPTIONS", ValueOf(opt))
+	push("COMPILE_OPTIONS", ValueOf(env))
 	push("SOURCE_CODE", Str(source))
 
 	table.vp = uint16(coreStack.Size())
@@ -452,21 +444,21 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *CompileOptions
 	cls.top.LoadGlobal = cls
 	cls.stack = coreStack.stack
 	cls.symbols = table.sym
-	cls.Functions = table.funcs
-	if opt != nil {
-		cls.Options = *opt
+	cls.functions = table.funcs
+	if env != nil {
+		cls.Environment = *env
 	}
-	cls.Options.Stdout = or(cls.Options.Stdout, os.Stdout).(io.Writer)
-	cls.Options.Stdin = or(cls.Options.Stdin, os.Stdin).(io.Reader)
-	cls.Options.Stderr = or(cls.Options.Stderr, os.Stderr).(io.Writer)
-	for _, f := range cls.Functions {
+	cls.Stdout = or(cls.Stdout, os.Stdout).(io.Writer)
+	cls.Stdin = or(cls.Stdin, os.Stdin).(io.Reader)
+	cls.Stderr = or(cls.Stderr, os.Stderr).(io.Writer)
+	for _, f := range cls.functions {
 		f.fun.LoadGlobal = cls
 	}
 	(*cls.stack)[gi] = intf(cls)
 	return cls, err
 }
 
-func LoadFile(path string, opt *CompileOptions) (*Program, error) {
+func LoadFile(path string, opt *Environment) (*Program, error) {
 	code, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -474,11 +466,11 @@ func LoadFile(path string, opt *CompileOptions) (*Program, error) {
 	return loadCode(*(*string)(unsafe.Pointer(&code)), path, opt)
 }
 
-func LoadString(code string, opt *CompileOptions) (*Program, error) {
+func LoadString(code string, opt *Environment) (*Program, error) {
 	return loadCode(code, "<memory>", opt)
 }
 
-func loadCode(code, name string, opt *CompileOptions) (*Program, error) {
+func loadCode(code, name string, opt *Environment) (*Program, error) {
 	n, err := parser.Parse(code, name)
 	if err != nil {
 		return nil, err

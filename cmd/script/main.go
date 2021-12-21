@@ -41,7 +41,7 @@ func main() {
 	flag.Parse()
 
 	if *apiServer != "" {
-		http.HandleFunc("/", lib.WebREPLHandler(nil, nil))
+		http.HandleFunc("/", lib.PlaygroundHandler(nil))
 		log.Println("listen", *apiServer)
 		http.ListenAndServe(*apiServer, nil)
 		return
@@ -125,7 +125,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	b.Options.MaxStackSize = int64(*stackSize)
+	b.MaxStackSize = int64(*stackSize)
 
 	if _compileonly {
 		return
@@ -166,7 +166,7 @@ func runRepl() {
 		code = append(code, s)
 		if s == "" || strings.HasSuffix(s, ";") {
 			text := strings.TrimSuffix(strings.Join(code, "\n"), ";")
-			p, err := nj.LoadString(text, &nj.CompileOptions{Globals: globals})
+			p, err := nj.LoadString(text, &nj.Environment{Globals: globals})
 			if err != nil {
 				fmt.Println("x", err)
 			} else {

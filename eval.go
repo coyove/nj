@@ -16,6 +16,27 @@ type Stacktrace struct {
 	Callable    *function
 }
 
+func (r *Stacktrace) sourceLine() (src uint32) {
+	posv := r.Callable.CodeSeg.Pos
+	for i := 0; i < posv.Len(); {
+		var opx uint32 = math.MaxUint32
+		ii, op, line := posv.Read(i)
+		if ii < posv.Len()-1 {
+			_, opx, _ = posv.Read(ii)
+		}
+		if r.Cursor >= op && r.Cursor < opx {
+			src = line
+			break
+		}
+		if r.Cursor < op && i == 0 {
+			src = line
+			break
+		}
+		i = ii
+	}
+	return
+}
+
 // ExecError represents the runtime error
 type ExecError struct {
 	root   interface{}
@@ -45,26 +66,12 @@ func (e *ExecError) Error() string {
 		if r.Cursor == typ.NativeCallCursor {
 			msg.WriteString(fmt.Sprintf("%s (native)\n", r.Callable.Name))
 		} else {
-			src := uint32(0)
-			posv := r.Callable.CodeSeg.Pos
-			for i := 0; i < posv.Len(); {
-				var opx uint32 = math.MaxUint32
-				ii, op, line := posv.Read(i)
-				if ii < posv.Len()-1 {
-					_, opx, _ = posv.Read(ii)
-				}
-				if r.Cursor >= op && r.Cursor < opx {
-					src = line
-					break
-				}
-				if r.Cursor < op && i == 0 {
-					src = line
-					break
-				}
-				i = ii
-			}
-			// the recorded cursor was advanced by 1 already
-			msg.WriteString(fmt.Sprintf("%s at %s:%d (cursor: %d)\n", r.Callable.Name, posv.Name, src, r.Cursor-1))
+			msg.WriteString(fmt.Sprintf("%s at %s:%d (cursor: %d)\n",
+				r.Callable.Name,
+				r.Callable.CodeSeg.Pos.Name,
+				r.sourceLine(),
+				r.Cursor-1, // the recorded cursor was advanced by 1 already
+			))
 		}
 	}
 	if e.root != nil {
@@ -400,7 +407,7 @@ func internalExecCursorLoop(env Env, K *function, retStack []Stacktrace) Value {
 			stackEnv.stackOffset = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
 		case typ.OpLoadFunc:
-			env.A = env.Global.Functions[opa].ToValue()
+			env.A = env.Global.functions[opa].ToValue()
 		case typ.OpCall, typ.OpTailCall:
 			a := env._get(opa)
 			if a.Type() != typ.Object {

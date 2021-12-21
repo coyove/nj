@@ -15,7 +15,7 @@ import (
 //go:embed index.html
 var indexBytes []byte
 
-func WebREPLHandler(opt *nj.CompileOptions, cb func(*nj.Program)) func(w http.ResponseWriter, r *http.Request) {
+func PlaygroundHandler(opt *nj.Environment) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() { recover() }()
 
@@ -41,12 +41,9 @@ func WebREPLHandler(opt *nj.CompileOptions, cb func(*nj.Program)) func(w http.Re
 				p.Stop()
 			}
 		}()
-		p.Options.MaxStackSize = 100
-		p.Options.Stdout = bufOut
-		p.Options.Stderr = bufOut
-		if cb != nil {
-			cb(p)
-		}
+		p.MaxStackSize = 100
+		p.Stdout = bufOut
+		p.Stderr = bufOut
 		code := p.GoString()
 		v, err := p.Run()
 		finished = true

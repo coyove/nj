@@ -3,6 +3,7 @@ package nj
 import (
 	"bytes"
 	"fmt"
+	"io"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -22,15 +23,21 @@ type function struct {
 	obj        *Object
 }
 
+type Environment struct {
+	MaxStackSize int64
+	Globals      *Object
+	Stdout       io.Writer
+	Stderr       io.Writer
+	Stdin        io.Reader
+}
+
 type Program struct {
 	top       *function
 	symbols   map[string]*symbol
 	stack     *[]Value
-	Functions []*Object
-	Options   CompileOptions
+	functions []*Object
+	Environment
 }
-
-func dummyFunc(*Env) {}
 
 // Func creates a callable object
 func Func(name string, f func(*Env), doc string) Value {
@@ -45,7 +52,7 @@ func Func(name string, f func(*Env), doc string) Value {
 		obj:       obj,
 	}
 	if f == nil {
-		obj.fun.Native = dummyFunc
+		obj.fun.Native = func(*Env) {}
 		obj.fun.Dummy = true
 	}
 	obj.SetPrototype(FuncProto)
@@ -72,7 +79,7 @@ func (p *Program) Stop() {
 		}
 	}
 	stop(p.top)
-	for _, f := range p.Functions {
+	for _, f := range p.functions {
 		stop(f.fun)
 	}
 }

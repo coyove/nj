@@ -158,7 +158,7 @@ func pkPrettify(c *function, p *Program, toplevel bool) string {
 		case typ.OpCreateObject:
 			sb.WriteString("createobject")
 		case typ.OpLoadFunc:
-			cls := p.Functions[a]
+			cls := p.functions[a]
 			sb.WriteString("loadfunc " + cls.fun.Name + "\n")
 			sb.WriteString(pkPrettify(cls.fun, p, false))
 		case typ.OpTailCall, typ.OpCall:

@@ -52,7 +52,7 @@ func init() {
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
 	}, "$f(p: object) -> object")
 	Globals.SetMethod("loadfile", func(e *Env) {
-		e.A = MustRun(LoadFile(e.Str(0), &e.Global.Options))
+		e.A = MustRun(LoadFile(e.Str(0), &e.Global.Environment))
 	}, "$f(path: string) -> value\n\tload and eval file at `path`, globals will be inherited in loaded file")
 	Globals.SetMethod("eval", func(e *Env) {
 		opts := e.Get(1).Safe().Object()
@@ -62,7 +62,7 @@ func init() {
 			e.A = ValueOf(v)
 			return
 		}
-		p, err := LoadString(e.Str(0), &CompileOptions{Globals: opts.Prop("globals").Safe().Object()})
+		p, err := LoadString(e.Str(0), &Environment{Globals: opts.Prop("globals").Safe().Object()})
 		internal.PanicErr(err)
 		v, err := p.Run()
 		internal.PanicErr(err)
@@ -107,24 +107,7 @@ func init() {
 			lines := make([]Value, 0, len(stacks))
 			for i := len(stacks) - 1 - env.Get(0).Safe().Int(0); i >= 0; i-- {
 				r := stacks[i]
-				src := uint32(0)
-				for i := 0; i < r.Callable.CodeSeg.Pos.Len(); {
-					var opx uint32 = math.MaxUint32
-					ii, op, line := r.Callable.CodeSeg.Pos.Read(i)
-					if ii < r.Callable.CodeSeg.Pos.Len()-1 {
-						_, opx, _ = r.Callable.CodeSeg.Pos.Read(ii)
-					}
-					if r.Cursor >= op && r.Cursor < opx {
-						src = line
-						break
-					}
-					if r.Cursor < op && i == 0 {
-						src = line
-						break
-					}
-					i = ii
-				}
-				lines = append(lines, Str(r.Callable.Name), Int64(int64(src)), Int64(int64(r.Cursor-1)))
+				lines = append(lines, Str(r.Callable.Name), Int64(int64(r.sourceLine())), Int64(int64(r.Cursor-1)))
 			}
 			env.A = NewArray(lines...).ToValue()
 		}, "$f(skip?: int) -> array\n\treturn [func_name0, line1, cursor1, n2, l2, c2, ...]").
@@ -183,12 +166,12 @@ func init() {
 	Globals.SetProp("stderr", ValueOf(os.Stderr))
 	Globals.SetMethod("print", func(env *Env) {
 		for _, a := range env.Stack() {
-			fmt.Fprint(env.Global.Options.Stdout, a.String())
+			fmt.Fprint(env.Global.Stdout, a.String())
 		}
-		fmt.Fprintln(env.Global.Options.Stdout)
+		fmt.Fprintln(env.Global.Stdout)
 	}, "$f(args...: value)\n\tprint `args` to stdout")
 	Globals.SetMethod("printf", func(e *Env) {
-		sprintf(e, 0, e.Global.Options.Stdout)
+		sprintf(e, 0, e.Global.Stdout)
 	}, "$f(format: string, args...: value)")
 	Globals.SetMethod("write", func(e *Env) {
 		w := NewWriter(e.Get(0))
@@ -199,15 +182,15 @@ func init() {
 	}, "$f(w: Writer, args...: value)\n\twrite `args` to `w`")
 	Globals.SetMethod("println", func(e *Env) {
 		for _, a := range e.Stack() {
-			fmt.Fprint(e.Global.Options.Stdout, a.String(), " ")
+			fmt.Fprint(e.Global.Stdout, a.String(), " ")
 		}
-		fmt.Fprintln(e.Global.Options.Stdout)
+		fmt.Fprintln(e.Global.Stdout)
 	}, "$f(args...: value)\n\tsame as `print`, but values are separated by spaces")
 	Globals.SetMethod("scanln", func(env *Env) {
 		prompt, n := env.B(0), env.Get(1)
-		fmt.Fprint(env.Global.Options.Stdout, prompt.Safe().Str(""))
+		fmt.Fprint(env.Global.Stdout, prompt.Safe().Str(""))
 		var results []Value
-		var r io.Reader = env.Global.Options.Stdin
+		var r io.Reader = env.Global.Stdin
 		for i := n.Safe().Int64(1); i > 0; i-- {
 			var s string
 			if _, err := fmt.Fscan(r, &s); err != nil {

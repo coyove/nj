@@ -31,7 +31,7 @@ func runFile(t *testing.T, path string) {
 		flag.Parse()
 	}
 
-	b, err := LoadFile(path, &CompileOptions{
+	b, err := LoadFile(path, &Environment{
 		Globals: NewObject(0).
 			SetProp("nativeVarargTest", ValueOf(func(a ...int) int {
 				return len(a)
@@ -95,7 +95,7 @@ a=a+n
 return a
 end
 return foo
-`, &CompileOptions{Globals: NewObject(0).SetProp("init", Int(1))})
+`, &Environment{Globals: NewObject(0).SetProp("init", Int(1))})
 		v, _ := cls.Run()
 		if v := Call(v.Object(), Int64(10)); v.Int64() != 11 {
 			t.Fatal(v)
@@ -382,7 +382,7 @@ return add`, nil)
 	p2, _ := LoadString(`
 local a = 100
 return [a + add(), a + add(), a + add()]
-`, &CompileOptions{Globals: NewObject(0).SetProp("add", ValueOf(add))})
+`, &Environment{Globals: NewObject(0).SetProp("add", ValueOf(add))})
 	v, err := p2.Run()
 	if err != nil {
 		panic(err)
@@ -549,7 +549,7 @@ func TestACall(t *testing.T) {
 	}
 
 	foo = MustRun(LoadString(`m.a = 11
-    return m.pow2()`, &CompileOptions{
+    return m.pow2()`, &Environment{
 		Globals: NewObject(0).
 			SetProp("m", NewObject(0).SetPrototype(NewObject(0).
 				SetProp("a", Int64(0)).
@@ -565,7 +565,7 @@ func TestACall(t *testing.T) {
 	foo = MustRun(LoadString(`function foo(m...)
 	return sum(m.concat(m)...) + sum2(m.slice(0, 2)...)
     end
-    return foo`, &CompileOptions{
+    return foo`, &Environment{
 		Globals: NewObject(0).
 			SetProp("sum", ValueOf(func(a ...int) int {
 				s := 0
@@ -600,7 +600,7 @@ func TestReflectedValue(t *testing.T) {
 	p[0] = 99
 	return v, v + 1, nil
 	end
-	bar(foo)`, &CompileOptions{Globals: NewObject(0).
+	bar(foo)`, &Environment{Globals: NewObject(0).
 		SetProp("bar", ValueOf(func(cb func(a int, p []byte) (int, int, error)) {
 			buf := []byte{0}
 			a, b, _ := cb(10, buf)
