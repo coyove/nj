@@ -306,21 +306,7 @@ func internalExecCursorLoop(env Env, K *function, retStack []Stacktrace) Value {
 			if a, b := env._get(opa), env._get(opb); a.Equal(b) {
 				env.A = True
 			} else {
-				env.A = False
-				switch p := b.Safe().Object(); a.Type() {
-				case typ.Nil:
-					env.A = Bool(p == nil)
-				case typ.Object:
-					env.A = Bool(a.Object().IsPrototype(p))
-				case typ.Bool:
-					env.A = Bool(p == BoolProto)
-				case typ.Number:
-					env.A = Bool(p == FloatProto || (a.IsInt64() && p == IntProto))
-				case typ.String:
-					env.A = Bool(p == StrProto)
-				case typ.Array:
-					env.A = Bool(a.Array().meta.Proto.IsPrototype(p))
-				}
+				env.A = Bool(IsPrototype(a, b.Safe().Object()))
 			}
 		case typ.OpStore:
 			subject, v := env._get(opa), env._get(opb)

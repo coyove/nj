@@ -325,3 +325,21 @@ func Less(a, b Value) bool {
 	}
 	return a.ptr() < b.ptr()
 }
+
+func IsPrototype(a Value, p *Object) bool {
+	switch a.Type() {
+	case typ.Nil:
+		return p == nil
+	case typ.Object:
+		return a.Object().IsPrototype(p)
+	case typ.Bool:
+		return p == BoolProto
+	case typ.Number:
+		return p == FloatProto || (a.IsInt64() && p == IntProto)
+	case typ.String:
+		return p == StrProto
+	case typ.Array:
+		return a.Array().meta.Proto.IsPrototype(p)
+	}
+	return false
+}

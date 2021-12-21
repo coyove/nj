@@ -83,7 +83,7 @@ func init() {
 	}
 	*bytesArrayMeta = ArrayMeta{
 		"bytes",
-		ArrayProto,
+		BytesProto,
 		func(a *Array) int { return len((a.any).([]byte)) },
 		func(a *Array) int { return cap((a.any).([]byte)) },
 		func(a *Array) { a.any = a.any.([]byte)[:0] },

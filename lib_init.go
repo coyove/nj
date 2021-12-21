@@ -26,13 +26,14 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const Version int64 = 362
+const Version int64 = 379
 
 var (
 	ObjectProto       Object
 	StaticObjectProto = NewObject(0)
 	BoolProto         = NewObject(0)
 	StrProto          = NewObject(0)
+	BytesProto        = NewObject(0)
 	IntProto          = NewObject(0)
 	FloatProto        = NewObject(0)
 	FuncProto         = NewObject(0)
@@ -50,7 +51,7 @@ func init() {
 	Globals.SetMethod("new", func(e *Env) {
 		m := e.Object(0)
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
-	}, "$f(p: object) -> object")
+	}, "$f(p: object, o?: object) -> object")
 	Globals.SetMethod("loadfile", func(e *Env) {
 		e.A = MustRun(LoadFile(e.Str(0), &e.Global.Environment))
 	}, "$f(path: string) -> value\n\tload and eval file at `path`, globals will be inherited in loaded file")
@@ -73,7 +74,7 @@ func init() {
 	Globals.SetProp("debug", NamedObject("debug", 0).
 		SetMethod("self", func(e *Env) {
 			e.A = e.Runtime().Stack1.Callable.obj.ToValue()
-		}, "").
+		}, "$f() -> function\n\treturn caller").
 		SetMethod("locals", func(e *Env) {
 			locals := e.Runtime().Stack1.Callable.Locals
 			start := e.stackOffset - uint32(e.Runtime().Stack1.Callable.StackSize)
@@ -124,8 +125,14 @@ func init() {
 	Globals.SetMethod("apply", func(e *Env) {
 		e.A = CallObject(e.Object(0), e, nil, e.Get(1), e.Stack()[2:]...)
 	}, "$f(f: function, this: value, args...: value) -> value")
-	Globals.SetMethod("panic", func(e *Env) { panic(e.Get(0)) }, "$f(v: value)")
-	Globals.SetMethod("throw", func(e *Env) { panic(e.Get(0)) }, "$f(v: value)")
+	Globals.SetMethod("panic", func(e *Env) {
+		v := e.Get(0)
+		if IsPrototype(v, ErrorProto) {
+			panic(v.Array().Unwrap().(*ExecError).root)
+		}
+		panic(v)
+	}, "$f(v: value)")
+	Globals.SetProp("throw", Globals.Prop("panic"))
 	Globals.SetMethod("assert", func(e *Env) {
 		if v := e.Get(0); e.Size() <= 1 && v.IsFalse() {
 			internal.Panic("assertion failed")
@@ -158,9 +165,10 @@ func init() {
 		}
 	}, "$f(v: value) -> number\n\tconvert `v` to a float number, panic when failed").Object()
 	Globals.SetProp("float", FloatProto.ToValue())
-	Globals.SetMethod("bytes", func(e *Env) {
+	*BytesProto = *Func("bytes", func(e *Env) {
 		_ = e.Get(0).IsInt64() && e.SetA(ValueOf(make([]byte, e.Int(0)))) || e.SetA(ValueOf([]byte(e.Str(0))))
-	}, "$f(s: str) -> bytes\n\tconvert string to bytes\n$f(n: int) -> bytes\n\tcreate an n-byte long array")
+	}, "$f(s: str) -> bytes\n\tcreate bytes from string\n$f(n: int) -> bytes\n\tcreate an n-byte long array").Object().SetPrototype(ArrayProto)
+	Globals.SetProp("bytes", BytesProto.ToValue())
 	Globals.SetProp("stdout", ValueOf(os.Stdout))
 	Globals.SetProp("stdin", ValueOf(os.Stdin))
 	Globals.SetProp("stderr", ValueOf(os.Stderr))
