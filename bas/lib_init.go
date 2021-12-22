@@ -28,7 +28,7 @@ const Version int64 = 379
 
 var (
 	ObjectProto       Object
-	StaticObjectProto = NewObject(0)
+	StaticObjectProto = NamedObject("staticobject", 0)
 	BoolProto         = NewObject(0)
 	StrProto          = NewObject(0)
 	BytesProto        = NewObject(0)
