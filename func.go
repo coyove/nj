@@ -131,9 +131,9 @@ func Call2(m *Object, args ...Value) (res Value, err error) {
 func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res Value) {
 	if !m.IsCallable() {
 		if err == nil {
-			internal.Panic("%v not callable", showType(m.ToValue()))
+			internal.Panic("%v not callable", simpleString(m.ToValue()))
 		} else {
-			*err = fmt.Errorf("%v not callable", showType(m.ToValue()))
+			*err = fmt.Errorf("%v not callable", simpleString(m.ToValue()))
 		}
 		return
 	}

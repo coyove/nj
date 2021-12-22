@@ -8,26 +8,13 @@ import (
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
+	"github.com/coyove/nj/typ"
 )
-
-type Position struct {
-	Source string
-	Line   uint32
-	Column uint32
-}
-
-func (pos *Position) String() string {
-	// if pos.Source == "" {
-	// 	return ""
-	// }
-	// return fmt.Sprintf("%s:%d:%d", pos.Source, pos.Line, pos.Column)
-	return fmt.Sprintf("line %d", pos.Line)
-}
 
 type Token struct {
 	Type uint32
 	Str  string
-	Pos  Position
+	Pos  typ.Position
 }
 
 func (t *Token) String() string {
@@ -55,19 +42,10 @@ func staticSym(s string) Node {
 func Str(s string) Node { return Node{typ: STR, ptr: unsafe.Pointer(&s)} }
 
 func Num(v string) Node {
-	i, err := strconv.ParseInt(v, 0, 64)
-	if err == nil {
+	f, i, isInt, err := internal.ParseNumber(v)
+	internal.PanicErr(err)
+	if isInt {
 		return Int(i)
-	}
-	if err.(*strconv.NumError).Err == strconv.ErrRange {
-		i, err := strconv.ParseUint(v, 0, 64)
-		if err == nil {
-			return Int(int64(i))
-		}
-	}
-	f, err := strconv.ParseFloat(v, 64)
-	if err != nil {
-		internal.Panic("invalid number format: %q", v)
 	}
 	return Float(f)
 }
@@ -154,44 +132,40 @@ func Nodes(args ...Node) Node {
 	if len(args) == 3 {
 		op := args[0].Sym()
 		a, b := args[1], args[2]
-		if op == AAdd && a.Type() == STR && b.Type() == STR {
+		if op == typ.AAdd && a.Type() == STR && b.Type() == STR {
 			return Str(a.Str() + b.Str())
 		}
 		if a.IsNum() && b.IsNum() {
 			switch op {
-			case AAdd:
+			case typ.AAdd:
 				af, ai, aIsInt := a.Num()
 				bf, bi, bIsInt := b.Num()
 				if aIsInt && bIsInt {
 					return Int(ai + bi)
-				} else {
-					return Float(af + bf)
 				}
-			case ASub:
+				return Float(af + bf)
+			case typ.ASub:
 				af, ai, aIsInt := a.Num()
 				bf, bi, bIsInt := b.Num()
 				if aIsInt && bIsInt {
 					return Int(ai - bi)
-				} else {
-					return Float(af - bf)
-
 				}
-			case AMul:
+				return Float(af - bf)
+			case typ.AMul:
 				af, ai, aIsInt := a.Num()
 				bf, bi, bIsInt := b.Num()
 				if aIsInt && bIsInt {
 					return Int(ai * bi)
-				} else {
-					return Float(af * bf)
 				}
-			case ADiv:
-				af, ai, aIsInt := a.Num()
-				bf, bi, bIsInt := b.Num()
-				if aIsInt && bIsInt && ai%bi == 0 {
-					return Int(ai / bi)
-				} else {
-					return Float(af / bf)
-				}
+				return Float(af * bf)
+			case typ.ADiv:
+				af, _, _ := a.Num()
+				bf, _, _ := b.Num()
+				return Float(af / bf)
+			case typ.AIDiv:
+				_, ai, _ := a.Num()
+				_, bi, _ := b.Num()
+				return Int(ai / bi)
 			}
 		}
 	}
@@ -211,18 +185,18 @@ func (n Node) At(tok Token) Node {
 	return n
 }
 
-func (n Node) Pos() Position {
+func (n Node) Line() uint32 {
 	switch n.Type() {
 	case SYM:
-		return Position{Line: n.symLine}
+		return n.symLine
 	case NODES:
 		c := n.Nodes()
 		if len(c) == 0 {
-			panic("Pos()")
+			panic("Line()")
 		}
-		return c[0].Pos()
+		return c[0].Line()
 	default:
-		panic("Pos()")
+		panic("Line()")
 	}
 }
 
@@ -294,7 +268,7 @@ func (n Node) append(n2 ...Node) Node {
 
 func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
 	if len(n.Nodes()) == 3 {
-		if s := n.Nodes()[0].Sym(); s == ALoad {
+		if s := n.Nodes()[0].Sym(); s == typ.ALoad {
 			return __store(n.Nodes()[1], n.Nodes()[2], v)
 		}
 	}

@@ -223,31 +223,31 @@ func (table *symTable) loadK(v interface{}) uint16 {
 }
 
 var operatorMapping = map[string]byte{
-	parser.AAdd:     typ.OpAdd,
-	parser.ASub:     typ.OpSub,
-	parser.AMul:     typ.OpMul,
-	parser.ADiv:     typ.OpDiv,
-	parser.AIDiv:    typ.OpIDiv,
-	parser.AMod:     typ.OpMod,
-	parser.ALess:    typ.OpLess,
-	parser.ALessEq:  typ.OpLessEq,
-	parser.AEq:      typ.OpEq,
-	parser.ANeq:     typ.OpNeq,
-	parser.ANot:     typ.OpNot,
-	parser.ABitAnd:  typ.OpBitAnd,
-	parser.ABitOr:   typ.OpBitOr,
-	parser.ABitXor:  typ.OpBitXor,
-	parser.ABitNot:  typ.OpBitNot,
-	parser.ABitLsh:  typ.OpBitLsh,
-	parser.ABitRsh:  typ.OpBitRsh,
-	parser.ABitURsh: typ.OpBitURsh,
-	parser.AStore:   typ.OpStore,
-	parser.ALoad:    typ.OpLoad,
-	parser.AInc:     typ.OpInc,
-	parser.ANext:    typ.OpNext,
-	parser.ALen:     typ.OpLen,
-	parser.AIs:      typ.OpIsProto,
-	parser.AReturn:  typ.OpRet,
+	typ.AAdd:     typ.OpAdd,
+	typ.ASub:     typ.OpSub,
+	typ.AMul:     typ.OpMul,
+	typ.ADiv:     typ.OpDiv,
+	typ.AIDiv:    typ.OpIDiv,
+	typ.AMod:     typ.OpMod,
+	typ.ALess:    typ.OpLess,
+	typ.ALessEq:  typ.OpLessEq,
+	typ.AEq:      typ.OpEq,
+	typ.ANeq:     typ.OpNeq,
+	typ.ANot:     typ.OpNot,
+	typ.ABitAnd:  typ.OpBitAnd,
+	typ.ABitOr:   typ.OpBitOr,
+	typ.ABitXor:  typ.OpBitXor,
+	typ.ABitNot:  typ.OpBitNot,
+	typ.ABitLsh:  typ.OpBitLsh,
+	typ.ABitRsh:  typ.OpBitRsh,
+	typ.ABitURsh: typ.OpBitURsh,
+	typ.AStore:   typ.OpStore,
+	typ.ALoad:    typ.OpLoad,
+	typ.AInc:     typ.OpInc,
+	typ.ANext:    typ.OpNext,
+	typ.ALen:     typ.OpLen,
+	typ.AIs:      typ.OpIsProto,
+	typ.AReturn:  typ.OpRet,
 }
 
 func (table *symTable) writeInst(op byte, n0, n1 parser.Node) {
@@ -328,27 +328,27 @@ func (table *symTable) compileNode(node parser.Node) uint16 {
 	name := nodes[0].Sym()
 	var yx uint16
 	switch name {
-	case parser.ADoBlock, parser.ABegin:
+	case typ.ADoBlock, typ.ABegin:
 		yx = table.compileChain(node)
-	case parser.ASet, parser.AMove:
+	case typ.ASet, typ.AMove:
 		yx = table.compileSetMove(nodes)
-	case parser.AIf:
+	case typ.AIf:
 		yx = table.compileIf(nodes)
-	case parser.AFor:
+	case typ.AFor:
 		yx = table.compileWhile(nodes)
-	case parser.ABreak, parser.AContinue:
+	case typ.ABreak, typ.AContinue:
 		yx = table.compileBreak(nodes)
-	case parser.ACall, parser.ATailCall:
+	case typ.ACall, typ.ATailCall:
 		yx = table.compileCall(nodes)
-	case parser.AArray, parser.AObject:
+	case typ.AArray, typ.AObject:
 		yx = table.compileList(nodes)
-	case parser.AOr, parser.AAnd:
+	case typ.AOr, typ.AAnd:
 		yx = table.compileAndOr(nodes)
-	case parser.AFunc:
+	case typ.AFunc:
 		yx = table.compileFunction(nodes)
-	case parser.AFreeAddr:
+	case typ.AFreeAddr:
 		yx = table.compileFreeAddr(nodes)
-	case parser.AGoto, parser.ALabel:
+	case typ.AGoto, typ.ALabel:
 		yx = table.compileGoto(nodes)
 	default:
 		yx = table.compileOperator(nodes)

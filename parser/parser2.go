@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"unsafe"
+
+	"github.com/coyove/nj/typ"
 )
 
 const (
@@ -27,51 +29,51 @@ var (
 )
 
 var (
-	ADoBlock, SDoBlock   = "do", staticSym("do")
-	ANil, SNil           = "nil", staticSym("nil")
-	ASet, SSet           = "set", staticSym("set")
-	AInc, SInc           = "incr", staticSym("incr")
-	AMove, SMove         = "move", staticSym("move")
-	AIf, SIf             = "if", staticSym("if")
-	AFor, SFor           = "loop", staticSym("loop")
-	AFunc, SFunc         = "function", staticSym("function")
-	ABreak, SBreak       = "break", staticSym("break")
-	AContinue, SContinue = "continue", staticSym("continue")
-	ABegin, SBegin       = "prog", staticSym("prog")
-	ALoad, SLoad         = "load", staticSym("load")
-	AStore, SStore       = "store", staticSym("store")
-	AArray, SArray       = "array", staticSym("array")
-	AObject, SObject     = "map", staticSym("map")
-	ACall, SCall         = "call", staticSym("call")
-	ATailCall, STailCall = "tailcall", staticSym("tailcall")
-	AReturn, SReturn     = "return", staticSym("return")
-	ALen, SLen           = "len", staticSym("len")
-	ANext, SNext         = "next", staticSym("next")
-	AAdd, SAdd           = "add", staticSym("add")
-	ASub, SSub           = "sub", staticSym("sub")
-	AMul, SMul           = "mul", staticSym("mul")
-	ADiv, SDiv           = "div", staticSym("div")
-	AIDiv, SIDiv         = "idiv", staticSym("idiv")
-	AMod, SMod           = "mod", staticSym("mod")
-	ABitAnd, SBitAnd     = "bitand", staticSym("bitand")
-	ABitOr, SBitOr       = "bitor", staticSym("bitor")
-	ABitXor, SBitXor     = "bitxor", staticSym("bitxor")
-	ABitNot, SBitNot     = "bitnot", staticSym("bitnot")
-	ABitLsh, SBitLsh     = "bitlsh", staticSym("bitlsh")
-	ABitRsh, SBitRsh     = "bitrsh", staticSym("bitrsh")
-	ABitURsh, SBitURsh   = "bitursh", staticSym("bitursh")
-	AEq, SEq             = "eq", staticSym("eq")
-	ANeq, SNeq           = "neq", staticSym("neq")
-	AAnd, SAnd           = "and", staticSym("and")
-	AOr, SOr             = "or", staticSym("or")
-	ANot, SNot           = "not", staticSym("not")
-	ALess, SLess         = "lt", staticSym("lt")
-	ALessEq, SLessEq     = "le", staticSym("le")
-	AFreeAddr, SFreeAddr = "freeaddr", staticSym("freeaddr")
-	ALabel, SLabel       = "label", staticSym("label")
-	AGoto, SGoto         = "goto", staticSym("goto")
-	AUnpack, SUnpack     = "unpack", staticSym("unpack")
-	AIs, SIs             = "isproto", staticSym("isproto")
+	SDoBlock  = staticSym(typ.ADoBlock)
+	SNil      = staticSym(typ.ANil)
+	SSet      = staticSym(typ.ASet)
+	SInc      = staticSym(typ.AInc)
+	SMove     = staticSym(typ.AMove)
+	SIf       = staticSym(typ.AIf)
+	SFor      = staticSym(typ.AFor)
+	SFunc     = staticSym(typ.AFunc)
+	SBreak    = staticSym(typ.ABreak)
+	SContinue = staticSym(typ.AContinue)
+	SBegin    = staticSym(typ.ABegin)
+	SLoad     = staticSym(typ.ALoad)
+	SStore    = staticSym(typ.AStore)
+	SArray    = staticSym(typ.AArray)
+	SObject   = staticSym(typ.AObject)
+	SCall     = staticSym(typ.ACall)
+	STailCall = staticSym(typ.ATailCall)
+	SReturn   = staticSym(typ.AReturn)
+	SLen      = staticSym(typ.ALen)
+	SNext     = staticSym(typ.ANext)
+	SAdd      = staticSym(typ.AAdd)
+	SSub      = staticSym(typ.ASub)
+	SMul      = staticSym(typ.AMul)
+	SDiv      = staticSym(typ.ADiv)
+	SIDiv     = staticSym(typ.AIDiv)
+	SMod      = staticSym(typ.AMod)
+	SBitAnd   = staticSym(typ.ABitAnd)
+	SBitOr    = staticSym(typ.ABitOr)
+	SBitXor   = staticSym(typ.ABitXor)
+	SBitNot   = staticSym(typ.ABitNot)
+	SBitLsh   = staticSym(typ.ABitLsh)
+	SBitRsh   = staticSym(typ.ABitRsh)
+	SBitURsh  = staticSym(typ.ABitURsh)
+	SEq       = staticSym(typ.AEq)
+	SNeq      = staticSym(typ.ANeq)
+	SAnd      = staticSym(typ.AAnd)
+	SOr       = staticSym(typ.AOr)
+	SNot      = staticSym(typ.ANot)
+	SLess     = staticSym(typ.ALess)
+	SLessEq   = staticSym(typ.ALessEq)
+	SFreeAddr = staticSym(typ.AFreeAddr)
+	SLabel    = staticSym(typ.ALabel)
+	SGoto     = staticSym(typ.AGoto)
+	SUnpack   = staticSym(typ.AUnpack)
+	SIs       = staticSym(typ.AIs)
 )
 
 func __chain(args ...Node) Node { return Nodes(append([]Node{SBegin}, args...)...) }
@@ -129,7 +131,7 @@ func __func(name Token, paramList Node, stats Node) Node {
 
 func __lambda(name Token, pp Node, stats Node) Node {
 	nodes := stats.Nodes()
-	if len(nodes) > 1 && nodes[0].Sym() == ABegin {
+	if len(nodes) > 1 && nodes[0].Sym() == typ.ABegin {
 		nodes[len(nodes)-1] = Nodes(SReturn, nodes[len(nodes)-1])
 	}
 	return __func(name, pp, stats)
@@ -153,7 +155,7 @@ func __findTailCall(stats []Node) {
 	if len(stats) > 0 {
 		x := stats[len(stats)-1]
 		c := x.Nodes()
-		if len(c) == 3 && c[0].Sym() == ACall {
+		if len(c) == 3 && c[0].Sym() == typ.ACall {
 			old := c[0].symLine
 			c[0] = STailCall
 			c[0].symLine = old
@@ -161,7 +163,7 @@ func __findTailCall(stats []Node) {
 		}
 
 		if len(c) > 0 {
-			if c[0].Sym() == (ABegin) {
+			if c[0].Sym() == typ.ABegin {
 				__findTailCall(c)
 				return
 			}

@@ -72,32 +72,6 @@ func reflectStore(subject interface{}, key, value Value) {
 	f.Set(value.ReflectValue(f.Type()))
 }
 
-func closeBuffer(p *bytes.Buffer, suffix string) {
-	for p.Len() > 0 {
-		b := p.Bytes()[p.Len()-1]
-		if b == ' ' || b == ',' {
-			p.Truncate(p.Len() - 1)
-		} else {
-			break
-		}
-	}
-	p.WriteString(suffix)
-}
-
-func ifstr(v bool, t, f string) string {
-	if v {
-		return t
-	}
-	return f
-}
-
-func ifquote(v bool, s string) string {
-	if v {
-		return strconv.Quote(s)
-	}
-	return s
-}
-
 func or(a, b interface{}) interface{} {
 	if a != nil {
 		return a
@@ -112,7 +86,7 @@ func setObjectRecv(v, r Value) Value {
 	return v
 }
 
-func showType(v Value) string {
+func simpleString(v Value) string {
 	switch vt := v.Type(); vt {
 	case typ.Number, typ.Bool, typ.Native:
 		return v.JSONString()
@@ -236,8 +210,7 @@ func fileInfo(fi os.FileInfo) *Object {
 		SetProp("mode", Int64(int64(fi.Mode()))).
 		SetProp("modestr", Str(fi.Mode().String())).
 		SetProp("modtime", ValueOf(fi.ModTime())).
-		SetProp("isdir", Bool(fi.IsDir())).
-		SetPrototype(FileInfoProto)
+		SetProp("isdir", Bool(fi.IsDir()))
 }
 
 func multiMap(e *Env, fun *Object, t Value, n int) Value {
@@ -297,49 +270,4 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 	}
 	internal.PanicErr(outError)
 	return t
-}
-
-func lessStr(a, b Value) bool {
-	if a.isSmallString() && b.isSmallString() {
-		if a.v == b.v {
-			return uintptr(a.p) < uintptr(b.p) // a is shorter than b
-		}
-		return a.v < b.v
-	}
-	return a.Str() < b.Str()
-}
-
-func Less(a, b Value) bool {
-	at, bt := a.Type(), b.Type()
-	if at != bt {
-		return at < bt
-	}
-	switch at {
-	case typ.Number:
-		if a.IsInt64() && b.IsInt64() {
-			return a.unsafeInt() < b.unsafeInt()
-		}
-		return a.Float64() < b.Float64()
-	case typ.String:
-		return lessStr(a, b)
-	}
-	return a.ptr() < b.ptr()
-}
-
-func IsPrototype(a Value, p *Object) bool {
-	switch a.Type() {
-	case typ.Nil:
-		return p == nil
-	case typ.Object:
-		return a.Object().IsPrototype(p)
-	case typ.Bool:
-		return p == BoolProto
-	case typ.Number:
-		return p == FloatProto || (a.IsInt64() && p == IntProto)
-	case typ.String:
-		return p == StrProto
-	case typ.Array:
-		return a.Array().meta.Proto.IsPrototype(p)
-	}
-	return false
 }

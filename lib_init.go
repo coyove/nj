@@ -21,7 +21,6 @@ import (
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
-	"github.com/coyove/nj/parser"
 	"github.com/coyove/nj/typ"
 	"github.com/tidwall/gjson"
 )
@@ -39,7 +38,6 @@ var (
 	FuncProto         = NewObject(0)
 	ArrayProto        = NewObject(0)
 	ErrorProto        = NewObject(0)
-	FileInfoProto     = NamedObject("FileInfo", 0)
 	Globals           = NewObject(0)
 )
 
@@ -57,12 +55,12 @@ func init() {
 	}, "$f(path: string) -> value\n\tload and eval file at `path`, globals will be inherited in loaded file")
 	Globals.SetMethod("eval", func(e *Env) {
 		opts := e.Get(1).Safe().Object()
-		if opts.Prop("ast").IsTrue() {
-			v, err := parser.Parse(e.Str(0), "")
-			internal.PanicErr(err)
-			e.A = ValueOf(v)
-			return
-		}
+		// if opts.Prop("ast").IsTrue() {
+		// 	v, err := parser.Parse(e.Str(0), "")
+		// 	internal.PanicErr(err)
+		// 	e.A = ValueOf(v)
+		// 	return
+		// }
 		p, err := LoadString(e.Str(0), &Environment{Globals: opts.Prop("globals").Safe().Object()})
 		internal.PanicErr(err)
 		v, err := p.Run()
@@ -158,10 +156,10 @@ func init() {
 	*FloatProto = *Func("float", func(e *Env) {
 		if v := e.Get(0); v.Type() == typ.Number {
 			e.A = v
-		} else if v := parser.Num(v.String()); v.Type() == parser.FLOAT {
-			e.A = Float64(v.Float64())
 		} else {
-			e.A = Int64(v.Int64())
+			f, i, isInt, err := internal.ParseNumber(v.String())
+			internal.PanicErr(err)
+			_ = isInt && e.SetA(Int64(i)) || e.SetA(Float64(f))
 		}
 	}, "$f(v: value) -> number\n\tconvert `v` to a float number, panic when failed").Object()
 	Globals.SetProp("float", FloatProto.ToValue())
@@ -775,7 +773,7 @@ func init() {
 		}, "").
 		SetMethod("shell", func(e *Env) {
 			win := runtime.GOOS == "windows"
-			p := exec.Command(ifstr(win, "cmd", "sh"), ifstr(win, "/c", "-c"), e.Str(0))
+			p := exec.Command(internal.IfStr(win, "cmd", "sh"), internal.IfStr(win, "/c", "-c"), e.Str(0))
 			opt := e.Get(1).Safe().Object()
 			opt.Prop("env").Safe().Object().Foreach(func(k Value, v *Value) bool {
 				p.Env = append(p.Env, k.String()+"="+v.String())

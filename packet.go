@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/coyove/nj/internal"
-	"github.com/coyove/nj/parser"
 	"github.com/coyove/nj/typ"
 )
 
@@ -43,12 +42,12 @@ func (b *Packet) writeJmpInst(op byte, d int) {
 	}
 }
 
-func (b *Packet) writePos(p parser.Position) {
-	if p.Line == 0 {
+func (b *Packet) writeLineNum(line uint32) {
+	if line == 0 {
 		// Debug Code, used to detect a null meta struct
 		internal.Panic("DEBUG: null line")
 	}
-	b.Pos.Append(uint32(len(b.Code)), p.Line)
+	b.Pos.Append(uint32(len(b.Code)), line)
 }
 
 func (b *Packet) truncLast() {
@@ -67,32 +66,32 @@ func (b *Packet) LastInst() typ.Inst {
 
 var (
 	biOp = map[byte]string{
-		typ.OpAdd:     parser.AAdd,
-		typ.OpSub:     parser.ASub,
-		typ.OpMul:     parser.AMul,
-		typ.OpDiv:     parser.ADiv,
-		typ.OpIDiv:    parser.AIDiv,
-		typ.OpMod:     parser.AMod,
-		typ.OpEq:      parser.AEq,
-		typ.OpNeq:     parser.ANeq,
-		typ.OpLess:    parser.ALess,
-		typ.OpLessEq:  parser.ALessEq,
-		typ.OpLoad:    parser.ALoad,
-		typ.OpStore:   parser.AStore,
-		typ.OpBitAnd:  parser.ABitAnd,
-		typ.OpBitOr:   parser.ABitOr,
-		typ.OpBitXor:  parser.ABitXor,
-		typ.OpBitLsh:  parser.ABitLsh,
-		typ.OpBitRsh:  parser.ABitRsh,
-		typ.OpBitURsh: parser.ABitURsh,
-		typ.OpNext:    parser.ANext,
-		typ.OpIsProto: parser.AIs,
+		typ.OpAdd:     typ.AAdd,
+		typ.OpSub:     typ.ASub,
+		typ.OpMul:     typ.AMul,
+		typ.OpDiv:     typ.ADiv,
+		typ.OpIDiv:    typ.AIDiv,
+		typ.OpMod:     typ.AMod,
+		typ.OpEq:      typ.AEq,
+		typ.OpNeq:     typ.ANeq,
+		typ.OpLess:    typ.ALess,
+		typ.OpLessEq:  typ.ALessEq,
+		typ.OpLoad:    typ.ALoad,
+		typ.OpStore:   typ.AStore,
+		typ.OpBitAnd:  typ.ABitAnd,
+		typ.OpBitOr:   typ.ABitOr,
+		typ.OpBitXor:  typ.ABitXor,
+		typ.OpBitLsh:  typ.ABitLsh,
+		typ.OpBitRsh:  typ.ABitRsh,
+		typ.OpBitURsh: typ.ABitURsh,
+		typ.OpNext:    typ.ANext,
+		typ.OpIsProto: typ.AIs,
 	}
 	uOp = map[byte]string{
-		typ.OpBitNot:     parser.ABitNot,
-		typ.OpNot:        parser.ANot,
-		typ.OpRet:        parser.AReturn,
-		typ.OpLen:        parser.ALen,
+		typ.OpBitNot:     typ.ABitNot,
+		typ.OpNot:        typ.ANot,
+		typ.OpRet:        typ.AReturn,
+		typ.OpLen:        typ.ALen,
 		typ.OpPush:       "push",
 		typ.OpPushUnpack: "pushvararg",
 	}
@@ -110,7 +109,7 @@ func pkPrettify(c *function, p *Program, toplevel bool) string {
 		suffix := ""
 		if rValue {
 			if a > regLocalMask || toplevel {
-				suffix = ":" + showType((*p.stack)[a&regLocalMask])
+				suffix = ":" + simpleString((*p.stack)[a&regLocalMask])
 			}
 		}
 

@@ -328,9 +328,9 @@ func (v Value) Interface() interface{} {
 	return nil
 }
 
-func (v Value) ptr() uintptr { return uintptr(v.p) }
+func (v Value) UnsafeAddr() uintptr { return uintptr(v.p) }
 
-func (v Value) unsafeInt() int64 { return int64(v.v) }
+func (v Value) UnsafeInt64() int64 { return int64(v.v) }
 
 // ReflectValue returns value as a reflect.Value based on reflect.Type
 func (v Value) ReflectValue(t reflect.Type) reflect.Value {
@@ -393,9 +393,9 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 func (v Value) Is(t typ.ValueType, msg string) Value {
 	if v.Type() != t {
 		if msg != "" {
-			internal.Panic("%s: expect %v, got %v", msg, t, showType(v))
+			internal.Panic("%s: expect %v, got %v", msg, t, simpleString(v))
 		}
-		internal.Panic("expect %v, got %v", t, showType(v))
+		internal.Panic("expect %v, got %v", t, simpleString(v))
 	}
 	return v
 }
@@ -433,7 +433,7 @@ func (v Value) MarshalJSON() ([]byte, error) {
 
 func (v Value) toString(p *bytes.Buffer, lv int, j typ.MarshalType) *bytes.Buffer {
 	if lv > 10 {
-		p.WriteString(ifstr(j == typ.MarshalToJSON, "{}", "..."))
+		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, "{}", "..."))
 		return p
 	}
 	switch v.Type() {
@@ -446,7 +446,7 @@ func (v Value) toString(p *bytes.Buffer, lv int, j typ.MarshalType) *bytes.Buffe
 			p.WriteString(strconv.FormatFloat(v.Float64(), 'f', -1, 64))
 		}
 	case typ.String:
-		p.WriteString(ifquote(j == typ.MarshalToJSON, v.Str()))
+		p.WriteString(internal.IfQuote(j == typ.MarshalToJSON, v.Str()))
 	case typ.Object:
 		v.Object().rawPrint(p, lv, j, false)
 	case typ.Array:
@@ -454,14 +454,14 @@ func (v Value) toString(p *bytes.Buffer, lv int, j typ.MarshalType) *bytes.Buffe
 	case typ.Native:
 		i := v.Interface()
 		if s, ok := i.(fmt.Stringer); ok {
-			p.WriteString(ifquote(j == typ.MarshalToJSON, s.String()))
+			p.WriteString(internal.IfQuote(j == typ.MarshalToJSON, s.String()))
 		} else if s, ok := i.(error); ok {
-			p.WriteString(ifquote(j == typ.MarshalToJSON, s.Error()))
+			p.WriteString(internal.IfQuote(j == typ.MarshalToJSON, s.Error()))
 		} else {
-			p.WriteString(ifquote(j == typ.MarshalToJSON, "<"+reflect.TypeOf(i).String()+">"))
+			p.WriteString(internal.IfQuote(j == typ.MarshalToJSON, "<"+reflect.TypeOf(i).String()+">"))
 		}
 	default:
-		p.WriteString(ifstr(j == typ.MarshalToJSON, "null", "nil"))
+		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, "null", "nil"))
 	}
 	return p
 }
@@ -477,9 +477,9 @@ func (v Value) Len() int {
 	case typ.Nil:
 		return 0
 	case typ.Native:
-		internal.Panic("can't measure length of %T", v.Interface())
+		return reflect.ValueOf(v.Interface()).Len()
 	}
-	internal.Panic("can't measure length of %v", showType(v))
+	internal.Panic("can't measure length of %v", simpleString(v))
 	return -1
 }
 
@@ -558,4 +558,49 @@ func (v SafeValue) Error() error {
 		return nil
 	}
 	return Value(v).Array().Unwrap().(*ExecError)
+}
+
+func lessStr(a, b Value) bool {
+	if a.isSmallString() && b.isSmallString() {
+		if a.v == b.v {
+			return uintptr(a.p) < uintptr(b.p) // a is shorter than b
+		}
+		return a.v < b.v
+	}
+	return a.Str() < b.Str()
+}
+
+func Less(a, b Value) bool {
+	at, bt := a.Type(), b.Type()
+	if at != bt {
+		return at < bt
+	}
+	switch at {
+	case typ.Number:
+		if a.IsInt64() && b.IsInt64() {
+			return a.UnsafeInt64() < b.UnsafeInt64()
+		}
+		return a.Float64() < b.Float64()
+	case typ.String:
+		return lessStr(a, b)
+	}
+	return a.UnsafeAddr() < b.UnsafeAddr()
+}
+
+func IsPrototype(a Value, p *Object) bool {
+	switch a.Type() {
+	case typ.Nil:
+		return p == nil
+	case typ.Object:
+		return a.Object().IsPrototype(p)
+	case typ.Bool:
+		return p == BoolProto
+	case typ.Number:
+		return p == FloatProto || (a.IsInt64() && p == IntProto)
+	case typ.String:
+		return p == StrProto
+	case typ.Array:
+		return a.Array().meta.Proto.IsPrototype(p)
+	}
+	return false
 }

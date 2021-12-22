@@ -13,7 +13,7 @@ var _nodeRegA = parser.Addr(regA)
 
 // [prog expr1 expr2 ...]
 func (table *symTable) compileChain(chain parser.Node) uint16 {
-	doblock := chain.Nodes()[0].Sym() == (parser.ADoBlock)
+	doblock := chain.Nodes()[0].Sym() == typ.ADoBlock
 
 	if doblock {
 		table.addMaskedSymTable()
@@ -45,7 +45,7 @@ func (table *symTable) compileChain(chain parser.Node) uint16 {
 func (table *symTable) compileSetMove(nodes []parser.Node) uint16 {
 	dest := nodes[1].Sym()
 	destAddr, declared := table.get(dest)
-	if nodes[0].Sym() == parser.AMove {
+	if nodes[0].Sym() == typ.AMove {
 		// a = b
 		if !declared {
 			// a is not declared yet
@@ -63,7 +63,7 @@ func (table *symTable) compileSetMove(nodes []parser.Node) uint16 {
 
 	srcAddr := table.compileNode(nodes[2])
 	table.codeSeg.writeInst(typ.OpSet, destAddr, srcAddr)
-	table.codeSeg.writePos(nodes[0].Pos())
+	table.codeSeg.writeLineNum(nodes[0].Line())
 	return destAddr
 }
 
@@ -119,8 +119,8 @@ func (table *symTable) compileOperator(atoms []parser.Node) uint16 {
 		internal.Panic("DEBUG invalid symbol: %v", atoms[0])
 	}
 	yx := table.writeInst3(op, atoms)
-	if p := atoms[0].Pos(); p.Line > 0 {
-		table.codeSeg.writePos(p)
+	if p := atoms[0].Line(); p > 0 {
+		table.codeSeg.writeLineNum(p)
 	}
 	return yx
 }
@@ -130,7 +130,7 @@ func (table *symTable) compileOperator(atoms []parser.Node) uint16 {
 func (table *symTable) compileAndOr(atoms []parser.Node) uint16 {
 	table.writeInst(typ.OpSet, _nodeRegA, atoms[1])
 
-	if atoms[0].Sym() == (parser.AOr) {
+	if atoms[0].Sym() == (typ.AOr) {
 		table.codeSeg.writeJmpInst(typ.OpIfNot, 1)
 		table.codeSeg.writeJmpInst(typ.OpJmp, 0)
 		part1 := table.codeSeg.Len()
@@ -148,7 +148,7 @@ func (table *symTable) compileAndOr(atoms []parser.Node) uint16 {
 
 		table.codeSeg.Code[part1-1] = jmpInst(typ.OpIfNot, part2-part1)
 	}
-	table.codeSeg.writePos(atoms[0].Pos())
+	table.codeSeg.writeLineNum(atoms[0].Line())
 	return regA
 }
 
@@ -166,7 +166,7 @@ func (table *symTable) compileIf(atoms []parser.Node) uint16 {
 	}
 
 	table.codeSeg.writeJmpInst(typ.OpIfNot, 0)
-	table.codeSeg.writePos(atoms[0].Pos())
+	table.codeSeg.writeLineNum(atoms[0].Line())
 	init := table.codeSeg.Len()
 
 	table.compileNode(trueBranch)
@@ -193,7 +193,7 @@ func (table *symTable) compileIf(atoms []parser.Node) uint16 {
 // [list [a, b, c, ...]]
 func (table *symTable) compileList(nodes []parser.Node) uint16 {
 	table.collapse(nodes[1].Nodes(), true)
-	if nodes[0].Sym() == parser.AArray {
+	if nodes[0].Sym() == typ.AArray {
 		for _, x := range nodes[1].Nodes() {
 			table.writeInst(typ.OpPush, x, parser.Node{})
 		}
@@ -213,7 +213,7 @@ func (table *symTable) compileList(nodes []parser.Node) uint16 {
 func (table *symTable) compileCall(nodes []parser.Node) uint16 {
 	tmp := append([]parser.Node{nodes[1]}, nodes[2].Nodes()...)
 	isVariadic := false
-	if last := &tmp[len(tmp)-1]; len(last.Nodes()) == 2 && last.Nodes()[0].Sym() == parser.AUnpack {
+	if last := &tmp[len(tmp)-1]; len(last.Nodes()) == 2 && last.Nodes()[0].Sym() == typ.AUnpack {
 		// [call callee [a b .. [unpack vararg]]]
 		*last = last.Nodes()[1]
 		table.collapse(tmp, true)
@@ -230,7 +230,7 @@ func (table *symTable) compileCall(nodes []parser.Node) uint16 {
 	}
 
 	op := byte(typ.OpCall)
-	if nodes[0].Sym() == parser.ATailCall {
+	if nodes[0].Sym() == typ.ATailCall {
 		op = typ.OpTailCall
 	}
 	if len(tmp) == 1 || isVariadic {
@@ -239,7 +239,7 @@ func (table *symTable) compileCall(nodes []parser.Node) uint16 {
 		table.writeInst(op, tmp[0], tmp[len(tmp)-1])
 	}
 
-	table.codeSeg.writePos(nodes[0].Pos())
+	table.codeSeg.writeLineNum(nodes[0].Line())
 	table.freeAddr(tmp)
 	return regA
 }
@@ -260,7 +260,7 @@ func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	varargIdx := -1
 	for i, p := range params.Nodes() {
 		n := p.Sym()
-		if len(p.Nodes()) == 2 && p.Nodes()[0].Sym() == parser.AUnpack {
+		if len(p.Nodes()) == 2 && p.Nodes()[0].Sym() == typ.AUnpack {
 			n = p.Nodes()[1].Sym()
 			varargIdx = i
 		}
@@ -313,7 +313,7 @@ func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 	if strings.HasPrefix(cls.Name, "<lambda") {
 		cls.Name = cls.Name[:len(cls.Name)-1] + "-" + strconv.Itoa(int(loadFuncIndex)) + ">"
 	}
-	table.codeSeg.writePos(atoms[0].Pos())
+	table.codeSeg.writeLineNum(atoms[0].Line())
 	return regA
 }
 
@@ -323,7 +323,7 @@ func (table *symTable) compileBreak(atoms []parser.Node) uint16 {
 		internal.Panic("%v: outside loop", atoms[0])
 	}
 	bl := table.forLoops[len(table.forLoops)-1]
-	if atoms[0].Sym() == parser.AContinue {
+	if atoms[0].Sym() == typ.AContinue {
 		table.compileNode(bl.continueNode)
 		table.codeSeg.writeJmpInst(typ.OpJmp, bl.continueGoto-len(table.codeSeg.Code)-1)
 	} else {
@@ -356,7 +356,7 @@ func (table *symTable) compileWhile(atoms []parser.Node) uint16 {
 
 func (table *symTable) compileGoto(atoms []parser.Node) uint16 {
 	label := atoms[1].Sym()
-	if atoms[0].Sym() == parser.ALabel { // :: label ::
+	if atoms[0].Sym() == typ.ALabel { // :: label ::
 		table.labelPos[label] = table.codeSeg.Len()
 	} else { // goto label
 		if pos, ok := table.labelPos[label]; ok {

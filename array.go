@@ -77,7 +77,7 @@ func init() {
 				p.WriteString(",")
 				return true
 			})
-			closeBuffer(p, "]")
+			internal.CloseBuffer(p, "]")
 			return p.Bytes()
 		},
 	}
@@ -205,7 +205,7 @@ func init() {
 		sgCopyNotSupported,
 		sgConcatNotSupported,
 		func(a *Array, mt typ.MarshalType) []byte {
-			return []byte(ifquote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error()))
+			return []byte(internal.IfQuote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error()))
 		},
 	}
 }
