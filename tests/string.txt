@@ -21,7 +21,7 @@ assert("x嘻" == str.from("嘻x嘻").trimleft("嘻"))
 
 -- json generator
 do
-	str.json_get = lambda(p) json.get(this, p) end
+	str.json_get = lambda(p) json.parse(this).get(p) end
 	local j = json.stringify({
 	      a = 'A',
 	      ("b-2") = true,
@@ -55,3 +55,8 @@ function array.equals(rhs)
 end
 
 assert(foo("1,2,3").equals(["1","x","3"]))
+
+assert(json.parse("null") is nil)
+assert(json.parse("true") is true)
+assert(json.parse("false") is bool)
+assert(json.parse.try("nil") is error)

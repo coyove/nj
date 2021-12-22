@@ -1,15 +1,16 @@
-package nj
+package bas
 
 import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
 
-type function struct {
+type Function struct {
 	CodeSeg    Packet
 	StackSize  uint16
 	NumParams  uint16
@@ -22,7 +23,6 @@ type function struct {
 	Locals     []string
 	obj        *Object
 }
-
 type Environment struct {
 	MaxStackSize int64
 	Globals      *Object
@@ -32,11 +32,30 @@ type Environment struct {
 }
 
 type Program struct {
-	top       *function
-	symbols   map[string]*symbol
+	top       *Function
+	symbols   map[string]*typ.Symbol
 	stack     *[]Value
 	functions []*Object
 	Environment
+}
+
+func NewProgram(coreStack *Env, top *Function, symbols map[string]*typ.Symbol, funcs []*Object, env *Environment) *Program {
+	cls := &Program{top: top}
+	cls.stack = coreStack.stack
+	cls.symbols = symbols
+	cls.functions = funcs
+	if env != nil {
+		cls.Environment = *env
+	}
+	cls.Stdout = or(cls.Stdout, os.Stdout).(io.Writer)
+	cls.Stdin = or(cls.Stdin, os.Stdin).(io.Reader)
+	cls.Stderr = or(cls.Stderr, os.Stderr).(io.Writer)
+
+	cls.top.LoadGlobal = cls
+	for _, f := range cls.functions {
+		f.fun.LoadGlobal = cls
+	}
+	return cls
 }
 
 // Func creates a callable object
@@ -45,7 +64,7 @@ func Func(name string, f func(*Env), doc string) Value {
 		name = internal.UnnamedFunc
 	}
 	obj := NewObject(0)
-	obj.fun = &function{
+	obj.fun = &Function{
 		Name:      name,
 		Native:    f,
 		DocString: doc,
@@ -73,9 +92,9 @@ func (p *Program) Run() (v1 Value, err error) {
 // After calling, program will become unavailable for any further operations
 // There is no way to terminate goroutines and blocking I/Os
 func (p *Program) Stop() {
-	stop := func(c *function) {
+	stop := func(c *Function) {
 		for i := range c.CodeSeg.Code {
-			c.CodeSeg.Code[i] = inst(typ.OpRet, regA, 0)
+			c.CodeSeg.Code[i] = typ.Inst{Opcode: typ.OpRet, A: typ.RegA}
 		}
 	}
 	stop(p.top)
@@ -89,19 +108,19 @@ func (p *Program) GoString() string {
 }
 
 func (p *Program) Get(k string) (v Value, ok bool) {
-	addr := p.symbols[k]
-	if addr == nil {
+	addr, ok := p.symbols[k]
+	if !ok {
 		return Nil, false
 	}
-	return (*p.stack)[addr.addr], true
+	return (*p.stack)[addr.Address], true
 }
 
 func (p *Program) Set(k string, v Value) (ok bool) {
-	addr := p.symbols[k]
-	if addr == nil {
+	addr, ok := p.symbols[k]
+	if !ok {
 		return false
 	}
-	(*p.stack)[addr.addr] = v
+	(*p.stack)[addr.Address] = v
 	return true
 }
 
@@ -176,7 +195,7 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 	return internalExecCursorLoop(newEnv, c, stk)
 }
 
-func (c *function) String() string {
+func (c *Function) String() string {
 	p := bytes.Buffer{}
 	if c.Name != "" {
 		p.WriteString(c.Name)
@@ -197,7 +216,7 @@ func (c *function) String() string {
 	return p.String()
 }
 
-func (c *function) GoString() string {
+func (c *Function) GoString() string {
 	if c.Native != nil {
 		return "[Native Code]"
 	}

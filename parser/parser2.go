@@ -4,24 +4,23 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
-	"unsafe"
 
+	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/typ"
 )
 
 const (
-	FLOAT = iota + 1
+	INVALID = iota
+	FLOAT
 	INT
 	STR
 	SYM
 	NODES
 	ADDR
-	INVALID
+	JSON
 )
 
 var (
-	intNode   = unsafe.Pointer(new(int))
-	floatNode = unsafe.Pointer(new(int))
 	breakNode = Nodes((SBreak))
 	zero      = Int(0)
 	one       = Int(1)
@@ -156,9 +155,9 @@ func __findTailCall(stats []Node) {
 		x := stats[len(stats)-1]
 		c := x.Nodes()
 		if len(c) == 3 && c[0].Sym() == typ.ACall {
-			old := c[0].symLine
+			old := c[0].SymLine
 			c[0] = STailCall
-			c[0].symLine = old
+			c[0].SymLine = old
 			return
 		}
 
@@ -240,6 +239,56 @@ func __forIn(key, value Token, expr, body Node, pos Token) Node {
 			).At(pos),
 		),
 	)
+}
+
+func (lex *Lexer) __arrayBuild(list, arg Node) Node {
+	if lex.jsonMode {
+		if list.Valid() {
+			list.simpleJSON(lex).Array().Append(arg.simpleJSON(lex))
+			return list
+		}
+		return Node{NodeType: JSON, Value: bas.NewArray(arg.simpleJSON(lex)).ToValue()}
+	}
+	if list.Valid() {
+		return list.append(arg)
+	}
+	return Nodes(arg)
+}
+
+func (lex *Lexer) __objectBuild(list, k, v Node) Node {
+	if lex.jsonMode {
+		if list.Valid() {
+			list.simpleJSON(lex).Object().Set(k.simpleJSON(lex), v.simpleJSON(lex))
+			return list
+		}
+		o := bas.NewObject(0)
+		o.Set(k.simpleJSON(lex), v.simpleJSON(lex))
+		return Node{NodeType: JSON, Value: o.ToValue()}
+	}
+	if list.Valid() {
+		return list.append(k, v)
+	}
+	return Nodes(k, v)
+}
+
+func (lex *Lexer) __array(tok Token, args Node) Node {
+	if lex.jsonMode {
+		if args == emptyNode {
+			return Node{NodeType: JSON, Value: bas.NewArray().ToValue()}
+		}
+		return args
+	}
+	return Nodes(SArray, args).At(tok)
+}
+
+func (lex *Lexer) __object(tok Token, args Node) Node {
+	if lex.jsonMode {
+		if args == emptyNode {
+			return Node{NodeType: JSON, Value: bas.NewObject(0).ToValue()}
+		}
+		return args
+	}
+	return Nodes(SObject, args).At(tok)
 }
 
 func randomVarname() Node {

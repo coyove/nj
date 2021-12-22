@@ -10,12 +10,13 @@ import (
 	"time"
 
 	"github.com/coyove/nj"
+	"github.com/coyove/nj/bas"
 )
 
 //go:embed index.html
 var indexBytes []byte
 
-func PlaygroundHandler(opt *nj.Environment) func(w http.ResponseWriter, r *http.Request) {
+func PlaygroundHandler(opt *bas.Environment) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() { recover() }()
 

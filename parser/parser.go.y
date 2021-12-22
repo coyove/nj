@@ -1,5 +1,7 @@
 %{
 package parser
+
+func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 %}
 %type<expr> prog
 %type<expr> stats
@@ -54,11 +56,11 @@ package parser
 prog: 
     {
         $$ = __chain()
-        yylex.(*Lexer).Stmts = $$
+        ss(yylex).Stmts = $$
     } |
     prog prog_stat {
         $$ = $1.append($2)
-        yylex.(*Lexer).Stmts = $$
+        ss(yylex).Stmts = $$
     }
 
 stats: 
@@ -195,7 +197,13 @@ jmp_stat:
     }
 
 declarator:
-    TIdent                         { $$ = Sym($1) } |
+    TIdent {
+        if ss(yylex).jsonMode {
+            $$ = Node{NodeType: JSON, Value: Sym($1).simpleJSON(ss(yylex))}
+        } else {
+            $$ = Sym($1)
+        }
+    } |
     prefix_expr TLBracket expr ']' { $$ = __load($1, $3).At($2) } |
     prefix_expr '.' TIdent         { $$ = __load($1, Str($3.Str)).At($2) } 
 
@@ -232,10 +240,10 @@ prefix_expr:
     TString                                            { $$ = Str($1.Str) } |
     '(' expr ')'                                       { $$ = $2 } |
     '(' '-' expr ')'                                   { $$ = Nodes(SSub, zero, $3).At($1) } |
-    '[' ']'                                            { $$ = Nodes(SArray, emptyNode).At($1) } |
-    '{' '}'                                            { $$ = Nodes(SObject, emptyNode).At($1) } |
-    '[' expr_list comma ']'                            { $$ = Nodes(SArray, $2).At($1) } |
-    '{' expr_assign_list comma'}'                      { $$ = Nodes(SObject, $2).At($1) } |
+    '[' ']'                                            { $$ = ss(yylex).__array($1, emptyNode) } |
+    '{' '}'                                            { $$ = ss(yylex).__object($1, emptyNode) } |
+    '[' expr_list comma ']'                            { $$ = ss(yylex).__array($1, $2) } |
+    '{' expr_assign_list comma'}'                      { $$ = ss(yylex).__object($1, $2) } |
     declarator                                         { $$ = $1 } |
     prefix_expr TLParen ')'                            { $$ = __call($1, emptyNode).At($2) } |
     prefix_expr TLParen expr_list comma ')'            { $$ = __call($1, $3).At($2) } |
@@ -250,13 +258,15 @@ ident_list:
     TIdent { $$ = Nodes(Sym($1)) } | ident_list ',' TIdent { $$ = $1.append(Sym($3)) }
 
 expr_list:
-    expr { $$ = Nodes($1) } | expr_list ',' expr { $$ = $1.append($3) }
+    expr { $$ = ss(yylex).__arrayBuild(Node{}, $1) } | expr_list ',' expr { $$ = ss(yylex).__arrayBuild($1, $3) }
 
 expr_assign_list:
-    TIdent assign expr                            { $$ = Nodes(Str($1.Str), $3) } |
-    '(' expr ')' assign expr                      { $$ = Nodes($2, $5) } |
-    expr_assign_list ',' TIdent assign expr       { $$ = $1.append(Str($3.Str)).append($5) } |
-    expr_assign_list ',' '(' expr ')' assign expr { $$ = $1.append($4).append($7) }
+    TIdent assign expr                            { $$ = ss(yylex).__objectBuild(Node{}, Str($1.Str), $3) } |
+    TString assign expr                           { $$ = ss(yylex).__objectBuild(Node{}, Str($1.Str), $3) } |
+    '(' expr ')' assign expr                      { $$ = ss(yylex).__objectBuild(Node{}, $2, $5) } |
+    expr_assign_list ',' TIdent assign expr       { $$ = ss(yylex).__objectBuild($1, Str($3.Str), $5) } |
+    expr_assign_list ',' TString assign expr      { $$ = ss(yylex).__objectBuild($1, Str($3.Str), $5) } |
+    expr_assign_list ',' '(' expr ')' assign expr { $$ = ss(yylex).__objectBuild($1, $4, $7) }
 
 comma: 
     { $$ = emptyNode } | ',' { $$ = emptyNode }

@@ -2,6 +2,7 @@ package nj
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"go/parser"
@@ -17,13 +18,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
+	_parser "github.com/coyove/nj/parser"
+	"github.com/coyove/nj/typ"
 )
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	log.SetFlags(log.Lshortfile | log.Ltime)
-	Globals.SetProp("G", Int(1))
+	bas.Globals.SetProp("G", bas.Int(1))
 }
 
 func runFile(t *testing.T, path string) {
@@ -31,32 +35,32 @@ func runFile(t *testing.T, path string) {
 		flag.Parse()
 	}
 
-	b, err := LoadFile(path, &Environment{
-		Globals: NewObject(0).
-			SetProp("nativeVarargTest", ValueOf(func(a ...int) int {
+	b, err := LoadFile(path, &bas.Environment{
+		Globals: bas.NewObject(0).
+			SetProp("nativeVarargTest", bas.ValueOf(func(a ...int) int {
 				return len(a)
 			})).
-			SetProp("nativeVarargTest2", ValueOf(func(b string, a ...int) string {
+			SetProp("nativeVarargTest2", bas.ValueOf(func(b string, a ...int) string {
 				return b + strconv.Itoa(len(a))
 			})).
-			SetProp("intAlias", ValueOf(func(d time.Duration) time.Time {
+			SetProp("intAlias", bas.ValueOf(func(d time.Duration) time.Time {
 				return time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).Add(d)
 			})).
-			SetProp("boolConvert", ValueOf(func(v bool) {
+			SetProp("boolConvert", bas.ValueOf(func(v bool) {
 				if !v {
 					panic("bad")
 				}
 			})).
-			SetProp("findGlobal", ValueOf(func(env *Env) {
+			SetProp("findGlobal", bas.ValueOf(func(env *bas.Env) {
 				v, err := env.Global.Get("G_FLAG")
 				fmt.Println(err)
 				if v.IsFalse() {
 					panic("findGlobal failed")
 				}
-				env.Global.Set("G_FLAG", Str("ok"))
+				env.Global.Set("G_FLAG", bas.Str("ok"))
 				fmt.Println("find global")
 			})).
-			SetProp("G", Str("test")),
+			SetProp("G", bas.Str("test")),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -95,13 +99,13 @@ a=a+n
 return a
 end
 return foo
-`, &Environment{Globals: NewObject(0).SetProp("init", Int(1))})
+`, &bas.Environment{Globals: bas.NewObject(0).SetProp("init", bas.Int(1))})
 		v, _ := cls.Run()
-		if v := Call(v.Object(), Int64(10)); v.Int64() != 11 {
+		if v := bas.Call(v.Object(), bas.Int64(10)); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v := Call(v.Object(), Int64(100)); v.Int64() != 111 {
+		if v := bas.Call(v.Object(), bas.Int64(100)); v.Int64() != 111 {
 			t.Fatal(v)
 		}
 	}
@@ -118,15 +122,15 @@ end
 return foo
 `, nil)
 		v, _ := cls.Run()
-		if v := Call(v.Object(), NewArray(Int64(1), Int64(2), Int64(3), Int64(4)).ToValue()); v.Int64() != 11 {
+		if v := bas.Call(v.Object(), bas.NewArray(bas.Int64(1), bas.Int64(2), bas.Int64(3), bas.Int64(4)).ToValue()); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v := Call(v.Object(), NewArray(Int64(10), Int64(20)).ToValue()); v.Int64() != 41 {
+		if v := bas.Call(v.Object(), bas.NewArray(bas.Int64(10), bas.Int64(20)).ToValue()); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 
-		if v := Call(v.Object()); v.Int64() != 41 {
+		if v := bas.Call(v.Object()); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 	}
@@ -234,13 +238,13 @@ func BenchmarkGoMapUnc10(b *testing.B) { benchmarkGoMapUnconstrainted(b, 10) }
 
 func benchmarkRHMap(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
-	m := NewObject(n)
+	m := bas.NewObject(n)
 	for i := 0; i < n; i++ {
-		m.Set(Int64(int64(i)), Int64(int64(i)))
+		m.Set(bas.Int64(int64(i)), bas.Int64(int64(i)))
 	}
 	for i := 0; i < b.N; i++ {
 		idx := rand.Intn(n)
-		if m.Get(Int64(int64(idx))) != Int64(int64(idx)) {
+		if m.Get(bas.Int64(int64(idx))) != bas.Int64(int64(idx)) {
 			b.Fatal(idx, m)
 		}
 	}
@@ -248,11 +252,11 @@ func benchmarkRHMap(b *testing.B, n int) {
 
 func benchmarkRHMapUnconstrainted(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
-	m := NewObject(1)
+	m := bas.NewObject(1)
 	for i := 0; i < b.N; i++ {
 		for i := 0; i < n; i++ {
 			x := rand.Intn(n)
-			m.Set(Int64(int64(x)), Int64(int64(i)))
+			m.Set(bas.Int64(int64(x)), bas.Int64(int64(i)))
 		}
 	}
 }
@@ -283,7 +287,7 @@ func benchmarkGoMapUnconstrainted(b *testing.B, n int) {
 }
 
 func TestBigList(t *testing.T) {
-	n := maxAddress/2 - Globals.Len()
+	n := typ.RegMaxAddress/2 - bas.Globals.Len()
 
 	makeCode := func(n int) string {
 		buf := bytes.Buffer{}
@@ -320,7 +324,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	start := time.Now()
-	_, err = LoadString(makeCode(maxAddress), nil)
+	_, err = LoadString(makeCode(typ.RegMaxAddress), nil)
 	fmt.Println("load", time.Since(start))
 	if !strings.Contains(err.Error(), "too many") {
 		t.Fatal(err)
@@ -347,15 +351,15 @@ func TestFalsyValue(t *testing.T) {
 		}
 	}
 
-	assert(Float64(0).IsFalse())
-	assert(Float64(1 / math.Inf(-1)).IsFalse())
-	assert(!Float64(math.NaN()).IsFalse())
-	assert(!Bool(true).IsFalse())
-	assert(Bool(false).IsFalse())
-	assert(Str("").IsFalse())
-	assert(Bytes(nil).IsTrue())
-	assert(Bytes([]byte("")).IsTrue())
-	assert(!ValueOf([]byte("")).IsFalse())
+	assert(bas.Float64(0).IsFalse())
+	assert(bas.Float64(1 / math.Inf(-1)).IsFalse())
+	assert(!bas.Float64(math.NaN()).IsFalse())
+	assert(!bas.Bool(true).IsFalse())
+	assert(bas.Bool(false).IsFalse())
+	assert(bas.Str("").IsFalse())
+	assert(bas.Bytes(nil).IsTrue())
+	assert(bas.Bytes([]byte("")).IsTrue())
+	assert(!bas.ValueOf([]byte("")).IsFalse())
 }
 
 func TestPlainReturn(t *testing.T) {
@@ -382,7 +386,7 @@ return add`, nil)
 	p2, _ := LoadString(`
 local a = 100
 return [a + add(), a + add(), a + add()]
-`, &Environment{Globals: NewObject(0).SetProp("add", ValueOf(add))})
+`, &bas.Environment{Globals: bas.NewObject(0).SetProp("add", bas.ValueOf(add))})
 	v, err := p2.Run()
 	if err != nil {
 		panic(err)
@@ -395,42 +399,42 @@ return [a + add(), a + add(), a + add()]
 }
 
 func TestNumberLexer(t *testing.T) {
-	assert := func(src string, v Value) {
+	assert := func(src string, v bas.Value) {
 		_, fn, ln, _ := runtime.Caller(1)
 		r := MustRun(LoadString(src, nil))
 		if r != v {
 			t.Fatal(fn, ln, r, v)
 		}
 	}
-	assert("1 + 2 ", Int64(3))
-	assert("1+ 2 ", Int64(3))
-	assert("-1+ 2 ", Int64(1))
-	assert("1- 2 ", Int64(-1))
-	assert("(1+1)- 2 ", Zero)
-	assert("1 - 2 ", Int64(-1))
-	assert("1 - -2 ", Int64(3))
-	assert("1- -2 ", Int64(3))
-	assert("1-2 ", Int64(-1))
-	assert("1.5 +2", Float64(3.5))
-	assert("1.5+ 2 ", Float64(3.5))
-	assert("12.5e-1+ 2 ", Float64(3.25))
-	assert("1.5e+1+ 2", Float64(17))
-	assert(".5+ 2 ", Float64(2.5))
-	assert("-.5+ 2", Float64(1.5))
-	assert("0x1+ 2", Int64(3))
-	assert("0xE+1 ", Int64(15))
-	assert(".5E+1 ", Int64(5))
-	assert("0x1_2_e+1", Int64(0x12f))
-	assert("([[1]])[0]", Int(49))
-	assert("'1'[0]", Int(49))
-	assert("([ [1] ])[0][0]", Int(1))
-	assert("([ [1]])[0][0]", Int(1))
-	assert("[0,1,2][1]", Int(1))
-	assert("[[%d]]['format'](1)", Str("1"))
-	assert("lambda()end (1)", Int(1))
-	assert("lambda()end [1][0]", Int(1))
-	assert("lambda()1 end()", Int(1))
-	assert("lambda() -1 end()", Int(-1))
+	assert("1 + 2 ", bas.Int64(3))
+	assert("1+ 2 ", bas.Int64(3))
+	assert("-1+ 2 ", bas.Int64(1))
+	assert("1- 2 ", bas.Int64(-1))
+	assert("(1+1)- 2 ", bas.Zero)
+	assert("1 - 2 ", bas.Int64(-1))
+	assert("1 - -2 ", bas.Int64(3))
+	assert("1- -2 ", bas.Int64(3))
+	assert("1-2 ", bas.Int64(-1))
+	assert("1.5 +2", bas.Float64(3.5))
+	assert("1.5+ 2 ", bas.Float64(3.5))
+	assert("12.5e-1+ 2 ", bas.Float64(3.25))
+	assert("1.5e+1+ 2", bas.Float64(17))
+	assert(".5+ 2 ", bas.Float64(2.5))
+	assert("-.5+ 2", bas.Float64(1.5))
+	assert("0x1+ 2", bas.Int64(3))
+	assert("0xE+1 ", bas.Int64(15))
+	assert(".5E+1 ", bas.Int64(5))
+	assert("0x1_2_e+1", bas.Int64(0x12f))
+	assert("([[1]])[0]", bas.Int(49))
+	assert("'1'[0]", bas.Int(49))
+	assert("([ [1] ])[0][0]", bas.Int(1))
+	assert("([ [1]])[0][0]", bas.Int(1))
+	assert("[0,1,2][1]", bas.Int(1))
+	assert("[[%d]]['format'](1)", bas.Str("1"))
+	assert("lambda()end (1)", bas.Int(1))
+	assert("lambda()end [1][0]", bas.Int(1))
+	assert("lambda()1 end()", bas.Int(1))
+	assert("lambda() -1 end()", bas.Int(-1))
 }
 
 func TestSmallString(t *testing.T) {
@@ -444,15 +448,15 @@ func TestSmallString(t *testing.T) {
 	}
 	for i := 0; i < 1e6; i++ {
 		v := randString()
-		if Str(v).Str() != v {
-			t.Fatal(Str(v).v, v)
+		if bas.Str(v).Str() != v {
+			t.Fatal(bas.Str(v).UnsafeInt64(), v)
 		}
 	}
 }
 
 func TestRHMap(t *testing.T) {
 	rand.Seed(time.Now().Unix())
-	m := Object{}
+	m := bas.NewObject(0)
 	m2 := map[int64]int64{}
 	counter := int64(0)
 	for i := 0; i < 1e6; i++ {
@@ -461,27 +465,28 @@ func TestRHMap(t *testing.T) {
 			x = counter
 			counter++
 		}
-		m.Set(Int64(x), Int64(x))
+		m.Set(bas.Int64(x), bas.Int64(x))
 		m2[x] = x
 	}
 	for k := range m2 {
 		delete(m2, k)
-		m.Delete(Int64(k))
+		m.Delete(bas.Int64(k))
 		if rand.Intn(10000) == 0 {
 			break
 		}
 	}
 
-	fmt.Println(m.count, len(m.items), len(m2))
+	fmt.Println(m.Len(), m.Size(), len(m2))
 
 	for k, v := range m2 {
-		if m.Get(Int64(k)).Int64() != v {
-			for _, e := range m.items {
-				if e.Key.Int64() == k {
-					t.Log(e)
+		if m.Get(bas.Int64(k)).Int64() != v {
+			m.Foreach(func(mk bas.Value, mv *bas.Value) bool {
+				if mk.Int64() == k {
+					t.Log(mk, *mv)
 				}
-			}
-			t.Fatal(m.Get(Int64(k)), k, v)
+				return true
+			})
+			t.Fatal(m.Get(bas.Int64(k)), k, v)
 		}
 	}
 
@@ -489,7 +494,7 @@ func TestRHMap(t *testing.T) {
 		t.Fatal(m.Len(), len(m2))
 	}
 
-	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
+	for k, v := m.Next(bas.Nil); k != bas.Nil; k, v = m.Next(k) {
 		if _, ok := m2[k.Int64()]; !ok {
 			t.Fatal(k, v, len(m2))
 		}
@@ -500,24 +505,24 @@ func TestRHMap(t *testing.T) {
 	}
 
 	m.Clear()
-	m.Set(Int64(0), Int64(0))
-	m.Set(Int64(1), Int64(1))
-	m.Set(Int64(2), Int64(2))
+	m.Set(bas.Int64(0), bas.Int64(0))
+	m.Set(bas.Int64(1), bas.Int64(1))
+	m.Set(bas.Int64(2), bas.Int64(2))
 
 	for i := 4; i < 9; i++ {
-		m.Set(Int64(int64(i*i)), Int64(0))
+		m.Set(bas.Int64(int64(i*i)), bas.Int64(0))
 	}
 
-	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
+	for k, v := m.Next(bas.Nil); k != bas.Nil; k, v = m.Next(k) {
 		fmt.Println(k, v)
 	}
 }
 
 func TestStrLess(t *testing.T) {
-	a := Str("a")
-	b := Str("a\x00")
-	t.Log(a.v, b.v)
-	if !lessStr(a, b) {
+	a := bas.Str("a")
+	b := bas.Str("a\x00")
+	t.Log(a, b)
+	if !bas.Less(a, b) {
 		t.FailNow()
 	}
 }
@@ -529,13 +534,13 @@ func TestACall(t *testing.T) {
 	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	Call(foo.Object(), Nil, Int64(1), Int64(2))
+	bas.Call(foo.Object(), bas.Nil, bas.Int64(1), bas.Int64(2))
 
 	foo = MustRun(LoadString(`function foo(a, b, m...)
 	assert(a == 1 and #(m) == 0)
     end
     return foo`, nil))
-	Call(foo.Object(), Int64(1))
+	bas.Call(foo.Object(), bas.Int64(1))
 
 	foo = MustRun(LoadString(`m = {a=1}
 	function m.pow2()
@@ -543,19 +548,19 @@ func TestACall(t *testing.T) {
 	end
 	a = new(m, {a=10})
     return a`, nil))
-	v := Call(foo.Object().Prop("pow2").Object())
+	v := bas.Call(foo.Object().Prop("pow2").Object())
 	if v.Int64() != 100 {
 		t.Fatal(v)
 	}
 
 	foo = MustRun(LoadString(`m.a = 11
-    return m.pow2()`, &Environment{
-		Globals: NewObject(0).
-			SetProp("m", NewObject(0).SetPrototype(NewObject(0).
-				SetProp("a", Int64(0)).
-				SetMethod("pow2", func(e *Env) {
+    return m.pow2()`, &bas.Environment{
+		Globals: bas.NewObject(0).
+			SetProp("m", bas.NewObject(0).SetPrototype(bas.NewObject(0).
+				SetProp("a", bas.Int64(0)).
+				SetMethod("pow2", func(e *bas.Env) {
 					i := e.Object(-1).Prop("a").Int64()
-					e.A = Int64(i * i)
+					e.A = bas.Int64(i * i)
 				}, "")).ToValue()),
 	}))
 	if foo.Int64() != 121 {
@@ -565,32 +570,32 @@ func TestACall(t *testing.T) {
 	foo = MustRun(LoadString(`function foo(m...)
 	return sum(m.concat(m)...) + sum2(m.slice(0, 2)...)
     end
-    return foo`, &Environment{
-		Globals: NewObject(0).
-			SetProp("sum", ValueOf(func(a ...int) int {
+    return foo`, &bas.Environment{
+		Globals: bas.NewObject(0).
+			SetProp("sum", bas.ValueOf(func(a ...int) int {
 				s := 0
 				for _, a := range a {
 					s += a
 				}
 				return s
 			})).
-			SetProp("sum2", ValueOf(func(a, b int) int {
+			SetProp("sum2", bas.ValueOf(func(a, b int) int {
 				return a + b
 			})),
 	}))
-	v = Call(foo.Object(), Int64(1), Int64(2), Int64(3))
+	v = bas.Call(foo.Object(), bas.Int64(1), bas.Int64(2), bas.Int64(3))
 	if v.Int64() != 15 {
 		t.Fatal(v)
 	}
 }
 
 func TestReflectedValue(t *testing.T) {
-	v := NewArray(True, False).ToValue()
+	v := bas.NewArray(bas.True, bas.False).ToValue()
 	x := v.ReflectValue(reflect.TypeOf([2]bool{})).Interface().([2]bool)
 	if x[0] != true || x[1] != false {
 		t.Fatal(x)
 	}
-	v = NewObject(2).SetProp("a", Int64(1)).SetProp("b", Int64(2)).ToValue()
+	v = bas.NewObject(2).SetProp("a", bas.Int64(1)).SetProp("b", bas.Int64(2)).ToValue()
 	y := v.ReflectValue(reflect.TypeOf(map[string]byte{})).Interface().(map[string]byte)
 	if y["a"] != 1 || y["b"] != 2 {
 		t.Fatal(x)
@@ -600,8 +605,8 @@ func TestReflectedValue(t *testing.T) {
 	p[0] = 99
 	return v, v + 1, nil
 	end
-	bar(foo)`, &Environment{Globals: NewObject(0).
-		SetProp("bar", ValueOf(func(cb func(a int, p []byte) (int, int, error)) {
+	bar(foo)`, &bas.Environment{Globals: bas.NewObject(0).
+		SetProp("bar", bas.ValueOf(func(cb func(a int, p []byte) (int, int, error)) {
 			buf := []byte{0}
 			a, b, _ := cb(10, buf)
 			if a != 10 || b != 11 || buf[0] != 99 {
@@ -619,15 +624,69 @@ func TestHashcodeDist(t *testing.T) {
 	z := map[uint64]int{}
 	rand.Seed(time.Now().Unix())
 	for i := 0; i < 1e6; i++ {
-		v := Int64(int64(i)).HashCode()
+		v := bas.Int64(int64(i)).HashCode()
 		z[v]++
 	}
 	fmt.Println(len(z))
 
 	z = map[uint64]int{}
 	for i := 0; i < 1e6; i++ {
-		v := Int64(rand.Int63()).HashCode()
+		v := bas.Int64(rand.Int63()).HashCode()
 		z[v]++
 	}
 	fmt.Println(len(z))
 }
+
+var jsonTest = func() string {
+	x := `{"data": {"feeds": [{"audios": [], "comment_num": 0, "content": "\n\t\rabc", "create_time": {"time": 1640074878, "time_desc": "20 mins ago"}, "dislike_num": 0, "id": "61c18e7e4a71d05c90f19951", "in_hq": false, "like_num": 0, "other_info": {"spotify_info": {}}, "pics": [], "tags": ["999"], "user_id": "60e3fa8af9bf8d3b66c470b1", "user_info": {"age": 31, "avatar": "99eb05ca-59d9-11e9-8672-00163e02deb4", "bio": "\u0e40\u0e18\u0e2d\u0e04\u0e37\u0e2d\u0e1a\u0e38\u0e04\u0e04\u0e25\u0e25\u0e36\u0e01\u0e25\u0e31\u0e1a", "country": "TH", "cover_photo": "60e3fa8af9bf8d3b66c470b1_coverPhoto_8_1640071635228.png", "create_time": 1625553546.0, "frame_fileid": "", "gender": "girl", "huanxin_id": "love131004954661603", "is_vip": false, "lit_id": 1119075350, "nickname": "\u7761", "party_level_info": {"received": {"avatar": "52b743c2-5705-11ec-80d6-00163e02a5e5", "diamonds": 0, "level": 18, "new_diamonds": 72255}, "sent": {"avatar": "99c83d2a-5d6e-11eb-8b66-00163e022423", "diamonds": 0, "level": 3, "new_diamonds": 50963}}, "party_top_three": -1, "removed": false, "role": 0, "tag_str": "_!EMPTY", "user_id": "60e3fa8af9bf8d3b66c470b1"}, "video": null, "video_length": 0, "visibility": 0}, {"audios": [], "comment_num": 0, "content": "\u7890", "create_time": {"time": 1640074781, "time_desc": "22 mins ago"}, "dislike_num": 0, "id": "61c18e1d4a71d05c992f578c", "in_hq": false, "like_num": 0, "other_info": {"spotify_info": {}}, "pics": [], "tags": ["999"], "user_id": "60e3fa8af9bf8d3b66c470b1", "user_info": {"age": 31, "avatar": "99eb05ca-59d9-11e9-8672-00163e02deb4", "bio": "\u0e40\u0e18\u0e2d\u0e04\u0e37\u0e2d\u0e1a\u0e38\u0e04\u0e04\u0e25\u0e25\u0e36\u0e01\u0e25\u0e31\u0e1a", "country": "TH", "cover_photo": "60e3fa8af9bf8d3b66c470b1_coverPhoto_8_1640071635228.png", "create_time": 1625553546.0, "frame_fileid": "", "gender": "girl", "huanxin_id": "love131004954661603", "is_vip": false, "lit_id": 1119075350, "nickname": "\u7761", "party_level_info": {"received": {"avatar": "52b743c2-5705-11ec-80d6-00163e02a5e5", "diamonds": 0, "level": 18, "new_diamonds": 72255}, "sent": {"avatar": "99c83d2a-5d6e-11eb-8b66-00163e022423", "diamonds": 0, "level": 3, "new_diamonds": 50963}}, "party_top_three": -1, "removed": false, "role": 0, "tag_str": "_!EMPTY", "user_id": "60e3fa8af9bf8d3b66c470b1"}, "video": null, "video_length": 0, "visibility": 0}], "has_next": false, "next_start": -1}, "result": 0, "success": true}`
+	return "[" + strings.Join([]string{x, x, x, x}, ",") + "]"
+}()
+
+func TestParseJSON(t *testing.T) {
+	v1, err := _parser.ParseJSON(jsonTest)
+	internal.PanicErr(err)
+	m := []interface{}{}
+	json.Unmarshal([]byte(jsonTest), &m)
+	v2 := parseJSON(m)
+	if !bas.DeepEqual(v1, v2) {
+		t.Fatal(v1, v2)
+	}
+}
+
+func BenchmarkNativeJSON(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_parser.ParseJSON(jsonTest)
+	}
+}
+
+func parseJSON(v interface{}) bas.Value {
+	switch v := v.(type) {
+	case []interface{}:
+		a := make([]bas.Value, len(v))
+		for i := range a {
+			a[i] = parseJSON(v[i])
+		}
+		return bas.NewArray(a...).ToValue()
+	case map[string]interface{}:
+		a := bas.NewObject(len(v) / 2)
+		for k, v := range v {
+			a.SetProp(k, parseJSON(v))
+		}
+		return a.ToValue()
+	}
+	return bas.ValueOf(v)
+}
+
+func BenchmarkGoJSON(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		m := []interface{}{}
+		json.Unmarshal([]byte(jsonTest), &m)
+		parseJSON(m)
+	}
+}
+
+// func BenchmarkGJSON(b *testing.B) {
+// 	for i := 0; i < b.N; i++ {
+// 		bas.ValueOf(gjson.Parse(jsonTest))
+// 	}
+// }

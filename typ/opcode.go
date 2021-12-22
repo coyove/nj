@@ -44,3 +44,10 @@ const (
 	OpIsProto
 	OpRet
 )
+
+func JmpInst(op byte, distance int) Inst {
+	if distance < -(1<<30) || distance >= 1<<30 {
+		panic("long jump")
+	}
+	return Inst{Opcode: op, B: int32(distance)}
+}

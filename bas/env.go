@@ -1,4 +1,4 @@
-package nj
+package bas
 
 import (
 	"bytes"
@@ -18,9 +18,13 @@ type Env struct {
 	runtime     Runtime
 }
 
+func NewEnv() *Env {
+	return &Env{stack: new([]Value)}
+}
+
 type Runtime struct {
 	// Stacktrace layout: [N, N-1, ..., 2], 1, 0 (current)
-	Callable0 *function
+	Callable0 *Function
 	Stack1    Stacktrace
 	StackN    []Stacktrace
 }
@@ -28,16 +32,16 @@ type Runtime struct {
 func (r Runtime) Stacktrace() []Stacktrace {
 	return append(r.StackN, r.Stack1, Stacktrace{
 		Callable: r.Callable0,
-		Cursor:   typ.NativeCallCursor,
+		Cursor:   internal.NativeCallCursor,
 	})
 }
 
-func (r Runtime) Push(k *function) Runtime {
+func (r Runtime) Push(k *Function) Runtime {
 	if r.Stack1.Callable == nil {
 		internal.Panic("DEBUG shouldn't happen")
 	}
 	r.StackN = append(r.StackN, r.Stack1)
-	r.Stack1 = Stacktrace{Callable: r.Callable0, Cursor: typ.NativeCallCursor}
+	r.Stack1 = Stacktrace{Callable: r.Callable0, Cursor: internal.NativeCallCursor}
 	r.Callable0 = k
 	return r
 }
@@ -68,11 +72,6 @@ func (env *Env) grow(newSize int) {
 	*env.stack = s[:sz]
 }
 
-// B is an alias of Get
-func (env *Env) B(index int) Value {
-	return env.Get(index)
-}
-
 // Get gets a value from the current stack
 func (env *Env) Get(index int) Value {
 	if index == -1 {
@@ -88,7 +87,7 @@ func (env *Env) Get(index int) Value {
 
 // Set sets a value in the current stack
 func (env *Env) Set(index int, value Value) {
-	env._set(uint16(index)&regLocalMask, value)
+	env._set(uint16(index)&typ.RegLocalMask, value)
 }
 
 // Clear clears the current stack
@@ -117,20 +116,20 @@ func (env *Env) Size() int {
 }
 
 func (env *Env) _get(yx uint16) Value {
-	if yx == regA {
+	if yx == typ.RegA {
 		return env.A
 	}
-	if yx > regLocalMask {
-		return (*env.Global.stack)[yx&regLocalMask]
+	if yx > typ.RegLocalMask {
+		return (*env.Global.stack)[yx&typ.RegLocalMask]
 	}
 	return (*env.stack)[uint32(yx)+(env.stackOffset)]
 }
 
 func (env *Env) _set(yx uint16, v Value) {
-	if yx == regA {
+	if yx == typ.RegA {
 		env.A = v
-	} else if yx > regLocalMask {
-		(*env.Global.stack)[yx&regLocalMask] = v
+	} else if yx > typ.RegLocalMask {
+		(*env.Global.stack)[yx&typ.RegLocalMask] = v
 	} else {
 		(*env.stack)[uint32(yx)+(env.stackOffset)] = v
 	}

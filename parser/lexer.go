@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
+	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
@@ -176,6 +177,7 @@ func (sc *Scanner) scanNumber() string {
 
 func (sc *Scanner) scanString(quote uint32) (string, error) {
 	lastIsSlash := false
+	needUnescape := false
 	buf := &sc.buffer
 	buf.Reset()
 
@@ -185,8 +187,12 @@ func (sc *Scanner) scanString(quote uint32) (string, error) {
 			return "", sc.Error(buf.String(), "unterminated string")
 		}
 		lastIsSlash = ch == '\\'
+		needUnescape = needUnescape || lastIsSlash
 		buf.WriteByte(byte(ch))
 		ch = sc.Next()
+	}
+	if !needUnescape {
+		return buf.String(), nil
 	}
 
 	x := buf.Bytes()
@@ -215,9 +221,11 @@ func (sc *Scanner) scanString(quote uint32) (string, error) {
 
 func (sc *Scanner) scanBlockString() (string, error) {
 	start := sc.offset
+	startPos := sc.Pos
 	for {
 		ch := sc.Next()
 		if ch == EOF {
+			sc.Pos = startPos
 			return "", sc.Error("", "unexpected end of string block")
 		}
 		if ch == ']' && sc.Peek() == ']' {
@@ -440,9 +448,10 @@ finally:
 // yacc interface {{{
 
 type Lexer struct {
-	scanner *Scanner
-	Stmts   Node
-	Token   Token
+	jsonMode bool
+	scanner  *Scanner
+	Stmts    Node
+	Token    Token
 }
 
 func (lx *Lexer) Lex(lval *yySymType) int {
@@ -467,11 +476,12 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 	panic(lx.scanner.TokenError(tok, message))
 }
 
-func parse(reader string, name string) (chunk Node, lexer *Lexer, err error) {
+func parse(reader, name string, jsonMode bool) (chunk Node, lexer *Lexer, err error) {
 	lexer = &Lexer{
-		scanner: NewScanner(reader, name),
-		Stmts:   Node{},
-		Token:   Token{Str: ""},
+		jsonMode: jsonMode,
+		scanner:  NewScanner(reader, name),
+		Stmts:    Node{},
+		Token:    Token{Str: ""},
 	}
 	defer internal.CatchError(&err)
 	yyParse(lexer)
@@ -482,11 +492,33 @@ func parse(reader string, name string) (chunk Node, lexer *Lexer, err error) {
 func Parse(text, name string) (chunk Node, err error) {
 	yyErrorVerbose = true
 	yyDebug = 1
-	chunk, _, err = parse(text, name)
+	chunk, _, err = parse(text, name, false)
 	if !chunk.Valid() && err == nil {
 		err = fmt.Errorf("invalid chunk")
 	}
 	return
+}
+
+func ParseJSON(text string) (bas.Value, error) {
+	yyErrorVerbose = true
+	yyDebug = 1
+	chunk, _, err := parse(text, "<json>", true)
+	if err != nil {
+		return bas.Nil, err
+	}
+	if !chunk.Valid() {
+		return bas.Nil, fmt.Errorf("invalid json chunk")
+	}
+	if chunk.Type() != NODES || len(chunk.Nodes()) < 1 || chunk.Nodes()[0].Sym() != typ.ABegin {
+		return bas.Nil, fmt.Errorf("invalid json chunk: %v", chunk)
+	}
+	j := chunk.Nodes()[1]
+	switch j.Type() {
+	case JSON, STR, INT, FLOAT:
+		return j.Value, nil
+	default:
+		return bas.Nil, fmt.Errorf("invalid json chunk: %v", chunk)
+	}
 }
 
 // }}}

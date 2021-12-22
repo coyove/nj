@@ -1,4 +1,4 @@
-package nj
+package bas
 
 import (
 	"bytes"
@@ -22,7 +22,6 @@ import (
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
-	"github.com/tidwall/gjson"
 )
 
 const Version int64 = 379
@@ -42,6 +41,14 @@ var (
 )
 
 func init() {
+	internal.GrowEnvStack = func(env unsafe.Pointer, sz int) {
+		(*Env)(env).grow(sz)
+	}
+	internal.SetObjFun = func(obj, fun unsafe.Pointer) {
+		(*Object)(obj).fun = (*Function)(fun)
+		(*Function)(fun).obj = (*Object)(obj)
+	}
+
 	Globals.SetProp("VERSION", Int64(Version))
 	Globals.SetMethod("globals", func(e *Env) {
 		e.A = e.Global.LocalsObject().ToValue()
@@ -50,23 +57,6 @@ func init() {
 		m := e.Object(0)
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
 	}, "$f(p: object, o?: object) -> object")
-	Globals.SetMethod("loadfile", func(e *Env) {
-		e.A = MustRun(LoadFile(e.Str(0), &e.Global.Environment))
-	}, "$f(path: string) -> value\n\tload and eval file at `path`, globals will be inherited in loaded file")
-	Globals.SetMethod("eval", func(e *Env) {
-		opts := e.Get(1).Safe().Object()
-		// if opts.Prop("ast").IsTrue() {
-		// 	v, err := parser.Parse(e.Str(0), "")
-		// 	internal.PanicErr(err)
-		// 	e.A = ValueOf(v)
-		// 	return
-		// }
-		p, err := LoadString(e.Str(0), &Environment{Globals: opts.Prop("globals").Safe().Object()})
-		internal.PanicErr(err)
-		v, err := p.Run()
-		internal.PanicErr(err)
-		_ = opts.Prop("returnglobals").IsTrue() && e.SetA(p.LocalsObject().ToValue()) || e.SetA(v)
-	}, "$f(code: string, options?: object) -> value\n\tevaluate `code` and return the reuslt")
 
 	// Debug libraries
 	Globals.SetProp("debug", NamedObject("debug", 0).
@@ -193,7 +183,7 @@ func init() {
 		fmt.Fprintln(e.Global.Stdout)
 	}, "$f(args...: value)\n\tsame as `print`, but values are separated by spaces")
 	Globals.SetMethod("scanln", func(env *Env) {
-		prompt, n := env.B(0), env.Get(1)
+		prompt, n := env.Get(0), env.Get(1)
 		fmt.Fprint(env.Global.Stdout, prompt.Safe().Str(""))
 		var results []Value
 		var r io.Reader = env.Global.Stdin
@@ -249,19 +239,6 @@ func init() {
 		SetMethod("replace", func(e *Env) {
 			e.A = Str(e.This("_rx").(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
 		}, "RegExp.$f(old: string, new: string) -> string").
-		ToValue())
-
-	Globals.SetProp("json", NamedObject("json", 0).
-		SetMethod("stringify", func(e *Env) {
-			e.A = Str(e.Get(0).JSONString())
-		}, "$f(v: value) -> string").
-		SetMethod("parse", func(e *Env) {
-			e.A = ValueOf(gjson.Parse(strings.TrimSpace(e.Str(0))))
-		}, "$f(j: string) -> value").
-		SetMethod("get", func(e *Env) {
-			result := gjson.Get(e.Str(0), e.Str(1))
-			_ = !result.Exists() && e.SetA(e.Get(2)) || e.SetA(ValueOf(result))
-		}, "$f(j: string, path: string, default?: value) -> value").
 		ToValue())
 
 	Globals.SetProp("open", Func("open", func(e *Env) {
@@ -713,7 +690,7 @@ func init() {
 		SetProp("NEG_INF", Float64(math.Inf(-1))).
 		SetProp("PI", Float64(math.Pi)).
 		SetProp("E", Float64(math.E)).
-		SetMethod("randomseed", func(e *Env) { rand.Seed(e.B(0).Safe().Int64(1)) }, "$f(seed: int)").
+		SetMethod("randomseed", func(e *Env) { rand.Seed(e.Get(0).Safe().Int64(1)) }, "$f(seed: int)").
 		SetMethod("random", func(e *Env) {
 			switch len(e.Stack()) {
 			case 2:

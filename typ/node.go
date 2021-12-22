@@ -60,3 +60,63 @@ type Position struct {
 func (pos *Position) String() string {
 	return fmt.Sprintf("%s:%d:%d", pos.Source, pos.Line, pos.Column)
 }
+
+var NodeOpcode = map[string]byte{
+	AAdd:     OpAdd,
+	ASub:     OpSub,
+	AMul:     OpMul,
+	ADiv:     OpDiv,
+	AIDiv:    OpIDiv,
+	AMod:     OpMod,
+	ALess:    OpLess,
+	ALessEq:  OpLessEq,
+	AEq:      OpEq,
+	ANeq:     OpNeq,
+	ANot:     OpNot,
+	ABitAnd:  OpBitAnd,
+	ABitOr:   OpBitOr,
+	ABitXor:  OpBitXor,
+	ABitNot:  OpBitNot,
+	ABitLsh:  OpBitLsh,
+	ABitRsh:  OpBitRsh,
+	ABitURsh: OpBitURsh,
+	AStore:   OpStore,
+	ALoad:    OpLoad,
+	AInc:     OpInc,
+	ANext:    OpNext,
+	ALen:     OpLen,
+	AIs:      OpIsProto,
+	AReturn:  OpRet,
+}
+
+var BinaryOpcode = map[byte]string{
+	OpAdd:     AAdd,
+	OpSub:     ASub,
+	OpMul:     AMul,
+	OpDiv:     ADiv,
+	OpIDiv:    AIDiv,
+	OpMod:     AMod,
+	OpEq:      AEq,
+	OpNeq:     ANeq,
+	OpLess:    ALess,
+	OpLessEq:  ALessEq,
+	OpLoad:    ALoad,
+	OpStore:   AStore,
+	OpBitAnd:  ABitAnd,
+	OpBitOr:   ABitOr,
+	OpBitXor:  ABitXor,
+	OpBitLsh:  ABitLsh,
+	OpBitRsh:  ABitRsh,
+	OpBitURsh: ABitURsh,
+	OpNext:    ANext,
+	OpIsProto: AIs,
+}
+
+var UnaryOpcode = map[byte]string{
+	OpBitNot:     ABitNot,
+	OpNot:        ANot,
+	OpRet:        AReturn,
+	OpLen:        ALen,
+	OpPush:       "push",
+	OpPushUnpack: "pushvararg",
+}

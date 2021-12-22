@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"io"
 	"strconv"
-	"strings"
-	"unsafe"
 
+	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
@@ -22,24 +21,26 @@ func (t *Token) String() string {
 }
 
 type Node struct {
-	typ     byte
-	pad     byte
-	Addr    uint16
-	symLine uint32
-	ptr     unsafe.Pointer
+	bas.Value
+	NodeType byte
+	SymLine  uint32
+}
+
+func staticSym(s string) Node {
+	return Node{NodeType: SYM, Value: bas.Str(s)}
 }
 
 func Sym(tok Token) Node {
-	return Node{typ: SYM, symLine: tok.Pos.Line, ptr: unsafe.Pointer(&tok.Str)}
+	return Node{NodeType: SYM, SymLine: tok.Pos.Line, Value: bas.Str(tok.Str)}
 }
 
-func Addr(yx uint16) Node { return Node{typ: ADDR, Addr: yx} }
-
-func staticSym(s string) Node {
-	return Node{typ: SYM, ptr: unsafe.Pointer(&s)}
+func Addr(yx uint16) Node {
+	return Node{NodeType: ADDR, Value: bas.Int(int(yx))}
 }
 
-func Str(s string) Node { return Node{typ: STR, ptr: unsafe.Pointer(&s)} }
+func Str(s string) Node {
+	return Node{NodeType: STR, Value: bas.Str(s)}
+}
 
 func Num(v string) Node {
 	f, i, isInt, err := internal.ParseNumber(v)
@@ -51,33 +52,15 @@ func Num(v string) Node {
 }
 
 func Int(v int64) (n Node) {
-	*(*int64)(unsafe.Pointer(&n)) = v
-	n.ptr = intNode
-	return
+	return Node{NodeType: INT, Value: bas.Int64(v)}
 }
 
 func Float(v float64) (n Node) {
-	if float64(int64(v)) == v {
-		return Int(int64(v))
-	}
-	*(*float64)(unsafe.Pointer(&n)) = v
-	n.ptr = floatNode
-	return
+	return Node{NodeType: FLOAT, Value: bas.Float64(v)}
 }
 
 func (n Node) Type() byte {
-	switch n.ptr {
-	case intNode:
-		return INT
-	case floatNode:
-		return FLOAT
-	default:
-		switch n.typ {
-		case STR, SYM, ADDR, NODES:
-			return n.typ
-		}
-	}
-	return INVALID
+	return n.NodeType
 }
 
 func (n Node) Valid() bool {
@@ -93,19 +76,15 @@ func (n Node) Str() string {
 	if n.Type() != STR {
 		return ""
 	}
-	return *(*string)(n.ptr)
+	return n.Value.Str()
 }
 
 func (n Node) Sym() string {
 	if n.Type() != SYM {
 		return ""
 	}
-	return *(*string)(n.ptr)
+	return n.Value.Str()
 }
-
-func (n Node) Int64() int64 { return *(*int64)(unsafe.Pointer(&n)) }
-
-func (n Node) Float64() float64 { return *(*float64)(unsafe.Pointer(&n)) }
 
 func (n Node) Num() (float64, int64, bool) {
 	if n.Type() == INT {
@@ -125,7 +104,7 @@ func (n Node) Nodes() []Node {
 	if n.Type() != NODES {
 		return nil
 	}
-	return *(*[]Node)(n.ptr)
+	return n.Array().Unwrap().([]Node)
 }
 
 func Nodes(args ...Node) Node {
@@ -169,13 +148,13 @@ func Nodes(args ...Node) Node {
 			}
 		}
 	}
-	return Node{ptr: unsafe.Pointer(&args), typ: NODES}
+	return Node{NodeType: NODES, Value: bas.ValueOf(args)}
 }
 
 func (n Node) At(tok Token) Node {
 	switch n.Type() {
 	case SYM:
-		n.symLine = tok.Pos.Line
+		n.SymLine = tok.Pos.Line
 	case NODES:
 		c := n.Nodes()
 		if len(c) > 0 {
@@ -188,7 +167,7 @@ func (n Node) At(tok Token) Node {
 func (n Node) Line() uint32 {
 	switch n.Type() {
 	case SYM:
-		return n.symLine
+		return n.SymLine
 	case NODES:
 		c := n.Nodes()
 		if len(c) == 0 {
@@ -232,7 +211,7 @@ func (n Node) Dump(w io.Writer, ident string) {
 		}
 		io.WriteString(w, "]\n")
 	case SYM:
-		io.WriteString(w, fmt.Sprintf("%s/%d", n.Sym(), n.symLine))
+		io.WriteString(w, fmt.Sprintf("%s/%d", n.Sym(), n.SymLine))
 	default:
 		io.WriteString(w, n.String())
 	}
@@ -240,30 +219,22 @@ func (n Node) Dump(w io.Writer, ident string) {
 
 func (n Node) String() string {
 	switch n.Type() {
-	case INT:
-		return strconv.FormatInt(n.Int64(), 10)
-	case FLOAT:
-		return strconv.FormatFloat(n.Float64(), 'f', -1, 64)
-	case STR:
-		return strconv.Quote(n.Str())
-	case SYM:
-		return fmt.Sprintf("%s/%d", n.Sym(), n.symLine)
+	case INT, FLOAT, STR, JSON:
+		return n.Value.JSONString()
 	case NODES:
-		buf := make([]string, len(n.Nodes()))
-		for i, a := range n.Nodes() {
-			buf[i] = a.String()
-		}
-		return "[" + strings.Join(buf, " ") + "]"
+		return n.Value.String()
+	case SYM:
+		return fmt.Sprintf("%s/%d", n.Sym(), n.SymLine)
 	case ADDR:
-		return "0x" + strconv.FormatInt(int64(n.Addr), 16)
+		return "0x" + strconv.FormatInt(n.Int64(), 16)
 	default:
 		return fmt.Sprintf("DEBUG: %#v", n)
 	}
 }
 
 func (n Node) append(n2 ...Node) Node {
-	*(*[]Node)(n.ptr) = append(n.Nodes(), n2...)
-	return n
+	x := append(n.Array().Unwrap().([]Node), n2...)
+	return Node{NodeType: NODES, Value: bas.ValueOf(x)}
 }
 
 func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
@@ -276,4 +247,22 @@ func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
 		panic(fmt.Sprintf("DEBUG: %v invalid assignment", n))
 	}
 	return sm(n, v)
+}
+
+func (n Node) simpleJSON(lex *Lexer) bas.Value {
+	switch n.Type() {
+	case JSON, STR, INT, FLOAT:
+		return n.Value
+	case SYM:
+		switch n.Value.Str() {
+		case "true":
+			return bas.True
+		case "false":
+			return bas.False
+		case "null":
+			return bas.Nil
+		}
+	}
+	lex.Error("unexpected json symbol: " + n.String())
+	return bas.Nil
 }

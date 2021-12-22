@@ -1,496 +1,446 @@
 package nj
 
 import (
-	"fmt"
-	"io"
-	"io/ioutil"
-	"os"
+	"strconv"
+	"strings"
 	"unsafe"
 
+	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/parser"
 	"github.com/coyove/nj/typ"
 )
 
-const (
-	regA          uint16 = 0xffff
-	regPhantom    uint16 = 0xfffe
-	regLocalMask         = 0x7fff
-	regGlobalFlag        = 0x8000
-	maxAddress           = 0x7f00
-)
+var _nodeRegA = parser.Addr(typ.RegA)
 
-type symbol struct {
-	addr uint16
-}
+// [prog expr1 expr2 ...]
+func (table *symTable) compileChain(chain parser.Node) uint16 {
+	doblock := chain.Nodes()[0].Sym() == typ.ADoBlock
 
-func (s *symbol) String() string { return fmt.Sprintf("symbol:%d", s.addr) }
-
-type breakLabel struct {
-	continueNode parser.Node
-	continueGoto int
-	labelPos     []int
-}
-
-// symTable is responsible for recording the state of compilation
-type symTable struct {
-	name    string
-	options *Environment
-
-	global *symTable
-	parent *symTable
-
-	codeSeg Packet
-
-	// toplevel symtable
-	funcs []*Object
-
-	// variable lookup
-	sym       map[string]*symbol
-	maskedSym []map[string]*symbol
-
-	forLoops []*breakLabel
-
-	vp uint16
-
-	collectConstMode bool
-	constMap         map[interface{}]uint16
-
-	reusableTmps      map[uint16]bool
-	reusableTmpsArray []uint16
-
-	forwardGoto map[int]string
-	labelPos    map[string]int
-}
-
-func newSymTable(opt *Environment) *symTable {
-	t := &symTable{
-		sym:          make(map[string]*symbol),
-		constMap:     make(map[interface{}]uint16),
-		reusableTmps: make(map[uint16]bool),
-		forwardGoto:  make(map[int]string),
-		labelPos:     make(map[string]int),
-		options:      opt,
+	if doblock {
+		table.addMaskedSymTable()
 	}
-	return t
-}
 
-func (table *symTable) symbolsToDebugLocals() []string {
-	x := make([]string, table.vp)
-	for sym, info := range table.sym {
-		x[info.addr] = sym
-	}
-	return x
-}
-
-func (table *symTable) borrowAddress() uint16 {
-	if len(table.reusableTmpsArray) > 0 {
-		tmp := table.reusableTmpsArray[0]
-		table.reusableTmpsArray = table.reusableTmpsArray[1:]
-		if !table.reusableTmps[tmp] {
-			panic("DEBUG: corrupted reusable map")
+	yx := typ.RegA
+	for i, a := range chain.Nodes() {
+		if i == 0 {
+			continue
 		}
-		table.reusableTmps[tmp] = false
-		return tmp
-	}
-	if table.vp > maxAddress {
-		panic("too many variables in a single scope")
-	}
-	table.reusableTmps[table.vp] = false
-	table.vp++
-	return table.vp - 1
-}
-
-func (table *symTable) freeAddr(a interface{}) {
-	switch a := a.(type) {
-	case []parser.Node:
-		for _, n := range a {
-			if n.Type() == parser.ADDR {
-				table.freeAddr(n.Addr)
+		_, isStatic := table.compileStaticNode(a)
+		yx = table.compileNode(a)
+		if isStatic {
+			// e.g.: [prog "a string"], we will transform it into:
+			//       [prog [set $a "a string"]]
+			if yx != typ.RegA {
+				table.codeSeg.WriteInst(typ.OpSet, typ.RegA, yx)
 			}
 		}
-	case []uint16:
-		for _, n := range a {
-			table.freeAddr(n)
-		}
-	case uint16:
-		if a == regA {
-			return
-		}
-		if a > regLocalMask {
-			// We don't free global variables
-			return
-		}
-		if available, existed := table.reusableTmps[a]; existed && !available {
-			table.reusableTmpsArray = append(table.reusableTmpsArray, a)
-			table.reusableTmps[a] = true
-		}
-
-	default:
-		panic("DEBUG freeAddr")
 	}
+
+	if doblock {
+		table.removeMaskedSymTable()
+	}
+
+	return yx
 }
 
-func (table *symTable) get(varname string) (uint16, bool) {
-	depth := uint16(0)
-	regNil := table.loadK(nil)
+func (table *symTable) compileSetMove(nodes []parser.Node) uint16 {
+	dest := nodes[1].Sym()
+	destAddr, declared := table.get(dest)
+	if nodes[0].Sym() == typ.AMove {
+		// a = b
+		if !declared {
+			// a is not declared yet
+			destAddr = table.borrowAddress()
 
-	switch varname {
-	case "nil":
-		return regNil, true
-	case "true":
-		return table.loadK(true), true
-	case "false":
-		return table.loadK(false), true
-	case "this":
-		if k, ok := table.sym[varname]; ok {
-			return k.addr, true
+			// Do not use t.put() because it may put the symbol into masked tables
+			// e.g.: do a = 1 end
+			table.sym[dest] = &typ.Symbol{Address: destAddr}
 		}
-		table.sym["this"] = &symbol{table.borrowAddress()}
-	case "$a":
-		return regA, true
-	}
-
-	calc := func(k *symbol) (uint16, bool) {
-		addr := (depth << 15) | (uint16(k.addr) & regLocalMask)
-		return addr, true
-	}
-
-	for table != nil {
-		// Firstly we will iterate the masked symbols
-		// Masked symbols are local variables inside do-blocks, like "if then .. end" and "do ... end"
-		// The rightmost map of this slice is the innermost do-block
-		for i := len(table.maskedSym) - 1; i >= 0; i-- {
-			m := table.maskedSym[i]
-			if k, ok := m[varname]; ok {
-				return calc(k)
-			}
-		}
-
-		if k, ok := table.sym[varname]; ok {
-			return calc(k)
-		}
-
-		depth++
-		table = table.global
-	}
-
-	return regNil, false
-}
-
-func (table *symTable) put(varname string, addr uint16) {
-	if addr == regA {
-		panic("DEBUG: put $a?")
-	}
-	sym := &symbol{
-		addr: addr,
-	}
-	if len(table.maskedSym) > 0 {
-		table.maskedSym[len(table.maskedSym)-1][varname] = sym
 	} else {
-		table.sym[varname] = sym
-	}
-}
-
-func (table *symTable) addMaskedSymTable() {
-	table.maskedSym = append(table.maskedSym, map[string]*symbol{})
-}
-
-func (table *symTable) removeMaskedSymTable() {
-	last := table.maskedSym[len(table.maskedSym)-1]
-	for _, k := range last {
-		table.freeAddr(k.addr)
-	}
-	table.maskedSym = table.maskedSym[:len(table.maskedSym)-1]
-}
-
-func (table *symTable) loadK(v interface{}) uint16 {
-	if table.global != nil {
-		return table.global.loadK(v)
+		// local a = b
+		destAddr = table.borrowAddress()
+		defer table.put(dest, destAddr) // execute in defer in case of: a = 1 do local a = a end
 	}
 
-	if i, ok := table.constMap[v]; ok {
-		return i
-	}
-
-	if !table.collectConstMode {
-		internal.Panic("DEBUG: collect consts %#v", v)
-	}
-
-	idx := regGlobalFlag | table.borrowAddress()
-	table.constMap[v] = idx
-	return idx
+	srcAddr := table.compileNode(nodes[2])
+	table.codeSeg.WriteInst(typ.OpSet, destAddr, srcAddr)
+	table.codeSeg.WriteLineNum(nodes[0].Line())
+	return destAddr
 }
 
-var operatorMapping = map[string]byte{
-	typ.AAdd:     typ.OpAdd,
-	typ.ASub:     typ.OpSub,
-	typ.AMul:     typ.OpMul,
-	typ.ADiv:     typ.OpDiv,
-	typ.AIDiv:    typ.OpIDiv,
-	typ.AMod:     typ.OpMod,
-	typ.ALess:    typ.OpLess,
-	typ.ALessEq:  typ.OpLessEq,
-	typ.AEq:      typ.OpEq,
-	typ.ANeq:     typ.OpNeq,
-	typ.ANot:     typ.OpNot,
-	typ.ABitAnd:  typ.OpBitAnd,
-	typ.ABitOr:   typ.OpBitOr,
-	typ.ABitXor:  typ.OpBitXor,
-	typ.ABitNot:  typ.OpBitNot,
-	typ.ABitLsh:  typ.OpBitLsh,
-	typ.ABitRsh:  typ.OpBitRsh,
-	typ.ABitURsh: typ.OpBitURsh,
-	typ.AStore:   typ.OpStore,
-	typ.ALoad:    typ.OpLoad,
-	typ.AInc:     typ.OpInc,
-	typ.ANext:    typ.OpNext,
-	typ.ALen:     typ.OpLen,
-	typ.AIs:      typ.OpIsProto,
-	typ.AReturn:  typ.OpRet,
-}
+// writeInst3 accepts 3 arguments at most, 2 arguments will be encoded into opCode itself, the 3rd one will be in typ.RegA
+func (table *symTable) writeInst3(bop byte, atoms []parser.Node) uint16 {
+	// first atom: the splitInst Name, tail atoms: the args
+	if len(atoms) > 4 {
+		panic("DEBUG: too many arguments")
+	}
 
-func (table *symTable) writeInst(op byte, n0, n1 parser.Node) {
-	var tmp []uint16
-	getAddr := func(n parser.Node, intoNewAddr bool) uint16 {
-		switch n.Type() {
-		case parser.NODES:
-			addr := table.compileNodeInto(n, intoNewAddr, regA)
-			tmp = append(tmp, addr)
-			return addr
-		default:
-			addr, ok := table.compileStaticNode(n)
-			if !ok {
-				internal.Panic("DEBUG writeInst unknown type: %#v", n)
+	atoms = append([]parser.Node{}, atoms...) // duplicate
+
+	if bop == typ.OpStore {
+		table.collapse(atoms[1:], true)
+
+		// (atoms    1      2    3 )
+		// (store subject value key) subject => opa, key => $a, value => opb
+
+		for i := 1; i <= 2; i++ { // subject and value shouldn't use typ.RegA
+			if atoms[i].Type() == parser.ADDR && uint16(atoms[i].Int()) == typ.RegA {
+				n := parser.Addr(table.borrowAddress())
+				table.writeInst(typ.OpSet, n, _nodeRegA)
+				atoms[i] = n
 			}
-			return addr
+		}
+
+		// We would love to see 'key' using typ.RegA, in this case writeInst will just omit it
+		table.writeInst(typ.OpSet, _nodeRegA, atoms[3])
+		table.writeInst(typ.OpStore, atoms[1], atoms[2])
+		table.freeAddr(atoms[1:])
+		return typ.RegA
+	}
+
+	table.collapse(atoms[1:], true)
+
+	switch bop {
+	case typ.OpNot, typ.OpRet, typ.OpBitNot, typ.OpLen:
+		// unary splitInst
+		table.writeInst(bop, atoms[1], parser.Node{})
+	default:
+		// binary splitInst
+		table.writeInst(bop, atoms[1], atoms[2])
+		table.freeAddr(atoms[1:])
+	}
+
+	return typ.RegA
+}
+
+func (table *symTable) compileOperator(atoms []parser.Node) uint16 {
+	head := atoms[0].Sym()
+	op, ok := typ.NodeOpcode[head]
+	if !ok {
+		internal.Panic("DEBUG invalid symbol: %v", atoms[0])
+	}
+	yx := table.writeInst3(op, atoms)
+	if p := atoms[0].Line(); p > 0 {
+		table.codeSeg.WriteLineNum(p)
+	}
+	return yx
+}
+
+// [and a b] => $a = a if not a then goto out else $a = b end ::out::
+// [or a b]  => $a = a if not a then $a = b end
+func (table *symTable) compileAndOr(atoms []parser.Node) uint16 {
+	table.writeInst(typ.OpSet, _nodeRegA, atoms[1])
+
+	if atoms[0].Sym() == (typ.AOr) {
+		table.codeSeg.WriteJmpInst(typ.OpIfNot, 1)
+		table.codeSeg.WriteJmpInst(typ.OpJmp, 0)
+		part1 := table.codeSeg.Len()
+
+		table.writeInst(typ.OpSet, _nodeRegA, atoms[2])
+		part2 := table.codeSeg.Len()
+
+		table.codeSeg.Code[part1-1] = typ.JmpInst(typ.OpJmp, part2-part1)
+	} else {
+		table.codeSeg.WriteJmpInst(typ.OpIfNot, 0)
+		part1 := table.codeSeg.Len()
+
+		table.writeInst(typ.OpSet, _nodeRegA, atoms[2])
+		part2 := table.codeSeg.Len()
+
+		table.codeSeg.Code[part1-1] = typ.JmpInst(typ.OpIfNot, part2-part1)
+	}
+	table.codeSeg.WriteLineNum(atoms[0].Line())
+	return typ.RegA
+}
+
+// [if condition [true-chain ...] [false-chain ...]]
+func (table *symTable) compileIf(atoms []parser.Node) uint16 {
+	condition := atoms[1]
+	trueBranch, falseBranch := atoms[2], atoms[3]
+
+	condyx := table.compileNode(condition)
+
+	table.addMaskedSymTable()
+
+	if condyx != typ.RegA {
+		table.codeSeg.WriteInst(typ.OpSet, typ.RegA, condyx)
+	}
+
+	table.codeSeg.WriteJmpInst(typ.OpIfNot, 0)
+	table.codeSeg.WriteLineNum(atoms[0].Line())
+	init := table.codeSeg.Len()
+
+	table.compileNode(trueBranch)
+	part1 := table.codeSeg.Len()
+
+	table.codeSeg.WriteJmpInst(typ.OpJmp, 0)
+
+	table.compileNode(falseBranch)
+	part2 := table.codeSeg.Len()
+
+	table.removeMaskedSymTable()
+
+	if len(falseBranch.Nodes()) > 0 {
+		table.codeSeg.Code[init-1] = typ.JmpInst(typ.OpIfNot, part1-init+1)
+		table.codeSeg.Code[part1] = typ.JmpInst(typ.OpJmp, part2-part1-1)
+	} else {
+		// The last inst is used to skip the false branch, since we don't have one, we don't need this jmp
+		table.codeSeg.TruncLast()
+		table.codeSeg.Code[init-1] = typ.JmpInst(typ.OpIfNot, part1-init)
+	}
+	return typ.RegA
+}
+
+// [list [a, b, c, ...]]
+func (table *symTable) compileList(nodes []parser.Node) uint16 {
+	table.collapse(nodes[1].Nodes(), true)
+	if nodes[0].Sym() == typ.AArray {
+		for _, x := range nodes[1].Nodes() {
+			table.writeInst(typ.OpPush, x, parser.Node{})
+		}
+		table.codeSeg.WriteInst(typ.OpCreateArray, 0, 0)
+	} else {
+		n := nodes[1].Nodes()
+		for i := 0; i < len(n); i += 2 {
+			table.writeInst(typ.OpPush, n[i], parser.Node{})
+			table.writeInst(typ.OpPush, n[i+1], parser.Node{})
+		}
+		table.codeSeg.WriteInst(typ.OpCreateObject, 0, 0)
+	}
+	return typ.RegA
+}
+
+// [call callee [args ...]]
+func (table *symTable) compileCall(nodes []parser.Node) uint16 {
+	tmp := append([]parser.Node{nodes[1]}, nodes[2].Nodes()...)
+	isVariadic := false
+	if last := &tmp[len(tmp)-1]; len(last.Nodes()) == 2 && last.Nodes()[0].Sym() == typ.AUnpack {
+		// [call callee [a b .. [unpack vararg]]]
+		*last = last.Nodes()[1]
+		table.collapse(tmp, true)
+		for i := 1; i < len(tmp)-1; i++ {
+			table.writeInst(typ.OpPush, tmp[i], parser.Addr(0))
+		}
+		table.writeInst(typ.OpPushUnpack, tmp[len(tmp)-1], parser.Addr(0))
+		isVariadic = true
+	} else {
+		table.collapse(tmp, true)
+		for i := 1; i < len(tmp)-1; i++ {
+			table.writeInst(typ.OpPush, tmp[i], parser.Addr(0))
 		}
 	}
 
-	if !n0.Valid() {
-		table.codeSeg.writeInst(op, 0, 0)
-		return
+	op := byte(typ.OpCall)
+	if nodes[0].Sym() == typ.ATailCall {
+		op = typ.OpTailCall
+	}
+	if len(tmp) == 1 || isVariadic {
+		table.writeInst(op, tmp[0], parser.Addr(typ.RegPhantom))
+	} else {
+		table.writeInst(op, tmp[0], tmp[len(tmp)-1])
 	}
 
-	n0a := getAddr(n0, n1.Valid())
-	if !n1.Valid() {
-		table.codeSeg.writeInst(op, n0a, 0)
-		table.freeAddr(tmp)
-		return
-	}
-
-	n1a := getAddr(n1, true)
-	table.codeSeg.writeInst(op, n0a, n1a)
+	table.codeSeg.WriteLineNum(nodes[0].Line())
 	table.freeAddr(tmp)
+	return typ.RegA
 }
 
-func (table *symTable) compileNodeInto(compound parser.Node, newVar bool, existedVar uint16) uint16 {
-	newYX := table.compileNode(compound)
-
-	var yx uint16
-	if newVar {
-		yx = table.borrowAddress()
+// [function name [paramlist] [chain ...] docstring]
+func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
+	params := atoms[2]
+	newtable := newSymTable(table.options)
+	newtable.name = table.name
+	newtable.codeSeg.Pos.Name = table.name
+	if table.global == nil {
+		newtable.global = table
 	} else {
-		yx = existedVar
+		newtable.global = table.global
 	}
+	newtable.parent = table
 
-	table.codeSeg.writeInst(typ.OpSet, yx, newYX)
-	return yx
-}
-
-func (table *symTable) compileStaticNode(node parser.Node) (uint16, bool) {
-	switch node.Type() {
-	case parser.ADDR:
-		return node.Addr, true
-	case parser.STR:
-		return table.loadK(node.Str()), true
-	case parser.FLOAT:
-		return table.loadK(node.Float64()), true
-	case parser.INT:
-		return table.loadK(node.Int64()), true
-	case parser.SYM:
-		idx, _ := table.get(node.Sym())
-		return idx, true
-	}
-	return 0, false
-}
-
-func (table *symTable) compileNode(node parser.Node) uint16 {
-	if addr, ok := table.compileStaticNode(node); ok {
-		return addr
-	}
-
-	nodes := node.Nodes()
-	if len(nodes) == 0 {
-		return regA
-	}
-
-	name := nodes[0].Sym()
-	var yx uint16
-	switch name {
-	case typ.ADoBlock, typ.ABegin:
-		yx = table.compileChain(node)
-	case typ.ASet, typ.AMove:
-		yx = table.compileSetMove(nodes)
-	case typ.AIf:
-		yx = table.compileIf(nodes)
-	case typ.AFor:
-		yx = table.compileWhile(nodes)
-	case typ.ABreak, typ.AContinue:
-		yx = table.compileBreak(nodes)
-	case typ.ACall, typ.ATailCall:
-		yx = table.compileCall(nodes)
-	case typ.AArray, typ.AObject:
-		yx = table.compileList(nodes)
-	case typ.AOr, typ.AAnd:
-		yx = table.compileAndOr(nodes)
-	case typ.AFunc:
-		yx = table.compileFunction(nodes)
-	case typ.AFreeAddr:
-		yx = table.compileFreeAddr(nodes)
-	case typ.AGoto, typ.ALabel:
-		yx = table.compileGoto(nodes)
-	default:
-		yx = table.compileOperator(nodes)
-	}
-	return yx
-}
-
-func (table *symTable) collectConsts(node parser.Node) {
-	switch node.Type() {
-	case parser.STR:
-		table.loadK(node.Str())
-	case parser.FLOAT:
-		table.loadK(node.Float64())
-	case parser.INT:
-		table.loadK(node.Int64())
-	case parser.NODES:
-		for _, n := range node.Nodes() {
-			table.collectConsts(n)
+	varargIdx := -1
+	for i, p := range params.Nodes() {
+		n := p.Sym()
+		if len(p.Nodes()) == 2 && p.Nodes()[0].Sym() == typ.AUnpack {
+			n = p.Nodes()[1].Sym()
+			varargIdx = i
 		}
+		if _, ok := newtable.sym[n]; ok {
+			internal.Panic("%v: duplicated parameter: %q", atoms[1], n)
+		}
+		newtable.put(n, uint16(i))
 	}
+
+	ln := len(newtable.sym)
+	if ln > 255 {
+		internal.Panic("%v: too many parameters, 255 at most", atoms[1])
+	}
+
+	newtable.vp = uint16(len(newtable.sym))
+	newtable.compileNode(atoms[3])
+	newtable.patchGoto()
+
+	if a := newtable.sym["this"]; a != nil {
+		newtable.codeSeg.Code = append([]typ.Inst{
+			{Opcode: typ.OpSet, A: a.Address, B: int32(typ.RegA)},
+		}, newtable.codeSeg.Code...)
+	}
+
+	code := newtable.codeSeg
+	code.WriteInst(typ.OpRet, table.loadK(nil), 0)
+	// code.writeInst(typ.OpRet, typ.RegA, 0)
+
+	cls := &bas.Function{}
+	cls.Variadic = varargIdx >= 0
+	cls.NumParams = uint16(len(params.Nodes()))
+	cls.Name = atoms[1].Sym()
+	cls.DocString = atoms[4].Str()
+	cls.StackSize = newtable.vp
+	cls.CodeSeg = code
+	cls.Locals = newtable.symbolsToDebugLocals()
+
+	var loadFuncIndex uint16
+	obj := bas.NewObject(0)
+	obj.SetPrototype(bas.FuncProto)
+	internal.SetObjFun(unsafe.Pointer(obj), unsafe.Pointer(cls))
+	if table.global != nil {
+		x := table.global
+		loadFuncIndex = uint16(len(x.funcs))
+		x.funcs = append(x.funcs, obj)
+	} else {
+		loadFuncIndex = uint16(len(table.funcs))
+		table.funcs = append(table.funcs, obj)
+	}
+	table.codeSeg.WriteInst(typ.OpLoadFunc, loadFuncIndex, 0)
+	if strings.HasPrefix(cls.Name, "<lambda") {
+		cls.Name = cls.Name[:len(cls.Name)-1] + "-" + strconv.Itoa(int(loadFuncIndex)) + ">"
+	}
+	table.codeSeg.WriteLineNum(atoms[0].Line())
+	return typ.RegA
 }
 
-func compileNodeTopLevel(name, source string, n parser.Node, env *Environment) (cls *Program, err error) {
-	defer internal.CatchError(&err)
+// [break|continue]
+func (table *symTable) compileBreak(atoms []parser.Node) uint16 {
+	if len(table.forLoops) == 0 {
+		internal.Panic("%v: outside loop", atoms[0])
+	}
+	bl := table.forLoops[len(table.forLoops)-1]
+	if atoms[0].Sym() == typ.AContinue {
+		table.compileNode(bl.continueNode)
+		table.codeSeg.WriteJmpInst(typ.OpJmp, bl.continueGoto-len(table.codeSeg.Code)-1)
+	} else {
+		bl.labelPos = append(bl.labelPos, table.codeSeg.Len())
+		table.codeSeg.WriteJmpInst(typ.OpJmp, 0)
+	}
+	return typ.RegA
+}
 
-	table := newSymTable(env)
-	table.collectConstMode = true
-	table.name = name
-	table.codeSeg.Pos.Name = name
-	coreStack := &Env{stack: new([]Value)}
+// [loop [chain ...]]
+func (table *symTable) compileWhile(atoms []parser.Node) uint16 {
+	init := table.codeSeg.Len()
+	breaks := &breakLabel{
+		continueNode: atoms[2],
+		continueGoto: init,
+	}
 
-	// Load nil first so it will be at the top
-	table.loadK(nil)
-	coreStack.Push(Nil)
+	table.forLoops = append(table.forLoops, breaks)
+	table.addMaskedSymTable()
+	table.compileNode(atoms[1])
+	table.removeMaskedSymTable()
+	table.forLoops = table.forLoops[:len(table.forLoops)-1]
 
-	push := func(k string, v Value) uint16 {
-		idx, ok := table.get(k)
-		if ok {
-			coreStack.Set(int(idx), v)
+	table.codeSeg.WriteJmpInst(typ.OpJmp, -(table.codeSeg.Len()-init)-1)
+	for _, idx := range breaks.labelPos {
+		table.codeSeg.Code[idx] = typ.JmpInst(typ.OpJmp, table.codeSeg.Len()-idx-1)
+	}
+	return typ.RegA
+}
+
+func (table *symTable) compileGoto(atoms []parser.Node) uint16 {
+	label := atoms[1].Sym()
+	if atoms[0].Sym() == typ.ALabel { // :: label ::
+		table.labelPos[label] = table.codeSeg.Len()
+	} else { // goto label
+		if pos, ok := table.labelPos[label]; ok {
+			table.codeSeg.WriteJmpInst(typ.OpJmp, pos-(table.codeSeg.Len()+1))
 		} else {
-			idx = uint16(coreStack.Size())
-			table.put(k, idx)
-			coreStack.Push(v)
-		}
-		return idx
-	}
-
-	Globals.Foreach(func(k Value, v *Value) bool { push(k.String(), *v); return true })
-
-	if env != nil && env.Globals != nil {
-		env.Globals.Foreach(func(k Value, v *Value) bool { push(k.String(), *v); return true })
-	}
-
-	gi := push("PROGRAM", Nil)
-	push("COMPILE_OPTIONS", ValueOf(env))
-	push("SOURCE_CODE", Str(source))
-
-	table.vp = uint16(coreStack.Size())
-
-	// Find and fill consts
-	table.loadK(true)
-	table.loadK(false)
-	table.collectConsts(n)
-	table.collectConstMode = false
-
-	table.compileNode(n)
-	table.codeSeg.writeInst(typ.OpRet, regA, 0)
-	table.patchGoto()
-
-	coreStack.grow(int(table.vp))
-	for k, stackPos := range table.constMap {
-		switch k := k.(type) {
-		case float64:
-			coreStack.Set(int(stackPos), Float64(k))
-		case int64:
-			coreStack.Set(int(stackPos), Int64(k))
-		case string:
-			coreStack.Set(int(stackPos), Str(k))
-		case bool:
-			coreStack.Set(int(stackPos), Bool(k))
-		case nil:
-			coreStack.Set(int(stackPos), Nil)
-		default:
-			panic("DEBUG")
+			table.codeSeg.WriteJmpInst(typ.OpJmp, 0)
+			table.forwardGoto[table.codeSeg.Len()-1] = label
 		}
 	}
-
-	cls = &Program{top: &function{}}
-	cls.top.Name = "main"
-	cls.top.CodeSeg = table.codeSeg
-	cls.top.StackSize = table.vp
-	cls.top.Locals = table.symbolsToDebugLocals()
-	cls.top.LoadGlobal = cls
-	cls.stack = coreStack.stack
-	cls.symbols = table.sym
-	cls.functions = table.funcs
-	if env != nil {
-		cls.Environment = *env
-	}
-	cls.Stdout = or(cls.Stdout, os.Stdout).(io.Writer)
-	cls.Stdin = or(cls.Stdin, os.Stdin).(io.Reader)
-	cls.Stderr = or(cls.Stderr, os.Stderr).(io.Writer)
-	for _, f := range cls.functions {
-		f.fun.LoadGlobal = cls
-	}
-	(*cls.stack)[gi] = intf(cls)
-	return cls, err
+	return typ.RegA
 }
 
-func LoadFile(path string, opt *Environment) (*Program, error) {
-	code, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
+func (table *symTable) patchGoto() {
+	code := table.codeSeg.Code
+	for i, l := range table.forwardGoto {
+		pos, ok := table.labelPos[l]
+		if !ok {
+			internal.Panic("label %q not found", l)
+		}
+		code[i] = typ.JmpInst(typ.OpJmp, pos-(i+1))
 	}
-	return loadCode(*(*string)(unsafe.Pointer(&code)), path, opt)
+	for i, c := range code {
+		if c.Opcode == typ.OpJmp && c.B != 0 {
+			dest := int32(i) + c.B + 1
+			for int(dest) < len(code) {
+				if c2 := code[dest]; c2.Opcode == typ.OpJmp && c2.B != 0 {
+					dest += c2.B + 1
+					continue
+				}
+				break
+			}
+			code[i].B = dest - int32(i) - 1
+		}
+	}
 }
 
-func LoadString(code string, opt *Environment) (*Program, error) {
-	return loadCode(code, "<memory>", opt)
+func (table *symTable) compileFreeAddr(atoms []parser.Node) uint16 {
+	for i := 1; i < len(atoms); i++ {
+		s := atoms[i].Sym()
+		yx, _ := table.get(s)
+		table.freeAddr(yx)
+		if len(table.maskedSym) > 0 {
+			delete(table.maskedSym[len(table.maskedSym)-1], s)
+		} else {
+			delete(table.sym, s)
+		}
+	}
+	return typ.RegA
 }
 
-func loadCode(code, name string, opt *Environment) (*Program, error) {
-	n, err := parser.Parse(code, name)
-	if err != nil {
-		return nil, err
+// collapse will accept a list of expressions, for each of them,
+// it will be collapsed into a temp variable and be replaced with a ADR node,
+// the last expression will be collapsed and not using a temp variable if optLast is true.
+func (table *symTable) collapse(nodes []parser.Node, optLast bool) {
+	var lastCompound struct {
+		n parser.Node
+		i int
 	}
-	if internal.IsDebug() {
-		n.Dump(os.Stderr, "  ")
-	}
-	return compileNodeTopLevel(name, code, n, opt)
-}
 
-func Run(p *Program, err error) (Value, error) {
-	if err != nil {
-		return Nil, err
-	}
-	return p.Run()
-}
+	for i, atom := range nodes {
+		if !atom.Valid() {
+			break
+		}
 
-func MustRun(p *Program, err error) Value {
-	internal.PanicErr(err)
-	v, err := p.Run()
-	internal.PanicErr(err)
-	return v
+		if atom.Type() == parser.NODES {
+			yx := table.compileNodeInto(atom, true, 0)
+			nodes[i] = parser.Addr(yx)
+
+			lastCompound.n = atom
+			lastCompound.i = i
+		}
+	}
+
+	if lastCompound.n.Valid() {
+		if optLast {
+			i := table.codeSeg.LastInst()
+			if i.Opcode == typ.OpSet {
+				table.codeSeg.TruncLast()
+				table.freeAddr(i.A)
+				nodes[lastCompound.i] = parser.Addr(uint16(i.B))
+			}
+		}
+	}
 }

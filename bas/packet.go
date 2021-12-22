@@ -1,4 +1,4 @@
-package nj
+package bas
 
 import (
 	"bytes"
@@ -9,40 +9,29 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
-func inst(op byte, a, b uint16) typ.Inst {
-	return typ.Inst{Opcode: op, A: a, B: int32(b)}
-}
-
-func jmpInst(op byte, dist int) typ.Inst {
-	if dist < -(1<<30) || dist >= 1<<30 {
-		panic("long jump")
-	}
-	return typ.Inst{Opcode: op, B: int32(dist)}
-}
-
 type Packet struct {
 	Code []typ.Inst
 	Pos  internal.VByte32
 }
 
-func (b *Packet) writeInst(op byte, opa, opb uint16) {
+func (b *Packet) WriteInst(op byte, opa, opb uint16) {
 	if opa == opb && op == typ.OpSet {
 		return
 	}
-	b.Code = append(b.Code, inst(op, opa, opb))
+	b.Code = append(b.Code, typ.Inst{Opcode: op, A: opa, B: int32(opb)})
 	if b.Len() >= 4e9 {
 		panic("too much code")
 	}
 }
 
-func (b *Packet) writeJmpInst(op byte, d int) {
-	b.Code = append(b.Code, jmpInst(op, d))
+func (b *Packet) WriteJmpInst(op byte, d int) {
+	b.Code = append(b.Code, typ.JmpInst(op, d))
 	if b.Len() >= 4e9 {
 		panic("too much code")
 	}
 }
 
-func (b *Packet) writeLineNum(line uint32) {
+func (b *Packet) WriteLineNum(line uint32) {
 	if line == 0 {
 		// Debug Code, used to detect a null meta struct
 		internal.Panic("DEBUG: null line")
@@ -50,7 +39,7 @@ func (b *Packet) writeLineNum(line uint32) {
 	b.Pos.Append(uint32(len(b.Code)), line)
 }
 
-func (b *Packet) truncLast() {
+func (b *Packet) TruncLast() {
 	if len(b.Code) > 0 {
 		b.Code = b.Code[:len(b.Code)-1]
 	}
@@ -64,59 +53,26 @@ func (b *Packet) LastInst() typ.Inst {
 	return b.Code[len(b.Code)-1]
 }
 
-var (
-	biOp = map[byte]string{
-		typ.OpAdd:     typ.AAdd,
-		typ.OpSub:     typ.ASub,
-		typ.OpMul:     typ.AMul,
-		typ.OpDiv:     typ.ADiv,
-		typ.OpIDiv:    typ.AIDiv,
-		typ.OpMod:     typ.AMod,
-		typ.OpEq:      typ.AEq,
-		typ.OpNeq:     typ.ANeq,
-		typ.OpLess:    typ.ALess,
-		typ.OpLessEq:  typ.ALessEq,
-		typ.OpLoad:    typ.ALoad,
-		typ.OpStore:   typ.AStore,
-		typ.OpBitAnd:  typ.ABitAnd,
-		typ.OpBitOr:   typ.ABitOr,
-		typ.OpBitXor:  typ.ABitXor,
-		typ.OpBitLsh:  typ.ABitLsh,
-		typ.OpBitRsh:  typ.ABitRsh,
-		typ.OpBitURsh: typ.ABitURsh,
-		typ.OpNext:    typ.ANext,
-		typ.OpIsProto: typ.AIs,
-	}
-	uOp = map[byte]string{
-		typ.OpBitNot:     typ.ABitNot,
-		typ.OpNot:        typ.ANot,
-		typ.OpRet:        typ.AReturn,
-		typ.OpLen:        typ.ALen,
-		typ.OpPush:       "push",
-		typ.OpPushUnpack: "pushvararg",
-	}
-)
-
-func pkPrettify(c *function, p *Program, toplevel bool) string {
+func pkPrettify(c *Function, p *Program, toplevel bool) string {
 	sb := &bytes.Buffer{}
 	sb.WriteString("+ START " + c.String() + "\n")
 
 	readAddr := func(a uint16, rValue bool) string {
-		if a == regA {
+		if a == typ.RegA {
 			return "$a"
 		}
 
 		suffix := ""
 		if rValue {
-			if a > regLocalMask || toplevel {
-				suffix = ":" + simpleString((*p.stack)[a&regLocalMask])
+			if a > typ.RegLocalMask || toplevel {
+				suffix = ":" + simpleString((*p.stack)[a&typ.RegLocalMask])
 			}
 		}
 
-		if a > regLocalMask {
-			return fmt.Sprintf("g$%d", a&regLocalMask) + suffix
+		if a > typ.RegLocalMask {
+			return fmt.Sprintf("g$%d", a&typ.RegLocalMask) + suffix
 		}
-		return fmt.Sprintf("$%d", a&regLocalMask) + suffix
+		return fmt.Sprintf("$%d", a&typ.RegLocalMask) + suffix
 	}
 
 	oldpos := c.CodeSeg.Pos
@@ -161,7 +117,7 @@ func pkPrettify(c *function, p *Program, toplevel bool) string {
 			sb.WriteString("loadfunc " + cls.fun.Name + "\n")
 			sb.WriteString(pkPrettify(cls.fun, p, false))
 		case typ.OpTailCall, typ.OpCall:
-			if b != regPhantom {
+			if b != typ.RegPhantom {
 				sb.WriteString("push " + readAddr(b, true) + " -> ")
 			}
 			if bop == typ.OpTailCall {
@@ -178,9 +134,9 @@ func pkPrettify(c *function, p *Program, toplevel bool) string {
 		case typ.OpInc:
 			sb.WriteString("inc " + readAddr(a, false) + " " + readAddr(b, true))
 		default:
-			if us, ok := uOp[bop]; ok {
+			if us, ok := typ.UnaryOpcode[bop]; ok {
 				sb.WriteString(us + " " + readAddr(a, true))
-			} else if bs, ok := biOp[bop]; ok {
+			} else if bs, ok := typ.BinaryOpcode[bop]; ok {
 				sb.WriteString(bs + " " + readAddr(a, true) + " " + readAddr(b, true))
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))

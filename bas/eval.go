@@ -1,4 +1,4 @@
-package nj
+package bas
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ import (
 type Stacktrace struct {
 	Cursor      uint32
 	StackOffset uint32
-	Callable    *function
+	Callable    *Function
 }
 
 func (r *Stacktrace) sourceLine() (src uint32) {
@@ -40,7 +40,7 @@ func (r *Stacktrace) sourceLine() (src uint32) {
 // ExecError represents the runtime error
 type ExecError struct {
 	root   interface{}
-	native *function
+	native *Function
 	stacks []Stacktrace
 }
 
@@ -63,7 +63,7 @@ func (e *ExecError) Error() string {
 	msg.WriteString("stacktrace:\n")
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
-		if r.Cursor == typ.NativeCallCursor {
+		if r.Cursor == internal.NativeCallCursor {
 			msg.WriteString(fmt.Sprintf("%s (native)\n", r.Callable.Name))
 		} else {
 			msg.WriteString(fmt.Sprintf("%s at %s:%d (cursor: %d)\n",
@@ -85,7 +85,7 @@ func (e *ExecError) Error() string {
 	return msg.String()
 }
 
-func internalExecCursorLoop(env Env, K *function, retStack []Stacktrace) Value {
+func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 	stackEnv := env
 	stackEnv.stackOffset = uint32(len(*env.stack))
 
@@ -403,7 +403,7 @@ func internalExecCursorLoop(env Env, K *function, retStack []Stacktrace) Value {
 			if cls == nil || cls.Dummy {
 				internal.Panic("%v not callable", simpleString(a))
 			}
-			if opb != regPhantom {
+			if opb != typ.RegPhantom {
 				stackEnv.Push(env._get(opb))
 			}
 			stackEnv.A = a.Object().this

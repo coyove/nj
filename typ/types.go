@@ -1,5 +1,7 @@
 package typ
 
+import "fmt"
+
 type ValueType byte
 
 const (
@@ -19,4 +21,18 @@ func (t ValueType) String() string {
 	return [...]string{"nil", "bool", "?", "number", "?", "?", "?", "string", "?", "?", "?", "?", "?", "?", "?", "object", "?", "array", "?", "native"}[t]
 }
 
-const NativeCallCursor = uint32(4212345678)
+const (
+	RegA          uint16 = 0xffff
+	RegPhantom    uint16 = 0xfffe
+	RegLocalMask         = 0x7fff
+	RegGlobalFlag        = 0x8000
+	RegMaxAddress        = 0x7f00
+)
+
+type Symbol struct {
+	Address uint16
+}
+
+func (s *Symbol) String() string {
+	return fmt.Sprintf("symbol:%d", s.Address)
+}

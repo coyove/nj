@@ -3,19 +3,19 @@ package lib
 import (
 	"fmt"
 
-	"github.com/coyove/nj"
+	"github.com/coyove/nj/bas"
 )
 
-type Set struct{ m map[uint64]nj.Value }
+type Set struct{ m map[uint64]bas.Value }
 
 func init() {
-	nj.Globals.SetMethod("set", func(env *nj.Env) {
-		s := Set{m: map[uint64]nj.Value{}}
-		env.Array(0).ForeachIndex(func(k int, v nj.Value) bool {
+	bas.Globals.SetMethod("set", func(env *bas.Env) {
+		s := Set{m: map[uint64]bas.Value{}}
+		env.Array(0).ForeachIndex(func(k int, v bas.Value) bool {
 			s.Add(v)
 			return true
 		})
-		env.A = nj.ValueOf(s)
+		env.A = bas.ValueOf(s)
 	}, "$f() -> go.Set\n"+
 		"$f(a: array) -> go.Set\n"+
 		"\tcreate a unique set:\n"+
@@ -29,7 +29,7 @@ func init() {
 		"\t\tgo.Set.size() -> int")
 }
 
-func (s Set) Add(v ...nj.Value) int {
+func (s Set) Add(v ...bas.Value) int {
 	c := 0
 	for _, v := range v {
 		hash := v.HashCode()
@@ -41,7 +41,7 @@ func (s Set) Add(v ...nj.Value) int {
 	return c
 }
 
-func (s Set) Delete(v nj.Value) nj.Value {
+func (s Set) Delete(v bas.Value) bas.Value {
 	hash := v.HashCode()
 	v = s.m[hash]
 	delete(s.m, hash)
@@ -74,13 +74,13 @@ func (s Set) Size() int {
 	return len(s.m)
 }
 
-func (s Set) Contains(v nj.Value) bool {
+func (s Set) Contains(v bas.Value) bool {
 	_, ok := s.m[v.HashCode()]
 	return ok
 }
 
-func (s Set) Values() []nj.Value {
-	v := make([]nj.Value, 0, s.Size())
+func (s Set) Values() []bas.Value {
+	v := make([]bas.Value, 0, s.Size())
 	for _, sv := range s.m {
 		v = append(v, sv)
 	}

@@ -1,4 +1,4 @@
-package nj
+package bas
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
-	"github.com/tidwall/gjson"
 )
 
 var (
@@ -184,23 +183,6 @@ func ValueOf(i interface{}) Value {
 		return ValueOf(v.Interface())
 	case os.FileInfo:
 		return fileInfo(v).ToValue()
-	case gjson.Result:
-		if v.Type == gjson.String {
-			return Str(v.Str)
-		} else if v.Type == gjson.Number {
-			return Float64(v.Float())
-		} else if v.Type == gjson.True || v.Type == gjson.False {
-			return Bool(v.Bool())
-		} else if v.IsArray() {
-			x := make([]Value, 0, len(v.Raw)/10)
-			v.ForEach(func(k, v gjson.Result) bool { x = append(x, ValueOf(v)); return true })
-			return NewArray(x...).ToValue()
-		} else if v.IsObject() {
-			x := NewObject(len(v.Raw) / 10)
-			v.ForEach(func(k, v gjson.Result) bool { x.Set(ValueOf(k), ValueOf(v)); return true })
-			return x.ToValue()
-		}
-		return Nil
 	}
 
 	rv := reflect.ValueOf(i)
@@ -558,6 +540,37 @@ func (v SafeValue) Error() error {
 		return nil
 	}
 	return Value(v).Array().Unwrap().(*ExecError)
+}
+
+func DeepEqual(a, b Value) bool {
+	if a.Equal(b) {
+		return true
+	}
+	if at, bt := a.Type(), b.Type(); at == bt {
+		switch at {
+		case typ.Array:
+			flag := a.Array().Len() == b.Array().Len()
+			if !flag {
+				return false
+			}
+			a.Array().ForeachIndex(func(k int, v Value) bool {
+				flag = DeepEqual(b.Array().Get(k), v)
+				return flag
+			})
+			return flag
+		case typ.Object:
+			flag := a.Object().Len() == b.Object().Len()
+			if !flag {
+				return false
+			}
+			a.Object().Foreach(func(k Value, v *Value) bool {
+				flag = DeepEqual(b.Object().Get(k), *v)
+				return flag
+			})
+			return flag
+		}
+	}
+	return false
 }
 
 func lessStr(a, b Value) bool {

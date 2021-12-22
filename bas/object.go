@@ -9,7 +9,7 @@
 //  express or implied. See the License for the specific language
 //  governing permissions and limitations under the License.
 
-package nj
+package bas
 
 import (
 	"bytes"
@@ -21,7 +21,7 @@ import (
 
 type Object struct {
 	parent *Object
-	fun    *function
+	fun    *Function
 	count  int64
 	items  []hashItem
 	this   Value
@@ -48,7 +48,7 @@ func NewObject(preallocateSize int) *Object {
 
 func NamedObject(name string, preallocateSize int) *Object {
 	obj := NewObject(preallocateSize)
-	obj.fun = &function{Name: name, Dummy: true, Native: func(*Env) {}, obj: obj}
+	obj.fun = &Function{Name: name, Dummy: true, Native: func(*Env) {}, obj: obj}
 	return obj
 }
 
@@ -383,9 +383,9 @@ func (m *Object) Merge(src *Object) *Object {
 	return m
 }
 
-func (m *Object) Callable() function {
+func (m *Object) Callable() Function {
 	if m == nil || m.fun == nil || m.fun.Dummy {
-		return function{}
+		return Function{Dummy: true}
 	}
 	return *m.fun
 }

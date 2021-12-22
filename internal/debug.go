@@ -7,9 +7,16 @@ import (
 	"os"
 	"runtime/debug"
 	"strconv"
+	"unsafe"
 )
 
 const UnnamedFunc = "<native>"
+
+const NativeCallCursor = uint32(4212345678)
+
+var GrowEnvStack func(env unsafe.Pointer, sz int)
+
+var SetObjFun func(obj unsafe.Pointer, fun unsafe.Pointer)
 
 type TransparentError struct{}
 

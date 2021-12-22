@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/coyove/nj"
+	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/lib"
 )
 
@@ -54,7 +55,7 @@ func main() {
 	log.SetFlags(0)
 
 	if *version {
-		fmt.Println("nj virtual machine v" + strconv.FormatInt(nj.Version, 10) + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")")
+		fmt.Println("nj virtual machine v" + strconv.FormatInt(bas.Version, 10) + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")")
 		flag.Usage()
 		return
 	}
@@ -105,7 +106,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	start := time.Now()
 
-	var b *nj.Program
+	var b *bas.Program
 	var err error
 
 	defer func() {
@@ -153,7 +154,7 @@ func main() {
 
 func runRepl() {
 	var code []string
-	var globals *nj.Object
+	var globals *bas.Object
 	rd := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Print("> ")
@@ -166,7 +167,7 @@ func runRepl() {
 		code = append(code, s)
 		if s == "" || strings.HasSuffix(s, ";") {
 			text := strings.TrimSuffix(strings.Join(code, "\n"), ";")
-			p, err := nj.LoadString(text, &nj.Environment{Globals: globals})
+			p, err := nj.LoadString(text, &bas.Environment{Globals: globals})
 			if err != nil {
 				fmt.Println("x", err)
 			} else {

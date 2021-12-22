@@ -6,12 +6,12 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/coyove/nj"
+	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/typ"
 )
 
 func init() {
-	nj.Globals.SetMethod("strtime", func(env *nj.Env) {
+	bas.Globals.SetMethod("strtime", func(env *bas.Env) {
 		f := env.Get(0).Safe().Str("")
 		switch strings.ToLower(f) {
 		case "ansic":
@@ -122,7 +122,7 @@ func init() {
 		}
 
 		r := tt.Format(f)
-		env.A = nj.Str(r)
+		env.A = bas.Str(r)
 	}, "$f(format: string) -> string\n"+
 		"$f(format: string, t: go.time.Time) -> string\n"+
 		"$f(format: string, unix_sec: float) -> string\n"+
