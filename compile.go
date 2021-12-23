@@ -302,7 +302,7 @@ func (table *symTable) compileFunction(atoms []parser.Node) uint16 {
 
 	var loadFuncIndex uint16
 	obj := bas.NewObject(0)
-	obj.SetPrototype(bas.FuncProto)
+	obj.SetPrototype(bas.Proto.Func)
 	internal.SetObjFun(unsafe.Pointer(obj), unsafe.Pointer(cls))
 	if table.global != nil {
 		x := table.global

@@ -41,7 +41,7 @@ var (
 func init() {
 	*internalArrayMeta = ArrayMeta{
 		"internal",
-		ArrayProto,
+		Proto.Array,
 		func(a *Array) int { return len(a.internal) },
 		func(a *Array) int { return cap(a.internal) },
 		func(a *Array) { a.internal = a.internal[:0] },
@@ -83,7 +83,7 @@ func init() {
 	}
 	*bytesArrayMeta = ArrayMeta{
 		"bytes",
-		BytesProto,
+		Proto.Bytes,
 		func(a *Array) int { return len((a.any).([]byte)) },
 		func(a *Array) int { return cap((a.any).([]byte)) },
 		func(a *Array) { a.any = a.any.([]byte)[:0] },
@@ -138,7 +138,7 @@ func init() {
 	}
 	*stringsArrayMeta = ArrayMeta{
 		"[]string",
-		ArrayProto,
+		Proto.Array,
 		func(a *Array) int { return len((a.any).([]string)) },
 		func(a *Array) int { return cap((a.any).([]string)) },
 		func(a *Array) { a.any = a.any.([]byte)[:0] },
@@ -192,7 +192,7 @@ func init() {
 	}
 	*errorArrayMeta = ArrayMeta{
 		"error",
-		ErrorProto,
+		Proto.Error,
 		func(a *Array) int { return 1 },
 		func(a *Array) int { return 1 },
 		sgClearNotSupported,
@@ -226,7 +226,7 @@ func GetTypedArrayMeta(v interface{}) *ArrayMeta {
 	if v, ok := genericArrayMetaCache.Load(rt); ok {
 		return v.(*ArrayMeta)
 	}
-	a := &ArrayMeta{rt.String(), ArrayProto, sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgAppend, sgSlice, sgSliceInplace, sgCopy, sgConcat, sgMarshal}
+	a := &ArrayMeta{rt.String(), Proto.Array, sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgAppend, sgSlice, sgSliceInplace, sgCopy, sgConcat, sgMarshal}
 	if rt.Kind() == reflect.Array {
 		a.SliceInplace = sgSliceInplaceNotSupported
 		a.Clear = sgClearNotSupported

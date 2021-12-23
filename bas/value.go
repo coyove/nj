@@ -607,11 +607,11 @@ func IsPrototype(a Value, p *Object) bool {
 	case typ.Object:
 		return a.Object().IsPrototype(p)
 	case typ.Bool:
-		return p == BoolProto
+		return p == Proto.Bool
 	case typ.Number:
-		return p == FloatProto || (a.IsInt64() && p == IntProto)
+		return p == Proto.Float || (a.IsInt64() && p == Proto.Int)
 	case typ.String:
-		return p == StrProto
+		return p == Proto.Str
 	case typ.Array:
 		return a.Array().meta.Proto.IsPrototype(p)
 	}

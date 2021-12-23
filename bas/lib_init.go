@@ -3,16 +3,7 @@ package bas
 import (
 	"bytes"
 	"fmt"
-	"io"
-	"io/fs"
-	"io/ioutil"
-	"math"
-	"math/rand"
-	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,19 +17,7 @@ import (
 
 const Version int64 = 379
 
-var (
-	ObjectProto       Object
-	StaticObjectProto = NamedObject("staticobject", 0)
-	BoolProto         = NewObject(0)
-	StrProto          = NewObject(0)
-	BytesProto        = NewObject(0)
-	IntProto          = NewObject(0)
-	FloatProto        = NewObject(0)
-	FuncProto         = NewObject(0)
-	ArrayProto        = NewObject(0)
-	ErrorProto        = NewObject(0)
-	Globals           = NewObject(0)
-)
+var Globals = NewObject(0)
 
 func init() {
 	internal.GrowEnvStack = func(env unsafe.Pointer, sz int) {
@@ -104,7 +83,7 @@ func init() {
 			o := e.Object(0)
 			_ = o.IsCallable() && e.SetA(Str(o.fun.GoString())) || e.SetA(Nil)
 		}, "").
-		SetPrototype(StaticObjectProto).
+		SetPrototype(Proto.StaticObject).
 		ToValue())
 
 	Globals.SetMethod("type", func(e *Env) {
@@ -115,7 +94,7 @@ func init() {
 	}, "$f(f: function, this: value, args...: value) -> value")
 	Globals.SetMethod("panic", func(e *Env) {
 		v := e.Get(0)
-		if IsPrototype(v, ErrorProto) {
+		if IsPrototype(v, Proto.Error) {
 			panic(v.Array().Unwrap().(*ExecError).root)
 		}
 		panic(v)
@@ -131,9 +110,9 @@ func init() {
 		}
 	}, "$f(v: value)\n\tpanic when value is falsy\n"+
 		"$f(v1: value, v2: value, msg?: string)\n\tpanic when two values are not equal")
-	*BoolProto = *Func("bool", func(e *Env) { e.A = Bool(e.Get(0).IsTrue()) }, "$f(v: value) -> bool").Object()
-	Globals.SetProp("bool", BoolProto.ToValue())
-	*IntProto = *Func("int", func(e *Env) {
+	*Proto.Bool = *Func("bool", func(e *Env) { e.A = Bool(e.Get(0).IsTrue()) }, "$f(v: value) -> bool").Object()
+	Globals.SetProp("bool", Proto.Bool.ToValue())
+	*Proto.Int = *Func("int", func(e *Env) {
 		if v := e.Get(0); v.Type() == typ.Number {
 			e.A = Int64(v.Int64())
 		} else {
@@ -142,8 +121,8 @@ func init() {
 			e.A = Int64(v)
 		}
 	}, "$f(v: value, base?: int) -> int\n\tconvert `v` to an integer number, panic when failed or overflowed").Object()
-	Globals.SetProp("int", IntProto.ToValue())
-	*FloatProto = *Func("float", func(e *Env) {
+	Globals.SetProp("int", Proto.Int.ToValue())
+	*Proto.Float = *Func("float", func(e *Env) {
 		if v := e.Get(0); v.Type() == typ.Number {
 			e.A = v
 		} else {
@@ -152,160 +131,25 @@ func init() {
 			_ = isInt && e.SetA(Int64(i)) || e.SetA(Float64(f))
 		}
 	}, "$f(v: value) -> number\n\tconvert `v` to a float number, panic when failed").Object()
-	Globals.SetProp("float", FloatProto.ToValue())
-	*BytesProto = *Func("bytes", func(e *Env) {
+	Globals.SetProp("float", Proto.Float.ToValue())
+	*Proto.Bytes = *Func("bytes", func(e *Env) {
 		_ = e.Get(0).IsInt64() && e.SetA(ValueOf(make([]byte, e.Int(0)))) || e.SetA(ValueOf([]byte(e.Str(0))))
-	}, "$f(s: str) -> bytes\n\tcreate bytes from string\n$f(n: int) -> bytes\n\tcreate an n-byte long array").Object().SetPrototype(ArrayProto)
-	Globals.SetProp("bytes", BytesProto.ToValue())
-	Globals.SetProp("stdout", ValueOf(os.Stdout))
-	Globals.SetProp("stdin", ValueOf(os.Stdin))
-	Globals.SetProp("stderr", ValueOf(os.Stderr))
-	Globals.SetMethod("print", func(env *Env) {
-		for _, a := range env.Stack() {
-			fmt.Fprint(env.Global.Stdout, a.String())
-		}
-		fmt.Fprintln(env.Global.Stdout)
-	}, "$f(args...: value)\n\tprint `args` to stdout")
-	Globals.SetMethod("printf", func(e *Env) {
-		sprintf(e, 0, e.Global.Stdout)
-	}, "$f(format: string, args...: value)")
-	Globals.SetMethod("write", func(e *Env) {
-		w := NewWriter(e.Get(0))
-		for _, a := range e.Stack()[1:] {
-			_, err := fmt.Fprint(w, a.String())
-			internal.PanicErr(err)
-		}
-	}, "$f(w: Writer, args...: value)\n\twrite `args` to `w`")
-	Globals.SetMethod("println", func(e *Env) {
-		for _, a := range e.Stack() {
-			fmt.Fprint(e.Global.Stdout, a.String(), " ")
-		}
-		fmt.Fprintln(e.Global.Stdout)
-	}, "$f(args...: value)\n\tsame as `print`, but values are separated by spaces")
-	Globals.SetMethod("scanln", func(env *Env) {
-		prompt, n := env.Get(0), env.Get(1)
-		fmt.Fprint(env.Global.Stdout, prompt.Safe().Str(""))
-		var results []Value
-		var r io.Reader = env.Global.Stdin
-		for i := n.Safe().Int64(1); i > 0; i-- {
-			var s string
-			if _, err := fmt.Fscan(r, &s); err != nil {
-				break
-			}
-			results = append(results, Str(s))
-		}
-		env.A = NewArray(results...).ToValue()
-	}, "$f() -> array\n\tread all user inputs and return as [input1, input2, ...]\n"+
-		"$f(prompt: string, n?: int) -> array\n\tprint `prompt` then read all (or at most `n`) user inputs")
-	Globals.SetMethod("time", func(e *Env) {
-		e.A = Float64(float64(time.Now().UnixNano()) / 1e9)
-	}, "$f() -> float\n\tunix timestamp in seconds")
-	Globals.SetMethod("sleep", func(e *Env) { time.Sleep(e.Num(0).Safe().Duration(0)) }, "$f(sec: float)")
-	Globals.SetMethod("Go_time", func(e *Env) {
-		if e.Size() > 0 {
-			e.A = ValueOf(time.Date(e.Int(0), time.Month(e.Int(1)), e.Int(2),
-				e.Get(3).Safe().Int(0), e.Get(4).Safe().Int(0), e.Get(5).Safe().Int(0), e.Get(6).Safe().Int(0), time.UTC))
-		} else {
-			e.A = ValueOf(time.Now())
-		}
-	}, "$f() -> go.time.Time\n\treturn time.Time of current time\n"+
-		"$f(year: int, month: int, day: int, h?: int, m?: int, s?: int, nanoseconds?: int) -> go.time.Time\n"+
-		"\treturn time.Time constructed by the given arguments",
-	)
-	Globals.SetMethod("clock", func(e *Env) {
-		x := time.Now()
-		s := *(*[2]int64)(unsafe.Pointer(&x))
-		e.A = Float64(float64(s[1]) / 1e9)
-	}, "$f() -> float\n\tseconds since startup (monotonic clock)")
-	Globals.SetMethod("exit", func(e *Env) { os.Exit(e.Int(0)) }, "$f(code: int)")
-	Globals.SetMethod("chr", func(e *Env) { e.A = Rune(rune(e.Int(0))) }, "$f(code: int) -> string")
-	Globals.SetMethod("byte", func(e *Env) { e.A = Byte(byte(e.Int(0))) }, "$f(code: int) -> string")
-	Globals.SetMethod("ord", func(e *Env) { r, _ := utf8.DecodeRuneInString(e.Str(0)); e.A = Int64(int64(r)) }, "$f(s: string) -> int")
-
-	Globals.SetProp("re", Func("RegExp", func(e *Env) {
-		e.A = NewObject(1).SetPrototype(e.A.Object()).SetProp("_rx", ValueOf(regexp.MustCompile(e.Str(0)))).ToValue()
-	}, "re(regex: string) -> RegExp\n\tcreate a regular expression object").Object().
-		SetMethod("match", func(e *Env) {
-			e.A = Bool(e.This("_rx").(*regexp.Regexp).MatchString(e.Str(0)))
-		}, "RegExp.$f(text: string) -> bool").
-		SetMethod("find", func(e *Env) {
-			m := e.This("_rx").(*regexp.Regexp).FindStringSubmatch(e.Str(0))
-			e.A = NewTypedArray(m, stringsArrayMeta).ToValue()
-		}, "RegExp.$f(text: string) -> array").
-		SetMethod("findall", func(e *Env) {
-			m := e.This("_rx").(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).Safe().Int(-1))
-			e.A = NewTypedArray(m, GetTypedArrayMeta(m)).ToValue()
-		}, "RegExp.$f(text: string) -> array").
-		SetMethod("replace", func(e *Env) {
-			e.A = Str(e.This("_rx").(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
-		}, "RegExp.$f(old: string, new: string) -> string").
-		ToValue())
-
-	Globals.SetProp("open", Func("open", func(e *Env) {
-		path, flag, perm := e.Str(0), e.Get(1).Safe().Str("r"), e.Get(2).Safe().Int64(0644)
-		var opt int
-		for _, f := range flag {
-			switch f {
-			case 'w':
-				opt &^= os.O_RDWR | os.O_RDONLY
-				opt |= os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-			case 'r':
-				opt &^= os.O_RDWR | os.O_WRONLY
-				opt |= os.O_RDONLY
-			case 'a':
-				opt |= os.O_APPEND | os.O_CREATE
-			case 'x':
-				opt |= os.O_EXCL
-			case '+':
-				opt &^= os.O_RDONLY | os.O_WRONLY
-				opt |= os.O_RDWR | os.O_CREATE
-			}
-		}
-		f, err := os.OpenFile(path, opt, fs.FileMode(perm))
-		internal.PanicErr(err)
-		e.Object(-1).Set(Zero, ValueOf(f))
-
-		e.A = NamedObject("File", 0).
-			SetProp("_f", ValueOf(f)).
-			SetProp("path", Str(f.Name())).
-			SetMethod("sync", func(e *Env) {
-				internal.PanicErr(e.This("_f").(*os.File).Sync())
-			}, "File.$f()").
-			SetMethod("stat", func(e *Env) {
-				fi, err := e.This("_f").(*os.File).Stat()
-				internal.PanicErr(err)
-				e.A = ValueOf(fi)
-			}, "File.$f() -> go.os.FileInfo").
-			SetMethod("truncate", func(e *Env) {
-				f := e.This("_f").(*os.File)
-				internal.PanicErr(f.Truncate(e.Int64(1)))
-				t, err := f.Seek(0, 2)
-				internal.PanicErr(err)
-				e.A = Int64(t)
-			}, "File.$f() -> int").
-			SetPrototype(ReadWriteSeekCloserProto).
-			ToValue()
-	}, "$f(path: string, flag: string, perm: int) -> File").Object().
-		SetMethod("close", func(e *Env) {
-			if f, _ := e.Object(-1).Get(Zero).Interface().(*os.File); f != nil {
-				internal.PanicErr(f.Close())
-			} else {
-				internal.Panic("no opened file yet")
-			}
-		}, "$f()\n\tclose last opened file").ToValue(),
-	)
+	}, "$f(s: str) -> bytes\n\tcreate bytes from string\n$f(n: int) -> bytes\n\tcreate an n-byte long array").
+		Object().
+		SetPrototype(Proto.Array)
+	Globals.SetProp("bytes", Proto.Bool.ToValue())
 
 	Globals.SetProp("io", NamedObject("io", 0).
-		SetProp("reader", ReaderProto.ToValue()).
-		SetProp("writer", WriterProto.ToValue()).
-		SetProp("seeker", SeekerProto.ToValue()).
-		SetProp("closer", CloserProto.ToValue()).
-		SetProp("readwriter", ReadWriterProto.ToValue()).
-		SetProp("readcloser", ReadCloserProto.ToValue()).
-		SetProp("writecloser", WriteCloserProto.ToValue()).
-		SetProp("readwritecloser", ReadWriteCloserProto.ToValue()).
-		SetProp("readwriteseekcloser", ReadWriteSeekCloserProto.ToValue()).
-		SetPrototype(StaticObjectProto).
+		SetProp("reader", Proto.Reader.ToValue()).
+		SetProp("writer", Proto.Writer.ToValue()).
+		SetProp("seeker", Proto.Seeker.ToValue()).
+		SetProp("closer", Proto.Closer.ToValue()).
+		SetProp("readwriter", Proto.ReadWriter.ToValue()).
+		SetProp("readcloser", Proto.ReadCloser.ToValue()).
+		SetProp("writecloser", Proto.WriteCloser.ToValue()).
+		SetProp("readwritecloser", Proto.ReadWriteCloser.ToValue()).
+		SetProp("readwriteseekcloser", Proto.ReadWriteSeekCloser.ToValue()).
+		SetPrototype(Proto.StaticObject).
 		ToValue())
 
 	ObjectProto = *NamedObject("object", 0).
@@ -313,7 +157,7 @@ func init() {
 			e.A = NewObject(e.Get(0).Safe().Int(0)).ToValue()
 		}, "object.$f(sz?: int) -> object").
 		SetMethod("newstatic", func(e *Env) {
-			e.A = NewObject(e.Get(0).Safe().Int(0)).SetPrototype(StaticObjectProto).ToValue()
+			e.A = NewObject(e.Get(0).Safe().Int(0)).SetPrototype(Proto.StaticObject).ToValue()
 		}, "object.$f(sz?: int) -> staticobject").
 		SetMethod("get", func(e *Env) {
 			e.A = e.Object(-1).Get(e.Get(0))
@@ -390,7 +234,7 @@ func init() {
 		}, "object.$f(k: value) -> [value, value]\n\tfind next key-value pair after `k` in the object and return as [key, value]")
 	ObjectProto.SetPrototype(nil) // objectlib is the topmost object, it should not have any prototype
 
-	*FuncProto = *NamedObject("function", 0).
+	*Proto.Func = *NamedObject("function", 0).
 		SetMethod("doc", func(e *Env) {
 			o := e.Object(-1)
 			e.A = Str(strings.Replace(o.fun.DocString, "$f", o.fun.Name, -1))
@@ -464,11 +308,11 @@ func init() {
 		SetPrototype(&ObjectProto)
 
 	Globals.SetProp("object", ObjectProto.ToValue())
-	Globals.SetProp("staticobject", StaticObjectProto.ToValue())
-	Globals.SetProp("func", FuncProto.ToValue())
-	Globals.SetProp("callable", FuncProto.ToValue())
+	Globals.SetProp("staticobject", Proto.StaticObject.ToValue())
+	Globals.SetProp("func", Proto.Func.ToValue())
+	Globals.SetProp("callable", Proto.Func.ToValue())
 
-	*ArrayProto = *NamedObject("array", 0).
+	*Proto.Array = *NamedObject("array", 0).
 		SetMethod("make", func(e *Env) {
 			e.A = NewArray(make([]Value, e.Int(0))...).ToValue()
 		}, "array.$f(n: int) -> array\n\tcreate an array of size `n`").
@@ -544,17 +388,17 @@ func init() {
 		SetMethod("untype", func(e *Env) {
 			e.A = NewArray(e.Array(-1).Values()...).ToValue()
 		}, "array.$f() -> array")
-	Globals.SetProp("array", ArrayProto.ToValue())
+	Globals.SetProp("array", Proto.Array.ToValue())
 
-	*ErrorProto = *Func("error", func(e *Env) {
+	*Proto.Error = *Func("error", func(e *Env) {
 		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.Runtime().Stacktrace()})
 	}, "").Object().
 		SetMethod("error", func(e *Env) { e.A = ValueOf(e.Array(-1).Unwrap().(*ExecError).root) }, "").
 		SetMethod("getcause", func(e *Env) { e.A = intf(e.Array(-1).Unwrap().(*ExecError).root) }, "").
 		SetMethod("trace", func(e *Env) { e.A = ValueOf(e.Array(-1).Unwrap().(*ExecError).stacks) }, "")
-	Globals.SetProp("error", ErrorProto.ToValue())
+	Globals.SetProp("error", Proto.Error.ToValue())
 
-	*StrProto = *Func("str", func(e *Env) {
+	*Proto.Str = *Func("str", func(e *Env) {
 		i, ok := e.Interface(0).([]byte)
 		_ = ok && e.SetA(UnsafeStr(i)) || e.SetA(Str(e.Get(0).String()))
 	}, "").Object().
@@ -670,7 +514,7 @@ func init() {
 				b.WriteString(v.String())
 			}
 			e.A = NamedObject("Buffer", 0).
-				SetPrototype(ReadWriterProto).
+				SetPrototype(Proto.ReadWriter).
 				SetProp("_f", ValueOf(b)).
 				SetMethod("reset", func(e *Env) {
 					e.This("_f").(*bytes.Buffer).Reset()
@@ -683,122 +527,9 @@ func init() {
 				}, "Buffer.$f() -> bytes").
 				ToValue()
 		}, "$f(v?: string) -> Buffer")
-	Globals.SetProp("str", StrProto.ToValue())
+	Globals.SetProp("str", Proto.Str.ToValue())
 
-	Globals.SetProp("math", NamedObject("math", 0).
-		SetProp("INF", Float64(math.Inf(1))).
-		SetProp("NEG_INF", Float64(math.Inf(-1))).
-		SetProp("PI", Float64(math.Pi)).
-		SetProp("E", Float64(math.E)).
-		SetMethod("randomseed", func(e *Env) { rand.Seed(e.Get(0).Safe().Int64(1)) }, "$f(seed: int)").
-		SetMethod("random", func(e *Env) {
-			switch len(e.Stack()) {
-			case 2:
-				ai, bi := e.Int64(0), e.Int64(1)
-				e.A = Int64(rand.Int63n(bi-ai+1) + ai)
-			case 1:
-				e.A = Int64(rand.Int63n(e.Int64(0)))
-			default:
-				e.A = Float64(rand.Float64())
-			}
-		}, "$f() -> float\n\treturn [0, 1)\n$f(n: int) -> int\n\treturn [0, n)\n$f(a: int, b: int) -> int\n\treturn [a, b]").
-		SetMethod("sqrt", func(e *Env) { e.A = Float64(math.Sqrt(e.Float64(0))) }, "$f(v: float) -> float").
-		SetMethod("floor", func(e *Env) { e.A = Float64(math.Floor(e.Float64(0))) }, "$f(v: float) -> float").
-		SetMethod("ceil", func(e *Env) { e.A = Float64(math.Ceil(e.Float64(0))) }, "$f(v: float) -> float").
-		SetMethod("min", func(e *Env) { mathMinMax(e, false) }, "$f(a: number, b...: number) -> number").
-		SetMethod("max", func(e *Env) { mathMinMax(e, true) }, "$f(a: number, b...: number) -> number").
-		SetMethod("pow", func(e *Env) { e.A = Float64(math.Pow(e.Float64(0), e.Float64(1))) }, "$f(a: float, b: float) -> float").
-		SetMethod("abs", func(e *Env) {
-			if e.A = e.Num(0); e.A.IsInt64() {
-				if i := e.A.Int64(); i < 0 {
-					e.A = Int64(-i)
-				}
-			} else {
-				e.A = Float64(math.Abs(e.A.Float64()))
-			}
-		}, "").
-		SetMethod("remainder", func(e *Env) { e.A = Float64(math.Remainder(e.Float64(0), e.Float64(1))) }, "").
-		SetMethod("mod", func(e *Env) { e.A = Float64(math.Mod(e.Float64(0), e.Float64(1))) }, "").
-		SetMethod("cos", func(e *Env) { e.A = Float64(math.Cos(e.Float64(0))) }, "").
-		SetMethod("sin", func(e *Env) { e.A = Float64(math.Sin(e.Float64(0))) }, "").
-		SetMethod("tan", func(e *Env) { e.A = Float64(math.Tan(e.Float64(0))) }, "").
-		SetMethod("acos", func(e *Env) { e.A = Float64(math.Acos(e.Float64(0))) }, "").
-		SetMethod("asin", func(e *Env) { e.A = Float64(math.Asin(e.Float64(0))) }, "").
-		SetMethod("atan", func(e *Env) { e.A = Float64(math.Atan(e.Float64(0))) }, "").
-		SetMethod("atan2", func(e *Env) { e.A = Float64(math.Atan2(e.Float64(0), e.Float64(1))) }, "").
-		SetMethod("ldexp", func(e *Env) { e.A = Float64(math.Ldexp(e.Float64(0), e.Int(0))) }, "").
-		SetMethod("modf", func(e *Env) { a, b := math.Modf(e.Float64(0)); e.A = NewArray(Float64(a), Float64(b)).ToValue() }, "").
-		SetPrototype(StaticObjectProto).
-		ToValue())
-
-	Globals.SetProp("os", NamedObject("os", 0).
-		SetProp("pid", Int(os.Getpid())).
-		SetProp("numcpus", Int(runtime.NumCPU())).
-		SetProp("args", ValueOf(os.Args)).
-		SetMethod("environ", func(e *Env) {
-			if env := os.Environ(); e.Get(0).IsTrue() {
-				obj := NewObject(len(env))
-				for _, e := range env {
-					if idx := strings.Index(e, "="); idx > -1 {
-						obj.SetProp(e[:idx], Str(e[idx+1:]))
-					}
-				}
-				e.A = obj.ToValue()
-			} else {
-				e.A = ValueOf(env)
-			}
-		}, "").
-		SetMethod("shell", func(e *Env) {
-			win := runtime.GOOS == "windows"
-			p := exec.Command(internal.IfStr(win, "cmd", "sh"), internal.IfStr(win, "/c", "-c"), e.Str(0))
-			opt := e.Get(1).Safe().Object()
-			opt.Prop("env").Safe().Object().Foreach(func(k Value, v *Value) bool {
-				p.Env = append(p.Env, k.String()+"="+v.String())
-				return true
-			})
-			stdout := &bytes.Buffer{}
-			p.Stdout, p.Stderr = stdout, stdout
-			p.Dir = opt.Prop("dir").Safe().Str("")
-			if tmp := opt.Prop("stdout"); tmp != Nil {
-				p.Stdout = NewWriter(tmp)
-			}
-			if tmp := opt.Prop("stderr"); tmp != Nil {
-				p.Stderr = NewWriter(tmp)
-			}
-			if tmp := opt.Prop("stdin"); tmp != Nil {
-				p.Stdin = NewReader(tmp)
-			}
-
-			out := make(chan error)
-			go func() { out <- p.Run() }()
-			select {
-			case r := <-out:
-				internal.PanicErr(r)
-			case <-time.After(opt.Prop("timeout").Safe().Duration(1 << 62)):
-				p.Process.Kill()
-				panic("timeout")
-			}
-			e.A = Bytes(stdout.Bytes())
-		}, "").
-		SetMethod("readdir", func(e *Env) {
-			fi, err := ioutil.ReadDir(e.Str(0))
-			internal.PanicErr(err)
-			e.A = ValueOf(fi)
-		}, "").
-		SetMethod("remove", func(e *Env) {
-			path := e.Str(0)
-			fi, err := os.Stat(path)
-			internal.PanicErr(err)
-			if fi.IsDir() {
-				internal.PanicErr(os.RemoveAll(path))
-			} else {
-				internal.PanicErr(os.Remove(path))
-			}
-		}, "").
-		SetMethod("pstat", func(e *Env) {
-			fi, err := os.Stat(e.Str(0))
-			_ = err == nil && e.SetA(ValueOf(fi)) || e.SetA(Nil)
-		}, "").
-		SetPrototype(StaticObjectProto).
-		ToValue())
+	Globals.SetMethod("printf", func(e *Env) {
+		sprintf(e, 0, e.Global.Stdout)
+	}, "$f(format: string, args...: value)")
 }

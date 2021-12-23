@@ -111,26 +111,6 @@ func simpleString(v Value) string {
 	}
 }
 
-func mathMinMax(e *Env, max bool) {
-	if v := e.Num(0); v.IsInt64() {
-		vi := v.Int64()
-		for ii := 1; ii < len(e.Stack()); ii++ {
-			if x := e.Int64(ii); x >= vi == max {
-				vi = x
-			}
-		}
-		e.A = Int64(vi)
-	} else {
-		vf := v.Float64()
-		for i := 1; i < len(e.Stack()); i++ {
-			if x := e.Float64(i); x >= vf == max {
-				vf = x
-			}
-		}
-		e.A = Float64(vf)
-	}
-}
-
 func sprintf(env *Env, start int, p io.Writer) {
 	f := env.Str(start)
 	tmp := bytes.Buffer{}

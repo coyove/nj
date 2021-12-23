@@ -21,12 +21,14 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 %type<expr> jmp_stat
 %type<expr> func_stat
 %type<expr> func_params
-%type<expr> comma
-%type<expr> assign
+%type<token> comma
+%type<token> assign
+%type<token2> op_assign
 
 %union {
-    token Token
-    expr  Node
+    token  Token
+    expr   Node
+    token2 *TokenNode
 }
 
 /* Reserved words */
@@ -34,6 +36,7 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString TIDiv
+%token<token> TAddEq TSubEq TMulEq TDivEq TIDivEq TModEq TBitAndEq TBitOrEq TBitXorEq TBitLshEq TBitRshEq TBitURshEq
 %token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~'
 
 /* Operators */
@@ -110,6 +113,9 @@ assign_stat:
         } else {
             $$ = __moveMulti($1.Nodes(), $3.Nodes(), $2)
         }
+    } |
+    declarator op_assign expr {
+        $$ = $1.moveLoadStore(__move, Nodes($2.Node, $1, $3).At($2.Token)).At($2.Token)
     }
 
 for_stat:
@@ -268,10 +274,22 @@ expr_assign_list:
     expr_assign_list ',' TString assign expr      { $$ = ss(yylex).__objectBuild($1, Str($3.Str), $5) } |
     expr_assign_list ',' '(' expr ')' assign expr { $$ = ss(yylex).__objectBuild($1, $4, $7) }
 
-comma: 
-    { $$ = emptyNode } | ',' { $$ = emptyNode }
+comma: {} | ',' {}
 
-assign: 
-    '=' { $$ = emptyNode } | ':' { $$ = emptyNode }
+assign: '=' {} | ':' {}
+
+op_assign: 
+    TAddEq     { $$ = &TokenNode{$1, SAdd} } |
+    TSubEq     { $$ = &TokenNode{$1, SSub} } |
+    TMulEq     { $$ = &TokenNode{$1, SMul} } |
+    TDivEq     { $$ = &TokenNode{$1, SDiv} } |
+    TIDivEq    { $$ = &TokenNode{$1, SIDiv} } |
+    TModEq     { $$ = &TokenNode{$1, SMod} } |
+    TBitAndEq  { $$ = &TokenNode{$1, SBitAnd} } |
+    TBitOrEq   { $$ = &TokenNode{$1, SBitOr} } |
+    TBitXorEq  { $$ = &TokenNode{$1, SBitXor} } |
+    TBitLshEq  { $$ = &TokenNode{$1, SBitLsh} } |
+    TBitRshEq  { $$ = &TokenNode{$1, SBitRsh} } |
+    TBitURshEq { $$ = &TokenNode{$1, SBitURsh} }
 
 %%

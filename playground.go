@@ -1,4 +1,4 @@
-package lib
+package nj
 
 import (
 	"bytes"
@@ -9,12 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coyove/nj"
 	"github.com/coyove/nj/bas"
 )
 
-//go:embed index.html
-var indexBytes []byte
+//go:embed playground.html
+var playgroundHTML []byte
 
 func PlaygroundHandler(opt *bas.Environment) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -23,14 +22,14 @@ func PlaygroundHandler(opt *bas.Environment) func(w http.ResponseWriter, r *http
 		c := getCode(r)
 		if c == "" {
 			w.Header().Add("Content-Type", "text/html")
-			w.Write(indexBytes)
+			w.Write(playgroundHTML)
 			return
 		}
 
 		start := time.Now()
 		bufOut := &limitedWriter{limit: 32 * 1024}
 
-		p, err := nj.LoadString(c, opt)
+		p, err := LoadString(c, opt)
 		if err != nil {
 			writeJSON(w, map[string]interface{}{"error": err.Error()})
 			return

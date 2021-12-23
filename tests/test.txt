@@ -255,3 +255,20 @@ assert((lambda(x) return (x+1) end)(1), 2)
 assert((lambda(x) (x+1) end)(1), 2)
 assert((lambda(x) end)(1), nil)
 assert((lambda(x) x.a end)(a=100), 100)
+
+a = 0 
+a += 1
+assert(a, 1)
+a -= 2
+assert(a, -1)
+a*=a
+assert(a, 1)
+a=[a]
+a[0]/=2
+assert(a[0], 0.5)
+
+a[0]*=4
+a[0]<<=3
+assert(a[0], 16)
+a[0] %= 7
+assert(a[0], 2)

@@ -358,7 +358,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 					}
 					break
 				} else if idx.Type() == typ.String {
-					if f := StrProto.Get(idx); f != Nil {
+					if f := Proto.Str.Get(idx); f != Nil {
 						env.A = setObjectRecv(f, a)
 						break
 					}

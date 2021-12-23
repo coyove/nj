@@ -147,7 +147,7 @@ func init() {
 		if args.Prop("bodyreader").IsFalse() && args.Prop("br").IsFalse() {
 			resp.Body.Close()
 		} else {
-			buf = bas.NewObject(1).SetProp("_f", bas.ValueOf(resp.Body)).SetPrototype(bas.ReadCloserProto).ToValue()
+			buf = bas.NewObject(1).SetProp("_f", bas.ValueOf(resp.Body)).SetPrototype(bas.Proto.ReadCloser).ToValue()
 		}
 
 		hdr := map[string]string{}

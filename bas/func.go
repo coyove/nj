@@ -74,7 +74,7 @@ func Func(name string, f func(*Env), doc string) Value {
 		obj.fun.Native = func(*Env) {}
 		obj.fun.Dummy = true
 	}
-	obj.SetPrototype(FuncProto)
+	obj.SetPrototype(Proto.Func)
 	return obj.ToValue()
 }
 

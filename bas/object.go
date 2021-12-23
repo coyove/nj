@@ -119,7 +119,7 @@ func (m *Object) Get(k Value) (v Value) {
 	} else if m.parent != nil {
 		v = m.parent.Get(k)
 	}
-	if m.parent != StaticObjectProto && v.IsObject() && v.Object().IsCallable() {
+	if m.parent != Proto.StaticObject && v.IsObject() && v.Object().IsCallable() {
 		f := v.Object().Copy(false)
 		f.this = m.ToValue()
 		v = f.ToValue()

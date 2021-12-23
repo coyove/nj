@@ -16,7 +16,6 @@ import (
 
 	"github.com/coyove/nj"
 	"github.com/coyove/nj/bas"
-	"github.com/coyove/nj/lib"
 )
 
 var (
@@ -42,7 +41,7 @@ func main() {
 	flag.Parse()
 
 	if *apiServer != "" {
-		http.HandleFunc("/", lib.PlaygroundHandler(nil))
+		http.HandleFunc("/", nj.PlaygroundHandler(nil))
 		log.Println("listen", *apiServer)
 		http.ListenAndServe(*apiServer, nil)
 		return

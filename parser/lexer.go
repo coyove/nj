@@ -261,6 +261,11 @@ var reservedWords = map[string]uint32{
 	"is":       TIs,
 }
 
+var opAssignMap = map[uint32]uint32{
+	'+': TAddEq, '-': TSubEq, '*': TMulEq, '/': TDivEq, TIDiv: TIDivEq, '%': TModEq,
+	'&': TBitAndEq, '|': TBitOrEq, '^': TBitXorEq, TLsh: TBitLshEq, TRsh: TBitRshEq, TURsh: TBitURshEq,
+}
+
 func (sc *Scanner) Scan(lexer *Lexer) (Token, error) {
 	var metSpaces bool
 
@@ -347,6 +352,7 @@ skipspaces:
 			}
 			tok.Type = ch
 			tok.Str = "-"
+			tok = sc.opAssign(tok)
 		case '"', '\'':
 			tok.Type = TString
 			tok.Str, err = sc.scanString(ch)
@@ -374,6 +380,7 @@ skipspaces:
 			} else if p == ch && ch == '<' {
 				tok.Type, tok.Str = TLsh, "<<"
 				sc.Next()
+				tok = sc.opAssign(tok)
 			} else if p == ch && ch == '>' {
 				sc.Next()
 				if sc.Peek() == '>' {
@@ -382,6 +389,7 @@ skipspaces:
 				} else {
 					tok.Type, tok.Str = TRsh, ">>"
 				}
+				tok = sc.opAssign(tok)
 			} else {
 				tok.Type = ch
 				tok.Str = [...]string{"=", "!", "~", "<", ">"}[idx]
@@ -414,6 +422,7 @@ skipspaces:
 				idx := strings.IndexByte(pat, byte(ch))
 				tok.Type = ch
 				tok.Str = pat[idx : idx+1]
+				tok = sc.opAssign(tok)
 			}
 		case ':':
 			if sc.Peek() == ':' {
@@ -434,6 +443,7 @@ skipspaces:
 				tok.Type = ch
 				tok.Str = [...]string{"+", "*", "/", "%"}[ii]
 			}
+			tok = sc.opAssign(tok)
 		default:
 			err = sc.Error(string(rune(ch)), "invalid token")
 			goto finally
@@ -443,6 +453,19 @@ skipspaces:
 finally:
 	sc.lastToken = tok
 	return tok, err
+}
+
+func (sc *Scanner) opAssign(tok Token) Token {
+	if sc.Peek() == '=' {
+		if m, ok := opAssignMap[tok.Type]; ok {
+			tok.Type = m
+		} else {
+			return tok
+		}
+		sc.Next()
+		tok.Str += "="
+	}
+	return tok
 }
 
 // yacc interface {{{
