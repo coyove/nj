@@ -11,7 +11,7 @@ type Set struct{ m map[uint64]bas.Value }
 func init() {
 	bas.Globals.SetMethod("set", func(env *bas.Env) {
 		s := Set{m: map[uint64]bas.Value{}}
-		env.Array(0).ForeachIndex(func(k int, v bas.Value) bool {
+		env.Array(0).Foreach(func(k int, v bas.Value) bool {
 			s.Add(v)
 			return true
 		})

@@ -194,35 +194,41 @@ func fileInfo(fi os.FileInfo) *Object {
 }
 
 func multiMap(e *Env, fun *Object, t Value, n int) Value {
-	if t.Type() == typ.Array && t.Array().Typed() {
-		internal.Panic("can't map typed array")
-	}
-
 	if n < 1 || n > runtime.NumCPU()*1e3 {
 		internal.Panic("invalid number of goroutines: %v", n)
 	}
 
 	type payload struct {
+		i int
 		k Value
 		v *Value
 	}
 
 	work := func(fun *Object, outError *error, p payload) {
-		res, err := e.Call2(fun, p.k, *p.v)
-		if err != nil {
-			*outError = err
+		if p.i == -1 {
+			res, err := e.Call2(fun, p.k, *p.v)
+			if err != nil {
+				*outError = err
+			} else {
+				*p.v = res
+			}
 		} else {
-			*p.v = res
+			res, err := e.Call2(fun, Int(p.i), p.k)
+			if err != nil {
+				*outError = err
+			} else {
+				t.Array().Set(p.i, res)
+			}
 		}
 	}
 
 	var outError error
 	if n == 1 {
 		if t.Type() == typ.Array {
-			t.Array().Foreach(func(k Value, v *Value) bool { work(fun, &outError, payload{k, v}); return outError == nil })
+			t.Array().Foreach(func(k int, v Value) bool { work(fun, &outError, payload{k, v, nil}); return outError == nil })
 		} else {
 			t.Object().Foreach(func(k Value, v *Value) int {
-				work(fun, &outError, payload{k, v})
+				work(fun, &outError, payload{-1, k, v})
 				if outError == nil {
 					return typ.ForeachContinue
 				}
@@ -246,9 +252,9 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 		}
 
 		if t.Type() == typ.Array {
-			t.Array().Foreach(func(k Value, v *Value) bool { in <- payload{k, v}; return true })
+			t.Array().Foreach(func(k int, v Value) bool { in <- payload{k, v, nil}; return true })
 		} else {
-			t.Object().Foreach(func(k Value, v *Value) int { in <- payload{k, v}; return typ.ForeachContinue })
+			t.Object().Foreach(func(k Value, v *Value) int { in <- payload{-1, k, v}; return typ.ForeachContinue })
 		}
 		close(in)
 

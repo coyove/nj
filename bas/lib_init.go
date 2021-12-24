@@ -242,7 +242,13 @@ func init() {
 		}, "object.$f() -> object\n\treturn a new object which shares all data from the original, but with no prototype").
 		SetMethod("next", func(e *Env) {
 			e.A = NewArray(e.Object(-1).Next(e.Get(0))).ToValue()
-		}, "object.$f(k: value) -> [value, value]\n\tfind next key-value pair after `k` in the object and return as [key, value]")
+		}, "object.$f(k: value) -> [value, value]\n\tfind next key-value pair after `k` in the object and return as [key, value]").
+		SetMethod("intersectkeys", func(e *Env) {
+			IntersectObject(e.Object(-1), e.Object(0))
+		}, "object.$f(o: object)\n\t").
+		SetMethod("subtractkeys", func(e *Env) {
+			SubtractObject(e.Object(-1), e.Object(0))
+		}, "object.$f(o: object)\n\t")
 	ObjectProto.SetPrototype(nil) // objectlib is the topmost object, it should not have any prototype
 
 	*Proto.Func = *NamedObject("function", 0).
@@ -346,7 +352,7 @@ func init() {
 		SetMethod("filter", func(e *Env) {
 			src, ff := e.Array(-1), e.Object(0)
 			dest := make([]Value, 0, src.Len())
-			src.ForeachIndex(func(k int, v Value) bool {
+			src.Foreach(func(k int, v Value) bool {
 				if e.Call(ff, v).IsTrue() {
 					dest = append(dest, v)
 				}
@@ -441,7 +447,7 @@ func init() {
 		SetMethod("join", func(e *Env) {
 			d := e.Str(-1)
 			buf := &bytes.Buffer{}
-			e.Array(0).ForeachIndex(func(k int, v Value) bool {
+			e.Array(0).Foreach(func(k int, v Value) bool {
 				buf.WriteString(v.String())
 				buf.WriteString(d)
 				return true

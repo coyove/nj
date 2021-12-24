@@ -227,65 +227,6 @@ func BenchmarkGoCompiling(b *testing.B) {
 	}
 }
 
-func BenchmarkRHMap10(b *testing.B)    { benchmarkRHMap(b, 10) }
-func BenchmarkGoMap10(b *testing.B)    { benchmarkGoMap(b, 10) }
-func BenchmarkRHMap20(b *testing.B)    { benchmarkRHMap(b, 20) }
-func BenchmarkGoMap20(b *testing.B)    { benchmarkGoMap(b, 20) }
-func BenchmarkRHMap50(b *testing.B)    { benchmarkRHMap(b, 50) }
-func BenchmarkGoMap50(b *testing.B)    { benchmarkGoMap(b, 50) }
-func BenchmarkRHMapUnc10(b *testing.B) { benchmarkRHMapUnconstrainted(b, 10) }
-func BenchmarkGoMapUnc10(b *testing.B) { benchmarkGoMapUnconstrainted(b, 10) }
-
-func benchmarkRHMap(b *testing.B, n int) {
-	rand.Seed(time.Now().Unix())
-	m := bas.NewObject(n)
-	for i := 0; i < n; i++ {
-		m.Set(bas.Int64(int64(i)), bas.Int64(int64(i)))
-	}
-	for i := 0; i < b.N; i++ {
-		idx := rand.Intn(n)
-		if m.Get(bas.Int64(int64(idx))) != bas.Int64(int64(idx)) {
-			b.Fatal(idx, m)
-		}
-	}
-}
-
-func benchmarkRHMapUnconstrainted(b *testing.B, n int) {
-	rand.Seed(time.Now().Unix())
-	m := bas.NewObject(1)
-	for i := 0; i < b.N; i++ {
-		for i := 0; i < n; i++ {
-			x := rand.Intn(n)
-			m.Set(bas.Int64(int64(x)), bas.Int64(int64(i)))
-		}
-	}
-}
-
-func benchmarkGoMap(b *testing.B, n int) {
-	rand.Seed(time.Now().Unix())
-	m := map[int]int{}
-	for i := 0; i < n; i++ {
-		m[i] = i
-	}
-	for i := 0; i < b.N; i++ {
-		idx := rand.Intn(n)
-		if m[idx] == -1 {
-			b.Fatal(idx, m)
-		}
-	}
-}
-
-func benchmarkGoMapUnconstrainted(b *testing.B, n int) {
-	rand.Seed(time.Now().Unix())
-	m := map[int]int{}
-	for i := 0; i < b.N; i++ {
-		for i := 0; i < n; i++ {
-			idx := rand.Intn(n)
-			m[idx] = i
-		}
-	}
-}
-
 func TestBigList(t *testing.T) {
 	n := typ.RegMaxAddress/2 - bas.Globals.Len()
 
@@ -451,70 +392,6 @@ func TestSmallString(t *testing.T) {
 		if bas.Str(v).Str() != v {
 			t.Fatal(bas.Str(v).UnsafeInt64(), v)
 		}
-	}
-}
-
-func TestRHMap(t *testing.T) {
-	rand.Seed(time.Now().Unix())
-	m := bas.NewObject(0)
-	m2 := map[int64]int64{}
-	counter := int64(0)
-	for i := 0; i < 1e6; i++ {
-		x := rand.Int63()
-		if x%2 == 0 {
-			x = counter
-			counter++
-		}
-		m.Set(bas.Int64(x), bas.Int64(x))
-		m2[x] = x
-	}
-	for k := range m2 {
-		delete(m2, k)
-		m.Delete(bas.Int64(k))
-		if rand.Intn(10000) == 0 {
-			break
-		}
-	}
-
-	fmt.Println(m.Len(), m.Size(), len(m2))
-
-	for k, v := range m2 {
-		if m.Get(bas.Int64(k)).Int64() != v {
-			m.Foreach(func(mk bas.Value, mv *bas.Value) int {
-				if mk.Int64() == k {
-					t.Log(mk, *mv)
-				}
-				return typ.ForeachContinue
-			})
-			t.Fatal(m.Get(bas.Int64(k)), k, v)
-		}
-	}
-
-	if m.Len() != len(m2) {
-		t.Fatal(m.Len(), len(m2))
-	}
-
-	for k, v := m.Next(bas.Nil); k != bas.Nil; k, v = m.Next(k) {
-		if _, ok := m2[k.Int64()]; !ok {
-			t.Fatal(k, v, len(m2))
-		}
-		delete(m2, k.Int64())
-	}
-	if len(m2) != 0 {
-		t.Fatal(len(m2))
-	}
-
-	m.Clear()
-	m.Set(bas.Int64(0), bas.Int64(0))
-	m.Set(bas.Int64(1), bas.Int64(1))
-	m.Set(bas.Int64(2), bas.Int64(2))
-
-	for i := 4; i < 9; i++ {
-		m.Set(bas.Int64(int64(i*i)), bas.Int64(0))
-	}
-
-	for k, v := m.Next(bas.Nil); k != bas.Nil; k, v = m.Next(k) {
-		fmt.Println(k, v)
 	}
 }
 

@@ -1,18 +1,8 @@
-//  Copyright (c) 2019 Couchbase, Inc.
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the
-//  License. You may obtain a copy of the License at
-//  http://www.apache.org/licenses/LICENSE-2.0
-//  Unless required by applicable law or agreed to in writing,
-//  software distributed under the License is distributed on an "AS
-//  IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
-//  express or implied. See the License for the specific language
-//  governing permissions and limitations under the License.
-
 package bas
 
 import (
 	"bytes"
+	"fmt"
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
@@ -145,12 +135,8 @@ func (m *Object) findHash(k Value) int {
 			return idx
 		}
 
-		idx++
-		if idx >= num {
-			idx = 0
-		}
-
-		if idx == idxStart { // Went all the way around.
+		idx = (idx + 1) % num
+		if idx == idxStart {
 			return -1
 		}
 	}
@@ -168,11 +154,13 @@ func (m *Object) Set(k, v Value) (prev Value) {
 	if k == Nil {
 		internal.Panic("object set with nil key")
 	}
-
 	if len(m.items) <= 0 {
 		m.items = make([]hashItem, 8)
 	}
-	return m.setHash(hashItem{Key: k, Val: v, Distance: 0})
+	if int(m.count) >= len(m.items)/2+1 {
+		m.resizeHash(len(m.items)*2 + 1)
+	}
+	return m.setHash(hashItem{Key: k, Val: v})
 }
 
 // Delete deletes a key-value pair from the object
@@ -184,16 +172,17 @@ func (m *Object) Delete(k Value) (prev Value) {
 	if idx < 0 {
 		return Nil
 	}
+	return m.deleteAt(idx)
+}
+
+func (m *Object) deleteAt(idx int) (prev Value) {
 	prev = m.items[idx].Val
 
 	// Left-shift succeeding items in the linear chain.
+	startIdx := idx
 	for {
-		next := idx + 1
-		if next >= len(m.items) {
-			next = 0
-		}
-
-		if next == idx { // Went all the way around.
+		next := (idx + 1) % len(m.items)
+		if next == startIdx { // Went all the way around.
 			break
 		}
 
@@ -248,17 +237,8 @@ func (m *Object) setHash(incoming hashItem) (prev Value) {
 		incoming.Distance++ // One step further away from best idx.
 		idx = (idx + 1) % num
 
-		// Grow if distances become big or we went all the way around.
-		if num < 8 {
-			if idx == idxStart {
-				m.resizeHash(num + 1)
-				return m.setHash(incoming)
-			}
-		} else {
-			if int(m.count) >= num/2 || idx == idxStart {
-				m.resizeHash(num*2 + 1)
-				return m.setHash(incoming)
-			}
+		if idx == idxStart {
+			panic("object space not enough")
 		}
 	}
 }
@@ -267,14 +247,29 @@ func (m *Object) Foreach(f func(k Value, v *Value) int) {
 	if m == nil {
 		return
 	}
-	for i := range m.items {
-		if m.items[i].Key != Nil {
-			switch f(m.items[i].Key, &m.items[i].Val) {
+	firstKey := Nil
+	for i := 0; i < len(m.items); {
+		ip := &m.items[i]
+		if ip.Key != Nil {
+			if firstKey == Nil {
+				firstKey = ip.Key
+			} else if ip.Key == firstKey {
+				fmt.Println(ip.Key)
+				break // went all the way around
+			}
+			switch f(ip.Key, &ip.Val) {
 			case typ.ForeachContinue:
+			case typ.ForeachDeleteContinue:
+				m.deleteAt(i)
+				continue
 			case typ.ForeachBreak:
+				return
+			case typ.ForeachDeleteBreak:
+				m.deleteAt(i)
 				return
 			}
 		}
+		i++
 	}
 }
 

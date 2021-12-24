@@ -350,11 +350,11 @@ func (v Value) ReflectValue(t reflect.Type) reflect.Value {
 		switch t.Kind() {
 		case reflect.Slice:
 			s := reflect.MakeSlice(t, a.Len(), a.Len())
-			a.ForeachIndex(func(k int, v Value) bool { s.Index(k).Set(v.ReflectValue(t.Elem())); return true })
+			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(v.ReflectValue(t.Elem())); return true })
 			return s
 		case reflect.Array:
 			s := reflect.New(t).Elem()
-			a.ForeachIndex(func(k int, v Value) bool { s.Index(k).Set(v.ReflectValue(t.Elem())); return true })
+			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(v.ReflectValue(t.Elem())); return true })
 			return s
 		}
 	} else if vt == typ.Object {
