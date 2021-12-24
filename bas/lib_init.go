@@ -192,26 +192,37 @@ func init() {
 		}, "object.$f() -> string\n\treturn object's name").
 		SetMethod("keys", func(e *Env) {
 			a := make([]Value, 0)
-			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, k); return true })
+			e.Object(-1).Foreach(func(k Value, v *Value) int { a = append(a, k); return typ.ForeachContinue })
 			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> array").
 		SetMethod("values", func(e *Env) {
 			a := make([]Value, 0)
-			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, *v); return true })
+			e.Object(-1).Foreach(func(k Value, v *Value) int { a = append(a, *v); return typ.ForeachContinue })
 			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> array").
 		SetMethod("items", func(e *Env) {
 			a := make([]Value, 0)
-			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, NewArray(k, *v).ToValue()); return true })
+			e.Object(-1).Foreach(func(k Value, v *Value) int { a = append(a, NewArray(k, *v).ToValue()); return typ.ForeachContinue })
 			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> [[value, value]]\n\treturn as [[key1, value1], [key2, value2], ...]").
 		SetMethod("foreach", func(e *Env) {
 			f := e.Object(0)
-			e.Object(-1).Foreach(func(k Value, v *Value) bool { return e.Call(f, k, *v) != False })
+			e.Object(-1).Foreach(func(k Value, v *Value) int {
+				if e.Call(f, k, *v) != False {
+					return typ.ForeachContinue
+				}
+				return typ.ForeachBreak
+			})
 		}, "object.$f(f: function)").
 		SetMethod("find", func(e *Env) {
 			found, b := false, e.Get(0)
-			e.Object(-1).Foreach(func(k Value, v *Value) bool { found = v.Equal(b); return !found })
+			e.Object(-1).Foreach(func(k Value, v *Value) int {
+				found = v.Equal(b)
+				if !found {
+					return typ.ForeachContinue
+				}
+				return typ.ForeachBreak
+			})
 			e.A = Bool(found)
 		}, "object.$f(val: value) -> bool").
 		SetMethod("contains", func(e *Env) {
@@ -371,7 +382,7 @@ func init() {
 		}, "array.$f(a: array) -> array\n\tconcat two arrays").
 		SetMethod("sort", func(e *Env) {
 			a, rev := e.Array(-1), e.Get(0).IsTrue()
-			if kf := e.Get(1); kf.IsCallable() {
+			if kf := e.Get(1); IsCallable(kf) {
 				sort.Slice(a.Unwrap(), func(i, j int) bool {
 					return Less(e.Call(kf.Object(), a.Get(i)), e.Call(kf.Object(), a.Get(j))) != rev
 				})

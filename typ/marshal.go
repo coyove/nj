@@ -6,3 +6,10 @@ const (
 	MarshalToString MarshalType = iota
 	MarshalToJSON
 )
+
+const (
+	ForeachContinue = iota
+	ForeachBreak
+	ForeachDeleteBreak
+	ForeachDeleteContinue
+)

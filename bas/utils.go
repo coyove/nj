@@ -221,7 +221,13 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 		if t.Type() == typ.Array {
 			t.Array().Foreach(func(k Value, v *Value) bool { work(fun, &outError, payload{k, v}); return outError == nil })
 		} else {
-			t.Object().Foreach(func(k Value, v *Value) bool { work(fun, &outError, payload{k, v}); return outError == nil })
+			t.Object().Foreach(func(k Value, v *Value) int {
+				work(fun, &outError, payload{k, v})
+				if outError == nil {
+					return typ.ForeachContinue
+				}
+				return typ.ForeachBreak
+			})
 		}
 	} else {
 		var in = make(chan payload, t.Len())
@@ -242,7 +248,7 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 		if t.Type() == typ.Array {
 			t.Array().Foreach(func(k Value, v *Value) bool { in <- payload{k, v}; return true })
 		} else {
-			t.Object().Foreach(func(k Value, v *Value) bool { in <- payload{k, v}; return true })
+			t.Object().Foreach(func(k Value, v *Value) int { in <- payload{k, v}; return typ.ForeachContinue })
 		}
 		close(in)
 

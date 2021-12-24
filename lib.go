@@ -24,6 +24,7 @@ import (
 	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/parser"
+	"github.com/coyove/nj/typ"
 )
 
 func init() {
@@ -262,9 +263,9 @@ func init() {
 			win := runtime.GOOS == "windows"
 			p := exec.Command(internal.IfStr(win, "cmd", "sh"), internal.IfStr(win, "/c", "-c"), e.Str(0))
 			opt := e.Get(1).Safe().Object()
-			opt.Prop("env").Safe().Object().Foreach(func(k bas.Value, v *bas.Value) bool {
+			opt.Prop("env").Safe().Object().Foreach(func(k bas.Value, v *bas.Value) int {
 				p.Env = append(p.Env, k.String()+"="+v.String())
-				return true
+				return typ.ForeachContinue
 			})
 			stdout := &bytes.Buffer{}
 			p.Stdout, p.Stderr = stdout, stdout

@@ -480,11 +480,11 @@ func TestRHMap(t *testing.T) {
 
 	for k, v := range m2 {
 		if m.Get(bas.Int64(k)).Int64() != v {
-			m.Foreach(func(mk bas.Value, mv *bas.Value) bool {
+			m.Foreach(func(mk bas.Value, mv *bas.Value) int {
 				if mk.Int64() == k {
 					t.Log(mk, *mv)
 				}
-				return true
+				return typ.ForeachContinue
 			})
 			t.Fatal(m.Get(bas.Int64(k)), k, v)
 		}

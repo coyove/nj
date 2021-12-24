@@ -40,7 +40,7 @@ func init() {
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Get(bas.Str(k))
 			if x.Type() == typ.Object {
-				x.Object().Foreach(func(k bas.Value, v *bas.Value) bool { add(k.String(), v.String()); return true })
+				x.Object().Foreach(func(k bas.Value, v *bas.Value) int { add(k.String(), v.String()); return typ.ForeachContinue })
 			}
 		}
 
@@ -80,7 +80,7 @@ func init() {
 			payload := bytes.Buffer{}
 			writer := multipart.NewWriter(&payload)
 			if x := args.Prop("multipart"); x.Type() == typ.Object {
-				x.Object().Foreach(func(k bas.Value, v *bas.Value) bool {
+				x.Object().Foreach(func(k bas.Value, v *bas.Value) int {
 					key := k.String()
 					filename := ""
 					if strings.Contains(key, "/") {
@@ -98,7 +98,7 @@ func init() {
 						_, err = io.Copy(part, bas.NewReader(*v))
 						internal.PanicErr(err)
 					}
-					return true
+					return typ.ForeachContinue
 				})
 			}
 			internal.PanicErr(writer.Close())
