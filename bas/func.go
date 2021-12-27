@@ -222,3 +222,7 @@ func (c *Function) GoString() string {
 	}
 	return pkPrettify(c, c.LoadGlobal, false)
 }
+
+func (c *Function) Object() *Object {
+	return c.obj
+}

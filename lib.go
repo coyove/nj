@@ -11,6 +11,9 @@ import (
 	"io/ioutil"
 	"math"
 	"math/rand"
+	"mime/multipart"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
@@ -92,9 +95,6 @@ func init() {
 		env.A = bas.NewArray(results...).ToValue()
 	}, "$f() -> array\n\tread all user inputs and return as [input1, input2, ...]\n"+
 		"$f(prompt: string, n?: int) -> array\n\tprint `prompt` then read all (or at most `n`) user inputs")
-	bas.Globals.SetMethod("time", func(e *bas.Env) {
-		e.A = bas.Float64(float64(time.Now().UnixNano()) / 1e9)
-	}, "$f() -> float\n\tunix timestamp in seconds")
 	bas.Globals.SetMethod("sleep", func(e *bas.Env) { time.Sleep(e.Num(0).Safe().Duration(0)) }, "$f(sec: float)")
 	bas.Globals.SetMethod("Go_time", func(e *bas.Env) {
 		if e.Size() > 0 {
@@ -388,6 +388,184 @@ func init() {
 		SetPrototype(encDecProto).
 		ToValue())
 
+	bas.Globals.SetProp("time", bas.Func("time", func(e *bas.Env) {
+		e.A = bas.Float64(float64(time.Now().UnixNano()) / 1e9)
+	}, "$f() -> float\n\tunix timestamp in seconds").Object().
+		SetMethod("now", func(e *bas.Env) {
+			e.A = bas.ValueOf(time.Now())
+		}, "$f() -> go.time.Time").
+		SetMethod("parse", func(e *bas.Env) {
+			t, err := time.Parse(getTimeFormat(e.Str(0)), e.Str(1))
+			internal.PanicErr(err)
+			e.A = bas.ValueOf(t)
+		}, "$f(format: string, text: string) -> go.time.Time").
+		SetMethod("format", func(e *bas.Env) {
+			tt, ok := e.Get(1).Interface().(time.Time)
+			if !ok {
+				if t := e.Get(1); t.Type() == typ.Number {
+					tt = time.Unix(0, int64(t.Float64()*1e9))
+				} else {
+					tt = time.Now()
+				}
+			}
+			e.A = bas.Str(tt.Format(getTimeFormat(e.Get(0).Safe().Str(""))))
+		}, "$f(format: string, t?: go.time.Time|float) -> string").
+		ToValue())
+
+	bas.Globals.SetProp("url", bas.Func("url", nil, "").Object().
+		SetMethod("escape", func(e *bas.Env) {
+			e.A = bas.Str(url.QueryEscape(e.Str(0)))
+		}, "").
+		SetMethod("unescape", func(e *bas.Env) {
+			v, err := url.QueryUnescape(e.Str(0))
+			internal.PanicErr(err)
+			e.A = bas.Str(v)
+		}, "").
+		ToValue())
+
+	httpLib := bas.Func("http", func(e *bas.Env) {
+		args := e.Get(0).Object()
+		to := args.Prop("timeout").Safe().Float64(1 << 30)
+		method := strings.ToUpper(args.Get(bas.Str("method")).Safe().Str("GET"))
+
+		u, err := url.Parse(args.Get(bas.Str("url")).Safe().Str("bad://%url%"))
+		internal.PanicErr(err)
+
+		addKV := func(k string, add func(k, v string)) {
+			x := args.Get(bas.Str(k))
+			x.Safe().Object().Foreach(func(k bas.Value, v *bas.Value) int { add(k.String(), v.String()); return typ.ForeachContinue })
+		}
+
+		additionalQueries := u.Query()
+		addKV("query", additionalQueries.Add) // append queries to url
+		u.RawQuery = additionalQueries.Encode()
+
+		var bodyReader io.Reader
+		dataForm, urlForm, jsonForm := (*multipart.Writer)(nil), false, false
+
+		if j := args.Prop("json"); j != bas.Nil {
+			bodyReader = strings.NewReader(j.JSONString())
+			jsonForm = true
+		} else {
+			var form url.Values
+			if args.Contains(bas.Str("form")) {
+				form = url.Values{}
+				addKV("form", form.Add) // check "form"
+			}
+			urlForm = len(form) > 0
+			if urlForm {
+				bodyReader = strings.NewReader(form.Encode())
+			} else if rd := args.Prop("data"); rd != bas.Nil {
+				bodyReader = bas.NewReader(rd)
+			}
+		}
+
+		if bodyReader == nil && (method == "POST" || method == "PUT") {
+			// Check form-data
+			payload := bytes.Buffer{}
+			writer := multipart.NewWriter(&payload)
+			if x := args.Prop("multipart"); x.Type() == typ.Object {
+				x.Object().Foreach(func(k bas.Value, v *bas.Value) int {
+					key, rd := k.String(), *v
+					if rd.Type() == typ.Array && rd.Len() == 2 { // [filename, reader]
+						part, err := writer.CreateFormFile(key, rd.Array().Get(0).Safe().Str(""))
+						internal.PanicErr(err)
+						_, err = io.Copy(part, bas.NewReader(rd.Array().Get(1)))
+						internal.PanicErr(err)
+					} else {
+						part, err := writer.CreateFormField(key)
+						internal.PanicErr(err)
+						_, err = io.Copy(part, bas.NewReader(rd))
+						internal.PanicErr(err)
+					}
+					return typ.ForeachContinue
+				})
+			}
+			internal.PanicErr(writer.Close())
+			if payload.Len() > 0 {
+				bodyReader = &payload
+				dataForm = writer
+			}
+		}
+
+		req, err := http.NewRequest(method, u.String(), bodyReader)
+		internal.PanicErr(err)
+
+		switch {
+		case urlForm:
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		case jsonForm:
+			req.Header.Add("Content-Type", "application/json")
+		case dataForm != nil:
+			req.Header.Add("Content-Type", dataForm.FormDataContentType())
+		}
+
+		addKV("header", req.Header.Add) // append headers
+
+		// Construct HTTP client
+		client := &http.Client{}
+		client.Timeout = time.Duration(to * float64(time.Second))
+		if v := args.Get(bas.Str("jar")); v.Type() == typ.Native {
+			client.Jar, _ = v.Interface().(http.CookieJar)
+		}
+		if !args.Get(bas.Str("noredirect")).IsFalse() {
+			client.CheckRedirect = func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			}
+		}
+		if p := args.Get(bas.Str("proxy")).Safe().Str(""); p != "" {
+			client.Transport = &http.Transport{
+				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
+			}
+		}
+		send := func(e *bas.Env, panic bool) (code, headers, buf, jar bas.Value) {
+			resp, err := client.Do(req)
+			if panic {
+				internal.PanicErr(err)
+			} else if err != nil {
+				return bas.Error(e, err), bas.Error(e, err), bas.Error(e, err), bas.Error(e, err)
+			}
+
+			if args.Prop("bodyreader").IsFalse() && args.Prop("br").IsFalse() {
+				resp.Body.Close()
+			} else {
+				buf = bas.NewObject(1).SetProp("_f", bas.ValueOf(resp.Body)).SetPrototype(bas.Proto.ReadCloser).ToValue()
+			}
+
+			hdr := map[string]string{}
+			for k := range resp.Header {
+				hdr[k] = resp.Header.Get(k)
+			}
+			return bas.Int(resp.StatusCode), bas.ValueOf(hdr), buf, bas.ValueOf(client.Jar)
+		}
+		if f := args.Prop("async"); bas.IsCallable(f) {
+			go func(e *bas.Env) {
+				code, hdr, buf, jar := send(e, false)
+				e.Call(f.Object(), code, hdr, buf, jar)
+			}(bas.EnvForAsyncCall(e))
+			return
+		}
+		e.A = bas.NewArray(send(e, true)).ToValue()
+	}, "$f(options: object) -> array\n"+
+		"\tperform an HTTP request and return [code, headers, body_reader, cookie_jar]\n"+
+		"\t'url' is a mandatory parameter in `options`, others are optional and pretty self explanatory:\n"+
+		"\thttp({url='...'})\n"+
+		"\thttp({url='...', noredirect=true})\n"+
+		"\thttp({url='...', bodyreader=true})\n"+
+		"\thttp({method='POST', url='...'})\n"+
+		"\thttp({method='POST', url='...'}, json={...})\n"+
+		"\thttp({method='POST', url='...', query={key=value}})\n"+
+		"\thttp({method='POST', url='...', header={key=value}, form={key=value}})\n"+
+		"\thttp({method='POST', url='...', multipart={file={reader}}})\n"+
+		"\thttp({method='POST', url='...', proxy='http://127.0.0.1:8080'})",
+	).Object()
+	for _, m := range []string{"get", "post", "put", "delete", "head", "patch"} {
+		httpLib = httpLib.SetMethod(m, func(e *bas.Env) {
+			ex := e.Get(1).Safe().Object()
+			e.A = e.Call(e.Object(-1), bas.NewObject(0).SetProp("method", bas.Str(m)).SetProp("url", e.Get(0)).Merge(ex).ToValue())
+		}, "")
+	}
+	bas.Globals.SetProp("http", httpLib.ToValue())
 }
 
 func mathMinMax(e *bas.Env, max bool) {
@@ -408,4 +586,48 @@ func mathMinMax(e *bas.Env, max bool) {
 		}
 		e.A = bas.Float64(vf)
 	}
+}
+
+var timeFormatMapping = map[interface{}]string{
+	"ansic": time.ANSIC, "ANSIC": time.ANSIC,
+	"unixdate": time.UnixDate, "UnixDate": time.UnixDate,
+	"rubydate": time.RubyDate, "RubyDate": time.RubyDate,
+	"rfc822": time.RFC822, "RFC822": time.RFC822,
+	"rfc822z": time.RFC822Z, "RFC822Z": time.RFC822Z,
+	"rfc850": time.RFC850, "RFC850": time.RFC850,
+	"rfc1123": time.RFC1123, "RFC1123": time.RFC1123,
+	"rfc1123z": time.RFC1123Z, "RFC1123Z": time.RFC1123Z,
+	"rfc3339": time.RFC3339, "RFC3339": time.RFC3339,
+	"rfc3339nano": time.RFC3339Nano, "RFC3339Nano": time.RFC3339Nano,
+	"kitchen": time.Kitchen, "Kitchen": time.Kitchen,
+	"stamp": time.Stamp, "Stamp": time.Stamp,
+	"stampmilli": time.StampMilli, "StampMilli": time.StampMilli,
+	"stampmicro": time.StampMicro, "StampMicro": time.StampMicro,
+	"stampnano": time.StampNano, "StampNano": time.StampNano,
+	'd': "02", 'D': "Mon", 'j': "2", 'l': "Monday", 'F': "January", 'z': "002", 'm': "01",
+	'M': "Jan", 'n': "1", 'Y': "2006", 'y': "06", 'a': "pm", 'A': "PM", 'g': "3", 'G': "15",
+	'h': "03", 'H': "15", 'i': "04", 's': "05", 'u': "05.000000", 'v': "05.000", 'O': "+0700",
+	'P': "-07:00", 'T': "MST",
+	'c': "2006-01-02T15:04:05-07:00",       //	ISO 860,
+	'r': "Mon, 02 Jan 2006 15:04:05 -0700", //	RFC 282,
+}
+
+func getTimeFormat(f string) string {
+	if tf, ok := timeFormatMapping[f]; ok {
+		return tf
+	}
+	buf := bytes.Buffer{}
+	for len(f) > 0 {
+		r, sz := utf8.DecodeRuneInString(f)
+		if sz == 0 {
+			break
+		}
+		if tf, ok := timeFormatMapping[r]; ok {
+			buf.WriteString(tf)
+		} else {
+			buf.WriteRune(r)
+		}
+		f = f[sz:]
+	}
+	return buf.String()
 }
