@@ -159,14 +159,14 @@ func init() {
 		SetMethod("newstatic", func(e *Env) {
 			e.A = NewObject(e.Get(0).Safe().Int(0)).SetPrototype(Proto.StaticObject).ToValue()
 		}, "object.$f(sz?: int) -> staticobject").
-		SetMethod("get", func(e *Env) {
-			e.A = e.Object(-1).Get(e.Get(0))
+		SetMethod("find", func(e *Env) {
+			e.A = e.Object(-1).Find(e.Get(0))
 		}, "object.$f(k: value) -> value").
 		SetMethod("set", func(e *Env) {
 			e.A = e.Object(-1).Set(e.Get(0), e.Get(1))
 		}, "object.$f(k: value, v: value) -> value\n\tset value and return previous value").
-		SetMethod("rawget", func(e *Env) {
-			e.A = e.Object(-1).RawGet(e.Get(0))
+		SetMethod("get", func(e *Env) {
+			e.A = e.Object(-1).Get(e.Get(0))
 		}, "object.$f(k: value) -> value").
 		SetMethod("delete", func(e *Env) {
 			e.A = e.Object(-1).Delete(e.Get(0))
@@ -207,27 +207,12 @@ func init() {
 		}, "object.$f() -> [[value, value]]\n\treturn as [[key1, value1], [key2, value2], ...]").
 		SetMethod("foreach", func(e *Env) {
 			f := e.Object(0)
-			e.Object(-1).Foreach(func(k Value, v *Value) int {
-				if e.Call(f, k, *v) != False {
-					return typ.ForeachContinue
-				}
-				return typ.ForeachBreak
-			})
-		}, "object.$f(f: function)").
-		SetMethod("find", func(e *Env) {
-			found, b := false, e.Get(0)
-			e.Object(-1).Foreach(func(k Value, v *Value) int {
-				found = v.Equal(b)
-				if !found {
-					return typ.ForeachContinue
-				}
-				return typ.ForeachBreak
-			})
-			e.A = Bool(found)
-		}, "object.$f(val: value) -> bool").
+			e.Object(-1).Foreach(func(k Value, v *Value) int { return e.Call(f, k, *v).Safe().Int(0) })
+		}, "object.$f(f: function)\n\t`f`'s return value:\n"+
+			"\t\t0: continue (default)\n\t\t1: break\n\t\t2: delete current key and continue\n\t\t3: delete current key and break").
 		SetMethod("contains", func(e *Env) {
-			e.A = Bool(e.Object(-1).Contains(e.Get(0)))
-		}, "object.$f(key: value) -> bool").
+			e.A = Bool(e.Object(-1).Contains(e.Get(0), e.Get(1).IsTrue()))
+		}, "object.$f(key: value, includeproto?: bool) -> bool").
 		SetMethod("merge", func(e *Env) {
 			e.A = e.Object(-1).Merge(e.Object(0)).ToValue()
 		}, "object.$f(o: object)\n\tmerge elements from `o`").

@@ -397,7 +397,7 @@ func (v Value) HashCode() uint64 {
 		}
 		return code
 	}
-	return v.v * uint64(^uintptr(v.p))
+	return v.v*uint64(uintptr(v.p)) + (v.v >> 3)
 }
 
 func (v Value) String() string {

@@ -25,6 +25,16 @@ func randString() string {
 	return base64.StdEncoding.EncodeToString(buf)
 }
 
+func randInt(len, idx int) int {
+	buf := make([]byte, 6)
+	rand.Read(buf)
+	v := rand.Int()
+	if Int(v).HashCode()%uint64(len) == uint64(idx) {
+		return v
+	}
+	return randInt(len, idx)
+}
+
 func TestObjectForeachDelete(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 
@@ -86,6 +96,34 @@ func TestObjectForeachDelete(t *testing.T) {
 			}
 		}
 	}
+
+	old := resizeHash
+	resizeHash = func(*Object, int) {}
+	o := NewObject(1)
+	a := randInt(2, 1)
+	b := randInt(2, 1)
+	o.Set(Int(a), Int(a)) // [null, a+0]
+	o.Set(Int(b), Int(b)) // [b+1, a+0]
+	o.Delete(Int(a))
+	if !o.items[1].Key.Equal(Int(b)) {
+		t.Fatal(o.items)
+	}
+	o.Set(Int(a), Int(a)) // [a+1, b+0]
+	o.Foreach(func(k Value, v *Value) int {
+		if k.Equal(Int(b)) {
+			return typ.ForeachDeleteContinue
+		}
+		return typ.ForeachContinue
+	})
+	// [null, a+0]
+	if !o.items[1].Key.Equal(Int(a)) {
+		t.Fatal(o.items)
+	}
+	if o.items[1].Distance != 0 {
+		t.Fatal(o.items)
+	}
+	fmt.Println(a, b, o.items)
+	resizeHash = old
 }
 
 func BenchmarkRHMap10(b *testing.B)    { benchmarkRHMap(b, 10) }
@@ -105,7 +143,7 @@ func benchmarkRHMap(b *testing.B, n int) {
 	}
 	for i := 0; i < b.N; i++ {
 		idx := rand.Intn(n)
-		if m.Get(Int64(int64(idx))) != Int64(int64(idx)) {
+		if m.Find(Int64(int64(idx))) != Int64(int64(idx)) {
 			b.Fatal(idx, m)
 		}
 	}
@@ -172,14 +210,14 @@ func TestRHMap(t *testing.T) {
 	fmt.Println(m.Len(), m.Size(), len(m2))
 
 	for k, v := range m2 {
-		if m.Get(Int64(k)).Int64() != v {
+		if m.Find(Int64(k)).Int64() != v {
 			m.Foreach(func(mk Value, mv *Value) int {
 				if mk.Int64() == k {
 					t.Log(mk, *mv)
 				}
 				return typ.ForeachContinue
 			})
-			t.Fatal(m.Get(Int64(k)), k, v)
+			t.Fatal(m.Find(Int64(k)), k, v)
 		}
 	}
 
@@ -209,4 +247,57 @@ func TestRHMap(t *testing.T) {
 	for k, v := m.Next(Nil); k != Nil; k, v = m.Next(k) {
 		fmt.Println(k, v)
 	}
+}
+
+func TestObjectDistance(t *testing.T) {
+	test := func(sz int) {
+		o := NewObject(sz)
+		for i := 0; i < sz; i++ {
+			o.Set(Int(randInt(sz, i)), Int(i))
+		}
+		for _, i := range o.items {
+			if i.Key != Nil {
+				if i.Distance != 0 {
+					t.Fatal(o.items)
+				}
+			}
+		}
+	}
+	for i := 1; i < 16; i++ {
+		test(i)
+	}
+	test = func(sz int) {
+		o := NewObject(sz / 2)
+		for i := 0; i < sz; i++ {
+			o.Set(Int(randInt(sz, i)), Int(i))
+		}
+		for _, i := range o.items {
+			if i.Distance != 0 {
+				t.Fatal(o.items)
+			}
+		}
+	}
+	old := resizeHash
+	resizeHash = func(*Object, int) {}
+	for i := 2; i <= 16; i += 2 {
+		test(i)
+	}
+	resizeHash = old
+}
+
+func TestHashcodeDist(t *testing.T) {
+	z := map[uint64]int{}
+	rand.Seed(time.Now().Unix())
+	for i := 0; i < 1e6; i++ {
+		v := Int64(int64(i)).HashCode()
+		z[v]++
+	}
+	fmt.Println(len(z))
+
+	z = map[uint64]int{}
+	for i := 0; i < 1e6; i++ {
+		v := Int64(rand.Int63()).HashCode()
+		z[v]++
+	}
+	fmt.Println(len(z))
 }

@@ -10,6 +10,6 @@ const (
 const (
 	ForeachContinue = iota
 	ForeachBreak
-	ForeachDeleteBreak
 	ForeachDeleteContinue
+	ForeachDeleteBreak
 )

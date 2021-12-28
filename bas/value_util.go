@@ -104,7 +104,7 @@ func DeepEqual(a, b Value) bool {
 				return false
 			}
 			a.Object().Foreach(func(k Value, v *Value) int {
-				flag = DeepEqual(b.Object().Get(k), *v)
+				flag = DeepEqual(b.Object().Find(k), *v)
 				if flag {
 					return typ.ForeachContinue
 				}
@@ -167,7 +167,7 @@ func IsCallable(a Value) bool {
 
 func IntersectObject(a, b *Object) {
 	a.Foreach(func(k Value, v *Value) int {
-		if !b.Contains(k) {
+		if !b.Contains(k, false) {
 			return typ.ForeachDeleteContinue
 		}
 		return typ.ForeachContinue
@@ -176,7 +176,7 @@ func IntersectObject(a, b *Object) {
 
 func SubtractObject(a, b *Object) {
 	a.Foreach(func(k Value, v *Value) int {
-		if b.Contains(k) {
+		if b.Contains(k, false) {
 			return typ.ForeachDeleteContinue
 		}
 		return typ.ForeachContinue

@@ -497,23 +497,6 @@ func TestReflectedValue(t *testing.T) {
 	}
 }
 
-func TestHashcodeDist(t *testing.T) {
-	z := map[uint64]int{}
-	rand.Seed(time.Now().Unix())
-	for i := 0; i < 1e6; i++ {
-		v := bas.Int64(int64(i)).HashCode()
-		z[v]++
-	}
-	fmt.Println(len(z))
-
-	z = map[uint64]int{}
-	for i := 0; i < 1e6; i++ {
-		v := bas.Int64(rand.Int63()).HashCode()
-		z[v]++
-	}
-	fmt.Println(len(z))
-}
-
 var jsonTest = func() string {
 	x := `{"data": {"feeds": [{"audios": [], "comment_num": 0, "content": "\n\t\rabc", "create_time": {"time": 1640074878, "time_desc": "20 mins ago"}, "dislike_num": 0, "id": "61c18e7e4a71d05c90f19951", "in_hq": false, "like_num": 0, "other_info": {"spotify_info": {}}, "pics": [], "tags": ["999"], "user_id": "60e3fa8af9bf8d3b66c470b1", "user_info": {"age": 31, "avatar": "99eb05ca-59d9-11e9-8672-00163e02deb4", "bio": "\u0e40\u0e18\u0e2d\u0e04\u0e37\u0e2d\u0e1a\u0e38\u0e04\u0e04\u0e25\u0e25\u0e36\u0e01\u0e25\u0e31\u0e1a", "country": "TH", "cover_photo": "60e3fa8af9bf8d3b66c470b1_coverPhoto_8_1640071635228.png", "create_time": 1625553546.0, "frame_fileid": "", "gender": "girl", "huanxin_id": "love131004954661603", "is_vip": false, "lit_id": 1119075350, "nickname": "\u7761", "party_level_info": {"received": {"avatar": "52b743c2-5705-11ec-80d6-00163e02a5e5", "diamonds": 0, "level": 18, "new_diamonds": 72255}, "sent": {"avatar": "99c83d2a-5d6e-11eb-8b66-00163e022423", "diamonds": 0, "level": 3, "new_diamonds": 50963}}, "party_top_three": -1, "removed": false, "role": 0, "tag_str": "_!EMPTY", "user_id": "60e3fa8af9bf8d3b66c470b1"}, "video": null, "video_length": 0, "visibility": 0}, {"audios": [], "comment_num": 0, "content": "\u7890", "create_time": {"time": 1640074781, "time_desc": "22 mins ago"}, "dislike_num": 0, "id": "61c18e1d4a71d05c992f578c", "in_hq": false, "like_num": 0, "other_info": {"spotify_info": {}}, "pics": [], "tags": ["999"], "user_id": "60e3fa8af9bf8d3b66c470b1", "user_info": {"age": 31, "avatar": "99eb05ca-59d9-11e9-8672-00163e02deb4", "bio": "\u0e40\u0e18\u0e2d\u0e04\u0e37\u0e2d\u0e1a\u0e38\u0e04\u0e04\u0e25\u0e25\u0e36\u0e01\u0e25\u0e31\u0e1a", "country": "TH", "cover_photo": "60e3fa8af9bf8d3b66c470b1_coverPhoto_8_1640071635228.png", "create_time": 1625553546.0, "frame_fileid": "", "gender": "girl", "huanxin_id": "love131004954661603", "is_vip": false, "lit_id": 1119075350, "nickname": "\u7761", "party_level_info": {"received": {"avatar": "52b743c2-5705-11ec-80d6-00163e02a5e5", "diamonds": 0, "level": 18, "new_diamonds": 72255}, "sent": {"avatar": "99c83d2a-5d6e-11eb-8b66-00163e022423", "diamonds": 0, "level": 3, "new_diamonds": 50963}}, "party_top_three": -1, "removed": false, "role": 0, "tag_str": "_!EMPTY", "user_id": "60e3fa8af9bf8d3b66c470b1"}, "video": null, "video_length": 0, "visibility": 0}], "has_next": false, "next_start": -1}, "result": 0, "success": true}`
 	return "[" + strings.Join([]string{x, x, x, x}, ",") + "]"

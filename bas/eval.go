@@ -334,12 +334,12 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			case typ.Nil, typ.Number, typ.Bool:
 				env.A = Nil
 			case typ.Object:
-				env.A = a.Object().Get(idx)
+				env.A = a.Object().Find(idx)
 			case typ.Array:
 				if idx.IsInt64() {
 					env.A = a.Array().Get(idx.Int())
 				} else if idx.Type() == typ.String {
-					if f := a.Array().meta.Proto.Get(idx); f != Nil {
+					if f := a.Array().meta.Proto.Find(idx); f != Nil {
 						env.A = setObjectRecv(f, a)
 						break
 					}
@@ -358,7 +358,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 					}
 					break
 				} else if idx.Type() == typ.String {
-					if f := Proto.Str.Get(idx); f != Nil {
+					if f := Proto.Str.Find(idx); f != Nil {
 						env.A = setObjectRecv(f, a)
 						break
 					}

@@ -183,7 +183,7 @@ func init() {
 			ToValue()
 	}, "$f(path: string, flag: string, perm: int) -> File").Object().
 		SetMethod("close", func(e *bas.Env) {
-			if f, _ := e.Object(-1).Get(bas.Zero).Interface().(*os.File); f != nil {
+			if f, _ := e.Object(-1).Find(bas.Zero).Interface().(*os.File); f != nil {
 				internal.PanicErr(f.Close())
 			} else {
 				internal.Panic("no opened file yet")
@@ -426,13 +426,13 @@ func init() {
 	httpLib := bas.Func("http", func(e *bas.Env) {
 		args := e.Get(0).Object()
 		to := args.Prop("timeout").Safe().Float64(1 << 30)
-		method := strings.ToUpper(args.Get(bas.Str("method")).Safe().Str("GET"))
+		method := strings.ToUpper(args.Find(bas.Str("method")).Safe().Str("GET"))
 
-		u, err := url.Parse(args.Get(bas.Str("url")).Safe().Str("bad://%url%"))
+		u, err := url.Parse(args.Find(bas.Str("url")).Safe().Str("bad://%url%"))
 		internal.PanicErr(err)
 
 		addKV := func(k string, add func(k, v string)) {
-			x := args.Get(bas.Str(k))
+			x := args.Find(bas.Str(k))
 			x.Safe().Object().Foreach(func(k bas.Value, v *bas.Value) int { add(k.String(), v.String()); return typ.ForeachContinue })
 		}
 
@@ -448,7 +448,7 @@ func init() {
 			jsonForm = true
 		} else {
 			var form url.Values
-			if args.Contains(bas.Str("form")) {
+			if args.Contains(bas.Str("form"), false) {
 				form = url.Values{}
 				addKV("form", form.Add) // check "form"
 			}
@@ -505,15 +505,15 @@ func init() {
 		// Construct HTTP client
 		client := &http.Client{}
 		client.Timeout = time.Duration(to * float64(time.Second))
-		if v := args.Get(bas.Str("jar")); v.Type() == typ.Native {
+		if v := args.Find(bas.Str("jar")); v.Type() == typ.Native {
 			client.Jar, _ = v.Interface().(http.CookieJar)
 		}
-		if !args.Get(bas.Str("noredirect")).IsFalse() {
+		if !args.Find(bas.Str("noredirect")).IsFalse() {
 			client.CheckRedirect = func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse
 			}
 		}
-		if p := args.Get(bas.Str("proxy")).Safe().Str(""); p != "" {
+		if p := args.Find(bas.Str("proxy")).Safe().Str(""); p != "" {
 			client.Transport = &http.Transport{
 				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
 			}

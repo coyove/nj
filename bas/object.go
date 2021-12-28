@@ -2,7 +2,6 @@ package bas
 
 import (
 	"bytes"
-	"fmt"
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
@@ -24,9 +23,7 @@ type hashItem struct {
 }
 
 func NewObject(preallocateSize int) *Object {
-	if preallocateSize >= 8 {
-		preallocateSize *= 2
-	}
+	preallocateSize *= 2
 	obj := &Object{}
 	if preallocateSize > 0 {
 		obj.items = make([]hashItem, preallocateSize)
@@ -86,7 +83,7 @@ func (m *Object) Clear() {
 }
 
 func (m *Object) Prop(k string) (v Value) {
-	return m.Get(Str(k))
+	return m.Find(Str(k))
 }
 
 func (m *Object) SetProp(k string, v Value) *Object {
@@ -99,15 +96,27 @@ func (m *Object) SetMethod(k string, v func(*Env), d string) *Object {
 	return m
 }
 
-// Get retrieves the value for a given key.
+// Get retrieves the value for a given key locally.
 func (m *Object) Get(k Value) (v Value) {
 	if m == nil || k == Nil {
 		return Nil
 	}
+	return m.find(k, false)
+}
+
+// Find finds the value for a given key (including prototypes)
+func (m *Object) Find(k Value) (v Value) {
+	if m == nil || k == Nil {
+		return Nil
+	}
+	return m.find(k, true)
+}
+
+func (m *Object) find(k Value, findPrototype bool) (v Value) {
 	if idx := m.findHash(k); idx >= 0 {
 		v = m.items[idx].Val
-	} else if m.parent != nil {
-		v = m.parent.Get(k)
+	} else if findPrototype && m.parent != nil {
+		v = m.parent.find(k, findPrototype)
 	}
 	if m.parent != Proto.StaticObject && v.IsObject() && v.Object().IsCallable() {
 		f := v.Object().Copy(false)
@@ -142,11 +151,15 @@ func (m *Object) findHash(k Value) int {
 	}
 }
 
-func (m *Object) Contains(k Value) bool {
+func (m *Object) Contains(k Value, includePrototypes bool) bool {
 	if m == nil || k == Nil {
 		return false
 	}
-	return m.findHash(k) >= 0
+	found := m.findHash(k) >= 0
+	if !found && includePrototypes {
+		found = m.parent.Contains(k, true)
+	}
+	return found
 }
 
 // Set upserts a key-value pair into the object
@@ -158,7 +171,7 @@ func (m *Object) Set(k, v Value) (prev Value) {
 		m.items = make([]hashItem, 8)
 	}
 	if int(m.count) >= len(m.items)/2+1 {
-		m.resizeHash(len(m.items)*2 + 1)
+		resizeHash(m, len(m.items)*2+1)
 	}
 	return m.setHash(hashItem{Key: k, Val: v})
 }
@@ -199,16 +212,6 @@ func (m *Object) deleteAt(idx int) (prev Value) {
 	m.items[idx] = hashItem{}
 	m.count--
 	return prev
-}
-
-func (m *Object) RawGet(k Value) (v Value) {
-	if m == nil {
-		return Nil
-	}
-	old := m.parent
-	m.parent = nil
-	v, m.parent = m.Get(k), old
-	return v
 }
 
 func (m *Object) setHash(incoming hashItem) (prev Value) {
@@ -254,7 +257,6 @@ func (m *Object) Foreach(f func(k Value, v *Value) int) {
 			if firstKey == Nil {
 				firstKey = ip.Key
 			} else if ip.Key == firstKey {
-				fmt.Println(ip.Key)
 				break // went all the way around
 			}
 			switch f(ip.Key, &ip.Val) {
@@ -376,7 +378,7 @@ func (m *Object) Copy(copyData bool) *Object {
 
 func (m *Object) Merge(src *Object) *Object {
 	if src != nil && src.Len() > 0 {
-		m.resizeHash((m.Len()+src.Len())*2 + 1)
+		resizeHash(m, (m.Len()+src.Len())*2+1)
 		src.Foreach(func(k Value, v *Value) int { m.Set(k, *v); return typ.ForeachContinue })
 	}
 	return m
@@ -396,7 +398,7 @@ func (m *Object) IsCallable() bool {
 	return m.fun != nil && !m.fun.Dummy
 }
 
-func (m *Object) resizeHash(newSize int) {
+var resizeHash = func(m *Object, newSize int) {
 	if newSize < len(m.items) {
 		panic("resizeHash: invalid size")
 	}
