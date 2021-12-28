@@ -109,12 +109,17 @@ func TestObjectForeachDelete(t *testing.T) {
 		t.Fatal(o.items)
 	}
 	o.Set(Int(a), Int(a)) // [a+1, b+0]
+	loopCount := 0
 	o.Foreach(func(k Value, v *Value) int {
+		loopCount++
 		if k.Equal(Int(b)) {
 			return typ.ForeachDeleteContinue
 		}
 		return typ.ForeachContinue
 	})
+	if loopCount != 2 {
+		t.Fatal(o.items)
+	}
 	// [null, a+0]
 	if !o.items[1].Key.Equal(Int(a)) {
 		t.Fatal(o.items)

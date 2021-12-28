@@ -166,7 +166,7 @@ assert( 1 /2+ 2.5 * (a + 1) * 5 == 38)
 assert((a + 1) % 2 == 1)
 assert(math.mod(a + 1.25, 2) == 1.25)
 assert(math.remainder(a + 1.25, 2) == -0.75)
-assert(math.mod((- a) - 1.25, 2) == -1.25)
+assert(math.mod(-a - 1.25, 2) == -1.25)
 
 do
     local mark = 0
@@ -272,3 +272,21 @@ a[0]<<=3
 assert(a[0], 16)
 a[0] %= 7
 assert(a[0], 2)
+
+a=-a[0]
+assert(a, -2)
+a=a -1
+assert(a, -2)
+a=a- 1
+assert(a, -3)
+a=a - 1
+assert(a, -4)
+a=-[a,a - 1][1]
+assert(a, 5)
+a=-lambda() -2 end()
+assert(a, 2)
+
+a=-(a-1)-a
+assert(a, -3)
+a=1-a-a
+assert(a, 7)

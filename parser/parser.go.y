@@ -35,7 +35,7 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 %token<token> TDo TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TLambda TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TNext TLsh TRsh TURsh TDotDotDot TLParen TLBracket TIs
 
 /* Literals */
-%token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString TIDiv
+%token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString TIDiv TInv
 %token<token> TAddEq TSubEq TMulEq TDivEq TIDivEq TModEq TBitAndEq TBitOrEq TBitXorEq TBitLshEq TBitRshEq TBitURshEq
 %token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~'
 
@@ -239,13 +239,13 @@ expr:
     expr TIs expr                     { $$ = Nodes((SIs), $1,$3).At($2) } |
     '~' expr %prec UNARY              { $$ = Nodes((SBitNot), $2).At($1) } |
     '#' expr %prec UNARY              { $$ = Nodes((SLen), $2).At($1) } |
+    TInv expr %prec UNARY             { $$ = Nodes(SSub, zero, $2).At($1) } |
     TNot expr %prec UNARY             { $$ = Nodes((SNot), $2).At($1) }
 
 prefix_expr:
     TLambda func_params stats TEnd                     { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
     TString                                            { $$ = Str($1.Str) } |
     '(' expr ')'                                       { $$ = $2 } |
-    '(' '-' expr ')'                                   { $$ = Nodes(SSub, zero, $3).At($1) } |
     '[' ']'                                            { $$ = ss(yylex).__array($1, emptyNode) } |
     '{' '}'                                            { $$ = ss(yylex).__object($1, emptyNode) } |
     '[' expr_list comma ']'                            { $$ = ss(yylex).__array($1, $2) } |

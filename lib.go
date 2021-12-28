@@ -62,24 +62,12 @@ func init() {
 	bas.Globals.SetProp("stdout", bas.ValueOf(os.Stdout))
 	bas.Globals.SetProp("stdin", bas.ValueOf(os.Stdin))
 	bas.Globals.SetProp("stderr", bas.ValueOf(os.Stderr))
-	bas.Globals.SetMethod("print", func(env *bas.Env) {
-		for _, a := range env.Stack() {
-			fmt.Fprint(env.Global.Stdout, a.String())
-		}
-		fmt.Fprintln(env.Global.Stdout)
-	}, "$f(args...: value)\n\tprint `args` to stdout")
 	bas.Globals.SetMethod("write", func(e *bas.Env) {
 		w := bas.NewWriter(e.Get(0))
 		for _, a := range e.Stack()[1:] {
 			fmt.Fprint(w, a.String())
 		}
 	}, "$f(w: Writer, args...: value)\n\twrite `args` to `w`")
-	bas.Globals.SetMethod("println", func(e *bas.Env) {
-		for _, a := range e.Stack() {
-			fmt.Fprint(e.Global.Stdout, a.String(), " ")
-		}
-		fmt.Fprintln(e.Global.Stdout)
-	}, "$f(args...: value)\n\tsame as `print`, but values are separated by spaces")
 	bas.Globals.SetMethod("scanln", func(env *bas.Env) {
 		prompt, n := env.Get(0), env.Get(1)
 		fmt.Fprint(env.Global.Stdout, prompt.Safe().Str(""))

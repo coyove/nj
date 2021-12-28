@@ -76,6 +76,13 @@ do
 	assert(err.error() == "badboy")
 end
 
-function foo(args...)
-for k, v in args do assert(k, v) end
+function intersect(a, b)
+	a.foreach(lambda(b, k, v)
+		if not b.contains(k) then return object.DELETE_CONTINUE end
+	end.closure(b))
+	return a
 end
+
+a = intersect({a=1, b=1, c=3}, {a=2, c:4})
+assert(a.a, 1)
+assert(a.c, 3)

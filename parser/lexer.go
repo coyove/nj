@@ -27,6 +27,7 @@ func init() {
 	for name, idx := range reservedWords {
 		update(int(idx), name)
 	}
+	update(TInv, "'-'")
 	update(TLParen, "'('")
 	update(TLBracket, "'['")
 	update(TLsh, "'<<'")
@@ -344,15 +345,24 @@ skipspaces:
 					sc.skipComments()
 				}
 				goto redo
-			} else if numberChars[byte(p)] && (metSpaces || !sc.isLastTokenSymbolOrNumberClosed()) {
-				// "n -1" are two statements, "n-1" is a substract expression
-				tok.Type = TNumber
-				tok.Str = sc.scanNumber()
-				goto finally
+			} else if metSpaces || !sc.isLastTokenSymbolOrNumberClosed() {
+				if p == '.' || (p >= '0' && p <= '9') {
+					tok.Type = TNumber
+					tok.Str = sc.scanNumber()
+					goto finally
+				} else if p == '=' {
+					sc.Next()
+					tok.Type = TSubEq
+					tok.Str = "-="
+					goto finally
+				} else if !unicode.IsSpace(rune(p)) {
+					tok.Type = TInv
+					tok.Str = "-"
+					goto finally
+				}
 			}
 			tok.Type = ch
 			tok.Str = "-"
-			tok = sc.opAssign(tok)
 		case '"', '\'':
 			tok.Type = TString
 			tok.Str, err = sc.scanString(ch)

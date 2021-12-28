@@ -205,6 +205,10 @@ func init() {
 			e.Object(-1).Foreach(func(k Value, v *Value) int { a = append(a, NewArray(k, *v).ToValue()); return typ.ForeachContinue })
 			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> [[value, value]]\n\treturn as [[key1, value1], [key2, value2], ...]").
+		SetProp("CONTINUE", Int(0)).
+		SetProp("BREAK", Int(1)).
+		SetProp("DELETE_CONTINUE", Int(2)).
+		SetProp("DELETE_BREAK", Int(3)).
 		SetMethod("foreach", func(e *Env) {
 			f := e.Object(0)
 			e.Object(-1).Foreach(func(k Value, v *Value) int { return e.Call(f, k, *v).Safe().Int(0) })
@@ -534,4 +538,16 @@ func init() {
 	Globals.SetMethod("printf", func(e *Env) {
 		sprintf(e, 0, e.Global.Stdout)
 	}, "$f(format: string, args...: value)")
+	Globals.SetMethod("println", func(e *Env) {
+		for _, a := range e.Stack() {
+			fmt.Fprint(e.Global.Stdout, a.String(), " ")
+		}
+		fmt.Fprintln(e.Global.Stdout)
+	}, "$f(args...: value)\n\tsame as `print`, but values are separated by spaces")
+	Globals.SetMethod("print", func(e *Env) {
+		for _, a := range e.Stack() {
+			fmt.Fprint(e.Global.Stdout, a.String())
+		}
+		fmt.Fprintln(e.Global.Stdout)
+	}, "$f(args...: value)\n\tprint `args` to stdout")
 }

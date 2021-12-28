@@ -28,6 +28,12 @@ NJ is a simple script engine written in golang with Lua-like syntax.
 - Syntax of calling functions strictly requires no spaces between callee and '(':
 	- `print(1)` is the only right way of calling a function.
 	- `print (1)` literally means two things: 1) get value of `print` and discard it, 2) evaluate `(1)`.
+- Same rule applies to unary operator `-`:
+	- `a = 1-a <=> a = 1 - a` means assign the result of `1-a` to `a`.
+	- `a = 1 -a` means assign `1` to `a` and negate `a`.
+	- `a = 1 -a+1` means assign `1` to `a` and eval `-a+1`.
+	- `a = -a` means negate `a` and assign the result to `a`.
+	- `a = - a` is invalid.
 - To write variadic functions:
 	- `function foo(a, b...) end`.
 	- `args = [1, 2, 3]; foo(args...)`.
