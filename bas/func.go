@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
 
 type Function struct {
-	CodeSeg    Packet
+	CodeSeg    internal.Packet
 	StackSize  uint16
 	NumParams  uint16
 	Variadic   bool
@@ -225,4 +226,103 @@ func (c *Function) GoString() string {
 
 func (c *Function) Object() *Object {
 	return c.obj
+}
+
+func pkPrettify(c *Function, p *Program, toplevel bool) string {
+	sb := &bytes.Buffer{}
+	sb.WriteString("+ START " + c.String() + "\n")
+
+	readAddr := func(a uint16, rValue bool) string {
+		if a == typ.RegA {
+			return "$a"
+		}
+
+		suffix := ""
+		if rValue {
+			if a > typ.RegLocalMask || toplevel {
+				suffix = ":" + simpleString((*p.stack)[a&typ.RegLocalMask])
+			}
+		}
+
+		if a > typ.RegLocalMask {
+			return fmt.Sprintf("g$%d", a&typ.RegLocalMask) + suffix
+		}
+		return fmt.Sprintf("$%d", a&typ.RegLocalMask) + suffix
+	}
+
+	oldpos := c.CodeSeg.Pos
+	lastLine := uint32(0)
+
+	for i, inst := range c.CodeSeg.Code {
+		cursor := uint32(i) + 1
+		bop, a, b := inst.Opcode, inst.A, uint16(inst.B)
+
+		if c.CodeSeg.Pos.Len() > 0 {
+			op, line := c.CodeSeg.Pos.Pop()
+			// log.Println(cursor, splitInst, unsafe.Pointer(&Pos))
+			for uint32(cursor) > op && c.CodeSeg.Pos.Len() > 0 {
+				if op, line = c.CodeSeg.Pos.Pop(); uint32(cursor) <= op {
+					break
+				}
+			}
+
+			if op == uint32(cursor) {
+				x := "."
+				if line != lastLine {
+					x = strconv.Itoa(int(line))
+					lastLine = line
+				}
+				sb.WriteString(fmt.Sprintf("|%-4s % 4d| ", x, cursor-1))
+			} else {
+				sb.WriteString(fmt.Sprintf("|     % 4d| ", cursor-1))
+			}
+		} else {
+			sb.WriteString(fmt.Sprintf("|$    % 4d| ", cursor-1))
+		}
+
+		switch bop {
+		case typ.OpSet:
+			sb.WriteString(readAddr(a, false) + " = " + readAddr(b, true))
+		case typ.OpCreateArray:
+			sb.WriteString("createarray")
+		case typ.OpCreateObject:
+			sb.WriteString("createobject")
+		case typ.OpLoadFunc:
+			cls := p.functions[a]
+			sb.WriteString("loadfunc " + cls.fun.Name + "\n")
+			sb.WriteString(pkPrettify(cls.fun, cls.fun.LoadGlobal, false))
+		case typ.OpTailCall, typ.OpCall:
+			if b != typ.RegPhantom {
+				sb.WriteString("push " + readAddr(b, true) + " -> ")
+			}
+			if bop == typ.OpTailCall {
+				sb.WriteString("tail")
+			}
+			sb.WriteString("call " + readAddr(a, true))
+		case typ.OpIfNot, typ.OpJmp:
+			pos := inst.B
+			pos2 := uint32(int32(cursor) + pos)
+			if bop == typ.OpIfNot {
+				sb.WriteString("if not $a ")
+			}
+			sb.WriteString(fmt.Sprintf("jmp %d to %d", pos, pos2))
+		case typ.OpInc:
+			sb.WriteString("inc " + readAddr(a, false) + " " + readAddr(b, true))
+		default:
+			if us, ok := typ.UnaryOpcode[bop]; ok {
+				sb.WriteString(us + " " + readAddr(a, true))
+			} else if bs, ok := typ.BinaryOpcode[bop]; ok {
+				sb.WriteString(bs + " " + readAddr(a, true) + " " + readAddr(b, true))
+			} else {
+				sb.WriteString(fmt.Sprintf("? %02x", bop))
+			}
+		}
+
+		sb.WriteString("\n")
+	}
+
+	c.CodeSeg.Pos = oldpos
+
+	sb.WriteString("+ END " + c.String())
+	return sb.String()
 }

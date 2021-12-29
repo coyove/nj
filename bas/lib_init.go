@@ -233,10 +233,20 @@ func init() {
 			e.A = NewArray(e.Object(-1).Next(e.Get(0))).ToValue()
 		}, "object.$f(k: value) -> [value, value]\n\tfind next key-value pair after `k` in the object and return as [key, value]").
 		SetMethod("intersectkeys", func(e *Env) {
-			IntersectObject(e.Object(-1), e.Object(0))
+			e.Object(-1).Foreach(func(k Value, v *Value) int {
+				if !e.Object(0).Contains(k, false) {
+					return typ.ForeachDeleteContinue
+				}
+				return typ.ForeachContinue
+			})
 		}, "object.$f(o: object)\n\t").
 		SetMethod("subtractkeys", func(e *Env) {
-			SubtractObject(e.Object(-1), e.Object(0))
+			e.Object(-1).Foreach(func(k Value, v *Value) int {
+				if e.Object(0).Contains(k, false) {
+					return typ.ForeachDeleteContinue
+				}
+				return typ.ForeachContinue
+			})
 		}, "object.$f(o: object)\n\t")
 	ObjectProto.SetPrototype(nil) // objectlib is the topmost object, it should not have any prototype
 

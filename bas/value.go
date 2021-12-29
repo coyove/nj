@@ -8,6 +8,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"time"
 	"unicode/utf8"
 	"unsafe"
 
@@ -465,3 +466,78 @@ func (v Value) Len() int {
 }
 
 func (v Value) Safe() SafeValue { return SafeValue(v) }
+
+type SafeValue Value
+
+func (v SafeValue) Str(defaultValue string) string {
+	switch Value(v).Type() {
+	case typ.String:
+		return Value(v).Str()
+	case typ.Array:
+		buf, ok := Value(v).Array().Unwrap().([]byte)
+		if ok {
+			return *(*string)(unsafe.Pointer(&buf))
+		}
+	}
+	return defaultValue
+}
+
+func (v SafeValue) Int(defaultValue int) int {
+	return int(v.Int64(int64(defaultValue)))
+}
+
+func (v SafeValue) Int64(defaultValue int64) int64 {
+	if Value(v).Type() == typ.Number {
+		return Value(v).Int64()
+	}
+	return defaultValue
+}
+
+func (v SafeValue) Float64(defaultValue float64) float64 {
+	if Value(v).Type() == typ.Number {
+		return Value(v).Float64()
+	}
+	return defaultValue
+}
+
+func (v SafeValue) Array() *Array {
+	if Value(v).Type() != typ.Array {
+		return nil
+	}
+	return Value(v).Array()
+}
+
+func (v SafeValue) Object() *Object {
+	if Value(v).Type() != typ.Object {
+		return nil
+	}
+	return Value(v).Object()
+}
+
+func (v SafeValue) Bytes() []byte {
+	switch Value(v).Type() {
+	case typ.String:
+		return []byte(Value(v).Str())
+	case typ.Array:
+		buf, _ := Value(v).Array().Unwrap().([]byte)
+		return buf
+	}
+	return nil
+}
+
+func (v SafeValue) Duration(defaultValue time.Duration) time.Duration {
+	if Value(v).Type() != typ.Number {
+		return defaultValue
+	}
+	if Value(v).IsInt64() {
+		return time.Duration(Value(v).Int64()) * time.Second
+	}
+	return time.Duration(Value(v).Float64() * float64(time.Second))
+}
+
+func (v SafeValue) Error() error {
+	if Value(v).Type() != typ.Array || Value(v).Array().meta != errorArrayMeta {
+		return nil
+	}
+	return Value(v).Array().Unwrap().(*ExecError)
+}

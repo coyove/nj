@@ -290,3 +290,27 @@ a=-(a-1)-a
 assert(a, -3)
 a=1-a-a
 assert(a, 7)
+a=1-a -a
+assert(a, -6)
+a=1-a - a
+assert(a, 13)
+a=1-
+a
+assert(a, -12)
+a=a-
+-1
+assert(a, -11)
+a=[a][0]- -1
+assert(a, -10)
+a=a- --comment
+-1
+assert(a, -9)
+a=a - --comment
+-1
+assert(a, -8)
+a=a -
+-(a)
+assert(a, -16)
+a=a+
+-a
+assert(a, 0)

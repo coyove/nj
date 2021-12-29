@@ -23,7 +23,7 @@ type symTable struct {
 	global *symTable
 	parent *symTable
 
-	codeSeg bas.Packet
+	codeSeg internal.Packet
 
 	// toplevel symtable
 	funcs []*bas.Object

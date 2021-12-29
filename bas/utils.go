@@ -263,3 +263,86 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 	internal.PanicErr(outError)
 	return t
 }
+
+func DeepEqual(a, b Value) bool {
+	if a.Equal(b) {
+		return true
+	}
+	if at, bt := a.Type(), b.Type(); at == bt {
+		switch at {
+		case typ.Array:
+			flag := a.Array().Len() == b.Array().Len()
+			if !flag {
+				return false
+			}
+			a.Array().Foreach(func(k int, v Value) bool {
+				flag = DeepEqual(b.Array().Get(k), v)
+				return flag
+			})
+			return flag
+		case typ.Object:
+			flag := a.Object().Len() == b.Object().Len()
+			if !flag {
+				return false
+			}
+			a.Object().Foreach(func(k Value, v *Value) int {
+				flag = DeepEqual(b.Object().Find(k), *v)
+				if flag {
+					return typ.ForeachContinue
+				}
+				return typ.ForeachBreak
+			})
+			return flag
+		}
+	}
+	return false
+}
+
+func lessStr(a, b Value) bool {
+	if a.isSmallString() && b.isSmallString() {
+		if a.v == b.v {
+			return uintptr(a.p) < uintptr(b.p) // a is shorter than b
+		}
+		return a.v < b.v
+	}
+	return a.Str() < b.Str()
+}
+
+func Less(a, b Value) bool {
+	at, bt := a.Type(), b.Type()
+	if at != bt {
+		return at < bt
+	}
+	switch at {
+	case typ.Number:
+		if a.IsInt64() && b.IsInt64() {
+			return a.UnsafeInt64() < b.UnsafeInt64()
+		}
+		return a.Float64() < b.Float64()
+	case typ.String:
+		return lessStr(a, b)
+	}
+	return a.UnsafeAddr() < b.UnsafeAddr()
+}
+
+func IsPrototype(a Value, p *Object) bool {
+	switch a.Type() {
+	case typ.Nil:
+		return p == nil
+	case typ.Object:
+		return a.Object().IsPrototype(p)
+	case typ.Bool:
+		return p == Proto.Bool
+	case typ.Number:
+		return p == Proto.Float || (a.IsInt64() && p == Proto.Int)
+	case typ.String:
+		return p == Proto.Str
+	case typ.Array:
+		return a.Array().meta.Proto.IsPrototype(p)
+	}
+	return false
+}
+
+func IsCallable(a Value) bool {
+	return a.Type() == typ.Object && a.Object().IsCallable()
+}

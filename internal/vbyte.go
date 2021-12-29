@@ -1,6 +1,10 @@
 package internal
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+
+	"github.com/coyove/nj/typ"
+)
 
 type VByte32 struct {
 	Name string
@@ -42,4 +46,48 @@ func (p *VByte32) Read(i int) (next int, idx, line uint32) {
 		return
 	}
 	return i + n + n2, uint32(a), uint32(b)
+}
+
+type Packet struct {
+	Code []typ.Inst
+	Pos  VByte32
+}
+
+func (b *Packet) WriteInst(op byte, opa, opb uint16) {
+	if opa == opb && op == typ.OpSet {
+		return
+	}
+	b.Code = append(b.Code, typ.Inst{Opcode: op, A: opa, B: int32(opb)})
+	if b.Len() >= 4e9 {
+		panic("too much code")
+	}
+}
+
+func (b *Packet) WriteJmpInst(op byte, d int) {
+	b.Code = append(b.Code, typ.JmpInst(op, d))
+	if b.Len() >= 4e9 {
+		panic("too much code")
+	}
+}
+
+func (b *Packet) WriteLineNum(line uint32) {
+	if line == 0 {
+		// Debug Code, used to detect a null meta struct
+		panic("DEBUG: null line")
+	}
+	b.Pos.Append(uint32(len(b.Code)), line)
+}
+
+func (b *Packet) TruncLast() {
+	if len(b.Code) > 0 {
+		b.Code = b.Code[:len(b.Code)-1]
+	}
+}
+
+func (b *Packet) Len() int {
+	return len(b.Code)
+}
+
+func (b *Packet) LastInst() typ.Inst {
+	return b.Code[len(b.Code)-1]
 }
