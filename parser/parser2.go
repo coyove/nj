@@ -242,12 +242,12 @@ func __forIn(key, value Token, expr, body Node, pos Token) Node {
 }
 
 func (lex *Lexer) __arrayBuild(list, arg Node) Node {
-	if lex.jsonMode {
+	if lex.scanner.jsonMode {
 		if list.Valid() {
 			list.simpleJSON(lex).Array().Append(arg.simpleJSON(lex))
 			return list
 		}
-		return Node{NodeType: JSON, Value: bas.NewArray(arg.simpleJSON(lex)).ToValue()}
+		return jsonValue(bas.NewArray(arg.simpleJSON(lex)).ToValue())
 	}
 	if list.Valid() {
 		return list.append(arg)
@@ -256,14 +256,14 @@ func (lex *Lexer) __arrayBuild(list, arg Node) Node {
 }
 
 func (lex *Lexer) __objectBuild(list, k, v Node) Node {
-	if lex.jsonMode {
+	if lex.scanner.jsonMode {
 		if list.Valid() {
 			list.simpleJSON(lex).Object().Set(k.simpleJSON(lex), v.simpleJSON(lex))
 			return list
 		}
 		o := bas.NewObject(0)
 		o.Set(k.simpleJSON(lex), v.simpleJSON(lex))
-		return Node{NodeType: JSON, Value: o.ToValue()}
+		return jsonValue(o.ToValue())
 	}
 	if list.Valid() {
 		return list.append(k, v)
@@ -272,7 +272,7 @@ func (lex *Lexer) __objectBuild(list, k, v Node) Node {
 }
 
 func (lex *Lexer) __array(tok Token, args Node) Node {
-	if lex.jsonMode {
+	if lex.scanner.jsonMode {
 		if args == emptyNode {
 			return Node{NodeType: JSON, Value: bas.NewArray().ToValue()}
 		}
@@ -282,9 +282,9 @@ func (lex *Lexer) __array(tok Token, args Node) Node {
 }
 
 func (lex *Lexer) __object(tok Token, args Node) Node {
-	if lex.jsonMode {
+	if lex.scanner.jsonMode {
 		if args == emptyNode {
-			return Node{NodeType: JSON, Value: bas.NewObject(0).ToValue()}
+			return jsonValue(bas.NewObject(0).ToValue())
 		}
 		return args
 	}

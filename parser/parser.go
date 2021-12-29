@@ -1171,8 +1171,8 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line parser.go.y:206
 		{
-			if ss(yylex).jsonMode {
-				yyVAL.expr = Node{NodeType: JSON, Value: Sym(yyDollar[1].token).simpleJSON(ss(yylex))}
+			if ss(yylex).scanner.jsonMode {
+				yyVAL.expr = jsonValue(Sym(yyDollar[1].token).simpleJSON(ss(yylex)))
 			} else {
 				yyVAL.expr = Sym(yyDollar[1].token)
 			}

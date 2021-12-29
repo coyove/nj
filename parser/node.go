@@ -35,6 +35,10 @@ func staticSym(s string) Node {
 	return Node{NodeType: SYM, Value: bas.Str(s)}
 }
 
+func jsonValue(v bas.Value) Node {
+	return Node{NodeType: JSON, Value: v}
+}
+
 func Sym(tok Token) Node {
 	return Node{NodeType: SYM, SymLine: tok.Pos.Line, Value: bas.Str(tok.Str)}
 }
@@ -113,43 +117,52 @@ func (n Node) Nodes() []Node {
 }
 
 func Nodes(args ...Node) Node {
+	if len(args) == 2 {
+		op, a := args[0].Sym(), args[1]
+		if a.IsNum() && op == typ.ABitNot {
+			return Int(^a.Int64())
+		}
+	}
 	if len(args) == 3 {
-		op := args[0].Sym()
-		a, b := args[1], args[2]
+		op, a, b := args[0].Sym(), args[1], args[2]
 		if op == typ.AAdd && a.Type() == STR && b.Type() == STR {
 			return Str(a.Str() + b.Str())
 		}
 		if a.IsNum() && b.IsNum() {
 			switch op {
 			case typ.AAdd:
-				af, ai, aIsInt := a.Num()
-				bf, bi, bIsInt := b.Num()
-				if aIsInt && bIsInt {
-					return Int(ai + bi)
+				if a.IsInt64() && b.IsInt64() {
+					return Int(a.Int64() + b.Int64())
 				}
-				return Float(af + bf)
+				return Float(a.Float64() + b.Float64())
 			case typ.ASub:
-				af, ai, aIsInt := a.Num()
-				bf, bi, bIsInt := b.Num()
-				if aIsInt && bIsInt {
-					return Int(ai - bi)
+				if a.IsInt64() && b.IsInt64() {
+					return Int(a.Int64() - b.Int64())
 				}
-				return Float(af - bf)
+				return Float(a.Float64() - b.Float64())
 			case typ.AMul:
-				af, ai, aIsInt := a.Num()
-				bf, bi, bIsInt := b.Num()
-				if aIsInt && bIsInt {
-					return Int(ai * bi)
+				if a.IsInt64() && b.IsInt64() {
+					return Int(a.Int64() * b.Int64())
 				}
-				return Float(af * bf)
+				return Float(a.Float64() * b.Float64())
 			case typ.ADiv:
-				af, _, _ := a.Num()
-				bf, _, _ := b.Num()
-				return Float(af / bf)
+				return Float(a.Float64() / b.Float64())
 			case typ.AIDiv:
-				_, ai, _ := a.Num()
-				_, bi, _ := b.Num()
-				return Int(ai / bi)
+				return Int(a.Int64() / b.Int64())
+			case typ.AMod:
+				return Int(a.Int64() % b.Int64())
+			case typ.ABitAnd:
+				return Int(a.Int64() & b.Int64())
+			case typ.ABitOr:
+				return Int(a.Int64() | b.Int64())
+			case typ.ABitXor:
+				return Int(a.Int64() ^ b.Int64())
+			case typ.ABitLsh:
+				return Int(a.Int64() << b.Int64())
+			case typ.ABitRsh:
+				return Int(a.Int64() >> b.Int64())
+			case typ.ABitURsh:
+				return Int(int64(uint64(a.Int64()) >> b.Int64()))
 			}
 		}
 	}

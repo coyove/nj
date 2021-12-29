@@ -71,6 +71,7 @@ func isIdent(ch uint32, pos int) bool {
 
 type Scanner struct {
 	Pos       typ.Position
+	jsonMode  bool
 	buffer    bytes.Buffer
 	offset    int64
 	text      string
@@ -367,7 +368,7 @@ skipspaces:
 			tok.Type = TString
 			tok.Str, err = sc.scanString(ch)
 		case '[':
-			if sc.Peek() == '[' {
+			if sc.Peek() == '[' && !sc.jsonMode {
 				sc.Next()
 				tok.Type = TString
 				tok.Str, err = sc.scanBlockString()
@@ -481,10 +482,9 @@ func (sc *Scanner) opAssign(tok Token) Token {
 // yacc interface {{{
 
 type Lexer struct {
-	jsonMode bool
-	scanner  *Scanner
-	Stmts    Node
-	Token    Token
+	scanner *Scanner
+	Stmts   Node
+	Token   Token
 }
 
 func (lx *Lexer) Lex(lval *yySymType) int {
@@ -511,11 +511,11 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 
 func parse(reader, name string, jsonMode bool) (chunk Node, lexer *Lexer, err error) {
 	lexer = &Lexer{
-		jsonMode: jsonMode,
-		scanner:  NewScanner(reader, name),
-		Stmts:    Node{},
-		Token:    Token{Str: ""},
+		scanner: NewScanner(reader, name),
+		Stmts:   Node{},
+		Token:   Token{Str: ""},
 	}
+	lexer.scanner.jsonMode = jsonMode
 	defer internal.CatchError(&err)
 	yyParse(lexer)
 	chunk = lexer.Stmts

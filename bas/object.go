@@ -171,7 +171,7 @@ func (m *Object) Set(k, v Value) (prev Value) {
 		m.items = make([]hashItem, 8)
 	}
 	if int(m.count) >= len(m.items)/2+1 {
-		resizeHash(m, len(m.items)*2+1)
+		resizeHash(m, len(m.items)*2)
 	}
 	return m.setHash(hashItem{Key: k, Val: v})
 }

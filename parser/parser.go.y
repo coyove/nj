@@ -204,8 +204,8 @@ jmp_stat:
 
 declarator:
     TIdent {
-        if ss(yylex).jsonMode {
-            $$ = Node{NodeType: JSON, Value: Sym($1).simpleJSON(ss(yylex))}
+        if ss(yylex).scanner.jsonMode {
+            $$ = jsonValue(Sym($1).simpleJSON(ss(yylex)))
         } else {
             $$ = Sym($1)
         }
