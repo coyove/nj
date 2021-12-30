@@ -4,15 +4,14 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math/rand"
+	"runtime/debug"
 	"testing"
 	"time"
-
-	"github.com/coyove/nj/typ"
 )
 
 func isEmpty(o *Object) bool {
 	for _, kv := range o.items {
-		if kv.Key != Nil {
+		if kv.key != Nil {
 			return false
 		}
 	}
@@ -37,63 +36,10 @@ func randInt(len, idx int) int {
 
 func TestObjectForeachDelete(t *testing.T) {
 	rand.Seed(time.Now().Unix())
-
-	for i := 1; i <= 16; i++ {
-		o := NewObject(i)
-		o.SetProp("a", Zero)
-		o.Foreach(func(k Value, v *Value) int { return typ.ForeachDeleteContinue })
-		if !isEmpty(o) {
-			t.Fatal(o.items)
-		}
-	}
-
-	for i := 1; i <= 16; i++ {
-		o := NewObject(i)
-		o.SetProp("a", Int(1))
-		o.SetProp("b", Int(2))
-		o.Foreach(func(k Value, v *Value) int { return typ.ForeachDeleteContinue })
-		if !isEmpty(o) {
-			t.Fatal(o.items)
-		}
-	}
-
-	for i := 1; i <= 16; i++ {
-		o := NewObject(i)
-		m := map[string]Value{}
-		o.SetProp("a", Int(1))
-		o.SetProp("b", Int(2))
-		m["a"] = Int(1)
-		m["b"] = Int(2)
-		o.Foreach(func(k Value, v *Value) int { delete(m, k.Str()); return typ.ForeachDeleteBreak })
-		for k, v := range m {
-			if o.Prop(k).Int() != v.Int() {
-				t.Fatal(o.items)
-			}
-		}
-	}
-
-	for i := 1; i <= 16; i++ {
-		o := NewObject(i)
-		m := map[string]int64{}
-		for i := 0; i < 1e5; i++ {
-			k, v := randString(), rand.Int63()
-			o.SetProp(k, Int64(v))
-			m[k] = v
-		}
-		// fmt.Println(o.items)
-		// fmt.Println()
-		o.Foreach(func(k Value, v *Value) int {
-			if rand.Intn(2) == 0 {
-				delete(m, k.Str())
-				return typ.ForeachDeleteContinue
-			}
-			return typ.ForeachContinue
-		})
-		for k, v := range m {
-			if ov := o.Prop(k); ov.Int64() != v {
-				// t.Fatal(o.Len(), len(m), ov, v)
-				t.Fatal(k, Str(k).HashCode()%uint64(len(o.items)), o.items, m)
-			}
+	check := func(o *Object, idx int, k int, dist int32) {
+		i := o.items[idx]
+		if i.key.Int() != k || i.dist != dist {
+			t.Fatal(o.items, string(debug.Stack()))
 		}
 	}
 
@@ -102,32 +48,97 @@ func TestObjectForeachDelete(t *testing.T) {
 	o := NewObject(1)
 	a := randInt(2, 1)
 	b := randInt(2, 1)
+	c := randInt(2, 1)
 	o.Set(Int(a), Int(a)) // [null, a+0]
 	o.Set(Int(b), Int(b)) // [b+1, a+0]
-	o.Delete(Int(a))
-	if !o.items[1].Key.Equal(Int(b)) {
+	o.Delete(Int(a))      // [b+1, deleted+0]
+	if o.items[0].dist != 1 || !o.items[1].pDeleted {
 		t.Fatal(o.items)
 	}
 	o.Set(Int(a), Int(a)) // [a+1, b+0]
+	check(o, 0, a, 1)
+	check(o, 1, b, 0)
+
+	o.Delete(Int(a))      // [deleted+1, b+0]
+	o.Set(Int(c), Int(c)) // [c+1, b+0]
+	check(o, 0, c, 1)
+	check(o, 1, b, 0)
+
+	o = NewObject(2)
+	a = randInt(4, 1)
+	b = randInt(4, 1)
+	c = randInt(4, 1)
+	d := randInt(4, 1)
+	o.Set(Int(a), Int(a))
+	o.Set(Int(b), Int(b))
+	o.Set(Int(c), Int(c))
+	o.Set(Int(d), Int(d)) // [d+3, a+0, b+1, c+2]
+	check(o, 0, d, 3)
+	check(o, 1, a, 0)
+	check(o, 2, b, 1)
+	check(o, 3, c, 2)
+
+	o.Delete(Int(b))      // [d+3, a+0, deleted+1, c+2]
+	o.Set(Int(b), Int(b)) // [b+3, a+0, c+1, d+2]
+	check(o, 0, b, 3)
+	check(o, 1, a, 0)
+	check(o, 2, c, 1)
+	check(o, 3, d, 2)
+
+	o.Delete(Int(a))
+	o.Delete(Int(c)) // [b+3, deleted+0, deleted+1, d+2]
 	loopCount := 0
-	o.Foreach(func(k Value, v *Value) int {
-		loopCount++
-		if k.Equal(Int(b)) {
-			return typ.ForeachDeleteContinue
-		}
-		return typ.ForeachContinue
-	})
+	o.Foreach(func(k Value, v *Value) bool { loopCount++; return true })
 	if loopCount != 2 {
+		t.Fatal(loopCount, o.items)
+	}
+	for k, _ := o.Next(Nil); k != Nil; k, _ = o.Next(k) {
+		loopCount--
+	}
+	if loopCount != 0 {
 		t.Fatal(o.items)
 	}
-	// [null, a+0]
-	if !o.items[1].Key.Equal(Int(a)) {
+	a = randInt(4, 2)
+	o.Set(Int(a), Int(a)) // [a+2, deleted+0, d+1, b+2]
+	check(o, 0, a, 2)
+	check(o, 2, d, 1)
+	check(o, 3, b, 2)
+
+	if o.Get(Int(a)).Int() != a {
 		t.Fatal(o.items)
 	}
-	if o.items[1].Distance != 0 {
+
+	o = NewObject(4)
+	a = randInt(8, 1)
+	b = randInt(8, 1)
+	c = randInt(8, 1)
+	d = randInt(8, 2)
+	e := randInt(8, 4)
+	o.Set(Int(a), Int(a))
+	o.Set(Int(b), Int(b))
+	o.Set(Int(c), Int(c))
+	o.Set(Int(d), Int(d))
+	o.Set(Int(e), Int(e)) // [nil, a+0, b+1, c+2, d+2, e+1, nil, nil]
+	check(o, 1, a, 0)
+	check(o, 2, b, 1)
+	check(o, 3, c, 2)
+	check(o, 4, d, 2)
+	check(o, 5, e, 1)
+
+	o.Delete(Int(b))
+	o.Delete(Int(d)) // [nil, a+0, deleted+1, c+2, deleted+2, e+1, nil, nil]
+	if o.Get(Int(b)) != Nil {
 		t.Fatal(o.items)
 	}
-	fmt.Println(a, b, o.items)
+	if o.Get(Int(c)) != Int(c) {
+		t.Fatal(o.items)
+	}
+	o.Set(Int(d), Int(d)) // [nil, a+0, c+1, d+1, e+0, nil, nil, nil]
+	check(o, 1, a, 0)
+	check(o, 2, c, 1)
+	check(o, 3, d, 1)
+	check(o, 4, e, 0)
+
 	resizeHash = old
 }
 
@@ -216,11 +227,11 @@ func TestRHMap(t *testing.T) {
 
 	for k, v := range m2 {
 		if m.Find(Int64(k)).Int64() != v {
-			m.Foreach(func(mk Value, mv *Value) int {
+			m.Foreach(func(mk Value, mv *Value) bool {
 				if mk.Int64() == k {
 					t.Log(mk, *mv)
 				}
-				return typ.ForeachContinue
+				return true
 			})
 			t.Fatal(m.Find(Int64(k)), k, v)
 		}
@@ -261,8 +272,8 @@ func TestObjectDistance(t *testing.T) {
 			o.Set(Int(randInt(sz, i)), Int(i))
 		}
 		for _, i := range o.items {
-			if i.Key != Nil {
-				if i.Distance != 0 {
+			if i.key != Nil {
+				if i.dist != 0 {
 					t.Fatal(o.items)
 				}
 			}
@@ -277,7 +288,7 @@ func TestObjectDistance(t *testing.T) {
 			o.Set(Int(randInt(sz, i)), Int(i))
 		}
 		for _, i := range o.items {
-			if i.Distance != 0 {
+			if i.dist != 0 {
 				t.Fatal(o.items)
 			}
 		}

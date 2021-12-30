@@ -251,9 +251,9 @@ func init() {
 			win := runtime.GOOS == "windows"
 			p := exec.Command(internal.IfStr(win, "cmd", "sh"), internal.IfStr(win, "/c", "-c"), e.Str(0))
 			opt := e.Get(1).Safe().Object()
-			opt.Prop("env").Safe().Object().Foreach(func(k bas.Value, v *bas.Value) int {
+			opt.Prop("env").Safe().Object().Foreach(func(k bas.Value, v *bas.Value) bool {
 				p.Env = append(p.Env, k.String()+"="+v.String())
-				return typ.ForeachContinue
+				return true
 			})
 			stdout := &bytes.Buffer{}
 			p.Stdout, p.Stderr = stdout, stdout
@@ -421,7 +421,7 @@ func init() {
 
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Find(bas.Str(k))
-			x.Safe().Object().Foreach(func(k bas.Value, v *bas.Value) int { add(k.String(), v.String()); return typ.ForeachContinue })
+			x.Safe().Object().Foreach(func(k bas.Value, v *bas.Value) bool { add(k.String(), v.String()); return true })
 		}
 
 		additionalQueries := u.Query()
@@ -453,7 +453,7 @@ func init() {
 			payload := bytes.Buffer{}
 			writer := multipart.NewWriter(&payload)
 			if x := args.Prop("multipart"); x.Type() == typ.Object {
-				x.Object().Foreach(func(k bas.Value, v *bas.Value) int {
+				x.Object().Foreach(func(k bas.Value, v *bas.Value) bool {
 					key, rd := k.String(), *v
 					if rd.Type() == typ.Array && rd.Len() == 2 { // [filename, reader]
 						part, err := writer.CreateFormFile(key, rd.Array().Get(0).Safe().Str(""))
@@ -466,7 +466,7 @@ func init() {
 						_, err = io.Copy(part, bas.NewReader(rd))
 						internal.PanicErr(err)
 					}
-					return typ.ForeachContinue
+					return true
 				})
 			}
 			internal.PanicErr(writer.Close())

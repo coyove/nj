@@ -2,6 +2,7 @@ package bas
 
 import (
 	"bytes"
+	"fmt"
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
@@ -18,8 +19,16 @@ type Object struct {
 
 // hashItem represents an entry in the object.
 type hashItem struct {
-	Key, Val Value
-	Distance int // How far item is from its best position.
+	key, val Value
+	dist     int32
+	pDeleted bool
+}
+
+func (i hashItem) String() string {
+	if i.pDeleted {
+		return fmt.Sprintf("deleted(+%d)", i.dist)
+	}
+	return fmt.Sprintf("%v=%v(+%d)", i.key, i.val, i.dist)
 }
 
 func NewObject(preallocateSize int) *Object {
@@ -114,7 +123,7 @@ func (m *Object) Find(k Value) (v Value) {
 
 func (m *Object) find(k Value, findPrototype bool) (v Value) {
 	if idx := m.findHash(k); idx >= 0 {
-		v = m.items[idx].Val
+		v = m.items[idx].val
 	} else if findPrototype && m.parent != nil {
 		v = m.parent.find(k, findPrototype)
 	}
@@ -136,11 +145,13 @@ func (m *Object) findHash(k Value) int {
 
 	for {
 		e := &m.items[idx]
-		if e.Key == Nil {
-			return -1
+		if e.key == Nil {
+			if !e.pDeleted {
+				return -1
+			}
 		}
 
-		if e.Key.Equal(k) {
+		if e.key.Equal(k) {
 			return idx
 		}
 
@@ -173,7 +184,7 @@ func (m *Object) Set(k, v Value) (prev Value) {
 	if int(m.count) >= len(m.items)/2+1 {
 		resizeHash(m, len(m.items)*2)
 	}
-	return m.setHash(hashItem{Key: k, Val: v})
+	return m.setHash(hashItem{key: k, val: v})
 }
 
 // Delete deletes a key-value pair from the object
@@ -185,100 +196,85 @@ func (m *Object) Delete(k Value) (prev Value) {
 	if idx < 0 {
 		return Nil
 	}
-	return m.deleteAt(idx)
-}
-
-func (m *Object) deleteAt(idx int) (prev Value) {
-	prev = m.items[idx].Val
-
-	// Left-shift succeeding items in the linear chain.
-	startIdx := idx
-	for {
-		next := (idx + 1) % len(m.items)
-		if next == startIdx { // Went all the way around.
-			break
-		}
-
-		f := &m.items[next]
-		if f.Key == Nil || f.Distance <= 0 {
-			break
-		}
-
-		f.Distance--
-		m.items[idx] = *f
-		idx = next
-	}
-
-	m.items[idx] = hashItem{}
+	current := &m.items[idx]
+	current.pDeleted = true
+	current.key = Nil
 	m.count--
-	return prev
+	return current.val
 }
 
 func (m *Object) setHash(incoming hashItem) (prev Value) {
 	num := len(m.items)
-	idx := int(incoming.Key.HashCode() % uint64(num))
+	idx := int(incoming.key.HashCode() % uint64(num))
 
 	for idxStart := idx; ; {
 		e := &m.items[idx]
-		if e.Key == Nil {
+		if e.pDeleted {
+			// Shift the following keys forward
+			this := idx
+			for startIdx := this; ; {
+				next := (this + 1) % num
+				if m.items[next].dist > 0 {
+					m.items[this] = m.items[next]
+					m.items[this].dist--
+					this = next
+					if this != startIdx {
+						continue
+					}
+				}
+				break
+			}
+			m.items[this] = hashItem{}
+			continue
+		}
+
+		if e.key == Nil {
 			m.items[idx] = incoming
 			m.count++
 			return Nil
 		}
 
-		if e.Key.Equal(incoming.Key) {
-			prev = e.Val
-			e.Val, e.Distance = incoming.Val, incoming.Distance
+		if e.key.Equal(incoming.key) {
+			prev = e.val
+			e.val, e.dist, e.pDeleted = incoming.val, incoming.dist, false
 			return prev
 		}
 
 		// Swap if the incoming item is further from its best idx.
-		if e.Distance < incoming.Distance {
+		if e.dist < incoming.dist {
 			incoming, m.items[idx] = m.items[idx], incoming
 		}
 
-		incoming.Distance++ // One step further away from best idx.
+		incoming.dist++ // One step further away from best idx.
 		idx = (idx + 1) % num
 
 		if idx == idxStart {
+			if internal.IsDebug() {
+				fmt.Println(m.items)
+			}
 			panic("object space not enough")
 		}
 	}
 }
 
-func (m *Object) Foreach(f func(k Value, v *Value) int) {
+func (m *Object) Foreach(f func(k Value, v *Value) bool) {
 	if m == nil {
 		return
 	}
-	firstKey := Nil
-	for i := 0; i < len(m.items); {
+	for i := 0; i < len(m.items); i++ {
 		ip := &m.items[i]
-		if ip.Key != Nil {
-			if firstKey == Nil {
-				firstKey = ip.Key
-			} else if ip.Key == firstKey {
-				break // went all the way around
-			}
-			switch f(ip.Key, &ip.Val) {
-			case typ.ForeachContinue:
-			case typ.ForeachDeleteContinue:
-				m.deleteAt(i)
-				continue
-			case typ.ForeachBreak:
-				return
-			case typ.ForeachDeleteBreak:
-				m.deleteAt(i)
+		if ip.key != Nil && !ip.pDeleted {
+			if !f(ip.key, &ip.val) {
 				return
 			}
 		}
-		i++
 	}
 }
 
 func (m *Object) nextHashPair(start int) (Value, Value) {
 	for i := start; i < len(m.items); i++ {
-		if p := &m.items[i]; p.Key != Nil {
-			return p.Key, p.Val
+		if p := &m.items[i]; p.key != Nil && !p.pDeleted {
+			return p.key, p.val
 		}
 	}
 	return Nil, Nil
@@ -327,12 +323,12 @@ func (m *Object) rawPrint(p *bytes.Buffer, lv int, j typ.MarshalType, showProto 
 		}
 		p.WriteString("{")
 	}
-	m.Foreach(func(k Value, v *Value) int {
+	m.Foreach(func(k Value, v *Value) bool {
 		k.toString(p, lv+1, j)
 		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, ":", "="))
 		v.toString(p, lv+1, j)
 		p.WriteString(",")
-		return typ.ForeachContinue
+		return true
 	})
 	if m.parent != nil && showProto && m.parent != &ObjectProto {
 		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, "\"<proto>\":", "<proto>="))
@@ -379,7 +375,7 @@ func (m *Object) Copy(copyData bool) *Object {
 func (m *Object) Merge(src *Object) *Object {
 	if src != nil && src.Len() > 0 {
 		resizeHash(m, (m.Len()+src.Len())*2+1)
-		src.Foreach(func(k Value, v *Value) int { m.Set(k, *v); return typ.ForeachContinue })
+		src.Foreach(func(k Value, v *Value) bool { m.Set(k, *v); return true })
 	}
 	return m
 }
@@ -407,8 +403,8 @@ var resizeHash = func(m *Object, newSize int) {
 	}
 	tmp := Object{items: make([]hashItem, newSize)}
 	for _, e := range m.items {
-		if e.Key != Nil {
-			e.Distance = 0
+		if e.key != Nil {
+			e.dist = 0
 			tmp.setHash(e)
 		}
 	}

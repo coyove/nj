@@ -192,17 +192,17 @@ func init() {
 		}, "object.$f() -> string\n\treturn object's name").
 		SetMethod("keys", func(e *Env) {
 			a := make([]Value, 0)
-			e.Object(-1).Foreach(func(k Value, v *Value) int { a = append(a, k); return typ.ForeachContinue })
+			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, k); return true })
 			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> array").
 		SetMethod("values", func(e *Env) {
 			a := make([]Value, 0)
-			e.Object(-1).Foreach(func(k Value, v *Value) int { a = append(a, *v); return typ.ForeachContinue })
+			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, *v); return true })
 			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> array").
 		SetMethod("items", func(e *Env) {
 			a := make([]Value, 0)
-			e.Object(-1).Foreach(func(k Value, v *Value) int { a = append(a, NewArray(k, *v).ToValue()); return typ.ForeachContinue })
+			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, NewArray(k, *v).ToValue()); return true })
 			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> [[value, value]]\n\treturn as [[key1, value1], [key2, value2], ...]").
 		SetProp("CONTINUE", Int(0)).
@@ -211,9 +211,8 @@ func init() {
 		SetProp("DELETE_BREAK", Int(3)).
 		SetMethod("foreach", func(e *Env) {
 			f := e.Object(0)
-			e.Object(-1).Foreach(func(k Value, v *Value) int { return e.Call(f, k, *v).Safe().Int(0) })
-		}, "object.$f(f: function)\n\t`f`'s return value:\n"+
-			"\t\t0: continue (default)\n\t\t1: break\n\t\t2: delete current key and continue\n\t\t3: delete current key and break").
+			e.Object(-1).Foreach(func(k Value, v *Value) bool { return e.Call(f, k, *v) != False })
+		}, "object.$f(f: function)").
 		SetMethod("contains", func(e *Env) {
 			e.A = Bool(e.Object(-1).Contains(e.Get(0), e.Get(1).IsTrue()))
 		}, "object.$f(key: value, includeproto?: bool) -> bool").
@@ -233,19 +232,21 @@ func init() {
 			e.A = NewArray(e.Object(-1).Next(e.Get(0))).ToValue()
 		}, "object.$f(k: value) -> [value, value]\n\tfind next key-value pair after `k` in the object and return as [key, value]").
 		SetMethod("intersectkeys", func(e *Env) {
-			e.Object(-1).Foreach(func(k Value, v *Value) int {
+			o := e.Object(-1)
+			o.Foreach(func(k Value, v *Value) bool {
 				if !e.Object(0).Contains(k, false) {
-					return typ.ForeachDeleteContinue
+					o.Delete(k)
 				}
-				return typ.ForeachContinue
+				return true
 			})
 		}, "object.$f(o: object)\n\t").
 		SetMethod("subtractkeys", func(e *Env) {
-			e.Object(-1).Foreach(func(k Value, v *Value) int {
+			o := e.Object(-1)
+			o.Foreach(func(k Value, v *Value) bool {
 				if e.Object(0).Contains(k, false) {
-					return typ.ForeachDeleteContinue
+					o.Delete(k)
 				}
-				return typ.ForeachContinue
+				return true
 			})
 		}, "object.$f(o: object)\n\t")
 	ObjectProto.SetPrototype(nil) // objectlib is the topmost object, it should not have any prototype

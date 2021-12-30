@@ -227,13 +227,7 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 		if t.Type() == typ.Array {
 			t.Array().Foreach(func(k int, v Value) bool { work(fun, &outError, payload{k, v, nil}); return outError == nil })
 		} else {
-			t.Object().Foreach(func(k Value, v *Value) int {
-				work(fun, &outError, payload{-1, k, v})
-				if outError == nil {
-					return typ.ForeachContinue
-				}
-				return typ.ForeachBreak
-			})
+			t.Object().Foreach(func(k Value, v *Value) bool { work(fun, &outError, payload{-1, k, v}); return outError == nil })
 		}
 	} else {
 		var in = make(chan payload, t.Len())
@@ -254,7 +248,7 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 		if t.Type() == typ.Array {
 			t.Array().Foreach(func(k int, v Value) bool { in <- payload{k, v, nil}; return true })
 		} else {
-			t.Object().Foreach(func(k Value, v *Value) int { in <- payload{-1, k, v}; return typ.ForeachContinue })
+			t.Object().Foreach(func(k Value, v *Value) bool { in <- payload{-1, k, v}; return true })
 		}
 		close(in)
 
@@ -285,12 +279,9 @@ func DeepEqual(a, b Value) bool {
 			if !flag {
 				return false
 			}
-			a.Object().Foreach(func(k Value, v *Value) int {
+			a.Object().Foreach(func(k Value, v *Value) bool {
 				flag = DeepEqual(b.Object().Find(k), *v)
-				if flag {
-					return typ.ForeachContinue
-				}
-				return typ.ForeachBreak
+				return flag
 			})
 			return flag
 		}

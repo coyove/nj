@@ -351,10 +351,10 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *bas.Environmen
 		return idx
 	}
 
-	bas.Globals.Foreach(func(k bas.Value, v *bas.Value) int { push(k.String(), *v); return typ.ForeachContinue })
+	bas.Globals.Foreach(func(k bas.Value, v *bas.Value) bool { push(k.String(), *v); return true })
 
 	if env != nil && env.Globals != nil {
-		env.Globals.Foreach(func(k bas.Value, v *bas.Value) int { push(k.String(), *v); return typ.ForeachContinue })
+		env.Globals.Foreach(func(k bas.Value, v *bas.Value) bool { push(k.String(), *v); return true })
 	}
 
 	gi := push("PROGRAM", bas.Nil)
