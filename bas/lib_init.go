@@ -27,6 +27,9 @@ func init() {
 		(*Object)(obj).fun = (*Function)(fun)
 		(*Function)(fun).obj = (*Object)(obj)
 	}
+	internal.DumpValue = func(v interface{}, w *bytes.Buffer, m typ.MarshalType) {
+		v.(Value).toString(w, 0, m)
+	}
 
 	Globals.SetProp("VERSION", Int64(Version))
 	Globals.SetMethod("globals", func(e *Env) {

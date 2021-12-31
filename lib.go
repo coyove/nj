@@ -5,6 +5,7 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -18,6 +19,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,11 +37,20 @@ func init() {
 		SetMethod("stringify", func(e *bas.Env) {
 			e.A = bas.Str(e.Get(0).JSONString())
 		}, "$f(v: value) -> string").
+		SetMethod("dump", func(e *bas.Env) {
+			v, _ := e.Get(0).MarshalJSON()
+			e.A = bas.Bytes(v)
+		}, "$f(v: value) -> bytes").
 		SetMethod("parse", func(e *bas.Env) {
-			v, err := parser.ParseJSON(strings.TrimSpace(e.Str(0)))
+			s := strings.TrimSpace(e.Str(0))
+			f := parser.ParseJSON
+			if e.Get(1).IsTrue() {
+				f = ParseStrictJSON
+			}
+			v, err := f(s)
 			internal.PanicErr(err)
 			e.A = v
-		}, "$f(j: string) -> value").
+		}, "$f(j: string, strict?: bool) -> value").
 		ToValue())
 	bas.Globals.SetMethod("loadfile", func(e *bas.Env) {
 		e.A = MustRun(LoadFile(e.Str(0), &e.Global.Environment))
@@ -618,4 +629,46 @@ func getTimeFormat(f string) string {
 		f = f[sz:]
 	}
 	return buf.String()
+}
+
+func ParseStrictJSON(s string) (bas.Value, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return bas.Nil, fmt.Errorf("empty value")
+	}
+	switch s[0] {
+	case 'n':
+		return bas.Nil, nil
+	case 't', 'f':
+		v, err := strconv.ParseBool(s)
+		return bas.Bool(v), err
+	case '[':
+		a := []interface{}{}
+		err := json.Unmarshal([]byte(s), &a)
+		return parseJSON(a), err
+	case '{':
+		a := map[string]interface{}{}
+		err := json.Unmarshal([]byte(s), &a)
+		return parseJSON(a), err
+	default:
+		return bas.Nil, fmt.Errorf("invalid value")
+	}
+}
+
+func parseJSON(v interface{}) bas.Value {
+	switch v := v.(type) {
+	case []interface{}:
+		a := make([]bas.Value, len(v))
+		for i := range a {
+			a[i] = parseJSON(v[i])
+		}
+		return bas.NewArray(a...).ToValue()
+	case map[string]interface{}:
+		a := bas.NewObject(len(v) / 2)
+		for k, v := range v {
+			a.SetProp(k, parseJSON(v))
+		}
+		return a.ToValue()
+	}
+	return bas.ValueOf(v)
 }

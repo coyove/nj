@@ -179,6 +179,27 @@ func (m ValueIO) Read(p []byte) (int, error) {
 	return 0, fmt.Errorf("reader not implemented")
 }
 
+func (m ValueIO) WriteString(p string) (int, error) {
+	switch Value(m).Type() {
+	case typ.Native:
+		if rd, _ := Value(m).Interface().(io.StringWriter); rd != nil {
+			return rd.WriteString(p)
+		}
+		if rd, _ := Value(m).Interface().(io.Writer); rd != nil {
+			return rd.Write([]byte(p))
+		}
+	case typ.Object:
+		if rb := Value(m).Object().Prop("write"); rb.IsObject() {
+			v, err := Call2(rb.Object(), Str(p))
+			if err != nil {
+				return 0, err
+			}
+			return v.Is(typ.Number, "ValueIO.WriteString: (int, error)").Int(), nil
+		}
+	}
+	return 0, fmt.Errorf("stringwriter not implemented")
+}
+
 func (m ValueIO) Write(p []byte) (int, error) {
 	switch Value(m).Type() {
 	case typ.Native:

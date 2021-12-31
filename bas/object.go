@@ -300,7 +300,7 @@ func (m *Object) String() string {
 	return p.String()
 }
 
-func (m *Object) rawPrint(p *bytes.Buffer, lv int, j typ.MarshalType, showProto bool) {
+func (m *Object) rawPrint(p *bytes.Buffer, lv, maxLevel int, j typ.MarshalType, showProto bool) {
 	if m == nil {
 		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, "null", "nil"))
 		return
@@ -324,15 +324,15 @@ func (m *Object) rawPrint(p *bytes.Buffer, lv int, j typ.MarshalType, showProto 
 		p.WriteString("{")
 	}
 	m.Foreach(func(k Value, v *Value) bool {
-		k.toString(p, lv+1, j)
+		k.toString(p, lv+1, maxLevel, j)
 		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, ":", "="))
-		v.toString(p, lv+1, j)
+		v.toString(p, lv+1, maxLevel, j)
 		p.WriteString(",")
 		return true
 	})
 	if m.parent != nil && showProto && m.parent != &ObjectProto {
 		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, "\"<proto>\":", "<proto>="))
-		m.parent.rawPrint(p, lv+1, j, true)
+		m.parent.rawPrint(p, lv+1, maxLevel, j, true)
 	}
 	internal.CloseBuffer(p, "}")
 }

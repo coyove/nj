@@ -519,29 +519,9 @@ func BenchmarkNativeJSON(b *testing.B) {
 	}
 }
 
-func parseJSON(v interface{}) bas.Value {
-	switch v := v.(type) {
-	case []interface{}:
-		a := make([]bas.Value, len(v))
-		for i := range a {
-			a[i] = parseJSON(v[i])
-		}
-		return bas.NewArray(a...).ToValue()
-	case map[string]interface{}:
-		a := bas.NewObject(len(v) / 2)
-		for k, v := range v {
-			a.SetProp(k, parseJSON(v))
-		}
-		return a.ToValue()
-	}
-	return bas.ValueOf(v)
-}
-
 func BenchmarkGoJSON(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		m := []interface{}{}
-		json.Unmarshal([]byte(jsonTest), &m)
-		parseJSON(m)
+		ParseStrictJSON(jsonTest)
 	}
 }
 

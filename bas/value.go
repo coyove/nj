@@ -402,19 +402,19 @@ func (v Value) HashCode() uint64 {
 }
 
 func (v Value) String() string {
-	return v.toString(&bytes.Buffer{}, 0, typ.MarshalToString).String()
+	return v.toString(&bytes.Buffer{}, 0, 10, typ.MarshalToString).String()
 }
 
 func (v Value) JSONString() string {
-	return v.toString(&bytes.Buffer{}, 0, typ.MarshalToJSON).String()
+	return v.toString(&bytes.Buffer{}, 0, 10, typ.MarshalToJSON).String()
 }
 
 func (v Value) MarshalJSON() ([]byte, error) {
-	return v.toString(&bytes.Buffer{}, 0, typ.MarshalToJSON).Bytes(), nil
+	return v.toString(&bytes.Buffer{}, 0, 10, typ.MarshalToJSON).Bytes(), nil
 }
 
-func (v Value) toString(p *bytes.Buffer, lv int, j typ.MarshalType) *bytes.Buffer {
-	if lv > 10 {
+func (v Value) toString(p *bytes.Buffer, lv, maxLevel int, j typ.MarshalType) *bytes.Buffer {
+	if lv > maxLevel {
 		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, "{}", "..."))
 		return p
 	}
