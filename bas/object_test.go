@@ -139,6 +139,13 @@ func TestObjectForeachDelete(t *testing.T) {
 	check(o, 3, d, 1)
 	check(o, 4, e, 0)
 
+	o.Delete(Int(e))
+	o.Set(Int(e), Int(e))
+	check(o, 1, a, 0)
+	check(o, 2, c, 1)
+	check(o, 3, d, 1)
+	check(o, 4, e, 0)
+
 	resizeHash = old
 }
 

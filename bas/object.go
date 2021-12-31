@@ -374,7 +374,7 @@ func (m *Object) Copy(copyData bool) *Object {
 
 func (m *Object) Merge(src *Object) *Object {
 	if src != nil && src.Len() > 0 {
-		resizeHash(m, (m.Len()+src.Len())*2+1)
+		resizeHash(m, (m.Len()+src.Len())*2)
 		src.Foreach(func(k Value, v *Value) bool { m.Set(k, *v); return true })
 	}
 	return m
@@ -395,10 +395,7 @@ func (m *Object) IsCallable() bool {
 }
 
 var resizeHash = func(m *Object, newSize int) {
-	if newSize < len(m.items) {
-		panic("resizeHash: invalid size")
-	}
-	if newSize == len(m.items) {
+	if newSize <= len(m.items) {
 		return
 	}
 	tmp := Object{items: make([]hashItem, newSize)}
