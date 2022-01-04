@@ -3,6 +3,7 @@ package bas
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
@@ -296,45 +297,49 @@ func (m *Object) Next(k Value) (Value, Value) {
 
 func (m *Object) String() string {
 	p := &bytes.Buffer{}
-	m.rawPrint(p, 0, typ.MarshalToString, false)
+	m.rawPrint(p, typ.MarshalToString, false)
 	return p.String()
 }
 
-func (m *Object) rawPrint(p *bytes.Buffer, lv, maxLevel int, j typ.MarshalType, showProto bool) {
+func (m *Object) rawPrint(p io.Writer, j typ.MarshalType, showProto bool) {
 	if m == nil {
-		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, "null", "nil"))
+		internal.WriteString(p, internal.IfStr(j == typ.MarshalToJSON, "null", "nil"))
 		return
 	}
+	needComma := false
 	if m.fun != nil {
 		if j == typ.MarshalToJSON {
-			p.WriteString("{\"<f>\":\"")
-			p.WriteString(m.fun.String())
-			p.WriteString("\",")
+			internal.WriteString(p, `{"<f>":"`)
+			internal.WriteString(p, m.fun.String())
+			internal.WriteString(p, `"`)
+			needComma = true
 		} else {
-			p.WriteString(m.fun.String())
+			internal.WriteString(p, m.fun.String())
 			if m.count == 0 {
 				return
 			}
-			p.WriteString("{")
+			internal.WriteString(p, "{")
 		}
 	} else {
 		if j == typ.MarshalToString {
-			p.WriteString(m.Name())
+			internal.WriteString(p, m.Name())
 		}
-		p.WriteString("{")
+		internal.WriteString(p, "{")
 	}
 	m.Foreach(func(k Value, v *Value) bool {
-		k.toString(p, lv+1, maxLevel, j)
-		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, ":", "="))
-		v.toString(p, lv+1, maxLevel, j)
-		p.WriteString(",")
+		internal.WriteString(p, internal.IfStr(needComma, ",", ""))
+		k.Stringify(p, j)
+		internal.WriteString(p, internal.IfStr(j == typ.MarshalToJSON, ":", "="))
+		v.Stringify(p, j)
+		needComma = true
 		return true
 	})
 	if m.parent != nil && showProto && m.parent != &ObjectProto {
-		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, "\"<proto>\":", "<proto>="))
-		m.parent.rawPrint(p, lv+1, maxLevel, j, true)
+		internal.WriteString(p, internal.IfStr(needComma, ",", ""))
+		internal.WriteString(p, internal.IfStr(j == typ.MarshalToJSON, "\"<proto>\":", "<proto>="))
+		m.parent.rawPrint(p, j, true)
 	}
-	internal.CloseBuffer(p, "}")
+	internal.WriteString(p, "}")
 }
 
 func (m *Object) ToValue() Value {

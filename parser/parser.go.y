@@ -22,7 +22,6 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 %type<expr> func_stat
 %type<expr> func_params
 %type<token> comma
-%type<token> assign
 %type<token2> op_assign
 
 %union {
@@ -37,7 +36,7 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString TIDiv TInv
 %token<token> TAddEq TSubEq TMulEq TDivEq TIDivEq TModEq TBitAndEq TBitOrEq TBitXorEq TBitLshEq TBitRshEq TBitURshEq
-%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~'
+%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' ':'
 
 /* Operators */
 %right 'T'
@@ -267,16 +266,12 @@ expr_list:
     expr { $$ = ss(yylex).__arrayBuild(Node{}, $1) } | expr_list ',' expr { $$ = ss(yylex).__arrayBuild($1, $3) }
 
 expr_assign_list:
-    TIdent assign expr                            { $$ = ss(yylex).__objectBuild(Node{}, Str($1.Str), $3) } |
-    TString assign expr                           { $$ = ss(yylex).__objectBuild(Node{}, Str($1.Str), $3) } |
-    '(' expr ')' assign expr                      { $$ = ss(yylex).__objectBuild(Node{}, $2, $5) } |
-    expr_assign_list ',' TIdent assign expr       { $$ = ss(yylex).__objectBuild($1, Str($3.Str), $5) } |
-    expr_assign_list ',' TString assign expr      { $$ = ss(yylex).__objectBuild($1, Str($3.Str), $5) } |
-    expr_assign_list ',' '(' expr ')' assign expr { $$ = ss(yylex).__objectBuild($1, $4, $7) }
+    TIdent '=' expr                       { $$ = ss(yylex).__objectBuild(Node{}, Str($1.Str), $3) } |
+    expr ':' expr                         { $$ = ss(yylex).__objectBuild(Node{}, $1, $3) } |
+    expr_assign_list ',' TIdent '=' expr  { $$ = ss(yylex).__objectBuild($1, Str($3.Str), $5) } |
+    expr_assign_list ',' expr ':' expr    { $$ = ss(yylex).__objectBuild($1, $3, $5) }
 
 comma: {} | ',' {}
-
-assign: '=' {} | ':' {}
 
 op_assign: 
     TAddEq     { $$ = &TokenNode{$1, SAdd} } |

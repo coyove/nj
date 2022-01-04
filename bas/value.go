@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"reflect"
@@ -191,6 +192,8 @@ func ValueOf(i interface{}) Value {
 		return Nil
 	} else if k == reflect.Array || k == reflect.Slice {
 		return NewTypedArray(i, GetTypedArrayMeta(i)).ToValue()
+	} else if k == reflect.Chan {
+		return NewObject(0).SetProp("_ch", intf(rv.Interface())).SetPrototype(Proto.Channel).ToValue()
 	} else if k == reflect.Func {
 		nf, _ := i.(func(*Env))
 		if nf == nil {
@@ -402,50 +405,51 @@ func (v Value) HashCode() uint64 {
 }
 
 func (v Value) String() string {
-	return v.toString(&bytes.Buffer{}, 0, 10, typ.MarshalToString).String()
+	p := &bytes.Buffer{}
+	v.Stringify(p, typ.MarshalToString)
+	return p.String()
 }
 
 func (v Value) JSONString() string {
-	return v.toString(&bytes.Buffer{}, 0, 10, typ.MarshalToJSON).String()
+	p := &bytes.Buffer{}
+	v.Stringify(p, typ.MarshalToJSON)
+	return p.String()
 }
 
 func (v Value) MarshalJSON() ([]byte, error) {
-	return v.toString(&bytes.Buffer{}, 0, 10, typ.MarshalToJSON).Bytes(), nil
+	p := &bytes.Buffer{}
+	v.Stringify(p, typ.MarshalToJSON)
+	return p.Bytes(), nil
 }
 
-func (v Value) toString(p *bytes.Buffer, lv, maxLevel int, j typ.MarshalType) *bytes.Buffer {
-	if lv > maxLevel {
-		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, "{}", "..."))
-		return p
-	}
+func (v Value) Stringify(p io.Writer, j typ.MarshalType) {
 	switch v.Type() {
 	case typ.Bool:
-		p.WriteString(strconv.FormatBool(v.Bool()))
+		internal.WriteString(p, strconv.FormatBool(v.Bool()))
 	case typ.Number:
 		if v.IsInt64() {
-			p.WriteString(strconv.FormatInt(v.Int64(), 10))
+			internal.WriteString(p, strconv.FormatInt(v.Int64(), 10))
 		} else {
-			p.WriteString(strconv.FormatFloat(v.Float64(), 'f', -1, 64))
+			internal.WriteString(p, strconv.FormatFloat(v.Float64(), 'f', -1, 64))
 		}
 	case typ.String:
-		p.WriteString(internal.IfQuote(j == typ.MarshalToJSON, v.Str()))
+		internal.WriteString(p, internal.IfQuote(j == typ.MarshalToJSON, v.Str()))
 	case typ.Object:
-		v.Object().rawPrint(p, lv, j, false)
+		v.Object().rawPrint(p, j, false)
 	case typ.Array:
-		p.Write(v.Array().Marshal(j))
+		v.Array().Marshal(p, j)
 	case typ.Native:
 		i := v.Interface()
 		if s, ok := i.(fmt.Stringer); ok {
-			p.WriteString(internal.IfQuote(j == typ.MarshalToJSON, s.String()))
+			internal.WriteString(p, internal.IfQuote(j == typ.MarshalToJSON, s.String()))
 		} else if s, ok := i.(error); ok {
-			p.WriteString(internal.IfQuote(j == typ.MarshalToJSON, s.Error()))
+			internal.WriteString(p, internal.IfQuote(j == typ.MarshalToJSON, s.Error()))
 		} else {
-			p.WriteString(internal.IfQuote(j == typ.MarshalToJSON, "<"+reflect.TypeOf(i).String()+">"))
+			internal.WriteString(p, internal.IfQuote(j == typ.MarshalToJSON, "<"+reflect.TypeOf(i).String()+">"))
 		}
 	default:
-		p.WriteString(internal.IfStr(j == typ.MarshalToJSON, "null", "nil"))
+		internal.WriteString(p, internal.IfStr(j == typ.MarshalToJSON, "null", "nil"))
 	}
-	return p
 }
 
 func (v Value) Len() int {

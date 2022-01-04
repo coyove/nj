@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,9 +27,6 @@ func init() {
 	internal.SetObjFun = func(obj, fun unsafe.Pointer) {
 		(*Object)(obj).fun = (*Function)(fun)
 		(*Function)(fun).obj = (*Object)(obj)
-	}
-	internal.DumpValue = func(v interface{}, w *bytes.Buffer, m typ.MarshalType) {
-		v.(Value).toString(w, 0, m)
 	}
 
 	Globals.SetProp("VERSION", Int64(Version))
@@ -140,7 +138,7 @@ func init() {
 	}, "$f(s: str) -> bytes\n\tcreate bytes from string\n$f(n: int) -> bytes\n\tcreate an n-byte long array").
 		Object().
 		SetPrototype(Proto.Array)
-	Globals.SetProp("bytes", Proto.Bool.ToValue())
+	Globals.SetProp("bytes", Proto.Bytes.ToValue())
 
 	Globals.SetProp("io", NamedObject("io", 0).
 		SetProp("reader", Proto.Reader.ToValue()).
@@ -224,7 +222,7 @@ func init() {
 		}, "object.$f(o: object)\n\tmerge elements from `o`").
 		SetMethod("tostring", func(e *Env) {
 			p := &bytes.Buffer{}
-			e.Object(-1).rawPrint(p, 0, typ.MarshalToJSON, true)
+			e.Object(-1).rawPrint(p, typ.MarshalToJSON, true)
 			e.A = UnsafeStr(p.Bytes())
 		}, "object.$f() -> string\n\tprint raw elements in object").
 		SetMethod("pure", func(e *Env) {
@@ -417,6 +415,68 @@ func init() {
 		SetMethod("getcause", func(e *Env) { e.A = intf(e.Array(-1).Unwrap().(*ExecError).root) }, "").
 		SetMethod("trace", func(e *Env) { e.A = ValueOf(e.Array(-1).Unwrap().(*ExecError).stacks) }, "")
 	Globals.SetProp("error", Proto.Error.ToValue())
+
+	*Proto.Channel = *Func("channel", func(e *Env) {
+		rv := reflect.ValueOf(e.Interface(0))
+		_ = rv.Kind() == reflect.Chan && e.SetA(ValueOf(rv.Interface())) || e.SetA(ValueOf(make(chan Value, e.Get(0).Safe().Int(0))))
+	}, "").Object().
+		SetMethod("close", func(e *Env) {
+			reflect.ValueOf(e.This("_ch")).Close()
+		}, "channel.$f()").
+		SetMethod("send", func(e *Env) {
+			rv := reflect.ValueOf(e.This("_ch"))
+			rv.Send(e.Get(0).ReflectValue(rv.Type().Elem()))
+		}, "channel.$f(v: value)").
+		SetMethod("recv", func(e *Env) {
+			rv := reflect.ValueOf(e.This("_ch"))
+			v, ok := rv.Recv()
+			e.A = NewArray(ValueOf(v), Bool(ok)).ToValue()
+		}, "channel.$f() -> value").
+		SetMethod("sendmulti", func(e *Env) {
+			var cases []reflect.SelectCase
+			var callbacks []Value
+			e.Object(0).Foreach(func(k Value, v *Value) bool {
+				if k.Type() == typ.String && k == Str("default") {
+					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectDefault})
+					callbacks = append(callbacks, *v)
+				} else {
+					ch := reflect.ValueOf(k.Object().Prop("_ch").Interface())
+					a := v.Is(typ.Array, "sendmulti: expect [value, callback]").Array()
+					cases = append(cases, reflect.SelectCase{
+						Dir:  reflect.SelectSend,
+						Chan: ch,
+						Send: a.Get(0).ReflectValue(ch.Type().Elem()),
+					})
+					callbacks = append(callbacks, a.Get(1))
+				}
+				return true
+			})
+			chosen, _, _ := reflect.Select(cases)
+			if cb := callbacks[chosen]; IsCallable(cb) {
+				e.A = e.Call(cb.Object())
+			}
+		}, "$f(channels: {(Channel)=[value, function]}) -> value").
+		SetMethod("recvmulti", func(e *Env) {
+			var cases []reflect.SelectCase
+			var callbacks []Value
+			e.Object(0).Foreach(func(k Value, v *Value) bool {
+				if k.Type() == typ.String && k == Str("default") {
+					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectDefault})
+				} else {
+					cases = append(cases, reflect.SelectCase{
+						Dir:  reflect.SelectRecv,
+						Chan: reflect.ValueOf(k.Object().Prop("_ch").Interface()),
+					})
+				}
+				callbacks = append(callbacks, *v)
+				return true
+			})
+			chosen, recv, recvOK := reflect.Select(cases)
+			if cb := callbacks[chosen]; IsCallable(cb) {
+				e.A = e.Call(cb.Object(), ValueOf(recv), Bool(recvOK))
+			}
+		}, "$f(channels: {(Channel)=function(value, bool)})")
+	Globals.SetProp("channel", Proto.Channel.ToValue())
 
 	*Proto.Str = *Func("str", func(e *Env) {
 		i, ok := e.Interface(0).([]byte)

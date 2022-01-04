@@ -1,10 +1,10 @@
 package bas
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"reflect"
 	"sync"
 	"unsafe"
@@ -27,7 +27,7 @@ type ArrayMeta struct {
 	SliceInplace func(*Array, int, int)
 	Copy         func(*Array, int, int, *Array)
 	Concat       func(*Array, *Array)
-	Marshal      func(*Array, *bytes.Buffer, typ.MarshalType)
+	Marshal      func(*Array, io.Writer, typ.MarshalType)
 }
 
 var (
@@ -69,14 +69,14 @@ func init() {
 				a.internal = append(a.internal, b.internal...)
 			}
 		},
-		func(a *Array, p *bytes.Buffer, mt typ.MarshalType) {
-			p.WriteString("[")
+		func(a *Array, w io.Writer, mt typ.MarshalType) {
+			w.Write([]byte("["))
 			a.Foreach(func(i int, v Value) bool {
-				v.toString(p, 1, 10, mt)
-				p.WriteString(",")
+				w.Write([]byte(internal.IfStr(i == 0, "", ",")))
+				v.Stringify(w, mt)
 				return true
 			})
-			internal.CloseBuffer(p, "]")
+			w.Write([]byte("]"))
 		},
 	}
 	*bytesArrayMeta = ArrayMeta{
@@ -124,14 +124,14 @@ func init() {
 				a.any = append(a.any.([]byte), b.any.([]byte)...)
 			}
 		},
-		func(a *Array, p *bytes.Buffer, mt typ.MarshalType) {
+		func(a *Array, w io.Writer, mt typ.MarshalType) {
 			if mt != typ.MarshalToJSON {
-				sgMarshal(a, p, mt)
+				sgMarshal(a, w, mt)
+			} else {
+				enc := base64.NewEncoder(base64.StdEncoding, w)
+				enc.Write(a.any.([]byte))
+				enc.Close()
 			}
-			buf := a.any.([]byte)
-			tmp := make([]byte, base64.StdEncoding.EncodedLen(len(buf)))
-			base64.StdEncoding.Encode(tmp, buf)
-			return tmp
 		},
 	}
 	*stringsArrayMeta = ArrayMeta{
@@ -202,8 +202,8 @@ func init() {
 		sgSliceInplaceNotSupported,
 		sgCopyNotSupported,
 		sgConcatNotSupported,
-		func(a *Array, mt typ.MarshalType) []byte {
-			return []byte(internal.IfQuote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error()))
+		func(a *Array, w io.Writer, mt typ.MarshalType) {
+			w.Write([]byte(internal.IfQuote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error())))
 		},
 	}
 }
@@ -348,8 +348,8 @@ func (a *Array) Concat(b *Array) {
 	a.meta.Concat(a, b)
 }
 
-func (a *Array) Marshal(mt typ.MarshalType) []byte {
-	return a.meta.Marshal(a, mt)
+func (a *Array) Marshal(w io.Writer, mt typ.MarshalType) {
+	a.meta.Marshal(a, w, mt)
 }
 
 func (a *Array) Foreach(f func(k int, v Value) bool) {
@@ -439,11 +439,11 @@ func sgConcat(a *Array, b *Array) {
 	}
 }
 
-func sgMarshal(a *Array, p *bytes.Buffer, mt typ.MarshalType) {
+func sgMarshal(a *Array, w io.Writer, mt typ.MarshalType) {
 	if mt != typ.MarshalToJSON {
-		p.WriteString(fmt.Sprint(a.any))
+		fmt.Fprint(w, a.any)
 	} else {
-		json.NewEncoder(p).Encode(a.any)
+		json.NewEncoder(w).Encode(a.any)
 	}
 }
 

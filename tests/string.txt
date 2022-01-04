@@ -24,9 +24,10 @@ do
 	str.json_get = lambda(p) json.parse(this).get(p) end
 	local j = json.stringify({
 	      a = 'A',
-	      ("b-2") = true,
+	      "b-2": true,
 	})
     assert(j.json_get('a'), 'A')
+    assert(j.json_get('b-2'), true)
 end
 
 function str.reverse()

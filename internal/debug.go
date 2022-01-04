@@ -3,6 +3,7 @@ package internal
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"runtime/debug"
@@ -88,6 +89,14 @@ func IfStr(v bool, t, f string) string {
 		return t
 	}
 	return f
+}
+
+func WriteString(w io.Writer, s string) (int, error) {
+	x := struct {
+		a string
+		b int
+	}{s, len(s)}
+	return w.Write(*(*[]byte)(unsafe.Pointer(&x)))
 }
 
 func IfQuote(v bool, s string) string {

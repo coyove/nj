@@ -198,7 +198,7 @@ findGlobal()
 assert(G_FLAG == 'ok')
 
 flag = "G_FLA" + "G"
-print(flag, {}, {a=2}, {("a")=2})
+print(flag, {}, {a=2}, {"a": 2})
 
 function double(args...)
     for i=0,#(args) do

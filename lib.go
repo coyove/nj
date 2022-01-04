@@ -38,9 +38,8 @@ func init() {
 			e.A = bas.Str(e.Get(0).JSONString())
 		}, "$f(v: value) -> string").
 		SetMethod("dump", func(e *bas.Env) {
-			v, _ := e.Get(0).MarshalJSON()
-			e.A = bas.Bytes(v)
-		}, "$f(v: value) -> bytes").
+			e.Get(1).Stringify(bas.NewWriter(e.Get(0)), typ.MarshalToJSON)
+		}, "$f(w: Writer, v: value)").
 		SetMethod("parse", func(e *bas.Env) {
 			s := strings.TrimSpace(e.Str(0))
 			f := parser.ParseJSON
@@ -393,6 +392,9 @@ func init() {
 		SetMethod("now", func(e *bas.Env) {
 			e.A = bas.ValueOf(time.Now())
 		}, "$f() -> go.time.Time").
+		SetMethod("after", func(e *bas.Env) {
+			e.A = bas.ValueOf(time.After(e.Get(0).Safe().Duration(0)))
+		}, "").
 		SetMethod("parse", func(e *bas.Env) {
 			t, err := time.Parse(getTimeFormat(e.Str(0)), e.Str(1))
 			internal.PanicErr(err)
