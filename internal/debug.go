@@ -21,6 +21,13 @@ var SetObjFun func(obj unsafe.Pointer, fun unsafe.Pointer)
 
 type TransparentError struct{}
 
+func ShouldNotHappen(args ...interface{}) {
+	if len(args) > 0 {
+		panic(fmt.Errorf("fatal: should not happen, bad values: %v", args...))
+	}
+	panic(fmt.Errorf("fatal: should not happen"))
+}
+
 func Panic(msg string, args ...interface{}) {
 	panic(fmt.Errorf(msg, args...))
 }

@@ -71,7 +71,7 @@ func (table *symTable) borrowAddress() uint16 {
 		tmp := table.reusableTmpsArray[0]
 		table.reusableTmpsArray = table.reusableTmpsArray[1:]
 		if !table.reusableTmps[tmp] {
-			panic("DEBUG: corrupted reusable map")
+			internal.ShouldNotHappen()
 		}
 		table.reusableTmps[tmp] = false
 		return tmp
@@ -110,58 +110,60 @@ func (table *symTable) freeAddr(a interface{}) {
 		}
 
 	default:
-		panic("DEBUG freeAddr")
+		internal.ShouldNotHappen()
 	}
 }
 
-func (table *symTable) get(varname string) (uint16, bool) {
-	depth := uint16(0)
-	regNil := table.loadK(nil)
-
-	switch varname {
+func (table *symTable) get(name string) (uint16, bool) {
+	switch name {
 	case "nil":
-		return regNil, true
+		return table.loadK(nil), true
 	case "true":
 		return table.loadK(true), true
 	case "false":
 		return table.loadK(false), true
 	case "this":
-		if k, ok := table.sym[varname]; ok {
+		if k, ok := table.sym[name]; ok {
 			return k.Address, true
 		}
-		table.sym["this"] = &typ.Symbol{Address: table.borrowAddress()}
+		k := &typ.Symbol{Address: table.borrowAddress()}
+		table.sym["this"] = k
+		return k.Address, true
 	case "$a":
 		return typ.RegA, true
 	}
 
-	calc := func(k *typ.Symbol) (uint16, bool) {
-		addr := (depth << 15) | (uint16(k.Address) & typ.RegLocalMask)
+	calc := func(k *typ.Symbol, depth uint16) (uint16, bool) {
+		addr := (depth << 15) | (k.Address & typ.RegLocalMask)
 		return addr, true
 	}
 
-	for table != nil {
-		// Firstly we will iterate the masked symbols
-		// Masked symbols are local variables inside do-blocks, like "if then .. end" and "do ... end"
-		// The rightmost map of this slice is the innermost do-block
-		for i := len(table.maskedSym) - 1; i >= 0; i-- {
-			m := table.maskedSym[i]
-			if k, ok := m[varname]; ok {
-				return calc(k)
-			}
+	// Firstly we will iterate local masked symbols,
+	// which are local variables inside do-blocks, like "if then .. end" and "do ... end".
+	// The rightmost map of this slice is the innermost do-block
+	for i := len(table.maskedSym) - 1; i >= 0; i-- {
+		m := table.maskedSym[i]
+		if k, ok := m[name]; ok {
+			return calc(k, 0)
 		}
-
-		if k, ok := table.sym[varname]; ok {
-			return calc(k)
-		}
-
-		depth++
-		table = table.global
 	}
 
-	return regNil, false
+	// Then local variables
+	if k, ok := table.sym[name]; ok {
+		return calc(k, 0)
+	}
+
+	// Finally global variables
+	if table.global != nil {
+		if k, ok := table.global.sym[name]; ok {
+			return calc(k, 1)
+		}
+	}
+
+	return table.loadK(nil), false
 }
 
-func (table *symTable) put(varname string, addr uint16) {
+func (table *symTable) put(name string, addr uint16) {
 	if addr == typ.RegA {
 		panic("DEBUG: put $a?")
 	}
@@ -169,9 +171,9 @@ func (table *symTable) put(varname string, addr uint16) {
 		Address: addr,
 	}
 	if len(table.maskedSym) > 0 {
-		table.maskedSym[len(table.maskedSym)-1][varname] = sym
+		table.maskedSym[len(table.maskedSym)-1][name] = sym
 	} else {
-		table.sym[varname] = sym
+		table.sym[name] = sym
 	}
 }
 
@@ -197,7 +199,7 @@ func (table *symTable) loadK(v interface{}) uint16 {
 	}
 
 	if !table.collectConstMode {
-		internal.Panic("DEBUG: collect consts %#v", v)
+		internal.ShouldNotHappen(v)
 	}
 
 	idx := typ.RegGlobalFlag | table.borrowAddress()
@@ -216,7 +218,7 @@ func (table *symTable) writeInst(op byte, n0, n1 parser.Node) {
 		default:
 			addr, ok := table.compileStaticNode(n)
 			if !ok {
-				internal.Panic("DEBUG writeInst unknown type: %#v", n)
+				internal.ShouldNotHappen(n)
 			}
 			return addr
 		}
@@ -335,7 +337,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *bas.Environmen
 	table.codeSeg.Pos.Name = name
 	coreStack := bas.NewEnv()
 
-	// Load nil first so it will be at the top
+	// Load nil first to ensure its address == 0
 	table.loadK(nil)
 	coreStack.Push(bas.Nil)
 
@@ -387,7 +389,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *bas.Environmen
 		case nil:
 			coreStack.Set(int(stackPos), bas.Nil)
 		default:
-			panic("DEBUG")
+			internal.ShouldNotHappen()
 		}
 	}
 

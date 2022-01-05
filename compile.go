@@ -70,45 +70,45 @@ func (table *symTable) compileSetMove(nodes []parser.Node) uint16 {
 }
 
 // writeInst3 accepts 3 arguments at most, 2 arguments will be encoded into opCode itself, the 3rd one will be in typ.RegA
-func (table *symTable) writeInst3(bop byte, atoms []parser.Node) uint16 {
+func (table *symTable) writeInst3(bop byte, nodes []parser.Node) uint16 {
 	// first atom: the splitInst Name, tail atoms: the args
-	if len(atoms) > 4 {
+	if len(nodes) > 4 {
 		panic("DEBUG: too many arguments")
 	}
 
-	atoms = append([]parser.Node{}, atoms...) // duplicate
+	nodes = append([]parser.Node{}, nodes...) // duplicate
 
 	if bop == typ.OpStore {
-		table.collapse(atoms[1:], true)
+		table.collapse(nodes[1:], true)
 
-		// (atoms    1      2    3 )
+		// (node     1      2    3 )
 		// (store subject value key) subject => opa, key => $a, value => opb
 
 		for i := 1; i <= 2; i++ { // subject and value shouldn't use typ.RegA
-			if atoms[i].Type() == parser.ADDR && uint16(atoms[i].Int()) == typ.RegA {
+			if nodes[i].Type() == parser.ADDR && uint16(nodes[i].Int()) == typ.RegA {
 				n := parser.Addr(table.borrowAddress())
 				table.writeInst(typ.OpSet, n, _nodeRegA)
-				atoms[i] = n
+				nodes[i] = n
 			}
 		}
 
 		// We would love to see 'key' using typ.RegA, in this case writeInst will just omit it
-		table.writeInst(typ.OpSet, _nodeRegA, atoms[3])
-		table.writeInst(typ.OpStore, atoms[1], atoms[2])
-		table.freeAddr(atoms[1:])
+		table.writeInst(typ.OpSet, _nodeRegA, nodes[3])
+		table.writeInst(typ.OpStore, nodes[1], nodes[2])
+		table.freeAddr(nodes[1:])
 		return typ.RegA
 	}
 
-	table.collapse(atoms[1:], true)
+	table.collapse(nodes[1:], true)
 
 	switch bop {
 	case typ.OpNot, typ.OpRet, typ.OpBitNot, typ.OpLen:
 		// unary splitInst
-		table.writeInst(bop, atoms[1], parser.Node{})
+		table.writeInst(bop, nodes[1], parser.Node{})
 	default:
 		// binary splitInst
-		table.writeInst(bop, atoms[1], atoms[2])
-		table.freeAddr(atoms[1:])
+		table.writeInst(bop, nodes[1], nodes[2])
+		table.freeAddr(nodes[1:])
 	}
 
 	return typ.RegA
@@ -118,7 +118,7 @@ func (table *symTable) compileOperator(atoms []parser.Node) uint16 {
 	head := atoms[0].Sym()
 	op, ok := typ.NodeOpcode[head]
 	if !ok {
-		internal.Panic("DEBUG invalid symbol: %v", atoms[0])
+		internal.ShouldNotHappen(atoms[0])
 	}
 	yx := table.writeInst3(op, atoms)
 	if p := atoms[0].Line(); p > 0 {
@@ -410,37 +410,30 @@ func (table *symTable) compileFreeAddr(atoms []parser.Node) uint16 {
 	return typ.RegA
 }
 
-// collapse will accept a list of expressions, for each of them,
-// it will be collapsed into a temp variable and be replaced with a ADR node,
-// the last expression will be collapsed and not using a temp variable if optLast is true.
+// collapse will accept a list of expressions, each of them will be collapsed into a temporal variable
+// and become an ADR node of this variable. If optLast is true, the last expression won't use one.
 func (table *symTable) collapse(nodes []parser.Node, optLast bool) {
-	var lastCompound struct {
-		n parser.Node
-		i int
-	}
+	var lastNode parser.Node
+	var lastNodeIndex int
 
-	for i, atom := range nodes {
-		if !atom.Valid() {
+	for i, n := range nodes {
+		if !n.Valid() {
 			break
 		}
 
-		if atom.Type() == parser.NODES {
-			yx := table.compileNodeInto(atom, true, 0)
-			nodes[i] = parser.Addr(yx)
-
-			lastCompound.n = atom
-			lastCompound.i = i
+		if n.Type() == parser.NODES {
+			nodes[i] = parser.Addr(table.compileNodeInto(n, true, 0))
+			lastNode, lastNodeIndex = n, i
 		}
 	}
 
-	if lastCompound.n.Valid() {
-		if optLast {
-			i := table.codeSeg.LastInst()
-			if i.Opcode == typ.OpSet {
-				table.codeSeg.TruncLast()
-				table.freeAddr(i.A)
-				nodes[lastCompound.i] = parser.Addr(uint16(i.B))
-			}
+	if optLast && lastNode.Valid() {
+		i := table.codeSeg.LastInst()
+		// [set a b]
+		if i.Opcode == typ.OpSet {
+			table.codeSeg.TruncLast()
+			table.freeAddr(i.A)
+			nodes[lastNodeIndex] = parser.Addr(uint16(i.B))
 		}
 	}
 }

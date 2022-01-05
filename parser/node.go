@@ -189,12 +189,12 @@ func (n Node) Line() uint32 {
 	case NODES:
 		c := n.Nodes()
 		if len(c) == 0 {
-			panic("Line()")
+			internal.ShouldNotHappen()
 		}
 		return c[0].Line()
-	default:
-		panic("Line()")
 	}
+	internal.ShouldNotHappen()
+	return 0
 }
 
 func (n Node) Dump(w io.Writer, ident string) {
@@ -246,7 +246,7 @@ func (n Node) String() string {
 	case ADDR:
 		return "0x" + strconv.FormatInt(n.Int64(), 16)
 	default:
-		return fmt.Sprintf("DEBUG: %#v", n)
+		return "<invalid node>"
 	}
 }
 
@@ -262,7 +262,7 @@ func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
 		}
 	}
 	if n.Type() != SYM {
-		panic(fmt.Sprintf("DEBUG: %v invalid assignment", n))
+		internal.ShouldNotHappen(n)
 	}
 	return sm(n, v)
 }
