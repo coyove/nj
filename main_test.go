@@ -28,6 +28,7 @@ func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	log.SetFlags(log.Lshortfile | log.Ltime)
 	bas.Globals.SetProp("G", bas.Int(1))
+	BuildGlobalStack()
 }
 
 func runFile(t *testing.T, path string) {
@@ -214,9 +215,25 @@ a = 0
 	}
 }
 
+func init() {
+	if os.Getenv("njb") == "1" {
+		f, err := os.Create("cpuprofile")
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		fmt.Println("cpuprofile")
+		for i := 0; i < 1e5; i++ {
+			// _parser.Parse("(a+1)", "")
+			LoadString("(a+1)", nil)
+		}
+		pprof.StopCPUProfile()
+	}
+}
+
 func BenchmarkCompiling(b *testing.B) {
+	BuildGlobalStack()
 	for i := 0; i < b.N; i++ {
-		// _parser.Parse("(a+1)", "")
 		LoadString("(a+1)", nil)
 	}
 }
@@ -253,15 +270,6 @@ func TestBigList(t *testing.T) {
 		if v2.Array().Get(i).Int() != i {
 			t.Fatal(v2)
 		}
-	}
-
-	{
-		f, err := os.Create("cpuprofile")
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
 	}
 
 	start := time.Now()

@@ -119,8 +119,24 @@ func Int64(i int64) Value {
 // Str creates a string value
 func Str(s string) Value {
 	if len(s) <= 8 { // payload 8b
-		x := [8]byte{byte(len(s))}
-		copy(x[:], s)
+		var x [8]byte
+		switch len(s) {
+		case 1:
+			a := s[0]
+			x = [8]byte{a, a, a, a, a, a, a, a}
+		case 2:
+			a, b := s[0], s[1]
+			x = [8]byte{a, b, a, b, a, b, a, b}
+		case 3:
+			copy(x[:], s)
+			copy(x[3:], s)
+			copy(x[6:], s)
+		case 4, 5, 6, 7:
+			copy(x[:], s)
+			copy(x[len(s):], s)
+		case 8:
+			copy(x[:], s)
+		}
 		return Value{
 			v: binary.BigEndian.Uint64(x[:]),
 			p: unsafe.Pointer(uintptr(smallStrMarker) + uintptr(len(s))*8),
@@ -401,7 +417,14 @@ func (v Value) HashCode() uint64 {
 		}
 		return code
 	}
-	return v.v*uint64(uintptr(v.p)) + (v.v >> 3)
+	return (v.v)*uint64(uintptr(v.p)) ^ (v.v >> 33)
+	// v.v ^= uint64(uintptr(v.p))
+	// v.v ^= v.v >> 33
+	// v.v *= 0xff51afd7ed558ccd
+	// v.v ^= v.v >> 33
+	// v.v *= 0xc4ceb9fe1a85ec53
+	// v.v ^= v.v >> 33
+	// return v.v
 }
 
 func (v Value) String() string {

@@ -130,7 +130,7 @@ func __func(name Token, paramList Node, stats Node) Node {
 
 func __lambda(name Token, pp Node, stats Node) Node {
 	nodes := stats.Nodes()
-	if len(nodes) > 1 && nodes[0].Sym() == typ.ABegin {
+	if len(nodes) > 1 && nodes[0].Value == SBegin.Value {
 		nodes[len(nodes)-1] = Nodes(SReturn, nodes[len(nodes)-1])
 	}
 	return __func(name, pp, stats)
@@ -154,7 +154,7 @@ func __findTailCall(stats []Node) {
 	if len(stats) > 0 {
 		x := stats[len(stats)-1]
 		c := x.Nodes()
-		if len(c) == 3 && c[0].Sym() == typ.ACall {
+		if len(c) == 3 && c[0].Value == SCall.Value {
 			old := c[0].SymLine
 			c[0] = STailCall
 			c[0].SymLine = old
@@ -162,7 +162,7 @@ func __findTailCall(stats []Node) {
 		}
 
 		if len(c) > 0 {
-			if c[0].Sym() == typ.ABegin {
+			if c[0].Value == SBegin.Value {
 				__findTailCall(c)
 				return
 			}

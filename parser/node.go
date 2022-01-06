@@ -118,50 +118,50 @@ func (n Node) Nodes() []Node {
 
 func Nodes(args ...Node) Node {
 	if len(args) == 2 {
-		op, a := args[0].Sym(), args[1]
-		if a.IsNum() && op == typ.ABitNot {
+		op, a := args[0].Value, args[1]
+		if a.IsNum() && op == SBitNot.Value {
 			return Int(^a.Int64())
 		}
 	}
 	if len(args) == 3 {
-		op, a, b := args[0].Sym(), args[1], args[2]
-		if op == typ.AAdd && a.Type() == STR && b.Type() == STR {
+		op, a, b := args[0].Value, args[1], args[2]
+		if op == SAdd.Value && a.Type() == STR && b.Type() == STR {
 			return Str(a.Str() + b.Str())
 		}
 		if a.IsNum() && b.IsNum() {
 			switch op {
-			case typ.AAdd:
+			case SAdd.Value:
 				if a.IsInt64() && b.IsInt64() {
 					return Int(a.Int64() + b.Int64())
 				}
 				return Float(a.Float64() + b.Float64())
-			case typ.ASub:
+			case SSub.Value:
 				if a.IsInt64() && b.IsInt64() {
 					return Int(a.Int64() - b.Int64())
 				}
 				return Float(a.Float64() - b.Float64())
-			case typ.AMul:
+			case SMul.Value:
 				if a.IsInt64() && b.IsInt64() {
 					return Int(a.Int64() * b.Int64())
 				}
 				return Float(a.Float64() * b.Float64())
-			case typ.ADiv:
+			case SDiv.Value:
 				return Float(a.Float64() / b.Float64())
-			case typ.AIDiv:
+			case SIDiv.Value:
 				return Int(a.Int64() / b.Int64())
-			case typ.AMod:
+			case SMod.Value:
 				return Int(a.Int64() % b.Int64())
-			case typ.ABitAnd:
+			case SBitAnd.Value:
 				return Int(a.Int64() & b.Int64())
-			case typ.ABitOr:
+			case SBitOr.Value:
 				return Int(a.Int64() | b.Int64())
-			case typ.ABitXor:
+			case SBitXor.Value:
 				return Int(a.Int64() ^ b.Int64())
-			case typ.ABitLsh:
+			case SBitLsh.Value:
 				return Int(a.Int64() << b.Int64())
-			case typ.ABitRsh:
+			case SBitRsh.Value:
 				return Int(a.Int64() >> b.Int64())
-			case typ.ABitURsh:
+			case SBitURsh.Value:
 				return Int(int64(uint64(a.Int64()) >> b.Int64()))
 			}
 		}
@@ -257,7 +257,7 @@ func (n Node) append(n2 ...Node) Node {
 
 func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
 	if len(n.Nodes()) == 3 {
-		if s := n.Nodes()[0].Sym(); s == typ.ALoad {
+		if s := n.Nodes()[0].Value; s == SLoad.Value {
 			return __store(n.Nodes()[1], n.Nodes()[2], v)
 		}
 	}

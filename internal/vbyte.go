@@ -72,8 +72,7 @@ func (b *Packet) WriteJmpInst(op byte, d int) {
 
 func (b *Packet) WriteLineNum(line uint32) {
 	if line == 0 {
-		// Debug Code, used to detect a null meta struct
-		panic("DEBUG: null line")
+		ShouldNotHappen()
 	}
 	b.Pos.Append(uint32(len(b.Code)), line)
 }

@@ -38,7 +38,7 @@ func (r Runtime) Stacktrace() []Stacktrace {
 
 func (r Runtime) Push(k *Function) Runtime {
 	if r.Stack1.Callable == nil {
-		internal.Panic("DEBUG shouldn't happen")
+		internal.ShouldNotHappen()
 	}
 	r.StackN = append(r.StackN, r.Stack1)
 	r.Stack1 = Stacktrace{Callable: r.Callable0, Cursor: internal.NativeCallCursor}

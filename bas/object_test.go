@@ -149,14 +149,18 @@ func TestObjectForeachDelete(t *testing.T) {
 	resizeHash = old
 }
 
-func BenchmarkRHMap10(b *testing.B)    { benchmarkRHMap(b, 10) }
-func BenchmarkGoMap10(b *testing.B)    { benchmarkGoMap(b, 10) }
-func BenchmarkRHMap20(b *testing.B)    { benchmarkRHMap(b, 20) }
-func BenchmarkGoMap20(b *testing.B)    { benchmarkGoMap(b, 20) }
-func BenchmarkRHMap50(b *testing.B)    { benchmarkRHMap(b, 50) }
-func BenchmarkGoMap50(b *testing.B)    { benchmarkGoMap(b, 50) }
-func BenchmarkRHMapUnc10(b *testing.B) { benchmarkRHMapUnconstrainted(b, 10) }
-func BenchmarkGoMapUnc10(b *testing.B) { benchmarkGoMapUnconstrainted(b, 10) }
+func BenchmarkRHMap10(b *testing.B)      { benchmarkRHMap(b, 10) }
+func BenchmarkGoMap10(b *testing.B)      { benchmarkGoMap(b, 10) }
+func BenchmarkRHMap20(b *testing.B)      { benchmarkRHMap(b, 20) }
+func BenchmarkGoMap20(b *testing.B)      { benchmarkGoMap(b, 20) }
+func BenchmarkRHMap50(b *testing.B)      { benchmarkRHMap(b, 50) }
+func BenchmarkGoMap50(b *testing.B)      { benchmarkGoMap(b, 50) }
+func BenchmarkRHMap5000(b *testing.B)    { benchmarkRHMap(b, 5000) }
+func BenchmarkGoMap5000(b *testing.B)    { benchmarkGoMap(b, 5000) }
+func BenchmarkRHMapUnc10(b *testing.B)   { benchmarkRHMapUnconstrainted(b, 10) }
+func BenchmarkGoMapUnc10(b *testing.B)   { benchmarkGoMapUnconstrainted(b, 10) }
+func BenchmarkRHMapUnc1000(b *testing.B) { benchmarkRHMapUnconstrainted(b, 1000) }
+func BenchmarkGoMapUnc1000(b *testing.B) { benchmarkGoMapUnconstrainted(b, 1000) }
 
 func benchmarkRHMap(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
@@ -309,18 +313,30 @@ func TestObjectDistance(t *testing.T) {
 }
 
 func TestHashcodeDist(t *testing.T) {
+	rand.Seed(time.Now().Unix())
+	for _, a := range []string{"a", "b", "c", "z", randString(), randString(), randString(), randString()} {
+		fmt.Println(Str(a).HashCode() % 32)
+	}
+
 	z := map[uint64]int{}
 	rand.Seed(time.Now().Unix())
 	for i := 0; i < 1e6; i++ {
-		v := Int64(int64(i)).HashCode()
+		v := Int64(int64(i)).HashCode() % 32
 		z[v]++
 	}
-	fmt.Println(len(z))
+	fmt.Println(z)
 
 	z = map[uint64]int{}
 	for i := 0; i < 1e6; i++ {
-		v := Int64(rand.Int63()).HashCode()
+		v := Int64(rand.Int63()).HashCode() % 32
 		z[v]++
 	}
-	fmt.Println(len(z))
+	fmt.Println((z))
+
+	z = map[uint64]int{}
+	for i := 0; i < 1e6; i++ {
+		v := Str(randString()).HashCode() % 32
+		z[v]++
+	}
+	fmt.Println((z))
 }

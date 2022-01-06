@@ -291,10 +291,11 @@ func DeepEqual(a, b Value) bool {
 
 func lessStr(a, b Value) bool {
 	if a.isSmallString() && b.isSmallString() {
-		if a.v == b.v {
-			return uintptr(a.p) < uintptr(b.p) // a is shorter than b
-		}
-		return a.v < b.v
+		al := (a.UnsafeAddr() - uintptr(smallStrMarker)) / 8 * 8
+		bl := (b.UnsafeAddr() - uintptr(smallStrMarker)) / 8 * 8
+		av := a.v >> (64 - al)
+		bv := b.v >> (64 - bl)
+		return av < bv
 	}
 	return a.Str() < b.Str()
 }

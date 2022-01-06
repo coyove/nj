@@ -28,6 +28,9 @@ func init() {
 		(*Object)(obj).fun = (*Function)(fun)
 		(*Function)(fun).obj = (*Object)(obj)
 	}
+	internal.SetEnvStack = func(env unsafe.Pointer, stack unsafe.Pointer) {
+		(*Env)(env).stack = (*[]Value)(stack)
+	}
 
 	Globals.SetProp("VERSION", Int64(Version))
 	Globals.SetMethod("globals", func(e *Env) {

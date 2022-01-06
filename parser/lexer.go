@@ -542,7 +542,7 @@ func ParseJSON(text string) (bas.Value, error) {
 	if !chunk.Valid() {
 		return bas.Nil, fmt.Errorf("invalid json chunk")
 	}
-	if chunk.Type() != NODES || len(chunk.Nodes()) < 1 || chunk.Nodes()[0].Sym() != typ.ABegin {
+	if chunk.Type() != NODES || len(chunk.Nodes()) < 1 || chunk.Nodes()[0].Value != SBegin.Value {
 		return bas.Nil, fmt.Errorf("invalid json chunk: %v", chunk)
 	}
 	j := chunk.Nodes()[1]

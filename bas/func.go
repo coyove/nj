@@ -34,13 +34,13 @@ type Environment struct {
 
 type Program struct {
 	top       *Function
-	symbols   map[string]*typ.Symbol
+	symbols   *Object
 	stack     *[]Value
 	functions []*Object
 	Environment
 }
 
-func NewProgram(coreStack *Env, top *Function, symbols map[string]*typ.Symbol, funcs []*Object, env *Environment) *Program {
+func NewProgram(coreStack *Env, top *Function, symbols *Object, funcs []*Object, env *Environment) *Program {
 	cls := &Program{top: top}
 	cls.stack = coreStack.stack
 	cls.symbols = symbols
@@ -109,19 +109,19 @@ func (p *Program) GoString() string {
 }
 
 func (p *Program) Get(k string) (v Value, ok bool) {
-	addr, ok := p.symbols[k]
-	if !ok {
+	addr := p.symbols.Prop(k)
+	if addr == Nil {
 		return Nil, false
 	}
-	return (*p.stack)[addr.Address], true
+	return (*p.stack)[addr.Int64()], true
 }
 
 func (p *Program) Set(k string, v Value) (ok bool) {
-	addr, ok := p.symbols[k]
-	if !ok {
+	addr := p.symbols.Prop(k)
+	if addr == Nil {
 		return false
 	}
-	(*p.stack)[addr.Address] = v
+	(*p.stack)[addr.Int64()] = v
 	return true
 }
 
