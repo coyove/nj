@@ -1,7 +1,9 @@
 package internal
 
 import (
+	"bytes"
 	"encoding/binary"
+	"unicode/utf8"
 
 	"github.com/coyove/nj/typ"
 )
@@ -89,4 +91,58 @@ func (b *Packet) Len() int {
 
 func (b *Packet) LastInst() typ.Inst {
 	return b.Code[len(b.Code)-1]
+}
+
+func (b *Packet) Copy() *Packet {
+	b2 := *b
+	b2.Code = append([]typ.Inst{}, b.Code...)
+	return &b2
+}
+
+type LimitedBuffer struct {
+	Limit int
+	bytes.Buffer
+}
+
+func (w *LimitedBuffer) Write(b []byte) (int, error) {
+	if w.Limit > 0 {
+		if w.Len()+len(b) > w.Limit {
+			if _, err := w.Buffer.Write(b[:w.Limit-w.Len()]); err != nil {
+				return 0, err
+			}
+			return len(b), nil
+		}
+	}
+	return w.Buffer.Write(b)
+}
+
+func (w *LimitedBuffer) WriteString(b string) (int, error) {
+	if w.Limit > 0 {
+		if w.Len()+len(b) > w.Limit {
+			if _, err := w.Buffer.WriteString(b[:w.Limit-w.Len()]); err != nil {
+				return 0, err
+			}
+			return len(b), nil
+		}
+	}
+	return w.Buffer.WriteString(b)
+}
+
+func (w *LimitedBuffer) WriteByte(b byte) error {
+	if w.Limit > 0 {
+		if w.Len()+1 > w.Limit {
+			return nil
+		}
+	}
+	return w.Buffer.WriteByte(b)
+}
+
+func (w *LimitedBuffer) WriteRune(b rune) (int, error) {
+	if w.Limit > 0 {
+		sz := utf8.RuneLen(b)
+		if w.Len()+sz > w.Limit {
+			return sz, nil
+		}
+	}
+	return w.Buffer.WriteRune(b)
 }

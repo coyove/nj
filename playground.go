@@ -1,7 +1,6 @@
 package nj
 
 import (
-	"bytes"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"github.com/coyove/nj/bas"
+	"github.com/coyove/nj/internal"
 )
 
 //go:embed playground.html
@@ -27,26 +27,19 @@ func PlaygroundHandler(opt *bas.Environment) func(w http.ResponseWriter, r *http
 		}
 
 		start := time.Now()
-		bufOut := &limitedWriter{limit: 32 * 1024}
+		bufOut := &internal.LimitedBuffer{Limit: 32 * 1024}
 
 		p, err := LoadString(c, opt)
 		if err != nil {
 			writeJSON(w, map[string]interface{}{"error": err.Error()})
 			return
 		}
-		finished := false
-		go func() {
-			time.Sleep(time.Second * 2)
-			if !finished {
-				p.Stop()
-			}
-		}()
 		p.MaxStackSize = 100
+		p.Deadline = start.Add(time.Second * 2)
 		p.Stdout = bufOut
 		p.Stderr = bufOut
 		code := p.GoString()
 		v, err := p.Run()
-		finished = true
 		if err != nil {
 			writeJSON(w, map[string]interface{}{
 				"error":   err.Error(),
@@ -81,16 +74,4 @@ func getCode(r *http.Request) string {
 		c = c[:16*1024]
 	}
 	return c
-}
-
-type limitedWriter struct {
-	limit int
-	bytes.Buffer
-}
-
-func (w *limitedWriter) Write(b []byte) (int, error) {
-	if w.Len()+len(b) > w.limit {
-		b = b[:w.limit-w.Len()]
-	}
-	return w.Buffer.Write(b)
 }

@@ -590,26 +590,7 @@ func init() {
 			buf := &bytes.Buffer{}
 			sprintf(e, -1, buf)
 			e.A = UnsafeStr(buf.Bytes())
-		}, "str.$f(args...: value) -> string").
-		SetMethod("buffer", func(e *Env) {
-			b := &bytes.Buffer{}
-			if v := e.Get(0); v != Nil {
-				b.WriteString(v.String())
-			}
-			e.A = NamedObject("Buffer", 0).
-				SetPrototype(Proto.ReadWriter).
-				SetProp("_f", ValueOf(b)).
-				SetMethod("reset", func(e *Env) {
-					e.This("_f").(*bytes.Buffer).Reset()
-				}, "Buffer.$f()").
-				SetMethod("value", func(e *Env) {
-					e.A = UnsafeStr(e.This("_f").(*bytes.Buffer).Bytes())
-				}, "Buffer.$f() -> string").
-				SetMethod("bytes", func(e *Env) {
-					e.A = Bytes(e.This("_f").(*bytes.Buffer).Bytes())
-				}, "Buffer.$f() -> bytes").
-				ToValue()
-		}, "$f(v?: string) -> Buffer")
+		}, "str.$f(args...: value) -> string")
 	Globals.SetProp("str", Proto.Str.ToValue())
 
 	Globals.SetMethod("printf", func(e *Env) {

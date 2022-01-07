@@ -31,7 +31,7 @@ do
 end
 
 function str.reverse()
-	x = str.buffer()
+	x = buffer()
 	local s = this.chars()
 	for i=#(s)-1,-1,-1 do
 		x.write(s[i])

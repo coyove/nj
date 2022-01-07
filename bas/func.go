@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -30,6 +32,7 @@ type Environment struct {
 	Stdout       io.Writer
 	Stderr       io.Writer
 	Stdin        io.Reader
+	Deadline     time.Time
 }
 
 type Program struct {
@@ -79,7 +82,54 @@ func Func(name string, f func(*Env), doc string) Value {
 	return obj.ToValue()
 }
 
-func (p *Program) Run() (v1 Value, err error) {
+func (p *Program) Run() (Value, error) {
+	if p.Deadline.IsZero() {
+		return p.runTop()
+	}
+	if time.Now().After(p.Deadline) {
+		return Nil, fmt.Errorf("timeout")
+	}
+
+	dummy := make(map[*Function]*internal.Packet)
+	dummy[p.top] = p.top.CodeSeg.Copy()
+	for _, f := range p.functions {
+		dummy[f.fun] = f.fun.CodeSeg.Copy()
+	}
+
+	var mu sync.Mutex
+	var reverted, timedout bool
+	finished := make(chan struct{}, 1)
+	go func(start time.Time) {
+		select {
+		case <-finished:
+		case <-time.After(time.Until(p.Deadline)):
+			mu.Lock()
+			if !reverted { // if code has been reverted to original, don't Stop again
+				p.Stop()
+				timedout = true
+			}
+			mu.Unlock()
+		}
+	}(time.Now())
+	v, err := p.runTop()
+	finished <- struct{}{}
+
+	// Revert code anyway
+	mu.Lock()
+	p.top.CodeSeg = *dummy[p.top]
+	for _, f := range p.functions {
+		f.fun.CodeSeg = *dummy[f.fun]
+	}
+	reverted = true
+	mu.Unlock()
+
+	if timedout {
+		return Nil, fmt.Errorf("timeout")
+	}
+	return v, err
+}
+
+func (p *Program) runTop() (v1 Value, err error) {
 	defer internal.CatchError(&err)
 	newEnv := Env{
 		Global: p,

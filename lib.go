@@ -567,6 +567,33 @@ func init() {
 		}, "")
 	}
 	bas.Globals.SetProp("http", httpLib.ToValue())
+
+	bas.Globals.SetMethod("buffer", func(e *bas.Env) {
+		b := &internal.LimitedBuffer{}
+		switch v := e.Get(0); v.Type() {
+		case typ.String:
+			b.WriteString(v.String())
+		case typ.Number:
+			b.Limit = v.Int()
+		default:
+			if v.IsBytes() {
+				b.Write(v.Safe().Bytes())
+			}
+		}
+		e.A = bas.NamedObject("Buffer", 0).
+			SetPrototype(bas.Proto.ReadWriter).
+			SetProp("_f", bas.ValueOf(b)).
+			SetMethod("reset", func(e *bas.Env) {
+				e.This("_f").(*internal.LimitedBuffer).Reset()
+			}, "Buffer.$f()").
+			SetMethod("value", func(e *bas.Env) {
+				e.A = bas.UnsafeStr(e.This("_f").(*internal.LimitedBuffer).Bytes())
+			}, "Buffer.$f() -> string").
+			SetMethod("bytes", func(e *bas.Env) {
+				e.A = bas.Bytes(e.This("_f").(*internal.LimitedBuffer).Bytes())
+			}, "Buffer.$f() -> bytes").
+			ToValue()
+	}, "$f(v?: string|bytes|int) -> Buffer")
 }
 
 func mathMinMax(e *bas.Env, max bool) {
