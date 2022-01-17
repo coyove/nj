@@ -209,10 +209,6 @@ func init() {
 			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, NewArray(k, *v).ToValue()); return true })
 			e.A = NewArray(a...).ToValue()
 		}, "object.$f() -> [[value, value]]\n\treturn as [[key1, value1], [key2, value2], ...]").
-		SetProp("CONTINUE", Int(0)).
-		SetProp("BREAK", Int(1)).
-		SetProp("DELETE_CONTINUE", Int(2)).
-		SetProp("DELETE_BREAK", Int(3)).
 		SetMethod("foreach", func(e *Env) {
 			f := e.Object(0)
 			e.Object(-1).Foreach(func(k Value, v *Value) bool { return e.Call(f, k, *v) != False })
@@ -234,7 +230,7 @@ func init() {
 		}, "object.$f() -> object\n\treturn a new object which shares all data from the original, but with no prototype").
 		SetMethod("next", func(e *Env) {
 			e.A = NewArray(e.Object(-1).Next(e.Get(0))).ToValue()
-		}, "object.$f(k: value) -> [value, value]\n\tfind next key-value pair after `k` in the object and return as [key, value]").
+		}, "object.$f(k: value) -> [value, value]\n\tfind next key-value pair after `k` in the object and return as `[key, value]`").
 		SetMethod("intersectkeys", func(e *Env) {
 			o := e.Object(-1)
 			o.Foreach(func(k Value, v *Value) bool {
@@ -270,15 +266,13 @@ func init() {
 			a, err := e.Call2(e.Object(-1), e.Stack()...)
 			_ = err == nil && e.SetA(a) || e.SetA(Error(e, err))
 		}, "function.$f(args...: value) -> value|Error\n"+
-			"\trun function, return Error if any panic occurred (if function tends to return n results, these values will all be Error by then)").
+			"\trun function, return Error if any panic occurred (if function tends to return multiple results, they will all be Error by then)").
 		SetMethod("after", func(e *Env) {
 			f, args, e2 := e.Object(-1), e.CopyStack()[1:], EnvForAsyncCall(e)
 			t := time.AfterFunc(e.Num(0).Safe().Duration(0), func() { e2.Call(f, args...) })
 			e.A = NamedObject("Timer", 0).
 				SetProp("t", ValueOf(t)).
-				SetMethod("stop", func(e *Env) {
-					e.A = Bool(e.This("t").(*time.Timer).Stop())
-				}, "").
+				SetMethod("stop", func(e *Env) { e.A = Bool(e.This("t").(*time.Timer).Stop()) }, "$f() -> bool\n\tstop the timer").
 				ToValue()
 		}, "function.$f(secs: float, args...: value) -> Timer").
 		SetMethod("go", func(e *Env) {
@@ -386,10 +380,10 @@ func init() {
 		}, "array.$f(index: int)\n\tremove value at `index`").
 		SetMethod("copy", func(e *Env) {
 			e.Array(-1).Copy(e.Int(0), e.Int(1), e.Array(2))
-		}, "array.$f(start: int, end: int, src: array) -> array\n\tcopy elements from `src` to `this[start:end]`").
+		}, "array.$f(start: int, end: int, src: array)\n\tcopy elements from `src` to `this[start:end]`").
 		SetMethod("concat", func(e *Env) {
 			e.Array(-1).Concat(e.Array(0))
-		}, "array.$f(a: array) -> array\n\tconcat two arrays").
+		}, "array.$f(a: array)\n\tconcat two arrays").
 		SetMethod("sort", func(e *Env) {
 			a, rev := e.Array(-1), e.Get(0).IsTrue()
 			if kf := e.Get(1); IsCallable(kf) {
@@ -438,10 +432,12 @@ func init() {
 		SetMethod("sendmulti", func(e *Env) {
 			var cases []reflect.SelectCase
 			var callbacks []Value
-			e.Object(0).Foreach(func(k Value, v *Value) bool {
+			e.Array(0).Foreach(func(_ int, v Value) bool {
+				v.Is(typ.Array, "sendmulti")
+				k := v.Array().Get(0)
 				if k.Type() == typ.String && k == Str("default") {
 					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectDefault})
-					callbacks = append(callbacks, *v)
+					callbacks = append(callbacks, v)
 				} else {
 					ch := reflect.ValueOf(k.Object().Prop("_ch").Interface())
 					a := v.Is(typ.Array, "sendmulti: expect [value, callback]").Array()
@@ -458,7 +454,7 @@ func init() {
 			if cb := callbacks[chosen]; IsCallable(cb) {
 				e.A = e.Call(cb.Object())
 			}
-		}, "$f(channels: {(Channel)=[value, function]}) -> value").
+		}, "$f(channels: [[Channel|\"default\", value]]) -> int").
 		SetMethod("recvmulti", func(e *Env) {
 			var cases []reflect.SelectCase
 			var callbacks []Value

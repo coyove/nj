@@ -313,3 +313,10 @@ assert(a, -16)
 a=a+
 -a
 assert(a, 0)
+
+assert(if(true, 10, panic("bad")), 10)
+
+if (false)then end
+if [0][0]then end
+
+assert(if(true, "a", "")[0], "a".ord()[0])

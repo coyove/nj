@@ -34,6 +34,11 @@ NJ is a simple script engine written in golang with Lua-like syntax.
 	- `a = 1 -a+1` means assign `1` to `a` and eval `-a+1`.
 	- `a = -a` means negate `a` and assign the result to `a`.
 	- `a = - a` is invalid.
+- There 2 ways to write `if`:
+	- `if cond then true else false end` as a statement.
+	- `local a = if(cond, true, false)` as an expression.
+	- `if(cond) then ... end` is invalid, spaces after `if` statement is mandatory.
+	- `if (cond, true, false)` is invalid, spaces after `if` expression is not allowed.
 - To write variadic functions:
 	- `function foo(a, b...) end`.
 	- `args = [1, 2, 3]; foo(args...)`.

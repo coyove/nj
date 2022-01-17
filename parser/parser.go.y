@@ -242,6 +242,7 @@ expr:
     TNot expr %prec UNARY             { $$ = Nodes((SNot), $2).At($1) }
 
 prefix_expr:
+    TIf TLParen expr ',' expr ',' expr ')'             { $$ = __if($3, __move(Sa, $5).At($1), __move(Sa, $7).At($1)).At($1) } |
     TLambda func_params stats TEnd                     { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
     TString                                            { $$ = Str($1.Str) } |
     '(' expr ')'                                       { $$ = $2 } |

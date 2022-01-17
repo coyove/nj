@@ -28,6 +28,7 @@ var (
 )
 
 var (
+	Sa        = staticSym("$a")
 	SDoBlock  = staticSym(typ.ADoBlock)
 	SNil      = staticSym(typ.ANil)
 	SSet      = staticSym(typ.ASet)
