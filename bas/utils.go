@@ -42,6 +42,13 @@ func reflectLoad(v interface{}, key Value) Value {
 	k := key.Is(typ.String, "").Str()
 	f := rv.MethodByName(k)
 	if !f.IsValid() {
+		if rv.Kind() == reflect.Ptr {
+			f = rv.Elem().MethodByName(k)
+		} else if rv.Kind() == reflect.Struct && rv.CanAddr() {
+			f = rv.Addr().MethodByName(k)
+		}
+	}
+	if !f.IsValid() {
 		f = reflect.Indirect(rv).FieldByName(k)
 		if !f.IsValid() {
 			return Nil

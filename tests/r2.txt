@@ -86,3 +86,7 @@ end
 a = intersect({a=1, b=1, c=3}, {a=2, c:4})
 assert(a.a, 1)
 assert(a.c, 3)
+
+assert(structAddrTest.Foo(), structAddrTest.A)
+assert(structAddrTest2.Foo(), structAddrTest2.A)
+print('---R2---')
