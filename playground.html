@@ -72,40 +72,7 @@
     </div>
     <div id="input">
 	<div style="border:solid 1px #aaa;border-width:1px 0 1px 0;height:100%;background: #ffc;">
-	    <textarea id="code">-- Author: coyove
-_, author = re([[Author: (\S+)]]).find(SOURCE_CODE)
-println("Author is:", author)
-
--- Print all global values, mainly functions
--- use doc(function) to view its documentation
-local g = debug.globals()
-
-print("version %s, total global values: %d".format(VERSION, #g/3))
-
-function pp(name, f, ident)
-    if f is object then
-        if f is callable then
-            local d = f.doc()
-            print(ident, name, " ", d.trimprefix(name + "."))
-            print()
-        end
-        for k, v in f do pp(name + "." + str(k), v, ident) end
-    else
-        print(ident, name, "=", f)
-        print()
-    end		
-end
-
-for i=0,#g,3 do
-    if g[i+1] == '' then
-    else
-        local name = g[i + 1]
-        if #name > 32 then
-            name = name.sub(0, 16) + '...' + name.sub(#name-16, #name)
-        end
-        pp(i//3 + ": " + name, g[i + 2], "")
-    end
-end</textarea>
+	    <textarea id="code">__CODE__</textarea>
 	</div>
     </div>
     <div id="output"></div>

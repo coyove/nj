@@ -18,8 +18,42 @@ import (
 
 //go:embed playground.html
 var playgroundHTML []byte
+var playgroundCode = `-- Author: coyove
+_, author = re([[Author: (\S+)]]).find(SOURCE_CODE)
+println("Author is:", author)
 
-func PlaygroundHandler(opt *bas.Environment) func(w http.ResponseWriter, r *http.Request) {
+-- Print all global values, mainly functions
+-- use doc(function) to view its documentation
+local g = debug.globals()
+
+print("version %s, total global values: %d".format(VERSION, #g/3))
+
+function pp(name, f, ident)
+    if f is object then
+        if f is callable then
+            local d = f.doc()
+            print(ident, name, " ", d.trimprefix(name + "."))
+            print()
+        end
+        for k, v in f do pp(name + "." + str(k), v, ident) end
+    else
+        print(ident, name, "=", f)
+        print()
+    end		
+end
+
+for i=0,#g,3 do
+    if g[i+1] == '' then
+    else
+        local name = g[i + 1]
+        if #name > 32 then
+            name = name.sub(0, 16) + '...' + name.sub(#name-16, #name)
+        end
+        pp(i//3 + ": " + name, g[i + 2], "")
+    end
+end`
+
+func PlaygroundHandler(defaultCode string, opt *bas.Environment) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() { recover() }()
 
@@ -67,7 +101,14 @@ func PlaygroundHandler(opt *bas.Environment) func(w http.ResponseWriter, r *http
 				}
 				return true
 			})
-			w.Write(bytes.Replace(playgroundHTML, []byte("__NAMES__"), []byte(strings.Join(names, ",")), -1))
+
+			buf := bytes.Replace(playgroundHTML, []byte("__NAMES__"), []byte(strings.Join(names, ",")), -1)
+			if defaultCode != "" {
+				buf = bytes.Replace(buf, []byte("__CODE__"), []byte(defaultCode), -1)
+			} else {
+				buf = bytes.Replace(buf, []byte("__CODE__"), []byte(playgroundCode), -1)
+			}
+			w.Write(buf)
 			return
 		}
 

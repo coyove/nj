@@ -41,7 +41,7 @@ func main() {
 	flag.Parse()
 
 	if *apiServer != "" {
-		http.HandleFunc("/", nj.PlaygroundHandler(nil))
+		http.HandleFunc("/", nj.PlaygroundHandler("", nil))
 		log.Println("listen", *apiServer)
 		http.ListenAndServe(*apiServer, nil)
 		return
