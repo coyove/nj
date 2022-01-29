@@ -20,6 +20,10 @@
         background-color: transparent;
         resize: none;
     }
+    .CodeMirror {
+        height: 100% !important;
+        background-color: #ffc !important;
+    }
     #input {
         position:absolute;
         left:0;
@@ -44,7 +48,7 @@
         background: #eee;
     }
     #output div.content {
-        font-family: monospace;
+        font-family: Lucida Console, Monaco, Monospace;
         padding: 0.5em;
     }
 </style>
@@ -53,8 +57,17 @@
   <div style="position:relative;height:100%">
     <div style="line-height: 32px;height:32px;padding:0 0.5em">
 	<button onclick="run()">Run (F5)</button>
+    <select id='output_fields'>
+        <option value="all">Return all</option>
+        <option value="stdout">Stdout only</option>
+        <option value="result">Results only</option>
+    </select>
 	<span style="float:right">
-	    <a href="https://github.com/coyove/script">Github</a>
+        <select id='cm_cdn' onchange="localStorage.setItem('cdn',this.value);location.reload()">
+            <option value="-">Plain editor</option>
+            <option value="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0">CodeMirror (cloudflare)</option>
+            <option value="https://cdn.bootcdn.net/ajax/libs/codemirror/5.65.0">CodeMirror (bootcdn)</option>
+        </select>
 	</span>
     </div>
     <div id="input">
@@ -101,38 +114,123 @@ end</textarea>
 
 <script>
     var output = document.getElementById("output"), editor = document.getElementById('code');
-    editor.addEventListener('keydown', function(e) {
-        var start = this.selectionStart, end = this.selectionEnd;
-        if (e.key == 'Tab') {
-            e.preventDefault();
-            this.value = this.value.substring(0, start) + "\t" + this.value.substring(end);
-            this.selectionStart = this.selectionEnd = start + 1;
+    async function loadEditor(textarea, prefix) {
+        prefix = prefix || localStorage.getItem('cdn') || "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0"
+        document.getElementById('cm_cdn').value = prefix;
+        if (prefix == "-") {
+            loadPlainEditor(editor);
+            return;
         }
-        if (e.key == 'F5') {
-            e.preventDefault();
-            run();
-        }
-        if (e.key == 'Enter') {
-            var v = this.value.substring(0, start);
-            var idx = v.lastIndexOf('\n');
-            if (idx) {
-                v = v.substring(idx + 1)
-                var spaces = '';
-                for (var i = 0; i < v.length; i++) {
-                    var c = v.charAt(i);
-                    if (c == ' ' || c == '\t') 
-                        spaces += c;
-                    else
-                        break;
-                }
-                if (spaces) {
-                    e.preventDefault()
-                    this.value = this.value.substring(0, start) + "\n" + spaces + this.value.substring(end);
-                    this.selectionStart = this.selectionEnd = start + 1 + spaces.length;
+
+        if (window.EDITOR) return;
+        var createScript = function(src, f) {
+            return new Promise(function(resolve) {
+                var s = document.createElement("script")
+                s.onload = resolve; s.src = src;
+                document.body.appendChild(s);
+            })
+        }, createCSS = function(src, f) {
+            return new Promise(function(resolve) {
+                var s = document.createElement("link")
+                s.onload = resolve; s.href = src; s.rel = 'stylesheet'; s.type = 'text/css'; s.media = 'all';
+                document.body.appendChild(s);
+            })
+        };
+
+        await createScript(prefix + "/codemirror.min.js");
+        await createScript(prefix + "/mode/lua/lua.min.js");
+        await createScript(prefix + "/addon/hint/show-hint.min.js");
+        await createCSS(prefix + "/codemirror.min.css");
+        await createCSS(prefix + "/addon/hint/show-hint.min.css");
+        const controlKeys = [
+            8, 9, 13, 16, 17, 18, 19, 20, 27, 33, 34, 35, 36, 37, 38, 39, 40, 45, 46, 91, 92, 93, 107, 109, 110, 111, 112,
+            113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 144, 145, 186, 187, 188, 189, 190, 191, 192, 220, 222,
+        ];
+        CodeMirror.hint.lua = function(cm) {
+            const cursor = cm.getCursor();
+            const token = cm.getTokenAt(cursor);
+            const word = (token.string.match(/\w+$/) || [token.string])[0];
+            const keywords = [
+                "and", "or", "local", "break", "continue", "else", "function", "lambda", "if", "elseif",
+                "then", "end", "not", "return", "for", "while", "repeat", "until", "do", "in", "goto", "is",
+            ]
+            const names = [__NAMES__];
+            const candidates = names.concat(word == token.string ? keywords : []);
+            const res = {from: cursor, to: cursor, list: []};
+            for (const i in candidates) {
+                const raw = candidates[i];
+                const data = raw.replace(/\(.+\)\./, '');
+                if (data.startsWith(word))
+                    res.list.push({text: data, displayText: raw})
+            }
+            if (token.string.length <= 1 || !word || keywords.includes(token.string)) {
+                res.list = [];
+            } else {
+                CodeMirror.on(res, "pick", function(obj) {
+                    const doc = window.EDITOR.getDoc(), w = obj.text;
+                    window.EDITOR.execCommand("delWordBefore");
+                    doc.replaceRange(keywords.includes(w) ? (w + ' ') : w, doc.getCursor());
+                });
+            }
+            return res;
+        };
+        window.EDITOR = CodeMirror.fromTextArea(textarea, {
+            mode: 'lua',
+            lineNumbers: true,
+            smartIndent: true,
+            indentUnit: 4,
+            extraKeys: { "F5": run },
+            hintOptions: { completeSingle: false },
+        });
+        window.EDITOR.on("keyup", function(editor, event) {
+            var keyCode = parseInt(event.keyCode || event.which);
+            var cursor = editor.getDoc().getCursor();
+            var token = editor.getTokenAt(cursor);
+            var word = editor.findWordAt(cursor); 
+            var currentWord = editor.getRange(word.anchor, word.head);
+
+            if (!editor.state.completionActive && !controlKeys.includes(keyCode) && token.type != 'number' && token.type != 'string') {
+                editor.showHint();
+                return;
+            }
+        });
+    }
+    loadEditor(code).then(function() {});
+
+    function loadPlainEditor(editor) {
+        editor.addEventListener('keydown', function(e) {
+            var start = this.selectionStart, end = this.selectionEnd;
+            if (e.key == 'Tab') {
+                e.preventDefault();
+                this.value = this.value.substring(0, start) + "\t" + this.value.substring(end);
+                this.selectionStart = this.selectionEnd = start + 1;
+            }
+            if (e.key == 'F5') {
+                e.preventDefault();
+                run();
+            }
+            if (e.key == 'Enter') {
+                var v = this.value.substring(0, start);
+                var idx = v.lastIndexOf('\n');
+                if (idx) {
+                    v = v.substring(idx + 1)
+                    var spaces = '';
+                    for (var i = 0; i < v.length; i++) {
+                        var c = v.charAt(i);
+                        if (c == ' ' || c == '\t') 
+                            spaces += c;
+                        else
+                            break;
+                    }
+                    if (spaces) {
+                        e.preventDefault()
+                        this.value = this.value.substring(0, start) + "\n" + spaces + this.value.substring(end);
+                        this.selectionStart = this.selectionEnd = start + 1 + spaces.length;
+                    }
                 }
             }
-        }
-    });
+        });
+    }
 
     function div(html, title) {
         var el = document.createElement("div");
@@ -142,7 +240,10 @@ end</textarea>
     }
 
     function run() {
-        fetch('?code=' + encodeURIComponent(editor.value))
+        const outf = document.getElementById('output_fields').value;
+        const code = encodeURIComponent(window.EDITOR ? window.EDITOR.getValue() : editor.value);
+        localStorage.setItem('output', outf);
+        fetch('?output=' + outf + '&code=' + code)
         .then(response => response.json())
         .then(function(data) {
             var el = output;
@@ -172,4 +273,6 @@ end</textarea>
             }
         });
     }
+
+    document.getElementById('output_fields').value = localStorage.getItem('output') || 'all';
 </script>

@@ -197,8 +197,8 @@ func (n Node) Line() uint32 {
 	return 0
 }
 
-func (n Node) Dump(w io.Writer, ident string) {
-	io.WriteString(w, ident)
+func (n Node) Dump(w io.Writer, indent string) {
+	io.WriteString(w, indent)
 	switch n.Type() {
 	case NODES:
 		nocpl := true
@@ -212,12 +212,12 @@ func (n Node) Dump(w io.Writer, ident string) {
 		if !nocpl {
 			io.WriteString(w, "[\n")
 			for _, a := range n.Nodes() {
-				a.Dump(w, "  "+ident)
+				a.Dump(w, "  "+indent)
 				if a.Type() != NODES {
 					io.WriteString(w, "\n")
 				}
 			}
-			io.WriteString(w, ident)
+			io.WriteString(w, indent)
 		} else {
 			io.WriteString(w, "[")
 			for i, a := range n.Nodes() {
