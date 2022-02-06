@@ -67,7 +67,38 @@ func PlaygroundHandler(defaultCode string, opt *bas.Environment) func(w http.Res
 					dedup[n], names = true, append(names, strconv.Quote(n))
 				}
 			}
-			var add2 = func(f, n string) { add("(" + f + ")." + n) }
+			var add2 = func(f, n string) {
+				if n[0] >= 'A' && n[0] <= 'Z' {
+					add("(" + f + ")." + n)
+				}
+			}
+			var addType func(reflect.Type)
+			addType = func(rf reflect.Type) {
+				rfs := rf.String()
+				if dedup[rfs] {
+					return
+				}
+				dedup[rfs] = true
+				rff := rf
+				if rf.Kind() == reflect.Ptr {
+					rff = rff.Elem()
+				}
+				if rff.Kind() == reflect.Struct {
+					s := rff.String()
+					for i := 0; i < rff.NumField(); i++ {
+						add2(s, rff.Field(i).Name)
+						addType(rff.Field(i).Type)
+					}
+					for i := 0; i < rf.NumMethod(); i++ {
+						add2(rfs, rf.Method(i).Name)
+					}
+					if rf != rff {
+						for i := 0; i < rff.NumMethod(); i++ {
+							add2(s, rff.Method(i).Name)
+						}
+					}
+				}
+			}
 			x := bas.Globals.Copy(true)
 			if opt != nil {
 				x.Merge(opt.Globals)
@@ -81,23 +112,7 @@ func PlaygroundHandler(defaultCode string, opt *bas.Environment) func(w http.Res
 						return true
 					})
 				case typ.Native:
-					rv := reflect.ValueOf(v.Interface())
-					rf := reflect.Indirect(rv).Type()
-					if rf.Kind() == reflect.Struct {
-						for i := 0; i < rf.NumField(); i++ {
-							add2(rf.String(), rf.Field(i).Name)
-						}
-						rf := rv.Type()
-						for i := 0; i < rf.NumMethod(); i++ {
-							add2(rf.String(), rf.Method(i).Name)
-						}
-						if rv.Kind() == reflect.Ptr {
-							rf := rv.Elem().Type()
-							for i := 0; i < rf.NumMethod(); i++ {
-								add2(rf.String(), rf.Method(i).Name)
-							}
-						}
-					}
+					addType(reflect.ValueOf(v.Interface()).Type())
 				}
 				return true
 			})

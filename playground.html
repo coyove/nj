@@ -19,10 +19,12 @@
         border: none;
         background-color: transparent;
         resize: none;
+        font-family: Lucida Console, Monaco, Monospace;
     }
     .CodeMirror {
         height: 100% !important;
-        background-color: #ffc !important;
+        background-color: #ffd !important;
+        font-family: Lucida Console, Monaco, Monospace !important;
     }
     #input {
         position:absolute;
@@ -71,7 +73,7 @@
 	</span>
     </div>
     <div id="input">
-	<div style="border:solid 1px #aaa;border-width:1px 0 1px 0;height:100%;background: #ffc;">
+	<div style="border:solid 1px #aaa;border-width:1px 0 1px 0;height:100%;background: #ffd;">
 	    <textarea id="code">__CODE__</textarea>
 	</div>
     </div>
@@ -109,19 +111,20 @@
         await createScript(prefix + "/addon/hint/show-hint.min.js");
         await createCSS(prefix + "/codemirror.min.css");
         await createCSS(prefix + "/addon/hint/show-hint.min.css");
+
         const controlKeys = [
             8, 9, 13, 16, 17, 18, 19, 20, 27, 33, 34, 35, 36, 37, 38, 39, 40, 45, 46, 91, 92, 93, 107, 109, 110, 111, 112,
             113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 144, 145, 186, 187, 188, 189, 190, 191, 192, 220, 222,
         ];
+        const keywords = [
+            "and", "or", "local", "break", "continue", "else", "function", "lambda", "if", "elseif",
+            "then", "end", "not", "return", "for", "while", "repeat", "until", "do", "in", "goto", "is",
+        ]
+        const names = [__NAMES__];
         CodeMirror.hint.lua = function(cm) {
             const cursor = cm.getCursor();
             const token = cm.getTokenAt(cursor);
             const word = (token.string.match(/\w+$/) || [token.string])[0];
-            const keywords = [
-                "and", "or", "local", "break", "continue", "else", "function", "lambda", "if", "elseif",
-                "then", "end", "not", "return", "for", "while", "repeat", "until", "do", "in", "goto", "is",
-            ]
-            const names = [__NAMES__];
             const candidates = names.concat(word == token.string ? keywords : []);
             const res = {from: cursor, to: cursor, list: []};
             for (const i in candidates) {
