@@ -95,26 +95,4 @@ function foo(a, b, c) return if(a,b,c) end
 
 assert(foo(true, 10, 20), 10)
 
-local a = --<<EOF --<<EOFtextEOF
-EOFb=9
-assert(a, "--<<EOFtextEOF")
-assert(b, 9)
-assert("abc", --<<ABCDEFG abc
-ABCDEFG)
-print(a)
-
-assert(--<<A  
-A, "")
-assert(--<<A 
-A, "")
-assert(--<<A
-A, "")
-assert(--<<A
-
-A, "")
-
-a = --<<whatever
-10
-assert(a, 10)
-
 print('---R2---')

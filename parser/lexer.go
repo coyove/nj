@@ -343,24 +343,6 @@ skipspaces:
 						goto finally
 					}
 				} else {
-					if strings.HasPrefix(sc.text[sc.offset:], "<<") {
-						// --<<TAG ... literal string ...\nTAG
-						sc.offset += 2
-						tag, start, oldPos := "", sc.offset, sc.Pos
-						for r := sc.Next(); r != EOF; r = sc.Next() {
-							if tag == "" && (r == '\n' || r == ' ') { // collect tag
-								tag = sc.text[start : sc.offset-1]
-							}
-							if tag != "" && r == '\n' && strings.HasPrefix(sc.text[sc.offset:], tag) {
-								tok.Type = TString
-								tok.Str = sc.text[start+int64(len(tag))+1 : sc.offset]
-								tok.Str = strings.TrimSpace(tok.Str)
-								sc.offset += int64(len(tag))
-								goto finally
-							}
-						}
-						sc.offset, sc.Pos = start, oldPos
-					}
 					sc.skipComments()
 				}
 				goto redo

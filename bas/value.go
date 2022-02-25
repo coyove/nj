@@ -245,6 +245,12 @@ func ValueOf(i interface{}) Value {
 			}
 		}
 		return Func("<"+rv.Type().String()+">", nf, "")
+	} else if k == reflect.Map {
+		o := NewObject(rv.Len())
+		for iter := rv.MapRange(); iter.Next(); {
+			o.Set(ValueOf(iter.Key().Interface()), ValueOf(iter.Value().Interface()))
+		}
+		return o.ToValue()
 	}
 	return intf(i)
 }

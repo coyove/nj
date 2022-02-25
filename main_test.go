@@ -54,6 +54,10 @@ func runFile(t *testing.T, path string) {
 			SetProp("nativeVarargTest2", bas.ValueOf(func(b string, a ...int) string {
 				return b + strconv.Itoa(len(a))
 			})).
+			SetProp("gomap", bas.ValueOf(func(m map[string]int, k string, v int) map[string]int {
+				m[k] = v
+				return m
+			})).
 			SetProp("intAlias", bas.ValueOf(func(d time.Duration) time.Time {
 				return time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).Add(d)
 			})).

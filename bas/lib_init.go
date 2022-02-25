@@ -528,8 +528,14 @@ func init() {
 			e.A = Bool(m)
 		}, "str.$f(text: string) -> bool").
 		SetMethod("find", func(e *Env) {
-			e.A = Int(strings.Index(e.Str(-1), e.Str(0)))
-		}, "str.$f(sub: string) -> int\n\tfind the index of first appearence of `sub` in text").
+			start, end := e.Get(1).Safe().Int(0), e.Get(2).Safe().Int(e.StrLen(-1))
+			e.A = Int(strings.Index(e.Str(-1)[start:end], e.Str(0)))
+		}, "str.$f(sub: string, start?: int, end?: int) -> int\n\tfind the index of first appearence of `sub` in text").
+		SetMethod("findsub", func(e *Env) {
+			s := e.Str(-1)
+			idx := strings.Index(s, e.Str(0))
+			_ = idx > -1 && e.SetA(Str(s[:idx])) || e.SetA(Str(""))
+		}, "str.$f(sub: string) -> int\n\tfind and return all text before the first appearence of `sub` in text").
 		SetMethod("findlast", func(e *Env) {
 			e.A = Int(strings.LastIndex(e.Str(-1), e.Str(0)))
 		}, "str.$f(sub: string) -> int\n\tsame as find(), but starting from right to left").

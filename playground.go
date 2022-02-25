@@ -67,8 +67,8 @@ func PlaygroundHandler(defaultCode string, opt *bas.Environment) func(w http.Res
 					dedup[n], names = true, append(names, strconv.Quote(n))
 				}
 			}
-			var add2 = func(f, n string) {
-				if n[0] >= 'A' && n[0] <= 'Z' {
+			var add2 = func(f, n string, force bool) {
+				if force || n[0] >= 'A' && n[0] <= 'Z' {
 					add("(" + f + ")." + n)
 				}
 			}
@@ -86,15 +86,15 @@ func PlaygroundHandler(defaultCode string, opt *bas.Environment) func(w http.Res
 				if rff.Kind() == reflect.Struct {
 					s := rff.String()
 					for i := 0; i < rff.NumField(); i++ {
-						add2(s, rff.Field(i).Name)
+						add2(s, rff.Field(i).Name, false)
 						addType(rff.Field(i).Type)
 					}
 					for i := 0; i < rf.NumMethod(); i++ {
-						add2(rfs, rf.Method(i).Name)
+						add2(rfs, rf.Method(i).Name, false)
 					}
 					if rf != rff {
 						for i := 0; i < rff.NumMethod(); i++ {
-							add2(s, rff.Method(i).Name)
+							add2(s, rff.Method(i).Name, false)
 						}
 					}
 				}
@@ -108,7 +108,7 @@ func PlaygroundHandler(defaultCode string, opt *bas.Environment) func(w http.Res
 				switch v.Type() {
 				case typ.Object:
 					v.Object().Foreach(func(kk bas.Value, vv *bas.Value) bool {
-						add2(k.String(), kk.String())
+						add2(k.String(), kk.String(), true)
 						return true
 					})
 				case typ.Native:

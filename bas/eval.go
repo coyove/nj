@@ -75,7 +75,7 @@ func (e *ExecError) Error() string {
 		}
 	}
 	if e.root != nil {
-		msg.WriteString("root panic:\n")
+		msg.WriteString("root cause:\n")
 		if e.native != nil {
 			msg.WriteString(e.native.Name)
 			msg.WriteString("() ")
