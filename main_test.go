@@ -39,6 +39,10 @@ func (ts testStruct) Foo() int { return ts.A }
 
 func (ts *testStruct) SetFoo(a int) { ts.A = a }
 
+type testStructEmbed struct {
+	T testStruct
+}
+
 func runFile(t *testing.T, path string) {
 	if !flag.Parsed() {
 		flag.Parse()
@@ -48,6 +52,7 @@ func runFile(t *testing.T, path string) {
 		Globals: bas.NewObject(0).
 			SetProp("structAddrTest", bas.ValueOf(&testStruct{2})).
 			SetProp("structAddrTest2", bas.ValueOf(testStruct{3})).
+			SetProp("structAddrTestEmbed", bas.ValueOf(&testStructEmbed{testStruct{4}})).
 			SetProp("nativeVarargTest", bas.ValueOf(func(a ...int) int {
 				return len(a)
 			})).

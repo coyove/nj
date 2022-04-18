@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -44,14 +45,24 @@ func reflectLoad(v interface{}, key Value) Value {
 	if !f.IsValid() {
 		if rv.Kind() == reflect.Ptr {
 			f = rv.Elem().MethodByName(k)
-		} else if rv.Kind() == reflect.Struct && rv.CanAddr() {
-			f = rv.Addr().MethodByName(k)
 		}
 	}
 	if !f.IsValid() {
-		f = reflect.Indirect(rv).FieldByName(k)
-		if !f.IsValid() {
-			return Nil
+		if strings.HasPrefix(k, "p") {
+			if rv.Kind() != reflect.Ptr {
+				return Nil
+			}
+			t, ok := rv.Elem().Type().FieldByName(k[1:])
+			if !ok {
+				return Nil
+			}
+			ptr := (*struct{ a, b uintptr })(unsafe.Pointer(&v)).b + t.Offset
+			f = reflect.NewAt(t.Type, unsafe.Pointer(ptr))
+		} else {
+			f = reflect.Indirect(rv).FieldByName(k)
+			if !f.IsValid() {
+				return Nil
+			}
 		}
 	}
 	return ValueOf(f.Interface())

@@ -37,6 +37,10 @@ assert(T1.c == 132 and T2.c == 53)
 
 print(timer.add)
 
+assert(structAddrTestEmbed.T.SetFoo, nil)
+structAddrTestEmbed.pT.SetFoo(10)
+assert(structAddrTestEmbed.T.A, 10)
+
 function dict() return new(new(this)) end
 
 function dict.next2()
