@@ -18,23 +18,16 @@ type Stacktrace struct {
 
 func (r *Stacktrace) sourceLine() (src uint32) {
 	posv := r.Callable.CodeSeg.Pos
-	for i := 0; i < posv.Len(); {
-		var opx uint32 = math.MaxUint32
-		ii, op, line := posv.Read(i)
-		if ii < posv.Len()-1 {
-			_, opx, _ = posv.Read(ii)
+	if posv.Len() > 0 {
+		_, op, line := posv.Read(0)
+		for r.Cursor > op && posv.Len() > 0 {
+			op, line = posv.Pop()
 		}
-		if r.Cursor >= op && r.Cursor < opx {
-			src = line
-			break
+		if r.Cursor <= op {
+			return line
 		}
-		if r.Cursor < op && i == 0 {
-			src = line
-			break
-		}
-		i = ii
 	}
-	return
+	return math.MaxUint32
 }
 
 // ExecError represents the runtime error

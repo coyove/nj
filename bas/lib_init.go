@@ -275,7 +275,7 @@ func init() {
 			t := time.AfterFunc(time.Duration(e.Float64(0)*1e6)*1e3, func() { e2.Call(f, args...) })
 			e.A = NamedObject("Timer", 0).
 				SetProp("t", ValueOf(t)).
-				SetMethod("stop", func(e *Env) { e.A = Bool(e.This("t").(*time.Timer).Stop()) }, "$f() -> bool\n\tstop the timer").
+				SetMethod("stop", func(e *Env) { e.A = Bool(e.ThisProp("t").(*time.Timer).Stop()) }, "$f() -> bool\n\tstop the timer").
 				ToValue()
 		}, "function.$f(secs: float, args...: value) -> Timer").
 		SetMethod("go", func(e *Env) {
@@ -293,7 +293,7 @@ func init() {
 			e.A = NamedObject("Goroutine", 0).
 				SetProp("f", f.ToValue()).
 				SetProp("w", intf(w)).
-				SetMethod("wait", func(e *Env) { e.A = <-e.This("w").(chan Value) }, "").
+				SetMethod("wait", func(e *Env) { e.A = <-e.ThisProp("w").(chan Value) }, "").
 				ToValue()
 		}, "function.$f(args...: value) -> Goroutine\n\texecute `f` in goroutine").
 		SetMethod("map", func(e *Env) {
@@ -414,14 +414,14 @@ func init() {
 		_ = rv.Kind() == reflect.Chan && e.SetA(ValueOf(rv.Interface())) || e.SetA(ValueOf(make(chan Value, e.Get(0).Maybe().Int64(0))))
 	}, "").Object().
 		SetMethod("close", func(e *Env) {
-			reflect.ValueOf(e.This("_ch")).Close()
+			reflect.ValueOf(e.ThisProp("_ch")).Close()
 		}, "channel.$f()").
 		SetMethod("send", func(e *Env) {
-			rv := reflect.ValueOf(e.This("_ch"))
+			rv := reflect.ValueOf(e.ThisProp("_ch"))
 			rv.Send(ToType(e.Get(0), rv.Type().Elem()))
 		}, "channel.$f(v: value)").
 		SetMethod("recv", func(e *Env) {
-			rv := reflect.ValueOf(e.This("_ch"))
+			rv := reflect.ValueOf(e.ThisProp("_ch"))
 			v, ok := rv.Recv()
 			e.A = NewArray(ValueOf(v), Bool(ok)).ToValue()
 		}, "channel.$f() -> value").

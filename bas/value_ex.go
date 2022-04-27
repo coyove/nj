@@ -209,19 +209,26 @@ func IsCallable(a Value) bool {
 	return a.Type() == typ.Object && a.Object().IsCallable()
 }
 
-// ToType returns value as a reflect.Value based on reflect.Type
+// ToType convert Value to reflect.Value based on reflect.Type
 func ToType(v Value, t reflect.Type) reflect.Value {
 	if t == nil {
 		return reflect.ValueOf(v.Interface())
-	} else if t == valueType {
+	}
+	if t == valueType {
 		return reflect.ValueOf(v)
-	} else if vt := v.Type(); vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
+	}
+
+	vt := v.Type()
+	if vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
 		return reflect.Zero(t)
-	} else if t.Implements(ioWriterType) || t.Implements(ioReaderType) || t.Implements(ioCloserType) {
+	}
+	if t.Implements(ioWriterType) || t.Implements(ioReaderType) || t.Implements(ioCloserType) {
 		return reflect.ValueOf(ValueIO(v))
-	} else if t.Implements(errType) {
+	}
+	if t.Implements(errType) {
 		return reflect.ValueOf(ToError(v))
-	} else if vt == typ.Object && t.Kind() == reflect.Func {
+	}
+	if IsCallable(v) && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
 			var a []Value
 			for i := range args {
@@ -231,7 +238,7 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 			if to := t.NumOut(); to == 1 {
 				results = []reflect.Value{ToType(out, t.Out(0))}
 			} else if to > 1 {
-				out.AssertType(typ.Array, "ReflectValue: expect multiple returned arguments")
+				out.AssertType(typ.Array, "ToType: expect multiple returned arguments")
 				results = make([]reflect.Value, t.NumOut())
 				for i := range results {
 					results[i] = ToType(out.Array().Get(i), t.Out(i))
@@ -239,9 +246,11 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 			}
 			return
 		})
-	} else if vt == typ.Number && t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
+	}
+	if vt == typ.Number && t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
 		return reflect.ValueOf(v.Interface()).Convert(t)
-	} else if vt == typ.Array {
+	}
+	if vt == typ.Array {
 		a := v.Array()
 		if t == reflect.TypeOf(a.Unwrap()) {
 			return reflect.ValueOf(a.Unwrap())
@@ -256,18 +265,66 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(ToType(v, t.Elem())); return true })
 			return s
 		}
-	} else if vt == typ.Object {
-		if t.Kind() == reflect.Map {
-			s := reflect.MakeMap(t)
-			kt, vt := t.Key(), t.Elem()
-			v.Object().Foreach(func(k Value, v *Value) bool {
-				s.SetMapIndex(ToType(k, kt), ToType(*v, vt))
-				return true
-			})
-			return s
+	}
+	if vt == typ.Object && t.Kind() == reflect.Map {
+		s := reflect.MakeMap(t)
+		kt, vt := t.Key(), t.Elem()
+		v.Object().Foreach(func(k Value, v *Value) bool {
+			s.SetMapIndex(ToType(k, kt), ToType(*v, vt))
+			return true
+		})
+		return s
+	}
+	if vt == typ.Object && t.Kind() == reflect.Struct {
+		return objectToStruct(v.Object(), t, false)
+	}
+	if vt == typ.Object && t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct {
+		return objectToStruct(v.Object(), t.Elem(), true)
+	}
+	if vt == typ.Bool && t.Kind() == reflect.Bool {
+		return reflect.ValueOf(v.Bool())
+	}
+	if vt == typ.String && t.Kind() == reflect.String {
+		return reflect.ValueOf(v.Str())
+	}
+	if vt == typ.Native {
+		if i := v.Interface(); reflect.TypeOf(i) == t {
+			return reflect.ValueOf(i)
 		}
 	}
-	return reflect.ValueOf(v.Interface())
+	panic("ToType: failed to convert " + simpleString(v) + " to " + t.String())
+}
+
+func objectToStruct(src *Object, t reflect.Type, ptr bool) reflect.Value {
+	vp := reflect.New(t)
+	s := vp.Elem()
+	src.Foreach(func(k Value, v *Value) bool {
+		field := k.AssertType(typ.String, "ToStruct: field name").Str()
+		if field == "" || field[0] < 'A' || field[0] > 'Z' {
+			return true
+		}
+		f := s.FieldByName(field)
+		if !f.IsValid() {
+			internal.Panic("ToStruct: field %q not found", field)
+		}
+		f.Set(ToType(*v, f.Type()))
+		return true
+	})
+	if ptr {
+		src.SetProp("_istruct", intf(s.Interface()))
+		src.SetMethod("interop", func(e *Env) {
+			this := e.Object(-1)
+			v := reflect.ValueOf(e.ThisProp("_istruct"))
+			for i := 0; i < v.NumField(); i++ {
+				f := v.Field(i)
+				if n := v.Type().Field(i).Name; n[0] >= 'A' && n[0] <= 'Z' {
+					this.SetProp(n, ValueOf(f.Interface()))
+				}
+			}
+		}, "")
+		return vp
+	}
+	return s
 }
 
 func Len(v Value) int {
@@ -286,6 +343,5 @@ func Len(v Value) int {
 	case typ.Native:
 		return reflect.ValueOf(v.Interface()).Len()
 	}
-	internal.Panic("can't measure length of %v", simpleString(v))
-	return -1
+	panic("can't measure length of " + simpleString(v))
 }

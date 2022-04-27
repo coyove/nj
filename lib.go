@@ -122,18 +122,18 @@ func init() {
 		e.A = bas.NewObject(1).SetPrototype(e.A.Object()).SetProp("_rx", bas.ValueOf(rx)).ToValue()
 	}, "re(regex: string) -> RegExp\n\tcreate a regular expression object").Object().
 		SetMethod("match", func(e *bas.Env) {
-			e.A = bas.Bool(e.This("_rx").(*regexp.Regexp).MatchString(e.Str(0)))
+			e.A = bas.Bool(e.ThisProp("_rx").(*regexp.Regexp).MatchString(e.Str(0)))
 		}, "RegExp.$f(text: string) -> bool").
 		SetMethod("find", func(e *bas.Env) {
-			m := e.This("_rx").(*regexp.Regexp).FindStringSubmatch(e.Str(0))
+			m := e.ThisProp("_rx").(*regexp.Regexp).FindStringSubmatch(e.Str(0))
 			e.A = bas.NewTypedArray(m, bas.GetTypedArrayMeta(m)).ToValue()
 		}, "RegExp.$f(text: string) -> array").
 		SetMethod("findall", func(e *bas.Env) {
-			m := e.This("_rx").(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).Maybe().Int(-1))
+			m := e.ThisProp("_rx").(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).Maybe().Int(-1))
 			e.A = bas.NewTypedArray(m, bas.GetTypedArrayMeta(m)).ToValue()
 		}, "RegExp.$f(text: string) -> array").
 		SetMethod("replace", func(e *bas.Env) {
-			e.A = bas.Str(e.This("_rx").(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
+			e.A = bas.Str(e.ThisProp("_rx").(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
 		}, "RegExp.$f(old: string, new: string) -> string").
 		ToValue())
 
@@ -165,15 +165,15 @@ func init() {
 			SetProp("_f", bas.ValueOf(f)).
 			SetProp("path", bas.Str(f.Name())).
 			SetMethod("sync", func(e *bas.Env) {
-				internal.PanicErr(e.This("_f").(*os.File).Sync())
+				internal.PanicErr(e.ThisProp("_f").(*os.File).Sync())
 			}, "File.$f()").
 			SetMethod("stat", func(e *bas.Env) {
-				fi, err := e.This("_f").(*os.File).Stat()
+				fi, err := e.ThisProp("_f").(*os.File).Stat()
 				internal.PanicErr(err)
 				e.A = bas.ValueOf(fi)
 			}, "File.$f() -> go.os.FileInfo").
 			SetMethod("truncate", func(e *bas.Env) {
-				f := e.This("_f").(*os.File)
+				f := e.ThisProp("_f").(*os.File)
 				internal.PanicErr(f.Truncate(e.Int64(1)))
 				t, err := f.Seek(0, 2)
 				internal.PanicErr(err)
@@ -322,11 +322,11 @@ func init() {
 
 	encDecProto := bas.NamedObject("EncodeDecode", 0).
 		SetMethod("encode", func(e *bas.Env) {
-			i := e.This("_e")
+			i := e.ThisProp("_e")
 			e.A = bas.Str(i.(interface{ EncodeToString([]byte) string }).EncodeToString(bas.ToReadonlyBytes(e.Get(0))))
 		}, "").
 		SetMethod("decode", func(e *bas.Env) {
-			i := e.This("_e")
+			i := e.ThisProp("_e")
 			v, err := i.(interface{ DecodeString(string) ([]byte, error) }).DecodeString(e.Str(0))
 			internal.PanicErr(err)
 			e.A = bas.Bytes(v)
@@ -335,7 +335,7 @@ func init() {
 			SetMethod("encoder", func(e *bas.Env) {
 				enc := bas.Nil
 				buf := &bytes.Buffer{}
-				switch encoding := e.This("_e").(type) {
+				switch encoding := e.ThisProp("_e").(type) {
 				default:
 					enc = bas.ValueOf(hex.NewEncoder(buf))
 				case *base32.Encoding:
@@ -347,10 +347,10 @@ func init() {
 					SetProp("_f", bas.ValueOf(enc)).
 					SetProp("_b", bas.ValueOf(buf)).
 					SetMethod("value", func(e *bas.Env) {
-						e.A = bas.Str(e.This("_b").(*bytes.Buffer).String())
+						e.A = bas.Str(e.ThisProp("_b").(*bytes.Buffer).String())
 					}, "").
 					SetMethod("bytes", func(e *bas.Env) {
-						e.A = bas.Bytes(e.This("_b").(*bytes.Buffer).Bytes())
+						e.A = bas.Bytes(e.ThisProp("_b").(*bytes.Buffer).Bytes())
 					}, "").
 					SetPrototype(bas.Proto.WriteCloser).
 					ToValue()
@@ -358,7 +358,7 @@ func init() {
 			SetMethod("decoder", func(e *bas.Env) {
 				src := bas.NewReader(e.Get(0))
 				dec := bas.Nil
-				switch encoding := e.This("_e").(type) {
+				switch encoding := e.ThisProp("_e").(type) {
 				case *base64.Encoding:
 					dec = bas.ValueOf(base64.NewDecoder(encoding, src))
 				case *base32.Encoding:
@@ -586,13 +586,13 @@ func init() {
 			SetPrototype(bas.Proto.ReadWriter).
 			SetProp("_f", bas.ValueOf(b)).
 			SetMethod("reset", func(e *bas.Env) {
-				e.This("_f").(*internal.LimitedBuffer).Reset()
+				e.ThisProp("_f").(*internal.LimitedBuffer).Reset()
 			}, "Buffer.$f()").
 			SetMethod("value", func(e *bas.Env) {
-				e.A = bas.UnsafeStr(e.This("_f").(*internal.LimitedBuffer).Bytes())
+				e.A = bas.UnsafeStr(e.ThisProp("_f").(*internal.LimitedBuffer).Bytes())
 			}, "Buffer.$f() -> string").
 			SetMethod("bytes", func(e *bas.Env) {
-				e.A = bas.Bytes(e.This("_f").(*internal.LimitedBuffer).Bytes())
+				e.A = bas.Bytes(e.ThisProp("_f").(*internal.LimitedBuffer).Bytes())
 			}, "Buffer.$f() -> bytes").
 			ToValue()
 	}, "$f(v?: string|bytes|int) -> Buffer")

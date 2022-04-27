@@ -73,6 +73,7 @@ func (env *Env) grow(newSize int) {
 }
 
 // Get gets a value from the current stack
+// Get(-1) means env.A
 func (env *Env) Get(index int) Value {
 	if index == -1 {
 		return env.A
@@ -169,7 +170,7 @@ func (env *Env) Interface(idx int) interface{} {
 	return env.Get(idx).Interface()
 }
 
-func (env *Env) This(k string) interface{} {
+func (env *Env) ThisProp(k string) interface{} {
 	return env.Object(-1).Prop(k).Interface()
 }
 
@@ -177,7 +178,7 @@ func (env *Env) mustBe(t typ.ValueType, idx int) (v Value) {
 	if idx == -1 {
 		v = env.A
 		if v.Type() != t {
-			internal.Panic("argument 'this' expects %v, got %v", t, simpleString(v))
+			internal.Panic("argument 'this' should be %v, not %v", t, simpleString(v))
 		}
 	} else {
 		v = env.Get(idx)

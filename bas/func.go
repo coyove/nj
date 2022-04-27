@@ -302,33 +302,21 @@ func pkPrettify(c *Function, p *Program, toplevel bool) string {
 	}
 
 	oldpos := c.CodeSeg.Pos
-	lastLine := uint32(0)
 
 	for i, inst := range c.CodeSeg.Code {
 		cursor := uint32(i) + 1
 		bop, a, b := inst.Opcode, inst.A, uint16(inst.B)
 
-		if c.CodeSeg.Pos.Len() > 0 {
-			op, line := c.CodeSeg.Pos.Pop()
+		if oldpos.Len() > 0 {
+			_, op, line := oldpos.Read(0)
 			// log.Println(cursor, splitInst, unsafe.Pointer(&Pos))
-			for uint32(cursor) > op && c.CodeSeg.Pos.Len() > 0 {
-				if op, line = c.CodeSeg.Pos.Pop(); uint32(cursor) <= op {
-					break
-				}
+			for uint32(cursor) > op && oldpos.Len() > 0 {
+				op, line = oldpos.Pop()
 			}
-
-			if op == uint32(cursor) {
-				x := "."
-				if line != lastLine {
-					x = strconv.Itoa(int(line))
-					lastLine = line
-				}
-				sb.WriteString(fmt.Sprintf("|%-4s % 4d| ", x, cursor-1))
-			} else {
-				sb.WriteString(fmt.Sprintf("|     % 4d| ", cursor-1))
-			}
+			x := strconv.Itoa(int(line))
+			sb.WriteString(fmt.Sprintf("|%-5s % 4d| ", x+"L", cursor-1))
 		} else {
-			sb.WriteString(fmt.Sprintf("|$    % 4d| ", cursor-1))
+			sb.WriteString(fmt.Sprintf("|$     % 4d| ", cursor-1))
 		}
 
 		switch bop {
@@ -371,8 +359,6 @@ func pkPrettify(c *Function, p *Program, toplevel bool) string {
 
 		sb.WriteString("\n")
 	}
-
-	c.CodeSeg.Pos = oldpos
 
 	sb.WriteString("+ END " + c.String())
 	return sb.String()

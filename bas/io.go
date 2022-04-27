@@ -25,11 +25,11 @@ func init() {
 			_ = buf == nil && e.SetA(Nil) || e.SetA(Bytes(buf))
 		}, "Reader.$f(n?: int) -> bytes\n\tread all (or at most `n`) bytes, return nil if EOF reached").
 		SetMethod("readbuf", func(e *Env) {
-			rn, err := e.This("_f").(io.Reader).Read(e.Array(0).Unwrap().([]byte))
+			rn, err := e.ThisProp("_f").(io.Reader).Read(e.Array(0).Unwrap().([]byte))
 			e.A = NewArray(Int(rn), ValueOf(err)).ToValue() // return in Go style
 		}, "Reader.$f(buf: bytes) -> [int, Error]\n\tread into `buf` and return in Go style").
 		SetMethod("readlines", func(e *Env) {
-			f := e.This("_f").(io.Reader)
+			f := e.ThisProp("_f").(io.Reader)
 			delim := e.Object(-1).Prop("delim").Maybe().Str("\n")
 			if e.Get(0) == Nil {
 				buf, err := ioutil.ReadAll(f)
@@ -66,7 +66,7 @@ func init() {
 
 	Proto.Writer.
 		SetMethod("write", func(e *Env) {
-			wn, err := e.This("_f").(io.Writer).Write(ToReadonlyBytes(e.Get(0)))
+			wn, err := e.ThisProp("_f").(io.Writer).Write(ToReadonlyBytes(e.Get(0)))
 			internal.PanicErr(err)
 			e.A = Int(wn)
 		}, "Writer.$f(buf: string|bytes) -> int\n\twrite `buf` to writer").
@@ -84,7 +84,7 @@ func init() {
 
 	Proto.Seeker.
 		SetMethod("seek", func(e *Env) {
-			f := e.This("_f").(io.Seeker)
+			f := e.ThisProp("_f").(io.Seeker)
 			wn, err := f.Seek(e.Int64(0), e.Int(1))
 			internal.PanicErr(err)
 			e.A = Int64(wn)
@@ -92,7 +92,7 @@ func init() {
 
 	Proto.Closer.
 		SetMethod("close", func(e *Env) {
-			internal.PanicErr(e.This("_f").(io.Closer).Close())
+			internal.PanicErr(e.ThisProp("_f").(io.Closer).Close())
 		}, "Closer.$f()")
 
 	Proto.ReadWriter.Merge(Proto.Reader).Merge(Proto.Writer)
@@ -234,7 +234,7 @@ func (m ValueIO) Close() error {
 }
 
 func ioRead(e *Env) []byte {
-	f := e.This("_f").(io.Reader)
+	f := e.ThisProp("_f").(io.Reader)
 	if n := e.Get(0); n.Type() == typ.Number {
 		p := make([]byte, n.Maybe().Int64(0))
 		rn, err := f.Read(p)

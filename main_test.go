@@ -43,6 +43,10 @@ type testStructEmbed struct {
 	T testStruct
 }
 
+type testStructPtr struct {
+	T *testStruct
+}
+
 func runFile(t *testing.T, path string) {
 	if !flag.Parsed() {
 		flag.Parse()
@@ -58,6 +62,12 @@ func runFile(t *testing.T, path string) {
 			})).
 			SetProp("nativeVarargTest2", bas.ValueOf(func(b string, a ...int) string {
 				return b + strconv.Itoa(len(a))
+			})).
+			SetProp("nativeVarargTest3", bas.ValueOf(func(s testStructPtr) int {
+				return s.T.A
+			})).
+			SetProp("nativeVarargTest4", bas.ValueOf(func(s *testStructPtr, v int) {
+				s.T.A = v
 			})).
 			SetProp("gomap", bas.ValueOf(func(m map[string]int, k string, v int) map[string]int {
 				m[k] = v
@@ -89,7 +99,6 @@ func runFile(t *testing.T, path string) {
 	if internal.IsDebug() {
 		fmt.Println(b.GoString())
 	}
-	// log.Println(b.Symbols)
 
 	_, err = b.Run()
 	if err != nil {
