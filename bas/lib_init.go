@@ -77,7 +77,7 @@ func init() {
 		SetMethod("trace", func(env *Env) {
 			stacks := env.Runtime().Stacktrace()
 			lines := make([]Value, 0, len(stacks))
-			for i := len(stacks) - 1 - env.Get(0).Safe().Int(0); i >= 0; i-- {
+			for i := len(stacks) - 1 - env.Get(0).Maybe().Int(0); i >= 0; i-- {
 				r := stacks[i]
 				lines = append(lines, Str(r.Callable.Name), Int64(int64(r.sourceLine())), Int64(int64(r.Cursor-1)))
 			}
@@ -120,7 +120,7 @@ func init() {
 		if v := e.Get(0); v.Type() == typ.Number {
 			e.A = Int64(v.Int64())
 		} else {
-			v, err := strconv.ParseInt(v.String(), e.Get(1).Safe().Int(0), 64)
+			v, err := strconv.ParseInt(v.String(), e.Get(1).Maybe().Int(0), 64)
 			internal.PanicErr(err)
 			e.A = Int64(v)
 		}
@@ -158,27 +158,27 @@ func init() {
 
 	ObjectProto = *NamedObject("object", 0).
 		SetMethod("new", func(e *Env) {
-			e.A = NewObject(e.Get(0).Safe().Int(0)).ToValue()
+			e.A = NewObject(e.Get(0).Maybe().Int(0)).ToValue()
 		}, "object.$f(sz?: int) -> object").
 		SetMethod("newstatic", func(e *Env) {
-			e.A = NewObject(e.Get(0).Safe().Int(0)).SetPrototype(Proto.StaticObject).ToValue()
+			e.A = NewObject(e.Get(0).Maybe().Int(0)).SetPrototype(Proto.StaticObject).ToValue()
 		}, "object.$f(sz?: int) -> staticobject").
 		SetMethod("find", func(e *Env) {
 			e.A = e.Object(-1).Find(e.Get(0))
-		}, "object.$f(k: value) -> value").
+		}, "object.$f(k: value) -> value\n\tget value by key").
 		SetMethod("set", func(e *Env) {
 			e.A = e.Object(-1).Set(e.Get(0), e.Get(1))
 		}, "object.$f(k: value, v: value) -> value\n\tset value and return previous value").
 		SetMethod("get", func(e *Env) {
 			e.A = e.Object(-1).Get(e.Get(0))
-		}, "object.$f(k: value) -> value").
+		}, "object.$f(k: value) -> value\n\tget value by key, ignoring object's prototype").
 		SetMethod("delete", func(e *Env) {
 			e.A = e.Object(-1).Delete(e.Get(0))
-		}, "object.$f(k: value) -> value\n\tdelete value and return previous value").
+		}, "object.$f(k: value) -> value\n\tdelete value by key, and return previous value").
 		SetMethod("clear", func(e *Env) { e.Object(-1).Clear() }, "object.$f()").
 		SetMethod("copy", func(e *Env) {
-			e.A = e.Object(-1).Copy(e.Get(0).IsTrue()).ToValue()
-		}, "object.$f(copydata?: bool) -> object\n\tcopy the object (and its key-value data if flag is set)").
+			e.A = e.Object(-1).Copy(e.Get(0).Maybe().Bool()).ToValue()
+		}, "object.$f(copydata?: bool) -> object\n\tcopy the object (and its key-value data if `copydata` is true)").
 		SetMethod("proto", func(e *Env) {
 			e.A = e.Object(-1).Prototype().ToValue()
 		}, "object.$f() -> object\n\treturn object's prototype if any").
@@ -194,6 +194,9 @@ func init() {
 		SetMethod("name", func(e *Env) {
 			e.A = Str(e.Object(-1).Name())
 		}, "object.$f() -> string\n\treturn object's name").
+		SetMethod("setname", func(e *Env) {
+			e.Object(-1).setName(e.Str(0))
+		}, "object.$f(name: str)\n\tset object's name").
 		SetMethod("keys", func(e *Env) {
 			a := make([]Value, 0)
 			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, k); return true })
@@ -214,7 +217,7 @@ func init() {
 			e.Object(-1).Foreach(func(k Value, v *Value) bool { return e.Call(f, k, *v) != False })
 		}, "object.$f(f: function)").
 		SetMethod("contains", func(e *Env) {
-			e.A = Bool(e.Object(-1).Contains(e.Get(0), e.Get(1).IsTrue()))
+			e.A = Bool(e.Object(-1).Contains(e.Get(0), e.Get(1).Maybe().Bool()))
 		}, "object.$f(key: value, includeproto?: bool) -> bool").
 		SetMethod("merge", func(e *Env) {
 			e.A = e.Object(-1).Merge(e.Object(0)).ToValue()
@@ -269,7 +272,7 @@ func init() {
 			"\trun function, return Error if any panic occurred (if function tends to return multiple results, they will all be Error by then)").
 		SetMethod("after", func(e *Env) {
 			f, args, e2 := e.Object(-1), e.CopyStack()[1:], EnvForAsyncCall(e)
-			t := time.AfterFunc(e.Num(0).Safe().Duration(0), func() { e2.Call(f, args...) })
+			t := time.AfterFunc(time.Duration(e.Float64(0)*1e6)*1e3, func() { e2.Call(f, args...) })
 			e.A = NamedObject("Timer", 0).
 				SetProp("t", ValueOf(t)).
 				SetMethod("stop", func(e *Env) { e.A = Bool(e.This("t").(*time.Timer).Stop()) }, "$f() -> bool\n\tstop the timer").
@@ -290,18 +293,11 @@ func init() {
 			e.A = NamedObject("Goroutine", 0).
 				SetProp("f", f.ToValue()).
 				SetProp("w", intf(w)).
-				SetMethod("wait", func(e *Env) {
-					select {
-					case <-time.After(e.Get(0).Safe().Duration(1 << 62)):
-						panic("timeout")
-					case v := <-e.This("w").(chan Value):
-						e.A = v
-					}
-				}, "").
+				SetMethod("wait", func(e *Env) { e.A = <-e.This("w").(chan Value) }, "").
 				ToValue()
 		}, "function.$f(args...: value) -> Goroutine\n\texecute `f` in goroutine").
 		SetMethod("map", func(e *Env) {
-			e.A = multiMap(e, e.Object(-1), e.Get(0), e.Get(1).Safe().Int(1))
+			e.A = multiMap(e, e.Object(-1), e.Get(0), e.Get(1).Maybe().Int(1))
 		}, "function.$f(a: object|array, n?: int) -> object|array\n"+
 			"\tmap values in `a` into new values using `f(k, v)`,\n"+
 			"\tsetting `n` higher than 1 will spread the load to n workers").
@@ -360,7 +356,7 @@ func init() {
 		}, "array.$f(f: function) -> array\n\tfilter out all values where f(value) is false").
 		SetMethod("slice", func(e *Env) {
 			a := e.Array(-1)
-			st, en := e.Int(0), e.Get(1).Safe().Int(a.Len())
+			st, en := e.Int(0), e.Get(1).Maybe().Int(a.Len())
 			for ; st < 0 && a.Len() > 0; st += a.Len() {
 			}
 			for ; en < 0 && a.Len() > 0; en += a.Len() {
@@ -385,10 +381,10 @@ func init() {
 			e.Array(-1).Concat(e.Array(0))
 		}, "array.$f(a: array)\n\tconcat two arrays").
 		SetMethod("sort", func(e *Env) {
-			a, rev := e.Array(-1), e.Get(0).IsTrue()
-			if kf := e.Get(1); IsCallable(kf) {
+			a, rev := e.Array(-1), e.Get(0).Maybe().Bool()
+			if kf := e.Get(1).Maybe().Func(nil); kf == nil {
 				sort.Slice(a.Unwrap(), func(i, j int) bool {
-					return Less(e.Call(kf.Object(), a.Get(i)), e.Call(kf.Object(), a.Get(j))) != rev
+					return Less(e.Call(kf, a.Get(i)), e.Call(kf, a.Get(j))) != rev
 				})
 			} else {
 				sort.Slice(a.Unwrap(), func(i, j int) bool { return Less(a.Get(i), a.Get(j)) != rev })
@@ -415,14 +411,14 @@ func init() {
 
 	*Proto.Channel = *Func("channel", func(e *Env) {
 		rv := reflect.ValueOf(e.Interface(0))
-		_ = rv.Kind() == reflect.Chan && e.SetA(ValueOf(rv.Interface())) || e.SetA(ValueOf(make(chan Value, e.Get(0).Safe().Int(0))))
+		_ = rv.Kind() == reflect.Chan && e.SetA(ValueOf(rv.Interface())) || e.SetA(ValueOf(make(chan Value, e.Get(0).Maybe().Int64(0))))
 	}, "").Object().
 		SetMethod("close", func(e *Env) {
 			reflect.ValueOf(e.This("_ch")).Close()
 		}, "channel.$f()").
 		SetMethod("send", func(e *Env) {
 			rv := reflect.ValueOf(e.This("_ch"))
-			rv.Send(e.Get(0).ReflectValue(rv.Type().Elem()))
+			rv.Send(ToType(e.Get(0), rv.Type().Elem()))
 		}, "channel.$f(v: value)").
 		SetMethod("recv", func(e *Env) {
 			rv := reflect.ValueOf(e.This("_ch"))
@@ -433,18 +429,18 @@ func init() {
 			var cases []reflect.SelectCase
 			var callbacks []Value
 			e.Array(0).Foreach(func(_ int, v Value) bool {
-				v.Is(typ.Array, "sendmulti")
+				v.AssertType(typ.Array, "sendmulti")
 				k := v.Array().Get(0)
 				if k.Type() == typ.String && k == Str("default") {
 					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectDefault})
 					callbacks = append(callbacks, v)
 				} else {
 					ch := reflect.ValueOf(k.Object().Prop("_ch").Interface())
-					a := v.Is(typ.Array, "sendmulti: expect [value, callback]").Array()
+					a := v.AssertType(typ.Array, "sendmulti: expect [value, callback]").Array()
 					cases = append(cases, reflect.SelectCase{
 						Dir:  reflect.SelectSend,
 						Chan: ch,
-						Send: a.Get(0).ReflectValue(ch.Type().Elem()),
+						Send: ToType(a.Get(0), ch.Type().Elem()),
 					})
 					callbacks = append(callbacks, a.Get(1))
 				}
@@ -485,10 +481,10 @@ func init() {
 			e.A = Str(fmt.Sprint(e.Interface(0)))
 		}, "$f(v: value) -> string\n\tconvert `v` to string").
 		SetMethod("size", func(e *Env) {
-			e.A = Int(e.StrLen(-1))
+			e.A = Int(Len(e.Get(-1)))
 		}, "str.$f() -> int\n\tsame as len()").
 		SetMethod("len", func(e *Env) {
-			e.A = Int(e.StrLen(-1))
+			e.A = Int(Len(e.Get(-1)))
 		}, "str.$f() -> int\n\tsame as size()").
 		SetMethod("count", func(e *Env) {
 			e.A = Int(utf8.RuneCountInString(e.Str(-1)))
@@ -500,7 +496,7 @@ func init() {
 			e.A = Bool(strings.Contains(e.Str(-1), e.Str(0)))
 		}, "str.$f(substr: string) -> bool").
 		SetMethod("split", func(e *Env) {
-			if n := e.Get(1).Safe().Int(0); n == 0 {
+			if n := e.Get(1).Maybe().Int(0); n == 0 {
 				e.A = NewTypedArray(strings.Split(e.Str(-1), e.Str(0)), stringsArrayMeta).ToValue()
 			} else {
 				e.A = NewTypedArray(strings.SplitN(e.Str(-1), e.Str(0), n), stringsArrayMeta).ToValue()
@@ -520,7 +516,7 @@ func init() {
 			e.A = UnsafeStr(buf.Bytes())
 		}, "str.$f(a: array) -> string").
 		SetMethod("replace", func(e *Env) {
-			e.A = Str(strings.Replace(e.Str(-1), e.Str(0), e.Str(1), e.Get(2).Safe().Int(-1)))
+			e.A = Str(strings.Replace(e.Str(-1), e.Str(0), e.Str(1), e.Get(2).Maybe().Int(-1)))
 		}, "str.$f(old: string, new: string, count?: int) -> string").
 		SetMethod("glob", func(e *Env) {
 			m, err := filepath.Match(e.Str(-1), e.Str(0))
@@ -528,7 +524,7 @@ func init() {
 			e.A = Bool(m)
 		}, "str.$f(text: string) -> bool").
 		SetMethod("find", func(e *Env) {
-			start, end := e.Get(1).Safe().Int(0), e.Get(2).Safe().Int(e.StrLen(-1))
+			start, end := e.Get(1).Maybe().Int(0), e.Get(2).Maybe().Int(Len(e.Get(-1)))
 			e.A = Int(strings.Index(e.Str(-1)[start:end], e.Str(0)))
 		}, "str.$f(sub: string, start?: int, end?: int) -> int\n\tfind the index of first appearence of `sub` in text").
 		SetMethod("findsub", func(e *Env) {
@@ -541,7 +537,7 @@ func init() {
 		}, "str.$f(sub: string) -> int\n\tsame as find(), but starting from right to left").
 		SetMethod("sub", func(e *Env) {
 			s := e.Str(-1)
-			st, en := e.Int(0), e.Get(1).Safe().Int(len(s))
+			st, en := e.Int(0), e.Get(1).Maybe().Int(len(s))
 			for ; st < 0 && len(s) > 0; st += len(s) {
 			}
 			for ; en < 0 && len(s) > 0; en += len(s) {
@@ -549,7 +545,8 @@ func init() {
 			e.A = Str(s[st:en])
 		}, "str.$f(start: int, end?: int) -> string").
 		SetMethod("trim", func(e *Env) {
-			_ = e.Get(0).IsNil() && e.SetA(Str(strings.TrimSpace(e.Str(-1)))) || e.SetA(Str(strings.Trim(e.Str(-1), e.Str(0))))
+			cutset := e.Get(0).Maybe().Str("")
+			_ = cutset == "" && e.SetA(Str(strings.TrimSpace(e.Str(-1)))) || e.SetA(Str(strings.Trim(e.Str(-1), e.Str(0))))
 		}, "str.$f(cutset?: string) -> string\n\ttrim spaces (or any chars in `cutset`) at both sides of the text").
 		SetMethod("trimprefix", func(e *Env) {
 			e.A = Str(strings.TrimPrefix(e.Str(-1), e.Str(0)))
@@ -573,7 +570,7 @@ func init() {
 		SetMethod("lower", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }, "str.$f() -> string").
 		SetMethod("chars", func(e *Env) {
 			var r []Value
-			for s, code := e.Str(-1), e.Get(0).IsTrue(); len(s) > 0; {
+			for s, code := e.Str(-1), e.Get(0).Maybe().Bool(); len(s) > 0; {
 				rn, sz := utf8.DecodeRuneInString(s)
 				if sz == 0 {
 					break

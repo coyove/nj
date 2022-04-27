@@ -1,7 +1,5 @@
 package typ
 
-import "fmt"
-
 type ValueType byte
 
 const (
@@ -28,11 +26,3 @@ const (
 	RegGlobalFlag        = 0x8000
 	RegMaxAddress        = 0x7f00
 )
-
-type Symbol struct {
-	Address uint16
-}
-
-func (s *Symbol) String() string {
-	return fmt.Sprintf("symbol:%d", s.Address)
-}

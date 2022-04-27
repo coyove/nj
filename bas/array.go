@@ -88,12 +88,12 @@ func init() {
 		func(a *Array) []Value { a.notSupported("Values"); return nil },
 		func(a *Array, idx int) Value { return Int64(int64(a.any.([]byte)[idx])) },
 		func(a *Array, idx int, v Value) {
-			a.any.([]byte)[idx] = byte(v.Is(typ.Number, "bytes.Set").Int())
+			a.any.([]byte)[idx] = byte(v.AssertType(typ.Number, "bytes.Set").Int())
 		},
 		func(a *Array, v ...Value) {
 			p := a.any.([]byte)
 			for _, b := range v {
-				p = append(p, byte(b.Is(typ.Number, "bytes.Append").Int()))
+				p = append(p, byte(b.AssertType(typ.Number, "bytes.Append").Int()))
 			}
 			a.any = p
 		},
@@ -107,7 +107,7 @@ func init() {
 			if from.meta == internalArrayMeta {
 				buf := a.any.([]byte)
 				for i := start; i < end; i++ {
-					buf[i] = byte(from.Get(i-start).Is(typ.Number, "bytes.Copy").Int())
+					buf[i] = byte(from.Get(i-start).AssertType(typ.Number, "bytes.Copy").Int())
 				}
 			} else {
 				copy(a.any.([]byte)[start:end], from.any.([]byte))
@@ -117,7 +117,7 @@ func init() {
 			if b.meta == internalArrayMeta {
 				buf := a.any.([]byte)
 				for i := 0; i < b.Len(); i++ {
-					buf[i] = byte(b.Get(i).Is(typ.Number, "bytes.Concat").Int())
+					buf[i] = byte(b.Get(i).AssertType(typ.Number, "bytes.Concat").Int())
 				}
 				a.any = buf
 			} else {
@@ -149,12 +149,12 @@ func init() {
 		},
 		func(a *Array, idx int) Value { return Str(a.any.([]string)[idx]) },
 		func(a *Array, idx int, v Value) {
-			a.any.([]string)[idx] = v.Is(typ.String, "[]string.Set").Str()
+			a.any.([]string)[idx] = v.AssertType(typ.String, "[]string.Set").Str()
 		},
 		func(a *Array, v ...Value) {
 			p := a.any.([]string)
 			for _, b := range v {
-				p = append(p, b.Is(typ.String, "[]string.Append").Str())
+				p = append(p, b.AssertType(typ.String, "[]string.Append").Str())
 			}
 			a.any = p
 		},
@@ -169,7 +169,7 @@ func init() {
 			if from.meta == internalArrayMeta {
 				buf := a.any.([]string)
 				for i := start; i < end; i++ {
-					buf[i] = from.Get(i-start).Is(typ.String, "[]string.Copy").Str()
+					buf[i] = from.Get(i-start).AssertType(typ.String, "[]string.Copy").Str()
 				}
 			} else {
 				copy(a.any.([]byte)[start:end], from.any.([]byte))
@@ -179,7 +179,7 @@ func init() {
 			if b.meta == internalArrayMeta {
 				buf := a.any.([]string)
 				for i := 0; i < b.Len(); i++ {
-					buf[i] = b.Get(i).Is(typ.String, "[]string.Concat").Str()
+					buf[i] = b.Get(i).AssertType(typ.String, "[]string.Concat").Str()
 				}
 				a.any = buf
 			} else {
@@ -394,14 +394,14 @@ func sgGet(a *Array, idx int) Value {
 
 func sgSet(a *Array, idx int, v Value) {
 	rv := reflect.ValueOf(a.any)
-	rv.Index(idx).Set(v.ReflectValue(rv.Type().Elem()))
+	rv.Index(idx).Set(ToType(v, rv.Type().Elem()))
 }
 
 func sgAppend(a *Array, v ...Value) {
 	rv := reflect.ValueOf(a.any)
 	rt := rv.Type().Elem()
 	for _, b := range v {
-		rv = reflect.Append(rv, b.ReflectValue(rt))
+		rv = reflect.Append(rv, ToType(b, rt))
 	}
 	a.any = rv.Interface()
 }
@@ -419,7 +419,7 @@ func sgCopy(a *Array, start, end int, from *Array) {
 		rv := reflect.ValueOf(a.any)
 		rt := rv.Type().Elem()
 		for i := start; i < end; i++ {
-			rv.Index(i).Set(from.Get(i - start).ReflectValue(rt))
+			rv.Index(i).Set(ToType(from.Get(i-start), rt))
 		}
 	} else {
 		reflect.Copy(reflect.ValueOf(a.any).Slice(start, end), reflect.ValueOf(from.any))
@@ -431,7 +431,7 @@ func sgConcat(a *Array, b *Array) {
 		rv := reflect.ValueOf(a.any)
 		rt := rv.Type().Elem()
 		for i := 0; i < b.Len(); i++ {
-			rv = reflect.Append(rv, b.Get(i).ReflectValue(rt))
+			rv = reflect.Append(rv, ToType(b.Get(i), rt))
 		}
 		a.any = rv.Interface()
 	} else {

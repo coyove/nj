@@ -26,6 +26,7 @@ type Function struct {
 	Locals     []string
 	obj        *Object
 }
+
 type Environment struct {
 	MaxStackSize int64
 	Globals      *Object

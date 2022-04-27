@@ -55,14 +55,14 @@ func init() {
 		e.A = MustRun(LoadFile(e.Str(0), &e.Global.Environment))
 	}, "$f(path: string) -> value\n\tload and eval file at `path`, globals will be inherited in loaded file")
 	bas.Globals.SetMethod("eval", func(e *bas.Env) {
-		opts := e.Get(1).Safe().Object()
+		opts := e.Get(1).Maybe().Object(nil)
 		if opts.Prop("ast").IsTrue() {
 			v, err := parser.Parse(e.Str(0), "")
 			internal.PanicErr(err)
 			e.A = bas.ValueOf(v)
 			return
 		}
-		p, err := LoadString(e.Str(0), &bas.Environment{Globals: opts.Prop("globals").Safe().Object()})
+		p, err := LoadString(e.Str(0), &bas.Environment{Globals: opts.Prop("globals").Maybe().Object(nil)})
 		internal.PanicErr(err)
 		v, err := p.Run()
 		internal.PanicErr(err)
@@ -80,10 +80,10 @@ func init() {
 	}, "$f(w: Writer, args...: value)\n\twrite `args` to `w`")
 	bas.Globals.SetMethod("scanln", func(env *bas.Env) {
 		prompt, n := env.Get(0), env.Get(1)
-		fmt.Fprint(env.Global.Stdout, prompt.Safe().Str(""))
+		fmt.Fprint(env.Global.Stdout, prompt.Maybe().Str(""))
 		var results []bas.Value
 		var r io.Reader = env.Global.Stdin
-		for i := n.Safe().Int64(1); i > 0; i-- {
+		for i := n.Maybe().Int64(1); i > 0; i-- {
 			var s string
 			if _, err := fmt.Fscan(r, &s); err != nil {
 				break
@@ -93,11 +93,13 @@ func init() {
 		env.A = bas.NewArray(results...).ToValue()
 	}, "$f() -> array\n\tread all user inputs and return as [input1, input2, ...]\n"+
 		"$f(prompt: string, n?: int) -> array\n\tprint `prompt` then read all (or at most `n`) user inputs")
-	bas.Globals.SetMethod("sleep", func(e *bas.Env) { time.Sleep(e.Num(0).Safe().Duration(0)) }, "$f(sec: float)")
+	bas.Globals.SetMethod("sleep", func(e *bas.Env) {
+		time.Sleep(time.Duration(e.Float64(0)*1e6) * 1e3)
+	}, "$f(sec: float)")
 	bas.Globals.SetMethod("Go_time", func(e *bas.Env) {
 		if e.Size() > 0 {
 			e.A = bas.ValueOf(time.Date(e.Int(0), time.Month(e.Int(1)), e.Int(2),
-				e.Get(3).Safe().Int(0), e.Get(4).Safe().Int(0), e.Get(5).Safe().Int(0), e.Get(6).Safe().Int(0), time.UTC))
+				e.Get(3).Maybe().Int(0), e.Get(4).Maybe().Int(0), e.Get(5).Maybe().Int(0), e.Get(6).Maybe().Int(0), time.UTC))
 		} else {
 			e.A = bas.ValueOf(time.Now())
 		}
@@ -127,7 +129,7 @@ func init() {
 			e.A = bas.NewTypedArray(m, bas.GetTypedArrayMeta(m)).ToValue()
 		}, "RegExp.$f(text: string) -> array").
 		SetMethod("findall", func(e *bas.Env) {
-			m := e.This("_rx").(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).Safe().Int(-1))
+			m := e.This("_rx").(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).Maybe().Int(-1))
 			e.A = bas.NewTypedArray(m, bas.GetTypedArrayMeta(m)).ToValue()
 		}, "RegExp.$f(text: string) -> array").
 		SetMethod("replace", func(e *bas.Env) {
@@ -136,7 +138,7 @@ func init() {
 		ToValue())
 
 	bas.Globals.SetProp("open", bas.Func("open", func(e *bas.Env) {
-		path, flag, perm := e.Str(0), e.Get(1).Safe().Str("r"), e.Get(2).Safe().Int64(0644)
+		path, flag, perm := e.Str(0), e.Get(1).Maybe().Str("r"), e.Get(2).Maybe().Int64(0644)
 		var opt int
 		for _, f := range flag {
 			switch f {
@@ -195,7 +197,7 @@ func init() {
 		SetProp("PI", bas.Float64(math.Pi)).
 		SetProp("E", bas.Float64(math.E)).
 		SetMethod("randomseed", func(e *bas.Env) {
-			rand.Seed(e.Get(0).Safe().Int64(1))
+			rand.Seed(e.Get(0).Maybe().Int64(1))
 		}, "$f(seed: int)").
 		SetMethod("random", func(e *bas.Env) {
 			switch len(e.Stack()) {
@@ -260,14 +262,14 @@ func init() {
 		SetMethod("shell", func(e *bas.Env) {
 			win := runtime.GOOS == "windows"
 			p := exec.Command(internal.IfStr(win, "cmd", "sh"), internal.IfStr(win, "/c", "-c"), e.Str(0))
-			opt := e.Get(1).Safe().Object()
-			opt.Prop("env").Safe().Object().Foreach(func(k bas.Value, v *bas.Value) bool {
+			opt := e.Get(1).Maybe().Object(nil)
+			opt.Prop("env").Maybe().Object(nil).Foreach(func(k bas.Value, v *bas.Value) bool {
 				p.Env = append(p.Env, k.String()+"="+v.String())
 				return true
 			})
 			stdout := &bytes.Buffer{}
 			p.Stdout, p.Stderr = stdout, stdout
-			p.Dir = opt.Prop("dir").Safe().Str("")
+			p.Dir = opt.Prop("dir").Maybe().Str("")
 			if tmp := opt.Prop("stdout"); tmp != bas.Nil {
 				p.Stdout = bas.NewWriter(tmp)
 			}
@@ -283,7 +285,7 @@ func init() {
 			select {
 			case r := <-out:
 				internal.PanicErr(r)
-			case <-time.After(opt.Prop("timeout").Safe().Duration(1 << 62)):
+			case <-time.After(time.Duration(opt.Prop("timeout").Maybe().Float64(1<<52)*1e6) * 1e3):
 				p.Process.Kill()
 				panic("timeout")
 			}
@@ -321,7 +323,7 @@ func init() {
 	encDecProto := bas.NamedObject("EncodeDecode", 0).
 		SetMethod("encode", func(e *bas.Env) {
 			i := e.This("_e")
-			e.A = bas.Str(i.(interface{ EncodeToString([]byte) string }).EncodeToString(e.Get(0).Safe().Bytes()))
+			e.A = bas.Str(i.(interface{ EncodeToString([]byte) string }).EncodeToString(bas.ToReadonlyBytes(e.Get(0))))
 		}, "").
 		SetMethod("decode", func(e *bas.Env) {
 			i := e.This("_e")
@@ -393,7 +395,7 @@ func init() {
 			e.A = bas.ValueOf(time.Now())
 		}, "$f() -> go.time.Time").
 		SetMethod("after", func(e *bas.Env) {
-			e.A = bas.ValueOf(time.After(e.Get(0).Safe().Duration(0)))
+			e.A = bas.ValueOf(time.After(time.Duration(e.Float64(0)*1e6) * 1e3))
 		}, "").
 		SetMethod("parse", func(e *bas.Env) {
 			t, err := time.Parse(getTimeFormat(e.Str(0)), e.Str(1))
@@ -409,7 +411,7 @@ func init() {
 					tt = time.Now()
 				}
 			}
-			e.A = bas.Str(tt.Format(getTimeFormat(e.Get(0).Safe().Str(""))))
+			e.A = bas.Str(tt.Format(getTimeFormat(e.Get(0).Maybe().Str(""))))
 		}, "$f(format: string, t?: go.time.Time|float) -> string").
 		ToValue())
 
@@ -426,15 +428,15 @@ func init() {
 
 	httpLib := bas.Func("http", func(e *bas.Env) {
 		args := e.Get(0).Object()
-		to := args.Prop("timeout").Safe().Float64(1 << 30)
-		method := strings.ToUpper(args.Find(bas.Str("method")).Safe().Str("GET"))
+		to := args.Prop("timeout").Maybe().Float64(1 << 30)
+		method := strings.ToUpper(args.Find(bas.Str("method")).Maybe().Str("GET"))
 
-		u, err := url.Parse(args.Find(bas.Str("url")).Safe().Str("bad://%url%"))
+		u, err := url.Parse(args.Find(bas.Str("url")).Maybe().Str("bad://%url%"))
 		internal.PanicErr(err)
 
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Find(bas.Str(k))
-			x.Safe().Object().Foreach(func(k bas.Value, v *bas.Value) bool { add(k.String(), v.String()); return true })
+			x.Maybe().Object(nil).Foreach(func(k bas.Value, v *bas.Value) bool { add(k.String(), v.String()); return true })
 		}
 
 		additionalQueries := u.Query()
@@ -468,8 +470,8 @@ func init() {
 			if x := args.Prop("multipart"); x.Type() == typ.Object {
 				x.Object().Foreach(func(k bas.Value, v *bas.Value) bool {
 					key, rd := k.String(), *v
-					if rd.Type() == typ.Array && rd.Len() == 2 { // [filename, reader]
-						part, err := writer.CreateFormFile(key, rd.Array().Get(0).Safe().Str(""))
+					if rd.Type() == typ.Array && bas.Len(rd) == 2 { // [filename, reader]
+						part, err := writer.CreateFormFile(key, rd.Array().Get(0).Maybe().Str(""))
 						internal.PanicErr(err)
 						_, err = io.Copy(part, bas.NewReader(rd.Array().Get(1)))
 						internal.PanicErr(err)
@@ -514,7 +516,7 @@ func init() {
 				return http.ErrUseLastResponse
 			}
 		}
-		if p := args.Find(bas.Str("proxy")).Safe().Str(""); p != "" {
+		if p := args.Find(bas.Str("proxy")).Maybe().Str(""); p != "" {
 			client.Transport = &http.Transport{
 				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
 			}
@@ -562,7 +564,7 @@ func init() {
 	).Object()
 	for _, m := range []string{"get", "post", "put", "delete", "head", "patch"} {
 		httpLib = httpLib.SetMethod(m, func(e *bas.Env) {
-			ex := e.Get(1).Safe().Object()
+			ex := e.Get(1).Maybe().Object(nil)
 			e.A = e.Call(e.Object(-1), bas.NewObject(0).SetProp("method", bas.Str(m)).SetProp("url", e.Get(0)).Merge(ex).ToValue())
 		}, "")
 	}
@@ -576,8 +578,8 @@ func init() {
 		case typ.Number:
 			b.Limit = v.Int()
 		default:
-			if v.IsBytes() {
-				b.Write(v.Safe().Bytes())
+			if bas.IsBytes(v) {
+				b.Write(bas.ToBytes(v))
 			}
 		}
 		e.A = bas.NamedObject("Buffer", 0).

@@ -495,12 +495,12 @@ func TestACall(t *testing.T) {
 
 func TestReflectedValue(t *testing.T) {
 	v := bas.NewArray(bas.True, bas.False).ToValue()
-	x := v.ReflectValue(reflect.TypeOf([2]bool{})).Interface().([2]bool)
+	x := bas.ToType(v, reflect.TypeOf([2]bool{})).Interface().([2]bool)
 	if x[0] != true || x[1] != false {
 		t.Fatal(x)
 	}
 	v = bas.NewObject(2).SetProp("a", bas.Int64(1)).SetProp("b", bas.Int64(2)).ToValue()
-	y := v.ReflectValue(reflect.TypeOf(map[string]byte{})).Interface().(map[string]byte)
+	y := bas.ToType(v, reflect.TypeOf(map[string]byte{})).Interface().(map[string]byte)
 	if y["a"] != 1 || y["b"] != 2 {
 		t.Fatal(x)
 	}
@@ -569,7 +569,7 @@ func TestRunTimeout(t *testing.T) {
 	if err.Error() != "timeout" {
 		t.Fatal(err)
 	}
-	if v := o.Prop("a"); v.Safe().Int(0) == 0 {
+	if v := o.Prop("a"); v.Maybe().Int(0) == 0 {
 		t.Fatal(v)
 	}
 
@@ -578,7 +578,7 @@ func TestRunTimeout(t *testing.T) {
 	if err.Error() != "timeout" {
 		t.Fatal(err)
 	}
-	if v := o.Prop("a"); v.Safe().Int(0) == 0 {
+	if v := o.Prop("a"); v.Maybe().Int64(0) == 0 {
 		t.Fatal(v)
 	}
 }

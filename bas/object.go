@@ -44,9 +44,12 @@ func NewObject(preallocateSize int) *Object {
 }
 
 func NamedObject(name string, preallocateSize int) *Object {
-	obj := NewObject(preallocateSize)
-	obj.fun = &Function{Name: name, Dummy: true, Native: func(*Env) {}, obj: obj}
-	return obj
+	return NewObject(preallocateSize).setName(name)
+}
+
+func (m *Object) setName(name string) *Object {
+	m.fun = &Function{Name: name, Dummy: true, Native: func(*Env) {}, obj: m}
+	return m
 }
 
 func (m *Object) Prototype() *Object {

@@ -34,13 +34,13 @@ func reflectLoad(v interface{}, key Value) Value {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Map:
-		v := rv.MapIndex(key.ReflectValue(rv.Type().Key()))
+		v := rv.MapIndex(ToType(key, rv.Type().Key()))
 		if v.IsValid() {
 			return ValueOf(v.Interface())
 		}
 	}
 
-	k := key.Is(typ.String, "").Str()
+	k := key.AssertType(typ.String, "").Str()
 	f := rv.MethodByName(k)
 	if !f.IsValid() {
 		if rv.Kind() == reflect.Ptr {
@@ -77,17 +77,17 @@ func reflectStore(subject interface{}, key, value Value) {
 
 	rv := reflect.ValueOf(subject)
 	if rv.Kind() == reflect.Map {
-		rv.SetMapIndex(key.ReflectValue(rv.Type().Key()), value.ReflectValue(rv.Type().Elem()))
+		rv.SetMapIndex(ToType(key, rv.Type().Key()), ToType(value, rv.Type().Elem()))
 		return
 	}
 
 	rv = reflect.Indirect(rv)
-	k := key.Is(typ.String, "").Str()
+	k := key.AssertType(typ.String, "").Str()
 	f := rv.FieldByName(k)
 	if !f.IsValid() || !f.CanAddr() {
 		internal.Panic("reflect: %q not assignable in %v", k, subject)
 	}
-	f.Set(value.ReflectValue(f.Type()))
+	f.Set(ToType(value, f.Type()))
 }
 
 func or(a, b interface{}) interface{} {
@@ -109,7 +109,7 @@ func simpleString(v Value) string {
 	case typ.Number, typ.Bool, typ.Native:
 		return v.JSONString()
 	case typ.String:
-		if v.StrLen() <= 32 {
+		if Len(v) <= 32 {
 			return v.JSONString()
 		}
 		return strconv.Quote(v.Str()[:32] + "...")
@@ -175,7 +175,7 @@ func sprintf(env *Env, start int, p io.Writer) {
 		case typ.Bool:
 			fmt.Fprint(p, env.Bool(popi))
 		case typ.String:
-			if pop := env.Get(popi); pop.IsBytes() {
+			if pop := env.Get(popi); IsBytes(pop) {
 				fmt.Fprintf(p, tmp.String(), pop.Array().Unwrap())
 			} else {
 				fmt.Fprintf(p, tmp.String(), pop.String())
@@ -184,7 +184,7 @@ func sprintf(env *Env, start int, p io.Writer) {
 			if pop := env.Get(popi); pop.Type() == typ.String {
 				fmt.Fprintf(p, tmp.String(), pop.Str())
 				continue
-			} else if pop.IsBytes() {
+			} else if IsBytes(pop) {
 				fmt.Fprintf(p, tmp.String(), pop.Array().Unwrap())
 				continue
 			}
@@ -248,7 +248,7 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 			t.Object().Foreach(func(k Value, v *Value) bool { work(fun, &outError, payload{-1, k, v}); return outError == nil })
 		}
 	} else {
-		var in = make(chan payload, t.Len())
+		var in = make(chan payload, Len(t))
 		var wg sync.WaitGroup
 		wg.Add(n)
 		for i := 0; i < n; i++ {
@@ -274,85 +274,4 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 	}
 	internal.PanicErr(outError)
 	return t
-}
-
-func DeepEqual(a, b Value) bool {
-	if a.Equal(b) {
-		return true
-	}
-	if at, bt := a.Type(), b.Type(); at == bt {
-		switch at {
-		case typ.Array:
-			flag := a.Array().Len() == b.Array().Len()
-			if !flag {
-				return false
-			}
-			a.Array().Foreach(func(k int, v Value) bool {
-				flag = DeepEqual(b.Array().Get(k), v)
-				return flag
-			})
-			return flag
-		case typ.Object:
-			flag := a.Object().Len() == b.Object().Len()
-			if !flag {
-				return false
-			}
-			a.Object().Foreach(func(k Value, v *Value) bool {
-				flag = DeepEqual(b.Object().Find(k), *v)
-				return flag
-			})
-			return flag
-		}
-	}
-	return false
-}
-
-func lessStr(a, b Value) bool {
-	if a.isSmallString() && b.isSmallString() {
-		al := (a.UnsafeAddr() - uintptr(smallStrMarker)) / 8 * 8
-		bl := (b.UnsafeAddr() - uintptr(smallStrMarker)) / 8 * 8
-		av := a.v >> (64 - al)
-		bv := b.v >> (64 - bl)
-		return av < bv
-	}
-	return a.Str() < b.Str()
-}
-
-func Less(a, b Value) bool {
-	at, bt := a.Type(), b.Type()
-	if at != bt {
-		return at < bt
-	}
-	switch at {
-	case typ.Number:
-		if a.IsInt64() && b.IsInt64() {
-			return a.UnsafeInt64() < b.UnsafeInt64()
-		}
-		return a.Float64() < b.Float64()
-	case typ.String:
-		return lessStr(a, b)
-	}
-	return a.UnsafeAddr() < b.UnsafeAddr()
-}
-
-func IsPrototype(a Value, p *Object) bool {
-	switch a.Type() {
-	case typ.Nil:
-		return p == nil
-	case typ.Object:
-		return a.Object().IsPrototype(p)
-	case typ.Bool:
-		return p == Proto.Bool
-	case typ.Number:
-		return p == Proto.Float || (a.IsInt64() && p == Proto.Int)
-	case typ.String:
-		return p == Proto.Str
-	case typ.Array:
-		return a.Array().meta.Proto.IsPrototype(p)
-	}
-	return false
-}
-
-func IsCallable(a Value) bool {
-	return a.Type() == typ.Object && a.Object().IsCallable()
 }

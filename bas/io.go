@@ -30,7 +30,7 @@ func init() {
 		}, "Reader.$f(buf: bytes) -> [int, Error]\n\tread into `buf` and return in Go style").
 		SetMethod("readlines", func(e *Env) {
 			f := e.This("_f").(io.Reader)
-			delim := e.Object(-1).Prop("delim").Safe().Str("\n")
+			delim := e.Object(-1).Prop("delim").Maybe().Str("\n")
 			if e.Get(0) == Nil {
 				buf, err := ioutil.ReadAll(f)
 				internal.PanicErr(err)
@@ -66,14 +66,14 @@ func init() {
 
 	Proto.Writer.
 		SetMethod("write", func(e *Env) {
-			wn, err := e.This("_f").(io.Writer).Write(e.Get(0).Safe().Bytes())
+			wn, err := e.This("_f").(io.Writer).Write(ToReadonlyBytes(e.Get(0)))
 			internal.PanicErr(err)
 			e.A = Int(wn)
 		}, "Writer.$f(buf: string|bytes) -> int\n\twrite `buf` to writer").
 		SetMethod("pipe", func(e *Env) {
 			var wn int64
 			var err error
-			if n := e.Get(1).Safe().Int64(0); n > 0 {
+			if n := e.Get(1).Maybe().Int64(0); n > 0 {
 				wn, err = io.CopyN(NewWriter(e.Get(-1)), NewReader(e.Get(0)), n)
 			} else {
 				wn, err = io.Copy(NewWriter(e.Get(-1)), NewReader(e.Get(0)))
@@ -152,8 +152,8 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			if err != nil {
 				return 0, err
 			}
-			t := v.Is(typ.Array, "ValueIO.Read: use readbuf()").Array()
-			n := t.Get(0).Is(typ.Number, "ValueIO.Read: (int, error)").Int()
+			t := v.AssertType(typ.Array, "ValueIO.Read: use readbuf()").Array()
+			n := t.Get(0).AssertType(typ.Number, "ValueIO.Read: (int, error)").Int()
 			ee, _ := t.Get(1).Interface().(*ExecError)
 			return int(n), ee.GetCause()
 		}
@@ -164,7 +164,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			} else if v == Nil {
 				return 0, io.EOF
 			}
-			return copy(p, v.Safe().Bytes()), nil
+			return copy(p, v.Maybe().Str("")), nil
 		}
 		if rb := Value(m).Object().Prop("read"); rb.IsObject() {
 			v, err := Call2(rb.Object(), Int(len(p)))
@@ -173,7 +173,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			} else if v == Nil {
 				return 0, io.EOF
 			}
-			return copy(p, v.Safe().Str("")), nil
+			return copy(p, v.Maybe().Str("")), nil
 		}
 	}
 	return 0, fmt.Errorf("reader not implemented")
@@ -194,7 +194,7 @@ func (m ValueIO) WriteString(p string) (int, error) {
 			if err != nil {
 				return 0, err
 			}
-			return v.Is(typ.Number, "ValueIO.WriteString: (int, error)").Int(), nil
+			return v.AssertType(typ.Number, "ValueIO.WriteString: (int, error)").Int(), nil
 		}
 	}
 	return 0, fmt.Errorf("stringwriter not implemented")
@@ -212,7 +212,7 @@ func (m ValueIO) Write(p []byte) (int, error) {
 			if err != nil {
 				return 0, err
 			}
-			return v.Is(typ.Number, "ValueIO.Write: (int, error)").Int(), nil
+			return v.AssertType(typ.Number, "ValueIO.Write: (int, error)").Int(), nil
 		}
 	}
 	return 0, fmt.Errorf("writer not implemented")
@@ -236,7 +236,7 @@ func (m ValueIO) Close() error {
 func ioRead(e *Env) []byte {
 	f := e.This("_f").(io.Reader)
 	if n := e.Get(0); n.Type() == typ.Number {
-		p := make([]byte, n.Safe().Int64(0))
+		p := make([]byte, n.Maybe().Int64(0))
 		rn, err := f.Read(p)
 		if err == nil || rn > 0 {
 			return p[:rn]

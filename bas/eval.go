@@ -142,7 +142,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			case typ.Array:
 				idx := 0
 				if vb != Nil {
-					idx = vb.Is(typ.Number, "array iteration").Int() + 1
+					idx = vb.AssertType(typ.Number, "array iteration").Int() + 1
 				}
 				a := va.Array()
 				_ = idx >= a.Len() && env.SetA(NewArray(Nil, Nil).ToValue()) || env.SetA(NewArray(Int(idx), a.Get(idx)).ToValue())
@@ -151,7 +151,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			case typ.String:
 				idx := int64(0)
 				if vb != Nil {
-					idx = vb.Is(typ.Number, "string iteration").Int64()
+					idx = vb.AssertType(typ.Number, "string iteration").Int64()
 				}
 				if r, sz := utf8.DecodeRuneInString(va.Str()[idx:]); sz == 0 {
 					env.A = NewArray(Nil, Nil).ToValue()
@@ -162,7 +162,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 				internal.Panic("can't iterate %v using %v", simpleString(va), simpleString(vb))
 			}
 		case typ.OpLen:
-			env.A = Int(env._get(opa).Len())
+			env.A = Int(Len(env._get(opa)))
 		case typ.OpAdd:
 			va, vb := env._get(opa), env._get(opb)
 			switch va.Type() + vb.Type() {
@@ -306,7 +306,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			if a, b := env._get(opa), env._get(opb); a.Equal(b) {
 				env.A = True
 			} else {
-				env.A = Bool(IsPrototype(a, b.Safe().Object()))
+				env.A = Bool(IsPrototype(a, b.AssertType(typ.Object, "operator 'is'").Object()))
 			}
 		case typ.OpStore:
 			subject, v := env._get(opa), env._get(opb)

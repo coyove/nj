@@ -150,8 +150,6 @@ func (env *Env) Bool(idx int) bool { return env.mustBe(typ.Bool, idx).Bool() }
 
 func (env *Env) Str(idx int) string { return env.mustBe(typ.String, idx).String() }
 
-func (env *Env) StrLen(idx int) int { return env.mustBe(typ.String, idx).StrLen() }
-
 func (env *Env) Num(idx int) Value { return env.mustBe(typ.Number, idx) }
 
 func (env *Env) Int64(idx int) int64 { return env.mustBe(typ.Number, idx).Int64() }

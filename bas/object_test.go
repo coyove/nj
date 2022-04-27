@@ -9,15 +9,6 @@ import (
 	"time"
 )
 
-func isEmpty(o *Object) bool {
-	for _, kv := range o.items {
-		if kv.key != Nil {
-			return false
-		}
-	}
-	return true
-}
-
 func randString() string {
 	buf := make([]byte, 6)
 	rand.Read(buf)

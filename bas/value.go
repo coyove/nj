@@ -9,7 +9,6 @@ import (
 	"os"
 	"reflect"
 	"strconv"
-	"time"
 	"unicode/utf8"
 	"unsafe"
 
@@ -85,9 +84,6 @@ func (v Value) IsObject() bool { return v.Type() == typ.Object }
 
 // IsNil tests whether value is nil
 func (v Value) IsNil() bool { return v == Nil }
-
-// IsBytes tests whether value is a byte sequence
-func (v Value) IsBytes() bool { return v.Type() == typ.Array && v.Array().meta == bytesArrayMeta }
 
 // Bool creates a boolean value
 func Bool(v bool) Value {
@@ -222,17 +218,17 @@ func ValueOf(i interface{}) Value {
 						internal.Panic("call native function, expect %d arguments, got %d", rtNumIn, env.Size())
 					}
 					for i := 0; i < rtNumIn; i++ {
-						ins = append(ins, env.Get(i).ReflectValue(rt.In(i)))
+						ins = append(ins, ToType(env.Get(i), rt.In(i)))
 					}
 				} else {
 					if env.Size() < rtNumIn-1 {
 						internal.Panic("call native variadic function, expect at least %d arguments, got %d", rtNumIn-1, env.Size())
 					}
 					for i := 0; i < rtNumIn-1; i++ {
-						ins = append(ins, env.Get(i).ReflectValue(rt.In(i)))
+						ins = append(ins, ToType(env.Get(i), rt.In(i)))
 					}
 					for i := rtNumIn - 1; i < env.Size(); i++ {
-						ins = append(ins, env.Get(i).ReflectValue(rt.In(rtNumIn-1).Elem()))
+						ins = append(ins, ToType(env.Get(i), rt.In(rtNumIn-1).Elem()))
 					}
 				}
 				if outs := rv.Call(ins); len(outs) == 0 {
@@ -272,14 +268,6 @@ func (v Value) Str() string {
 		return *(*string)(unsafe.Pointer(&buf))
 	}
 	return *(*string)(v.p)
-}
-
-// StrLen returns the length of string without checking Type()
-func (v Value) StrLen() int {
-	if v.isSmallString() {
-		return int(uintptr(v.p)-uintptr(smallStrMarker)) / 8
-	}
-	return len(*(*string)(v.p))
 }
 
 // Int returns value as an integer without checking Type()
@@ -336,68 +324,7 @@ func (v Value) UnsafeAddr() uintptr { return uintptr(v.p) }
 
 func (v Value) UnsafeInt64() int64 { return int64(v.v) }
 
-// ReflectValue returns value as a reflect.Value based on reflect.Type
-func (v Value) ReflectValue(t reflect.Type) reflect.Value {
-	if t == nil {
-		return reflect.ValueOf(v.Interface())
-	} else if t == valueType {
-		return reflect.ValueOf(v)
-	} else if vt := v.Type(); vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
-		return reflect.Zero(t)
-	} else if t.Implements(ioWriterType) || t.Implements(ioReaderType) || t.Implements(ioCloserType) {
-		return reflect.ValueOf(ValueIO(v))
-	} else if t.Implements(errType) {
-		return reflect.ValueOf(v.Safe().Error())
-	} else if vt == typ.Object && t.Kind() == reflect.Func {
-		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
-			var a []Value
-			for i := range args {
-				a = append(a, ValueOf(args[i].Interface()))
-			}
-			out := Call(v.Object(), a...)
-			if to := t.NumOut(); to == 1 {
-				results = []reflect.Value{out.ReflectValue(t.Out(0))}
-			} else if to > 1 {
-				out.Is(typ.Array, "ReflectValue: expect multiple returned arguments")
-				results = make([]reflect.Value, t.NumOut())
-				for i := range results {
-					results[i] = out.Array().Get(i).ReflectValue(t.Out(i))
-				}
-			}
-			return
-		})
-	} else if vt == typ.Number && t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
-		return reflect.ValueOf(v.Interface()).Convert(t)
-	} else if vt == typ.Array {
-		a := v.Array()
-		if t == reflect.TypeOf(a.Unwrap()) {
-			return reflect.ValueOf(a.Unwrap())
-		}
-		switch t.Kind() {
-		case reflect.Slice:
-			s := reflect.MakeSlice(t, a.Len(), a.Len())
-			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(v.ReflectValue(t.Elem())); return true })
-			return s
-		case reflect.Array:
-			s := reflect.New(t).Elem()
-			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(v.ReflectValue(t.Elem())); return true })
-			return s
-		}
-	} else if vt == typ.Object {
-		if t.Kind() == reflect.Map {
-			s := reflect.MakeMap(t)
-			kt, vt := t.Key(), t.Elem()
-			v.Object().Foreach(func(k Value, v *Value) bool {
-				s.SetMapIndex(k.ReflectValue(kt), v.ReflectValue(vt))
-				return true
-			})
-			return s
-		}
-	}
-	return reflect.ValueOf(v.Interface())
-}
-
-func (v Value) Is(t typ.ValueType, msg string) Value {
+func (v Value) AssertType(t typ.ValueType, msg string) Value {
 	if v.Type() != t {
 		if msg != "" {
 			internal.Panic("%s: expect %v, got %v", msg, t, simpleString(v))
@@ -481,96 +408,4 @@ func (v Value) Stringify(p io.Writer, j typ.MarshalType) {
 	}
 }
 
-func (v Value) Len() int {
-	switch v.Type() {
-	case typ.String:
-		return v.StrLen()
-	case typ.Array:
-		return v.Array().Len()
-	case typ.Object:
-		return v.Object().Len()
-	case typ.Nil:
-		return 0
-	case typ.Native:
-		return reflect.ValueOf(v.Interface()).Len()
-	}
-	internal.Panic("can't measure length of %v", simpleString(v))
-	return -1
-}
-
-func (v Value) Safe() SafeValue { return SafeValue(v) }
-
-type SafeValue Value
-
-func (v SafeValue) Str(defaultValue string) string {
-	switch Value(v).Type() {
-	case typ.String:
-		return Value(v).Str()
-	case typ.Array:
-		buf, ok := Value(v).Array().Unwrap().([]byte)
-		if ok {
-			return *(*string)(unsafe.Pointer(&buf))
-		}
-	}
-	return defaultValue
-}
-
-func (v SafeValue) Int(defaultValue int) int {
-	return int(v.Int64(int64(defaultValue)))
-}
-
-func (v SafeValue) Int64(defaultValue int64) int64 {
-	if Value(v).Type() == typ.Number {
-		return Value(v).Int64()
-	}
-	return defaultValue
-}
-
-func (v SafeValue) Float64(defaultValue float64) float64 {
-	if Value(v).Type() == typ.Number {
-		return Value(v).Float64()
-	}
-	return defaultValue
-}
-
-func (v SafeValue) Array() *Array {
-	if Value(v).Type() != typ.Array {
-		return nil
-	}
-	return Value(v).Array()
-}
-
-func (v SafeValue) Object() *Object {
-	if Value(v).Type() != typ.Object {
-		return nil
-	}
-	return Value(v).Object()
-}
-
-func (v SafeValue) Bytes() []byte {
-	switch Value(v).Type() {
-	case typ.String:
-		return []byte(Value(v).Str())
-	case typ.Array:
-		buf, _ := Value(v).Array().Unwrap().([]byte)
-		return buf
-	}
-	return nil
-}
-
-func (v SafeValue) Duration(defaultValue time.Duration) time.Duration {
-	if Value(v).Type() != typ.Number {
-		return defaultValue
-	}
-	if Value(v).IsInt64() {
-		return time.Duration(Value(v).Int64()) * time.Second
-	}
-	return time.Duration(Value(v).Float64() * float64(time.Second))
-}
-
-func (v SafeValue) Error() error {
-	if Value(v).Type() != typ.Array || Value(v).Array().meta != errorArrayMeta {
-		return nil
-	}
-	return Value(v).Array().Unwrap().(*ExecError)
-}
+func (v Value) Maybe() MaybeValue { return MaybeValue(v) }
