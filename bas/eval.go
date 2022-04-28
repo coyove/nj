@@ -11,9 +11,17 @@ import (
 )
 
 type Stacktrace struct {
-	Cursor      uint32
-	StackOffset uint32
-	Callable    *Function
+	Cursor          uint32
+	stackOffsetFlag uint32 // LSB: 1=tailcall
+	Callable        *Function
+}
+
+func (r *Stacktrace) StackOffset() uint32 {
+	return r.stackOffsetFlag & 0x7fffffff
+}
+
+func (r *Stacktrace) IsTailcall() bool {
+	return r.stackOffsetFlag>>31 == 1
 }
 
 func (r *Stacktrace) sourceLine() (src uint32) {
@@ -59,12 +67,16 @@ func (e *ExecError) Error() string {
 		if r.Cursor == internal.NativeCallCursor {
 			msg.WriteString(fmt.Sprintf("%s (native)\n", r.Callable.Name))
 		} else {
-			msg.WriteString(fmt.Sprintf("%s at %s:%d (i%d)\n",
+			msg.WriteString(fmt.Sprintf("%s at %s:%d (i%d)",
 				r.Callable.Name,
 				r.Callable.CodeSeg.Pos.Name,
 				r.sourceLine(),
 				r.Cursor-1, // the recorded cursor was advanced by 1 already
 			))
+			if r.IsTailcall() {
+				msg.WriteString(" (tailcall)")
+			}
+			msg.WriteString("\n")
 		}
 	}
 	if e.root != nil {
@@ -380,7 +392,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			r := retStack[len(retStack)-1]
 			cursor = r.Cursor
 			K = r.Callable
-			env.stackOffset = r.StackOffset
+			env.stackOffset = r.StackOffset()
 			env.A = v
 			*env.stack = (*env.stack)[:env.stackOffset+uint32(r.Callable.StackSize)]
 			stackEnv.stackOffset = uint32(len(*env.stack))
@@ -422,9 +434,9 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 				stackEnv.growZero(int(cls.StackSize), int(cls.NumParams))
 
 				last := Stacktrace{
-					Callable:    K,
-					Cursor:      cursor,
-					StackOffset: uint32(env.stackOffset),
+					Callable:        K,
+					Cursor:          cursor,
+					stackOffsetFlag: uint32(env.stackOffset),
 				}
 
 				// Switch 'env' to 'stackEnv' and clear 'stackEnv'
@@ -436,6 +448,8 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 
 				if bop == typ.OpCall {
 					retStack = append(retStack, last)
+				} else if len(retStack) > 0 {
+					retStack[len(retStack)-1].stackOffsetFlag |= 0x80000000
 				}
 
 				stackEnv.stackOffset = uint32(len(*env.stack))
