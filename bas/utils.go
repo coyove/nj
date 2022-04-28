@@ -252,10 +252,15 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 
 	var outError error
 	if n == 1 {
-		if t.Type() == typ.Native {
-			t.Native().Foreach(func(k int, v Value) bool { work(fun, &outError, payload{k, v, nil}); return outError == nil })
+		if t.IsArray() {
+			for i := 0; outError == nil && i < t.Native().Len(); i++ {
+				work(fun, &outError, payload{i, t.Native().Get(i), nil})
+			}
 		} else {
-			t.Object().Foreach(func(k Value, v *Value) bool { work(fun, &outError, payload{-1, k, v}); return outError == nil })
+			t.Object().Foreach(func(k Value, v *Value) bool {
+				work(fun, &outError, payload{-1, k, v})
+				return outError == nil
+			})
 		}
 	} else {
 		var in = make(chan payload, Len(t))
@@ -273,10 +278,15 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 			}()
 		}
 
-		if t.Type() == typ.Native {
-			t.Native().Foreach(func(k int, v Value) bool { in <- payload{k, v, nil}; return true })
+		if t.IsArray() {
+			for i := 0; i < t.Native().Len(); i++ {
+				in <- payload{i, t.Native().Get(i), nil}
+			}
 		} else {
-			t.Object().Foreach(func(k Value, v *Value) bool { in <- payload{-1, k, v}; return true })
+			t.Object().Foreach(func(k Value, v *Value) bool {
+				in <- payload{-1, k, v}
+				return true
+			})
 		}
 		close(in)
 

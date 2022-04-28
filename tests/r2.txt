@@ -96,3 +96,10 @@ function foo(a, b, c) return if(a,b,c) end
 assert(foo(true, 10, 20), 10)
 
 print('---R2---')
+
+assert(1 is not object)
+assert([1,2] is array)
+assert([1,2] is native)
+assert([1,2] is not nativemap)
+assert([1,2] is not object)
+assert(native is not object)

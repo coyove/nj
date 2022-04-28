@@ -235,7 +235,8 @@ expr:
     expr TLsh expr                    { $$ = Nodes((SBitLsh), $1,$3).At($2) } |
     expr TRsh expr                    { $$ = Nodes((SBitRsh), $1,$3).At($2) } |
     expr TURsh expr                   { $$ = Nodes((SBitURsh), $1,$3).At($2) } |
-    expr TIs expr                     { $$ = Nodes((SIs), $1,$3).At($2) } |
+    expr TIs prefix_expr              { $$ = Nodes(SIs, $1, $3).At($2) } |
+    expr TIs TNot prefix_expr         { $$ = Nodes(SNot, Nodes(SIs, $1, $4).At($2)).At($2) } |
     '~' expr %prec UNARY              { $$ = Nodes((SBitNot), $2).At($1) } |
     '#' expr %prec UNARY              { $$ = Nodes((SLen), $2).At($1) } |
     TInv expr %prec UNARY             { $$ = Nodes(SSub, zero, $2).At($1) } |

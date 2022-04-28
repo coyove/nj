@@ -48,7 +48,7 @@ func NamedObject(name string, preallocateSize int) *Object {
 }
 
 func (m *Object) setName(name string) *Object {
-	m.fun = &Function{Name: name, Dummy: true, Native: func(*Env) {}, obj: m}
+	m.fun = &Function{Name: name, Native: func(*Env) {}, obj: m}
 	return m
 }
 
@@ -388,18 +388,11 @@ func (m *Object) Merge(src *Object) *Object {
 	return m
 }
 
-func (m *Object) Callable() Function {
-	if m == nil || m.fun == nil || m.fun.Dummy {
-		return Function{Dummy: true}
-	}
-	return *m.fun
-}
-
 func (m *Object) IsCallable() bool {
 	if m == nil {
 		return false
 	}
-	return m.fun != nil && !m.fun.Dummy
+	return m.fun != nil
 }
 
 var resizeHash = func(m *Object, newSize int) {

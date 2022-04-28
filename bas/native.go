@@ -75,11 +75,10 @@ func init() {
 		},
 		func(a *Native, w io.Writer, mt typ.MarshalType) {
 			w.Write([]byte("["))
-			a.Foreach(func(i int, v Value) bool {
+			for i, v := range a.internal {
 				w.Write([]byte(internal.IfStr(i == 0, "", ",")))
 				v.Stringify(w, mt)
-				return true
-			})
+			}
 			w.Write([]byte("]"))
 		},
 	}
@@ -418,14 +417,6 @@ func (a *Native) Concat(b *Native) {
 
 func (a *Native) Marshal(w io.Writer, mt typ.MarshalType) {
 	a.meta.Marshal(a, w, mt)
-}
-
-func (a *Native) Foreach(f func(k int, v Value) bool) {
-	for i := 0; i < a.Len(); i++ {
-		if !f(i, a.Get(i)) {
-			break
-		}
-	}
 }
 
 func (a *Native) IsInternalArray() bool {

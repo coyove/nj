@@ -311,7 +311,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			if a, b := env._get(opa), env._get(opb); a.Equal(b) {
 				env.A = True
 			} else {
-				env.A = Bool(IsPrototype(a, b.AssertType(typ.Object, "operator 'is'").Object()))
+				env.A = Bool(IsPrototype(a, b.AssertType(typ.Object, "isprototype").Object()))
 			}
 		case typ.OpStore:
 			subject, v := env._get(opa), env._get(opb)
@@ -329,7 +329,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 					subject.Native().SetKey(env.A, v)
 				}
 			default:
-				internal.Panic("can't store %v into (%v)[%v]", simpleString(v), simpleString(subject), simpleString(env.A))
+				internal.Panic("invalid store: %v, key: %v", simpleString(subject), simpleString(env.A))
 			}
 			env.A = v
 		case typ.OpLoad:
@@ -345,23 +345,16 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 					env.A = a.Native().GetKey(idx)
 				}
 			case typ.String:
-				if idx.Type() == typ.Number {
-					if s := a.Str(); idx.Int64() >= 0 && idx.Int64() < int64(len(s)) {
-						env.A = Int64(int64(s[idx.Int64()]))
-					} else {
-						env.A = Nil
+				if idx.IsInt64() {
+					env.A = Nil
+					if s := a.Str(); idx.UnsafeInt64() >= 0 && idx.UnsafeInt64() < int64(len(s)) {
+						env.A = Int64(int64(s[idx.UnsafeInt64()]))
 					}
-					break
-				} else if idx.Type() == typ.String {
-					if f := Proto.Str.Find(idx); f != Nil {
-						env.A = setObjectRecv(f, a)
-						break
-					}
-					internal.Panic("string method %q not found", idx.Str())
+				} else {
+					env.A = setObjectRecv(Proto.Str.Find(idx), a)
 				}
-				fallthrough
 			default:
-				internal.Panic("can't load (%v)[%v]", simpleString(a), simpleString(idx))
+				internal.Panic("invalid load: %v, key: %v", simpleString(a), simpleString(idx))
 			}
 		case typ.OpPush:
 			stackEnv.Push(env._get(opa))
@@ -395,7 +388,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 				internal.Panic("can't call %v", simpleString(a))
 			}
 			cls := a.Object().fun
-			if cls == nil || cls.Dummy {
+			if cls == nil {
 				internal.Panic("%v not callable", simpleString(a))
 			}
 			if opb != typ.RegPhantom {

@@ -135,15 +135,16 @@ func DeepEqual(a, b Value) bool {
 	if at, bt := a.Type(), b.Type(); at == bt {
 		switch at {
 		case typ.Native:
-			flag := a.Native().Len() == b.Native().Len()
-			if !flag {
-				return false
-			}
-			a.Native().Foreach(func(k int, v Value) bool {
-				flag = DeepEqual(b.Native().Get(k), v)
+			if a.IsArray() && b.IsArray() {
+				flag := a.Native().Len() == b.Native().Len()
+				if !flag {
+					return false
+				}
+				for i := 0; flag && i < a.Native().Len(); i++ {
+					flag = DeepEqual(b.Native().Get(i), a.Native().Get(i))
+				}
 				return flag
-			})
-			return flag
+			}
 		case typ.Object:
 			flag := a.Object().Len() == b.Object().Len()
 			if !flag {
@@ -275,12 +276,18 @@ func toTypePtrStruct(v Value, t reflect.Type, interopFuncs *[]func()) reflect.Va
 		}
 		switch t.Kind() {
 		case reflect.Slice:
+			a.AssertPrototype(Proto.Array, "ToType")
 			s := reflect.MakeSlice(t, a.Len(), a.Len())
-			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(toTypePtrStruct(v, t.Elem(), interopFuncs)); return true })
+			for i := 0; i < a.Len(); i++ {
+				s.Index(i).Set(toTypePtrStruct(a.Get(i), t.Elem(), interopFuncs))
+			}
 			return s
 		case reflect.Array:
+			a.AssertPrototype(Proto.Array, "ToType")
 			s := reflect.New(t).Elem()
-			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(toTypePtrStruct(v, t.Elem(), interopFuncs)); return true })
+			for i := 0; i < a.Len(); i++ {
+				s.Index(i).Set(toTypePtrStruct(a.Get(i), t.Elem(), interopFuncs))
+			}
 			return s
 		}
 	}

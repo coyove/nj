@@ -297,6 +297,9 @@ func init() {
 				ToValue()
 		}, "function.$f(args...: value) -> Goroutine\n\texecute `f` in goroutine").
 		SetMethod("map", func(e *Env) {
+			if !e.Get(0).IsArray() {
+				e.Get(0).AssertType(typ.Object, "map")
+			}
 			e.A = multiMap(e, e.Object(-1), e.Get(0), e.Get(1).Maybe().Int(1))
 		}, "function.$f(a: object|array, n?: int) -> object|array\n"+
 			"\tmap values in `a` into new values using `f(k, v)`,\n"+
@@ -311,7 +314,7 @@ func init() {
 				e.A = e.Call(f, stk...)
 			}, "").Object().
 				SetProp("_l", lambda.ToValue()).
-				SetProp("_c", newArray(c...).ToValue()).
+				SetProp("_c", Array(c...)).
 				ToValue()
 		}, "function.$f(args...: value) -> function\n"+
 			"\tcreate a closure, when it is called, `args` will be prepended to the argument list:\n"+
@@ -322,6 +325,13 @@ func init() {
 	Globals.SetProp("staticobject", Proto.StaticObject.ToValue())
 	Globals.SetProp("func", Proto.Func.ToValue())
 	Globals.SetProp("callable", Proto.Func.ToValue())
+
+	*Proto.Native = *NamedObject("native", 16).
+		SetMethod("typename", func(e *Env) {
+			e.A = Str(reflect.TypeOf(e.Get(-1).Native().Unwrap()).String())
+		}, "native.$f()")
+	Proto.Native.parent = nil // native prototype has no parent
+	Globals.SetProp("native", Proto.Native.ToValue())
 
 	*Proto.Array = *NamedObject("array", 0).
 		SetMethod("make", func(e *Env) {
@@ -346,12 +356,11 @@ func init() {
 		SetMethod("filter", func(e *Env) {
 			src, ff := e.Native(-1), e.Object(0)
 			dest := make([]Value, 0, src.Len())
-			src.Foreach(func(k int, v Value) bool {
-				if e.Call(ff, v).IsTrue() {
+			for i := 0; i < src.Len(); i++ {
+				if v := src.Get(i); e.Call(ff, v).IsTrue() {
 					dest = append(dest, v)
 				}
-				return true
-			})
+			}
 			e.A = newArray(dest...).ToValue()
 		}, "array.$f(f: function) -> array\n\tfilter out all values where f(value) is false").
 		SetMethod("slice", func(e *Env) {
@@ -398,7 +407,8 @@ func init() {
 		}, "array.$f() -> string").
 		SetMethod("untype", func(e *Env) {
 			e.A = newArray(e.Native(-1).Values()...).ToValue()
-		}, "array.$f() -> array")
+		}, "array.$f() -> array").
+		SetPrototype(Proto.Native)
 	Globals.SetProp("array", Proto.Array.ToValue())
 
 	*Proto.Error = *Func("error", func(e *Env) {
@@ -406,14 +416,9 @@ func init() {
 	}, "").Object().
 		SetMethod("error", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).root) }, "").
 		SetMethod("getcause", func(e *Env) { e.A = NewNative(e.Native(-1).Unwrap().(*ExecError).root).ToValue() }, "").
-		SetMethod("trace", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).stacks) }, "")
+		SetMethod("trace", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).stacks) }, "").
+		SetPrototype(Proto.Native)
 	Globals.SetProp("error", Proto.Error.ToValue())
-
-	*Proto.Native = *NamedObject("native", 16).
-		SetMethod("typename", func(e *Env) {
-			e.A = Str(reflect.TypeOf(e.Get(-1).Native().Unwrap()).String())
-		}, "native.$f()")
-	Globals.SetProp("native", Proto.Native.ToValue())
 
 	*Proto.NativeMap = *NamedObject("nativemap", 4).
 		SetMethod("toobject", func(e *Env) {
@@ -506,15 +511,15 @@ func init() {
 				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectDefault})
 				channels = append(channels, Str("default"))
 			}
-			e.Native(0).Foreach(func(_ int, ch Value) bool {
-				ch.AssertType(typ.Native, "recvmulti").Native().AssertPrototype(Proto.Channel, "recvmulti")
+			x := e.Native(0).AssertPrototype(Proto.Array, "recvmulti")
+			for i := 0; i < x.Len(); i++ {
+				ch := x.Get(i).AssertType(typ.Native, "recvmulti").Native().AssertPrototype(Proto.Channel, "recvmulti")
 				cases = append(cases, reflect.SelectCase{
 					Dir:  reflect.SelectRecv,
-					Chan: reflect.ValueOf(ch.Native().Unwrap()),
+					Chan: reflect.ValueOf(ch.Unwrap()),
 				})
-				channels = append(channels, ch)
-				return true
-			})
+				channels = append(channels, ch.ToValue())
+			}
 			chosen, recv, recvOK := reflect.Select(cases)
 			e.A = newArray(channels[chosen], ValueOf(recv.Interface()), Bool(recvOK)).ToValue()
 		}, "$f(channels: [Channel], default?: bool) -> [Channel|'default', value, bool]").
@@ -553,11 +558,10 @@ func init() {
 		SetMethod("join", func(e *Env) {
 			d := e.Str(-1)
 			buf := &bytes.Buffer{}
-			e.Native(0).Foreach(func(k int, v Value) bool {
-				buf.WriteString(v.String())
+			for x, i := e.Native(0).AssertPrototype(Proto.Array, "join"), 0; i < x.Len(); i++ {
+				buf.WriteString(x.Get(i).String())
 				buf.WriteString(d)
-				return true
-			})
+			}
 			if buf.Len() > 0 {
 				buf.Truncate(buf.Len() - len(d))
 			}

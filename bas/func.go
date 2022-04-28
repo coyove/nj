@@ -18,7 +18,6 @@ type Function struct {
 	StackSize  uint16
 	NumParams  uint16
 	Variadic   bool
-	Dummy      bool
 	Native     func(env *Env)
 	Name       string
 	DocString  string
@@ -77,7 +76,6 @@ func Func(name string, f func(*Env), doc string) Value {
 	}
 	if f == nil {
 		obj.fun.Native = func(*Env) {}
-		obj.fun.Dummy = true
 	}
 	obj.SetPrototype(Proto.Func)
 	return obj.ToValue()
@@ -248,6 +246,13 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 }
 
 func (c *Function) String() string {
+	if c.Native != nil {
+		if c.Name != "" {
+			return c.Name
+		}
+		return "native"
+	}
+
 	p := bytes.Buffer{}
 	if c.Name != "" {
 		p.WriteString(c.Name)
