@@ -124,7 +124,7 @@ func simpleString(v Value) string {
 		}
 		return strconv.Quote(v.Str()[:32] + "...")
 	case typ.Object:
-		if v.Object().fun != nil { // including named objects
+		if v.Object().fun != nil {
 			return v.Object().fun.String()
 		}
 		return "{" + v.Object().Name() + "}"

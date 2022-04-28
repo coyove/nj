@@ -22,7 +22,7 @@ func (v MaybeValue) Str(defaultValue string) string {
 		}
 		fallthrough
 	default:
-		panic("Str: expects string or nil, got " + simpleString(Value(v)))
+		panic("Str: expects string, bytes or nil, got " + simpleString(Value(v)))
 	}
 }
 
@@ -93,6 +93,13 @@ func ToError(v Value) error {
 		return Value(v).Native().Unwrap().(*ExecError)
 	}
 	panic("ToError: not error: " + simpleString(v))
+}
+
+func ToErrorRootCause(v Value) interface{} {
+	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(errorArrayMeta.Proto) {
+		return Value(v).Native().Unwrap().(*ExecError).root
+	}
+	panic("ToErrorRootCause: not error: " + simpleString(v))
 }
 
 func ToBytes(v Value) []byte {
@@ -188,7 +195,7 @@ func Less(a, b Value) bool {
 	return a.UnsafeAddr() < b.UnsafeAddr()
 }
 
-func IsPrototype(a Value, p *Object) bool {
+func HasPrototype(a Value, p *Object) bool {
 	switch a.Type() {
 	case typ.Nil:
 		return p == nil

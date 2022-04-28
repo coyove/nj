@@ -266,7 +266,7 @@ func ValueOf(i interface{}) Value {
 				}
 			}
 		}
-		return Func("<"+rv.Type().String()+">", nf, "")
+		return Func("<"+rv.Type().String()+">", nf)
 	}
 	return NewNative(i).ToValue()
 }
@@ -354,6 +354,16 @@ func (v Value) AssertType2(t1, t2 typ.ValueType, msg string) Value {
 			internal.Panic("%s: expects %v or %v, got %v", msg, t1, t2, simpleString(v))
 		}
 		internal.Panic("expects %v or %v, got %v", t1, t2, simpleString(v))
+	}
+	return v
+}
+
+func (v Value) AssertPrototype(p *Object, msg string) Value {
+	if !HasPrototype(v, p) {
+		if msg != "" {
+			internal.Panic("%s: expects prototype %v, got %v", msg, simpleString(p.ToValue()), simpleString(v))
+		}
+		internal.Panic("expects prototype %v, got %v", simpleString(p.ToValue()), simpleString(v))
 	}
 	return v
 }

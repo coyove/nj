@@ -104,8 +104,8 @@ func (m *Object) SetProp(k string, v Value) *Object {
 	return m
 }
 
-func (m *Object) SetMethod(k string, v func(*Env), d string) *Object {
-	m.Set(Str(k), Func(k, v, d))
+func (m *Object) SetMethod(k string, v func(*Env)) *Object {
+	m.Set(Str(k), Func(k, v))
 	return m
 }
 

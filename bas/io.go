@@ -19,15 +19,15 @@ func init() {
 		SetMethod("read", func(e *Env) {
 			buf := ioRead(e)
 			_ = buf == nil && e.SetA(Nil) || e.SetA(UnsafeStr(buf))
-		}, "Reader.$f(n?: int) -> string\n\tread all (or at most `n`) bytes as string, return nil if EOF reached").
+		}).
 		SetMethod("readbytes", func(e *Env) {
 			buf := ioRead(e)
 			_ = buf == nil && e.SetA(Nil) || e.SetA(Bytes(buf))
-		}, "Reader.$f(n?: int) -> bytes\n\tread all (or at most `n`) bytes, return nil if EOF reached").
+		}).
 		SetMethod("readbuf", func(e *Env) {
 			rn, err := e.ThisProp("_f").(io.Reader).Read(e.Native(0).Unwrap().([]byte))
-			e.A = newArray(Int(rn), ValueOf(err)).ToValue() // return in Go style
-		}, "Reader.$f(buf: bytes) -> [int, Error]\n\tread into `buf` and return in Go style").
+			e.A = newArray(Int(rn), Error(e, err)).ToValue() // return in Go style
+		}).
 		SetMethod("readlines", func(e *Env) {
 			f := e.ThisProp("_f").(io.Reader)
 			delim := e.Object(-1).Prop("delim").Maybe().Str("\n")
@@ -61,15 +61,23 @@ func init() {
 				}
 			}
 			e.A = Nil
-		}, "Reader.$f() -> array\n\tread the whole file and return lines as an array\n"+
-			"Reader.$f(f: function)\n\tfor every line read, `f(line)` will be called\n\tto exit the reading, return `false` in `f`")
+		})
 
 	Proto.Writer.
 		SetMethod("write", func(e *Env) {
 			wn, err := e.ThisProp("_f").(io.Writer).Write(ToReadonlyBytes(e.Get(0)))
 			internal.PanicErr(err)
 			e.A = Int(wn)
-		}, "Writer.$f(buf: string|bytes) -> int\n\twrite `buf` to writer").
+		}).
+		SetMethod("writebytes", func(e *Env) {
+			wn, err := e.ThisProp("_f").(io.Writer).Write(ToReadonlyBytes(e.Get(0)))
+			internal.PanicErr(err)
+			e.A = Int(wn)
+		}).
+		SetMethod("writebuf", func(e *Env) {
+			wn, err := e.ThisProp("_f").(io.Writer).Write(ToReadonlyBytes(e.Get(0)))
+			e.A = Array(Int(wn), Error(e, err))
+		}).
 		SetMethod("pipe", func(e *Env) {
 			var wn int64
 			var err error
@@ -80,7 +88,7 @@ func init() {
 			}
 			internal.PanicErr(err)
 			e.A = Int64(wn)
-		}, "Writer.$f(r: Reader, n?: int) -> int\n\tcopy (at most `n`) bytes from `r` to writer, return number of bytes copied")
+		})
 
 	Proto.Seeker.
 		SetMethod("seek", func(e *Env) {
@@ -88,12 +96,12 @@ func init() {
 			wn, err := f.Seek(e.Int64(0), e.Int(1))
 			internal.PanicErr(err)
 			e.A = Int64(wn)
-		}, "Seeker.$f(offset: int, whence: int) -> int")
+		})
 
 	Proto.Closer.
 		SetMethod("close", func(e *Env) {
 			internal.PanicErr(e.ThisProp("_f").(io.Closer).Close())
-		}, "Closer.$f()")
+		})
 
 	Proto.ReadWriter.Merge(Proto.Reader).Merge(Proto.Writer)
 
@@ -147,58 +155,34 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			return rd.Read(p)
 		}
 	case typ.Object:
-		if rb := Value(m).Object().Prop("readbuf"); rb.IsObject() {
-			v, err := Call2(rb.Object(), Bytes(p))
-			if err != nil {
-				return 0, err
+		if rb := Value(m).Object().Prop("readbuf"); IsCallable(rb) {
+			t := Call(rb.Object(), Bytes(p)).AssertPrototype(Proto.Array, "readbuf result").Native()
+			n := t.Get(0).AssertType(typ.Number, "readbuf result").Int()
+			if IsError(t.Get(1)) {
+				return int(n), ToErrorRootCause(t.Get(1)).(error)
 			}
-			t := v.AssertType(typ.Native, "ValueIO.Read: use readbuf()").Native()
-			n := t.Get(0).AssertType(typ.Number, "ValueIO.Read: (int, error)").Int()
-			ee, _ := t.Get(1).Interface().(*ExecError)
-			return int(n), ee.GetCause()
+			return int(n), nil
 		}
-		if rb := Value(m).Object().Prop("readbytes"); rb.IsObject() {
-			v, err := Call2(rb.Object(), Int(len(p)))
-			if err != nil {
-				return 0, err
-			} else if v == Nil {
+		if rb := Value(m).Object().Prop("readbytes"); IsCallable(rb) {
+			v := Call(rb.Object(), Int(len(p)))
+			if v == Nil {
 				return 0, io.EOF
 			}
-			return copy(p, v.Maybe().Str("")), nil
+			return copy(p, v.AssertPrototype(Proto.Bytes, "readbytes result").Native().Unwrap().([]byte)), nil
 		}
-		if rb := Value(m).Object().Prop("read"); rb.IsObject() {
-			v, err := Call2(rb.Object(), Int(len(p)))
-			if err != nil {
-				return 0, err
-			} else if v == Nil {
+		if rb := Value(m).Object().Prop("read"); IsCallable(rb) {
+			v := Call(rb.Object(), Int(len(p)))
+			if v == Nil {
 				return 0, io.EOF
 			}
-			return copy(p, v.Maybe().Str("")), nil
+			return copy(p, v.AssertType(typ.String, "read result").Str()), nil
 		}
 	}
 	return 0, fmt.Errorf("reader not implemented")
 }
 
 func (m ValueIO) WriteString(p string) (int, error) {
-	switch Value(m).Type() {
-	case typ.Native:
-		i := Value(m).Interface()
-		if rd, _ := i.(io.StringWriter); rd != nil {
-			return rd.WriteString(p)
-		}
-		if rd, _ := i.(io.Writer); rd != nil {
-			return rd.Write([]byte(p))
-		}
-	case typ.Object:
-		if rb := Value(m).Object().Prop("write"); rb.IsObject() {
-			v, err := Call2(rb.Object(), Str(p))
-			if err != nil {
-				return 0, err
-			}
-			return v.AssertType(typ.Number, "ValueIO.WriteString: (int, error)").Int(), nil
-		}
-	}
-	return 0, fmt.Errorf("stringwriter not implemented")
+	return m.Write([]byte(p))
 }
 
 func (m ValueIO) Write(p []byte) (int, error) {
@@ -208,12 +192,27 @@ func (m ValueIO) Write(p []byte) (int, error) {
 			return rd.Write(p)
 		}
 	case typ.Object:
-		if rb := Value(m).Object().Prop("write"); rb.IsObject() {
-			v, err := Call2(rb.Object(), Bytes(p))
-			if err != nil {
-				return 0, err
+		if rb := Value(m).Object().Prop("write"); IsCallable(rb) {
+			v := Call(rb.Object(), UnsafeStr(p))
+			if IsError(v) {
+				return 0, ToError(v)
 			}
-			return v.AssertType(typ.Number, "ValueIO.Write: (int, error)").Int(), nil
+			return v.AssertType(typ.Number, "write result").Int(), nil
+		}
+		if rb := Value(m).Object().Prop("writebytes"); IsCallable(rb) {
+			v := Call(rb.Object(), Bytes(p))
+			if IsError(v) {
+				return 0, ToError(v)
+			}
+			return v.AssertType(typ.Number, "writebytes result").Int(), nil
+		}
+		if rb := Value(m).Object().Prop("writebuf"); IsCallable(rb) {
+			t := Call(rb.Object(), Bytes(p)).AssertPrototype(Proto.Array, "writebuf result").Native()
+			n := t.Get(0).AssertType(typ.Number, "writebuf result").Int()
+			if IsError(t.Get(1)) {
+				return int(n), ToErrorRootCause(t.Get(1)).(error)
+			}
+			return int(n), nil
 		}
 	}
 	return 0, fmt.Errorf("writer not implemented")
@@ -227,8 +226,10 @@ func (m ValueIO) Close() error {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("close"); rb.IsObject() {
-			_, err := Call2(rb.Object())
-			return err
+			if v := Call(rb.Object()); IsError(v) {
+				return ToError(v)
+			}
+			return nil
 		}
 	}
 	return fmt.Errorf("closer not implemented")

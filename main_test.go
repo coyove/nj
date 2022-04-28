@@ -456,7 +456,7 @@ func TestACall(t *testing.T) {
 				SetMethod("pow2", func(e *bas.Env) {
 					i := e.Object(-1).Prop("a").Int64()
 					e.A = bas.Int64(i * i)
-				}, "")).ToValue()),
+				})).ToValue()),
 	}))
 	if foo.Int64() != 121 {
 		t.Fatal(foo)

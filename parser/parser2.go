@@ -3,7 +3,6 @@ package parser
 import (
 	"math/rand"
 	"strconv"
-	"strings"
 
 	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/typ"
@@ -107,25 +106,9 @@ func __ret(v Node) Node { return Nodes(SReturn, v) }
 func __func(name Token, paramList Node, stats Node) Node {
 	__findTailCall(stats.Nodes())
 	funcname := Sym(name)
-	docString := name.Str + "("
-	for _, p := range paramList.Nodes() {
-		if p.Type() == SYM {
-			docString += p.Sym() + ","
-		} else {
-			docString += p.Nodes()[1].Sym() + "..."
-		}
-	}
-	docString = strings.TrimSuffix(docString, ",") + ")"
-
-	// [chain "doc string" ...]
-	if len(stats.Nodes()) > 1 {
-		if first := stats.Nodes()[1]; first.Type() == STR {
-			docString += "\n" + first.Str()
-		}
-	}
 	return __chain(
 		__set(funcname, SNil).At(name),
-		__move(funcname, Nodes(SFunc, funcname, paramList, stats, Str(docString)).At(name)).At(name),
+		__move(funcname, Nodes(SFunc, funcname, paramList, stats).At(name)).At(name),
 	)
 }
 

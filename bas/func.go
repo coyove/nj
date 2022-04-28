@@ -20,7 +20,6 @@ type Function struct {
 	Variadic   bool
 	Native     func(env *Env)
 	Name       string
-	DocString  string
 	LoadGlobal *Program
 	Locals     []string
 	obj        *Object
@@ -63,20 +62,15 @@ func NewProgram(coreStack *Env, top *Function, symbols *Object, funcs []*Object,
 }
 
 // Func creates a callable object
-func Func(name string, f func(*Env), doc string) Value {
+func Func(name string, f func(*Env)) Value {
 	if name == "" {
 		name = internal.UnnamedFunc
 	}
-	obj := NewObject(0)
-	obj.fun = &Function{
-		Name:      name,
-		Native:    f,
-		DocString: doc,
-		obj:       obj,
-	}
 	if f == nil {
-		obj.fun.Native = func(*Env) {}
+		f = func(*Env) {}
 	}
+	obj := NewObject(0)
+	obj.fun = &Function{Name: name, Native: f, obj: obj}
 	obj.SetPrototype(Proto.Func)
 	return obj.ToValue()
 }

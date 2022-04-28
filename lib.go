@@ -34,12 +34,8 @@ import (
 
 func init() {
 	bas.Globals.SetProp("json", bas.NamedObject("json", 0).
-		SetMethod("stringify", func(e *bas.Env) {
-			e.A = bas.Str(e.Get(0).JSONString())
-		}, "$f(v: value) -> string").
-		SetMethod("dump", func(e *bas.Env) {
-			e.Get(1).Stringify(bas.NewWriter(e.Get(0)), typ.MarshalToJSON)
-		}, "$f(w: Writer, v: value)").
+		SetMethod("stringify", func(e *bas.Env) { e.A = bas.Str(e.Get(0).JSONString()) }).
+		SetMethod("dump", func(e *bas.Env) { e.Get(1).Stringify(bas.NewWriter(e.Get(0)), typ.MarshalToJSON) }).
 		SetMethod("parse", func(e *bas.Env) {
 			s := strings.TrimSpace(e.Str(0))
 			f := parser.ParseJSON
@@ -49,11 +45,11 @@ func init() {
 			v, err := f(s)
 			internal.PanicErr(err)
 			e.A = v
-		}, "$f(j: string, strict?: bool) -> value").
+		}).
 		ToValue())
 	bas.Globals.SetMethod("loadfile", func(e *bas.Env) {
 		e.A = MustRun(LoadFile(e.Str(0), &e.Global.Environment))
-	}, "$f(path: string) -> value\n\tload and eval file at `path`, globals will be inherited in loaded file")
+	})
 	bas.Globals.SetMethod("eval", func(e *bas.Env) {
 		opts := e.Get(1).Maybe().Object(nil)
 		if opts.Prop("ast").IsTrue() {
@@ -67,7 +63,7 @@ func init() {
 		v, err := p.Run()
 		internal.PanicErr(err)
 		_ = opts.Prop("returnglobals").IsTrue() && e.SetA(p.LocalsObject().ToValue()) || e.SetA(v)
-	}, "$f(code: string, options?: object) -> value\n\tevaluate `code` and return the reuslt")
+	})
 
 	bas.Globals.SetProp("stdout", bas.ValueOf(os.Stdout))
 	bas.Globals.SetProp("stdin", bas.ValueOf(os.Stdin))
@@ -77,7 +73,7 @@ func init() {
 		for _, a := range e.Stack()[1:] {
 			fmt.Fprint(w, a.String())
 		}
-	}, "$f(w: Writer, args...: value)\n\twrite `args` to `w`")
+	})
 	bas.Globals.SetMethod("scanln", func(env *bas.Env) {
 		prompt, n := env.Get(0), env.Get(1)
 		fmt.Fprint(env.Global.Stdout, prompt.Maybe().Str(""))
@@ -91,11 +87,8 @@ func init() {
 			results = append(results, bas.Str(s))
 		}
 		env.A = bas.Array(results...)
-	}, "$f() -> array\n\tread all user inputs and return as [input1, input2, ...]\n"+
-		"$f(prompt: string, n?: int) -> array\n\tprint `prompt` then read all (or at most `n`) user inputs")
-	bas.Globals.SetMethod("sleep", func(e *bas.Env) {
-		time.Sleep(time.Duration(e.Float64(0)*1e6) * 1e3)
-	}, "$f(sec: float)")
+	})
+	bas.Globals.SetMethod("sleep", func(e *bas.Env) { time.Sleep(time.Duration(e.Float64(0)*1e6) * 1e3) })
 	bas.Globals.SetMethod("Go_time", func(e *bas.Env) {
 		if e.Size() > 0 {
 			e.A = bas.ValueOf(time.Date(e.Int(0), time.Month(e.Int(1)), e.Int(2),
@@ -103,37 +96,34 @@ func init() {
 		} else {
 			e.A = bas.ValueOf(time.Now())
 		}
-	}, "$f() -> go.time.Time\n\treturn time.Time of current time\n"+
-		"$f(year: int, month: int, day: int, h?: int, m?: int, s?: int, nanoseconds?: int) -> go.time.Time\n"+
-		"\treturn time.Time constructed by the given arguments",
-	)
+	})
 	bas.Globals.SetMethod("clock", func(e *bas.Env) {
 		x := time.Now()
 		s := *(*[2]int64)(unsafe.Pointer(&x))
 		e.A = bas.Float64(float64(s[1]) / 1e9)
-	}, "$f() -> float\n\tseconds since startup (monotonic clock)")
-	bas.Globals.SetMethod("exit", func(e *bas.Env) { os.Exit(e.Int(0)) }, "$f(code: int)")
-	bas.Globals.SetMethod("chr", func(e *bas.Env) { e.A = bas.Rune(rune(e.Int(0))) }, "$f(code: int) -> string")
-	bas.Globals.SetMethod("byte", func(e *bas.Env) { e.A = bas.Byte(byte(e.Int(0))) }, "$f(code: int) -> string")
-	bas.Globals.SetMethod("ord", func(e *bas.Env) { r, _ := utf8.DecodeRuneInString(e.Str(0)); e.A = bas.Int64(int64(r)) }, "$f(s: string) -> int")
+	})
+	bas.Globals.SetMethod("exit", func(e *bas.Env) { os.Exit(e.Int(0)) })
+	bas.Globals.SetMethod("chr", func(e *bas.Env) { e.A = bas.Rune(rune(e.Int(0))) })
+	bas.Globals.SetMethod("byte", func(e *bas.Env) { e.A = bas.Byte(byte(e.Int(0))) })
+	bas.Globals.SetMethod("ord", func(e *bas.Env) { r, _ := utf8.DecodeRuneInString(e.Str(0)); e.A = bas.Int64(int64(r)) })
 
 	bas.Globals.SetProp("re", bas.Func("RegExp", func(e *bas.Env) {
 		rx := regexp.MustCompile(e.Str(0))
 		e.A = bas.NewObject(1).SetPrototype(e.A.Object()).SetProp("_rx", bas.ValueOf(rx)).ToValue()
-	}, "re(regex: string) -> RegExp\n\tcreate a regular expression object").Object().
+	}).Object().
 		SetMethod("match", func(e *bas.Env) {
 			e.A = bas.Bool(e.ThisProp("_rx").(*regexp.Regexp).MatchString(e.Str(0)))
-		}, "RegExp.$f(text: string) -> bool").
+		}).
 		SetMethod("find", func(e *bas.Env) {
 			e.A = bas.NewNative(e.ThisProp("_rx").(*regexp.Regexp).FindStringSubmatch(e.Str(0))).ToValue()
-		}, "RegExp.$f(text: string) -> array").
+		}).
 		SetMethod("findall", func(e *bas.Env) {
 			m := e.ThisProp("_rx").(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).Maybe().Int(-1))
 			e.A = bas.NewNative(m).ToValue()
-		}, "RegExp.$f(text: string) -> array").
+		}).
 		SetMethod("replace", func(e *bas.Env) {
 			e.A = bas.Str(e.ThisProp("_rx").(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
-		}, "RegExp.$f(old: string, new: string) -> string").
+		}).
 		ToValue())
 
 	bas.Globals.SetProp("open", bas.Func("open", func(e *bas.Env) {
@@ -163,31 +153,25 @@ func init() {
 		e.A = bas.NamedObject("File", 0).
 			SetProp("_f", bas.ValueOf(f)).
 			SetProp("path", bas.Str(f.Name())).
-			SetMethod("sync", func(e *bas.Env) {
-				internal.PanicErr(e.ThisProp("_f").(*os.File).Sync())
-			}, "File.$f()").
-			SetMethod("stat", func(e *bas.Env) {
-				fi, err := e.ThisProp("_f").(*os.File).Stat()
-				internal.PanicErr(err)
-				e.A = bas.ValueOf(fi)
-			}, "File.$f() -> go.os.FileInfo").
+			SetMethod("sync", func(e *bas.Env) { internal.PanicErr(e.ThisProp("_f").(*os.File).Sync()) }).
+			SetMethod("stat", func(e *bas.Env) { e.A = valueOrPanic(e.ThisProp("_f").(*os.File).Stat()) }).
 			SetMethod("truncate", func(e *bas.Env) {
 				f := e.ThisProp("_f").(*os.File)
 				internal.PanicErr(f.Truncate(e.Int64(1)))
 				t, err := f.Seek(0, 2)
 				internal.PanicErr(err)
 				e.A = bas.Int64(t)
-			}, "File.$f() -> int").
+			}).
 			SetPrototype(bas.Proto.ReadWriteSeekCloser).
 			ToValue()
-	}, "$f(path: string, flag: string, perm: int) -> File").Object().
+	}).Object().
 		SetMethod("close", func(e *bas.Env) {
 			if f, _ := e.Object(-1).Find(bas.Zero).Interface().(*os.File); f != nil {
 				internal.PanicErr(f.Close())
 			} else {
 				internal.Panic("no opened file yet")
 			}
-		}, "$f()\n\tclose last opened file").ToValue(),
+		}).ToValue(),
 	)
 
 	bas.Globals.SetProp("math", bas.NamedObject("math", 0).
@@ -195,9 +179,7 @@ func init() {
 		SetProp("NEG_INF", bas.Float64(math.Inf(-1))).
 		SetProp("PI", bas.Float64(math.Pi)).
 		SetProp("E", bas.Float64(math.E)).
-		SetMethod("randomseed", func(e *bas.Env) {
-			rand.Seed(e.Get(0).Maybe().Int64(1))
-		}, "$f(seed: int)").
+		SetMethod("randomseed", func(e *bas.Env) { rand.Seed(e.Get(0).Maybe().Int64(1)) }).
 		SetMethod("random", func(e *bas.Env) {
 			switch len(e.Stack()) {
 			case 2:
@@ -208,13 +190,13 @@ func init() {
 			default:
 				e.A = bas.Float64(rand.Float64())
 			}
-		}, "$f() -> float\n\treturn [0, 1)\n$f(n: int) -> int\n\treturn [0, n)\n$f(a: int, b: int) -> int\n\treturn [a, b]").
-		SetMethod("sqrt", func(e *bas.Env) { e.A = bas.Float64(math.Sqrt(e.Float64(0))) }, "$f(v: float) -> float").
-		SetMethod("floor", func(e *bas.Env) { e.A = bas.Float64(math.Floor(e.Float64(0))) }, "$f(v: float) -> float").
-		SetMethod("ceil", func(e *bas.Env) { e.A = bas.Float64(math.Ceil(e.Float64(0))) }, "$f(v: float) -> float").
-		SetMethod("min", func(e *bas.Env) { mathMinMax(e, false) }, "$f(a: number, b...: number) -> number").
-		SetMethod("max", func(e *bas.Env) { mathMinMax(e, true) }, "$f(a: number, b...: number) -> number").
-		SetMethod("pow", func(e *bas.Env) { e.A = bas.Float64(math.Pow(e.Float64(0), e.Float64(1))) }, "$f(a: float, b: float) -> float").
+		}).
+		SetMethod("sqrt", func(e *bas.Env) { e.A = bas.Float64(math.Sqrt(e.Float64(0))) }).
+		SetMethod("floor", func(e *bas.Env) { e.A = bas.Float64(math.Floor(e.Float64(0))) }).
+		SetMethod("ceil", func(e *bas.Env) { e.A = bas.Float64(math.Ceil(e.Float64(0))) }).
+		SetMethod("min", func(e *bas.Env) { mathMinMax(e, false) }).
+		SetMethod("max", func(e *bas.Env) { mathMinMax(e, true) }).
+		SetMethod("pow", func(e *bas.Env) { e.A = bas.Float64(math.Pow(e.Float64(0), e.Float64(1))) }).
 		SetMethod("abs", func(e *bas.Env) {
 			if e.A = e.Num(0); e.A.IsInt64() {
 				if i := e.A.Int64(); i < 0 {
@@ -223,21 +205,21 @@ func init() {
 			} else {
 				e.A = bas.Float64(math.Abs(e.A.Float64()))
 			}
-		}, "").
-		SetMethod("remainder", func(e *bas.Env) { e.A = bas.Float64(math.Remainder(e.Float64(0), e.Float64(1))) }, "").
-		SetMethod("mod", func(e *bas.Env) { e.A = bas.Float64(math.Mod(e.Float64(0), e.Float64(1))) }, "").
-		SetMethod("cos", func(e *bas.Env) { e.A = bas.Float64(math.Cos(e.Float64(0))) }, "").
-		SetMethod("sin", func(e *bas.Env) { e.A = bas.Float64(math.Sin(e.Float64(0))) }, "").
-		SetMethod("tan", func(e *bas.Env) { e.A = bas.Float64(math.Tan(e.Float64(0))) }, "").
-		SetMethod("acos", func(e *bas.Env) { e.A = bas.Float64(math.Acos(e.Float64(0))) }, "").
-		SetMethod("asin", func(e *bas.Env) { e.A = bas.Float64(math.Asin(e.Float64(0))) }, "").
-		SetMethod("atan", func(e *bas.Env) { e.A = bas.Float64(math.Atan(e.Float64(0))) }, "").
-		SetMethod("atan2", func(e *bas.Env) { e.A = bas.Float64(math.Atan2(e.Float64(0), e.Float64(1))) }, "").
-		SetMethod("ldexp", func(e *bas.Env) { e.A = bas.Float64(math.Ldexp(e.Float64(0), e.Int(0))) }, "").
+		}).
+		SetMethod("remainder", func(e *bas.Env) { e.A = bas.Float64(math.Remainder(e.Float64(0), e.Float64(1))) }).
+		SetMethod("mod", func(e *bas.Env) { e.A = bas.Float64(math.Mod(e.Float64(0), e.Float64(1))) }).
+		SetMethod("cos", func(e *bas.Env) { e.A = bas.Float64(math.Cos(e.Float64(0))) }).
+		SetMethod("sin", func(e *bas.Env) { e.A = bas.Float64(math.Sin(e.Float64(0))) }).
+		SetMethod("tan", func(e *bas.Env) { e.A = bas.Float64(math.Tan(e.Float64(0))) }).
+		SetMethod("acos", func(e *bas.Env) { e.A = bas.Float64(math.Acos(e.Float64(0))) }).
+		SetMethod("asin", func(e *bas.Env) { e.A = bas.Float64(math.Asin(e.Float64(0))) }).
+		SetMethod("atan", func(e *bas.Env) { e.A = bas.Float64(math.Atan(e.Float64(0))) }).
+		SetMethod("atan2", func(e *bas.Env) { e.A = bas.Float64(math.Atan2(e.Float64(0), e.Float64(1))) }).
+		SetMethod("ldexp", func(e *bas.Env) { e.A = bas.Float64(math.Ldexp(e.Float64(0), e.Int(0))) }).
 		SetMethod("modf", func(e *bas.Env) {
 			a, b := math.Modf(e.Float64(0))
 			e.A = bas.Array(bas.Float64(a), bas.Float64(b))
-		}, "").
+		}).
 		SetPrototype(bas.Proto.StaticObject).
 		ToValue())
 
@@ -257,7 +239,7 @@ func init() {
 			} else {
 				e.A = bas.ValueOf(env)
 			}
-		}, "").
+		}).
 		SetMethod("shell", func(e *bas.Env) {
 			win := runtime.GOOS == "windows"
 			p := exec.Command(internal.IfStr(win, "cmd", "sh"), internal.IfStr(win, "/c", "-c"), e.Str(0))
@@ -289,12 +271,8 @@ func init() {
 				panic("timeout")
 			}
 			e.A = bas.Bytes(stdout.Bytes())
-		}, "").
-		SetMethod("readdir", func(e *bas.Env) {
-			fi, err := ioutil.ReadDir(e.Str(0))
-			internal.PanicErr(err)
-			e.A = bas.ValueOf(fi)
-		}, "").
+		}).
+		SetMethod("readdir", func(e *bas.Env) { e.A = valueOrPanic(ioutil.ReadDir(e.Str(0))) }).
 		SetMethod("remove", func(e *bas.Env) {
 			path := e.Str(0)
 			fi, err := os.Stat(path)
@@ -304,18 +282,18 @@ func init() {
 			} else {
 				internal.PanicErr(os.Remove(path))
 			}
-		}, "").
+		}).
 		SetMethod("pstat", func(e *bas.Env) {
 			fi, err := os.Stat(e.Str(0))
 			_ = err == nil && e.SetA(bas.ValueOf(fi)) || e.SetA(bas.Nil)
-		}, "").
+		}).
 		SetPrototype(bas.Proto.StaticObject).
 		ToValue())
 
 	bas.Globals.SetProp("sync", bas.NamedObject("sync", 0).
-		SetMethod("mutex", func(e *bas.Env) { e.A = bas.ValueOf(&sync.Mutex{}) }, "$f() -> *go.sync.Mutex").
-		SetMethod("rwmutex", func(e *bas.Env) { e.A = bas.ValueOf(&sync.RWMutex{}) }, "$f() -> *go.sync.RWMutex").
-		SetMethod("waitgroup", func(e *bas.Env) { e.A = bas.ValueOf(&sync.WaitGroup{}) }, "$f() -> *go.sync.WaitGroup").
+		SetMethod("mutex", func(e *bas.Env) { e.A = bas.ValueOf(&sync.Mutex{}) }).
+		SetMethod("rwmutex", func(e *bas.Env) { e.A = bas.ValueOf(&sync.RWMutex{}) }).
+		SetMethod("waitgroup", func(e *bas.Env) { e.A = bas.ValueOf(&sync.WaitGroup{}) }).
 		SetPrototype(bas.Proto.StaticObject).
 		ToValue())
 
@@ -323,13 +301,13 @@ func init() {
 		SetMethod("encode", func(e *bas.Env) {
 			i := e.ThisProp("_e")
 			e.A = bas.Str(i.(interface{ EncodeToString([]byte) string }).EncodeToString(bas.ToReadonlyBytes(e.Get(0))))
-		}, "").
+		}).
 		SetMethod("decode", func(e *bas.Env) {
 			i := e.ThisProp("_e")
 			v, err := i.(interface{ DecodeString(string) ([]byte, error) }).DecodeString(e.Str(0))
 			internal.PanicErr(err)
 			e.A = bas.Bytes(v)
-		}, "").
+		}).
 		SetPrototype(bas.NamedObject("EncoderDecoder", 0).
 			SetMethod("encoder", func(e *bas.Env) {
 				enc := bas.Nil
@@ -345,15 +323,11 @@ func init() {
 				e.A = bas.NamedObject("Encoder", 0).
 					SetProp("_f", bas.ValueOf(enc)).
 					SetProp("_b", bas.ValueOf(buf)).
-					SetMethod("value", func(e *bas.Env) {
-						e.A = bas.Str(e.ThisProp("_b").(*bytes.Buffer).String())
-					}, "").
-					SetMethod("bytes", func(e *bas.Env) {
-						e.A = bas.Bytes(e.ThisProp("_b").(*bytes.Buffer).Bytes())
-					}, "").
+					SetMethod("value", func(e *bas.Env) { e.A = bas.Str(e.ThisProp("_b").(*bytes.Buffer).String()) }).
+					SetMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.ThisProp("_b").(*bytes.Buffer).Bytes()) }).
 					SetPrototype(bas.Proto.WriteCloser).
 					ToValue()
-			}, "").
+			}).
 			SetMethod("decoder", func(e *bas.Env) {
 				src := bas.NewReader(e.Get(0))
 				dec := bas.Nil
@@ -369,7 +343,7 @@ func init() {
 					SetProp("_f", bas.ValueOf(dec)).
 					SetPrototype(bas.Proto.Reader).
 					ToValue()
-			}, ""))
+			}))
 
 	bas.Globals.SetProp("hex", bas.NamedObject("hex", 0).SetPrototype(encDecProto.Prototype()).ToValue())
 	bas.Globals.SetProp("base64", bas.NamedObject("base64", 0).
@@ -389,18 +363,10 @@ func init() {
 
 	bas.Globals.SetProp("time", bas.Func("time", func(e *bas.Env) {
 		e.A = bas.Float64(float64(time.Now().UnixNano()) / 1e9)
-	}, "$f() -> float\n\tunix timestamp in seconds").Object().
-		SetMethod("now", func(e *bas.Env) {
-			e.A = bas.ValueOf(time.Now())
-		}, "$f() -> go.time.Time").
-		SetMethod("after", func(e *bas.Env) {
-			e.A = bas.ValueOf(time.After(time.Duration(e.Float64(0)*1e6) * 1e3))
-		}, "").
-		SetMethod("parse", func(e *bas.Env) {
-			t, err := time.Parse(getTimeFormat(e.Str(0)), e.Str(1))
-			internal.PanicErr(err)
-			e.A = bas.ValueOf(t)
-		}, "$f(format: string, text: string) -> go.time.Time").
+	}).Object().
+		SetMethod("now", func(e *bas.Env) { e.A = bas.ValueOf(time.Now()) }).
+		SetMethod("after", func(e *bas.Env) { e.A = bas.ValueOf(time.After(time.Duration(e.Float64(0)*1e6) * 1e3)) }).
+		SetMethod("parse", func(e *bas.Env) { e.A = valueOrPanic(time.Parse(getTimeFormat(e.Str(0)), e.Str(1))) }).
 		SetMethod("format", func(e *bas.Env) {
 			tt, ok := e.Get(1).Interface().(time.Time)
 			if !ok {
@@ -411,22 +377,16 @@ func init() {
 				}
 			}
 			e.A = bas.Str(tt.Format(getTimeFormat(e.Get(0).Maybe().Str(""))))
-		}, "$f(format: string, t?: go.time.Time|float) -> string").
+		}).
 		ToValue())
 
-	bas.Globals.SetProp("url", bas.Func("url", nil, "").Object().
-		SetMethod("escape", func(e *bas.Env) {
-			e.A = bas.Str(url.QueryEscape(e.Str(0)))
-		}, "").
-		SetMethod("unescape", func(e *bas.Env) {
-			v, err := url.QueryUnescape(e.Str(0))
-			internal.PanicErr(err)
-			e.A = bas.Str(v)
-		}, "").
+	bas.Globals.SetProp("url", bas.Func("url", nil).Object().
+		SetMethod("escape", func(e *bas.Env) { e.A = bas.Str(url.QueryEscape(e.Str(0))) }).
+		SetMethod("unescape", func(e *bas.Env) { e.A = valueOrPanic(url.QueryUnescape(e.Str(0))) }).
 		ToValue())
 
 	httpLib := bas.Func("http", func(e *bas.Env) {
-		args := e.Get(0).Object()
+		args := e.Object(0)
 		to := args.Prop("timeout").Maybe().Float64(1 << 30)
 		method := strings.ToUpper(args.Find(bas.Str("method")).Maybe().Str("GET"))
 
@@ -548,24 +508,12 @@ func init() {
 			return
 		}
 		e.A = bas.Array(send(e, true))
-	}, "$f(options: object) -> array\n"+
-		"\tperform an HTTP request and return [code, headers, body_reader, cookie_jar]\n"+
-		"\t'url' is a mandatory parameter in `options`, others are optional and pretty self explanatory:\n"+
-		"\thttp({url='...'})\n"+
-		"\thttp({url='...', noredirect=true})\n"+
-		"\thttp({url='...', bodyreader=true})\n"+
-		"\thttp({method='POST', url='...'})\n"+
-		"\thttp({method='POST', url='...'}, json={...})\n"+
-		"\thttp({method='POST', url='...', query={key=value}})\n"+
-		"\thttp({method='POST', url='...', header={key=value}, form={key=value}})\n"+
-		"\thttp({method='POST', url='...', multipart={file={reader}}})\n"+
-		"\thttp({method='POST', url='...', proxy='http://127.0.0.1:8080'})",
-	).Object()
+	}).Object()
 	for _, m := range []string{"get", "post", "put", "delete", "head", "patch"} {
 		httpLib = httpLib.SetMethod(m, func(e *bas.Env) {
 			ex := e.Get(1).Maybe().Object(nil)
 			e.A = e.Call(e.Object(-1), bas.NewObject(0).SetProp("method", bas.Str(m)).SetProp("url", e.Get(0)).Merge(ex).ToValue())
-		}, "")
+		})
 	}
 	bas.Globals.SetProp("http", httpLib.ToValue())
 
@@ -584,17 +532,11 @@ func init() {
 		e.A = bas.NamedObject("Buffer", 0).
 			SetPrototype(bas.Proto.ReadWriter).
 			SetProp("_f", bas.ValueOf(b)).
-			SetMethod("reset", func(e *bas.Env) {
-				e.ThisProp("_f").(*internal.LimitedBuffer).Reset()
-			}, "Buffer.$f()").
-			SetMethod("value", func(e *bas.Env) {
-				e.A = bas.UnsafeStr(e.ThisProp("_f").(*internal.LimitedBuffer).Bytes())
-			}, "Buffer.$f() -> string").
-			SetMethod("bytes", func(e *bas.Env) {
-				e.A = bas.Bytes(e.ThisProp("_f").(*internal.LimitedBuffer).Bytes())
-			}, "Buffer.$f() -> bytes").
+			SetMethod("reset", func(e *bas.Env) { e.ThisProp("_f").(*internal.LimitedBuffer).Reset() }).
+			SetMethod("value", func(e *bas.Env) { e.A = bas.UnsafeStr(e.ThisProp("_f").(*internal.LimitedBuffer).Bytes()) }).
+			SetMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.ThisProp("_f").(*internal.LimitedBuffer).Bytes()) }).
 			ToValue()
-	}, "$f(v?: string|bytes|int) -> Buffer")
+	})
 }
 
 func mathMinMax(e *bas.Env, max bool) {
@@ -700,5 +642,10 @@ func parseJSON(v interface{}) bas.Value {
 		}
 		return a.ToValue()
 	}
+	return bas.ValueOf(v)
+}
+
+func valueOrPanic(v interface{}, err error) bas.Value {
+	internal.PanicErr(err)
 	return bas.ValueOf(v)
 }

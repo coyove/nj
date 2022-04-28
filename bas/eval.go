@@ -311,7 +311,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			if a, b := env._get(opa), env._get(opb); a.Equal(b) {
 				env.A = True
 			} else {
-				env.A = Bool(IsPrototype(a, b.AssertType(typ.Object, "isprototype").Object()))
+				env.A = Bool(HasPrototype(a, b.AssertType(typ.Object, "isprototype").Object()))
 			}
 		case typ.OpStore:
 			subject, v := env._get(opa), env._get(opb)

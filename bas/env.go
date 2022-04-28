@@ -30,6 +30,9 @@ type Runtime struct {
 }
 
 func (r Runtime) Stacktrace() []Stacktrace {
+	if r.Stack1.Callable == nil {
+		return []Stacktrace{{Callable: r.Callable0, Cursor: internal.NativeCallCursor}}
+	}
 	return append(r.StackN, r.Stack1, Stacktrace{
 		Callable: r.Callable0,
 		Cursor:   internal.NativeCallCursor,

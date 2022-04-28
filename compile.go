@@ -283,7 +283,6 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	cls.Variadic = varargIdx >= 0
 	cls.NumParams = uint16(len(params.Nodes()))
 	cls.Name = nodes[1].Sym()
-	cls.DocString = nodes[4].Str()
 	cls.StackSize = newtable.vp
 	cls.CodeSeg = code
 	cls.Locals = newtable.symbolsToDebugLocals()
