@@ -44,7 +44,8 @@ type testStructEmbed struct {
 }
 
 type testStructPtr struct {
-	T *testStruct
+	T    *testStruct
+	Next *testStructPtr
 }
 
 func runFile(t *testing.T, path string) {
@@ -318,25 +319,6 @@ func TestBigList(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-}
-
-func TestFalsyValue(t *testing.T) {
-	assert := func(b bool) {
-		if !b {
-			_, fn, ln, _ := runtime.Caller(1)
-			t.Fatal(fn, ln)
-		}
-	}
-
-	assert(bas.Float64(0).IsFalse())
-	assert(bas.Float64(1 / math.Inf(-1)).IsFalse())
-	assert(!bas.Float64(math.NaN()).IsFalse())
-	assert(!bas.Bool(true).IsFalse())
-	assert(bas.Bool(false).IsFalse())
-	assert(bas.Str("").IsFalse())
-	assert(bas.Bytes(nil).IsTrue())
-	assert(bas.Bytes([]byte("")).IsTrue())
-	assert(!bas.ValueOf([]byte("")).IsFalse())
 }
 
 func TestPlainReturn(t *testing.T) {

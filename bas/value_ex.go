@@ -211,6 +211,10 @@ func IsCallable(a Value) bool {
 
 // ToType convert Value to reflect.Value based on reflect.Type
 func ToType(v Value, t reflect.Type) reflect.Value {
+	return toTypePtrStruct(v, t, nil)
+}
+
+func toTypePtrStruct(v Value, t reflect.Type, interopFuncs *[]func()) reflect.Value {
 	if t == nil {
 		return reflect.ValueOf(v.Interface())
 	}
@@ -219,6 +223,20 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 	}
 
 	vt := v.Type()
+	if interopFuncs != nil && t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct && vt == typ.Object {
+		this := v.Object()
+		vp := objectToStruct(this, t.Elem(), interopFuncs)
+		*interopFuncs = append(*interopFuncs, func() {
+			for i := 0; i < vp.NumField(); i++ {
+				f := vp.Field(i)
+				if n := vp.Type().Field(i).Name; n[0] >= 'A' && n[0] <= 'Z' {
+					this.SetProp(n, ValueOf(f.Interface()))
+				}
+			}
+		})
+		return vp.Addr()
+	}
+
 	if vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
 		return reflect.Zero(t)
 	}
@@ -236,12 +254,12 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 			}
 			out := Call(v.Object(), a...)
 			if to := t.NumOut(); to == 1 {
-				results = []reflect.Value{ToType(out, t.Out(0))}
+				results = []reflect.Value{toTypePtrStruct(out, t.Out(0), interopFuncs)}
 			} else if to > 1 {
-				out.AssertType(typ.Array, "ToType: expect multiple returned arguments")
+				out.AssertType(typ.Array, "ToType: requires function to return multiple arguments")
 				results = make([]reflect.Value, t.NumOut())
 				for i := range results {
-					results[i] = ToType(out.Array().Get(i), t.Out(i))
+					results[i] = toTypePtrStruct(out.Array().Get(i), t.Out(i), interopFuncs)
 				}
 			}
 			return
@@ -258,11 +276,11 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 		switch t.Kind() {
 		case reflect.Slice:
 			s := reflect.MakeSlice(t, a.Len(), a.Len())
-			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(ToType(v, t.Elem())); return true })
+			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(toTypePtrStruct(v, t.Elem(), interopFuncs)); return true })
 			return s
 		case reflect.Array:
 			s := reflect.New(t).Elem()
-			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(ToType(v, t.Elem())); return true })
+			a.Foreach(func(k int, v Value) bool { s.Index(k).Set(toTypePtrStruct(v, t.Elem(), interopFuncs)); return true })
 			return s
 		}
 	}
@@ -270,16 +288,13 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 		s := reflect.MakeMap(t)
 		kt, vt := t.Key(), t.Elem()
 		v.Object().Foreach(func(k Value, v *Value) bool {
-			s.SetMapIndex(ToType(k, kt), ToType(*v, vt))
+			s.SetMapIndex(toTypePtrStruct(k, kt, interopFuncs), toTypePtrStruct(*v, vt, interopFuncs))
 			return true
 		})
 		return s
 	}
 	if vt == typ.Object && t.Kind() == reflect.Struct {
-		return objectToStruct(v.Object(), t, false)
-	}
-	if vt == typ.Object && t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct {
-		return objectToStruct(v.Object(), t.Elem(), true)
+		return objectToStruct(v.Object(), t, interopFuncs)
 	}
 	if vt == typ.Bool && t.Kind() == reflect.Bool {
 		return reflect.ValueOf(v.Bool())
@@ -295,7 +310,7 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 	panic("ToType: failed to convert " + simpleString(v) + " to " + t.String())
 }
 
-func objectToStruct(src *Object, t reflect.Type, ptr bool) reflect.Value {
+func objectToStruct(src *Object, t reflect.Type, interopFuncs *[]func()) reflect.Value {
 	vp := reflect.New(t)
 	s := vp.Elem()
 	src.Foreach(func(k Value, v *Value) bool {
@@ -307,23 +322,9 @@ func objectToStruct(src *Object, t reflect.Type, ptr bool) reflect.Value {
 		if !f.IsValid() {
 			internal.Panic("ToStruct: field %q not found", field)
 		}
-		f.Set(ToType(*v, f.Type()))
+		f.Set(toTypePtrStruct(*v, f.Type(), interopFuncs))
 		return true
 	})
-	if ptr {
-		src.SetProp("_istruct", intf(s.Interface()))
-		src.SetMethod("interop", func(e *Env) {
-			this := e.Object(-1)
-			v := reflect.ValueOf(e.ThisProp("_istruct"))
-			for i := 0; i < v.NumField(); i++ {
-				f := v.Field(i)
-				if n := v.Type().Field(i).Name; n[0] >= 'A' && n[0] <= 'Z' {
-					this.SetProp(n, ValueOf(f.Interface()))
-				}
-			}
-		}, "")
-		return vp
-	}
 	return s
 }
 

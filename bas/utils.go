@@ -27,7 +27,7 @@ var (
 func reflectLoad(v interface{}, key Value) Value {
 	defer func() {
 		if r := recover(); r != nil {
-			panic(fmt.Errorf("reflectLoad %T.%s: %v", v, key, r))
+			panic(fmt.Errorf("reflectLoad %T[%v]: %v", v, key, r))
 		}
 	}()
 
@@ -71,7 +71,7 @@ func reflectLoad(v interface{}, key Value) Value {
 func reflectStore(subject interface{}, key, value Value) {
 	defer func() {
 		if r := recover(); r != nil {
-			panic(fmt.Errorf("reflectStore %T.%s: %v", subject, key, r))
+			panic(fmt.Errorf("reflectStore %T[%v]: %v", subject, key, r))
 		}
 	}()
 
@@ -85,7 +85,7 @@ func reflectStore(subject interface{}, key, value Value) {
 	k := key.AssertType(typ.String, "").Str()
 	f := rv.FieldByName(k)
 	if !f.IsValid() || !f.CanAddr() {
-		internal.Panic("reflect: %q not assignable in %v", k, subject)
+		internal.Panic("%q not assignable in %T", k, subject)
 	}
 	f.Set(ToType(value, f.Type()))
 }

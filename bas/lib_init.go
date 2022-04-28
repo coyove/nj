@@ -436,7 +436,7 @@ func init() {
 					callbacks = append(callbacks, v)
 				} else {
 					ch := reflect.ValueOf(k.Object().Prop("_ch").Interface())
-					a := v.AssertType(typ.Array, "sendmulti: expect [value, callback]").Array()
+					a := v.AssertType(typ.Array, "sendmulti").Array()
 					cases = append(cases, reflect.SelectCase{
 						Dir:  reflect.SelectSend,
 						Chan: ch,

@@ -59,7 +59,7 @@ func (e *ExecError) Error() string {
 		if r.Cursor == internal.NativeCallCursor {
 			msg.WriteString(fmt.Sprintf("%s (native)\n", r.Callable.Name))
 		} else {
-			msg.WriteString(fmt.Sprintf("%s at %s:%d (cursor: %d)\n",
+			msg.WriteString(fmt.Sprintf("%s at %s:%d (i%d)\n",
 				r.Callable.Name,
 				r.Callable.CodeSeg.Pos.Name,
 				r.sourceLine(),

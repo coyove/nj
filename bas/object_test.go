@@ -3,8 +3,11 @@ package bas
 import (
 	"encoding/base64"
 	"fmt"
+	"math"
 	"math/rand"
+	"runtime"
 	"runtime/debug"
+	"strings"
 	"testing"
 	"time"
 )
@@ -330,4 +333,38 @@ func TestHashcodeDist(t *testing.T) {
 		z[v]++
 	}
 	fmt.Println((z))
+}
+
+func BenchmarkStr(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		Str("\x00")
+	}
+}
+
+func TestFalsyValue(t *testing.T) {
+	assert := func(b bool) {
+		if !b {
+			_, fn, ln, _ := runtime.Caller(1)
+			t.Fatal(fn, ln)
+		}
+	}
+
+	assert(Float64(0).IsFalse())
+	assert(Float64(1 / math.Inf(-1)).IsFalse())
+	assert(!Float64(math.NaN()).IsFalse())
+	assert(!Bool(true).IsFalse())
+	assert(Bool(false).IsFalse())
+	assert(Str("").IsFalse())
+	assert(Str("\x00").IsTrue())
+	assert(Str("\x00\x00").IsTrue())
+	assert(Str("\x00\x00\x00").IsTrue())
+	assert(Str("\x00\x00\x00\x00").IsTrue())
+	assert(Str("\x00\x00\x00\x00\x00").IsTrue())
+	assert(Str(strings.Repeat("\x00", 6)).IsTrue())
+	assert(Str(strings.Repeat("\x00", 7)).IsTrue())
+	assert(Str(strings.Repeat("\x00", 8)).IsTrue())
+	assert(Bytes(nil).IsTrue())
+	assert(Bytes([]byte("")).IsTrue())
+	assert(!ValueOf([]byte("")).IsFalse())
+	assert(Less(Str("\x00\x00\x00\x00\x00\x00\x00"), Str("\x00\x00\x00\x00\x00\x00\x00\x00")))
 }

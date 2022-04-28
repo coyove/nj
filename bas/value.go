@@ -119,18 +119,22 @@ func Str(s string) Value {
 		switch len(s) {
 		case 1:
 			a := s[0]
-			x = [8]byte{a, a, a, a, a, a, a, a}
+			x = [8]byte{a, a, a, a, a, a, a, a + 1}
 		case 2:
 			a, b := s[0], s[1]
-			x = [8]byte{a, b, a, b, a, b, a, b}
+			x = [8]byte{a, b, a, b, a, b, a, b + 1}
 		case 3:
 			copy(x[:], s)
 			copy(x[3:], s)
-			copy(x[6:], s)
+			x[6], x[7] = s[0], s[1]+1
 		case 4, 5, 6, 7:
 			copy(x[:], s)
 			copy(x[len(s):], s)
+			x[7]++
 		case 8:
+			if s == "\x00\x00\x00\x00\x00\x00\x00\x00" {
+				return Value{v: uint64(typ.String), p: unsafe.Pointer(&s)}
+			}
 			copy(x[:], s)
 		}
 		return Value{
@@ -211,24 +215,25 @@ func ValueOf(i interface{}) Value {
 		if nf == nil {
 			rt := rv.Type()
 			nf = func(env *Env) {
+				var interopFuncs []func()
 				rtNumIn := rt.NumIn()
 				ins := make([]reflect.Value, 0, rtNumIn)
 				if !rt.IsVariadic() {
 					if env.Size() != rtNumIn {
-						internal.Panic("call native function, expect %d arguments, got %d", rtNumIn, env.Size())
+						internal.Panic("native function expects %d arguments, got %d", rtNumIn, env.Size())
 					}
 					for i := 0; i < rtNumIn; i++ {
-						ins = append(ins, ToType(env.Get(i), rt.In(i)))
+						ins = append(ins, toTypePtrStruct(env.Get(i), rt.In(i), &interopFuncs))
 					}
 				} else {
 					if env.Size() < rtNumIn-1 {
-						internal.Panic("call native variadic function, expect at least %d arguments, got %d", rtNumIn-1, env.Size())
+						internal.Panic("native variadic function expects at least %d arguments, got %d", rtNumIn-1, env.Size())
 					}
 					for i := 0; i < rtNumIn-1; i++ {
-						ins = append(ins, ToType(env.Get(i), rt.In(i)))
+						ins = append(ins, toTypePtrStruct(env.Get(i), rt.In(i), &interopFuncs))
 					}
 					for i := rtNumIn - 1; i < env.Size(); i++ {
-						ins = append(ins, ToType(env.Get(i), rt.In(rtNumIn-1).Elem()))
+						ins = append(ins, toTypePtrStruct(env.Get(i), rt.In(rtNumIn-1).Elem(), &interopFuncs))
 					}
 				}
 				if outs := rv.Call(ins); len(outs) == 0 {
@@ -237,6 +242,9 @@ func ValueOf(i interface{}) Value {
 					env.A = ValueOf(outs[0].Interface())
 				} else {
 					env.A = NewTypedArray(outs, GetTypedArrayMeta(outs)).ToValue()
+				}
+				for _, f := range interopFuncs {
+					f()
 				}
 			}
 		}
@@ -327,9 +335,9 @@ func (v Value) UnsafeInt64() int64 { return int64(v.v) }
 func (v Value) AssertType(t typ.ValueType, msg string) Value {
 	if v.Type() != t {
 		if msg != "" {
-			internal.Panic("%s: expect %v, got %v", msg, t, simpleString(v))
+			internal.Panic("%s: expects %v, got %v", msg, t, simpleString(v))
 		}
-		internal.Panic("expect %v, got %v", t, simpleString(v))
+		internal.Panic("expects %v, got %v", t, simpleString(v))
 	}
 	return v
 }
