@@ -64,7 +64,7 @@ func (m *Object) SetPrototype(m2 *Object) *Object {
 	return m
 }
 
-func (m *Object) IsPrototype(proto *Object) bool {
+func (m *Object) HasPrototype(proto *Object) bool {
 	for ; m != nil; m = m.parent {
 		if m == proto {
 			return true

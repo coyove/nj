@@ -144,12 +144,12 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			switch va.Type() {
 			case typ.Nil:
 				env.A = NewArray(Nil, Nil).ToValue()
-			case typ.Array:
+			case typ.Native:
 				idx := 0
 				if vb != Nil {
 					idx = vb.AssertType(typ.Number, "array iteration").Int() + 1
 				}
-				a := va.Array()
+				a := va.Native()
 				_ = idx >= a.Len() && env.SetA(NewArray(Nil, Nil).ToValue()) || env.SetA(NewArray(Int(idx), a.Get(idx)).ToValue())
 			case typ.Object:
 				env.A = NewArray(va.Object().Next(vb)).ToValue()
@@ -318,18 +318,16 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			switch subject.Type() {
 			case typ.Object:
 				subject.Object().Set(env.A, v)
-			case typ.Array:
+			case typ.Native:
 				if env.A.IsInt64() {
-					if a, idx := subject.Array(), env.A.Int(); idx == a.Len() {
+					if a, idx := subject.Native(), env.A.Int(); idx == a.Len() {
 						a.Append(v)
 					} else {
 						a.Set(idx, v)
 					}
 				} else {
-					internal.Panic("can't store %v into array[%v]", simpleString(v), simpleString(env.A))
+					subject.Native().SetKey(env.A, v)
 				}
-			case typ.Native:
-				reflectStore(subject.Interface(), env.A, v)
 			default:
 				internal.Panic("can't store %v into (%v)[%v]", simpleString(v), simpleString(subject), simpleString(env.A))
 			}
@@ -340,20 +338,12 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 				env.A = Nil
 			case typ.Object:
 				env.A = a.Object().Find(idx)
-			case typ.Array:
-				if idx.IsInt64() {
-					env.A = a.Array().Get(idx.Int())
-				} else if idx.Type() == typ.String {
-					if f := a.Array().meta.Proto.Find(idx); f != Nil {
-						env.A = setObjectRecv(f, a)
-						break
-					}
-					internal.Panic("array method %q not found", idx.Str())
-				} else {
-					internal.Panic("can't load array[%v]", simpleString(idx))
-				}
 			case typ.Native:
-				env.A = reflectLoad(a.Interface(), idx)
+				if idx.IsInt64() {
+					env.A = a.Native().Get(idx.Int())
+				} else {
+					env.A = a.Native().GetKey(idx)
+				}
 			case typ.String:
 				if idx.Type() == typ.Number {
 					if s := a.Str(); idx.Int64() >= 0 && idx.Int64() < int64(len(s)) {
@@ -377,8 +367,8 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			stackEnv.Push(env._get(opa))
 		case typ.OpPushUnpack:
 			switch a := env._get(opa); a.Type() {
-			case typ.Array:
-				*stackEnv.stack = append(*stackEnv.stack, a.Array().Values()...)
+			case typ.Native:
+				*stackEnv.stack = append(*stackEnv.stack, a.Native().Values()...)
 			case typ.Nil:
 			default:
 				internal.Panic("arguments unpacking expects array, got %v", simpleString(a))

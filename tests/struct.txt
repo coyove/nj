@@ -172,3 +172,9 @@ open.close()
 
 os.remove("tests/a.txt")
 os.remove("tests/b.txt")
+
+
+m = gomap({a=1,b=2}, 'c', 3)
+print(type(m))
+assert(m is nativemap)
+assert(m.c , 3)

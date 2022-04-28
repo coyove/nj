@@ -3,7 +3,6 @@ package bas
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"math"
 	"os"
@@ -81,6 +80,11 @@ func (v Value) IsInt64() bool { return v.p == int64Marker }
 
 // IsObject tests whether value is an object
 func (v Value) IsObject() bool { return v.Type() == typ.Object }
+
+// IsArray tests whether value is a native array
+func (v Value) IsArray() bool {
+	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(Proto.Array)
+}
 
 // IsNil tests whether value is nil
 func (v Value) IsNil() bool { return v == Nil }
@@ -165,7 +169,7 @@ func Rune(r rune) Value {
 
 // Bytes creates a bytes array
 func Bytes(b []byte) Value {
-	return NewTypedArray(b, bytesArrayMeta).ToValue()
+	return newTypedArray(b, bytesArrayMeta).ToValue()
 }
 
 // ValueOf creates a `Value` from golang `interface{}`
@@ -206,10 +210,6 @@ func ValueOf(i interface{}) Value {
 		return Int64(int64(rv.Uint()))
 	} else if (k == reflect.Ptr || k == reflect.Interface) && rv.IsNil() {
 		return Nil
-	} else if k == reflect.Array || k == reflect.Slice {
-		return NewTypedArray(i, GetTypedArrayMeta(i)).ToValue()
-	} else if k == reflect.Chan {
-		return NewObject(0).SetProp("_ch", intf(rv.Interface())).SetPrototype(Proto.Channel).ToValue()
 	} else if k == reflect.Func {
 		nf, _ := i.(func(*Env))
 		if nf == nil {
@@ -241,7 +241,7 @@ func ValueOf(i interface{}) Value {
 				} else if len(outs) == 1 {
 					env.A = ValueOf(outs[0].Interface())
 				} else {
-					env.A = NewTypedArray(outs, GetTypedArrayMeta(outs)).ToValue()
+					env.A = newTypedArray(outs, GetNativeMeta(outs)).ToValue()
 				}
 				for _, f := range interopFuncs {
 					f()
@@ -249,18 +249,8 @@ func ValueOf(i interface{}) Value {
 			}
 		}
 		return Func("<"+rv.Type().String()+">", nf, "")
-	} else if k == reflect.Map {
-		o := NewObject(rv.Len())
-		for iter := rv.MapRange(); iter.Next(); {
-			o.Set(ValueOf(iter.Key().Interface()), ValueOf(iter.Value().Interface()))
-		}
-		return o.ToValue()
 	}
-	return intf(i)
-}
-
-func intf(i interface{}) Value {
-	return Value{v: uint64(typ.Native), p: unsafe.Pointer(&i)}
+	return NewNative(i).ToValue()
 }
 
 func (v Value) isSmallString() bool {
@@ -303,8 +293,8 @@ func (v Value) Bool() bool { return v.p == trueMarker }
 // Object returns value as an object without checking Type()
 func (v Value) Object() *Object { return (*Object)(v.p) }
 
-// Array returns value as a sequence without checking Type()
-func (v Value) Array() *Array { return (*Array)(v.p) }
+// Native returns value as a sequence without checking Type()
+func (v Value) Native() *Native { return (*Native)(v.p) }
 
 // Interface returns value as an interface{}
 func (v Value) Interface() interface{} {
@@ -320,10 +310,8 @@ func (v Value) Interface() interface{} {
 		return v.Str()
 	case typ.Object:
 		return v.Object()
-	case typ.Array:
-		return v.Array().Unwrap()
 	case typ.Native:
-		return *(*interface{})(v.p)
+		return v.Native().Unwrap()
 	}
 	return nil
 }
@@ -400,17 +388,8 @@ func (v Value) Stringify(p io.Writer, j typ.MarshalType) {
 		internal.WriteString(p, internal.IfQuote(j == typ.MarshalToJSON, v.Str()))
 	case typ.Object:
 		v.Object().rawPrint(p, j, false)
-	case typ.Array:
-		v.Array().Marshal(p, j)
 	case typ.Native:
-		i := v.Interface()
-		if s, ok := i.(fmt.Stringer); ok {
-			internal.WriteString(p, internal.IfQuote(j == typ.MarshalToJSON, s.String()))
-		} else if s, ok := i.(error); ok {
-			internal.WriteString(p, internal.IfQuote(j == typ.MarshalToJSON, s.Error()))
-		} else {
-			internal.WriteString(p, internal.IfQuote(j == typ.MarshalToJSON, "<"+reflect.TypeOf(i).String()+">"))
-		}
+		v.Native().Marshal(p, j)
 	default:
 		internal.WriteString(p, internal.IfStr(j == typ.MarshalToJSON, "null", "nil"))
 	}

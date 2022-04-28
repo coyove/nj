@@ -245,7 +245,7 @@ func __forIn(key, value Token, expr, body Node, pos Token) Node {
 func (lex *Lexer) __arrayBuild(list, arg Node) Node {
 	if lex.scanner.jsonMode {
 		if list.Valid() {
-			list.simpleJSON(lex).Array().Append(arg.simpleJSON(lex))
+			list.simpleJSON(lex).Native().Append(arg.simpleJSON(lex))
 			return list
 		}
 		return jsonValue(bas.NewArray(arg.simpleJSON(lex)).ToValue())

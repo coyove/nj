@@ -12,6 +12,8 @@ var Proto = struct {
 	Func,
 	Array,
 	Error,
+	Native,
+	NativeMap,
 	Channel,
 	Reader,
 	Writer,
@@ -33,6 +35,8 @@ var Proto = struct {
 	Array:               NewObject(0),                          // filled in lib_init.go
 	Error:               NewObject(0),                          // filled in lib_init.go
 	Channel:             NewObject(0),                          // filled in lib_init.go
+	Native:              NewObject(0),                          // filled in lib_init.go
+	NativeMap:           NewObject(0),                          // filled in lib_init.go
 	Reader:              NamedObject("Reader", 0),              // filled in io.go
 	Writer:              NamedObject("Writer", 0),              // filled in io.go
 	Seeker:              NamedObject("Seeker", 0),              // filled in io.go

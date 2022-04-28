@@ -125,12 +125,11 @@ func init() {
 			e.A = bas.Bool(e.ThisProp("_rx").(*regexp.Regexp).MatchString(e.Str(0)))
 		}, "RegExp.$f(text: string) -> bool").
 		SetMethod("find", func(e *bas.Env) {
-			m := e.ThisProp("_rx").(*regexp.Regexp).FindStringSubmatch(e.Str(0))
-			e.A = bas.NewTypedArray(m, bas.GetTypedArrayMeta(m)).ToValue()
+			e.A = bas.NewNative(e.ThisProp("_rx").(*regexp.Regexp).FindStringSubmatch(e.Str(0))).ToValue()
 		}, "RegExp.$f(text: string) -> array").
 		SetMethod("findall", func(e *bas.Env) {
 			m := e.ThisProp("_rx").(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).Maybe().Int(-1))
-			e.A = bas.NewTypedArray(m, bas.GetTypedArrayMeta(m)).ToValue()
+			e.A = bas.NewNative(m).ToValue()
 		}, "RegExp.$f(text: string) -> array").
 		SetMethod("replace", func(e *bas.Env) {
 			e.A = bas.Str(e.ThisProp("_rx").(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
@@ -470,10 +469,10 @@ func init() {
 			if x := args.Prop("multipart"); x.Type() == typ.Object {
 				x.Object().Foreach(func(k bas.Value, v *bas.Value) bool {
 					key, rd := k.String(), *v
-					if rd.Type() == typ.Array && bas.Len(rd) == 2 { // [filename, reader]
-						part, err := writer.CreateFormFile(key, rd.Array().Get(0).Maybe().Str(""))
+					if rd.Type() == typ.Native && bas.Len(rd) == 2 { // [filename, reader]
+						part, err := writer.CreateFormFile(key, rd.Native().Get(0).Maybe().Str(""))
 						internal.PanicErr(err)
-						_, err = io.Copy(part, bas.NewReader(rd.Array().Get(1)))
+						_, err = io.Copy(part, bas.NewReader(rd.Native().Get(1)))
 						internal.PanicErr(err)
 					} else {
 						part, err := writer.CreateFormField(key)

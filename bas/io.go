@@ -152,7 +152,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			if err != nil {
 				return 0, err
 			}
-			t := v.AssertType(typ.Array, "ValueIO.Read: use readbuf()").Array()
+			t := v.AssertType(typ.Native, "ValueIO.Read: use readbuf()").Native()
 			n := t.Get(0).AssertType(typ.Number, "ValueIO.Read: (int, error)").Int()
 			ee, _ := t.Get(1).Interface().(*ExecError)
 			return int(n), ee.GetCause()
@@ -182,10 +182,11 @@ func (m ValueIO) Read(p []byte) (int, error) {
 func (m ValueIO) WriteString(p string) (int, error) {
 	switch Value(m).Type() {
 	case typ.Native:
-		if rd, _ := Value(m).Interface().(io.StringWriter); rd != nil {
+		i := Value(m).Interface()
+		if rd, _ := i.(io.StringWriter); rd != nil {
 			return rd.WriteString(p)
 		}
-		if rd, _ := Value(m).Interface().(io.Writer); rd != nil {
+		if rd, _ := i.(io.Writer); rd != nil {
 			return rd.Write([]byte(p))
 		}
 	case typ.Object:

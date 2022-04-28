@@ -296,7 +296,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		if v2.Array().Get(i).Int() != i {
+		if v2.Native().Get(i).Int() != i {
 			t.Fatal(v2)
 		}
 	}
@@ -351,7 +351,7 @@ return [a + add(), a + add(), a + add()]
 		panic(err)
 	}
 	fmt.Println(p2.GoString())
-	if v1 := v.Array().Values(); v1[0].Int64() != 101 || v1[1].Int64() != 102 || v1[2].Int64() != 103 {
+	if v1 := v.Native().Values(); v1[0].Int64() != 101 || v1[1].Int64() != 102 || v1[2].Int64() != 103 {
 		t.Fatal(v, v1, err, p2.GoString())
 	}
 

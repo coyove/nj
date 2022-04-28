@@ -16,8 +16,8 @@ func (v MaybeValue) Str(defaultValue string) string {
 		return Value(v).Str()
 	case typ.Nil:
 		return defaultValue
-	case typ.Array:
-		if buf, ok := Value(v).Array().Unwrap().([]byte); ok {
+	case typ.Native:
+		if buf, ok := Value(v).Native().Unwrap().([]byte); ok {
 			return *(*string)(unsafe.Pointer(&buf))
 		}
 		fallthrough
@@ -89,24 +89,24 @@ func (v MaybeValue) Func(defaultValue *Object) *Object {
 }
 
 func ToError(v Value) error {
-	if Value(v).Type() == typ.Array && Value(v).Array().meta.Proto.IsPrototype(errorArrayMeta.Proto) {
-		return Value(v).Array().Unwrap().(*ExecError)
+	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(errorArrayMeta.Proto) {
+		return Value(v).Native().Unwrap().(*ExecError)
 	}
 	panic("ToError: not error: " + simpleString(v))
 }
 
 func ToBytes(v Value) []byte {
-	if Value(v).Type() == typ.Array && Value(v).Array().meta.Proto.IsPrototype(bytesArrayMeta.Proto) {
-		return Value(v).Array().Unwrap().([]byte)
+	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(bytesArrayMeta.Proto) {
+		return Value(v).Native().Unwrap().([]byte)
 	}
 	panic("ToBytes: not []byte: " + simpleString(v))
 }
 
 func ToReadonlyBytes(v Value) []byte {
 	switch v.Type() {
-	case typ.Array:
-		if v.Array().meta.Proto.IsPrototype(bytesArrayMeta.Proto) {
-			return Value(v).Array().Unwrap().([]byte)
+	case typ.Native:
+		if v.Native().meta.Proto.HasPrototype(bytesArrayMeta.Proto) {
+			return Value(v).Native().Unwrap().([]byte)
 		}
 	case typ.String:
 		var s struct {
@@ -121,11 +121,11 @@ func ToReadonlyBytes(v Value) []byte {
 }
 
 func IsBytes(v Value) bool {
-	return v.Type() == typ.Array && v.Array().meta.Proto.IsPrototype(bytesArrayMeta.Proto)
+	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(bytesArrayMeta.Proto)
 }
 
 func IsError(v Value) bool {
-	return v.Type() == typ.Array && v.Array().meta.Proto.IsPrototype(errorArrayMeta.Proto)
+	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(errorArrayMeta.Proto)
 }
 
 func DeepEqual(a, b Value) bool {
@@ -134,13 +134,13 @@ func DeepEqual(a, b Value) bool {
 	}
 	if at, bt := a.Type(), b.Type(); at == bt {
 		switch at {
-		case typ.Array:
-			flag := a.Array().Len() == b.Array().Len()
+		case typ.Native:
+			flag := a.Native().Len() == b.Native().Len()
 			if !flag {
 				return false
 			}
-			a.Array().Foreach(func(k int, v Value) bool {
-				flag = DeepEqual(b.Array().Get(k), v)
+			a.Native().Foreach(func(k int, v Value) bool {
+				flag = DeepEqual(b.Native().Get(k), v)
 				return flag
 			})
 			return flag
@@ -192,15 +192,15 @@ func IsPrototype(a Value, p *Object) bool {
 	case typ.Nil:
 		return p == nil
 	case typ.Object:
-		return a.Object().IsPrototype(p)
+		return a.Object().HasPrototype(p)
 	case typ.Bool:
 		return p == Proto.Bool
 	case typ.Number:
 		return p == Proto.Float || (a.IsInt64() && p == Proto.Int)
 	case typ.String:
 		return p == Proto.Str
-	case typ.Array:
-		return a.Array().meta.Proto.IsPrototype(p)
+	case typ.Native:
+		return a.Native().meta.Proto.HasPrototype(p)
 	}
 	return false
 }
@@ -256,10 +256,10 @@ func toTypePtrStruct(v Value, t reflect.Type, interopFuncs *[]func()) reflect.Va
 			if to := t.NumOut(); to == 1 {
 				results = []reflect.Value{toTypePtrStruct(out, t.Out(0), interopFuncs)}
 			} else if to > 1 {
-				out.AssertType(typ.Array, "ToType: requires function to return multiple arguments")
+				out.AssertType(typ.Native, "ToType: requires function to return multiple arguments")
 				results = make([]reflect.Value, t.NumOut())
 				for i := range results {
-					results[i] = toTypePtrStruct(out.Array().Get(i), t.Out(i), interopFuncs)
+					results[i] = toTypePtrStruct(out.Native().Get(i), t.Out(i), interopFuncs)
 				}
 			}
 			return
@@ -268,8 +268,8 @@ func toTypePtrStruct(v Value, t reflect.Type, interopFuncs *[]func()) reflect.Va
 	if vt == typ.Number && t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
 		return reflect.ValueOf(v.Interface()).Convert(t)
 	}
-	if vt == typ.Array {
-		a := v.Array()
+	if vt == typ.Native {
+		a := v.Native()
 		if t == reflect.TypeOf(a.Unwrap()) {
 			return reflect.ValueOf(a.Unwrap())
 		}
@@ -302,11 +302,7 @@ func toTypePtrStruct(v Value, t reflect.Type, interopFuncs *[]func()) reflect.Va
 	if vt == typ.String && t.Kind() == reflect.String {
 		return reflect.ValueOf(v.Str())
 	}
-	if vt == typ.Native {
-		if i := v.Interface(); reflect.TypeOf(i) == t {
-			return reflect.ValueOf(i)
-		}
-	}
+
 	panic("ToType: failed to convert " + simpleString(v) + " to " + t.String())
 }
 
@@ -335,14 +331,12 @@ func Len(v Value) int {
 			return int(uintptr(v.p)-uintptr(smallStrMarker)) / 8
 		}
 		return len(*(*string)(v.p))
-	case typ.Array:
-		return v.Array().Len()
+	case typ.Native:
+		return v.Native().Len()
 	case typ.Object:
 		return v.Object().Len()
 	case typ.Nil:
 		return 0
-	case typ.Native:
-		return reflect.ValueOf(v.Interface()).Len()
 	}
 	panic("can't measure length of " + simpleString(v))
 }

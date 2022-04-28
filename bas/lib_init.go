@@ -99,7 +99,7 @@ func init() {
 	Globals.SetMethod("panic", func(e *Env) {
 		v := e.Get(0)
 		if IsPrototype(v, Proto.Error) {
-			panic(v.Array().Unwrap().(*ExecError).root)
+			panic(v.Native().Unwrap().(*ExecError).root)
 		}
 		panic(v)
 	}, "$f(v: value)")
@@ -292,7 +292,7 @@ func init() {
 			}(f, args)
 			e.A = NamedObject("Goroutine", 0).
 				SetProp("f", f.ToValue()).
-				SetProp("w", intf(w)).
+				SetProp("w", newTypedArray(w, GetNativeMeta(w)).ToValue()).
 				SetMethod("wait", func(e *Env) { e.A = <-e.ThisProp("w").(chan Value) }, "").
 				ToValue()
 		}, "function.$f(args...: value) -> Goroutine\n\texecute `f` in goroutine").
@@ -307,7 +307,7 @@ func init() {
 			e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
 				o := e.runtime.Callable0.obj
 				f := o.Prop("_l").Object()
-				stk := append(o.Prop("_c").Array().Values(), e.Stack()...)
+				stk := append(o.Prop("_c").Native().Values(), e.Stack()...)
 				e.A = e.Call(f, stk...)
 			}, "").Object().
 				SetProp("_l", lambda.ToValue()).
@@ -405,9 +405,27 @@ func init() {
 		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.Runtime().Stacktrace()})
 	}, "").Object().
 		SetMethod("error", func(e *Env) { e.A = ValueOf(e.Array(-1).Unwrap().(*ExecError).root) }, "").
-		SetMethod("getcause", func(e *Env) { e.A = intf(e.Array(-1).Unwrap().(*ExecError).root) }, "").
+		SetMethod("getcause", func(e *Env) { e.A = NewNative(e.Array(-1).Unwrap().(*ExecError).root).ToValue() }, "").
 		SetMethod("trace", func(e *Env) { e.A = ValueOf(e.Array(-1).Unwrap().(*ExecError).stacks) }, "")
 	Globals.SetProp("error", Proto.Error.ToValue())
+
+	*Proto.Native = *NamedObject("native", 16).
+		SetMethod("typename", func(e *Env) {
+			e.A = Str(reflect.TypeOf(e.Get(-1).Native().Unwrap()).String())
+		}, "native.$f()")
+	Globals.SetProp("native", Proto.Native.ToValue())
+
+	*Proto.NativeMap = *NamedObject("nativemap", 4).
+		SetMethod("toobject", func(e *Env) {
+			rv := reflect.ValueOf(e.Get(-1).Native().Unwrap())
+			o := NewObject(rv.Len())
+			for iter := rv.MapRange(); iter.Next(); {
+				o.Set(ValueOf(iter.Key().Interface()), ValueOf(iter.Value().Interface()))
+			}
+			e.A = o.ToValue()
+		}, "nativemap.$f()").
+		SetPrototype(Proto.Native)
+	Globals.SetProp("nativemap", Proto.NativeMap.ToValue())
 
 	*Proto.Channel = *Func("channel", func(e *Env) {
 		rv := reflect.ValueOf(e.Interface(0))
@@ -429,14 +447,14 @@ func init() {
 			var cases []reflect.SelectCase
 			var callbacks []Value
 			e.Array(0).Foreach(func(_ int, v Value) bool {
-				v.AssertType(typ.Array, "sendmulti")
-				k := v.Array().Get(0)
+				v.AssertType(typ.Native, "sendmulti")
+				k := v.Native().Get(0)
 				if k.Type() == typ.String && k == Str("default") {
 					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectDefault})
 					callbacks = append(callbacks, v)
 				} else {
 					ch := reflect.ValueOf(k.Object().Prop("_ch").Interface())
-					a := v.AssertType(typ.Array, "sendmulti").Array()
+					a := v.AssertType(typ.Native, "sendmulti").Native()
 					cases = append(cases, reflect.SelectCase{
 						Dir:  reflect.SelectSend,
 						Chan: ch,
@@ -470,7 +488,8 @@ func init() {
 			if cb := callbacks[chosen]; IsCallable(cb) {
 				e.A = e.Call(cb.Object(), ValueOf(recv), Bool(recvOK))
 			}
-		}, "$f(channels: {(Channel)=function(value, bool)})")
+		}, "$f(channels: {(Channel)=function(value, bool)})").
+		SetPrototype(Proto.Native)
 	Globals.SetProp("channel", Proto.Channel.ToValue())
 
 	*Proto.Str = *Func("str", func(e *Env) {
@@ -497,9 +516,9 @@ func init() {
 		}, "str.$f(substr: string) -> bool").
 		SetMethod("split", func(e *Env) {
 			if n := e.Get(1).Maybe().Int(0); n == 0 {
-				e.A = NewTypedArray(strings.Split(e.Str(-1), e.Str(0)), stringsArrayMeta).ToValue()
+				e.A = newTypedArray(strings.Split(e.Str(-1), e.Str(0)), stringsArrayMeta).ToValue()
 			} else {
-				e.A = NewTypedArray(strings.SplitN(e.Str(-1), e.Str(0), n), stringsArrayMeta).ToValue()
+				e.A = newTypedArray(strings.SplitN(e.Str(-1), e.Str(0), n), stringsArrayMeta).ToValue()
 			}
 		}, "str.$f(delim: string, n?: int) -> array").
 		SetMethod("join", func(e *Env) {

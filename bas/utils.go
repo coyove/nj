@@ -24,7 +24,7 @@ var (
 	valueType    = reflect.TypeOf(Value{})
 )
 
-func reflectLoad(v interface{}, key Value) Value {
+func reflectLoad(v interface{}, key Value) (Value, bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			panic(fmt.Errorf("reflectLoad %T[%v]: %v", v, key, r))
@@ -32,12 +32,12 @@ func reflectLoad(v interface{}, key Value) Value {
 	}()
 
 	rv := reflect.ValueOf(v)
-	switch rv.Kind() {
-	case reflect.Map:
+	if rv.Kind() == reflect.Map {
 		v := rv.MapIndex(ToType(key, rv.Type().Key()))
 		if v.IsValid() {
-			return ValueOf(v.Interface())
+			return ValueOf(v.Interface()), true
 		}
+		return Nil, false
 	}
 
 	k := key.AssertType(typ.String, "").Str()
@@ -50,22 +50,22 @@ func reflectLoad(v interface{}, key Value) Value {
 	if !f.IsValid() {
 		if strings.HasPrefix(k, "p") {
 			if rv.Kind() != reflect.Ptr {
-				return Nil
+				return Nil, false
 			}
 			t, ok := rv.Elem().Type().FieldByName(k[1:])
 			if !ok {
-				return Nil
+				return Nil, false
 			}
 			ptr := (*struct{ a, b uintptr })(unsafe.Pointer(&v)).b + t.Offset
 			f = reflect.NewAt(t.Type, unsafe.Pointer(ptr))
 		} else {
 			f = reflect.Indirect(rv).FieldByName(k)
 			if !f.IsValid() {
-				return Nil
+				return Nil, false
 			}
 		}
 	}
-	return ValueOf(f.Interface())
+	return ValueOf(f.Interface()), true
 }
 
 func reflectStore(subject interface{}, key, value Value) {
@@ -90,6 +90,16 @@ func reflectStore(subject interface{}, key, value Value) {
 	f.Set(ToType(value, f.Type()))
 }
 
+func reflectString(i interface{}) string {
+	if s, ok := i.(fmt.Stringer); ok {
+		return s.String()
+	}
+	if s, ok := i.(error); ok {
+		return s.Error()
+	}
+	return "<" + reflect.TypeOf(i).String() + ">"
+}
+
 func or(a, b interface{}) interface{} {
 	if a != nil {
 		return a
@@ -106,7 +116,7 @@ func setObjectRecv(v, r Value) Value {
 
 func simpleString(v Value) string {
 	switch vt := v.Type(); vt {
-	case typ.Number, typ.Bool, typ.Native:
+	case typ.Number, typ.Bool:
 		return v.JSONString()
 	case typ.String:
 		if Len(v) <= 32 {
@@ -118,8 +128,8 @@ func simpleString(v Value) string {
 			return v.Object().fun.String()
 		}
 		return "{" + v.Object().Name() + "}"
-	case typ.Array:
-		a := v.Array()
+	case typ.Native:
+		a := v.Native()
 		if a.Typed() {
 			return fmt.Sprintf("array(%s)", a.meta.Name)
 		}
@@ -159,7 +169,7 @@ func sprintf(env *Env, start int, p io.Writer) {
 			case 'x', 'X':
 				expecting = typ.String + typ.Number
 			case 'v':
-				expecting = typ.Native
+				expecting = typ.Object
 			case 't':
 				expecting = typ.Bool
 			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
@@ -176,7 +186,7 @@ func sprintf(env *Env, start int, p io.Writer) {
 			fmt.Fprint(p, env.Bool(popi))
 		case typ.String:
 			if pop := env.Get(popi); IsBytes(pop) {
-				fmt.Fprintf(p, tmp.String(), pop.Array().Unwrap())
+				fmt.Fprintf(p, tmp.String(), pop.Native().Unwrap())
 			} else {
 				fmt.Fprintf(p, tmp.String(), pop.String())
 			}
@@ -185,7 +195,7 @@ func sprintf(env *Env, start int, p io.Writer) {
 				fmt.Fprintf(p, tmp.String(), pop.Str())
 				continue
 			} else if IsBytes(pop) {
-				fmt.Fprintf(p, tmp.String(), pop.Array().Unwrap())
+				fmt.Fprintf(p, tmp.String(), pop.Native().Unwrap())
 				continue
 			}
 			fallthrough
@@ -195,7 +205,7 @@ func sprintf(env *Env, start int, p io.Writer) {
 			} else {
 				fmt.Fprintf(p, tmp.String(), pop.Float64())
 			}
-		case typ.Native:
+		case typ.Object:
 			fmt.Fprint(p, env.Interface(popi))
 		}
 	}
@@ -235,15 +245,15 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 			if err != nil {
 				*outError = err
 			} else {
-				t.Array().Set(p.i, res)
+				t.Native().Set(p.i, res)
 			}
 		}
 	}
 
 	var outError error
 	if n == 1 {
-		if t.Type() == typ.Array {
-			t.Array().Foreach(func(k int, v Value) bool { work(fun, &outError, payload{k, v, nil}); return outError == nil })
+		if t.Type() == typ.Native {
+			t.Native().Foreach(func(k int, v Value) bool { work(fun, &outError, payload{k, v, nil}); return outError == nil })
 		} else {
 			t.Object().Foreach(func(k Value, v *Value) bool { work(fun, &outError, payload{-1, k, v}); return outError == nil })
 		}
@@ -263,8 +273,8 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 			}()
 		}
 
-		if t.Type() == typ.Array {
-			t.Array().Foreach(func(k int, v Value) bool { in <- payload{k, v, nil}; return true })
+		if t.Type() == typ.Native {
+			t.Native().Foreach(func(k int, v Value) bool { in <- payload{k, v, nil}; return true })
 		} else {
 			t.Object().Foreach(func(k Value, v *Value) bool { in <- payload{-1, k, v}; return true })
 		}

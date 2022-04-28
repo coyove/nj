@@ -113,7 +113,7 @@ func (n Node) Nodes() []Node {
 	if n.Type() != NODES {
 		return nil
 	}
-	return n.Array().Unwrap().([]Node)
+	return n.Native().Unwrap().([]Node)
 }
 
 func Nodes(args ...Node) Node {
@@ -251,7 +251,7 @@ func (n Node) String() string {
 }
 
 func (n Node) append(n2 ...Node) Node {
-	x := append(n.Array().Unwrap().([]Node), n2...)
+	x := append(n.Native().Unwrap().([]Node), n2...)
 	return Node{NodeType: NODES, Value: bas.ValueOf(x)}
 }
 
