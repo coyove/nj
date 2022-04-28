@@ -152,11 +152,11 @@ end
 return foo
 `, nil)
 		v, _ := cls.Run()
-		if v := bas.Call(v.Object(), bas.NewArray(bas.Int64(1), bas.Int64(2), bas.Int64(3), bas.Int64(4)).ToValue()); v.Int64() != 11 {
+		if v := bas.Call(v.Object(), bas.Array(bas.Int64(1), bas.Int64(2), bas.Int64(3), bas.Int64(4))); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v := bas.Call(v.Object(), bas.NewArray(bas.Int64(10), bas.Int64(20)).ToValue()); v.Int64() != 41 {
+		if v := bas.Call(v.Object(), bas.Array(bas.Int64(10), bas.Int64(20))); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 
@@ -485,7 +485,7 @@ func TestACall(t *testing.T) {
 }
 
 func TestReflectedValue(t *testing.T) {
-	v := bas.NewArray(bas.True, bas.False).ToValue()
+	v := bas.Array(bas.True, bas.False)
 	x := bas.ToType(v, reflect.TypeOf([2]bool{})).Interface().([2]bool)
 	if x[0] != true || x[1] != false {
 		t.Fatal(x)

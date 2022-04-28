@@ -130,10 +130,10 @@ func simpleString(v Value) string {
 		return "{" + v.Object().Name() + "}"
 	case typ.Native:
 		a := v.Native()
-		if a.Typed() {
-			return fmt.Sprintf("array(%s)", a.meta.Name)
+		if a.IsInternalArray() {
+			return fmt.Sprintf("array(%d)", a.Len())
 		}
-		return fmt.Sprintf("array(%d)", a.Len())
+		return fmt.Sprintf("native(%s)", a.meta.Name)
 	default:
 		return vt.String()
 	}

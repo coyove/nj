@@ -232,10 +232,10 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 	if c.Variadic {
 		s := *newEnv.stack
 		if len(s) > int(c.NumParams)-1 {
-			s[c.NumParams-1] = NewArray(append([]Value{}, s[c.NumParams-1:]...)...).ToValue()
+			s[c.NumParams-1] = newArray(append([]Value{}, s[c.NumParams-1:]...)...).ToValue()
 		} else {
 			newEnv.grow(int(c.NumParams))
-			newEnv._set(c.NumParams-1, NewArray().ToValue())
+			newEnv._set(c.NumParams-1, newArray().ToValue())
 		}
 	}
 	newEnv.growZero(int(c.StackSize), int(c.NumParams))

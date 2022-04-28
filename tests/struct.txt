@@ -178,3 +178,29 @@ m = gomap({a=1,b=2}, 'c', 3)
 print(type(m))
 assert(m is nativemap)
 assert(m.c , 3)
+assert(#m, 3)
+m.merge(d=4, e=5)
+assert(m.contains('e'))
+print(m.keys())
+
+
+ch = channel(1)
+ch.send(1)
+assert(ch.recv()[0], 1)
+
+ch2 = channel(1)
+flag = false
+lambda()
+    ch.send(1)
+    sleep(1)
+    ch2.send(2)
+    flag = true
+end.go()
+
+local rch, rv = channel.recvmulti([ch, ch2])
+assert(rch, ch)
+assert(rv, 1)
+local rch, rv = channel.recvmulti([ch, ch2])
+assert(rch, ch2)
+assert(rv, 2)
+assert(flag)

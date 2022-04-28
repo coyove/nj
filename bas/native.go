@@ -313,31 +313,16 @@ type Native struct {
 	any      interface{}
 }
 
-// NewArray creates an array consists of given arguments
-func NewArray(m ...Value) *Native {
+func NewNative(any interface{}) *Native {
+	return newNativeWithType(any, GetNativeMeta(any))
+}
+
+func newArray(m ...Value) *Native {
 	return &Native{meta: internalArrayMeta, internal: m}
 }
 
-func NewNative(any interface{}) *Native {
-	return newTypedArray(any, GetNativeMeta(any))
-}
-
-func newTypedArray(any interface{}, meta *NativeMeta) *Native {
+func newNativeWithType(any interface{}, meta *NativeMeta) *Native {
 	return &Native{meta: meta, any: any}
-}
-
-// Error creates a builtin error, env can be nil
-func Error(e *Env, err error) Value {
-	if err == nil {
-		return Nil
-	} else if _, ok := err.(*ExecError); ok {
-		return newTypedArray(err, errorArrayMeta).ToValue()
-	}
-	ee := &ExecError{root: err}
-	if e != nil {
-		ee.stacks = e.Runtime().Stacktrace()
-	}
-	return newTypedArray(ee, errorArrayMeta).ToValue()
 }
 
 func (a *Native) ToValue() Value {
@@ -443,8 +428,26 @@ func (a *Native) Foreach(f func(k int, v Value) bool) {
 	}
 }
 
-func (a *Native) Typed() bool {
-	return a.meta != internalArrayMeta
+func (a *Native) IsInternalArray() bool {
+	return a.meta == internalArrayMeta
+}
+
+func (a *Native) Prototype() *Object {
+	return a.meta.Proto
+}
+
+func (a *Native) HasPrototype(p *Object) bool {
+	return a.meta.Proto.HasPrototype(p)
+}
+
+func (a *Native) AssertPrototype(p *Object, msg string) *Native {
+	if !a.HasPrototype(p) {
+		if msg != "" {
+			internal.Panic("native: %s: expects prototype %v, got %v", msg, p.Name(), a.meta.Proto.Name())
+		}
+		internal.Panic("native: expects prototype %v, got %v", p.Name(), a.meta.Proto.Name())
+	}
+	return a
 }
 
 func (a *Native) notSupported(method string) {

@@ -143,25 +143,25 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			va, vb := env._get(opa), env._get(opb)
 			switch va.Type() {
 			case typ.Nil:
-				env.A = NewArray(Nil, Nil).ToValue()
+				env.A = newArray(Nil, Nil).ToValue()
 			case typ.Native:
 				idx := 0
 				if vb != Nil {
 					idx = vb.AssertType(typ.Number, "array iteration").Int() + 1
 				}
 				a := va.Native()
-				_ = idx >= a.Len() && env.SetA(NewArray(Nil, Nil).ToValue()) || env.SetA(NewArray(Int(idx), a.Get(idx)).ToValue())
+				_ = idx >= a.Len() && env.SetA(newArray(Nil, Nil).ToValue()) || env.SetA(newArray(Int(idx), a.Get(idx)).ToValue())
 			case typ.Object:
-				env.A = NewArray(va.Object().Next(vb)).ToValue()
+				env.A = newArray(va.Object().Next(vb)).ToValue()
 			case typ.String:
 				idx := int64(0)
 				if vb != Nil {
 					idx = vb.AssertType(typ.Number, "string iteration").Int64()
 				}
 				if r, sz := utf8.DecodeRuneInString(va.Str()[idx:]); sz == 0 {
-					env.A = NewArray(Nil, Nil).ToValue()
+					env.A = newArray(Nil, Nil).ToValue()
 				} else {
-					env.A = NewArray(Int64(int64(sz)+idx), Rune(r)).ToValue()
+					env.A = newArray(Int64(int64(sz)+idx), Rune(r)).ToValue()
 				}
 			default:
 				internal.Panic("can't iterate %v using %v", simpleString(va), simpleString(vb))
@@ -297,7 +297,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 				internal.Panic("bitwise not "+errNeedNumber, simpleString(a))
 			}
 		case typ.OpCreateArray:
-			env.A = NewArray(append([]Value{}, stackEnv.Stack()...)...).ToValue()
+			env.A = newArray(append([]Value{}, stackEnv.Stack()...)...).ToValue()
 			stackEnv.Clear()
 		case typ.OpCreateObject:
 			stk := stackEnv.Stack()
@@ -405,10 +405,10 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			if cls.Variadic {
 				s, w := stackEnv.Stack(), int(cls.NumParams)-1
 				if len(s) > w {
-					s[w] = NewArray(append([]Value{}, s[w:]...)...).ToValue()
+					s[w] = newArray(append([]Value{}, s[w:]...)...).ToValue()
 				} else {
 					stackEnv.grow(w + 1)
-					stackEnv._set(uint16(w), NewArray().ToValue())
+					stackEnv._set(uint16(w), newArray().ToValue())
 				}
 			}
 			if cls.Native != nil {

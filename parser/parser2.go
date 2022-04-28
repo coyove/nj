@@ -248,7 +248,7 @@ func (lex *Lexer) __arrayBuild(list, arg Node) Node {
 			list.simpleJSON(lex).Native().Append(arg.simpleJSON(lex))
 			return list
 		}
-		return jsonValue(bas.NewArray(arg.simpleJSON(lex)).ToValue())
+		return jsonValue(bas.Array(arg.simpleJSON(lex)))
 	}
 	if list.Valid() {
 		return list.append(arg)
@@ -275,7 +275,7 @@ func (lex *Lexer) __objectBuild(list, k, v Node) Node {
 func (lex *Lexer) __array(tok Token, args Node) Node {
 	if lex.scanner.jsonMode {
 		if args == emptyNode {
-			return Node{NodeType: JSON, Value: bas.NewArray().ToValue()}
+			return Node{NodeType: JSON, Value: bas.Array()}
 		}
 		return args
 	}

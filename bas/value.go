@@ -169,7 +169,25 @@ func Rune(r rune) Value {
 
 // Bytes creates a bytes array
 func Bytes(b []byte) Value {
-	return newTypedArray(b, bytesArrayMeta).ToValue()
+	return newNativeWithType(b, bytesArrayMeta).ToValue()
+}
+
+// Error creates a builtin error, env can be nil
+func Error(e *Env, err error) Value {
+	if err == nil {
+		return Nil
+	} else if _, ok := err.(*ExecError); ok {
+		return newNativeWithType(err, errorArrayMeta).ToValue()
+	}
+	ee := &ExecError{root: err}
+	if e != nil {
+		ee.stacks = e.Runtime().Stacktrace()
+	}
+	return newNativeWithType(ee, errorArrayMeta).ToValue()
+}
+
+func Array(v ...Value) Value {
+	return newArray(v...).ToValue()
 }
 
 // ValueOf creates a `Value` from golang `interface{}`
@@ -192,7 +210,7 @@ func ValueOf(i interface{}) Value {
 	case *Object:
 		return v.ToValue()
 	case []Value:
-		return NewArray(v...).ToValue()
+		return newArray(v...).ToValue()
 	case Value:
 		return v
 	case error:
@@ -241,7 +259,7 @@ func ValueOf(i interface{}) Value {
 				} else if len(outs) == 1 {
 					env.A = ValueOf(outs[0].Interface())
 				} else {
-					env.A = newTypedArray(outs, GetNativeMeta(outs)).ToValue()
+					env.A = newNativeWithType(outs, GetNativeMeta(outs)).ToValue()
 				}
 				for _, f := range interopFuncs {
 					f()
@@ -326,6 +344,16 @@ func (v Value) AssertType(t typ.ValueType, msg string) Value {
 			internal.Panic("%s: expects %v, got %v", msg, t, simpleString(v))
 		}
 		internal.Panic("expects %v, got %v", t, simpleString(v))
+	}
+	return v
+}
+
+func (v Value) AssertType2(t1, t2 typ.ValueType, msg string) Value {
+	if vt := v.Type(); vt != t1 && vt != t2 {
+		if msg != "" {
+			internal.Panic("%s: expects %v or %v, got %v", msg, t1, t2, simpleString(v))
+		}
+		internal.Panic("expects %v or %v, got %v", t1, t2, simpleString(v))
 	}
 	return v
 }

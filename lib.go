@@ -90,7 +90,7 @@ func init() {
 			}
 			results = append(results, bas.Str(s))
 		}
-		env.A = bas.NewArray(results...).ToValue()
+		env.A = bas.Array(results...)
 	}, "$f() -> array\n\tread all user inputs and return as [input1, input2, ...]\n"+
 		"$f(prompt: string, n?: int) -> array\n\tprint `prompt` then read all (or at most `n`) user inputs")
 	bas.Globals.SetMethod("sleep", func(e *bas.Env) {
@@ -236,7 +236,7 @@ func init() {
 		SetMethod("ldexp", func(e *bas.Env) { e.A = bas.Float64(math.Ldexp(e.Float64(0), e.Int(0))) }, "").
 		SetMethod("modf", func(e *bas.Env) {
 			a, b := math.Modf(e.Float64(0))
-			e.A = bas.NewArray(bas.Float64(a), bas.Float64(b)).ToValue()
+			e.A = bas.Array(bas.Float64(a), bas.Float64(b))
 		}, "").
 		SetPrototype(bas.Proto.StaticObject).
 		ToValue())
@@ -547,7 +547,7 @@ func init() {
 			}(bas.EnvForAsyncCall(e))
 			return
 		}
-		e.A = bas.NewArray(send(e, true)).ToValue()
+		e.A = bas.Array(send(e, true))
 	}, "$f(options: object) -> array\n"+
 		"\tperform an HTTP request and return [code, headers, body_reader, cookie_jar]\n"+
 		"\t'url' is a mandatory parameter in `options`, others are optional and pretty self explanatory:\n"+
@@ -692,7 +692,7 @@ func parseJSON(v interface{}) bas.Value {
 		for i := range a {
 			a[i] = parseJSON(v[i])
 		}
-		return bas.NewArray(a...).ToValue()
+		return bas.Array(a...)
 	case map[string]interface{}:
 		a := bas.NewObject(len(v) / 2)
 		for k, v := range v {

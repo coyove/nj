@@ -25,8 +25,8 @@ func init() {
 			_ = buf == nil && e.SetA(Nil) || e.SetA(Bytes(buf))
 		}, "Reader.$f(n?: int) -> bytes\n\tread all (or at most `n`) bytes, return nil if EOF reached").
 		SetMethod("readbuf", func(e *Env) {
-			rn, err := e.ThisProp("_f").(io.Reader).Read(e.Array(0).Unwrap().([]byte))
-			e.A = NewArray(Int(rn), ValueOf(err)).ToValue() // return in Go style
+			rn, err := e.ThisProp("_f").(io.Reader).Read(e.Native(0).Unwrap().([]byte))
+			e.A = newArray(Int(rn), ValueOf(err)).ToValue() // return in Go style
 		}, "Reader.$f(buf: bytes) -> [int, Error]\n\tread into `buf` and return in Go style").
 		SetMethod("readlines", func(e *Env) {
 			f := e.ThisProp("_f").(io.Reader)
@@ -42,7 +42,7 @@ func init() {
 					}
 					res = append(res, UnsafeStr(line))
 				}
-				e.A = NewArray(res...).ToValue()
+				e.A = newArray(res...).ToValue()
 				return
 			}
 			for cb, rd := e.Object(0), bufio.NewReader(f); ; {

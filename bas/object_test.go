@@ -367,4 +367,5 @@ func TestFalsyValue(t *testing.T) {
 	assert(Bytes([]byte("")).IsTrue())
 	assert(!ValueOf([]byte("")).IsFalse())
 	assert(Less(Str("\x00\x00\x00\x00\x00\x00\x00"), Str("\x00\x00\x00\x00\x00\x00\x00\x00")))
+	assert(newArray().ToValue().IsArray())
 }
