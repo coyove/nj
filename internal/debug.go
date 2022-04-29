@@ -53,10 +53,6 @@ func processSpecialError(err *error, r interface{}) bool {
 }
 
 func processPanic(err *error, r interface{}) {
-	if IsDebug() {
-		log.Println(string(debug.Stack()))
-	}
-
 	*err, _ = r.(error)
 	if *err == nil {
 		*err = fmt.Errorf("%v", r)
@@ -65,6 +61,10 @@ func processPanic(err *error, r interface{}) {
 
 func CatchError(err *error) {
 	if r := recover(); r != nil {
+		if IsDebug() {
+			log.Println(string(debug.Stack()))
+		}
+
 		if processSpecialError(err, r) {
 			return
 		}

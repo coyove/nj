@@ -111,6 +111,8 @@ func ToBytes(v Value) []byte {
 
 func ToReadonlyBytes(v Value) []byte {
 	switch v.Type() {
+	case typ.Nil:
+		return nil
 	case typ.Native:
 		if v.Native().meta.Proto.HasPrototype(bytesArrayMeta.Proto) {
 			return Value(v).Native().Unwrap().([]byte)

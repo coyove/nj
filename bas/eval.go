@@ -143,28 +143,28 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			va, vb := env._get(opa), env._get(opb)
 			switch va.Type() {
 			case typ.Nil:
-				env.A = newArray(Nil, Nil).ToValue()
+				env.A = Array(Nil, Nil)
 			case typ.Native:
+				env.A = va.Native().Next(vb)
+			case typ.Object:
+				env.A = va.Object().Next(vb)
+			case typ.String:
 				idx := 0
 				if vb != Nil {
-					idx = vb.AssertType(typ.Number, "array iteration").Int() + 1
-				}
-				a := va.Native()
-				_ = idx >= a.Len() && env.SetA(newArray(Nil, Nil).ToValue()) || env.SetA(newArray(Int(idx), a.Get(idx)).ToValue())
-			case typ.Object:
-				env.A = newArray(va.Object().Next(vb)).ToValue()
-			case typ.String:
-				idx := int64(0)
-				if vb != Nil {
-					idx = vb.AssertType(typ.Number, "string iteration").Int64()
+					idx = vb.Native().Get(0).Int()
+				} else {
+					vb = Array(Nil, Nil)
 				}
 				if r, sz := utf8.DecodeRuneInString(va.Str()[idx:]); sz == 0 {
-					env.A = newArray(Nil, Nil).ToValue()
+					vb.Native().Set(0, Nil)
+					vb.Native().Set(1, Nil)
 				} else {
-					env.A = newArray(Int64(int64(sz)+idx), Rune(r)).ToValue()
+					vb.Native().Set(0, Int(idx+sz))
+					vb.Native().Set(1, Rune(r))
 				}
+				env.A = vb
 			default:
-				internal.Panic("can't iterate %v using %v", simpleString(va), simpleString(vb))
+				internal.Panic("can't iterate over %v", simpleString(va))
 			}
 		case typ.OpLen:
 			env.A = Int(Len(env._get(opa)))

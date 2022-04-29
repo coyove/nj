@@ -57,10 +57,8 @@ do
     for k, v in lst do
         if v%3 == 1 then continue end
         sum = sum + v
-        k = k + 1
-        v = lst[k]
     end
-    assert(sum, 2 + 5 + 8)
+    assert(sum, 2 + 3 + 5 + 6 + 8 + 9)
     assert(k, 'not touched')
 end
 
@@ -323,3 +321,19 @@ assert(if(true, "a", "")[0], "a".ord()[0])
 
 m = gomap({a=1,b=2}, "a", 10)
 assert(m.a , 10)
+
+cnt = 0
+for k,v in m do
+    print(k, v)
+    cnt += 1
+    assert(v, if(k=='a', 10, if(k=='b', 2, nil)))
+end
+assert(cnt, 2)
+
+m.c = 3
+m.d = 4
+for k,v in m do
+if k == 'b' then m.delete(k) end
+end
+assert(#m, 3)
+assert(not m.contains('b'))

@@ -30,6 +30,7 @@ type NativeMeta struct {
 	Copy         func(*Native, int, int, *Native)
 	Concat       func(*Native, *Native)
 	Marshal      func(*Native, io.Writer, typ.MarshalType)
+	Next         func(*Native, Value) Value
 }
 
 var (
@@ -81,6 +82,7 @@ func init() {
 			}
 			w.Write([]byte("]"))
 		},
+		sgArrayNext,
 	}
 	*bytesArrayMeta = NativeMeta{
 		"bytes",
@@ -138,6 +140,7 @@ func init() {
 				enc.Close()
 			}
 		},
+		sgArrayNext,
 	}
 	*stringsArrayMeta = NativeMeta{
 		"[]string",
@@ -194,6 +197,7 @@ func init() {
 			}
 		},
 		sgMarshal,
+		sgArrayNext,
 	}
 	*errorArrayMeta = NativeMeta{
 		"error",
@@ -214,6 +218,7 @@ func init() {
 		func(a *Native, w io.Writer, mt typ.MarshalType) {
 			w.Write([]byte(internal.IfQuote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error())))
 		},
+		sgNextNotSupported,
 	}
 }
 
@@ -253,12 +258,14 @@ func GetNativeMeta(v interface{}) *NativeMeta {
 			sgCopyNotSupported,
 			sgConcatNotSupported,
 			sgMarshalTypeOnly,
+			sgNextNotSupported,
 		}
 		if rt.Kind() == reflect.Map {
 			a.Proto = Proto.NativeMap
 			a.Len = sgLen
 			a.Size = sgSize
 			a.Marshal = sgMarshal
+			a.Next = sgMapNext
 		}
 	case reflect.Chan:
 		a = &NativeMeta{rt.String(), Proto.Channel,
@@ -276,6 +283,7 @@ func GetNativeMeta(v interface{}) *NativeMeta {
 			sgCopyNotSupported,
 			sgConcatNotSupported,
 			sgMarshalTypeOnly,
+			sgNextNotSupported,
 		}
 	case reflect.Array, reflect.Slice:
 		a = &NativeMeta{rt.String(), Proto.Array,
@@ -293,6 +301,7 @@ func GetNativeMeta(v interface{}) *NativeMeta {
 			sgCopy,
 			sgConcat,
 			sgMarshal,
+			sgArrayNext,
 		}
 		if rt.Kind() == reflect.Array {
 			a.SliceInplace = sgSliceInplaceNotSupported
@@ -417,6 +426,13 @@ func (a *Native) Concat(b *Native) {
 
 func (a *Native) Marshal(w io.Writer, mt typ.MarshalType) {
 	a.meta.Marshal(a, w, mt)
+}
+
+func (a *Native) Next(k Value) Value {
+	if a.meta == internalArrayMeta {
+		return sgArrayNext(a, k)
+	}
+	return a.meta.Next(a, k)
 }
 
 func (a *Native) IsInternalArray() bool {
@@ -570,6 +586,48 @@ func sgSetNotSupported(a *Native, b int, c Value) {
 
 func sgSetKeyNotSupported(a *Native, b, c Value) {
 	a.notSupported("SetKey")
+}
+
+func sgNextNotSupported(a *Native, b Value) Value {
+	a.notSupported("Next")
+	return Nil
+}
+
+func sgArrayNext(a *Native, kv Value) Value {
+	al := a.Len()
+	if al == 0 {
+		return Nil
+	}
+	if kv == Nil {
+		return Array(Int(0), a.Get(0))
+	}
+	idx := kv.Native().Get(0).AssertType(typ.Number, "array iteration").Int() + 1
+	if idx >= al {
+		return Nil
+	}
+	kv.Native().Set(0, Int(idx))
+	kv.Native().Set(1, a.Get(idx))
+	return kv
+}
+
+func sgMapNext(a *Native, kv Value) Value {
+	if a.Len() == 0 {
+		return Nil
+	}
+	if kv == Nil {
+		iter := reflect.ValueOf(a.any).MapRange()
+		if iter.Next() {
+			return Array(ValueOf(iter.Key()), ValueOf(iter.Value()), NewNative(iter).ToValue())
+		}
+		return Nil
+	}
+	iter := kv.Native().Get(2).Interface().(*reflect.MapIter)
+	if !iter.Next() {
+		return Nil
+	}
+	kv.Native().Set(0, ValueOf(iter.Key()))
+	kv.Native().Set(1, ValueOf(iter.Value()))
+	return kv
 }
 
 func sgGetKey(a *Native, k Value) Value {

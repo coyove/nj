@@ -284,7 +284,20 @@ func (m *Object) nextHashPair(start int) (Value, Value) {
 	return Nil, Nil
 }
 
-func (m *Object) Next(k Value) (Value, Value) {
+func (m *Object) Next(kv Value) Value {
+	if kv == Nil {
+		kv = Array(Nil, Nil)
+	}
+	nk, nv := m.NextKeyValue(kv.Native().Get(0))
+	if nk == Nil {
+		return Nil
+	}
+	kv.Native().Set(0, nk)
+	kv.Native().Set(1, nv)
+	return kv
+}
+
+func (m *Object) NextKeyValue(k Value) (Value, Value) {
 	if m == nil {
 		return Nil, Nil
 	}

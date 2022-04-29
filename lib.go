@@ -518,17 +518,8 @@ func init() {
 	bas.Globals.SetProp("http", httpLib.ToValue())
 
 	bas.Globals.SetMethod("buffer", func(e *bas.Env) {
-		b := &internal.LimitedBuffer{}
-		switch v := e.Get(0); v.Type() {
-		case typ.String:
-			b.WriteString(v.String())
-		case typ.Number:
-			b.Limit = v.Int()
-		default:
-			if bas.IsBytes(v) {
-				b.Write(bas.ToBytes(v))
-			}
-		}
+		b := &internal.LimitedBuffer{Limit: e.Get(1).Maybe().Int(0)}
+		b.Write(bas.ToReadonlyBytes(e.Get(0)))
 		e.A = bas.NamedObject("Buffer", 0).
 			SetPrototype(bas.Proto.ReadWriter).
 			SetProp("_f", bas.ValueOf(b)).

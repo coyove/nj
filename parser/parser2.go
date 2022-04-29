@@ -198,29 +198,21 @@ func __dotdotdot(expr Node) Node {
 }
 
 func __forIn(key, value Token, expr, body Node, pos Token) Node {
-	k, v, e, tmp := Sym(key), Sym(value), randomVarname(), randomVarname()
-	next := Nodes(SNext, e, k).At(pos)
+	k, v, subject, kv := Sym(key), Sym(value), randomVarname(), randomVarname()
 	moveNext := __chain(
-		__move(tmp, next).At(pos),
-		__move(k, __load(tmp, zero).At(pos)).At(pos),
-		__move(v, __load(tmp, one).At(pos)).At(pos),
+		__move(kv, Nodes(SNext, subject, kv).At(pos)).At(pos),
+		__move(k, __load(kv, zero).At(pos)).At(pos),
+		__move(v, __load(kv, one).At(pos)).At(pos),
 	)
 	return __do(
-		__set(e, expr).At(pos),
+		__set(subject, expr).At(pos),
 		__set(k, SNil).At(pos),
-		__set(tmp, next).At(pos), // init, move to the first key
-		__move(k, __load(tmp, zero).At(pos)).At(pos),
-		__set(v, __load(tmp, one).At(pos)).At(pos),
+		__set(v, SNil).At(pos),
+		__set(kv, SNil).At(pos),
 		__loop(
+			one,
 			moveNext,
-			__if(
-				Nodes((SEq), k, SNil).At(pos),
-				breakNode,
-				__chain(
-					body,
-					moveNext,
-				),
-			).At(pos),
+			__if(Nodes(SEq, kv, SNil).At(pos), breakNode, body).At(pos),
 		),
 	)
 }

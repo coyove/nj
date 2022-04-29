@@ -185,7 +185,7 @@ func init() {
 			e.A = UnsafeStr(p.Bytes())
 		}).
 		SetMethod("pure", func(e *Env) { e.A = e.Object(-1).Copy(false).SetPrototype(&ObjectProto).ToValue() }).
-		SetMethod("next", func(e *Env) { e.A = newArray(e.Object(-1).Next(e.Get(0))).ToValue() })
+		SetMethod("next", func(e *Env) { e.A = newArray(e.Object(-1).NextKeyValue(e.Get(0))).ToValue() })
 	ObjectProto.SetPrototype(nil) // objectlib is the topmost object, it should not have any prototype
 
 	*Proto.Func = *NamedObject("function", 0).
@@ -255,7 +255,15 @@ func init() {
 	Globals.SetProp("native", Proto.Native.ToValue())
 
 	*Proto.Array = *NamedObject("array", 0).
-		SetMethod("make", func(e *Env) { e.A = newArray(make([]Value, e.Int(0))...).ToValue() }).
+		SetMethod("make", func(e *Env) {
+			a := make([]Value, e.Int(0))
+			if v := e.Get(1); v != Nil {
+				for i := range a {
+					a[i] = v
+				}
+			}
+			e.A = Array(a...)
+		}).
 		SetMethod("len", func(e *Env) { e.A = Int(e.Native(-1).Len()) }).
 		SetMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
 		SetMethod("clear", func(e *Env) { e.Native(-1).Clear() }).
