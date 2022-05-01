@@ -217,7 +217,7 @@ func init() {
 			}(f, args)
 			e.A = NamedObject("Goroutine", 0).
 				SetProp("f", f.ToValue()).
-				SetProp("w", newNativeWithType(w, GetNativeMeta(w)).ToValue()).
+				SetProp("w", NewNative(w).ToValue()).
 				SetMethod("wait", func(e *Env) { e.A = <-e.ThisProp("w").(chan Value) }).
 				ToValue()
 		}).

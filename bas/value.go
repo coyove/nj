@@ -177,13 +177,13 @@ func Error(e *Env, err error) Value {
 	if err == nil {
 		return Nil
 	} else if _, ok := err.(*ExecError); ok {
-		return newNativeWithType(err, errorArrayMeta).ToValue()
+		return newNativeWithType(err, errorNativeMeta).ToValue()
 	}
 	ee := &ExecError{root: err}
 	if e != nil {
 		ee.stacks = e.Runtime().Stacktrace()
 	}
-	return newNativeWithType(ee, errorArrayMeta).ToValue()
+	return newNativeWithType(ee, errorNativeMeta).ToValue()
 }
 
 func Array(v ...Value) Value {
@@ -259,7 +259,7 @@ func ValueOf(i interface{}) Value {
 				} else if len(outs) == 1 {
 					env.A = ValueOf(outs[0].Interface())
 				} else {
-					env.A = newNativeWithType(outs, GetNativeMeta(outs)).ToValue()
+					env.A = NewNative(outs).ToValue()
 				}
 				for _, f := range interopFuncs {
 					f()

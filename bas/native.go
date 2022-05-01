@@ -37,7 +37,7 @@ var (
 	internalArrayMeta = &NativeMeta{}
 	bytesArrayMeta    = &NativeMeta{}
 	stringsArrayMeta  = &NativeMeta{}
-	errorArrayMeta    = &NativeMeta{}
+	errorNativeMeta   = &NativeMeta{}
 	genericMetaCache  sync.Map
 )
 
@@ -199,7 +199,7 @@ func init() {
 		sgMarshal,
 		sgArrayNext,
 	}
-	*errorArrayMeta = NativeMeta{
+	*errorNativeMeta = NativeMeta{
 		"error",
 		Proto.Error,
 		func(a *Native) int { return 1 },
@@ -222,7 +222,7 @@ func init() {
 	}
 }
 
-func GetNativeMeta(v interface{}) *NativeMeta {
+func getNativeMeta(v interface{}) *NativeMeta {
 	switch v.(type) {
 	case []Value:
 		return internalArrayMeta
@@ -230,6 +230,8 @@ func GetNativeMeta(v interface{}) *NativeMeta {
 		return bytesArrayMeta
 	case []string:
 		return stringsArrayMeta
+	case error:
+		return errorNativeMeta
 	}
 	rt := reflect.TypeOf(v)
 	if v, ok := genericMetaCache.Load(rt); ok {
@@ -322,7 +324,7 @@ type Native struct {
 }
 
 func NewNative(any interface{}) *Native {
-	return newNativeWithType(any, GetNativeMeta(any))
+	return newNativeWithType(any, getNativeMeta(any))
 }
 
 func newArray(m ...Value) *Native {

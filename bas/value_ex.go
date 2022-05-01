@@ -89,14 +89,14 @@ func (v MaybeValue) Func(defaultValue *Object) *Object {
 }
 
 func ToError(v Value) error {
-	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(errorArrayMeta.Proto) {
+	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(errorNativeMeta.Proto) {
 		return Value(v).Native().Unwrap().(*ExecError)
 	}
 	panic("ToError: not error: " + simpleString(v))
 }
 
 func ToErrorRootCause(v Value) interface{} {
-	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(errorArrayMeta.Proto) {
+	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(errorNativeMeta.Proto) {
 		return Value(v).Native().Unwrap().(*ExecError).root
 	}
 	panic("ToErrorRootCause: not error: " + simpleString(v))
@@ -134,7 +134,7 @@ func IsBytes(v Value) bool {
 }
 
 func IsError(v Value) bool {
-	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(errorArrayMeta.Proto)
+	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(errorNativeMeta.Proto)
 }
 
 func DeepEqual(a, b Value) bool {
