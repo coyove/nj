@@ -90,7 +90,7 @@ func init() {
 		func(a *Native) int { return len((a.any).([]byte)) },
 		func(a *Native) int { return cap((a.any).([]byte)) },
 		func(a *Native) { a.any = a.any.([]byte)[:0] },
-		func(a *Native) []Value { a.notSupported("Values"); return nil },
+		sgValuesNotSupported,
 		func(a *Native, idx int) Value { return Int64(int64(a.any.([]byte)[idx])) },
 		func(a *Native, idx int, v Value) {
 			a.any.([]byte)[idx] = byte(v.AssertType(typ.Number, "bytes.Set").Int())
@@ -169,12 +169,9 @@ func init() {
 			a.any = p
 		},
 		func(a *Native, start, end int) *Native {
-			p := a.any.([]string)[start:end]
-			return &Native{meta: a.meta, any: p}
+			return &Native{meta: a.meta, any: a.any.([]string)[start:end]}
 		},
-		func(a *Native, start, end int) {
-			a.any = a.any.([]string)[start:end]
-		},
+		func(a *Native, start, end int) { a.any = a.any.([]string)[start:end] },
 		func(a *Native, start, end int, from *Native) {
 			if from.meta == internalArrayMeta {
 				buf := a.any.([]string)
@@ -262,12 +259,15 @@ func getNativeMeta(v interface{}) *NativeMeta {
 			sgMarshalTypeOnly,
 			sgNextNotSupported,
 		}
-		if rt.Kind() == reflect.Map {
+		switch rt.Kind() {
+		case reflect.Map:
 			a.Proto = Proto.NativeMap
 			a.Len = sgLen
 			a.Size = sgSize
 			a.Marshal = sgMarshal
 			a.Next = sgMapNext
+		case reflect.Ptr:
+			a.Proto = Proto.NativePtr
 		}
 	case reflect.Chan:
 		a = &NativeMeta{rt.String(), Proto.Channel,
@@ -285,7 +285,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 			sgCopyNotSupported,
 			sgConcatNotSupported,
 			sgMarshalTypeOnly,
-			sgNextNotSupported,
+			sgChanNext,
 		}
 	case reflect.Array, reflect.Slice:
 		a = &NativeMeta{rt.String(), Proto.Array,
@@ -629,6 +629,20 @@ func sgMapNext(a *Native, kv Value) Value {
 	}
 	kv.Native().Set(0, ValueOf(iter.Key()))
 	kv.Native().Set(1, ValueOf(iter.Value()))
+	return kv
+}
+
+func sgChanNext(a *Native, kv Value) Value {
+	if kv == Nil {
+		kv = Array(Nil, Nil)
+	} else {
+		if kv.Native().Get(1).IsFalse() {
+			return Nil // break because the channel has been closed
+		}
+	}
+	rv, ok := reflect.ValueOf(a.any).Recv()
+	kv.Native().Set(0, ValueOf(rv.Interface()))
+	kv.Native().Set(1, Bool(ok))
 	return kv
 }
 

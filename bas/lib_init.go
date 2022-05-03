@@ -186,7 +186,7 @@ func init() {
 		}).
 		SetMethod("pure", func(e *Env) { e.A = e.Object(-1).Copy(false).SetPrototype(&ObjectProto).ToValue() }).
 		SetMethod("next", func(e *Env) { e.A = newArray(e.Object(-1).NextKeyValue(e.Get(0))).ToValue() })
-	ObjectProto.SetPrototype(nil) // objectlib is the topmost object, it should not have any prototype
+	ObjectProto.SetPrototype(nil) // object is the topmost 'object', it should not have any prototype
 
 	*Proto.Func = *NamedObject("function", 0).
 		SetMethod("apply", func(e *Env) { e.A = CallObject(e.Object(-1), e, nil, e.Get(0), e.Stack()[1:]...) }).
@@ -386,13 +386,18 @@ func init() {
 		SetPrototype(Proto.Native)
 	Globals.SetProp("nativemap", Proto.NativeMap.ToValue())
 
+	*Proto.NativePtr = *NamedObject("nativeptr", 1).
+		SetMethod("deref", func(e *Env) { e.A = ValueOf(reflect.ValueOf(e.Native(-1).Unwrap()).Elem().Interface()) }).
+		SetPrototype(Proto.Native)
+	Globals.SetProp("nativeptr", Proto.NativePtr.ToValue())
+
 	*Proto.Channel = *Func("channel", func(e *Env) {
 		rv := reflect.ValueOf(e.Interface(0))
 		_ = rv.Kind() == reflect.Chan && e.SetA(ValueOf(rv.Interface())) || e.SetA(ValueOf(make(chan Value, e.Get(0).Maybe().Int64(0))))
 	}).Object().
-		SetMethod("close", func(e *Env) {
-			reflect.ValueOf(e.Native(-1).Unwrap()).Close()
-		}).
+		SetMethod("len", func(e *Env) { e.A = Int(e.Native(-1).Len()) }).
+		SetMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
+		SetMethod("close", func(e *Env) { reflect.ValueOf(e.Native(-1).Unwrap()).Close() }).
 		SetMethod("send", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap())
 			rv.Send(ToType(e.Get(0), rv.Type().Elem()))
@@ -511,7 +516,7 @@ func init() {
 		SetMethod("trimright", func(e *Env) { e.A = Str(strings.TrimRight(e.Str(-1), e.Str(0))) }).
 		SetMethod("ord", func(e *Env) {
 			r, sz := utf8.DecodeRuneInString(e.Str(-1))
-			e.A = newArray(Int64(int64(r)), Int(sz)).ToValue()
+			e.A = Array(Int64(int64(r)), Int(sz))
 		}).
 		SetMethod("startswith", func(e *Env) { e.A = Bool(strings.HasPrefix(e.Str(-1), e.Str(0))) }).
 		SetMethod("endswith", func(e *Env) { e.A = Bool(strings.HasSuffix(e.Str(-1), e.Str(0))) }).
