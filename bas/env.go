@@ -23,20 +23,18 @@ func NewEnv() *Env {
 }
 
 type Runtime struct {
-	// Stacktrace layout: [N, N-1, ..., 2], 1, 0 (current)
-	Callable0 *Function
-	Stack1    Stacktrace
-	StackN    []Stacktrace
+	// Stacktrace layout: [N, N-1, ..., 2], 1, 0(current)
+	Callable0 *Function    // 0
+	Stack1    Stacktrace   // 1. if null, then Callable0 is the only one in stacktrace
+	StackN    []Stacktrace // [N, N-1, ..., 2]
 }
 
 func (r Runtime) Stacktrace() []Stacktrace {
+	self := Stacktrace{Callable: r.Callable0, Cursor: internal.NativeCallCursor}
 	if r.Stack1.Callable == nil {
-		return []Stacktrace{{Callable: r.Callable0, Cursor: internal.NativeCallCursor}}
+		return []Stacktrace{self}
 	}
-	return append(r.StackN, r.Stack1, Stacktrace{
-		Callable: r.Callable0,
-		Cursor:   internal.NativeCallCursor,
-	})
+	return append(r.StackN, r.Stack1, self)
 }
 
 func (r Runtime) Push(k *Function) Runtime {

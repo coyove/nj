@@ -23,7 +23,6 @@ _, author = re([[Author: (\S+)]]).find(SOURCE_CODE)
 println("Author is:", author)
 
 -- Print all global values, mainly functions
--- use doc(function) to view its documentation
 local g = debug.globals()
 
 print("version %s, total global values: %d".format(VERSION, #g/3))
@@ -31,8 +30,7 @@ print("version %s, total global values: %d".format(VERSION, #g/3))
 function pp(name, f, ident)
     if f is object then
         if f is callable then
-            local d = f.doc()
-            print(ident, name, " ", d.trimprefix(name + "."))
+            print(ident, name)
             print()
         end
         for k, v in f do pp(name + "." + str(k), v, ident) end

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/coyove/nj/internal"
@@ -61,31 +62,38 @@ func (e *ExecError) GetCause() error {
 
 func (e *ExecError) Error() string {
 	msg := bytes.Buffer{}
+	if e.root != nil {
+		if e.native != nil {
+			msg.WriteString(e.native.Name)
+			msg.WriteString("(): ")
+		}
+		msg.WriteString(fmt.Sprintf("%v\n", e.root))
+	}
 	msg.WriteString("stacktrace:\n")
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
 		if r.Cursor == internal.NativeCallCursor {
 			msg.WriteString(fmt.Sprintf("%s (native)\n", r.Callable.Name))
 		} else {
+			ln := r.sourceLine()
 			msg.WriteString(fmt.Sprintf("%s at %s:%d (i%d)",
 				r.Callable.Name,
 				r.Callable.CodeSeg.Pos.Name,
-				r.sourceLine(),
+				ln,
 				r.Cursor-1, // the recorded cursor was advanced by 1 already
 			))
 			if r.IsTailcall() {
 				msg.WriteString(" (tailcall)")
 			}
+			msg.WriteString("\n\t")
+			line, ok := lineOf(r.Callable.LoadGlobal.Source, int(ln))
+			if ok {
+				msg.WriteString(strings.TrimSpace(line))
+			} else {
+				msg.WriteString("<unknown source>")
+			}
 			msg.WriteString("\n")
 		}
-	}
-	if e.root != nil {
-		msg.WriteString("root cause:\n")
-		if e.native != nil {
-			msg.WriteString(e.native.Name)
-			msg.WriteString("() ")
-		}
-		msg.WriteString(fmt.Sprintf("%v\n", e.root))
 	}
 	return msg.String()
 }
@@ -122,23 +130,28 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 
 	for {
 		v := K.CodeSeg.Code[cursor]
-		bop, opa, opb := v.Opcode, v.A, uint16(v.B)
+		bop, opa, opb, opc := v.Opcode, v.A, v.B, v.C
 		cursor++
 
 		switch bop {
 		case typ.OpSet:
 			env._set(opa, env._get(opb))
 		case typ.OpInc:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
+			va, vb := env._get(opa), env._get(opb)
+			switch va.Type() + vb.Type() {
+			case typ.Number + typ.Number:
 				if va.IsInt64() && vb.IsInt64() {
 					env.A = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
 				} else {
 					env.A = Float64(va.Float64() + vb.Float64())
 				}
-				env._set(opa, env.A)
-			} else {
-				internal.Panic("inc "+errNeedNumbers, simpleString(va), simpleString(vb))
+			case typ.String + typ.String:
+				env.A = Str(va.Str() + vb.Str())
+			default:
+				internal.Panic("inc "+errNeedNumbersOrStrings, simpleString(va), simpleString(vb))
 			}
+			env._set(opa, env.A)
+			cursor = uint32(int32(cursor) + int32(int16(opc)))
 		case typ.OpNext:
 			va, vb := env._get(opa), env._get(opb)
 			switch va.Type() {
@@ -314,22 +327,22 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 				env.A = Bool(HasPrototype(a, b.AssertType(typ.Object, "isprototype").Object()))
 			}
 		case typ.OpStore:
-			subject, v := env._get(opa), env._get(opb)
+			subject, k, v := env._get(opa), env._get(opb), env._get(opc)
 			switch subject.Type() {
 			case typ.Object:
-				subject.Object().Set(env.A, v)
+				subject.Object().Set(k, v)
 			case typ.Native:
-				if env.A.IsInt64() {
-					if a, idx := subject.Native(), env.A.Int(); idx == a.Len() {
+				if k.IsInt64() {
+					if a, idx := subject.Native(), k.Int(); idx == a.Len() {
 						a.Append(v)
 					} else {
 						a.Set(idx, v)
 					}
 				} else {
-					subject.Native().SetKey(env.A, v)
+					subject.Native().SetKey(k, v)
 				}
 			default:
-				internal.Panic("invalid store: %v, key: %v", simpleString(subject), simpleString(env.A))
+				internal.Panic("invalid store: %v, key: %v", simpleString(subject), simpleString(k))
 			}
 			env.A = v
 		case typ.OpLoad:
@@ -356,6 +369,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			default:
 				internal.Panic("invalid load: %v, key: %v", simpleString(a), simpleString(idx))
 			}
+			env._set(opc, env.A)
 		case typ.OpPush:
 			stackEnv.Push(env._get(opa))
 		case typ.OpPushUnpack:
@@ -438,10 +452,10 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 				stackEnv.stackOffset = uint32(len(*env.stack))
 			}
 		case typ.OpJmp:
-			cursor = uint32(int32(cursor) + v.B)
+			cursor = uint32(int32(cursor) + v.D())
 		case typ.OpIfNot:
 			if env.A.IsFalse() {
-				cursor = uint32(int32(cursor) + v.B)
+				cursor = uint32(int32(cursor) + v.D())
 			}
 		}
 	}

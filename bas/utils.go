@@ -295,3 +295,21 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 	internal.PanicErr(outError)
 	return t
 }
+
+func lineOf(text string, line int) (string, bool) {
+	for line > 0 {
+		idx := strings.IndexByte(text, '\n')
+		line--
+		if line == 0 {
+			if idx == -1 {
+				return text, true
+			}
+			return text[:idx], true
+		}
+		if idx == -1 {
+			break
+		}
+		text = text[idx+1:]
+	}
+	return "", false
+}

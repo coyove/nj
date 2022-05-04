@@ -39,10 +39,11 @@ type Program struct {
 	symbols   *Object
 	stack     *[]Value
 	functions []*Object
+	Source    string
 	Environment
 }
 
-func NewProgram(coreStack *Env, top *Function, symbols *Object, funcs []*Object, env *Environment) *Program {
+func NewProgram(source string, coreStack *Env, top *Function, symbols *Object, funcs []*Object, env *Environment) *Program {
 	cls := &Program{top: top}
 	cls.stack = coreStack.stack
 	cls.symbols = symbols
@@ -53,6 +54,7 @@ func NewProgram(coreStack *Env, top *Function, symbols *Object, funcs []*Object,
 	cls.Stdout = or(cls.Stdout, os.Stdout).(io.Writer)
 	cls.Stdin = or(cls.Stdin, os.Stdin).(io.Reader)
 	cls.Stderr = or(cls.Stderr, os.Stderr).(io.Writer)
+	cls.Source = source
 
 	cls.top.LoadGlobal = cls
 	for _, f := range cls.functions {
@@ -290,7 +292,10 @@ func pkPrettify(c *Function, p *Program, toplevel bool) string {
 		suffix := ""
 		if rValue {
 			if a > typ.RegLocalMask || toplevel {
-				suffix = ":" + simpleString((*p.stack)[a&typ.RegLocalMask])
+				x := (*p.stack)[a&typ.RegLocalMask]
+				if x != Nil {
+					suffix = ":" + simpleString(x)
+				}
 			}
 		}
 
@@ -304,7 +309,7 @@ func pkPrettify(c *Function, p *Program, toplevel bool) string {
 
 	for i, inst := range c.CodeSeg.Code {
 		cursor := uint32(i) + 1
-		bop, a, b := inst.Opcode, inst.A, uint16(inst.B)
+		bop, a, b, c := inst.Opcode, inst.A, inst.B, inst.C
 
 		if oldpos.Len() > 0 {
 			_, op, line := oldpos.Read(0)
@@ -338,16 +343,23 @@ func pkPrettify(c *Function, p *Program, toplevel bool) string {
 			}
 			sb.WriteString("call " + readAddr(a, true))
 		case typ.OpIfNot, typ.OpJmp:
-			pos := inst.B
-			pos2 := uint32(int32(cursor) + pos)
+			dest := inst.D()
+			pos2 := uint32(int32(cursor) + dest)
 			if bop == typ.OpIfNot {
 				sb.WriteString("if not $a ")
 			}
-			sb.WriteString(fmt.Sprintf("jmp %d to %d", pos, pos2))
+			sb.WriteString(fmt.Sprintf("jmp %d to %d", dest, pos2))
 		case typ.OpInc:
 			sb.WriteString("inc " + readAddr(a, false) + " " + readAddr(b, true))
+			if c != 0 {
+				sb.WriteString(fmt.Sprintf(" jmp %d to %d", int16(c), int32(cursor)+int32(int16(c))))
+			}
 		default:
-			if us, ok := typ.UnaryOpcode[bop]; ok {
+			if bop == typ.OpLoad {
+				sb.WriteString("load " + readAddr(a, true) + " " + readAddr(b, true) + " -> " + readAddr(c, false))
+			} else if bop == typ.OpStore {
+				sb.WriteString("store " + readAddr(a, true) + " " + readAddr(b, true) + " " + readAddr(c, true))
+			} else if us, ok := typ.UnaryOpcode[bop]; ok {
 				sb.WriteString(us + " " + readAddr(a, true))
 			} else if bs, ok := typ.BinaryOpcode[bop]; ok {
 				sb.WriteString(bs + " " + readAddr(a, true) + " " + readAddr(b, true))

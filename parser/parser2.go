@@ -34,7 +34,7 @@ var (
 	SInc      = staticSym(typ.AInc)
 	SMove     = staticSym(typ.AMove)
 	SIf       = staticSym(typ.AIf)
-	SFor      = staticSym(typ.AFor)
+	SWhile    = staticSym(typ.AFor)
 	SFunc     = staticSym(typ.AFunc)
 	SBreak    = staticSym(typ.ABreak)
 	SContinue = staticSym(typ.AContinue)
@@ -91,11 +91,11 @@ func __inc(subject, step Node) Node { return Nodes((SInc), subject, step) }
 
 func __load(subject, key Node) Node { return Nodes((SLoad), subject, key) }
 
-func __store(subject, key, value Node) Node { return Nodes((SStore), subject, value, key) }
+func __store(subject, key, value Node) Node { return Nodes(SStore, subject, key, value) }
 
 func __if(cond, t, f Node) Node { return Nodes((SIf), cond, t, f) }
 
-func __loop(cont Node, body ...Node) Node { return Nodes(SFor, __chain(body...), cont) }
+func __loop(cont Node, body ...Node) Node { return Nodes(SWhile, __chain(body...), cont) }
 
 func __goto(label Node) Node { return Nodes(SGoto, label) }
 

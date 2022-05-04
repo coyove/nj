@@ -10,9 +10,9 @@ import (
 )
 
 type breakLabel struct {
-	continueNode parser.Node
-	continueGoto int
-	labelPos     []int
+	continueNode     parser.Node
+	continueGoto     int
+	breakContinuePos []int
 }
 
 // symTable is responsible for recording the state of compilation
@@ -130,7 +130,7 @@ func init() {
 	nodeCompiler[parser.SSet.Value] = compileSetMove
 	nodeCompiler[parser.SMove.Value] = compileSetMove
 	nodeCompiler[parser.SIf.Value] = compileIf
-	nodeCompiler[parser.SFor.Value] = compileWhile
+	nodeCompiler[parser.SWhile.Value] = compileWhile
 	nodeCompiler[parser.SBreak.Value] = compileBreak
 	nodeCompiler[parser.SContinue.Value] = compileBreak
 	nodeCompiler[parser.SCall.Value] = compileCall
@@ -276,29 +276,37 @@ func (table *symTable) writeInst1(op byte, n parser.Node) {
 	}
 }
 
+func (table *symTable) compileAtom(n parser.Node, tmp *[]uint16) uint16 {
+	switch n.Type() {
+	case parser.NODES:
+		addr := table.borrowAddress()
+		table.codeSeg.WriteInst(typ.OpSet, addr, table.compileNode(n))
+		*tmp = append(*tmp, addr)
+		return addr
+	default:
+		addr, ok := table.compileStaticNode(n)
+		if !ok {
+			internal.ShouldNotHappen(n)
+		}
+		return addr
+	}
+}
+
 func (table *symTable) writeInst2(op byte, n0, n1 parser.Node) {
 	if !n0.Valid() || !n1.Valid() {
 		internal.ShouldNotHappen(n0, n1)
 	}
-
 	var tmp []uint16
-	getAddr := func(n parser.Node) uint16 {
-		switch n.Type() {
-		case parser.NODES:
-			addr := table.borrowAddress()
-			table.codeSeg.WriteInst(typ.OpSet, addr, table.compileNode(n))
-			tmp = append(tmp, addr)
-			return addr
-		default:
-			addr, ok := table.compileStaticNode(n)
-			if !ok {
-				internal.ShouldNotHappen(n)
-			}
-			return addr
-		}
-	}
+	table.codeSeg.WriteInst(op, table.compileAtom(n0, &tmp), table.compileAtom(n1, &tmp))
+	table.freeAddr(tmp)
+}
 
-	table.codeSeg.WriteInst(op, getAddr(n0), getAddr(n1))
+func (table *symTable) writeInst3(op byte, n0, n1, n2 parser.Node) {
+	if !n0.Valid() || !n1.Valid() || !n2.Valid() {
+		internal.ShouldNotHappen(n0, n1)
+	}
+	var tmp []uint16
+	table.codeSeg.WriteInst3(op, table.compileAtom(n0, &tmp), table.compileAtom(n1, &tmp), table.compileAtom(n2, &tmp))
 	table.freeAddr(tmp)
 }
 
@@ -404,7 +412,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *bas.Environmen
 		return true
 	})
 
-	cls = bas.NewProgram(coreStack, &bas.Function{
+	cls = bas.NewProgram(source, coreStack, &bas.Function{
 		Name:      "main",
 		CodeSeg:   table.codeSeg,
 		StackSize: table.vp,

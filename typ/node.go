@@ -73,7 +73,6 @@ var BinaryOpcode = map[byte]string{
 	OpLess:    ALess,
 	OpLessEq:  ALessEq,
 	OpLoad:    ALoad,
-	OpStore:   AStore,
 	OpBitAnd:  ABitAnd,
 	OpBitOr:   ABitOr,
 	OpBitXor:  ABitXor,

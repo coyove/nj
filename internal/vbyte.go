@@ -55,21 +55,63 @@ type Packet struct {
 	Pos  VByte32
 }
 
-func (b *Packet) WriteInst(op byte, opa, opb uint16) {
-	if opa == opb && op == typ.OpSet {
-		return
-	}
-	b.Code = append(b.Code, typ.Inst{Opcode: op, A: opa, B: int32(opb)})
+func (b *Packet) check() {
 	if b.Len() >= 4e9 {
 		panic("too much code")
 	}
 }
 
+func (b *Packet) WriteInst(op byte, opa, opb uint16) {
+	if op == typ.OpSet {
+		if opa == opb {
+			/*
+				form:
+					set v v
+			*/
+			return
+		}
+		if opb == typ.RegA && len(b.Code) > 0 {
+			/*
+				form:
+					load subject key $a
+					set dest $a
+				into:
+					load subject key dest
+			*/
+			x := &b.Code[len(b.Code)-1]
+			if x.Opcode == typ.OpLoad && x.C == typ.RegA {
+				x.C = opa
+				return
+			}
+		}
+		if opb == typ.RegA && len(b.Code) > 0 {
+			/*
+				form:
+					add v num
+					set v $a
+				into:
+					inc v num
+				note that 'add num v' is not optimizable because 'add' also applies on strings
+			*/
+			x := &b.Code[len(b.Code)-1]
+			if x.Opcode == typ.OpAdd && x.A == opa {
+				x.Opcode = typ.OpInc
+				return
+			}
+		}
+	}
+	b.Code = append(b.Code, typ.Inst{Opcode: op, A: opa, B: opb})
+	b.check()
+}
+
+func (b *Packet) WriteInst3(op byte, opa, opb, opc uint16) {
+	b.Code = append(b.Code, typ.Inst{Opcode: op, A: opa, B: opb, C: opc})
+	b.check()
+}
+
 func (b *Packet) WriteJmpInst(op byte, d int) {
 	b.Code = append(b.Code, typ.JmpInst(op, d))
-	if b.Len() >= 4e9 {
-		panic("too much code")
-	}
+	b.check()
 }
 
 func (b *Packet) WriteLineNum(line uint32) {

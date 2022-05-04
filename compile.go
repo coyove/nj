@@ -1,6 +1,7 @@
 package nj
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -63,54 +64,32 @@ func compileSetMove(table *symTable, nodes []parser.Node) uint16 {
 	return destAddr
 }
 
-// writeInst3 accepts 3 arguments at most, 2 arguments will be encoded into opCode itself, the 3rd one will be in typ.RegA
-func (table *symTable) writeInst3(bop byte, nodes []parser.Node) uint16 {
+func (table *symTable) writeNodes3(bop byte, nodes []parser.Node) uint16 {
 	// first atom: the splitInst Name, tail atoms: the args
 	if len(nodes) > 4 {
 		internal.ShouldNotHappen(nodes)
 	}
 
 	nodes = append([]parser.Node{}, nodes...) // duplicate
-
-	if bop == typ.OpStore {
-		table.collapse(nodes[1:], true)
-
-		// (node     1      2    3 )
-		// (store subject value key) subject => opa, key => $a, value => opb
-
-		for i := 1; i <= 2; i++ { // subject and value shouldn't use typ.RegA
-			if nodes[i].Type() == parser.ADDR && uint16(nodes[i].Int()) == typ.RegA {
-				n := parser.Addr(table.borrowAddress())
-				table.writeInst2(typ.OpSet, n, nodeRegA)
-				nodes[i] = n
-			}
-		}
-
-		// We would love to see 'key' using typ.RegA, in this case writeInst will just omit it
-		table.writeInst2(typ.OpSet, nodeRegA, nodes[3])
-		table.writeInst2(typ.OpStore, nodes[1], nodes[2])
-		table.freeAddr(nodes[1:])
-		return typ.RegA
-	}
-
 	table.collapse(nodes[1:], true)
 
 	switch bop {
-	case typ.OpNot, typ.OpRet, typ.OpBitNot, typ.OpLen:
-		// unary splitInst
+	case typ.OpStore: // ternary
+		table.writeInst3(typ.OpStore, nodes[1], nodes[2], nodes[3])
+	case typ.OpLoad: // special binary
+		table.writeInst3(bop, nodes[1], nodes[2], nodeRegA)
+	case typ.OpNot, typ.OpRet, typ.OpBitNot, typ.OpLen: // unary
 		table.writeInst1(bop, nodes[1])
-	default:
-		// binary splitInst
+	default: // binary
 		table.writeInst2(bop, nodes[1], nodes[2])
-		table.freeAddr(nodes[1:])
 	}
-
+	table.freeAddr(nodes[1:])
 	return typ.RegA
 }
 
 func makeOPCompiler(op byte) func(table *symTable, nodes []parser.Node) uint16 {
 	return func(table *symTable, nodes []parser.Node) uint16 {
-		yx := table.writeInst3(op, nodes)
+		yx := table.writeNodes3(op, nodes)
 		if p := nodes[0].Line(); p > 0 {
 			table.codeSeg.WriteLineNum(p)
 		}
@@ -272,7 +251,7 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 
 	if a := newtable.sym.Prop("this"); a != bas.Nil {
 		newtable.codeSeg.Code = append([]typ.Inst{
-			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: int32(typ.RegA)},
+			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: typ.RegA},
 		}, newtable.codeSeg.Code...)
 	}
 
@@ -313,13 +292,13 @@ func compileBreak(table *symTable, atoms []parser.Node) uint16 {
 		table.compileNode(bl.continueNode)
 		table.codeSeg.WriteJmpInst(typ.OpJmp, bl.continueGoto-len(table.codeSeg.Code)-1)
 	} else {
-		bl.labelPos = append(bl.labelPos, table.codeSeg.Len())
+		bl.breakContinuePos = append(bl.breakContinuePos, table.codeSeg.Len())
 		table.codeSeg.WriteJmpInst(typ.OpJmp, 0)
 	}
 	return typ.RegA
 }
 
-// [loop [chain ...]]
+// [loop body continue]
 func compileWhile(table *symTable, nodes []parser.Node) uint16 {
 	init := table.codeSeg.Len()
 	breaks := &breakLabel{
@@ -334,7 +313,7 @@ func compileWhile(table *symTable, nodes []parser.Node) uint16 {
 	table.forLoops = table.forLoops[:len(table.forLoops)-1]
 
 	table.codeSeg.WriteJmpInst(typ.OpJmp, -(table.codeSeg.Len()-init)-1)
-	for _, idx := range breaks.labelPos {
+	for _, idx := range breaks.breakContinuePos {
 		table.codeSeg.Code[idx] = typ.JmpInst(typ.OpJmp, table.codeSeg.Len()-idx-1)
 	}
 	return typ.RegA
@@ -366,17 +345,24 @@ func (table *symTable) patchGoto() {
 		code[i.Int()] = typ.JmpInst(typ.OpJmp, pos.Int()-(i.Int()+1))
 		return true
 	})
-	for i, c := range code {
-		if c.Opcode == typ.OpJmp && c.B != 0 {
-			dest := int32(i) + c.B + 1
+	for i := range code {
+		if code[i].Opcode == typ.OpJmp && code[i].D() != 0 {
+			// Group continuous jumps into one single jump
+			dest := int32(i) + code[i].D() + 1
 			for int(dest) < len(code) {
-				if c2 := code[dest]; c2.Opcode == typ.OpJmp && c2.B != 0 {
-					dest += c2.B + 1
+				if c2 := code[dest]; c2.Opcode == typ.OpJmp && c2.D() != 0 {
+					dest += c2.D() + 1
 					continue
 				}
 				break
 			}
-			code[i].B = dest - int32(i) - 1
+			code[i] = code[i].SetD(dest - int32(i) - 1)
+		}
+		if code[i].Opcode == typ.OpJmp && i > 0 && code[i-1].Opcode == typ.OpInc {
+			// Inc-then-small-jump, see OpInc in eval.go
+			if d := code[i].D() + 1; d >= math.MinInt16 && d <= math.MaxInt16 {
+				code[i-1].C = uint16(int16(d))
+			}
 		}
 	}
 }
@@ -418,10 +404,11 @@ func (table *symTable) collapse(nodes []parser.Node, optLast bool) {
 	}
 
 	if optLast && lastNode.Valid() {
-		i := table.codeSeg.LastInst()
-		// [set a b]
-		table.codeSeg.TruncLast()
-		table.freeAddr(i.A)
-		nodes[lastNodeIndex] = parser.Addr(uint16(i.B))
+		if i := table.codeSeg.LastInst(); i.Opcode == typ.OpSet && i.B == typ.RegA {
+			// [set a $a]
+			table.codeSeg.TruncLast()
+			table.freeAddr(i.A)
+			nodes[lastNodeIndex] = parser.Addr(uint16(i.B))
+		}
 	}
 }
