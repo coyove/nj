@@ -204,3 +204,5 @@ local rch, rv = channel.recvmulti([ch, ch2])
 assert(rch, ch2)
 assert(rv, 2)
 assert(flag)
+
+loadfile("tests/array.txt")

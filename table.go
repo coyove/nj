@@ -163,6 +163,7 @@ func init() {
 	nodeCompiler[parser.SBitURsh.Value] = makeOPCompiler(typ.OpBitURsh)
 	nodeCompiler[parser.SStore.Value] = makeOPCompiler(typ.OpStore)
 	nodeCompiler[parser.SLoad.Value] = makeOPCompiler(typ.OpLoad)
+	nodeCompiler[parser.SSlice.Value] = makeOPCompiler(typ.OpSlice)
 	nodeCompiler[parser.SInc.Value] = makeOPCompiler(typ.OpInc)
 	nodeCompiler[parser.SNext.Value] = makeOPCompiler(typ.OpNext)
 	nodeCompiler[parser.SLen.Value] = makeOPCompiler(typ.OpLen)

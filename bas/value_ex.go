@@ -210,7 +210,7 @@ func HasPrototype(a Value, p *Object) bool {
 	case typ.String:
 		return p == Proto.Str
 	case typ.Native:
-		return a.Native().meta.Proto.HasPrototype(p)
+		return a.Native().HasPrototype(p)
 	}
 	return false
 }

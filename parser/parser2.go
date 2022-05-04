@@ -41,6 +41,7 @@ var (
 	SBegin    = staticSym(typ.ABegin)
 	SLoad     = staticSym(typ.ALoad)
 	SStore    = staticSym(typ.AStore)
+	SSlice    = staticSym(typ.ASlice)
 	SArray    = staticSym(typ.AArray)
 	SObject   = staticSym(typ.AObject)
 	SCall     = staticSym(typ.ACall)

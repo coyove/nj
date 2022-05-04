@@ -251,6 +251,9 @@ prefix_expr:
     '{' '}'                                            { $$ = ss(yylex).__object($1, emptyNode) } |
     '[' expr_list comma ']'                            { $$ = ss(yylex).__array($1, $2) } |
     '{' expr_assign_list comma'}'                      { $$ = ss(yylex).__object($1, $2) } |
+    prefix_expr TLBracket expr ':' expr ']'            { $$ = Nodes(SSlice, $1, $3, $5).At($2) } |
+    prefix_expr TLBracket ':' expr ']'                 { $$ = Nodes(SSlice, $1, zero, $4).At($2) } |
+    prefix_expr TLBracket expr ':' ']'                 { $$ = Nodes(SSlice, $1, $3, Int(-1)).At($2) } |
     declarator                                         { $$ = $1 } |
     prefix_expr TLParen ')'                            { $$ = __call($1, emptyNode).At($2) } |
     prefix_expr TLParen expr_list comma ')'            { $$ = __call($1, $3).At($2) } |

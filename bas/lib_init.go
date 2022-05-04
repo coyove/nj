@@ -247,7 +247,8 @@ func init() {
 	Globals.SetProp("func", Proto.Func.ToValue())
 	Globals.SetProp("callable", Proto.Func.ToValue())
 
-	*Proto.Native = *NamedObject("native", 16).
+	*Proto.Native = *NamedObject("native", 4).
+		SetProp("types", nativeGoObject.ToValue()).
 		SetMethod("typename", func(e *Env) {
 			e.A = Str(reflect.TypeOf(e.Get(-1).Native().Unwrap()).String())
 		})

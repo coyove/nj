@@ -39,6 +39,7 @@ var (
 	stringsArrayMeta  = &NativeMeta{}
 	errorNativeMeta   = &NativeMeta{}
 	genericMetaCache  sync.Map
+	nativeGoObject    = NewObject(0).SetPrototype(Proto.StaticObject)
 )
 
 func init() {
@@ -196,11 +197,18 @@ func init() {
 		sgMarshal,
 		sgArrayNext,
 	}
-	*errorNativeMeta = NativeMeta{
-		"error",
-		Proto.Error,
-		func(a *Native) int { return 1 },
-		func(a *Native) int { return 1 },
+	*errorNativeMeta = *NewEmptyNativeMeta("error", Proto.Error)
+	errorNativeMeta.Len = func(a *Native) int { return 1 }
+	errorNativeMeta.Size = errorNativeMeta.Len
+	errorNativeMeta.Marshal = func(a *Native, w io.Writer, mt typ.MarshalType) {
+		w.Write([]byte(internal.IfQuote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error())))
+	}
+}
+
+func NewEmptyNativeMeta(name string, proto *Object) *NativeMeta {
+	return &NativeMeta{name, proto,
+		sgLenNotSupported,
+		sgSizeNotSupported,
 		sgClearNotSupported,
 		sgValuesNotSupported,
 		func(a *Native, idx int) Value { return a.ToValue() },
@@ -213,7 +221,11 @@ func init() {
 		sgCopyNotSupported,
 		sgConcatNotSupported,
 		func(a *Native, w io.Writer, mt typ.MarshalType) {
-			w.Write([]byte(internal.IfQuote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error())))
+			if mt != typ.MarshalToJSON {
+				fmt.Fprint(w, reflectString(a.any))
+			} else {
+				json.NewEncoder(w).Encode(reflectString(a.any))
+			}
 		},
 		sgNextNotSupported,
 	}
@@ -237,55 +249,57 @@ func getNativeMeta(v interface{}) *NativeMeta {
 	var a *NativeMeta
 	switch rt.Kind() {
 	default:
-		a = &NativeMeta{rt.String(), Proto.Native,
-			sgLenNotSupported,
-			sgSizeNotSupported,
-			sgClearNotSupported,
-			sgValuesNotSupported,
-			func(a *Native, idx int) Value { return a.ToValue() },
-			sgSetNotSupported,
-			func(a *Native, k Value) Value {
-				if v, ok := reflectLoad(a.any, k); ok {
-					return v
-				}
-				return sgGetKey(a, k)
-			},
-			func(a *Native, k, v Value) { reflectStore(a.any, k, v) },
-			sgAppendNotSupported,
-			sgSliceNotSupported,
-			sgSliceInplaceNotSupported,
-			sgCopyNotSupported,
-			sgConcatNotSupported,
-			sgMarshalTypeOnly,
-			sgNextNotSupported,
+		a = NewEmptyNativeMeta(rt.String(), Proto.Native)
+		a.GetKey = func(a *Native, k Value) Value {
+			if v, ok := reflectLoad(a.any, k); ok {
+				return v
+			}
+			return sgGetKey(a, k)
 		}
+		a.SetKey = func(a *Native, k, v Value) {
+			reflectStore(a.any, k, v)
+		}
+		tn := []byte(a.Name)
+		for i := range tn {
+			switch tn[i] {
+			case '*':
+				tn[i] = 'p'
+			case '.', '[', ']':
+				tn[i] = '_'
+			}
+		}
+		pt := Func(string(tn), func(e *Env) {
+			e.A = ValueOf(reflect.New(rt).Elem().Interface())
+		}).Object()
 		switch rt.Kind() {
 		case reflect.Map:
-			a.Proto = Proto.NativeMap
 			a.Len = sgLen
 			a.Size = sgSize
 			a.Marshal = sgMarshal
 			a.Next = sgMapNext
+			a.Proto = pt.SetPrototype(Proto.NativeMap)
 		case reflect.Ptr:
-			a.Proto = Proto.NativePtr
+			a.Proto = pt.SetPrototype(Proto.NativePtr)
+		default:
+			a.Proto = pt.SetPrototype(Proto.Native)
 		}
+		nativeGoObject.SetProp(pt.Name(), pt.ToValue())
 	case reflect.Chan:
-		a = &NativeMeta{rt.String(), Proto.Channel,
-			sgLen,
-			sgSize,
-			sgClearNotSupported,
-			sgValuesNotSupported,
-			func(a *Native, idx int) Value { return a.ToValue() },
-			sgSetNotSupported,
-			sgGetKey,
-			sgSetKeyNotSupported,
-			sgAppendNotSupported,
-			sgSliceNotSupported,
-			sgSliceInplaceNotSupported,
-			sgCopyNotSupported,
-			sgConcatNotSupported,
-			sgMarshalTypeOnly,
-			sgChanNext,
+		a = NewEmptyNativeMeta(rt.String(), Proto.Channel)
+		a.Len = sgLen
+		a.Size = sgSize
+		a.Next = func(a *Native, kv Value) Value {
+			if kv == Nil {
+				kv = Array(Nil, Nil)
+			} else {
+				if kv.Native().Get(1).IsFalse() {
+					return Nil // break because the channel has been closed
+				}
+			}
+			rv, ok := reflect.ValueOf(a.any).Recv()
+			kv.Native().Set(0, ValueOf(rv.Interface()))
+			kv.Native().Set(1, Bool(ok))
+			return kv
 		}
 	case reflect.Array, reflect.Slice:
 		a = &NativeMeta{rt.String(), Proto.Array,
@@ -632,32 +646,10 @@ func sgMapNext(a *Native, kv Value) Value {
 	return kv
 }
 
-func sgChanNext(a *Native, kv Value) Value {
-	if kv == Nil {
-		kv = Array(Nil, Nil)
-	} else {
-		if kv.Native().Get(1).IsFalse() {
-			return Nil // break because the channel has been closed
-		}
-	}
-	rv, ok := reflect.ValueOf(a.any).Recv()
-	kv.Native().Set(0, ValueOf(rv.Interface()))
-	kv.Native().Set(1, Bool(ok))
-	return kv
-}
-
 func sgGetKey(a *Native, k Value) Value {
 	f := a.meta.Proto.Find(k)
 	if f != Nil {
 		f = setObjectRecv(f, a.ToValue())
 	}
 	return f
-}
-
-func sgMarshalTypeOnly(a *Native, w io.Writer, mt typ.MarshalType) {
-	if mt != typ.MarshalToJSON {
-		fmt.Fprint(w, reflectString(a.any))
-	} else {
-		json.NewEncoder(w).Encode(reflectString(a.any))
-	}
 }

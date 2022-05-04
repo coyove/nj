@@ -22,6 +22,7 @@ var (
 	ioCloserType = reflect.TypeOf((*io.Closer)(nil)).Elem()
 	errType      = reflect.TypeOf((*error)(nil)).Elem()
 	valueType    = reflect.TypeOf(Value{})
+	// reflectTypeType = reflect.TypeOf(reflect.ValueOf(1).Type())
 )
 
 func reflectLoad(v interface{}, key Value) (Value, bool) {

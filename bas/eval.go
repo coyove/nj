@@ -370,6 +370,27 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 				internal.Panic("invalid load: %v, key: %v", simpleString(a), simpleString(idx))
 			}
 			env._set(opc, env.A)
+		case typ.OpSlice:
+			a, start, end := env._get(opa), env._get(opb), env._get(opc)
+			if start.Type()+end.Type() != typ.Number+typ.Number {
+				internal.Panic("slice "+errNeedNumbers, simpleString(start), simpleString(end))
+			}
+			switch a.Type() {
+			case typ.Native:
+				if end := end.Int(); end == -1 {
+					env.A = a.Native().Slice(start.Int(), a.Native().Len()).ToValue()
+				} else {
+					env.A = a.Native().Slice(start.Int(), end).ToValue()
+				}
+			case typ.String:
+				if end := end.Int(); end == -1 {
+					env.A = Str(a.Str()[start.Int():Len(a)])
+				} else {
+					env.A = Str(a.Str()[start.Int():end])
+				}
+			default:
+				internal.Panic("can't slice %v", simpleString(a))
+			}
 		case typ.OpPush:
 			stackEnv.Push(env._get(opa))
 		case typ.OpPushUnpack:

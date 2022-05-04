@@ -17,6 +17,7 @@ const (
 	ABegin    = "prog"
 	ALoad     = "load"
 	AStore    = "store"
+	ASlice    = "slice"
 	AArray    = "array"
 	AObject   = "map"
 	ACall     = "call"

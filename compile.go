@@ -74,8 +74,8 @@ func (table *symTable) writeNodes3(bop byte, nodes []parser.Node) uint16 {
 	table.collapse(nodes[1:], true)
 
 	switch bop {
-	case typ.OpStore: // ternary
-		table.writeInst3(typ.OpStore, nodes[1], nodes[2], nodes[3])
+	case typ.OpStore, typ.OpSlice: // ternary
+		table.writeInst3(bop, nodes[1], nodes[2], nodes[3])
 	case typ.OpLoad: // special binary
 		table.writeInst3(bop, nodes[1], nodes[2], nodeRegA)
 	case typ.OpNot, typ.OpRet, typ.OpBitNot, typ.OpLen: // unary
