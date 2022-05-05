@@ -14,15 +14,17 @@ import (
 )
 
 type Function struct {
-	CodeSeg    internal.Packet
-	StackSize  uint16
-	NumParams  uint16
-	Variadic   bool
-	Native     func(env *Env)
-	Name       string
-	LoadGlobal *Program
-	Locals     []string
-	obj        *Object
+	CodeSeg     internal.Packet
+	StackSize   uint16
+	NumParams   uint16
+	Variadic    bool
+	namedObjFun bool // indicates a dummy Function, which is used by NamedObject()
+	envgNeeded  bool // an execution env (*Env) with Global is required
+	Native      func(env *Env)
+	Name        string
+	LoadGlobal  *Program
+	Locals      []string
+	obj         *Object
 }
 
 type Environment struct {
@@ -35,15 +37,15 @@ type Environment struct {
 }
 
 type Program struct {
-	top       *Function
-	symbols   *Object
-	stack     *[]Value
-	functions []*Object
-	Source    string
+	top          *Function
+	symbols      *Object
+	stack        *[]Value
+	functions    []*Object
+	File, Source string
 	Environment
 }
 
-func NewProgram(source string, coreStack *Env, top *Function, symbols *Object, funcs []*Object, env *Environment) *Program {
+func NewProgram(file, source string, coreStack *Env, top *Function, symbols *Object, funcs []*Object, env *Environment) *Program {
 	cls := &Program{top: top}
 	cls.stack = coreStack.stack
 	cls.symbols = symbols
@@ -54,6 +56,7 @@ func NewProgram(source string, coreStack *Env, top *Function, symbols *Object, f
 	cls.Stdout = or(cls.Stdout, os.Stdout).(io.Writer)
 	cls.Stdin = or(cls.Stdin, os.Stdin).(io.Reader)
 	cls.Stderr = or(cls.Stderr, os.Stderr).(io.Writer)
+	cls.File = file
 	cls.Source = source
 
 	cls.top.LoadGlobal = cls
@@ -75,6 +78,13 @@ func Func(name string, f func(*Env)) Value {
 	obj.fun = &Function{Name: name, Native: f, obj: obj}
 	obj.SetPrototype(Proto.Func)
 	return obj.ToValue()
+}
+
+// EnvFunc creates a callable object which strictly requires a valid execution env
+func EnvFunc(name string, f func(*Env)) Value {
+	o := Func(name, f).Object()
+	o.fun.envgNeeded = true
+	return o.ToValue()
 }
 
 func (p *Program) Run() (Value, error) {
@@ -218,6 +228,10 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 			newEnv.runtime.Callable0 = c
 		} else {
 			newEnv.runtime = e.runtime.Push(c)
+			newEnv.Global = e.Global
+		}
+		if newEnv.Global == nil && c.envgNeeded {
+			internal.Panic("native function %s requires global env")
 		}
 		c.Native(&newEnv)
 		return newEnv.A
@@ -334,12 +348,15 @@ func pkPrettify(c *Function, p *Program, toplevel bool) string {
 			cls := p.functions[a]
 			sb.WriteString("loadfunc " + cls.fun.Name + "\n")
 			sb.WriteString(pkPrettify(cls.fun, cls.fun.LoadGlobal, false))
-		case typ.OpTailCall, typ.OpCall:
+		case typ.OpTailCall, typ.OpCall, typ.OpTryCall:
 			if b != typ.RegPhantom {
 				sb.WriteString("push " + readAddr(b, true) + " -> ")
 			}
-			if bop == typ.OpTailCall {
+			switch bop {
+			case typ.OpTailCall:
 				sb.WriteString("tail")
+			case typ.OpTryCall:
+				sb.WriteString("try")
 			}
 			sb.WriteString("call " + readAddr(a, true))
 		case typ.OpIfNot, typ.OpJmp:

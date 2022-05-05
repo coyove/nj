@@ -205,8 +205,11 @@ func compileCall(table *symTable, nodes []parser.Node) uint16 {
 	}
 
 	op := byte(typ.OpCall)
-	if nodes[0].Value == parser.STailCall.Value {
+	switch nodes[0].Value {
+	case parser.STailCall.Value:
 		op = typ.OpTailCall
+	case parser.STryCall.Value:
+		op = typ.OpTryCall
 	}
 	if len(tmp) == 1 || isVariadic {
 		table.writeInst2(op, tmp[0], parser.Addr(typ.RegPhantom))

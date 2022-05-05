@@ -176,7 +176,7 @@ foo()
 end
 foo()
 `, nil)
-	fmt.Println(err)
+	fmt.Println(err, cls.GoString())
 	if s := cls.GoString(); !strings.Contains(s, "tailcall") {
 		t.Fatal(s)
 	}

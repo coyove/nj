@@ -46,6 +46,7 @@ var (
 	SObject   = staticSym(typ.AObject)
 	SCall     = staticSym(typ.ACall)
 	STailCall = staticSym(typ.ATailCall)
+	STryCall  = staticSym(typ.ATryCall)
 	SReturn   = staticSym(typ.AReturn)
 	SLen      = staticSym(typ.ALen)
 	SNext     = staticSym(typ.ANext)
@@ -131,9 +132,9 @@ func __markupLambdaName(lambda Token) Token {
 	return lambda
 }
 
-func __call(cls, args Node) Node {
-	return Nodes((SCall), cls, args)
-}
+func __call(cls, args Node) Node { return Nodes(SCall, cls, args) }
+
+func __tryCall(cls, args Node) Node { return Nodes(STryCall, cls, args) }
 
 func __findTailCall(stats []Node) {
 	if len(stats) > 0 {

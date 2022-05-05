@@ -121,6 +121,9 @@ assert(bar.try(6).error(), 14)
 local x, _, _ = bar.try(6)
 assert(x.error(), 15)
 
+print.try("native try call")
+print?("native try call")
+
 -- syntax test
 m = {}
 function m.a() return 'a' end

@@ -32,12 +32,14 @@ func init() {
 		(*Env)(env).stack = (*[]Value)(stack)
 	}
 
-	Globals.SetProp("VERSION", Int64(Version)).
-		SetMethod("globals", func(e *Env) { e.A = e.Global.LocalsObject().ToValue() }).
-		SetMethod("new", func(e *Env) {
-			m := e.Object(0)
-			_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
-		})
+	Globals.SetProp("VERSION", Int64(Version))
+	Globals.SetProp("globals", EnvFunc("globals", func(e *Env) {
+		e.A = e.Global.LocalsObject().ToValue()
+	}))
+	Globals.SetMethod("new", func(e *Env) {
+		m := e.Object(0)
+		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
+	})
 
 	// Debug libraries
 	Globals.SetProp("debug", NamedObject("debug", 0).
@@ -60,14 +62,16 @@ func init() {
 				e.A = newArray(r...).ToValue()
 			}
 		}).
-		SetMethod("globals", func(e *Env) {
+		SetProp("globals", EnvFunc("globals", func(e *Env) {
 			var r []Value
 			for i, name := range e.Global.top.Locals {
 				r = append(r, Int(i), Str(name), (*e.Global.stack)[i])
 			}
 			e.A = newArray(r...).ToValue()
-		}).
-		SetMethod("set", func(e *Env) { (*e.Global.stack)[e.Int64(0)] = e.Get(1) }).
+		})).
+		SetProp("set", EnvFunc("set", func(e *Env) {
+			(*e.Global.stack)[e.Int64(0)] = e.Get(1)
+		})).
 		SetMethod("trace", func(env *Env) {
 			stacks := env.Runtime().Stacktrace()
 			lines := make([]Value, 0, len(stacks))
@@ -140,6 +144,12 @@ func init() {
 		SetProp("writecloser", Proto.WriteCloser.ToValue()).
 		SetProp("readwritecloser", Proto.ReadWriteCloser.ToValue()).
 		SetProp("readwriteseekcloser", Proto.ReadWriteSeekCloser.ToValue()).
+		SetMethod("write", func(e *Env) {
+			w := NewWriter(e.Get(0))
+			for _, a := range e.Stack()[1:] {
+				w.Write(ToReadonlyBytes(a))
+			}
+		}).
 		SetPrototype(Proto.StaticObject).
 		ToValue())
 
@@ -546,17 +556,19 @@ func init() {
 		})
 	Globals.SetProp("str", Proto.Str.ToValue())
 
-	Globals.SetMethod("printf", func(e *Env) {
+	Globals.SetProp("printf", EnvFunc("printf", func(e *Env) {
 		sprintf(e, 0, e.Global.Stdout)
-	}).SetMethod("println", func(e *Env) {
+	}))
+	Globals.SetProp("println", EnvFunc("println", func(e *Env) {
 		for _, a := range e.Stack() {
 			fmt.Fprint(e.Global.Stdout, a.String(), " ")
 		}
 		fmt.Fprintln(e.Global.Stdout)
-	}).SetMethod("print", func(e *Env) {
+	}))
+	Globals.SetProp("print", EnvFunc("print", func(e *Env) {
 		for _, a := range e.Stack() {
 			fmt.Fprint(e.Global.Stdout, a.String())
 		}
 		fmt.Fprintln(e.Global.Stdout)
-	})
+	}))
 }

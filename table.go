@@ -135,6 +135,7 @@ func init() {
 	nodeCompiler[parser.SContinue.Value] = compileBreak
 	nodeCompiler[parser.SCall.Value] = compileCall
 	nodeCompiler[parser.STailCall.Value] = compileCall
+	nodeCompiler[parser.STryCall.Value] = compileCall
 	nodeCompiler[parser.SArray.Value] = compileArray
 	nodeCompiler[parser.SObject.Value] = compileObject
 	nodeCompiler[parser.SOr.Value] = compileAndOr
@@ -413,7 +414,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *bas.Environmen
 		return true
 	})
 
-	cls = bas.NewProgram(source, coreStack, &bas.Function{
+	cls = bas.NewProgram(name, source, coreStack, &bas.Function{
 		Name:      "main",
 		CodeSeg:   table.codeSeg,
 		StackSize: table.vp,

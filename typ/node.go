@@ -21,6 +21,7 @@ const (
 	AArray    = "array"
 	AObject   = "map"
 	ACall     = "call"
+	ATryCall  = "trycall"
 	ATailCall = "tailcall"
 	AReturn   = "return"
 	ALen      = "len"

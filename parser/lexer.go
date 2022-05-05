@@ -120,9 +120,15 @@ func (sc *Scanner) Next() uint32 {
 
 func (sc *Scanner) isLastTokenSymbolClosed() bool {
 	last := sc.lastToken
-	// foo(... foo()(... foo[bar](...
-	// arr[... arr()[... arr[bar][...
-	return last.Type == TEnd || last.Type == TIf || last.Type == TIdent || last.Type == ')' || last.Type == ']' || last.Type == '}'
+	// foo(...)
+	// foo?(...)
+	// foo()(...)
+	// foo[bar](...)
+	// {...}(...)
+	// if(cond, true, false)
+	// lambda() end(...)
+	return last.Type == TEnd || last.Type == TIf || last.Type == TIdent ||
+		last.Type == ')' || last.Type == ']' || last.Type == '}' || last.Type == '?'
 }
 
 func (sc *Scanner) isLastTokenSymbolOrNumberClosed() bool {
@@ -424,12 +430,12 @@ skipspaces:
 				tok.Type = '.'
 				tok.Str = "."
 			}
-		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|', '&':
+		case '(', ')', '{', '}', ']', ';', ',', '#', '^', '|', '&', '?':
 			if ch == '(' && sc.isLastTokenSymbolClosed() && !metSpaces {
 				tok.Type = TLParen
 				tok.Str = "("
 			} else {
-				const pat = "(){}];,#^|&"
+				const pat = "(){}];,#^|&?"
 				idx := strings.IndexByte(pat, byte(ch))
 				tok.Type = ch
 				tok.Str = pat[idx : idx+1]

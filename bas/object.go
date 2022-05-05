@@ -48,7 +48,7 @@ func NamedObject(name string, preallocateSize int) *Object {
 }
 
 func (m *Object) setName(name string) *Object {
-	m.fun = &Function{Name: name, Native: func(*Env) {}, obj: m}
+	m.fun = &Function{Name: name, namedObjFun: true, Native: func(*Env) {}, obj: m}
 	return m
 }
 
@@ -132,9 +132,11 @@ func (m *Object) find(k Value, findPrototype bool) (v Value) {
 		v = m.parent.find(k, findPrototype)
 	}
 	if m.parent != Proto.StaticObject && v.IsObject() && v.Object().IsCallable() {
-		f := v.Object().Copy(false)
-		f.this = m.ToValue()
-		v = f.ToValue()
+		if !v.Object().fun.namedObjFun {
+			f := v.Object().Copy(false)
+			f.this = m.ToValue()
+			v = f.ToValue()
+		}
 	}
 	return v
 }

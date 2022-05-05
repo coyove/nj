@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -48,7 +49,11 @@ func init() {
 		}).
 		ToValue())
 	bas.Globals.SetMethod("loadfile", func(e *bas.Env) {
-		e.A = MustRun(LoadFile(e.Str(0), &e.Global.Environment))
+		path := e.Str(0)
+		if e.Get(1).Maybe().Bool() && e.Global.File != "" {
+			path = filepath.Join(filepath.Dir(e.Global.File), path)
+		}
+		e.A = MustRun(LoadFile(path, &e.Global.Environment))
 	})
 	bas.Globals.SetMethod("eval", func(e *bas.Env) {
 		opts := e.Get(1).Maybe().Object(nil)
@@ -68,12 +73,6 @@ func init() {
 	bas.Globals.SetProp("stdout", bas.ValueOf(os.Stdout))
 	bas.Globals.SetProp("stdin", bas.ValueOf(os.Stdin))
 	bas.Globals.SetProp("stderr", bas.ValueOf(os.Stderr))
-	bas.Globals.SetMethod("write", func(e *bas.Env) {
-		w := bas.NewWriter(e.Get(0))
-		for _, a := range e.Stack()[1:] {
-			fmt.Fprint(w, a.String())
-		}
-	})
 	bas.Globals.SetMethod("scanln", func(env *bas.Env) {
 		prompt, n := env.Get(0), env.Get(1)
 		fmt.Fprint(env.Global.Stdout, prompt.Maybe().Str(""))

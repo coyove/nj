@@ -417,7 +417,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			retStack = retStack[:len(retStack)-1]
 		case typ.OpLoadFunc:
 			env.A = env.Global.functions[opa].ToValue()
-		case typ.OpCall, typ.OpTailCall:
+		case typ.OpCall, typ.OpTryCall, typ.OpTailCall:
 			a := env._get(opa)
 			if a.Type() != typ.Object {
 				internal.Panic("can't call %v", simpleString(a))
@@ -439,7 +439,16 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 					stackEnv._set(uint16(w), newArray().ToValue())
 				}
 			}
-			if cls.Native != nil {
+			if bop == typ.OpTryCall {
+				stackEnv.Global = env.Global
+				stackEnv.runtime.Callable0 = cls
+				stackEnv.runtime.Stack1 = Stacktrace{Callable: K, Cursor: cursor}
+				stackEnv.runtime.StackN = retStack
+				a, err := stackEnv.Call2(a.Object(), stackEnv.Stack()...)
+				_ = err == nil && env.SetA(a) || env.SetA(Error(&stackEnv, err))
+				stackEnv.runtime = Runtime{}
+				stackEnv.Clear()
+			} else if cls.Native != nil {
 				stackEnv.Global = env.Global
 				stackEnv.runtime.Callable0 = cls
 				stackEnv.runtime.Stack1 = Stacktrace{Callable: K, Cursor: cursor}

@@ -14,6 +14,7 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 %type<expr> expr_list
 %type<expr> expr_assign_list
 %type<expr> prefix_expr
+%type<expr> prefix_expr_call_arguments
 %type<expr> assign_stat
 %type<expr> for_stat
 %type<expr> if_stat
@@ -36,7 +37,7 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString TIDiv TInv
 %token<token> TAddEq TSubEq TMulEq TDivEq TIDivEq TModEq TBitAndEq TBitOrEq TBitXorEq TBitLshEq TBitRshEq TBitURshEq
-%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' ':'
+%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' ':' '?' ')' ','
 
 /* Operators */
 %right 'T'
@@ -243,6 +244,7 @@ expr:
     TNot expr %prec UNARY             { $$ = Nodes((SNot), $2).At($1) }
 
 prefix_expr:
+    declarator                                         { $$ = $1 } |
     TIf TLParen expr ',' expr ',' expr ')'             { $$ = __if($3, __move(Sa, $5).At($1), __move(Sa, $7).At($1)).At($1) } |
     TLambda func_params stats TEnd                     { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
     TString                                            { $$ = Str($1.Str) } |
@@ -254,12 +256,15 @@ prefix_expr:
     prefix_expr TLBracket expr ':' expr ']'            { $$ = Nodes(SSlice, $1, $3, $5).At($2) } |
     prefix_expr TLBracket ':' expr ']'                 { $$ = Nodes(SSlice, $1, zero, $4).At($2) } |
     prefix_expr TLBracket expr ':' ']'                 { $$ = Nodes(SSlice, $1, $3, Int(-1)).At($2) } |
-    declarator                                         { $$ = $1 } |
-    prefix_expr TLParen ')'                            { $$ = __call($1, emptyNode).At($2) } |
-    prefix_expr TLParen expr_list comma ')'            { $$ = __call($1, $3).At($2) } |
-    prefix_expr TLParen expr_assign_list comma ')'     { $$ = __call($1, Nodes(Nodes(SObject, $3).At($2))).At($2) } |
-    prefix_expr TLParen expr_list TDotDotDot comma ')' { $$ = __call($1, __dotdotdot($3)).At($2) } |
-    prefix_expr TLParen expr_list ',' expr_assign_list comma ')' { $$ = __call($1, $3.append(Nodes(SObject, $5).At($2))).At($2) }
+    prefix_expr '?' TLParen prefix_expr_call_arguments { $$ = __tryCall($1, $4.At($3)).At($3) } |
+    prefix_expr TLParen prefix_expr_call_arguments     { $$ = __call($1, $3.At($2)).At($2) }
+
+prefix_expr_call_arguments:
+    ')'                                      { $$ = emptyNode } |
+    expr_list comma ')'                      { $$ = $1 } |
+    expr_assign_list comma ')'               { $$ = Nodes(Nodes(SObject, $1).At($3)) } |
+    expr_list TDotDotDot comma ')'           { $$ = __dotdotdot($1) } |
+    expr_list ',' expr_assign_list comma ')' { $$ = $1.append(Nodes(SObject, $3).At($2)) }
 
 declarator_list:
     declarator { $$ = Nodes($1) } | declarator_list ',' declarator { $$ = $1.append($3) }
