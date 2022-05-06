@@ -15,6 +15,35 @@ import (
 type ValueIO Value
 
 func init() {
+	ioReadlinesIter = NewEmptyNativeMeta("readlines", Proto.Native)
+	ioReadlinesIter.Next = func(a *Native, k Value) Value {
+		if k.IsNil() {
+			k = Array(Int(-1), Nil)
+		}
+		var er error
+		if s := a.any.(*ioReadlinesStruct); s.bytes {
+			line, err := s.rd.ReadBytes(s.delim)
+			if len(line) > 0 {
+				k.Native().Set(0, Int(k.Native().Get(0).Int()+1))
+				k.Native().Set(1, Bytes(line))
+				return k
+			}
+			er = err
+		} else {
+			line, err := s.rd.ReadString(s.delim)
+			if len(line) > 0 {
+				k.Native().Set(0, Int(k.Native().Get(0).Int()+1))
+				k.Native().Set(1, Str(line))
+				return k
+			}
+			er = err
+		}
+		if er == io.EOF {
+			return Nil
+		}
+		panic(er)
+	}
+
 	Proto.Reader.
 		SetMethod("read", func(e *Env) {
 			buf := ioRead(e)
@@ -29,38 +58,11 @@ func init() {
 			e.A = newArray(Int(rn), Error(e, err)).ToValue() // return in Go style
 		}).
 		SetMethod("readlines", func(e *Env) {
-			f := e.ThisProp("_f").(io.Reader)
-			delim := e.Object(-1).Prop("delim").Maybe().Str("\n")
-			if e.Get(0) == Nil {
-				buf, err := ioutil.ReadAll(f)
-				internal.PanicErr(err)
-				parts := bytes.Split(buf, []byte(delim))
-				var res []Value
-				for i, line := range parts {
-					if i < len(parts)-1 {
-						line = append(line, delim...)
-					}
-					res = append(res, UnsafeStr(line))
-				}
-				e.A = newArray(res...).ToValue()
-				return
-			}
-			for cb, rd := e.Object(0), bufio.NewReader(f); ; {
-				line, err := rd.ReadString(delim[0])
-				if len(line) > 0 {
-					if v := Call(cb, Str(line)); v == False {
-						e.A = v
-						return
-					}
-				}
-				if err != nil {
-					if err != io.EOF {
-						panic(err)
-					}
-					break
-				}
-			}
-			e.A = Nil
+			e.A = NewNativeWithMeta(&ioReadlinesStruct{
+				rd:    bufio.NewReader(e.ThisProp("_f").(io.Reader)),
+				delim: e.Get(0).Maybe().Str("\n")[0],
+				bytes: e.Get(1).Maybe().Bool(),
+			}, ioReadlinesIter).ToValue()
 		})
 
 	Proto.Writer.
@@ -250,4 +252,12 @@ func ioRead(e *Env) []byte {
 	buf, err := ioutil.ReadAll(f)
 	internal.PanicErr(err)
 	return buf
+}
+
+var ioReadlinesIter *NativeMeta
+
+type ioReadlinesStruct struct {
+	rd    *bufio.Reader
+	delim byte
+	bytes bool
 }

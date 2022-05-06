@@ -38,7 +38,7 @@ assert(T1.c == 132 and T2.c == 53)
 print(timer.add)
 
 assert(structAddrTestEmbed.T.SetFoo, nil)
-structAddrTestEmbed.pT.SetFoo(10)
+structAddrTestEmbed.natptrat('T').SetFoo(10)
 assert(structAddrTestEmbed.T.A, 10)
 
 assert(nativeVarargTest3({"T":{'A':98}}), 98)

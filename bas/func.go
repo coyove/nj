@@ -53,9 +53,9 @@ func NewProgram(file, source string, coreStack *Env, top *Function, symbols *Obj
 	if env != nil {
 		cls.Environment = *env
 	}
-	cls.Stdout = or(cls.Stdout, os.Stdout).(io.Writer)
-	cls.Stdin = or(cls.Stdin, os.Stdin).(io.Reader)
-	cls.Stderr = or(cls.Stderr, os.Stderr).(io.Writer)
+	cls.Stdout = internal.Or(cls.Stdout, os.Stdout).(io.Writer)
+	cls.Stdin = internal.Or(cls.Stdin, os.Stdin).(io.Reader)
+	cls.Stderr = internal.Or(cls.Stderr, os.Stderr).(io.Writer)
 	cls.File = file
 	cls.Source = source
 
@@ -206,9 +206,9 @@ func Call2(m *Object, args ...Value) (res Value, err error) {
 func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res Value) {
 	if !m.IsCallable() {
 		if err == nil {
-			internal.Panic("%v not callable", simpleString(m.ToValue()))
+			internal.Panic("%v not callable", detail(m.ToValue()))
 		} else {
-			*err = fmt.Errorf("%v not callable", simpleString(m.ToValue()))
+			*err = fmt.Errorf("%v not callable", detail(m.ToValue()))
 		}
 		return
 	}
@@ -226,7 +226,7 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 
 	if c.Native != nil {
 		st := Stacktrace{Callable: c, stackOffsetFlag: internal.FlagNativeCall}
-		defer relayPanic(&newEnv, func() []Stacktrace { return newEnv.runtime.Stacktrace() })
+		defer relayPanic(func() []Stacktrace { return newEnv.runtime.Stacktrace() })
 		if e == nil {
 			newEnv.runtime.Stack0 = st
 		} else {
@@ -311,7 +311,7 @@ func pkPrettify(c *Function, p *Program, toplevel bool) string {
 			if a > typ.RegLocalMask || toplevel {
 				x := (*p.stack)[a&typ.RegLocalMask]
 				if x != Nil {
-					suffix = ":" + simpleString(x)
+					suffix = ":" + detail(x)
 				}
 			}
 		}

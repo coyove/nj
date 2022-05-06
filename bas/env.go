@@ -184,12 +184,12 @@ func (env *Env) mustBe(t typ.ValueType, idx int) (v Value) {
 	if idx == -1 {
 		v = env.A
 		if v.Type() != t {
-			internal.Panic("argument 'this' should be %v, not %v", t, simpleString(v))
+			internal.Panic("argument 'this' should be %v, not %v", t, detail(v))
 		}
 	} else {
 		v = env.Get(idx)
 		if v.Type() != t {
-			internal.Panic("argument %d expects %v, got %v", idx+1, t, simpleString(v))
+			internal.Panic("argument %d expects %v, got %v", idx+1, t, detail(v))
 		}
 	}
 	return v

@@ -198,14 +198,15 @@ func init() {
 		sgArrayNext,
 	}
 	*errorNativeMeta = *NewEmptyNativeMeta("error", Proto.Error)
-	errorNativeMeta.Len = func(a *Native) int { return 1 }
-	errorNativeMeta.Size = errorNativeMeta.Len
 	errorNativeMeta.Marshal = func(a *Native, w io.Writer, mt typ.MarshalType) {
 		w.Write([]byte(internal.IfQuote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error())))
 	}
 }
 
 func NewEmptyNativeMeta(name string, proto *Object) *NativeMeta {
+	if proto == nil {
+		proto = Proto.Native
+	}
 	return &NativeMeta{name, proto,
 		sgLenNotSupported,
 		sgSizeNotSupported,
@@ -222,9 +223,9 @@ func NewEmptyNativeMeta(name string, proto *Object) *NativeMeta {
 		sgConcatNotSupported,
 		func(a *Native, w io.Writer, mt typ.MarshalType) {
 			if mt != typ.MarshalToJSON {
-				fmt.Fprint(w, reflectString(a.any))
+				internal.StringifyTo(w, a.any)
 			} else {
-				json.NewEncoder(w).Encode(reflectString(a.any))
+				json.NewEncoder(w).Encode(a.any)
 			}
 		},
 		sgNextNotSupported,
@@ -251,26 +252,27 @@ func getNativeMeta(v interface{}) *NativeMeta {
 	default:
 		a = NewEmptyNativeMeta(rt.String(), Proto.Native)
 		a.GetKey = func(a *Native, k Value) Value {
-			if v, ok := reflectLoad(a.any, k); ok {
+			if v, ok := sgReflectLoadSafe(a.any, k); ok {
 				return v
 			}
 			return sgGetKey(a, k)
 		}
 		a.SetKey = func(a *Native, k, v Value) {
-			reflectStore(a.any, k, v)
-		}
-		tn := []byte(a.Name)
-		for i := range tn {
-			switch tn[i] {
-			case '*':
-				tn[i] = 'p'
-			case '.', '[', ']':
-				tn[i] = '_'
+			defer func() {
+				if r := recover(); r != nil {
+					panic(fmt.Errorf("%s.SetKey(%v, %v): %v", a.meta.Name, detail(k), detail(v), r))
+				}
+			}()
+			rv := reflect.ValueOf(a.any)
+			if rv.Kind() == reflect.Map {
+				rv.SetMapIndex(ToType(k, rv.Type().Key()), ToType(v, rv.Type().Elem()))
+			} else {
+				f := reflect.Indirect(rv).FieldByName(k.AssertType(typ.String, "key").Str())
+				f.Set(ToType(v, f.Type()))
 			}
 		}
-		pt := Func(string(tn), func(e *Env) {
-			e.A = ValueOf(reflect.New(rt).Elem().Interface())
-		}).Object()
+		tn := internal.SanitizeName(a.Name)
+		pt := Func(string(tn), func(e *Env) { e.A = ValueOf(reflect.New(rt).Elem().Interface()) }).Object()
 		switch rt.Kind() {
 		case reflect.Map:
 			a.Len = sgLen
@@ -303,22 +305,8 @@ func getNativeMeta(v interface{}) *NativeMeta {
 		}
 	case reflect.Array, reflect.Slice:
 		a = &NativeMeta{rt.String(), Proto.Array,
-			sgLen,
-			sgSize,
-			sgClear,
-			sgValues,
-			sgGet,
-			sgSet,
-			sgGetKey,
-			sgSetKeyNotSupported,
-			sgAppend,
-			sgSlice,
-			sgSliceInplace,
-			sgCopy,
-			sgConcat,
-			sgMarshal,
-			sgArrayNext,
-		}
+			sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgGetKey, sgSetKeyNotSupported, sgAppend, sgSlice,
+			sgSliceInplace, sgCopy, sgConcat, sgMarshal, sgArrayNext}
 		if rt.Kind() == reflect.Array {
 			a.SliceInplace = sgSliceInplaceNotSupported
 			a.Clear = sgClearNotSupported
@@ -338,14 +326,14 @@ type Native struct {
 }
 
 func NewNative(any interface{}) *Native {
-	return newNativeWithType(any, getNativeMeta(any))
+	return NewNativeWithMeta(any, getNativeMeta(any))
 }
 
 func newArray(m ...Value) *Native {
 	return &Native{meta: internalArrayMeta, internal: m}
 }
 
-func newNativeWithType(any interface{}, meta *NativeMeta) *Native {
+func NewNativeWithMeta(any interface{}, meta *NativeMeta) *Native {
 	return &Native{meta: meta, any: any}
 }
 
@@ -474,7 +462,7 @@ func (a *Native) AssertPrototype(p *Object, msg string) *Native {
 }
 
 func (a *Native) notSupported(method string) {
-	panic(a.meta.Name + "." + method + " not allowed")
+	panic(a.meta.Name + "." + method + " not supported")
 }
 
 func sgLen(a *Native) int {
@@ -652,4 +640,39 @@ func sgGetKey(a *Native, k Value) Value {
 		f = setObjectRecv(f, a.ToValue())
 	}
 	return f
+}
+
+func sgReflectLoadSafe(v interface{}, key Value) (value Value, ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			value, ok = Nil, false
+		}
+	}()
+
+	if reflect.TypeOf(v).Kind() == reflect.Map {
+		rv := reflect.ValueOf(v)
+		if v := rv.MapIndex(ToType(key, rv.Type().Key())); v.IsValid() {
+			return ValueOf(v.Interface()), true
+		}
+		return Nil, false
+	}
+	if key.Type() != typ.String {
+		return Nil, false
+	}
+	k := key.Str()
+	if len(k) > 0 && k[0] >= 'A' && k[0] <= 'Z' {
+		rv := reflect.ValueOf(v)
+		f := rv.MethodByName(k)
+		if !f.IsValid() {
+			f = reflect.Indirect(rv).MethodByName(k)
+		}
+		if !f.IsValid() {
+			f = reflect.Indirect(rv).FieldByName(k)
+		}
+		if !f.IsValid() {
+			return Nil, false
+		}
+		return ValueOf(f.Interface()), true
+	}
+	return Nil, false
 }

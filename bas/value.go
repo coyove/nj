@@ -169,7 +169,7 @@ func Rune(r rune) Value {
 
 // Bytes creates a bytes array
 func Bytes(b []byte) Value {
-	return newNativeWithType(b, bytesArrayMeta).ToValue()
+	return NewNativeWithMeta(b, bytesArrayMeta).ToValue()
 }
 
 // Error creates a builtin error, env can be nil
@@ -177,13 +177,13 @@ func Error(e *Env, err error) Value {
 	if err == nil {
 		return Nil
 	} else if _, ok := err.(*ExecError); ok {
-		return newNativeWithType(err, errorNativeMeta).ToValue()
+		return NewNativeWithMeta(err, errorNativeMeta).ToValue()
 	}
 	ee := &ExecError{root: err}
 	if e != nil {
 		ee.stacks = e.Runtime().Stacktrace()
 	}
-	return newNativeWithType(ee, errorNativeMeta).ToValue()
+	return NewNativeWithMeta(ee, errorNativeMeta).ToValue()
 }
 
 func Array(v ...Value) Value {
@@ -341,9 +341,9 @@ func (v Value) UnsafeInt64() int64 { return int64(v.v) }
 func (v Value) AssertType(t typ.ValueType, msg string) Value {
 	if v.Type() != t {
 		if msg != "" {
-			internal.Panic("%s: expects %v, got %v", msg, t, simpleString(v))
+			internal.Panic("%s: expects %v, got %v", msg, t, detail(v))
 		}
-		internal.Panic("expects %v, got %v", t, simpleString(v))
+		internal.Panic("expects %v, got %v", t, detail(v))
 	}
 	return v
 }
@@ -351,9 +351,9 @@ func (v Value) AssertType(t typ.ValueType, msg string) Value {
 func (v Value) AssertType2(t1, t2 typ.ValueType, msg string) Value {
 	if vt := v.Type(); vt != t1 && vt != t2 {
 		if msg != "" {
-			internal.Panic("%s: expects %v or %v, got %v", msg, t1, t2, simpleString(v))
+			internal.Panic("%s: expects %v or %v, got %v", msg, t1, t2, detail(v))
 		}
-		internal.Panic("expects %v or %v, got %v", t1, t2, simpleString(v))
+		internal.Panic("expects %v or %v, got %v", t1, t2, detail(v))
 	}
 	return v
 }
@@ -361,9 +361,9 @@ func (v Value) AssertType2(t1, t2 typ.ValueType, msg string) Value {
 func (v Value) AssertPrototype(p *Object, msg string) Value {
 	if !HasPrototype(v, p) {
 		if msg != "" {
-			internal.Panic("%s: expects prototype %v, got %v", msg, simpleString(p.ToValue()), simpleString(v))
+			internal.Panic("%s: expects prototype %v, got %v", msg, detail(p.ToValue()), detail(v))
 		}
-		internal.Panic("expects prototype %v, got %v", simpleString(p.ToValue()), simpleString(v))
+		internal.Panic("expects prototype %v, got %v", detail(p.ToValue()), detail(v))
 	}
 	return v
 }

@@ -49,18 +49,11 @@ type ExecError struct {
 	stacks []Stacktrace
 }
 
-func (e *ExecError) TransparentError() internal.TransparentError {
-	panic(nil)
-}
-
-func (e *ExecError) GetCause() error {
+func (e *ExecError) GetCause() interface{} {
 	if e == nil {
 		return nil
 	}
-	if err, ok := e.root.(error); ok {
-		return err
-	}
-	return e
+	return e.root
 }
 
 func (e *ExecError) Error() string {
@@ -83,7 +76,7 @@ func (e *ExecError) Error() string {
 				msg.WriteString(" (tailcall)")
 			}
 			msg.WriteString("\n\t")
-			line, ok := lineOf(r.Callable.LoadGlobal.Source, int(ln))
+			line, ok := internal.LineOf(r.Callable.LoadGlobal.Source, int(ln))
 			if ok {
 				msg.WriteString(strings.TrimSpace(line))
 			} else {
@@ -95,15 +88,15 @@ func (e *ExecError) Error() string {
 	return msg.String()
 }
 
-func relayPanic(stackEnv *Env, f func() []Stacktrace) {
+func relayPanic(onPanic func() []Stacktrace) {
 	if r := recover(); r != nil {
 		if re, ok := r.(*ExecError); ok {
 			panic(re)
 		}
 
 		e := &ExecError{}
-		e.root = r // root panic
-		e.stacks = f()
+		e.root = r
+		e.stacks = onPanic()
 		panic(e)
 	}
 }
@@ -115,7 +108,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 	var cursor uint32
 	retStackStartSize := len(retStack)
 
-	defer relayPanic(&stackEnv, func() []Stacktrace {
+	defer relayPanic(func() []Stacktrace {
 		retStack = append(retStack, Stacktrace{
 			Cursor:          cursor,
 			Callable:        K,
@@ -147,7 +140,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			case typ.String + typ.String:
 				env.A = Str(va.Str() + vb.Str())
 			default:
-				internal.Panic("inc "+errNeedNumbersOrStrings, simpleString(va), simpleString(vb))
+				internal.Panic("inc "+errNeedNumbersOrStrings, detail(va), detail(vb))
 			}
 			env._set(opa, env.A)
 			cursor = uint32(int32(cursor) + int32(int16(opc)))
@@ -176,7 +169,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 				}
 				env.A = vb
 			default:
-				internal.Panic("can't iterate over %v", simpleString(va))
+				internal.Panic("can't iterate over %v", detail(va))
 			}
 		case typ.OpLen:
 			env.A = Int(Len(env._get(opa)))
@@ -194,7 +187,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			case typ.String + typ.Number:
 				env.A = Str(va.String() + vb.String())
 			default:
-				internal.Panic("add "+errNeedNumbersOrStrings, simpleString(va), simpleString(vb))
+				internal.Panic("add "+errNeedNumbersOrStrings, detail(va), detail(vb))
 			}
 		case typ.OpSub:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
@@ -204,7 +197,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 					env.A = Float64(va.Float64() - vb.Float64())
 				}
 			} else {
-				internal.Panic("sub "+errNeedNumbers, simpleString(va), simpleString(vb))
+				internal.Panic("sub "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpMul:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
@@ -214,25 +207,25 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 					env.A = Float64(va.Float64() * vb.Float64())
 				}
 			} else {
-				internal.Panic("mul "+errNeedNumbers, simpleString(va), simpleString(vb))
+				internal.Panic("mul "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpDiv:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Float64(va.Float64() / vb.Float64())
 			} else {
-				internal.Panic("div "+errNeedNumbers, simpleString(va), simpleString(vb))
+				internal.Panic("div "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpIDiv:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int64(va.Int64() / vb.Int64())
 			} else {
-				internal.Panic("idiv "+errNeedNumbers, simpleString(va), simpleString(vb))
+				internal.Panic("idiv "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpMod:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int64(va.Int64() % vb.Int64())
 			} else {
-				internal.Panic("mod "+errNeedNumbers, simpleString(va), simpleString(vb))
+				internal.Panic("mod "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpEq:
 			env.A = Bool(env._get(opa).Equal(env._get(opb)))
@@ -249,7 +242,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			case typ.String + typ.String:
 				env.A = Bool(lessStr(va, vb))
 			default:
-				internal.Panic("comparison "+errNeedNumbersOrStrings, simpleString(va), simpleString(vb))
+				internal.Panic("comparison "+errNeedNumbersOrStrings, detail(va), detail(vb))
 			}
 		case typ.OpLessEq:
 			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
@@ -262,7 +255,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			case typ.String + typ.String:
 				env.A = Bool(!lessStr(vb, va))
 			default:
-				internal.Panic("comparison "+errNeedNumbersOrStrings, simpleString(va), simpleString(vb))
+				internal.Panic("comparison "+errNeedNumbersOrStrings, detail(va), detail(vb))
 			}
 		case typ.OpNot:
 			env.A = Bool(env._get(opa).IsFalse())
@@ -270,43 +263,43 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int64(va.Int64() & vb.Int64())
 			} else {
-				internal.Panic("bitwise and "+errNeedNumbers, simpleString(va), simpleString(vb))
+				internal.Panic("bitwise and "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpBitOr:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int64(va.Int64() | vb.Int64())
 			} else {
-				internal.Panic("bitwise or "+errNeedNumbers, simpleString(va), simpleString(vb))
+				internal.Panic("bitwise or "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpBitXor:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int64(va.Int64() ^ vb.Int64())
 			} else {
-				internal.Panic("bitwise xor "+errNeedNumbers, simpleString(va), simpleString(vb))
+				internal.Panic("bitwise xor "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpBitLsh:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int64(va.Int64() << vb.Int64())
 			} else {
-				internal.Panic("bitwise lsh "+errNeedNumbers, simpleString(va), simpleString(vb))
+				internal.Panic("bitwise lsh "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpBitRsh:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int64(va.Int64() >> vb.Int64())
 			} else {
-				internal.Panic("bitwise rsh "+errNeedNumbers, simpleString(va), simpleString(vb))
+				internal.Panic("bitwise rsh "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpBitURsh:
 			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
 				env.A = Int64(int64(uint64(va.Int64()) >> vb.Int64()))
 			} else {
-				internal.Panic("bitwise ursh "+errNeedNumbers, simpleString(va), simpleString(vb))
+				internal.Panic("bitwise ursh "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpBitNot:
 			if a := env._get(opa); a.Type() == typ.Number {
 				env.A = Int64(^a.Int64())
 			} else {
-				internal.Panic("bitwise not "+errNeedNumber, simpleString(a))
+				internal.Panic("bitwise not "+errNeedNumber, detail(a))
 			}
 		case typ.OpCreateArray:
 			env.A = newArray(append([]Value{}, stackEnv.Stack()...)...).ToValue()
@@ -341,7 +334,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 					subject.Native().SetKey(k, v)
 				}
 			default:
-				internal.Panic("invalid store: %v, key: %v", simpleString(subject), simpleString(k))
+				internal.Panic("invalid store: %v, key: %v", detail(subject), detail(k))
 			}
 			env.A = v
 		case typ.OpLoad:
@@ -366,13 +359,13 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 					env.A = setObjectRecv(Proto.Str.Find(idx), a)
 				}
 			default:
-				internal.Panic("invalid load: %v, key: %v", simpleString(a), simpleString(idx))
+				internal.Panic("invalid load: %v, key: %v", detail(a), detail(idx))
 			}
 			env._set(opc, env.A)
 		case typ.OpSlice:
 			a, start, end := env._get(opa), env._get(opb), env._get(opc)
 			if start.Type()+end.Type() != typ.Number+typ.Number {
-				internal.Panic("slice "+errNeedNumbers, simpleString(start), simpleString(end))
+				internal.Panic("slice "+errNeedNumbers, detail(start), detail(end))
 			}
 			switch a.Type() {
 			case typ.Native:
@@ -388,7 +381,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 					env.A = Str(a.Str()[start.Int():end])
 				}
 			default:
-				internal.Panic("can't slice %v", simpleString(a))
+				internal.Panic("can't slice %v", detail(a))
 			}
 		case typ.OpPush:
 			stackEnv.Push(env._get(opa))
@@ -398,7 +391,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 				*stackEnv.stack = append(*stackEnv.stack, a.Native().Values()...)
 			case typ.Nil:
 			default:
-				internal.Panic("arguments unpacking expects array, got %v", simpleString(a))
+				internal.Panic("arguments unpacking expects array, got %v", detail(a))
 			}
 		case typ.OpRet:
 			v := env._get(opa)
@@ -419,11 +412,11 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 		case typ.OpCall, typ.OpTryCall, typ.OpTailCall:
 			a := env._get(opa)
 			if a.Type() != typ.Object {
-				internal.Panic("can't call %v", simpleString(a))
+				internal.Panic("can't call %v", detail(a))
 			}
 			cls := a.Object().fun
 			if cls == nil {
-				internal.Panic("%v not callable", simpleString(a))
+				internal.Panic("%v not callable", detail(a))
 			}
 			if opb != typ.RegPhantom {
 				stackEnv.Push(env._get(opb))

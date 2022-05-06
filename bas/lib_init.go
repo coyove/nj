@@ -3,11 +3,15 @@ package bas
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 	"unsafe"
@@ -261,6 +265,17 @@ func init() {
 		SetProp("types", nativeGoObject.ToValue()).
 		SetMethod("typename", func(e *Env) {
 			e.A = Str(reflect.TypeOf(e.Get(-1).Native().Unwrap()).String())
+		}).
+		SetMethod("natptrat", func(e *Env) {
+			v := e.Native(-1).Unwrap()
+			rv := reflect.ValueOf(v)
+			e.A = Nil
+			if rv.Kind() == reflect.Ptr && rv.Elem().Kind() == reflect.Struct {
+				if t, ok := rv.Elem().Type().FieldByName(e.Str(0)); ok {
+					ptr := (*struct{ a, b uintptr })(unsafe.Pointer(&v)).b + t.Offset
+					e.A = ValueOf(reflect.NewAt(t.Type, unsafe.Pointer(ptr)).Interface())
+				}
+			}
 		})
 	Proto.Native.SetPrototype(nil) // native prototype has no parent
 	Globals.SetProp("native", Proto.Native.ToValue())
@@ -334,6 +349,9 @@ func init() {
 		SetMethod("istyped", func(e *Env) { e.A = Bool(!e.Native(-1).IsInternalArray()) }).
 		SetMethod("typename", func(e *Env) { e.A = Str(e.Native(-1).meta.Name) }).
 		SetMethod("untype", func(e *Env) { e.A = newArray(e.Native(-1).Values()...).ToValue() }).
+		SetMethod("natptrat", func(e *Env) {
+			e.A = ValueOf(reflect.ValueOf(e.Native(-1).Unwrap()).Index(e.Int(0)).Addr().Interface())
+		}).
 		SetPrototype(Proto.Native)
 	Globals.SetProp("array", Proto.Array.ToValue())
 
@@ -398,7 +416,13 @@ func init() {
 	Globals.SetProp("nativemap", Proto.NativeMap.ToValue())
 
 	*Proto.NativePtr = *NamedObject("nativeptr", 1).
-		SetMethod("deref", func(e *Env) { e.A = ValueOf(reflect.ValueOf(e.Native(-1).Unwrap()).Elem().Interface()) }).
+		SetMethod("set", func(e *Env) {
+			rv := reflect.ValueOf(e.Native(-1).Unwrap()).Elem()
+			rv.Set(ToType(e.Get(0), rv.Type()))
+		}).
+		SetMethod("deref", func(e *Env) {
+			e.A = ValueOf(reflect.ValueOf(e.Native(-1).Unwrap()).Elem().Interface())
+		}).
 		SetPrototype(Proto.Native)
 	Globals.SetProp("nativeptr", Proto.NativePtr.ToValue())
 
@@ -462,8 +486,8 @@ func init() {
 	Globals.SetProp("channel", Proto.Channel.ToValue())
 
 	*Proto.Str = *Func("str", func(e *Env) {
-		i, ok := e.Interface(0).([]byte)
-		_ = ok && e.SetA(UnsafeStr(i)) || e.SetA(Str(e.Get(0).String()))
+		i := e.Get(0)
+		_ = IsBytes(i) && e.SetA(UnsafeStr(i.Native().Unwrap().([]byte))) || e.SetA(Str(i.String()))
 	}).Object().
 		SetMethod("from", func(e *Env) { e.A = Str(fmt.Sprint(e.Interface(0))) }).
 		SetMethod("size", func(e *Env) { e.A = Int(Len(e.Get(-1))) }).
@@ -473,9 +497,9 @@ func init() {
 		SetMethod("contains", func(e *Env) { e.A = Bool(strings.Contains(e.Str(-1), e.Str(0))) }).
 		SetMethod("split", func(e *Env) {
 			if n := e.Get(1).Maybe().Int(0); n == 0 {
-				e.A = newNativeWithType(strings.Split(e.Str(-1), e.Str(0)), stringsArrayMeta).ToValue()
+				e.A = NewNativeWithMeta(strings.Split(e.Str(-1), e.Str(0)), stringsArrayMeta).ToValue()
 			} else {
-				e.A = newNativeWithType(strings.SplitN(e.Str(-1), e.Str(0), n), stringsArrayMeta).ToValue()
+				e.A = NewNativeWithMeta(strings.SplitN(e.Str(-1), e.Str(0), n), stringsArrayMeta).ToValue()
 			}
 		}).
 		SetMethod("join", func(e *Env) {
@@ -571,4 +595,102 @@ func init() {
 		}
 		fmt.Fprintln(e.Global.Stdout)
 	}))
+}
+
+func sprintf(env *Env, start int, p io.Writer) {
+	args := make([]interface{}, 0)
+	for i := start + 1; i < env.Size(); i++ {
+		v := env.Get(i)
+		if v.Type() == typ.Number {
+			args = append(args, internal.SprintfNumber{v.Int64(), v.Float64(), v.IsInt64()})
+		} else {
+			args = append(args, v.Interface())
+		}
+	}
+	internal.Fprintf(p, env.Str(start), args...)
+}
+
+func fileInfo(fi os.FileInfo) *Object {
+	return NewObject(0).
+		SetProp("filename", Str(fi.Name())).
+		SetProp("size", Int64(fi.Size())).
+		SetProp("mode", Int64(int64(fi.Mode()))).
+		SetProp("modestr", Str(fi.Mode().String())).
+		SetProp("modtime", ValueOf(fi.ModTime())).
+		SetProp("isdir", Bool(fi.IsDir()))
+}
+
+func multiMap(e *Env, fun *Object, t Value, n int) Value {
+	if n < 1 || n > runtime.NumCPU()*1e3 {
+		internal.Panic("invalid number of goroutines: %v", n)
+	}
+
+	type payload struct {
+		i int
+		k Value
+		v *Value
+	}
+
+	work := func(fun *Object, outError *error, p payload) {
+		if p.i == -1 {
+			res, err := e.Call2(fun, p.k, *p.v)
+			if err != nil {
+				*outError = err
+			} else {
+				*p.v = res
+			}
+		} else {
+			res, err := e.Call2(fun, Int(p.i), p.k)
+			if err != nil {
+				*outError = err
+			} else {
+				t.Native().Set(p.i, res)
+			}
+		}
+	}
+
+	var outError error
+	if n == 1 {
+		if t.IsArray() {
+			for i := 0; outError == nil && i < t.Native().Len(); i++ {
+				work(fun, &outError, payload{i, t.Native().Get(i), nil})
+			}
+		} else {
+			t.Object().Foreach(func(k Value, v *Value) bool {
+				work(fun, &outError, payload{-1, k, v})
+				return outError == nil
+			})
+		}
+	} else {
+		var in = make(chan payload, Len(t))
+		var wg sync.WaitGroup
+		wg.Add(n)
+		for i := 0; i < n; i++ {
+			go func() {
+				defer wg.Done()
+				for p := range in {
+					if outError != nil {
+						return
+					}
+					work(fun, &outError, p)
+				}
+			}()
+		}
+
+		if t.IsArray() {
+			for i := 0; i < t.Native().Len(); i++ {
+				in <- payload{i, t.Native().Get(i), nil}
+			}
+		} else {
+			t.Object().Foreach(func(k Value, v *Value) bool {
+				in <- payload{-1, k, v}
+				return true
+			})
+		}
+		close(in)
+
+		wg.Wait()
+	}
+	internal.PanicErr(outError)
+	return t
 }

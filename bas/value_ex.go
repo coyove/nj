@@ -1,11 +1,21 @@
 package bas
 
 import (
+	"fmt"
+	"io"
 	"reflect"
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
+)
+
+var (
+	ioWriterType = reflect.TypeOf((*io.Writer)(nil)).Elem()
+	ioReaderType = reflect.TypeOf((*io.Reader)(nil)).Elem()
+	ioCloserType = reflect.TypeOf((*io.Closer)(nil)).Elem()
+	errType      = reflect.TypeOf((*error)(nil)).Elem()
+	valueType    = reflect.TypeOf(Value{})
 )
 
 type MaybeValue Value
@@ -22,7 +32,7 @@ func (v MaybeValue) Str(defaultValue string) string {
 		}
 		fallthrough
 	default:
-		panic("Str: expects string, bytes or nil, got " + simpleString(Value(v)))
+		panic("Str: expects string, bytes or nil, got " + detail(Value(v)))
 	}
 }
 
@@ -33,7 +43,7 @@ func (v MaybeValue) Bool() bool {
 	case typ.Nil:
 		return false
 	default:
-		panic("Bool: expects boolean or nil, got " + simpleString(Value(v)))
+		panic("Bool: expects boolean or nil, got " + detail(Value(v)))
 	}
 }
 
@@ -44,7 +54,7 @@ func (v MaybeValue) Int64(defaultValue int64) int64 {
 	case typ.Nil:
 		return defaultValue
 	default:
-		panic("Int64: expects integer number or nil, got " + simpleString(Value(v)))
+		panic("Int64: expects integer number or nil, got " + detail(Value(v)))
 	}
 }
 
@@ -59,7 +69,7 @@ func (v MaybeValue) Float64(defaultValue float64) float64 {
 	case typ.Nil:
 		return defaultValue
 	default:
-		panic("Float64: expects float number or nil, got " + simpleString(Value(v)))
+		panic("Float64: expects float number or nil, got " + detail(Value(v)))
 	}
 }
 
@@ -70,7 +80,7 @@ func (v MaybeValue) Object(defaultValue *Object) *Object {
 	case typ.Nil:
 		return defaultValue
 	default:
-		panic("Object: expects object or nil, got " + simpleString(Value(v)))
+		panic("Object: expects object or nil, got " + detail(Value(v)))
 	}
 }
 
@@ -83,7 +93,7 @@ func (v MaybeValue) Func(defaultValue *Object) *Object {
 		if o.IsCallable() {
 			return o
 		}
-		panic("Func: expects function or nil, got " + simpleString(Value(v)))
+		panic("Func: expects function or nil, got " + detail(Value(v)))
 	}
 	return o
 }
@@ -92,21 +102,21 @@ func ToError(v Value) error {
 	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(errorNativeMeta.Proto) {
 		return Value(v).Native().Unwrap().(*ExecError)
 	}
-	panic("ToError: not error: " + simpleString(v))
+	panic("ToError: not error: " + detail(v))
 }
 
 func ToErrorRootCause(v Value) interface{} {
 	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(errorNativeMeta.Proto) {
 		return Value(v).Native().Unwrap().(*ExecError).root
 	}
-	panic("ToErrorRootCause: not error: " + simpleString(v))
+	panic("ToErrorRootCause: not error: " + detail(v))
 }
 
 func ToBytes(v Value) []byte {
 	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(bytesArrayMeta.Proto) {
 		return Value(v).Native().Unwrap().([]byte)
 	}
-	panic("ToBytes: not []byte: " + simpleString(v))
+	panic("ToBytes: not []byte: " + detail(v))
 }
 
 func ToReadonlyBytes(v Value) []byte {
@@ -126,7 +136,7 @@ func ToReadonlyBytes(v Value) []byte {
 		s.i = len(s.a)
 		return *(*[]byte)(unsafe.Pointer(&s))
 	}
-	panic("ToReadonlyBytes: not []byte or string: " + simpleString(v))
+	panic("ToReadonlyBytes: not []byte or string: " + detail(v))
 }
 
 func IsBytes(v Value) bool {
@@ -319,7 +329,7 @@ func toTypePtrStruct(v Value, t reflect.Type, interopFuncs *[]func()) reflect.Va
 		return reflect.ValueOf(v.Str())
 	}
 
-	panic("ToType: failed to convert " + simpleString(v) + " to " + t.String())
+	panic("ToType: failed to convert " + detail(v) + " to " + t.String())
 }
 
 func objectToStruct(src *Object, t reflect.Type, interopFuncs *[]func()) reflect.Value {
@@ -354,5 +364,30 @@ func Len(v Value) int {
 	case typ.Nil:
 		return 0
 	}
-	panic("can't measure length of " + simpleString(v))
+	panic("can't measure length of " + detail(v))
+}
+
+func setObjectRecv(v, r Value) Value {
+	if v.IsObject() {
+		v.Object().this = r
+	}
+	return v
+}
+
+func detail(v Value) string {
+	switch vt := v.Type(); vt {
+	case typ.Object:
+		if v.Object().fun != nil {
+			return v.Object().fun.String()
+		}
+		return v.Object().Name() + "{}"
+	case typ.Native:
+		a := v.Native()
+		if a.IsInternalArray() {
+			return fmt.Sprintf("array(%d)", a.Len())
+		}
+		return fmt.Sprintf("native(%s)", a.meta.Name)
+	default:
+		return v.Type().String()
+	}
 }
