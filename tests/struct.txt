@@ -122,7 +122,8 @@ local x, _, _ = bar.try(6)
 assert(x.error(), 15)
 
 print.try("native try call")
-print?("native try call")
+assert(lambda(x) assert(x, 1) x end?(1) is (1))
+assert(lambda(x) assert(x, 1) x end?(2) is error)
 
 -- syntax test
 m = {}

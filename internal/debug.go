@@ -13,8 +13,6 @@ import (
 
 const UnnamedFunc = "<native>"
 
-const NativeCallCursor = uint32(4212345678)
-
 var (
 	GrowEnvStack func(env unsafe.Pointer, sz int)
 	SetEnvStack  func(env unsafe.Pointer, stack unsafe.Pointer)
@@ -44,40 +42,21 @@ func IsDebug() bool {
 	return os.Getenv("njd") != ""
 }
 
-func processSpecialError(err *error, r interface{}) bool {
-	if x, ok := r.(interface{ TransparentError() TransparentError }); ok {
-		*err = x.(error)
-		return true
-	}
-	return false
-}
-
-func processPanic(err *error, r interface{}) {
-	*err, _ = r.(error)
-	if *err == nil {
-		*err = fmt.Errorf("%v", r)
-	}
-}
-
 func CatchError(err *error) {
 	if r := recover(); r != nil {
 		if IsDebug() {
 			log.Println(string(debug.Stack()))
 		}
 
-		if processSpecialError(err, r) {
+		if x, ok := r.(interface{ TransparentError() TransparentError }); ok {
+			*err = x.(error)
 			return
 		}
-		processPanic(err, r)
-	}
-}
 
-func CatchErrorFuncCall(err *error, f string) {
-	if r := recover(); r != nil {
-		if processSpecialError(err, r) {
-			return
+		*err, _ = r.(error)
+		if *err == nil {
+			*err = fmt.Errorf("%v", r)
 		}
-		processPanic(err, fmt.Errorf("%s() %v", f, r))
 	}
 }
 

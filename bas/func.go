@@ -212,9 +212,6 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 		}
 		return
 	}
-	if err != nil {
-		defer internal.CatchErrorFuncCall(err, m.fun.Name)
-	}
 
 	c := m.fun
 	newEnv := Env{
@@ -223,11 +220,17 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 		stack:  &args,
 	}
 
+	if err != nil {
+		defer internal.CatchError(err)
+	}
+
 	if c.Native != nil {
+		st := Stacktrace{Callable: c, stackOffsetFlag: internal.FlagNativeCall}
+		defer relayPanic(&newEnv, func() []Stacktrace { return newEnv.runtime.Stacktrace() })
 		if e == nil {
-			newEnv.runtime.Callable0 = c
+			newEnv.runtime.Stack0 = st
 		} else {
-			newEnv.runtime = e.runtime.Push(c)
+			newEnv.runtime = e.runtime.Push(st)
 			newEnv.Global = e.Global
 		}
 		if newEnv.Global == nil && c.envgNeeded {

@@ -8,6 +8,12 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
+const (
+	MaxStackSize   = 0x0fffffff
+	FlagTailCall   = 0x80000000
+	FlagNativeCall = 0x40000000
+)
+
 type VByte32 struct {
 	Name string
 	b    []byte
@@ -56,7 +62,7 @@ type Packet struct {
 }
 
 func (b *Packet) check() {
-	if b.Len() >= 4e9 {
+	if b.Len() >= MaxStackSize-1 {
 		panic("too much code")
 	}
 }

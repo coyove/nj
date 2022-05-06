@@ -46,7 +46,7 @@ func init() {
 		SetMethod("self", func(e *Env) { e.A = e.Runtime().Stack1.Callable.obj.ToValue() }).
 		SetMethod("locals", func(e *Env) {
 			locals := e.Runtime().Stack1.Callable.Locals
-			start := e.stackOffset - uint32(e.Runtime().Stack1.Callable.StackSize)
+			start := e.stackOffset() - uint32(e.Runtime().Stack1.Callable.StackSize)
 			if e.Get(0).IsTrue() {
 				r := NewObject(0)
 				for i, name := range locals {
@@ -241,7 +241,7 @@ func init() {
 			lambda := e.Object(-1)
 			c := e.CopyStack()
 			e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
-				o := e.runtime.Callable0.obj
+				o := e.runtime.Stack0.Callable.obj
 				f := o.Prop("_l").Object()
 				stk := append(o.Prop("_c").Native().Values(), e.Stack()...)
 				e.A = e.Call(f, stk...)

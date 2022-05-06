@@ -11,11 +11,11 @@ import (
 // stack contains arguments used by the execution and is a global shared value, local can only use stack[stackOffset:]
 // A stores the result of the execution
 type Env struct {
-	Global      *Program
-	A           Value
-	stack       *[]Value
-	stackOffset uint32
-	runtime     Runtime
+	Global          *Program
+	A               Value
+	stack           *[]Value
+	stackOffsetFlag uint32
+	runtime         Runtime
 }
 
 func NewEnv() *Env {
@@ -24,31 +24,36 @@ func NewEnv() *Env {
 
 type Runtime struct {
 	// Stacktrace layout: [N, N-1, ..., 2], 1, 0(current)
-	Callable0 *Function    // 0
-	Stack1    Stacktrace   // 1. if null, then Callable0 is the only one in stacktrace
-	StackN    []Stacktrace // [N, N-1, ..., 2]
+	StackN []Stacktrace // [N, N-1, ..., 2]
+	Stack1 Stacktrace   // 1. if null, then Stack0 is the only one in stacktrace
+	Stack0 Stacktrace   // 0
 }
 
 func (r Runtime) Stacktrace() []Stacktrace {
-	self := Stacktrace{Callable: r.Callable0, Cursor: internal.NativeCallCursor}
-	if r.Stack1.Callable == nil {
-		return []Stacktrace{self}
-	}
-	return append(r.StackN, r.Stack1, self)
-}
-
-func (r Runtime) Push(k *Function) Runtime {
-	if r.Stack1.Callable == nil {
+	if r.Stack0.Callable == nil {
 		internal.ShouldNotHappen()
 	}
-	r.StackN = append(r.StackN, r.Stack1)
-	r.Stack1 = Stacktrace{Callable: r.Callable0, Cursor: internal.NativeCallCursor}
-	r.Callable0 = k
+	if r.Stack1.Callable == nil {
+		return []Stacktrace{r.Stack0}
+	}
+	return append(r.StackN, r.Stack1, r.Stack0)
+}
+
+func (r Runtime) Push(k Stacktrace) Runtime {
+	if r.Stack1.Callable != nil {
+		r.StackN = append(r.StackN, r.Stack1)
+	}
+	r.Stack1 = r.Stack0
+	r.Stack0 = k
 	return r
 }
 
 func (env *Env) Runtime() Runtime {
 	return env.runtime
+}
+
+func (env *Env) stackOffset() uint32 {
+	return env.stackOffsetFlag & internal.MaxStackSize
 }
 
 func (env *Env) growZero(newSize, zeroSize int) {
@@ -61,7 +66,7 @@ func (env *Env) growZero(newSize, zeroSize int) {
 
 func (env *Env) grow(newSize int) {
 	s := *env.stack
-	sz := int(env.stackOffset) + newSize
+	sz := int(env.stackOffset()) + newSize
 	if sz > cap(s) {
 		if env.Global != nil && env.Global.MaxStackSize > 0 && int64(sz) > env.Global.MaxStackSize {
 			panic("stack overflow")
@@ -80,7 +85,7 @@ func (env *Env) Get(index int) Value {
 		return env.A
 	}
 	s := *env.stack
-	index += int(env.stackOffset)
+	index += int(env.stackOffset())
 	if index < len(s) {
 		return s[index]
 	}
@@ -94,7 +99,7 @@ func (env *Env) Set(index int, value Value) {
 
 // Clear clears the current stack
 func (env *Env) Clear() {
-	*env.stack = (*env.stack)[:env.stackOffset]
+	*env.stack = (*env.stack)[:env.stackOffset()]
 	env.A = Value{}
 }
 
@@ -109,12 +114,12 @@ func (env *Env) PushVararg(v []Value) {
 
 func (env *Env) Prepend(v Value) {
 	*env.stack = append(*env.stack, Nil)
-	copy((*env.stack)[env.stackOffset+1:], (*env.stack)[env.stackOffset:])
-	(*env.stack)[env.stackOffset] = v
+	copy((*env.stack)[env.stackOffset()+1:], (*env.stack)[env.stackOffset():])
+	(*env.stack)[env.stackOffset()] = v
 }
 
 func (env *Env) Size() int {
-	return len(*env.stack) - int(env.stackOffset)
+	return len(*env.stack) - int(env.stackOffset())
 }
 
 func (env *Env) _get(yx uint16) Value {
@@ -124,7 +129,7 @@ func (env *Env) _get(yx uint16) Value {
 	if yx > typ.RegLocalMask {
 		return (*env.Global.stack)[yx&typ.RegLocalMask]
 	}
-	return (*env.stack)[uint32(yx)+(env.stackOffset)]
+	return (*env.stack)[uint32(yx)+(env.stackOffset())]
 }
 
 func (env *Env) _set(yx uint16, v Value) {
@@ -133,11 +138,11 @@ func (env *Env) _set(yx uint16, v Value) {
 	} else if yx > typ.RegLocalMask {
 		(*env.Global.stack)[yx&typ.RegLocalMask] = v
 	} else {
-		(*env.stack)[uint32(yx)+(env.stackOffset)] = v
+		(*env.stack)[uint32(yx)+env.stackOffset()] = v
 	}
 }
 
-func (env *Env) Stack() []Value { return (*env.stack)[env.stackOffset:] }
+func (env *Env) Stack() []Value { return (*env.stack)[env.stackOffset():] }
 
 func (env *Env) CopyStack() []Value { return append([]Value{}, env.Stack()...) }
 
