@@ -2,8 +2,6 @@ package nj
 
 import (
 	"math"
-	"strconv"
-	"strings"
 	"unsafe"
 
 	"github.com/coyove/nj/bas"
@@ -276,11 +274,6 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	funcIdx := uint16(len(table.getGlobal().funcs))
 	table.getGlobal().funcs = append(table.getGlobal().funcs, obj)
 	table.codeSeg.WriteInst(typ.OpLoadFunc, funcIdx, 0)
-
-	if strings.HasPrefix(cls.Name, "<lambda") {
-		cls.Name = cls.Name[:len(cls.Name)-1] + "-" + strconv.Itoa(int(funcIdx)) + ">"
-	}
-
 	table.codeSeg.WriteLineNum(nodes[0].Line())
 	return typ.RegA
 }

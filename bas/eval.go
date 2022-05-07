@@ -63,7 +63,7 @@ func (e *ExecError) Error() string {
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
 		if r.IsNativeCall() {
-			msg.WriteString(fmt.Sprintf("%s at <native>\n\t...\n", r.Callable.Name))
+			msg.WriteString(fmt.Sprintf("%s at native\n\t<native code>\n", r.Callable.Name))
 		} else {
 			ln := r.sourceLine()
 			msg.WriteString(fmt.Sprintf("%s at %s:%d (i%d)",

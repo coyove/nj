@@ -1,14 +1,18 @@
 package nj
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/parser"
 )
+
+var loadIndex int64
 
 func LoadFile(path string, opt *bas.Environment) (*bas.Program, error) {
 	code, err := ioutil.ReadFile(path)
@@ -19,7 +23,7 @@ func LoadFile(path string, opt *bas.Environment) (*bas.Program, error) {
 }
 
 func LoadString(code string, opt *bas.Environment) (*bas.Program, error) {
-	return loadCode(code, "<memory>", opt)
+	return loadCode(code, fmt.Sprintf("<memory-%d>", atomic.AddInt64(&loadIndex, 1)), opt)
 }
 
 func loadCode(code, name string, opt *bas.Environment) (*bas.Program, error) {

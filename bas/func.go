@@ -234,7 +234,7 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 			newEnv.Global = e.Global
 		}
 		if newEnv.Global == nil && c.envgNeeded {
-			internal.Panic("native function %s requires global env")
+			internal.Panic("native function %q requires global env", c.Name)
 		}
 		c.Native(&newEnv)
 		return newEnv.A
@@ -259,37 +259,20 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 }
 
 func (c *Function) String() string {
-	if c.Native != nil {
-		if c.Name != "" {
-			return c.Name
-		}
-		return "native"
-	}
-
-	p := bytes.Buffer{}
-	if c.Name != "" {
-		p.WriteString(c.Name)
-	} else {
-		p.WriteString("function")
-	}
+	p := bytes.NewBufferString(c.Name)
 	p.WriteString("(")
-	for i := 0; i < int(c.NumParams); i++ {
-		fmt.Fprintf(&p, "a%d,", i)
-	}
-	if c.Variadic {
-		p.Truncate(p.Len() - 1)
+	if c.Native != nil {
 		p.WriteString("...")
-	} else if p.Bytes()[p.Len()-1] == ',' {
-		p.Truncate(p.Len() - 1)
+	} else {
+		for i := 0; i < int(c.NumParams); i++ {
+			fmt.Fprintf(p, "a%d,", i)
+		}
 	}
-	p.WriteString(")")
+	internal.CloseBuffer(p, internal.IfStr(c.Variadic, "...)", ")"))
 	return p.String()
 }
 
 func (c *Function) GoString() string {
-	if c.Native != nil {
-		return "[Native Code]"
-	}
 	return pkPrettify(c, c.LoadGlobal, false)
 }
 
@@ -300,6 +283,9 @@ func (c *Function) Object() *Object {
 func pkPrettify(c *Function, p *Program, toplevel bool) string {
 	sb := &bytes.Buffer{}
 	sb.WriteString("+ START " + c.String() + "\n")
+	if c.Native != nil {
+		sb.WriteString("| NATIVE CODE\n")
+	}
 
 	readAddr := func(a uint16, rValue bool) string {
 		if a == typ.RegA {

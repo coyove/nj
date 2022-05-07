@@ -1,8 +1,10 @@
 package parser
 
 import (
+	"fmt"
 	"math/rand"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/typ"
@@ -127,8 +129,10 @@ func __markupFuncName(recv, name Token) Token {
 	return name
 }
 
+var lambdaIndex int64
+
 func __markupLambdaName(lambda Token) Token {
-	lambda.Str = "<lambda" + strconv.Itoa(int(lambda.Pos.Line)) + ">"
+	lambda.Str = fmt.Sprintf("<lambda-%d-%d>", lambda.Pos.Line, atomic.AddInt64(&lambdaIndex, 1))
 	return lambda
 }
 
