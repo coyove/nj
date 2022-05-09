@@ -69,7 +69,7 @@ func NewProgram(file, source string, coreStack *Env, top *Function, symbols *Obj
 // Func creates a callable object
 func Func(name string, f func(*Env)) Value {
 	if name == "" {
-		name = internal.UnnamedFunc
+		name = internal.UnnamedFunc()
 	}
 	if f == nil {
 		f = func(*Env) {}

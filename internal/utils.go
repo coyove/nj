@@ -10,16 +10,21 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"unsafe"
 )
-
-const UnnamedFunc = "<native>"
 
 var (
 	GrowEnvStack func(env unsafe.Pointer, sz int)
 	SetEnvStack  func(env unsafe.Pointer, stack unsafe.Pointer)
 	SetObjFun    func(obj unsafe.Pointer, fun unsafe.Pointer)
+
+	unnamedFuncIndex int64
 )
+
+func UnnamedFunc() string {
+	return fmt.Sprintf("<native-%d>", atomic.AddInt64(&unnamedFuncIndex, 1))
+}
 
 func ShouldNotHappen(args ...interface{}) {
 	if len(args) > 0 {

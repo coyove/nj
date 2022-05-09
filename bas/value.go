@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"io"
 	"math"
-	"os"
 	"reflect"
 	"strconv"
 	"unicode/utf8"
@@ -194,15 +193,33 @@ func Array(v ...Value) Value {
 func ValueOf(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
-		return Value{}
+		return Nil
 	case bool:
 		return Bool(v)
 	case float64:
 		return Float64(v)
 	case int:
 		return Int64(int64(v))
+	case int8:
+		return Int64(int64(v))
+	case int16:
+		return Int64(int64(v))
+	case int32:
+		return Int64(int64(v))
 	case int64:
 		return Int64(v)
+	case uint:
+		return Int64(int64(uint64(v)))
+	case uint8:
+		return Int64(int64(uint64(v)))
+	case uint16:
+		return Int64(int64(uint64(v)))
+	case uint32:
+		return Int64(int64(uint64(v)))
+	case uint64:
+		return Int64(int64(v))
+	case uintptr:
+		return Int64(int64(v))
 	case string:
 		return Str(v)
 	case []byte:
@@ -210,63 +227,53 @@ func ValueOf(i interface{}) Value {
 	case *Object:
 		return v.ToValue()
 	case []Value:
-		return newArray(v...).ToValue()
+		return Array(v...)
 	case Value:
 		return v
 	case error:
 		return Error(nil, v)
 	case reflect.Value:
 		return ValueOf(v.Interface())
-	case os.FileInfo:
-		return fileInfo(v).ToValue()
+	case func(*Env):
+		return Func(internal.UnnamedFunc(), v)
 	}
 
-	rv := reflect.ValueOf(i)
-	if k := rv.Kind(); k >= reflect.Int && k <= reflect.Int64 {
-		return Int64(rv.Int())
-	} else if k >= reflect.Uint && k <= reflect.Uintptr {
-		return Int64(int64(rv.Uint()))
-	} else if (k == reflect.Ptr || k == reflect.Interface) && rv.IsNil() {
-		return Nil
-	} else if k == reflect.Func {
-		nf, _ := i.(func(*Env))
-		if nf == nil {
-			rt := rv.Type()
-			nf = func(env *Env) {
-				var interopFuncs []func()
-				rtNumIn := rt.NumIn()
-				ins := make([]reflect.Value, 0, rtNumIn)
-				if !rt.IsVariadic() {
-					if env.Size() != rtNumIn {
-						internal.Panic("native function expects %d arguments, got %d", rtNumIn, env.Size())
-					}
-					for i := 0; i < rtNumIn; i++ {
-						ins = append(ins, toTypePtrStruct(env.Get(i), rt.In(i), &interopFuncs))
-					}
-				} else {
-					if env.Size() < rtNumIn-1 {
-						internal.Panic("native variadic function expects at least %d arguments, got %d", rtNumIn-1, env.Size())
-					}
-					for i := 0; i < rtNumIn-1; i++ {
-						ins = append(ins, toTypePtrStruct(env.Get(i), rt.In(i), &interopFuncs))
-					}
-					for i := rtNumIn - 1; i < env.Size(); i++ {
-						ins = append(ins, toTypePtrStruct(env.Get(i), rt.In(rtNumIn-1).Elem(), &interopFuncs))
-					}
+	if rv := reflect.ValueOf(i); rv.Kind() == reflect.Func {
+		rt := rv.Type()
+		nf := func(env *Env) {
+			var interopFuncs []func()
+			rtNumIn := rt.NumIn()
+			ins := make([]reflect.Value, 0, rtNumIn)
+			if !rt.IsVariadic() {
+				if env.Size() != rtNumIn {
+					internal.Panic("native function expects %d arguments, got %d", rtNumIn, env.Size())
 				}
-				if outs := rv.Call(ins); len(outs) == 0 {
-					env.A = Nil
-				} else if len(outs) == 1 {
-					env.A = ValueOf(outs[0].Interface())
-				} else {
-					env.A = NewNative(outs).ToValue()
+				for i := 0; i < rtNumIn; i++ {
+					ins = append(ins, toTypePtrStruct(env.Get(i), rt.In(i), &interopFuncs))
 				}
-				for _, f := range interopFuncs {
-					f()
+			} else {
+				if env.Size() < rtNumIn-1 {
+					internal.Panic("native variadic function expects at least %d arguments, got %d", rtNumIn-1, env.Size())
+				}
+				for i := 0; i < rtNumIn-1; i++ {
+					ins = append(ins, toTypePtrStruct(env.Get(i), rt.In(i), &interopFuncs))
+				}
+				for i := rtNumIn - 1; i < env.Size(); i++ {
+					ins = append(ins, toTypePtrStruct(env.Get(i), rt.In(rtNumIn-1).Elem(), &interopFuncs))
 				}
 			}
+			if outs := rv.Call(ins); len(outs) == 0 {
+				env.A = Nil
+			} else if len(outs) == 1 {
+				env.A = ValueOf(outs[0].Interface())
+			} else {
+				env.A = NewNative(outs).ToValue()
+			}
+			for _, f := range interopFuncs {
+				f()
+			}
 		}
-		return Func("<"+rv.Type().String()+">", nf)
+		return Func("<"+rt.String()+">", nf)
 	}
 	return NewNative(i).ToValue()
 }

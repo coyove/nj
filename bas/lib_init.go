@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -20,7 +19,7 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
-const Version int64 = 412
+const Version int64 = 422
 
 var Globals = NewObject(0)
 
@@ -266,6 +265,14 @@ func init() {
 		SetMethod("typename", func(e *Env) {
 			e.A = Str(reflect.TypeOf(e.Get(-1).Native().Unwrap()).String())
 		}).
+		SetMethod("isnil", func(e *Env) {
+			switch rv := reflect.ValueOf(e.Native(-1).Unwrap()); rv.Kind() {
+			case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
+				e.A = Bool(rv.IsNil())
+			default:
+				e.A = False
+			}
+		}).
 		SetMethod("natptrat", func(e *Env) {
 			v := e.Native(-1).Unwrap()
 			rv := reflect.ValueOf(v)
@@ -421,10 +428,16 @@ func init() {
 			rv.Set(ToType(e.Get(0), rv.Type()))
 		}).
 		SetMethod("deref", func(e *Env) {
-			e.A = ValueOf(reflect.ValueOf(e.Native(-1).Unwrap()).Elem().Interface())
+			rv := reflect.ValueOf(e.Native(-1).Unwrap())
+			_ = rv.IsNil() && e.SetA(Nil) || e.SetA(ValueOf(rv.Elem().Interface()))
 		}).
 		SetPrototype(Proto.Native)
 	Globals.SetProp("nativeptr", Proto.NativePtr.ToValue())
+
+	*Proto.NativeIntf = *NamedObject("nativeintf", 1).
+		SetProp("deref", Proto.NativePtr.Prop("deref")).
+		SetPrototype(Proto.Native)
+	Globals.SetProp("nativeintf", Proto.NativeIntf.ToValue())
 
 	*Proto.Channel = *Func("channel", func(e *Env) {
 		rv := reflect.ValueOf(e.Interface(0))
@@ -600,24 +613,13 @@ func init() {
 func sprintf(env *Env, start int, p io.Writer) {
 	args := make([]interface{}, 0)
 	for i := start + 1; i < env.Size(); i++ {
-		v := env.Get(i)
-		if v.Type() == typ.Number {
-			args = append(args, internal.SprintfNumber{v.Int64(), v.Float64(), v.IsInt64()})
+		if v := env.Get(i); v.Type() == typ.Number {
+			args = append(args, internal.SprintfNumber{I: v.Int64(), F: v.Float64(), IsInt: v.IsInt64()})
 		} else {
 			args = append(args, v.Interface())
 		}
 	}
 	internal.Fprintf(p, env.Str(start), args...)
-}
-
-func fileInfo(fi os.FileInfo) *Object {
-	return NewObject(0).
-		SetProp("filename", Str(fi.Name())).
-		SetProp("size", Int64(fi.Size())).
-		SetProp("mode", Int64(int64(fi.Mode()))).
-		SetProp("modestr", Str(fi.Mode().String())).
-		SetProp("modtime", ValueOf(fi.ModTime())).
-		SetProp("isdir", Bool(fi.IsDir()))
 }
 
 func multiMap(e *Env, fun *Object, t Value, n int) Value {
