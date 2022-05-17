@@ -328,6 +328,9 @@ func toTypePtrStruct(v Value, t reflect.Type, interopFuncs *[]func()) reflect.Va
 	if vt == typ.String && t.Kind() == reflect.String {
 		return reflect.ValueOf(v.Str())
 	}
+	if t.Kind() == reflect.Interface {
+		return reflect.ValueOf(v.Interface())
+	}
 
 	panic("ToType: failed to convert " + detail(v) + " to " + t.String())
 }

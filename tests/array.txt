@@ -17,3 +17,7 @@ assert(a[10], 100)
 b = [foo()][(0)][:10]
 b[#b] = 100
 assert(a[10], 100)
+
+
+syncMap.Store("a", 1)
+assert(syncMap.Load("a")[0], 1)

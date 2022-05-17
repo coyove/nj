@@ -15,6 +15,7 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -55,6 +56,7 @@ func runFile(t *testing.T, path string) {
 
 	b, err := LoadFile(path, &bas.Environment{
 		Globals: bas.NewObject(0).
+			SetProp("syncMap", bas.ValueOf(&sync.Map{})).
 			SetProp("structAddrTest", bas.ValueOf(&testStruct{2})).
 			SetProp("structAddrTest2", bas.ValueOf(testStruct{3})).
 			SetProp("structAddrTestEmbed", bas.ValueOf(&testStructEmbed{testStruct{4}})).
