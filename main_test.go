@@ -465,7 +465,7 @@ func TestACall(t *testing.T) {
 	}
 
 	foo = MustRun(LoadString(`function foo(m...)
-	return sum(m.concat(m)...) + sum2(m.slice(0, 2)...)
+	return sum(m.concat(m)...) + sum2(m[:2]...)
     end
     return foo`, &bas.Environment{
 		Globals: bas.NewObject(0).

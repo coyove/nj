@@ -321,15 +321,6 @@ func init() {
 			}
 			e.A = newArray(dest...).ToValue()
 		}).
-		SetMethod("slice", func(e *Env) {
-			a := e.Native(-1)
-			st, en := e.Int(0), e.Get(1).Maybe().Int(a.Len())
-			for ; st < 0 && a.Len() > 0; st += a.Len() {
-			}
-			for ; en < 0 && a.Len() > 0; en += a.Len() {
-			}
-			e.A = a.Slice(st, en).ToValue()
-		}).
 		SetMethod("removeat", func(e *Env) {
 			ma, idx := e.Native(-1), e.Int(0)
 			if idx < 0 || idx >= ma.Len() {
@@ -339,6 +330,15 @@ func init() {
 				ma.Copy(idx, ma.Len(), ma.Slice(idx+1, ma.Len()))
 				ma.SliceInplace(0, ma.Len()-1)
 				e.A = old
+			}
+		}).
+		SetMethod("last", func(e *Env) {
+			if arr, n := e.Native(-1), e.Int(0); n < 0 {
+				e.A = Nil
+			} else if n >= arr.Len() {
+				e.A = arr.ToValue()
+			} else {
+				e.A = arr.Slice(arr.Len()-n, arr.Len()).ToValue()
 			}
 		}).
 		SetMethod("copy", func(e *Env) { e.Native(-1).Copy(e.Int(0), e.Int(1), e.Native(2)) }).
