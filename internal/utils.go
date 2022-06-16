@@ -200,13 +200,9 @@ NEXT:
 			case 'f', 'F', 'g', 'G', 'e', 'E':
 				preferNumber = 'f'
 				found = true
-			case 's', 'q',
-				'x', 'X',
-				'v',
-				't',
-				'p',
-				'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
+			case 's', 'q', 'x', 'X', 'v', 't', 'p':
 				found = true
+			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
 			default:
 				WriteString(w, tmp.String()+"(BAD)")
 				goto NEXT
