@@ -44,6 +44,18 @@ func init() {
 	update(TIdent, "identifier")
 	update(TNumber, "number")
 	update(TString, "string")
+	update(TAddEq, "+=")
+	update(TSubEq, "-=")
+	update(TMulEq, "*=")
+	update(TDivEq, "/=")
+	update(TIDivEq, "//=")
+	update(TModEq, "%=")
+	update(TBitAndEq, "&=")
+	update(TBitOrEq, "|=")
+	update(TBitXorEq, "^=")
+	update(TBitLshEq, "<<=")
+	update(TBitRshEq, ">>=")
+	update(TBitURshEq, ">>>=")
 }
 
 type Error struct {
@@ -57,7 +69,7 @@ func (e *Error) Error() string {
 	if pos.Line == EOF {
 		return e.Message
 	} else {
-		msg := fmt.Sprintf("%q at %s:%d: %s", e.Token, pos.Source, pos.Line, e.Message)
+		msg := fmt.Sprintf("%q at %s:%d\t%s", e.Token, pos.Source, pos.Line, e.Message)
 		// if e.Message == "syntax error: unexpected '('" {
 		// 	msg += ", is there any space(' ') or newline('\\n') before it?"
 		// }

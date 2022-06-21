@@ -103,3 +103,8 @@ assert([1,2] is native)
 assert([1,2] is not nativemap)
 assert([1,2] is not object)
 assert(native is not object)
+
+
+function foo(k) debug.self()[k] = k end
+for i=0,10 do foo(i) end
+for i=0,10 do assert(foo[i], i) end

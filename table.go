@@ -319,7 +319,10 @@ func (table *symTable) compileStaticNode(node parser.Node) (uint16, bool) {
 	case parser.STR, parser.FLOAT, parser.INT:
 		return table.loadConst(node.Value), true
 	case parser.SYM:
-		idx, _ := table.get(node.Value)
+		idx, ok := table.get(node.Value)
+		if !ok {
+			internal.Panic("%s at %s:%d\tsymbol not defined", node.Value.Str(), table.name, node.SymLine)
+		}
 		return idx, true
 	}
 	return 0, false

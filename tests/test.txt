@@ -87,7 +87,7 @@ en end
 assert(syntax_return_void2(1), nil)
 
 ex = [ 1, 2 ]
-ex[0], ex[1], ex3 = ex3, ex[0], ex[1]
+ex[0], ex[1], ex3 = nil, ex[0], ex[1]
 assert(ex3 == 2 and ex[0] == nil and ex[1] == 1)
 
 assert(0x7fff_fffffffffffd < 0x7fffffffffffffff)
@@ -224,12 +224,6 @@ x = double(3, 1)
 assert(x[0] == 3)
 x = double(4, 1, 2, 3)
 assert(x[0] + x[1] + x[2] == 24)
-
-function foo()
-    _u_ = 10
-end
-foo()
-assert(_u_ == nil)
 
 function test_return(a)
 end_ = 10+a

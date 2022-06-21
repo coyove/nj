@@ -58,7 +58,7 @@
 <body>
   <div style="position:relative;height:100%">
     <div style="line-height: 32px;height:32px;padding:0 0.5em">
-	<button onclick="run()">Run (F5)</button>
+	<button onclick="run()">Run (F9)</button>
     <select id='output_fields'>
         <option value="all">Return all</option>
         <option value="stdout">Stdout only</option>
@@ -149,7 +149,7 @@
             lineNumbers: true,
             smartIndent: true,
             indentUnit: 4,
-            extraKeys: { "F5": run },
+            extraKeys: { "F9": run },
             hintOptions: { completeSingle: false },
         });
         window.EDITOR.on("keyup", function(editor, event) {
@@ -175,7 +175,7 @@
                 this.value = this.value.substring(0, start) + "\t" + this.value.substring(end);
                 this.selectionStart = this.selectionEnd = start + 1;
             }
-            if (e.key == 'F5') {
+            if (e.key == 'F9') {
                 e.preventDefault();
                 run();
             }
