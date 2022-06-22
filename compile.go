@@ -237,13 +237,13 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 			varargIdx = i
 		}
 		if newtable.sym.Contains(n.Value, false) {
-			internal.Panic("%v: duplicated parameter: %q", nodes[1], n)
+			table.panicnode(nodes[1], "duplicated parameter %q", n.Value.Str())
 		}
 		newtable.put(n.Value, uint16(i))
 	}
 
 	if ln := newtable.sym.Len(); ln > 255 {
-		internal.Panic("%v: too many parameters, 255 at most", nodes[1])
+		table.panicnode(nodes[1], "too many parameters (%d > 255)", ln)
 	}
 
 	newtable.vp = uint16(newtable.sym.Len())
@@ -281,7 +281,7 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 // [break|continue]
 func compileBreak(table *symTable, atoms []parser.Node) uint16 {
 	if len(table.forLoops) == 0 {
-		internal.Panic("%v: outside loop", atoms[0])
+		table.panicnode(atoms[0], "outside loop")
 	}
 	bl := table.forLoops[len(table.forLoops)-1]
 	if atoms[0].Value == parser.SContinue.Value {
@@ -316,31 +316,36 @@ func compileWhile(table *symTable, nodes []parser.Node) uint16 {
 }
 
 func compileLabel(table *symTable, nodes []parser.Node) uint16 {
-	table.labelPos.Set(nodes[1].Value, bas.Int(table.codeSeg.Len()))
+	if table.labelPos == nil {
+		table.labelPos = map[string]int{}
+	}
+	table.labelPos[nodes[1].Value.Str()] = table.codeSeg.Len()
 	return typ.RegA
 }
 
 func compileGoto(table *symTable, nodes []parser.Node) uint16 {
-	label := nodes[1].Value
-	if pos := table.labelPos.Get(label); pos != bas.Nil {
-		table.codeSeg.WriteJmpInst(typ.OpJmp, pos.Int()-(table.codeSeg.Len()+1))
+	label := nodes[1]
+	if pos, ok := table.labelPos[label.Value.Str()]; ok {
+		table.codeSeg.WriteJmpInst(typ.OpJmp, pos-(table.codeSeg.Len()+1))
 	} else {
 		table.codeSeg.WriteJmpInst(typ.OpJmp, 0)
-		table.forwardGoto.Set(bas.Int(table.codeSeg.Len()-1), label)
+		if table.forwardGoto == nil {
+			table.forwardGoto = map[int]parser.Node{}
+		}
+		table.forwardGoto[table.codeSeg.Len()-1] = label
 	}
 	return typ.RegA
 }
 
 func (table *symTable) patchGoto() {
 	code := table.codeSeg.Code
-	table.forwardGoto.Foreach(func(i bas.Value, l *bas.Value) bool {
-		pos := table.labelPos.Get(*l)
-		if pos == bas.Nil {
-			internal.Panic("label %q not found", l.Str())
+	for ipos, node := range table.forwardGoto {
+		pos, ok := table.labelPos[node.Value.Str()]
+		if !ok {
+			table.panicnode(node, "label not found")
 		}
-		code[i.Int()] = typ.JmpInst(typ.OpJmp, pos.Int()-(i.Int()+1))
-		return true
-	})
+		code[ipos] = typ.JmpInst(typ.OpJmp, pos-(ipos+1))
+	}
 	for i := range code {
 		if code[i].Opcode == typ.OpJmp && code[i].D() != 0 {
 			// Group continuous jumps into one single jump

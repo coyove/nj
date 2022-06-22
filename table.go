@@ -1,6 +1,7 @@
 package nj
 
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/coyove/nj/bas"
@@ -42,8 +43,8 @@ type symTable struct {
 	reusableTmps      bas.Object // address: uint16 -> used: bool
 	reusableTmpsArray []uint16
 
-	forwardGoto bas.Object // position of goto: int -> label: str
-	labelPos    bas.Object // label: str -> positon of label: int
+	forwardGoto map[int]parser.Node // position to goto label node
+	labelPos    map[string]int      // label name to position
 }
 
 func newSymTable(opt *bas.Environment) *symTable {
@@ -51,6 +52,10 @@ func newSymTable(opt *bas.Environment) *symTable {
 		options: opt,
 	}
 	return t
+}
+
+func (table *symTable) panicnode(node parser.Node, msg string, args ...interface{}) {
+	panic(fmt.Sprintf("%s at %s:%d\t", node.Value.Str(), table.name, node.SymLine) + fmt.Sprintf(msg, args...))
 }
 
 func (table *symTable) symbolsToDebugLocals() []string {
@@ -75,6 +80,10 @@ func (table *symTable) borrowAddress() uint16 {
 	if table.vp > typ.RegMaxAddress {
 		panic("too many variables in a single scope")
 	}
+	return table.borrowAddressNoReuse()
+}
+
+func (table *symTable) borrowAddressNoReuse() uint16 {
 	table.reusableTmps.Set(bas.Int64(int64(table.vp)), bas.False)
 	table.vp++
 	return table.vp - 1
@@ -185,7 +194,7 @@ func (table *symTable) get(name bas.Value) (uint16, bool) {
 		if k.Type() == typ.Number {
 			return uint16(k.Int64()), true
 		}
-		k = bas.Int64(int64(table.borrowAddress()))
+		k = bas.Int64(int64(table.borrowAddressNoReuse()))
 		table.sym.Set(bas.Str("this"), k)
 		return uint16(k.Int64()), true
 	case staticA:
@@ -321,7 +330,7 @@ func (table *symTable) compileStaticNode(node parser.Node) (uint16, bool) {
 	case parser.SYM:
 		idx, ok := table.get(node.Value)
 		if !ok {
-			internal.Panic("%s at %s:%d\tsymbol not defined", node.Value.Str(), table.name, node.SymLine)
+			table.panicnode(node, "symbol not defined")
 		}
 		return idx, true
 	}

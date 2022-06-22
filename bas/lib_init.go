@@ -43,6 +43,18 @@ func init() {
 		m := e.Object(0)
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
 	})
+	Globals.SetMethod("createprototype", func(e *Env) {
+		e.A = Func(e.Str(0), func(e *Env) {
+			o := e.runtime.Stack0.Callable.obj
+			init := o.Prop("_init").Object()
+			n := o.Copy(true).SetPrototype(o)
+			CallObject(init, e, nil, n.ToValue(), e.Stack()...)
+			e.A = n.ToValue()
+		}).Object().
+			Merge(e.Object(2)).
+			SetProp("_init", e.Object(1).ToValue()).
+			ToValue()
+	})
 
 	// Debug libraries
 	Globals.SetProp("debug", NamedObject("debug", 0).
@@ -497,6 +509,8 @@ func init() {
 		}).
 		SetPrototype(Proto.Native)
 	Globals.SetProp("channel", Proto.Channel.ToValue())
+
+	Globals.SetProp("chr", Func("chr", func(e *Env) { e.A = Rune(rune(e.Int(0))) }))
 
 	*Proto.Str = *Func("str", func(e *Env) {
 		i := e.Get(0)

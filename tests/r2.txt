@@ -108,3 +108,70 @@ assert(native is not object)
 function foo(k) debug.self()[k] = k end
 for i=0,10 do foo(i) end
 for i=0,10 do assert(foo[i], i) end
+
+oneline = new(io.writer)
+
+function oneline.write(b)
+    x = #b
+    b = b.replace('\n', '').replace('\t', '')
+    b = re([[\s+]]).replace(b, '')
+    this.buf += b
+    return x
+end
+
+ol = new(oneline, buf='')
+os.shell("ls -al", stdout=ol)
+print(ol.buf)
+
+local bigint = createprototype("bigint", lambda(s)
+    this.buf = bytes(0)
+    for i=#s-1,-1,-1 do
+        this.buf.append(s[i] - 48)
+    end
+end, {})
+
+function bigint.tostring()
+    local tmp = ''
+    for _, b in this.buf do
+        tmp = chr(48 + b) + tmp
+    end
+    return tmp
+end
+
+function bigint.equals(rhs)
+    if #this.buf != #rhs.buf then return false end
+    for i=0,#this.buf do
+        if this.buf[i] != rhs.buf[i] then return false end
+    end
+    return true
+end
+
+function bigint.add(rhs)
+    for i=#this.buf,#rhs.buf do this.buf.append(0) end
+    local carry = 0
+    for i=0,#this.buf do
+        if i < #rhs.buf then
+            this.buf[i] += rhs.buf[i] + carry
+        else
+            if carry == 0 then break end
+            this.buf[i] += carry
+        end
+
+        if this.buf[i] < 10 then 
+            carry = 0
+            continue
+        end
+        carry = 1
+        this.buf[i] -= 10
+    end
+    if carry != 0 then
+        this.buf.append(1)
+    end
+    return this
+end
+
+assert(bigint("1234").tostring(), "1234")
+assert(bigint("9").add(bigint("2")).equals(bigint("11")))
+assert(bigint("9").add(bigint("99")).equals(bigint("108")))
+assert(bigint("9999999999999999999999999999").add(bigint("2")).
+equals(bigint("10000000000000000000000000001")))

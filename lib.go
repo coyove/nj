@@ -260,12 +260,13 @@ func init() {
 				p.Stdin = bas.NewReader(tmp)
 			}
 
+			to := opt.Prop("timeout").Maybe().Float64(1 << 30)
 			out := make(chan error)
 			go func() { out <- p.Run() }()
 			select {
 			case r := <-out:
 				internal.PanicErr(r)
-			case <-time.After(time.Duration(opt.Prop("timeout").Maybe().Float64(1<<52)*1e6) * 1e3):
+			case <-time.After(time.Duration(to*1e6) * 1e3):
 				p.Process.Kill()
 				panic("timeout")
 			}
@@ -382,6 +383,8 @@ func init() {
 	bas.Globals.SetProp("url", bas.Func("url", nil).Object().
 		SetMethod("escape", func(e *bas.Env) { e.A = bas.Str(url.QueryEscape(e.Str(0))) }).
 		SetMethod("unescape", func(e *bas.Env) { e.A = valueOrPanic(url.QueryUnescape(e.Str(0))) }).
+		SetMethod("pathescape", func(e *bas.Env) { e.A = bas.Str(url.PathEscape(e.Str(0))) }).
+		SetMethod("pathunescape", func(e *bas.Env) { e.A = valueOrPanic(url.PathUnescape(e.Str(0))) }).
 		ToValue())
 
 	httpLib := bas.Func("http", func(e *bas.Env) {
