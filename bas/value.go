@@ -14,6 +14,9 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
+//go:linkname strhash runtime.strhash
+func strhash(p unsafe.Pointer, h uintptr) uintptr
+
 var (
 	baseMarker = func() []byte {
 		// Ensures baseMarker is at least 256 bytes long and its memory aligns with 256 bytes
@@ -385,11 +388,12 @@ func (v Value) Equal(r Value) bool {
 
 func (v Value) HashCode() uint64 {
 	if typ.ValueType(v.v) == typ.String {
-		code := uint64(5381)
-		for _, r := range v.Str() {
-			code = code*33 + uint64(r)
-		}
-		return code
+		return uint64(strhash(v.p, 0))
+		// code := uint64(5381)
+		// for _, r := range v.Str() {
+		// 	code = code*33 + uint64(r)
+		// }
+		// return code
 	}
 	return (v.v)*uint64(uintptr(v.p)) ^ (v.v >> 33)
 	// v.v ^= uint64(uintptr(v.p))

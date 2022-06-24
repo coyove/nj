@@ -336,11 +336,25 @@ func TestHashcodeDist(t *testing.T) {
 		z[v]++
 	}
 	fmt.Println((z))
+
+	z = map[uint64]int{}
+	for i := 0; i < 1e6; i++ {
+		v := Str(fmt.Sprintf("%016x", rand.Uint64())).HashCode() % 32
+		z[v]++
+	}
+	fmt.Println((z))
 }
 
 func BenchmarkStr(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		Str("\x00")
+	}
+}
+
+func BenchmarkStrHashCode(b *testing.B) {
+	x := Str(randString() + randString())
+	for i := 0; i < b.N; i++ {
+		x.HashCode()
 	}
 }
 

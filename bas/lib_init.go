@@ -678,6 +678,7 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 			})
 		}
 	} else {
+		e = EnvForAsyncCall(e)
 		var in = make(chan payload, Len(t))
 		var wg sync.WaitGroup
 		wg.Add(n)

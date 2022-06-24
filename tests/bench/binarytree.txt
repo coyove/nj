@@ -1,12 +1,19 @@
 n = 21
+use_array = true
 
 function bottomUpTree(depth)
-   if (depth <= 0) then return {} end
-   return { left=bottomUpTree(depth-1), right=bottomUpTree(depth-1) } 
+    if (depth <= 0) then return if(use_array, [], {}) end
+    if use_array then
+        return [bottomUpTree(depth-1), bottomUpTree(depth-1)]
+    end
+    return { left=bottomUpTree(depth-1), right=bottomUpTree(depth-1) } 
 end
 
 function itemCheck(n)
     if (#(n) == 0) then return 1 end
+    if use_array then
+        return itemCheck(n[0]) + itemCheck(n[1]) + 1
+    end
     return itemCheck(n.left) + itemCheck(n.right) + 1
 end
 
@@ -17,10 +24,10 @@ stretchDepth = maxDepth + 1
 
 check_l = itemCheck(bottomUpTree(stretchDepth)) 
 print(str.from("stretch tree of depth %d\t check: %v").format(stretchDepth, check_l) )
-return
+--return
 
 longLivedTree = bottomUpTree(maxDepth) 
-result = array.makearray(maxDepth+1) 
+result = array.make(maxDepth+1) 
 
 function worker(k, args)
     local depth, check = args[0], args[1]
@@ -37,7 +44,7 @@ payload = []
 for depth_l = minDepth,maxDepth,2 do
     payload.append([depth_l, check_l])
 end
-sync.map(payload, worker)
+worker.map(payload, os.numcpus)
 
 for depth = minDepth,maxDepth,2 do
     print(result[depth]) 
