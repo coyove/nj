@@ -647,7 +647,7 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 		v *Value
 	}
 
-	work := func(fun *Object, outError *error, p payload) {
+	work := func(e *Env, fun *Object, outError *error, p payload) {
 		if p.i == -1 {
 			res, err := e.Call2(fun, p.k, *p.v)
 			if err != nil {
@@ -669,29 +669,28 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 	if n == 1 {
 		if t.IsArray() {
 			for i := 0; outError == nil && i < t.Native().Len(); i++ {
-				work(fun, &outError, payload{i, t.Native().Get(i), nil})
+				work(e, fun, &outError, payload{i, t.Native().Get(i), nil})
 			}
 		} else {
 			t.Object().Foreach(func(k Value, v *Value) bool {
-				work(fun, &outError, payload{-1, k, v})
+				work(e, fun, &outError, payload{-1, k, v})
 				return outError == nil
 			})
 		}
 	} else {
-		e = EnvForAsyncCall(e)
 		var in = make(chan payload, Len(t))
 		var wg sync.WaitGroup
 		wg.Add(n)
 		for i := 0; i < n; i++ {
-			go func() {
+			go func(e *Env) {
 				defer wg.Done()
 				for p := range in {
 					if outError != nil {
 						return
 					}
-					work(fun, &outError, p)
+					work(e, fun, &outError, p)
 				}
-			}()
+			}(EnvForAsyncCall(e))
 		}
 
 		if t.IsArray() {

@@ -483,4 +483,6 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			}
 		}
 	}
+
+	panic("stop")
 }
