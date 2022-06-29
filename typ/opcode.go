@@ -58,6 +58,7 @@ const (
 	OpTailCall
 	OpTryCall
 	OpIsProto
+	OpSelf
 	OpSlice
 	OpRet
 )

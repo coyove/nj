@@ -77,7 +77,7 @@ do
 end
 
 function intersect(a, b)
-	a.foreach(lambda(b, k, v)
+	a.foreach(function(b, k, v)
 		if not b.contains(k) then return object.DELETE_CONTINUE end
 	end.closure(b))
 	return a
@@ -123,7 +123,7 @@ ol = new(oneline, buf='')
 os.shell("ls -al", stdout=ol)
 print(ol.buf)
 
-local bigint = createprototype("bigint", lambda(s)
+local bigint = createprototype("bigint", function(s)
     this.buf = bytes(0)
     for i=#s-1,-1,-1 do
         this.buf.append(s[i] - 48)

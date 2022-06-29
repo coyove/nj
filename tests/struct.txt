@@ -1,5 +1,5 @@
 function makecls(f, c)
-    a = lambda(x...)
+    a = function(x...)
         o = debug.self()
         return o._f(o._c, x...)
     end.copy()
@@ -7,8 +7,8 @@ function makecls(f, c)
     return a
 end
 
-a = makecls(lambda(x, step) x.c=x.c+step return x.c end, c=0)
-b = makecls(lambda(x, step) x.c=x.c+step return x.c end, c=0)
+a = makecls(function(x, step) x.c=x.c+step return x.c end, c=0)
+b = makecls(function(x, step) x.c=x.c+step return x.c end, c=0)
 assert(a(1), 1)
 assert(b(2), 2)
 assert(a(1), 2)
@@ -102,8 +102,8 @@ assert(worker.map([0], os.numcpus)[0] == 'finished')
 
 -- closure
 function foo(a)
-    return lambda(a, b)
-        return lambda(ab, c)
+    return function(a, b)
+        return function(ab, c)
             ab.a = ab.a + 1
             if c == 6 then panic(ab.a + ab.b + c) end
             return ab.a + ab.b + c
@@ -122,8 +122,8 @@ local x, _, _ = bar.try(6)
 assert(x.error(), 15)
 
 print.try("native try call")
-assert(lambda(x) assert(x, 1) x end?(1) is (1))
-assert(lambda(x) assert(x, 1) x end?(2) is error)
+assert(function(x) assert(x, 1) x end?(1) is (1))
+assert(function(x) assert(x, 1) x end?(2) is error)
 
 -- syntax test
 m = {}
@@ -131,8 +131,8 @@ function m.a() return 'a' end
 assert(m.a() == 'a')
 
 cls = {}
-cls.__str = lambda() return this.v end
-cls2 = {__str= lambda() return this.v + '2' end}
+cls.__str = function() return this.v end
+cls2 = {__str= function() return this.v + '2' end}
 cls2 = new(cls, cls2)
 obj = new(cls, v='obj')
 obj2 = new(cls2, v='obj')
@@ -146,7 +146,7 @@ t2 = t.copy(true)
 t.b =3
 assert(t2.b, 2)
 
-t = ([1,2,3,4]).filter(lambda(v) return v >= 2 end)
+t = ([1,2,3,4]).filter(function(v) return v >= 2 end)
 assert(t[0] == 2 and t[2] == 4)
 
 
@@ -194,7 +194,7 @@ assert(ch.recv()[0], 1)
 
 ch2 = channel(1)
 flag = false
-lambda()
+function()
     ch.send(1)
     sleep(1)
     ch2.send(2)

@@ -250,8 +250,14 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	newtable.compileNode(nodes[3])
 	newtable.patchGoto()
 
-	if a := newtable.sym.Prop("this"); a != bas.Nil {
+	if a := newtable.sym.Get(staticThis); a != bas.Nil {
 		newtable.codeSeg.Code = append([]typ.Inst{
+			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: typ.RegA},
+		}, newtable.codeSeg.Code...)
+	}
+	if a := newtable.sym.Get(staticSelf); a != bas.Nil {
+		newtable.codeSeg.Code = append([]typ.Inst{
+			{Opcode: typ.OpSelf},
 			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: typ.RegA},
 		}, newtable.codeSeg.Code...)
 	}

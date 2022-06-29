@@ -242,10 +242,10 @@ foo()
 ({a=1}).a  -- should run flawlessly
 ({a=(1+bar())}).a
 
-assert((lambda(x) return (x+1) end)(1), 2)
-assert((lambda(x) (x+1) end)(1), 2)
-assert((lambda(x) end)(1), nil)
-assert((lambda(x) x.a end)(a=100), 100)
+assert((function(x) return (x+1) end)(1), 2)
+assert((function(x) (x+1) end)(1), 2)
+assert((function(x) end)(1), nil)
+assert((function(x) x.a end)(a=100), 100)
 
 a = 0 
 a += 1
@@ -274,7 +274,7 @@ a=a - 1
 assert(a, -4)
 a=-[a,a - 1][1]
 assert(a, 5)
-a=-lambda() -2 end()
+a=-function() -2 end()
 assert(a, 2)
 
 a=-(a-1)-a

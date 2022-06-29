@@ -124,6 +124,7 @@ var (
 	staticTrue   = bas.Str("true")
 	staticFalse  = bas.Str("false")
 	staticThis   = bas.Str("this")
+	staticSelf   = bas.Str("self")
 	staticA      = bas.Str("$a")
 	nodeCompiler = map[bas.Value]func(*symTable, []parser.Node) uint16{}
 	builtGlobal  struct {
@@ -189,13 +190,13 @@ func (table *symTable) get(name bas.Value) (uint16, bool) {
 		return table.loadConst(bas.True), true
 	case staticFalse:
 		return table.loadConst(bas.False), true
-	case staticThis:
+	case staticThis, staticSelf:
 		k := table.sym.Get(name)
 		if k.Type() == typ.Number {
 			return uint16(k.Int64()), true
 		}
 		k = bas.Int64(int64(table.borrowAddressNoReuse()))
-		table.sym.Set(bas.Str("this"), k)
+		table.sym.Set(name, k)
 		return uint16(k.Int64()), true
 	case staticA:
 		return typ.RegA, true

@@ -138,7 +138,7 @@ func (sc *Scanner) isLastTokenSymbolClosed() bool {
 	// foo[bar](...)
 	// {...}(...)
 	// if(cond, true, false)
-	// lambda() end(...)
+	// function() end(...)
 	return last.Type == TEnd || last.Type == TIf || last.Type == TIdent ||
 		last.Type == ')' || last.Type == ']' || last.Type == '}' || last.Type == '?'
 }
@@ -264,7 +264,6 @@ var reservedWords = map[string]uint32{
 	"continue": TContinue,
 	"else":     TElse,
 	"function": TFunc,
-	"lambda":   TLambda,
 	"if":       TIf,
 	"elseif":   TElseIf,
 	"then":     TThen,
@@ -325,8 +324,8 @@ skipspaces:
 					crlf = true
 				} else {
 					for k := range reservedWords {
-						if k == "lambda" || k == "if" {
-							// return lambda() end / return if(a, b, c)
+						if k == "function" || k == "if" {
+							// return function() end / return if(a, b, c)
 							continue
 						}
 						if strings.HasPrefix(tail, k) {

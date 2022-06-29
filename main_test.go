@@ -392,10 +392,10 @@ func TestNumberLexer(t *testing.T) {
 	assert("([ [1]])[0][0]", bas.Int(1))
 	assert("[0,1,2][1]", bas.Int(1))
 	assert("[[%d]]['format'](1)", bas.Str("1"))
-	assert("lambda()end (1)", bas.Int(1))
-	assert("lambda()end [1][0]", bas.Int(1))
-	assert("lambda()1 end()", bas.Int(1))
-	assert("lambda() -1 end()", bas.Int(-1))
+	assert("function()end (1)", bas.Int(1))
+	assert("function()end [1][0]", bas.Int(1))
+	assert("function()1 end()", bas.Int(1))
+	assert("function() -1 end()", bas.Int(-1))
 }
 
 func TestSmallString(t *testing.T) {

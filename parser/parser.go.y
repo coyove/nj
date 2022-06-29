@@ -5,7 +5,6 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 %}
 %type<expr> prog
 %type<expr> stats
-%type<expr> prog_stat
 %type<expr> stat
 %type<expr> declarator
 %type<expr> declarator_list
@@ -32,7 +31,7 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 }
 
 /* Reserved words */
-%token<token> TDo TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TLambda TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TLsh TRsh TURsh TDotDotDot TLParen TLBracket TIs
+%token<token> TDo TLocal TElseIf TThen TEnd TBreak TContinue TElse TFor TWhile TFunc TIf TReturn TReturnVoid TRepeat TUntil TNot TLabel TGoto TIn TLsh TRsh TURsh TDotDotDot TLParen TLBracket TIs
 
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString TIDiv TInv
@@ -61,7 +60,7 @@ prog:
         $$ = __chain()
         ss(yylex).Stmts = $$
     } |
-    prog prog_stat {
+    prog stat {
         $$ = $1.append($2)
         ss(yylex).Stmts = $$
     }
@@ -69,11 +68,8 @@ prog:
 stats: 
     { $$ = __chain() } | stats stat { $$ = $1.append($2) }
 
-prog_stat:
-    func_stat      { $$ = $1 } |
-    stat           { $$ = $1 }
-
 stat:
+    func_stat      { $$ = $1 } |
     TDo stats TEnd { $$ = __do($2) } |
     jmp_stat       { $$ = $1 } |
     assign_stat    { $$ = $1 } |
@@ -246,7 +242,7 @@ expr:
 prefix_expr:
     declarator                                         { $$ = $1 } |
     TIf TLParen expr ',' expr ',' expr ')'             { $$ = __if($3, __move(Sa, $5).At($1), __move(Sa, $7).At($1)).At($1) } |
-    TLambda func_params stats TEnd                     { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
+    TFunc func_params stats TEnd                       { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
     TString                                            { $$ = Str($1.Str) } |
     '(' expr ')'                                       { $$ = $2 } |
     '[' ']'                                            { $$ = ss(yylex).__array($1, emptyNode) } |

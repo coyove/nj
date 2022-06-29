@@ -31,6 +31,7 @@ func (r *Stacktrace) IsNativeCall() bool {
 
 func (r *Stacktrace) sourceLine() (src uint32) {
 	posv := r.Callable.CodeSeg.Pos
+	lastLine := uint32(math.MaxUint32)
 	if posv.Len() > 0 {
 		_, op, line := posv.Read(0)
 		for r.Cursor > op && posv.Len() > 0 {
@@ -39,8 +40,9 @@ func (r *Stacktrace) sourceLine() (src uint32) {
 		if r.Cursor <= op {
 			return line
 		}
+		lastLine = line
 	}
-	return math.MaxUint32
+	return lastLine
 }
 
 // ExecError represents the runtime error
@@ -409,6 +411,8 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			retStack = retStack[:len(retStack)-1]
 		case typ.OpLoadFunc:
 			env.A = env.Global.functions[opa].ToValue()
+		case typ.OpSelf:
+			env.A = K.obj.ToValue()
 		case typ.OpCall, typ.OpTryCall, typ.OpTailCall:
 			a := env._get(opa)
 			if a.Type() != typ.Object {
