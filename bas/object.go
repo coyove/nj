@@ -13,7 +13,7 @@ import (
 type Object struct {
 	parent *Object
 	fun    *Function
-	count  int64
+	count  int
 	items  []hashItem
 	this   Value
 }
@@ -48,7 +48,7 @@ func NamedObject(name string, preallocateSize int) *Object {
 }
 
 func (m *Object) setName(name string) *Object {
-	m.fun = &Function{Name: name, namedObjFun: true, Native: func(*Env) {}, obj: m}
+	m.fun = &Function{Name: name, Native: func(*Env) {}, obj: m}
 	return m
 }
 
@@ -105,7 +105,9 @@ func (m *Object) SetProp(k string, v Value) *Object {
 }
 
 func (m *Object) SetMethod(k string, v func(*Env)) *Object {
-	m.Set(Str(k), Func(k, v))
+	f := Func(k, v)
+	f.Object().fun.Method = true
+	m.Set(Str(k), f)
 	return m
 }
 
@@ -114,7 +116,7 @@ func (m *Object) Get(k Value) (v Value) {
 	if m == nil || k == Nil {
 		return Nil
 	}
-	return m.find(k, false)
+	return m.find(k, false, true)
 }
 
 // Find finds the value for a given key (including prototypes)
@@ -122,17 +124,18 @@ func (m *Object) Find(k Value) (v Value) {
 	if m == nil || k == Nil {
 		return Nil
 	}
-	return m.find(k, true)
+	return m.find(k, true, true)
 }
 
-func (m *Object) find(k Value, findPrototype bool) (v Value) {
+func (m *Object) find(k Value, findPrototype, setReceiver bool) (v Value) {
 	if idx := m.findHash(k); idx >= 0 {
 		v = m.items[idx].val
 	} else if findPrototype && m.parent != nil {
-		v = m.parent.find(k, findPrototype)
+		v = m.parent.find(k, findPrototype, false)
 	}
-	if m.parent != Proto.StaticObject && v.IsObject() && v.Object().IsCallable() {
-		if !v.Object().fun.namedObjFun {
+	if setReceiver && v.IsObject() {
+		obj := v.Object()
+		if obj.fun != nil && obj.fun.Method {
 			f := v.Object().Copy(false)
 			f.this = m.ToValue()
 			v = f.ToValue()

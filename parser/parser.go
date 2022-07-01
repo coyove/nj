@@ -1095,7 +1095,7 @@ yydefault:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line parser.go.y:176
 		{
-			yyVAL.expr = __store(Sym(yyDollar[2].token), Str(yyDollar[4].token.Str), __func(__markupFuncName(yyDollar[2].token, yyDollar[4].token), yyDollar[5].expr, yyDollar[6].expr))
+			yyVAL.expr = __store(Sym(yyDollar[2].token), Str(yyDollar[4].token.Str), __method(__markupFuncName(yyDollar[2].token, yyDollar[4].token), yyDollar[5].expr, yyDollar[6].expr))
 		}
 	case 29:
 		yyDollar = yyS[yypt-2 : yypt+1]

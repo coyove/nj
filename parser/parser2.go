@@ -116,6 +116,11 @@ func __func(name Token, paramList Node, stats Node) Node {
 	)
 }
 
+func __method(name Token, paramList Node, stats Node) Node {
+	__findTailCall(stats.Nodes())
+	return Nodes(SFunc, Sym(name), paramList, stats).At(name)
+}
+
 func __lambda(name Token, pp Node, stats Node) Node {
 	nodes := stats.Nodes()
 	if len(nodes) > 1 && nodes[0].Value == SBegin.Value {

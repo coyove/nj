@@ -52,6 +52,20 @@ func (env *Env) Runtime() Runtime {
 	return env.runtime
 }
 
+func (env *Env) GlobalEnvironment() Environment {
+	if env.Global == nil {
+		return Environment{}
+	}
+	return env.Global.Environment
+}
+
+func (env *Env) SourceFilename() string {
+	if env.Global == nil {
+		return ""
+	}
+	return env.Global.File
+}
+
 func (env *Env) stackOffset() uint32 {
 	return env.stackOffsetFlag & internal.MaxStackSize
 }

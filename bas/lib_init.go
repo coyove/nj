@@ -214,6 +214,7 @@ func init() {
 	ObjectProto.SetPrototype(nil) // object is the topmost 'object', it should not have any prototype
 
 	*Proto.Func = *NamedObject("function", 0).
+		SetMethod("ismethod", func(e *Env) { e.A = Bool(e.Object(-1).fun.Method) }).
 		SetMethod("apply", func(e *Env) { e.A = CallObject(e.Object(-1), e, nil, e.Get(0), e.Stack()[1:]...) }).
 		SetMethod("call", func(e *Env) { e.A = e.Call(e.Object(-1), e.Stack()...) }).
 		SetMethod("try", func(e *Env) {
@@ -602,29 +603,13 @@ func init() {
 		}).
 		SetMethod("format", func(e *Env) {
 			buf := &bytes.Buffer{}
-			sprintf(e, -1, buf)
+			EnvFprintf(e, -1, buf)
 			e.A = UnsafeStr(buf.Bytes())
 		})
 	Globals.SetProp("str", Proto.Str.ToValue())
-
-	Globals.SetProp("printf", EnvFunc("printf", func(e *Env) {
-		sprintf(e, 0, e.Global.Stdout)
-	}))
-	Globals.SetProp("println", EnvFunc("println", func(e *Env) {
-		for _, a := range e.Stack() {
-			fmt.Fprint(e.Global.Stdout, a.String(), " ")
-		}
-		fmt.Fprintln(e.Global.Stdout)
-	}))
-	Globals.SetProp("print", EnvFunc("print", func(e *Env) {
-		for _, a := range e.Stack() {
-			fmt.Fprint(e.Global.Stdout, a.String())
-		}
-		fmt.Fprintln(e.Global.Stdout)
-	}))
 }
 
-func sprintf(env *Env, start int, p io.Writer) {
+func EnvFprintf(env *Env, start int, p io.Writer) {
 	args := make([]interface{}, 0)
 	for i := start + 1; i < env.Size(); i++ {
 		if v := env.Get(i); v.Type() == typ.Number {

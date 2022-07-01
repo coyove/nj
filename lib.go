@@ -73,11 +73,26 @@ func init() {
 	bas.Globals.SetProp("stdout", bas.ValueOf(os.Stdout))
 	bas.Globals.SetProp("stdin", bas.ValueOf(os.Stdin))
 	bas.Globals.SetProp("stderr", bas.ValueOf(os.Stderr))
+	bas.Globals.SetProp("printf", bas.Func("printf", func(e *bas.Env) {
+		bas.EnvFprintf(e, 0, bas.Stdout)
+	}))
+	bas.Globals.SetProp("println", bas.Func("println", func(e *bas.Env) {
+		for _, a := range e.Stack() {
+			fmt.Fprint(bas.Stdout, a.String(), " ")
+		}
+		fmt.Fprintln(bas.Stdout)
+	}))
+	bas.Globals.SetProp("print", bas.Func("print", func(e *bas.Env) {
+		for _, a := range e.Stack() {
+			fmt.Fprint(bas.Stdout, a.String())
+		}
+		fmt.Fprintln(bas.Stdout)
+	}))
 	bas.Globals.SetMethod("scanln", func(env *bas.Env) {
 		prompt, n := env.Get(0), env.Get(1)
-		fmt.Fprint(env.Global.Stdout, prompt.Maybe().Str(""))
+		fmt.Fprint(bas.Stdout, prompt.Maybe().Str(""))
 		var results []bas.Value
-		var r io.Reader = env.Global.Stdin
+		var r io.Reader = bas.Stdin
 		for i := n.Maybe().Int64(1); i > 0; i-- {
 			var s string
 			if _, err := fmt.Fscan(r, &s); err != nil {

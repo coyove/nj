@@ -13,35 +13,39 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
+var (
+	Stdout io.Writer = os.Stdout
+	Stderr io.Writer = os.Stderr
+	Stdin  io.Reader = os.Stdin
+)
+
 type Function struct {
-	CodeSeg     internal.Packet
-	StackSize   uint16
-	NumParams   uint16
-	Variadic    bool
-	namedObjFun bool // indicates a dummy Function, which is used by NamedObject()
-	envgNeeded  bool // an execution env (*Env) with Global is required
-	Native      func(env *Env)
-	Name        string
-	LoadGlobal  *Program
-	Locals      []string
-	obj         *Object
+	CodeSeg    internal.Packet
+	StackSize  uint16
+	NumParams  byte
+	Variadic   bool
+	Method     bool
+	envgNeeded bool // an execution env (*Env) with Global is required
+	Native     func(env *Env)
+	Name       string
+	LoadGlobal *Program
+	Locals     []string
+	obj        *Object
 }
 
 type Environment struct {
 	MaxStackSize int64
 	Globals      *Object
-	Stdout       io.Writer
-	Stderr       io.Writer
-	Stdin        io.Reader
+	File         string
+	Source       string
 	Deadline     time.Time
 }
 
 type Program struct {
-	top          *Function
-	symbols      *Object
-	stack        *[]Value
-	functions    []*Object
-	File, Source string
+	top       *Function
+	symbols   *Object
+	stack     *[]Value
+	functions []*Object
 	Environment
 }
 
@@ -53,9 +57,6 @@ func NewProgram(file, source string, coreStack *Env, top *Function, symbols *Obj
 	if env != nil {
 		cls.Environment = *env
 	}
-	cls.Stdout = internal.Or(cls.Stdout, os.Stdout).(io.Writer)
-	cls.Stdin = internal.Or(cls.Stdin, os.Stdin).(io.Reader)
-	cls.Stderr = internal.Or(cls.Stderr, os.Stderr).(io.Writer)
 	cls.File = file
 	cls.Source = source
 
@@ -246,7 +247,7 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 			s[c.NumParams-1] = newArray(append([]Value{}, s[c.NumParams-1:]...)...).ToValue()
 		} else {
 			newEnv.grow(int(c.NumParams))
-			newEnv._set(c.NumParams-1, newArray().ToValue())
+			newEnv._set(uint16(c.NumParams)-1, newArray().ToValue())
 		}
 	}
 	newEnv.growZero(int(c.StackSize), int(c.NumParams))
@@ -260,7 +261,7 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 
 func (c *Function) String() string {
 	p := bytes.NewBufferString(c.Name)
-	p.WriteString("(")
+	p.WriteString(internal.IfStr(c.Method, "([this],", "("))
 	if c.Native != nil {
 		p.WriteString("...")
 	} else {

@@ -131,8 +131,9 @@ function m.a() return 'a' end
 assert(m.a() == 'a')
 
 cls = {}
-cls.__str = function() return this.v end
-cls2 = {__str= function() return this.v + '2' end}
+function cls.__str() return this.v end
+cls2 = {}
+function cls2.__str() return this.v + '2' end
 cls2 = new(cls, cls2)
 obj = new(cls, v='obj')
 obj2 = new(cls2, v='obj')

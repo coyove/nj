@@ -2,6 +2,7 @@ package nj
 
 import (
 	"math"
+	"strings"
 	"unsafe"
 
 	"github.com/coyove/nj/bas"
@@ -225,7 +226,7 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	params := nodes[2]
 	newtable := newSymTable(table.options)
 	newtable.name = table.name
-	newtable.codeSeg.Pos.Name = table.name
+	newtable.codeSeg.Pos = &internal.VByte32{Name: table.name}
 	newtable.global = table.getGlobal()
 	newtable.parent = table
 
@@ -267,11 +268,12 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 
 	cls := &bas.Function{}
 	cls.Variadic = varargIdx >= 0
-	cls.NumParams = uint16(len(params.Nodes()))
+	cls.NumParams = byte(len(params.Nodes()))
 	cls.Name = nodes[1].Sym()
 	cls.StackSize = newtable.vp
 	cls.CodeSeg = code
 	cls.Locals = newtable.symbolsToDebugLocals()
+	cls.Method = strings.Contains(cls.Name, ".")
 
 	obj := bas.NewObject(0)
 	obj.SetPrototype(bas.Proto.Func)

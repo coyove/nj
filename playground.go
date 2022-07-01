@@ -135,8 +135,8 @@ func PlaygroundHandler(defaultCode string, opt *bas.Environment) func(w http.Res
 		}
 		p.MaxStackSize = 100
 		p.Deadline = start.Add(time.Second * 2)
-		p.Stdout = bufOut
-		p.Stderr = bufOut
+		bas.Stdout = bufOut
+		bas.Stderr = bufOut
 		code := p.GoString()
 		v, err := p.Run()
 		if err != nil {
