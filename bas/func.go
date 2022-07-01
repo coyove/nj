@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/coyove/nj/internal"
@@ -19,18 +18,17 @@ var (
 	Stdin  io.Reader = os.Stdin
 )
 
-type Function struct {
+type funcbody struct {
 	CodeSeg    internal.Packet
 	StackSize  uint16
 	NumParams  byte
 	Variadic   bool
 	Method     bool
-	envgNeeded bool // an execution env (*Env) with Global is required
+	EnvgNeeded bool // an execution env (*Env) with Global is required
 	Native     func(env *Env)
 	Name       string
 	LoadGlobal *Program
 	Locals     []string
-	obj        *Object
 }
 
 type Environment struct {
@@ -42,14 +40,14 @@ type Environment struct {
 }
 
 type Program struct {
-	top       *Function
+	top       *Object
 	symbols   *Object
 	stack     *[]Value
 	functions []*Object
 	Environment
 }
 
-func NewProgram(file, source string, coreStack *Env, top *Function, symbols *Object, funcs []*Object, env *Environment) *Program {
+func NewProgram(file, source string, coreStack *Env, top, symbols *Object, funcs []*Object, env *Environment) *Program {
 	cls := &Program{top: top}
 	cls.stack = coreStack.stack
 	cls.symbols = symbols
@@ -60,7 +58,7 @@ func NewProgram(file, source string, coreStack *Env, top *Function, symbols *Obj
 	cls.File = file
 	cls.Source = source
 
-	cls.top.LoadGlobal = cls
+	cls.top.fun.LoadGlobal = cls
 	for _, f := range cls.functions {
 		f.fun.LoadGlobal = cls
 	}
@@ -76,7 +74,7 @@ func Func(name string, f func(*Env)) Value {
 		f = func(*Env) {}
 	}
 	obj := NewObject(0)
-	obj.fun = &Function{Name: name, Native: f, obj: obj}
+	obj.fun = &funcbody{Name: name, Native: f}
 	obj.SetPrototype(Proto.Func)
 	return obj.ToValue()
 }
@@ -84,58 +82,11 @@ func Func(name string, f func(*Env)) Value {
 // EnvFunc creates a callable object which strictly requires a valid execution env
 func EnvFunc(name string, f func(*Env)) Value {
 	o := Func(name, f).Object()
-	o.fun.envgNeeded = true
+	o.fun.EnvgNeeded = true
 	return o.ToValue()
 }
 
-func (p *Program) Run() (Value, error) {
-	if p.Deadline.IsZero() {
-		return p.runTop()
-	}
-	if time.Now().After(p.Deadline) {
-		return Nil, fmt.Errorf("timeout")
-	}
-
-	dummy := make(map[*Function]*internal.Packet)
-	dummy[p.top] = p.top.CodeSeg.Copy()
-	for _, f := range p.functions {
-		dummy[f.fun] = f.fun.CodeSeg.Copy()
-	}
-
-	var mu sync.Mutex
-	var reverted, timedout bool
-	finished := make(chan struct{}, 1)
-	go func(start time.Time) {
-		select {
-		case <-finished:
-		case <-time.After(time.Until(p.Deadline)):
-			mu.Lock()
-			if !reverted { // if code has been reverted to original, don't Stop again
-				p.Stop()
-				timedout = true
-			}
-			mu.Unlock()
-		}
-	}(time.Now())
-	v, err := p.runTop()
-	finished <- struct{}{}
-
-	// Revert code anyway
-	mu.Lock()
-	p.top.CodeSeg = *dummy[p.top]
-	for _, f := range p.functions {
-		f.fun.CodeSeg = *dummy[f.fun]
-	}
-	reverted = true
-	mu.Unlock()
-
-	if timedout {
-		return Nil, fmt.Errorf("timeout")
-	}
-	return v, err
-}
-
-func (p *Program) runTop() (v1 Value, err error) {
+func (p *Program) Run() (v1 Value, err error) {
 	defer internal.CatchError(&err)
 	newEnv := Env{
 		Global: p,
@@ -145,23 +96,12 @@ func (p *Program) runTop() (v1 Value, err error) {
 	return
 }
 
-// Stop terminates the execution of program
-// After calling, program will become unavailable for any further operations
-// There is no way to terminate goroutines and blocking I/Os
 func (p *Program) Stop() {
-	stop := func(c *Function) {
-		for i := range c.CodeSeg.Code {
-			c.CodeSeg.Code[i] = typ.Inst{Opcode: typ.OpRet, A: typ.RegA}
-		}
-	}
-	stop(p.top)
-	for _, f := range p.functions {
-		stop(f.fun)
-	}
+	return
 }
 
 func (p *Program) GoString() string {
-	return pkPrettify(p.top, p, true)
+	return pkPrettify(p.top.fun, p, true)
 }
 
 func (p *Program) Get(k string) (v Value, ok bool) {
@@ -182,8 +122,8 @@ func (p *Program) Set(k string, v Value) (ok bool) {
 }
 
 func (p *Program) LocalsObject() *Object {
-	r := NewObject(len(p.top.Locals))
-	for i, name := range p.top.Locals {
+	r := NewObject(len(p.top.fun.Locals))
+	for i, name := range p.top.fun.Locals {
 		r.Set(Str(name), (*p.stack)[i])
 	}
 	return r
@@ -204,12 +144,12 @@ func Call2(m *Object, args ...Value) (res Value, err error) {
 	return
 }
 
-func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res Value) {
+func CallObject(m *Object, e *Env, outErr *error, this Value, args ...Value) (res Value) {
 	if !m.IsCallable() {
-		if err == nil {
+		if outErr == nil {
 			internal.Panic("%v not callable", detail(m.ToValue()))
 		} else {
-			*err = fmt.Errorf("%v not callable", detail(m.ToValue()))
+			*outErr = fmt.Errorf("%v not callable", detail(m.ToValue()))
 		}
 		return
 	}
@@ -221,20 +161,19 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 		stack:  &args,
 	}
 
-	if err != nil {
-		defer internal.CatchError(err)
+	if outErr != nil {
+		defer internal.CatchError(outErr)
 	}
 
 	if c.Native != nil {
-		st := Stacktrace{Callable: c, stackOffsetFlag: internal.FlagNativeCall}
+		st := Stacktrace{Callable: m, stackOffsetFlag: internal.FlagNativeCall}
 		defer relayPanic(func() []Stacktrace { return newEnv.runtime.Stacktrace() })
 		if e == nil {
 			newEnv.runtime.Stack0 = st
 		} else {
 			newEnv.runtime = e.runtime.Push(st)
-			newEnv.Global = e.Global
 		}
-		if newEnv.Global == nil && c.envgNeeded {
+		if newEnv.Global == nil && c.EnvgNeeded {
 			internal.Panic("native function %q requires global env", c.Name)
 		}
 		c.Native(&newEnv)
@@ -256,10 +195,10 @@ func CallObject(m *Object, e *Env, err *error, this Value, args ...Value) (res V
 	if e != nil {
 		stk = e.runtime.Stacktrace()
 	}
-	return internalExecCursorLoop(newEnv, c, stk)
+	return internalExecCursorLoop(newEnv, m, stk)
 }
 
-func (c *Function) String() string {
+func (c *funcbody) String() string {
 	p := bytes.NewBufferString(c.Name)
 	p.WriteString(internal.IfStr(c.Method, "([this],", "("))
 	if c.Native != nil {
@@ -273,15 +212,11 @@ func (c *Function) String() string {
 	return p.String()
 }
 
-func (c *Function) GoString() string {
+func (c *funcbody) GoString() string {
 	return pkPrettify(c, c.LoadGlobal, false)
 }
 
-func (c *Function) Object() *Object {
-	return c.obj
-}
-
-func pkPrettify(c *Function, p *Program, toplevel bool) string {
+func pkPrettify(c *funcbody, p *Program, toplevel bool) string {
 	sb := &bytes.Buffer{}
 	sb.WriteString("+ START " + c.String() + "\n")
 	if c.Native != nil {

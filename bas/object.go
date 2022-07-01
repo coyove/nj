@@ -12,7 +12,7 @@ import (
 
 type Object struct {
 	parent *Object
-	fun    *Function
+	fun    *funcbody
 	count  int
 	items  []hashItem
 	this   Value
@@ -48,7 +48,7 @@ func NamedObject(name string, preallocateSize int) *Object {
 }
 
 func (m *Object) setName(name string) *Object {
-	m.fun = &Function{Name: name, Native: func(*Env) {}, obj: m}
+	m.fun = &funcbody{Name: name, Native: func(*Env) {}}
 	return m
 }
 
@@ -389,11 +389,6 @@ func (m *Object) Copy(copyData bool) *Object {
 	m2 := *m
 	if copyData {
 		m2.items = append([]hashItem{}, m.items...)
-	}
-	if m.fun != nil {
-		c2 := *m.fun
-		m2.fun = &c2
-		m2.fun.obj = &m2
 	}
 	return &m2
 }

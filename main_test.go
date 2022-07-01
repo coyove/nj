@@ -551,27 +551,27 @@ func BenchmarkGoJSON(b *testing.B) {
 // 	}
 // }
 
-func TestRunTimeout(t *testing.T) {
-	o := bas.NewObject(0)
-	p, _ := LoadString("for i=0,1e8 do z.a = i end", &bas.Environment{
-		Globals: bas.NewObject(0).SetProp("z", o.ToValue()),
-	})
-
-	p.Deadline = time.Now().Add(time.Second / 2)
-	_, err := p.Run()
-	if err.Error() != "timeout" {
-		t.Fatal(err)
-	}
-	if v := o.Prop("a"); v.Maybe().Int(0) == 0 {
-		t.Fatal(v)
-	}
-
-	p.Deadline = time.Now().Add(time.Second / 2)
-	_, err = p.Run()
-	if err.Error() != "timeout" {
-		t.Fatal(err)
-	}
-	if v := o.Prop("a"); v.Maybe().Int64(0) == 0 {
-		t.Fatal(v)
-	}
-}
+// func TestRunTimeout(t *testing.T) {
+// 	o := bas.NewObject(0)
+// 	p, _ := LoadString("for i=0,1e8 do z.a = i end", &bas.Environment{
+// 		Globals: bas.NewObject(0).SetProp("z", o.ToValue()),
+// 	})
+//
+// 	p.Deadline = time.Now().Add(time.Second / 2)
+// 	_, err := p.Run()
+// 	if err.Error() != "timeout" {
+// 		t.Fatal(err)
+// 	}
+// 	if v := o.Prop("a"); v.Maybe().Int(0) == 0 {
+// 		t.Fatal(v)
+// 	}
+//
+// 	p.Deadline = time.Now().Add(time.Second / 2)
+// 	_, err = p.Run()
+// 	if err.Error() != "timeout" {
+// 		t.Fatal(err)
+// 	}
+// 	if v := o.Prop("a"); v.Maybe().Int64(0) == 0 {
+// 		t.Fatal(v)
+// 	}
+// }

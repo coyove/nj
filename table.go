@@ -427,12 +427,14 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *bas.Environmen
 		return true
 	})
 
-	cls = bas.NewProgram(name, source, coreStack, &bas.Function{
-		Name:      "main",
-		CodeSeg:   table.codeSeg,
-		StackSize: table.vp,
-		Locals:    table.symbolsToDebugLocals(),
-	}, &table.sym, table.funcs, env)
+	cls = bas.NewProgram(name, source, coreStack, (*bas.Object)(internal.CreateRawFunc(
+		"main",
+		false,
+		0,
+		table.vp,
+		table.symbolsToDebugLocals(),
+		table.codeSeg,
+	)), &table.sym, table.funcs, env)
 	coreStack.Set(int(gi), bas.ValueOf(cls))
 	return cls, err
 }

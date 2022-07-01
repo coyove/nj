@@ -2,8 +2,6 @@ package nj
 
 import (
 	"math"
-	"strings"
-	"unsafe"
 
 	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
@@ -266,19 +264,14 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	code := newtable.codeSeg
 	code.WriteInst(typ.OpRet, typ.RegGlobalFlag, 0) // return nil
 
-	cls := &bas.Function{}
-	cls.Variadic = varargIdx >= 0
-	cls.NumParams = byte(len(params.Nodes()))
-	cls.Name = nodes[1].Sym()
-	cls.StackSize = newtable.vp
-	cls.CodeSeg = code
-	cls.Locals = newtable.symbolsToDebugLocals()
-	cls.Method = strings.Contains(cls.Name, ".")
-
-	obj := bas.NewObject(0)
-	obj.SetPrototype(bas.Proto.Func)
-	internal.SetObjFun(unsafe.Pointer(obj), unsafe.Pointer(cls))
-
+	obj := (*bas.Object)(internal.CreateRawFunc(
+		nodes[1].Sym(),
+		varargIdx >= 0,
+		byte(len(params.Nodes())),
+		newtable.vp,
+		newtable.symbolsToDebugLocals(),
+		code,
+	))
 	funcIdx := uint16(len(table.getGlobal().funcs))
 	table.getGlobal().funcs = append(table.getGlobal().funcs, obj)
 	table.codeSeg.WriteInst(typ.OpLoadFunc, funcIdx, 0)

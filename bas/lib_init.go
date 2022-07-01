@@ -27,12 +27,22 @@ func init() {
 	internal.GrowEnvStack = func(env unsafe.Pointer, sz int) {
 		(*Env)(env).grow(sz)
 	}
-	internal.SetObjFun = func(obj, fun unsafe.Pointer) {
-		(*Object)(obj).fun = (*Function)(fun)
-		(*Function)(fun).obj = (*Object)(obj)
-	}
 	internal.SetEnvStack = func(env unsafe.Pointer, stack unsafe.Pointer) {
 		(*Env)(env).stack = (*[]Value)(stack)
+	}
+	internal.CreateRawFunc = func(name string,
+		variadic bool, numParams byte, stackSize uint16, locals []string, code internal.Packet) unsafe.Pointer {
+		obj := NewObject(0)
+		obj.SetPrototype(Proto.Func)
+		obj.fun = &funcbody{}
+		obj.fun.Variadic = variadic
+		obj.fun.NumParams = numParams
+		obj.fun.Name = name
+		obj.fun.StackSize = stackSize
+		obj.fun.CodeSeg = code
+		obj.fun.Locals = locals
+		obj.fun.Method = strings.Contains(name, ".")
+		return unsafe.Pointer(obj)
 	}
 
 	Globals.SetProp("VERSION", Int64(Version))
@@ -45,7 +55,7 @@ func init() {
 	})
 	Globals.SetMethod("createprototype", func(e *Env) {
 		e.A = Func(e.Str(0), func(e *Env) {
-			o := e.runtime.Stack0.Callable.obj
+			o := e.runtime.Stack0.Callable
 			init := o.Prop("_init").Object()
 			n := o.Copy(true).SetPrototype(o)
 			CallObject(init, e, nil, n.ToValue(), e.Stack()...)
@@ -58,10 +68,10 @@ func init() {
 
 	// Debug libraries
 	Globals.SetProp("debug", NamedObject("debug", 0).
-		SetMethod("self", func(e *Env) { e.A = e.Runtime().Stack1.Callable.obj.ToValue() }).
+		SetMethod("self", func(e *Env) { e.A = e.Runtime().Stack1.Callable.ToValue() }).
 		SetMethod("locals", func(e *Env) {
-			locals := e.Runtime().Stack1.Callable.Locals
-			start := e.stackOffset() - uint32(e.Runtime().Stack1.Callable.StackSize)
+			locals := e.Runtime().Stack1.Callable.fun.Locals
+			start := e.stackOffset() - uint32(e.Runtime().Stack1.Callable.fun.StackSize)
 			if e.Get(0).IsTrue() {
 				r := NewObject(0)
 				for i, name := range locals {
@@ -79,7 +89,7 @@ func init() {
 		}).
 		SetProp("globals", EnvFunc("globals", func(e *Env) {
 			var r []Value
-			for i, name := range e.Global.top.Locals {
+			for i, name := range e.Global.top.fun.Locals {
 				r = append(r, Int(i), Str(name), (*e.Global.stack)[i])
 			}
 			e.A = newArray(r...).ToValue()
@@ -92,7 +102,7 @@ func init() {
 			lines := make([]Value, 0, len(stacks))
 			for i := len(stacks) - 1 - env.Get(0).Maybe().Int(0); i >= 0; i-- {
 				r := stacks[i]
-				lines = append(lines, Str(r.Callable.Name), Int64(int64(r.sourceLine())), Int64(int64(r.Cursor-1)))
+				lines = append(lines, Str(r.Callable.fun.Name), Int64(int64(r.sourceLine())), Int64(int64(r.Cursor-1)))
 			}
 			env.A = newArray(lines...).ToValue()
 		}).
@@ -257,7 +267,7 @@ func init() {
 			lambda := e.Object(-1)
 			c := e.CopyStack()
 			e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
-				o := e.runtime.Stack0.Callable.obj
+				o := e.runtime.Stack0.Callable
 				f := o.Prop("_l").Object()
 				stk := append(o.Prop("_c").Native().Values(), e.Stack()...)
 				e.A = e.Call(f, stk...)

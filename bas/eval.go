@@ -14,7 +14,7 @@ import (
 type Stacktrace struct {
 	Cursor          uint32
 	stackOffsetFlag uint32 // LSB: 1=tailcall
-	Callable        *Function
+	Callable        *Object
 }
 
 func (r *Stacktrace) StackOffset() uint32 {
@@ -30,7 +30,7 @@ func (r *Stacktrace) IsNativeCall() bool {
 }
 
 func (r *Stacktrace) sourceLine() (src uint32) {
-	posv := r.Callable.CodeSeg.Pos
+	posv := r.Callable.fun.CodeSeg.Pos
 	lastLine := uint32(math.MaxUint32)
 	if posv.Len() > 0 {
 		_, op, line := posv.Read(0)
@@ -65,12 +65,12 @@ func (e *ExecError) Error() string {
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
 		if r.IsNativeCall() {
-			msg.WriteString(fmt.Sprintf("%s at native\n\t<native code>\n", r.Callable.Name))
+			msg.WriteString(fmt.Sprintf("%s at native\n\t<native code>\n", r.Callable.fun.Name))
 		} else {
 			ln := r.sourceLine()
 			msg.WriteString(fmt.Sprintf("%s at %s:%d (i%d)",
-				r.Callable.Name,
-				r.Callable.CodeSeg.Pos.Name,
+				r.Callable.fun.Name,
+				r.Callable.fun.CodeSeg.Pos.Name,
 				ln,
 				r.Cursor-1, // the recorded cursor was advanced by 1 already
 			))
@@ -78,7 +78,7 @@ func (e *ExecError) Error() string {
 				msg.WriteString(" (tailcall)")
 			}
 			msg.WriteString("\n\t")
-			line, ok := internal.LineOf(r.Callable.LoadGlobal.Source, int(ln))
+			line, ok := internal.LineOf(r.Callable.fun.LoadGlobal.Source, int(ln))
 			if ok {
 				msg.WriteString(strings.TrimSpace(line))
 			} else {
@@ -103,7 +103,7 @@ func relayPanic(onPanic func() []Stacktrace) {
 	}
 }
 
-func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
+func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 	stackEnv := env
 	stackEnv.stackOffsetFlag = uint32(len(*env.stack))
 
@@ -123,7 +123,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 	})
 
 	for {
-		v := K.CodeSeg.Code[cursor]
+		v := K.fun.CodeSeg.Code[cursor]
 		bop, opa, opb, opc := v.Opcode, v.A, v.B, v.C
 		cursor++
 
@@ -406,19 +406,21 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 			K = r.Callable
 			env.stackOffsetFlag = r.stackOffsetFlag
 			env.A = v
-			*env.stack = (*env.stack)[:env.stackOffset()+uint32(r.Callable.StackSize)]
+			env.Global = K.fun.LoadGlobal
+			*env.stack = (*env.stack)[:env.stackOffset()+uint32(r.Callable.fun.StackSize)]
 			stackEnv.stackOffsetFlag = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
 		case typ.OpLoadFunc:
 			env.A = env.Global.functions[opa].ToValue()
 		case typ.OpSelf:
-			env.A = K.obj.ToValue()
+			env.A = K.ToValue()
 		case typ.OpCall, typ.OpTryCall, typ.OpTailCall:
 			a := env._get(opa)
 			if a.Type() != typ.Object {
 				internal.Panic("can't call %v", detail(a))
 			}
-			cls := a.Object().fun
+			obj := a.Object()
+			cls := obj.fun
 			if cls == nil {
 				internal.Panic("%v not callable", detail(a))
 			}
@@ -455,7 +457,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 				stackEnv.Clear()
 			} else if cls.Native != nil {
 				stackEnv.Global = env.Global
-				stackEnv.runtime.Stack0 = Stacktrace{Callable: cls, stackOffsetFlag: internal.FlagNativeCall}
+				stackEnv.runtime.Stack0 = Stacktrace{Callable: obj, stackOffsetFlag: internal.FlagNativeCall}
 				stackEnv.runtime.Stack1 = last
 				stackEnv.runtime.StackN = retStack
 				cls.Native(&stackEnv)
@@ -467,7 +469,7 @@ func internalExecCursorLoop(env Env, K *Function, retStack []Stacktrace) Value {
 
 				// Switch 'env' to 'stackEnv' and clear 'stackEnv'
 				cursor = 0
-				K = cls
+				K = obj
 				env.stackOffsetFlag = stackEnv.stackOffsetFlag
 				env.Global = cls.LoadGlobal
 				env.A = stackEnv.A

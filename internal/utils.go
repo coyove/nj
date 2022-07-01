@@ -15,9 +15,9 @@ import (
 )
 
 var (
-	GrowEnvStack func(env unsafe.Pointer, sz int)
-	SetEnvStack  func(env unsafe.Pointer, stack unsafe.Pointer)
-	SetObjFun    func(obj unsafe.Pointer, fun unsafe.Pointer)
+	GrowEnvStack  func(env unsafe.Pointer, sz int)
+	SetEnvStack   func(env unsafe.Pointer, stack unsafe.Pointer)
+	CreateRawFunc func(name string, variadic bool, numParams byte, stackSize uint16, locals []string, code Packet) unsafe.Pointer
 
 	unnamedFuncIndex int64
 )
