@@ -131,20 +131,20 @@ func (p *Program) LocalsObject() *Object {
 
 func EnvForAsyncCall(e *Env) *Env {
 	e2 := *e
-	e2.runtime.StackN = append([]Stacktrace{}, e2.runtime.StackN...)
+	e2.runtime.stackN = append([]Stacktrace{}, e2.runtime.stackN...)
 	return &e2
 }
 
 func Call(m *Object, args ...Value) (res Value) {
-	return CallObject(m, nil, nil, m.this, args...)
+	return CallObject(m, Runtime{}, nil, m.this, args...)
 }
 
 func Call2(m *Object, args ...Value) (res Value, err error) {
-	res = CallObject(m, nil, &err, m.this, args...)
+	res = CallObject(m, Runtime{}, &err, m.this, args...)
 	return
 }
 
-func CallObject(m *Object, e *Env, outErr *error, this Value, args ...Value) (res Value) {
+func CallObject(m *Object, r Runtime, outErr *error, this Value, args ...Value) (res Value) {
 	if !m.IsCallable() {
 		if outErr == nil {
 			internal.Panic("%v not callable", detail(m.ToValue()))
@@ -166,13 +166,11 @@ func CallObject(m *Object, e *Env, outErr *error, this Value, args ...Value) (re
 	}
 
 	if c.Native != nil {
-		st := Stacktrace{Callable: m, stackOffsetFlag: internal.FlagNativeCall}
 		defer relayPanic(func() []Stacktrace { return newEnv.runtime.Stacktrace() })
-		if e == nil {
-			newEnv.runtime.Stack0 = st
-		} else {
-			newEnv.runtime = e.runtime.Push(st)
-		}
+		newEnv.runtime = r.push(Stacktrace{
+			Callable:        m,
+			stackOffsetFlag: internal.FlagNativeCall,
+		})
 		if newEnv.Global == nil && c.EnvgNeeded {
 			internal.Panic("native function %q requires global env", c.Name)
 		}
@@ -191,11 +189,7 @@ func CallObject(m *Object, e *Env, outErr *error, this Value, args ...Value) (re
 	}
 	newEnv.growZero(int(c.StackSize), int(c.NumParams))
 
-	var stk []Stacktrace
-	if e != nil {
-		stk = e.runtime.Stacktrace()
-	}
-	return internalExecCursorLoop(newEnv, m, stk)
+	return internalExecCursorLoop(newEnv, m, r.Stacktrace())
 }
 
 func (c *funcbody) String() string {

@@ -116,8 +116,8 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			Callable:        K,
 			stackOffsetFlag: env.stackOffsetFlag,
 		})
-		if stackEnv.runtime.Stack0.Callable != nil {
-			retStack = append(retStack, stackEnv.runtime.Stack0)
+		if stackEnv.runtime.stack0.Callable != nil {
+			retStack = append(retStack, stackEnv.runtime.stack0)
 		}
 		return retStack
 	})
@@ -446,10 +446,10 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 
 			if bop == typ.OpTryCall {
 				stackEnv.Global = env.Global
-				stackEnv.runtime.Stack0 = last
+				stackEnv.runtime.stack0 = last
 				if len(retStack) > 0 {
-					stackEnv.runtime.Stack1 = retStack[len(retStack)-1]
-					stackEnv.runtime.StackN = retStack[:len(retStack)-1]
+					stackEnv.runtime.stack1 = retStack[len(retStack)-1]
+					stackEnv.runtime.stackN = retStack[:len(retStack)-1]
 				}
 				a, err := stackEnv.Call2(a.Object(), stackEnv.Stack()...)
 				_ = err == nil && env.SetA(a) || env.SetA(Error(&stackEnv, err))
@@ -457,9 +457,9 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				stackEnv.Clear()
 			} else if cls.Native != nil {
 				stackEnv.Global = env.Global
-				stackEnv.runtime.Stack0 = Stacktrace{Callable: obj, stackOffsetFlag: internal.FlagNativeCall}
-				stackEnv.runtime.Stack1 = last
-				stackEnv.runtime.StackN = retStack
+				stackEnv.runtime.stack0 = Stacktrace{Callable: obj, stackOffsetFlag: internal.FlagNativeCall}
+				stackEnv.runtime.stack1 = last
+				stackEnv.runtime.stackN = retStack
 				cls.Native(&stackEnv)
 				stackEnv.runtime = Runtime{}
 				env.A = stackEnv.A

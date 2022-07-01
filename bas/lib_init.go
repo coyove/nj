@@ -55,10 +55,10 @@ func init() {
 	})
 	Globals.SetMethod("createprototype", func(e *Env) {
 		e.A = Func(e.Str(0), func(e *Env) {
-			o := e.runtime.Stack0.Callable
+			o := e.runtime.stack0.Callable
 			init := o.Prop("_init").Object()
 			n := o.Copy(true).SetPrototype(o)
-			CallObject(init, e, nil, n.ToValue(), e.Stack()...)
+			CallObject(init, e.runtime, nil, n.ToValue(), e.Stack()...)
 			e.A = n.ToValue()
 		}).Object().
 			Merge(e.Object(2)).
@@ -68,10 +68,10 @@ func init() {
 
 	// Debug libraries
 	Globals.SetProp("debug", NamedObject("debug", 0).
-		SetMethod("self", func(e *Env) { e.A = e.Runtime().Stack1.Callable.ToValue() }).
+		SetMethod("self", func(e *Env) { e.A = e.Runtime().stack1.Callable.ToValue() }).
 		SetMethod("locals", func(e *Env) {
-			locals := e.Runtime().Stack1.Callable.fun.Locals
-			start := e.stackOffset() - uint32(e.Runtime().Stack1.Callable.fun.StackSize)
+			locals := e.Runtime().stack1.Callable.fun.Locals
+			start := e.stackOffset() - uint32(e.Runtime().stack1.Callable.fun.StackSize)
 			if e.Get(0).IsTrue() {
 				r := NewObject(0)
 				for i, name := range locals {
@@ -115,7 +115,7 @@ func init() {
 
 	Globals.
 		SetMethod("type", func(e *Env) { e.A = Str(e.Get(0).Type().String()) }).
-		SetMethod("apply", func(e *Env) { e.A = CallObject(e.Object(0), e, nil, e.Get(1), e.Stack()[2:]...) }).
+		SetMethod("apply", func(e *Env) { e.A = CallObject(e.Object(0), e.runtime, nil, e.Get(1), e.Stack()[2:]...) }).
 		SetMethod("panic", func(e *Env) {
 			v := e.Get(0)
 			if HasPrototype(v, Proto.Error) {
@@ -225,7 +225,7 @@ func init() {
 
 	*Proto.Func = *NamedObject("function", 0).
 		SetMethod("ismethod", func(e *Env) { e.A = Bool(e.Object(-1).fun.Method) }).
-		SetMethod("apply", func(e *Env) { e.A = CallObject(e.Object(-1), e, nil, e.Get(0), e.Stack()[1:]...) }).
+		SetMethod("apply", func(e *Env) { e.A = CallObject(e.Object(-1), e.runtime, nil, e.Get(0), e.Stack()[1:]...) }).
 		SetMethod("call", func(e *Env) { e.A = e.Call(e.Object(-1), e.Stack()...) }).
 		SetMethod("try", func(e *Env) {
 			a, err := e.Call2(e.Object(-1), e.Stack()...)
@@ -267,7 +267,7 @@ func init() {
 			lambda := e.Object(-1)
 			c := e.CopyStack()
 			e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
-				o := e.runtime.Stack0.Callable
+				o := e.runtime.stack0.Callable
 				f := o.Prop("_l").Object()
 				stk := append(o.Prop("_c").Native().Values(), e.Stack()...)
 				e.A = e.Call(f, stk...)

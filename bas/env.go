@@ -23,40 +23,33 @@ func NewEnv() *Env {
 }
 
 type Runtime struct {
-	// Stacktrace layout: [N, N-1, ..., 2], 1, 0(current)
-	StackN []Stacktrace // [N, N-1, ..., 2]
-	Stack1 Stacktrace   // 1. if null, then Stack0 is the only one in stacktrace
-	Stack0 Stacktrace   // 0
+	// Stacktrace layout: N, N-1, ..., 2, 1, 0(current)
+	stackN []Stacktrace // [N, N-1, ..., 2]
+	stack1 Stacktrace   // 1. if null, then Stack0 is the only one in stacktrace
+	stack0 Stacktrace   // 0
 }
 
 func (r Runtime) Stacktrace() []Stacktrace {
-	if r.Stack0.Callable == nil {
-		internal.ShouldNotHappen()
+	if r.stack0.Callable == nil {
+		return nil
 	}
-	if r.Stack1.Callable == nil {
-		return []Stacktrace{r.Stack0}
+	if r.stack1.Callable == nil {
+		return []Stacktrace{r.stack0}
 	}
-	return append(r.StackN, r.Stack1, r.Stack0)
+	return append(append([]Stacktrace{}, r.stackN...), r.stack1, r.stack0)
 }
 
-func (r Runtime) Push(k Stacktrace) Runtime {
-	if r.Stack1.Callable != nil {
-		r.StackN = append(r.StackN, r.Stack1)
+func (r Runtime) push(k Stacktrace) Runtime {
+	if r.stack1.Callable != nil {
+		r.stackN = append(r.stackN, r.stack1)
 	}
-	r.Stack1 = r.Stack0
-	r.Stack0 = k
+	r.stack1 = r.stack0
+	r.stack0 = k
 	return r
 }
 
 func (env *Env) Runtime() Runtime {
 	return env.runtime
-}
-
-func (env *Env) GlobalEnvironment() Environment {
-	if env.Global == nil {
-		return Environment{}
-	}
-	return env.Global.Environment
 }
 
 func (env *Env) SourceFilename() string {
@@ -215,10 +208,10 @@ func (env *Env) SetA(a Value) bool {
 }
 
 func (e *Env) Call(m *Object, args ...Value) (res Value) {
-	return CallObject(m, e, nil, m.this, args...)
+	return CallObject(m, e.runtime, nil, m.this, args...)
 }
 
 func (e *Env) Call2(m *Object, args ...Value) (res Value, err error) {
-	res = CallObject(m, e, &err, m.this, args...)
+	res = CallObject(m, e.runtime, &err, m.this, args...)
 	return
 }
