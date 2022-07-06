@@ -158,7 +158,7 @@ func UnsafeStr(s []byte) Value {
 
 // Byte creates a one-byte string value
 func Byte(s byte) Value {
-	x := [8]byte{s}
+	x := [8]byte{s, s, s, s, s, s, s, s + 1}
 	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStrMarker) + 8)}
 }
 
@@ -166,6 +166,17 @@ func Byte(s byte) Value {
 func Rune(r rune) Value {
 	x := [8]byte{}
 	n := utf8.EncodeRune(x[:], r)
+	switch n {
+	case 1:
+		x[1], x[2], x[3], x[4], x[5], x[6], x[7] = x[0], x[0], x[0], x[0], x[0], x[0], x[0]+1
+	case 2:
+		x[2], x[3], x[4], x[5], x[6], x[7] = x[0], x[1], x[0], x[1], x[0], x[1]+1
+	case 3:
+		x[3], x[4], x[5], x[6], x[7] = x[0], x[1], x[2], x[0], x[1]+1
+	case 4:
+		copy(x[4:], x[:4])
+		x[7]++
+	}
 	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStrMarker) + uintptr(n)*8)}
 }
 
