@@ -256,7 +256,7 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	}
 	if a := newtable.sym.Get(staticSelf); a != bas.Nil {
 		newtable.codeSeg.Code = append([]typ.Inst{
-			{Opcode: typ.OpSelf},
+			{Opcode: typ.OpLoadFunc, A: typ.RegA},
 			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: typ.RegA},
 		}, newtable.codeSeg.Code...)
 	}

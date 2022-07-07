@@ -53,7 +53,7 @@ function renderRow(y0)
     return row 
 end
 
-size = 1600
+size = 16000
 bytesPerRow = size >> 3 
 
 initial_r = array.make(size) 
@@ -68,7 +68,7 @@ end
 
 rows = renderRow.map(array.make(size), os.numcpus)
 
-write(PROGRAM.Stdout, "P4\n" + (size) + " " + (size) + "\n") 
+io.write(stdout, "P4\n" + (size) + " " + (size) + "\n") 
 for i = 0, #(rows) do
-    write(PROGRAM.Stdout, rows[i]) 
+    io.write(stdout, rows[i]) 
 end

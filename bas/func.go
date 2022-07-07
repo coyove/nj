@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/coyove/nj/internal"
@@ -211,15 +210,16 @@ func (c *funcbody) GoString() string {
 }
 
 func pkPrettify(c *funcbody, p *Program, toplevel bool) string {
-	sb := &bytes.Buffer{}
-	sb.WriteString("+ START " + c.String() + "\n")
 	if c.Native != nil {
-		sb.WriteString("| NATIVE CODE\n")
+		return "0)\t0\tnative code"
 	}
+
+	sb := &bytes.Buffer{}
+	sb.WriteString("start)\t" + c.String() + "\n")
 
 	readAddr := func(a uint16, rValue bool) string {
 		if a == typ.RegA {
-			return "$a"
+			return "a"
 		}
 
 		suffix := ""
@@ -233,9 +233,9 @@ func pkPrettify(c *funcbody, p *Program, toplevel bool) string {
 		}
 
 		if a > typ.RegLocalMask {
-			return fmt.Sprintf("g$%d", a&typ.RegLocalMask) + suffix
+			return fmt.Sprintf("g(%d)", a&typ.RegLocalMask) + suffix
 		}
-		return fmt.Sprintf("$%d", a&typ.RegLocalMask) + suffix
+		return fmt.Sprintf("sp(%d)", a&typ.RegLocalMask) + suffix
 	}
 
 	oldpos := c.CodeSeg.Pos
@@ -250,26 +250,29 @@ func pkPrettify(c *funcbody, p *Program, toplevel bool) string {
 			for uint32(cursor) > op && oldpos.Len() > 0 {
 				op, line = oldpos.Pop()
 			}
-			x := strconv.Itoa(int(line))
-			sb.WriteString(fmt.Sprintf("|%-5s % 4d| ", x+"L", cursor-1))
+			sb.WriteString(fmt.Sprintf("%d)\t%d\t", line, cursor-1))
 		} else {
-			sb.WriteString(fmt.Sprintf("|$     % 4d| ", cursor-1))
+			sb.WriteString(fmt.Sprintf("$)\t%d\t", cursor-1))
 		}
 
 		switch bop {
 		case typ.OpSet:
-			sb.WriteString(readAddr(a, false) + " = " + readAddr(b, true))
+			sb.WriteString(readAddr(a, false) + " = " + readAddr(b, false))
 		case typ.OpCreateArray:
 			sb.WriteString("createarray")
 		case typ.OpCreateObject:
 			sb.WriteString("createobject")
 		case typ.OpLoadFunc:
-			cls := p.functions[a]
-			sb.WriteString("loadfunc " + cls.fun.Name + "\n")
-			sb.WriteString(pkPrettify(cls.fun, cls.fun.LoadGlobal, false))
+			if a == typ.RegA {
+				sb.WriteString("loadself")
+			} else {
+				cls := p.functions[a]
+				sb.WriteString(fmt.Sprintf("loadfunc(%d)\n", a))
+				sb.WriteString(pkPrettify(cls.fun, cls.fun.LoadGlobal, false))
+			}
 		case typ.OpTailCall, typ.OpCall, typ.OpTryCall:
 			if b != typ.RegPhantom {
-				sb.WriteString("push " + readAddr(b, true) + " -> ")
+				sb.WriteString("push " + readAddr(b, false) + " -> ")
 			}
 			switch bop {
 			case typ.OpTailCall:
@@ -286,19 +289,19 @@ func pkPrettify(c *funcbody, p *Program, toplevel bool) string {
 			}
 			sb.WriteString(fmt.Sprintf("jmp %d to %d", dest, pos2))
 		case typ.OpInc:
-			sb.WriteString("inc " + readAddr(a, false) + " " + readAddr(b, true))
+			sb.WriteString("inc " + readAddr(a, false) + " " + readAddr(b, false))
 			if c != 0 {
 				sb.WriteString(fmt.Sprintf(" jmp %d to %d", int16(c), int32(cursor)+int32(int16(c))))
 			}
 		default:
 			if bop == typ.OpLoad {
-				sb.WriteString("load " + readAddr(a, true) + " " + readAddr(b, true) + " -> " + readAddr(c, false))
+				sb.WriteString("load " + readAddr(a, false) + " " + readAddr(b, false) + " -> " + readAddr(c, false))
 			} else if bop == typ.OpStore {
-				sb.WriteString("store " + readAddr(a, true) + " " + readAddr(b, true) + " " + readAddr(c, true))
+				sb.WriteString("store " + readAddr(a, false) + " " + readAddr(b, false) + " " + readAddr(c, false))
 			} else if us, ok := typ.UnaryOpcode[bop]; ok {
-				sb.WriteString(us + " " + readAddr(a, true))
+				sb.WriteString(us + " " + readAddr(a, false))
 			} else if bs, ok := typ.BinaryOpcode[bop]; ok {
-				sb.WriteString(bs + " " + readAddr(a, true) + " " + readAddr(b, true))
+				sb.WriteString(bs + " " + readAddr(a, false) + " " + readAddr(b, false))
 			} else {
 				sb.WriteString(fmt.Sprintf("? %02x", bop))
 			}
@@ -307,6 +310,6 @@ func pkPrettify(c *funcbody, p *Program, toplevel bool) string {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("+ END " + c.String())
+	sb.WriteString("end)\t" + c.String())
 	return sb.String()
 }

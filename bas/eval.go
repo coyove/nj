@@ -122,8 +122,9 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		return retStack
 	})
 
+	code := K.fun.CodeSeg.Code
 	for {
-		v := K.fun.CodeSeg.Code[cursor]
+		v := code[cursor]
 		bop, opa, opb, opc := v.Opcode, v.A, v.B, v.C
 		cursor++
 
@@ -404,6 +405,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			r := retStack[len(retStack)-1]
 			cursor = r.Cursor
 			K = r.Callable
+			code = K.fun.CodeSeg.Code
 			env.stackOffsetFlag = r.stackOffsetFlag
 			env.A = v
 			env.Global = K.fun.LoadGlobal
@@ -411,9 +413,11 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			stackEnv.stackOffsetFlag = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
 		case typ.OpLoadFunc:
-			env.A = env.Global.functions[opa].ToValue()
-		case typ.OpSelf:
-			env.A = K.ToValue()
+			if opa == typ.RegA {
+				env.A = K.ToValue()
+			} else {
+				env.A = env.Global.functions[opa].ToValue()
+			}
 		case typ.OpCall, typ.OpTryCall, typ.OpTailCall:
 			a := env._get(opa)
 			if a.Type() != typ.Object {
@@ -470,6 +474,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				// Switch 'env' to 'stackEnv' and clear 'stackEnv'
 				cursor = 0
 				K = obj
+				code = obj.fun.CodeSeg.Code
 				env.stackOffsetFlag = stackEnv.stackOffsetFlag
 				env.Global = cls.LoadGlobal
 				env.A = stackEnv.A
