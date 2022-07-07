@@ -34,7 +34,7 @@ import (
 )
 
 func init() {
-	bas.Globals.SetProp("json", bas.NamedObject("json", 0).
+	bas.AddGlobal("json", bas.NamedObject("json", 0).
 		SetMethod("stringify", func(e *bas.Env) { e.A = bas.Str(e.Get(0).JSONString()) }).
 		SetMethod("dump", func(e *bas.Env) { e.Get(1).Stringify(bas.NewWriter(e.Get(0)), typ.MarshalToJSON) }).
 		SetMethod("parse", func(e *bas.Env) {
@@ -48,14 +48,14 @@ func init() {
 			e.A = v
 		}).
 		ToValue())
-	bas.Globals.SetMethod("loadfile", func(e *bas.Env) {
+	bas.AddGlobalMethod("loadfile", func(e *bas.Env) {
 		path := e.Str(0)
 		if e.Get(1).Maybe().Bool() && e.Global.File != "" {
 			path = filepath.Join(filepath.Dir(e.Global.File), path)
 		}
 		e.A = MustRun(LoadFile(path, &e.Global.Environment))
 	})
-	bas.Globals.SetMethod("eval", func(e *bas.Env) {
+	bas.AddGlobalMethod("eval", func(e *bas.Env) {
 		opts := e.Get(1).Maybe().Object(nil)
 		if opts.Prop("ast").IsTrue() {
 			v, err := parser.Parse(e.Str(0), "")
@@ -70,25 +70,25 @@ func init() {
 		_ = opts.Prop("returnglobals").IsTrue() && e.SetA(p.LocalsObject().ToValue()) || e.SetA(v)
 	})
 
-	bas.Globals.SetProp("stdout", bas.ValueOf(os.Stdout))
-	bas.Globals.SetProp("stdin", bas.ValueOf(os.Stdin))
-	bas.Globals.SetProp("stderr", bas.ValueOf(os.Stderr))
-	bas.Globals.SetProp("printf", bas.Func("printf", func(e *bas.Env) {
+	bas.AddGlobal("stdout", bas.ValueOf(os.Stdout))
+	bas.AddGlobal("stdin", bas.ValueOf(os.Stdin))
+	bas.AddGlobal("stderr", bas.ValueOf(os.Stderr))
+	bas.AddGlobal("printf", bas.Func("printf", func(e *bas.Env) {
 		bas.EnvFprintf(e, 0, bas.Stdout)
 	}))
-	bas.Globals.SetProp("println", bas.Func("println", func(e *bas.Env) {
+	bas.AddGlobal("println", bas.Func("println", func(e *bas.Env) {
 		for _, a := range e.Stack() {
 			fmt.Fprint(bas.Stdout, a.String(), " ")
 		}
 		fmt.Fprintln(bas.Stdout)
 	}))
-	bas.Globals.SetProp("print", bas.Func("print", func(e *bas.Env) {
+	bas.AddGlobal("print", bas.Func("print", func(e *bas.Env) {
 		for _, a := range e.Stack() {
 			fmt.Fprint(bas.Stdout, a.String())
 		}
 		fmt.Fprintln(bas.Stdout)
 	}))
-	bas.Globals.SetMethod("scanln", func(env *bas.Env) {
+	bas.AddGlobalMethod("scanln", func(env *bas.Env) {
 		prompt, n := env.Get(0), env.Get(1)
 		fmt.Fprint(bas.Stdout, prompt.Maybe().Str(""))
 		var results []bas.Value
@@ -102,8 +102,8 @@ func init() {
 		}
 		env.A = bas.Array(results...)
 	})
-	bas.Globals.SetMethod("sleep", func(e *bas.Env) { time.Sleep(time.Duration(e.Float64(0)*1e6) * 1e3) })
-	bas.Globals.SetMethod("Go_time", func(e *bas.Env) {
+	bas.AddGlobalMethod("sleep", func(e *bas.Env) { time.Sleep(time.Duration(e.Float64(0)*1e6) * 1e3) })
+	bas.AddGlobalMethod("Go_time", func(e *bas.Env) {
 		if e.Size() > 0 {
 			e.A = bas.ValueOf(time.Date(e.Int(0), time.Month(e.Int(1)), e.Int(2),
 				e.Get(3).Maybe().Int(0), e.Get(4).Maybe().Int(0), e.Get(5).Maybe().Int(0), e.Get(6).Maybe().Int(0), time.UTC))
@@ -111,17 +111,17 @@ func init() {
 			e.A = bas.ValueOf(time.Now())
 		}
 	})
-	bas.Globals.SetMethod("clock", func(e *bas.Env) {
+	bas.AddGlobalMethod("clock", func(e *bas.Env) {
 		x := time.Now()
 		s := *(*[2]int64)(unsafe.Pointer(&x))
 		e.A = bas.Float64(float64(s[1]) / 1e9)
 	})
-	bas.Globals.SetMethod("exit", func(e *bas.Env) { os.Exit(e.Int(0)) })
-	bas.Globals.SetMethod("chr", func(e *bas.Env) { e.A = bas.Rune(rune(e.Int(0))) })
-	bas.Globals.SetMethod("byte", func(e *bas.Env) { e.A = bas.Byte(byte(e.Int(0))) })
-	bas.Globals.SetMethod("ord", func(e *bas.Env) { r, _ := utf8.DecodeRuneInString(e.Str(0)); e.A = bas.Int64(int64(r)) })
+	bas.AddGlobalMethod("exit", func(e *bas.Env) { os.Exit(e.Int(0)) })
+	bas.AddGlobalMethod("chr", func(e *bas.Env) { e.A = bas.Rune(rune(e.Int(0))) })
+	bas.AddGlobalMethod("byte", func(e *bas.Env) { e.A = bas.Byte(byte(e.Int(0))) })
+	bas.AddGlobalMethod("ord", func(e *bas.Env) { r, _ := utf8.DecodeRuneInString(e.Str(0)); e.A = bas.Int64(int64(r)) })
 
-	bas.Globals.SetProp("re", bas.Func("RegExp", func(e *bas.Env) {
+	bas.AddGlobal("re", bas.Func("RegExp", func(e *bas.Env) {
 		rx := regexp.MustCompile(e.Str(0))
 		e.A = bas.NewObject(1).SetPrototype(e.A.Object()).SetProp("_rx", bas.ValueOf(rx)).ToValue()
 	}).Object().
@@ -140,7 +140,7 @@ func init() {
 		}).
 		ToValue())
 
-	bas.Globals.SetProp("open", bas.Func("open", func(e *bas.Env) {
+	bas.AddGlobal("open", bas.Func("open", func(e *bas.Env) {
 		path, flag, perm := e.Str(0), e.Get(1).Maybe().Str("r"), e.Get(2).Maybe().Int64(0644)
 		var opt int
 		for _, f := range flag {
@@ -188,7 +188,7 @@ func init() {
 		}).ToValue(),
 	)
 
-	bas.Globals.SetProp("math", bas.NamedObject("math", 0).
+	bas.AddGlobal("math", bas.NamedObject("math", 0).
 		SetProp("INF", bas.Float64(math.Inf(1))).
 		SetProp("NEG_INF", bas.Float64(math.Inf(-1))).
 		SetProp("PI", bas.Float64(math.Pi)).
@@ -237,7 +237,7 @@ func init() {
 		SetPrototype(bas.Proto.StaticObject).
 		ToValue())
 
-	bas.Globals.SetProp("os", bas.NamedObject("os", 0).
+	bas.AddGlobal("os", bas.NamedObject("os", 0).
 		SetProp("pid", bas.Int(os.Getpid())).
 		SetProp("numcpus", bas.Int(runtime.NumCPU())).
 		SetProp("args", bas.ValueOf(os.Args)).
@@ -305,7 +305,7 @@ func init() {
 		SetPrototype(bas.Proto.StaticObject).
 		ToValue())
 
-	bas.Globals.SetProp("sync", bas.NamedObject("sync", 0).
+	bas.AddGlobal("sync", bas.NamedObject("sync", 0).
 		SetMethod("mutex", func(e *bas.Env) { e.A = bas.ValueOf(&sync.Mutex{}) }).
 		SetMethod("rwmutex", func(e *bas.Env) { e.A = bas.ValueOf(&sync.RWMutex{}) }).
 		SetMethod("waitgroup", func(e *bas.Env) { e.A = bas.ValueOf(&sync.WaitGroup{}) }).
@@ -360,15 +360,15 @@ func init() {
 					ToValue()
 			}))
 
-	bas.Globals.SetProp("hex", bas.NamedObject("hex", 0).SetPrototype(encDecProto.Prototype()).ToValue())
-	bas.Globals.SetProp("base64", bas.NamedObject("base64", 0).
+	bas.AddGlobal("hex", bas.NamedObject("hex", 0).SetPrototype(encDecProto.Prototype()).ToValue())
+	bas.AddGlobal("base64", bas.NamedObject("base64", 0).
 		SetProp("std", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base64.StdEncoding)).ToValue()).
 		SetProp("url", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base64.URLEncoding)).ToValue()).
 		SetProp("std2", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base64.StdEncoding.WithPadding(-1))).ToValue()).
 		SetProp("url2", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base64.URLEncoding.WithPadding(-1))).ToValue()).
 		SetPrototype(encDecProto).
 		ToValue())
-	bas.Globals.SetProp("base32", bas.NamedObject("base32", 0).
+	bas.AddGlobal("base32", bas.NamedObject("base32", 0).
 		SetProp("std", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base32.StdEncoding)).ToValue()).
 		SetProp("hex", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base32.HexEncoding)).ToValue()).
 		SetProp("std2", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base32.StdEncoding.WithPadding(-1))).ToValue()).
@@ -376,7 +376,7 @@ func init() {
 		SetPrototype(encDecProto).
 		ToValue())
 
-	bas.Globals.SetProp("time", bas.Func("time", func(e *bas.Env) {
+	bas.AddGlobal("time", bas.Func("time", func(e *bas.Env) {
 		e.A = bas.Float64(float64(time.Now().UnixNano()) / 1e9)
 	}).Object().
 		SetMethod("now", func(e *bas.Env) { e.A = bas.ValueOf(time.Now()) }).
@@ -395,7 +395,7 @@ func init() {
 		}).
 		ToValue())
 
-	bas.Globals.SetProp("url", bas.Func("url", nil).Object().
+	bas.AddGlobal("url", bas.Func("url", nil).Object().
 		SetMethod("escape", func(e *bas.Env) { e.A = bas.Str(url.QueryEscape(e.Str(0))) }).
 		SetMethod("unescape", func(e *bas.Env) { e.A = valueOrPanic(url.QueryUnescape(e.Str(0))) }).
 		SetMethod("pathescape", func(e *bas.Env) { e.A = bas.Str(url.PathEscape(e.Str(0))) }).
@@ -532,9 +532,9 @@ func init() {
 			e.A = e.Call(e.Object(-1), bas.NewObject(0).SetProp("method", bas.Str(m)).SetProp("url", e.Get(0)).Merge(ex).ToValue())
 		})
 	}
-	bas.Globals.SetProp("http", httpLib.ToValue())
+	bas.AddGlobal("http", httpLib.ToValue())
 
-	bas.Globals.SetMethod("buffer", func(e *bas.Env) {
+	bas.AddGlobalMethod("buffer", func(e *bas.Env) {
 		b := &internal.LimitedBuffer{Limit: e.Get(1).Maybe().Int(0)}
 		b.Write(bas.ToReadonlyBytes(e.Get(0)))
 		e.A = bas.NamedObject("Buffer", 0).

@@ -28,8 +28,7 @@ import (
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	log.SetFlags(log.Lshortfile | log.Ltime)
-	bas.Globals.SetProp("G", bas.Int(1))
-	BuildGlobalStack()
+	bas.AddGlobal("G", bas.Int(1))
 }
 
 type testStruct struct {
@@ -263,7 +262,6 @@ func init() {
 }
 
 func BenchmarkCompiling(b *testing.B) {
-	BuildGlobalStack()
 	for i := 0; i < b.N; i++ {
 		LoadString("(a+1)", nil)
 	}
@@ -276,7 +274,7 @@ func BenchmarkGoCompiling(b *testing.B) {
 }
 
 func TestBigList(t *testing.T) {
-	n := typ.RegMaxAddress/2 - bas.Globals.Len()
+	n := typ.RegMaxAddress/2 - bas.GetGlobals().Len()
 
 	makeCode := func(n int) string {
 		buf := bytes.Buffer{}

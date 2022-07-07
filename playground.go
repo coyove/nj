@@ -97,7 +97,7 @@ func PlaygroundHandler(defaultCode string, opt *bas.Environment) func(w http.Res
 					}
 				}
 			}
-			x := bas.Globals.Copy(true)
+			x := bas.GetGlobals()
 			if opt != nil {
 				x.Merge(opt.Globals)
 			}

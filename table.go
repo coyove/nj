@@ -127,11 +127,6 @@ var (
 	staticSelf   = bas.Str("self")
 	staticA      = bas.Str("$a")
 	nodeCompiler = map[bas.Value]func(*symTable, []parser.Node) uint16{}
-	builtGlobal  struct {
-		built bool
-		stack []bas.Value
-		sym   bas.Object
-	}
 )
 
 func init() {
@@ -393,14 +388,9 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *bas.Environmen
 	// Load nil first to ensure its address == 0
 	table.borrowAddress()
 
-	if builtGlobal.built {
-		x := append([]bas.Value{}, builtGlobal.stack...)
-		internal.SetEnvStack(unsafe.Pointer(coreStack), unsafe.Pointer(&x))
-		table.sym = *builtGlobal.sym.Copy(true)
-	} else {
-		coreStack.Push(bas.Nil)
-		bas.Globals.Foreach(func(k bas.Value, v *bas.Value) bool { push(k, *v); return true })
-	}
+	obj, stk := bas.GetGlobalsStack()
+	internal.SetEnvStack(unsafe.Pointer(coreStack), unsafe.Pointer(&stk))
+	table.sym = *obj
 
 	if env != nil && env.Globals != nil {
 		env.Globals.Foreach(func(k bas.Value, v *bas.Value) bool { push(k, *v); return true })
@@ -437,25 +427,4 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *bas.Environmen
 	)), &table.sym, table.funcs, env)
 	coreStack.Set(int(gi), bas.ValueOf(cls))
 	return cls, err
-}
-
-// BuildGlobalStack can be called when all global values have been added into bas.Globals,
-// to speed up LoadString and LoadFile.
-func BuildGlobalStack() {
-	builtGlobal.sym.Clear()
-	builtGlobal.stack = append(builtGlobal.stack[:0], bas.Nil)
-
-	bas.Globals.Foreach(func(k bas.Value, v *bas.Value) bool {
-		idx := builtGlobal.sym.Get(k)
-		if idx != bas.Nil {
-			builtGlobal.stack[idx.Int()] = *v
-		} else {
-			idx := len(builtGlobal.stack)
-			builtGlobal.sym.Set(k, bas.Int(idx))
-			builtGlobal.stack = append(builtGlobal.stack, *v)
-		}
-		return true
-	})
-
-	builtGlobal.built = true
 }
