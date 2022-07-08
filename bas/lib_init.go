@@ -140,7 +140,7 @@ func init() {
 			env.A = newArray(lines...).ToValue()
 		}).
 		SetMethod("disfunc", func(e *Env) {
-			e.A = Str(e.Object(0).fun.GoString())
+			e.A = Str(e.Object(0).GoString())
 		}).
 		SetPrototype(Proto.StaticObject).
 		ToValue())
@@ -248,6 +248,9 @@ func init() {
 			p := &bytes.Buffer{}
 			e.Object(-1).rawPrint(p, typ.MarshalToJSON, true)
 			e.A = UnsafeStr(p.Bytes())
+		}).
+		SetMethod("print", func(e *Env) {
+			e.A = Str(e.Object(-1).GoString())
 		}).
 		SetMethod("pure", func(e *Env) { e.A = e.Object(-1).Copy(false).SetPrototype(&ObjectProto).ToValue() }).
 		SetMethod("next", func(e *Env) { e.A = newArray(e.Object(-1).NextKeyValue(e.Get(0))).ToValue() })

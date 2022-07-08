@@ -333,13 +333,13 @@ func (m *Object) rawPrint(p io.Writer, j typ.MarshalType, showProto bool) {
 			internal.WriteString(p, `{`)
 		} else {
 			internal.WriteString(p, `{"<f>":"`)
-			internal.WriteString(p, m.fun.String())
+			internal.WriteString(p, m.funcSig())
 			internal.WriteString(p, `"`)
 			needComma = true
 		}
 	} else {
 		if m.fun != objEmptyFunc {
-			internal.WriteString(p, m.fun.String())
+			internal.WriteString(p, m.funcSig())
 		}
 		internal.WriteString(p, "{")
 	}

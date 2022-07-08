@@ -367,7 +367,7 @@ func detail(v Value) string {
 	switch vt := v.Type(); vt {
 	case typ.Object:
 		if v.Object().fun != nil {
-			return v.Object().fun.String()
+			return v.Object().funcSig()
 		}
 		return v.Object().Name() + "{}"
 	case typ.Native:
