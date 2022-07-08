@@ -78,7 +78,7 @@ func (e *ExecError) Error() string {
 				msg.WriteString(" (tailcall)")
 			}
 			msg.WriteString("\n\t")
-			line, ok := internal.LineOf(r.Callable.fun.LoadGlobal.Source, int(ln))
+			line, ok := internal.LineOf(r.Callable.fun.LoadGlobal.source, int(ln))
 			if ok {
 				msg.WriteString(strings.TrimSpace(line))
 			} else {
@@ -439,6 +439,15 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				} else {
 					stackEnv.grow(w + 1)
 					stackEnv._set(uint16(w), newArray().ToValue())
+				}
+			}
+
+			if g := env.Global; g != nil {
+				if g.MaxStackSize > 0 && int64(len(*g.stack)) > g.MaxStackSize {
+					panic("stack overflow")
+				}
+				if g.stopped {
+					panic("program stopped")
 				}
 			}
 

@@ -24,7 +24,7 @@ var (
 	version   = flag.Bool("v", false, "print version and usage")
 	repl      = flag.Bool("repl", false, "repl mode")
 	timeout   = flag.Int("t", 0, "max execution time in ms")
-	stackSize = flag.Int("ss", 1e6, "max stack size (counted by 16 bytes)")
+	stackSize = flag.Int("ss", 1e6, "max stack size, 1 stack size is 16-byte on 64bit platform")
 	apiServer = flag.String("serve", "", "start as language playground")
 )
 
@@ -131,20 +131,14 @@ func main() {
 		return
 	}
 
-	var finished bool
 	if *timeout > 0 {
-		// b.SetTimeout(time.Second * time.Duration(*timeout))
 		go func() {
-			time.Sleep(time.Second * time.Duration(*timeout))
-			if !finished {
-				b.Stop()
-				log.Fatalln("timeout")
-			}
+			time.Sleep(time.Millisecond * time.Duration(*timeout))
+			b.Stop()
 		}()
 	}
 
 	i, err := b.Run()
-	finished = true
 	if _ret {
 		fmt.Print(i)
 		fmt.Print(" ", err, "\n")
@@ -166,7 +160,7 @@ func runRepl() {
 		code = append(code, s)
 		if s == "" || strings.HasSuffix(s, ";") {
 			text := strings.TrimSuffix(strings.Join(code, "\n"), ";")
-			p, err := nj.LoadString(text, &bas.Environment{Globals: globals})
+			p, err := nj.LoadString(text, &nj.LoadOptions{Globals: globals})
 			if err != nil {
 				fmt.Println("x", err)
 			} else {

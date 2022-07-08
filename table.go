@@ -2,6 +2,7 @@ package nj
 
 import (
 	"fmt"
+	"io"
 	"unsafe"
 
 	"github.com/coyove/nj/bas"
@@ -19,7 +20,7 @@ type breakLabel struct {
 // symTable is responsible for recording the state of compilation
 type symTable struct {
 	name    string
-	options *bas.Environment
+	options *LoadOptions
 
 	global *symTable
 	parent *symTable
@@ -47,7 +48,7 @@ type symTable struct {
 	labelPos    map[string]int      // label name to position
 }
 
-func newSymTable(opt *bas.Environment) *symTable {
+func newSymTable(opt *LoadOptions) *symTable {
 	t := &symTable{
 		options: opt,
 	}
@@ -364,7 +365,7 @@ func (table *symTable) getGlobal() *symTable {
 	return table
 }
 
-func compileNodeTopLevel(name, source string, n parser.Node, env *bas.Environment) (cls *bas.Program, err error) {
+func compileNodeTopLevel(name, source string, n parser.Node, env *LoadOptions) (cls *bas.Program, err error) {
 	defer internal.CatchError(&err)
 
 	table := newSymTable(env)
@@ -424,7 +425,14 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *bas.Environmen
 		table.vp,
 		table.symbolsToDebugLocals(),
 		table.codeSeg,
-	)), &table.sym, table.funcs, env)
+	)), &table.sym, table.funcs)
+	if env != nil {
+		cls.MaxStackSize = env.MaxStackSize
+		cls.Globals = env.Globals
+		cls.Stdout = internal.Or(env.Stdout, cls.Stdout).(io.Writer)
+		cls.Stderr = internal.Or(env.Stderr, cls.Stderr).(io.Writer)
+		cls.Stdin = internal.Or(env.Stdin, cls.Stdin).(io.Reader)
+	}
 	coreStack.Set(int(gi), bas.ValueOf(cls))
 	return cls, err
 }

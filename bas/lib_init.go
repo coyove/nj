@@ -76,11 +76,12 @@ func init() {
 		obj.fun.Method = strings.Contains(name, ".")
 		return unsafe.Pointer(obj)
 	}
+	objEmptyFunc.Native = func(e *Env) { e.A = e.A.Object().Copy(true).ToValue() }
 
 	AddGlobal("VERSION", Int64(Version))
-	AddGlobal("globals", EnvFunc("globals", func(e *Env) {
-		e.A = e.Global.LocalsObject().ToValue()
-	}))
+	AddGlobalMethod("globals", func(e *Env) {
+		e.A = e.MustGlobal().LocalsObject().ToValue()
+	})
 	AddGlobalMethod("new", func(e *Env) {
 		m := e.Object(0)
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
@@ -99,7 +100,7 @@ func init() {
 	})
 
 	// Debug libraries
-	AddGlobal("debug", NamedObject("debug", 0).
+	AddGlobal("debug", NewNamedObject("debug", 0).
 		SetMethod("self", func(e *Env) { e.A = e.Runtime().stack1.Callable.ToValue() }).
 		SetMethod("locals", func(e *Env) {
 			locals := e.Runtime().stack1.Callable.fun.Locals
@@ -119,16 +120,16 @@ func init() {
 				e.A = newArray(r...).ToValue()
 			}
 		}).
-		SetProp("globals", EnvFunc("globals", func(e *Env) {
+		SetMethod("globals", func(e *Env) {
 			var r []Value
-			for i, name := range e.Global.top.fun.Locals {
+			for i, name := range e.MustGlobal().top.fun.Locals {
 				r = append(r, Int(i), Str(name), (*e.Global.stack)[i])
 			}
-			e.A = newArray(r...).ToValue()
-		})).
-		SetProp("set", EnvFunc("set", func(e *Env) {
-			(*e.Global.stack)[e.Int64(0)] = e.Get(1)
-		})).
+			e.A = Array(r...)
+		}).
+		SetMethod("set", func(e *Env) {
+			(*e.MustGlobal().stack)[e.Int64(0)] = e.Get(1)
+		}).
 		SetMethod("trace", func(env *Env) {
 			stacks := env.Runtime().Stacktrace()
 			lines := make([]Value, 0, len(stacks))
@@ -139,8 +140,7 @@ func init() {
 			env.A = newArray(lines...).ToValue()
 		}).
 		SetMethod("disfunc", func(e *Env) {
-			o := e.Object(0)
-			_ = o.IsCallable() && e.SetA(Str(o.fun.GoString())) || e.SetA(Nil)
+			e.A = Str(e.Object(0).fun.GoString())
 		}).
 		SetPrototype(Proto.StaticObject).
 		ToValue())
@@ -189,7 +189,7 @@ func init() {
 	}).Object()
 	AddGlobal("float", Proto.Float.ToValue())
 
-	AddGlobal("io", NamedObject("io", 0).
+	AddGlobal("io", NewNamedObject("io", 0).
 		SetProp("reader", Proto.Reader.ToValue()).
 		SetProp("writer", Proto.Writer.ToValue()).
 		SetProp("seeker", Proto.Seeker.ToValue()).
@@ -208,7 +208,7 @@ func init() {
 		SetPrototype(Proto.StaticObject).
 		ToValue())
 
-	ObjectProto = *NamedObject("object", 0).
+	ObjectProto = *NewNamedObject("object", 0).
 		SetMethod("new", func(e *Env) { e.A = NewObject(e.Get(0).Maybe().Int(0)).ToValue() }).
 		SetMethod("newstatic", func(e *Env) { e.A = NewObject(e.Get(0).Maybe().Int(0)).SetPrototype(Proto.StaticObject).ToValue() }).
 		SetMethod("find", func(e *Env) { e.A = e.Object(-1).Find(e.Get(0)) }).
@@ -253,7 +253,7 @@ func init() {
 		SetMethod("next", func(e *Env) { e.A = newArray(e.Object(-1).NextKeyValue(e.Get(0))).ToValue() })
 	ObjectProto.SetPrototype(nil) // object is the topmost 'object', it should not have any prototype
 
-	*Proto.Func = *NamedObject("function", 0).
+	*Proto.Func = *NewNamedObject("function", 0).
 		SetMethod("ismethod", func(e *Env) { e.A = Bool(e.Object(-1).fun.Method) }).
 		SetMethod("apply", func(e *Env) { e.A = CallObject(e.Object(-1), e.runtime, nil, e.Get(0), e.Stack()[1:]...) }).
 		SetMethod("call", func(e *Env) { e.A = e.Call(e.Object(-1), e.Stack()...) }).
@@ -264,7 +264,7 @@ func init() {
 		SetMethod("after", func(e *Env) {
 			f, args, e2 := e.Object(-1), e.CopyStack()[1:], EnvForAsyncCall(e)
 			t := time.AfterFunc(time.Duration(e.Float64(0)*1e6)*1e3, func() { e2.Call(f, args...) })
-			e.A = NamedObject("Timer", 0).
+			e.A = NewNamedObject("Timer", 0).
 				SetProp("t", ValueOf(t)).
 				SetMethod("stop", func(e *Env) { e.A = Bool(e.ThisProp("t").(*time.Timer).Stop()) }).
 				ToValue()
@@ -281,7 +281,7 @@ func init() {
 					w <- v
 				}
 			}(f, args)
-			e.A = NamedObject("Goroutine", 0).
+			e.A = NewNamedObject("Goroutine", 0).
 				SetProp("f", f.ToValue()).
 				SetProp("w", NewNative(w).ToValue()).
 				SetMethod("wait", func(e *Env) { e.A = <-e.ThisProp("w").(chan Value) }).
@@ -313,7 +313,7 @@ func init() {
 	AddGlobal("func", Proto.Func.ToValue())
 	AddGlobal("callable", Proto.Func.ToValue())
 
-	*Proto.Native = *NamedObject("native", 4).
+	*Proto.Native = *NewNamedObject("native", 4).
 		SetProp("types", nativeGoObject.ToValue()).
 		SetMethod("typename", func(e *Env) {
 			e.A = Str(reflect.TypeOf(e.Get(-1).Native().Unwrap()).String())
@@ -340,7 +340,7 @@ func init() {
 	Proto.Native.SetPrototype(nil) // native prototype has no parent
 	AddGlobal("native", Proto.Native.ToValue())
 
-	*Proto.Array = *NamedObject("array", 0).
+	*Proto.Array = *NewNamedObject("array", 0).
 		SetMethod("make", func(e *Env) {
 			a := make([]Value, e.Int(0))
 			if v := e.Get(1); v != Nil {
@@ -429,7 +429,7 @@ func init() {
 		SetPrototype(Proto.Native)
 	AddGlobal("error", Proto.Error.ToValue())
 
-	*Proto.NativeMap = *NamedObject("nativemap", 4).
+	*Proto.NativeMap = *NewNamedObject("nativemap", 4).
 		SetMethod("toobject", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap())
 			o := NewObject(rv.Len())
@@ -475,7 +475,7 @@ func init() {
 		SetPrototype(Proto.Native)
 	AddGlobal("nativemap", Proto.NativeMap.ToValue())
 
-	*Proto.NativePtr = *NamedObject("nativeptr", 1).
+	*Proto.NativePtr = *NewNamedObject("nativeptr", 1).
 		SetMethod("set", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap()).Elem()
 			rv.Set(ToType(e.Get(0), rv.Type()))
@@ -487,7 +487,7 @@ func init() {
 		SetPrototype(Proto.Native)
 	AddGlobal("nativeptr", Proto.NativePtr.ToValue())
 
-	*Proto.NativeIntf = *NamedObject("nativeintf", 1).
+	*Proto.NativeIntf = *NewNamedObject("nativeintf", 1).
 		SetProp("deref", Proto.NativePtr.Prop("deref")).
 		SetPrototype(Proto.Native)
 	AddGlobal("nativeintf", Proto.NativeIntf.ToValue())

@@ -85,17 +85,7 @@ func (v MaybeValue) Object(defaultValue *Object) *Object {
 }
 
 func (v MaybeValue) Func(defaultValue *Object) *Object {
-	o := v.Object(defaultValue)
-	if o == defaultValue {
-		return o
-	}
-	if o != nil {
-		if o.IsCallable() {
-			return o
-		}
-		panic("Func: expects function or nil, got " + detail(Value(v)))
-	}
-	return o
+	return v.Object(defaultValue)
 }
 
 func ToError(v Value) error {
@@ -225,10 +215,6 @@ func HasPrototype(a Value, p *Object) bool {
 	return false
 }
 
-func IsCallable(a Value) bool {
-	return a.Type() == typ.Object && a.Object().IsCallable()
-}
-
 // ToType convert Value to reflect.Value based on reflect.Type
 func ToType(v Value, t reflect.Type) reflect.Value {
 	return toTypePtrStruct(v, t, nil)
@@ -266,7 +252,7 @@ func toTypePtrStruct(v Value, t reflect.Type, interopFuncs *[]func()) reflect.Va
 	if t.Implements(errType) {
 		return reflect.ValueOf(ToError(v))
 	}
-	if IsCallable(v) && t.Kind() == reflect.Func {
+	if v.IsObject() && t.Kind() == reflect.Func {
 		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
 			var a []Value
 			for i := range args {

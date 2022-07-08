@@ -40,10 +40,11 @@ func NewObject(preallocateSize int) *Object {
 	}
 	obj.this = obj.ToValue()
 	obj.parent = &ObjectProto
+	obj.fun = objEmptyFunc
 	return obj
 }
 
-func NamedObject(name string, preallocateSize int) *Object {
+func NewNamedObject(name string, preallocateSize int) *Object {
 	return NewObject(preallocateSize).setName(name)
 }
 
@@ -134,9 +135,8 @@ func (m *Object) find(k Value, findPrototype, setReceiver bool) (v Value) {
 		v = m.parent.find(k, findPrototype, false)
 	}
 	if setReceiver && v.IsObject() {
-		obj := v.Object()
-		if obj.fun != nil && obj.fun.Method {
-			f := v.Object().Copy(false)
+		if obj := v.Object(); obj.fun.Method {
+			f := obj.Copy(false)
 			f.this = m.ToValue()
 			v = f.ToValue()
 		}
@@ -328,22 +328,18 @@ func (m *Object) rawPrint(p io.Writer, j typ.MarshalType, showProto bool) {
 		return
 	}
 	needComma := false
-	if m.fun != nil {
-		if j == typ.MarshalToJSON {
+	if j == typ.MarshalToJSON {
+		if m.fun == objEmptyFunc {
+			internal.WriteString(p, `{`)
+		} else {
 			internal.WriteString(p, `{"<f>":"`)
 			internal.WriteString(p, m.fun.String())
 			internal.WriteString(p, `"`)
 			needComma = true
-		} else {
-			internal.WriteString(p, m.fun.String())
-			if m.count == 0 {
-				return
-			}
-			internal.WriteString(p, "{")
 		}
 	} else {
-		if j == typ.MarshalToString {
-			internal.WriteString(p, m.Name())
+		if m.fun != objEmptyFunc {
+			internal.WriteString(p, m.fun.String())
 		}
 		internal.WriteString(p, "{")
 	}
@@ -372,14 +368,9 @@ func (m *Object) ToValue() Value {
 
 func (m *Object) Name() string {
 	if m != nil {
-		if m.fun != nil {
-			return m.fun.Name
-		}
-		if m.parent != nil {
-			return m.parent.Name()
-		}
+		return m.fun.Name
 	}
-	return "object"
+	return objEmptyFunc.Name
 }
 
 func (m *Object) Copy(copyData bool) *Object {
@@ -399,13 +390,6 @@ func (m *Object) Merge(src *Object) *Object {
 		src.Foreach(func(k Value, v *Value) bool { m.Set(k, *v); return true })
 	}
 	return m
-}
-
-func (m *Object) IsCallable() bool {
-	if m == nil {
-		return false
-	}
-	return m.fun != nil
 }
 
 var resizeHash = func(m *Object, newSize int) {

@@ -5,17 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
 
-var (
-	Stdout io.Writer = os.Stdout
-	Stderr io.Writer = os.Stderr
-	Stdin  io.Reader = os.Stdin
-)
+var objEmptyFunc = &funcbody{Name: "object"}
 
 type funcbody struct {
 	CodeSeg    internal.Packet
@@ -23,19 +18,10 @@ type funcbody struct {
 	NumParams  byte
 	Variadic   bool
 	Method     bool
-	EnvgNeeded bool // an execution env (*Env) with Global is required
 	Native     func(env *Env)
 	Name       string
 	LoadGlobal *Program
 	Locals     []string
-}
-
-type Environment struct {
-	MaxStackSize int64
-	Globals      *Object
-	File         string
-	Source       string
-	Deadline     time.Time
 }
 
 type Program struct {
@@ -43,19 +29,27 @@ type Program struct {
 	symbols   *Object
 	stack     *[]Value
 	functions []*Object
-	Environment
+	stopped   bool
+	file      string
+	source    string
+
+	MaxStackSize int64
+	Globals      *Object
+	Stdout       io.Writer
+	Stderr       io.Writer
+	Stdin        io.Reader
 }
 
-func NewProgram(file, source string, coreStack *Env, top, symbols *Object, funcs []*Object, env *Environment) *Program {
+func NewProgram(file, source string, coreStack *Env, top, symbols *Object, funcs []*Object) *Program {
 	cls := &Program{top: top}
 	cls.stack = coreStack.stack
 	cls.symbols = symbols
 	cls.functions = funcs
-	if env != nil {
-		cls.Environment = *env
-	}
-	cls.File = file
-	cls.Source = source
+	cls.file = file
+	cls.source = source
+	cls.Stdout = os.Stdout
+	cls.Stdin = os.Stdin
+	cls.Stderr = os.Stderr
 
 	cls.top.fun.LoadGlobal = cls
 	for _, f := range cls.functions {
@@ -78,14 +72,8 @@ func Func(name string, f func(*Env)) Value {
 	return obj.ToValue()
 }
 
-// EnvFunc creates a callable object which strictly requires a valid execution env
-func EnvFunc(name string, f func(*Env)) Value {
-	o := Func(name, f).Object()
-	o.fun.EnvgNeeded = true
-	return o.ToValue()
-}
-
 func (p *Program) Run() (v1 Value, err error) {
+	p.stopped = false
 	defer internal.CatchError(&err)
 	newEnv := Env{
 		Global: p,
@@ -96,7 +84,12 @@ func (p *Program) Run() (v1 Value, err error) {
 }
 
 func (p *Program) Stop() {
+	p.stopped = true
 	return
+}
+
+func (p *Program) FileSource() (string, string) {
+	return p.file, p.source
 }
 
 func (p *Program) GoString() string {
@@ -144,15 +137,6 @@ func Call2(m *Object, args ...Value) (res Value, err error) {
 }
 
 func CallObject(m *Object, r Runtime, outErr *error, this Value, args ...Value) (res Value) {
-	if !m.IsCallable() {
-		if outErr == nil {
-			internal.Panic("%v not callable", detail(m.ToValue()))
-		} else {
-			*outErr = fmt.Errorf("%v not callable", detail(m.ToValue()))
-		}
-		return
-	}
-
 	c := m.fun
 	newEnv := Env{
 		A:      this,
@@ -170,9 +154,6 @@ func CallObject(m *Object, r Runtime, outErr *error, this Value, args ...Value) 
 			Callable:        m,
 			stackOffsetFlag: internal.FlagNativeCall,
 		})
-		if newEnv.Global == nil && c.EnvgNeeded {
-			internal.Panic("native function %q requires global env", c.Name)
-		}
 		c.Native(&newEnv)
 		return newEnv.A
 	}
@@ -216,6 +197,10 @@ func pkPrettify(c *funcbody, p *Program, toplevel bool) string {
 
 	sb := &bytes.Buffer{}
 	sb.WriteString("start)\t" + c.String() + "\n")
+
+	if c == p.top.fun {
+		sb.WriteString("source)\t" + c.LoadGlobal.file + "\n")
+	}
 
 	readAddr := func(a uint16, rValue bool) string {
 		if a == typ.RegA {
@@ -297,7 +282,7 @@ func pkPrettify(c *funcbody, p *Program, toplevel bool) string {
 			if bop == typ.OpLoad {
 				sb.WriteString("load " + readAddr(a, false) + " " + readAddr(b, false) + " -> " + readAddr(c, false))
 			} else if bop == typ.OpStore {
-				sb.WriteString("store " + readAddr(a, false) + " " + readAddr(b, false) + " " + readAddr(c, false))
+				sb.WriteString("store " + readAddr(a, false) + " " + readAddr(b, false) + " <- " + readAddr(c, false))
 			} else if us, ok := typ.UnaryOpcode[bop]; ok {
 				sb.WriteString(us + " " + readAddr(a, false))
 			} else if bs, ok := typ.BinaryOpcode[bop]; ok {

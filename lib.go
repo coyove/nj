@@ -34,7 +34,7 @@ import (
 )
 
 func init() {
-	bas.AddGlobal("json", bas.NamedObject("json", 0).
+	bas.AddGlobal("json", bas.NewNamedObject("json", 0).
 		SetMethod("stringify", func(e *bas.Env) { e.A = bas.Str(e.Get(0).JSONString()) }).
 		SetMethod("dump", func(e *bas.Env) { e.Get(1).Stringify(bas.NewWriter(e.Get(0)), typ.MarshalToJSON) }).
 		SetMethod("parse", func(e *bas.Env) {
@@ -50,10 +50,14 @@ func init() {
 		ToValue())
 	bas.AddGlobalMethod("loadfile", func(e *bas.Env) {
 		path := e.Str(0)
-		if e.Get(1).Maybe().Bool() && e.Global.File != "" {
-			path = filepath.Join(filepath.Dir(e.Global.File), path)
+		file, _ := e.MustGlobal().FileSource()
+		if e.Get(1).Maybe().Bool() && file != "" {
+			path = filepath.Join(filepath.Dir(file), path)
 		}
-		e.A = MustRun(LoadFile(path, &e.Global.Environment))
+		e.A = MustRun(LoadFile(path, &LoadOptions{
+			MaxStackSize: e.MustGlobal().MaxStackSize,
+			Globals:      e.MustGlobal().Globals,
+		}))
 	})
 	bas.AddGlobalMethod("eval", func(e *bas.Env) {
 		opts := e.Get(1).Maybe().Object(nil)
@@ -63,7 +67,9 @@ func init() {
 			e.A = bas.ValueOf(v)
 			return
 		}
-		p, err := LoadString(e.Str(0), &bas.Environment{Globals: opts.Prop("globals").Maybe().Object(nil)})
+		p, err := LoadString(e.Str(0), &LoadOptions{
+			Globals: opts.Prop("globals").Maybe().Object(nil),
+		})
 		internal.PanicErr(err)
 		v, err := p.Run()
 		internal.PanicErr(err)
@@ -74,25 +80,25 @@ func init() {
 	bas.AddGlobal("stdin", bas.ValueOf(os.Stdin))
 	bas.AddGlobal("stderr", bas.ValueOf(os.Stderr))
 	bas.AddGlobal("printf", bas.Func("printf", func(e *bas.Env) {
-		bas.EnvFprintf(e, 0, bas.Stdout)
+		bas.EnvFprintf(e, 0, e.MustGlobal().Stdout)
 	}))
 	bas.AddGlobal("println", bas.Func("println", func(e *bas.Env) {
 		for _, a := range e.Stack() {
-			fmt.Fprint(bas.Stdout, a.String(), " ")
+			fmt.Fprint(e.MustGlobal().Stdout, a.String(), " ")
 		}
-		fmt.Fprintln(bas.Stdout)
+		fmt.Fprintln(e.MustGlobal().Stdout)
 	}))
 	bas.AddGlobal("print", bas.Func("print", func(e *bas.Env) {
 		for _, a := range e.Stack() {
-			fmt.Fprint(bas.Stdout, a.String())
+			fmt.Fprint(e.MustGlobal().Stdout, a.String())
 		}
-		fmt.Fprintln(bas.Stdout)
+		fmt.Fprintln(e.MustGlobal().Stdout)
 	}))
 	bas.AddGlobalMethod("scanln", func(env *bas.Env) {
 		prompt, n := env.Get(0), env.Get(1)
-		fmt.Fprint(bas.Stdout, prompt.Maybe().Str(""))
+		fmt.Fprint(env.MustGlobal().Stdout, prompt.Maybe().Str(""))
 		var results []bas.Value
-		var r io.Reader = bas.Stdin
+		var r io.Reader = env.MustGlobal().Stdin
 		for i := n.Maybe().Int64(1); i > 0; i-- {
 			var s string
 			if _, err := fmt.Fscan(r, &s); err != nil {
@@ -164,7 +170,7 @@ func init() {
 		internal.PanicErr(err)
 		e.Object(-1).Set(bas.Zero, bas.ValueOf(f))
 
-		e.A = bas.NamedObject("File", 0).
+		e.A = bas.NewNamedObject("File", 0).
 			SetProp("_f", bas.ValueOf(f)).
 			SetProp("path", bas.Str(f.Name())).
 			SetMethod("sync", func(e *bas.Env) { internal.PanicErr(e.ThisProp("_f").(*os.File).Sync()) }).
@@ -188,7 +194,7 @@ func init() {
 		}).ToValue(),
 	)
 
-	bas.AddGlobal("math", bas.NamedObject("math", 0).
+	bas.AddGlobal("math", bas.NewNamedObject("math", 0).
 		SetProp("INF", bas.Float64(math.Inf(1))).
 		SetProp("NEG_INF", bas.Float64(math.Inf(-1))).
 		SetProp("PI", bas.Float64(math.Pi)).
@@ -237,7 +243,7 @@ func init() {
 		SetPrototype(bas.Proto.StaticObject).
 		ToValue())
 
-	bas.AddGlobal("os", bas.NamedObject("os", 0).
+	bas.AddGlobal("os", bas.NewNamedObject("os", 0).
 		SetProp("pid", bas.Int(os.Getpid())).
 		SetProp("numcpus", bas.Int(runtime.NumCPU())).
 		SetProp("args", bas.ValueOf(os.Args)).
@@ -305,14 +311,14 @@ func init() {
 		SetPrototype(bas.Proto.StaticObject).
 		ToValue())
 
-	bas.AddGlobal("sync", bas.NamedObject("sync", 0).
+	bas.AddGlobal("sync", bas.NewNamedObject("sync", 0).
 		SetMethod("mutex", func(e *bas.Env) { e.A = bas.ValueOf(&sync.Mutex{}) }).
 		SetMethod("rwmutex", func(e *bas.Env) { e.A = bas.ValueOf(&sync.RWMutex{}) }).
 		SetMethod("waitgroup", func(e *bas.Env) { e.A = bas.ValueOf(&sync.WaitGroup{}) }).
 		SetPrototype(bas.Proto.StaticObject).
 		ToValue())
 
-	encDecProto := bas.NamedObject("EncodeDecode", 0).
+	encDecProto := bas.NewNamedObject("EncodeDecode", 0).
 		SetMethod("encode", func(e *bas.Env) {
 			i := e.ThisProp("_e")
 			e.A = bas.Str(i.(interface{ EncodeToString([]byte) string }).EncodeToString(bas.ToReadonlyBytes(e.Get(0))))
@@ -323,7 +329,7 @@ func init() {
 			internal.PanicErr(err)
 			e.A = bas.Bytes(v)
 		}).
-		SetPrototype(bas.NamedObject("EncoderDecoder", 0).
+		SetPrototype(bas.NewNamedObject("EncoderDecoder", 0).
 			SetMethod("encoder", func(e *bas.Env) {
 				enc := bas.Nil
 				buf := &bytes.Buffer{}
@@ -335,7 +341,7 @@ func init() {
 				case *base64.Encoding:
 					enc = bas.ValueOf(base64.NewEncoder(encoding, buf))
 				}
-				e.A = bas.NamedObject("Encoder", 0).
+				e.A = bas.NewNamedObject("Encoder", 0).
 					SetProp("_f", bas.ValueOf(enc)).
 					SetProp("_b", bas.ValueOf(buf)).
 					SetMethod("value", func(e *bas.Env) { e.A = bas.Str(e.ThisProp("_b").(*bytes.Buffer).String()) }).
@@ -354,21 +360,21 @@ func init() {
 				default:
 					dec = bas.ValueOf(hex.NewDecoder(src))
 				}
-				e.A = bas.NamedObject("Decoder", 0).
+				e.A = bas.NewNamedObject("Decoder", 0).
 					SetProp("_f", bas.ValueOf(dec)).
 					SetPrototype(bas.Proto.Reader).
 					ToValue()
 			}))
 
-	bas.AddGlobal("hex", bas.NamedObject("hex", 0).SetPrototype(encDecProto.Prototype()).ToValue())
-	bas.AddGlobal("base64", bas.NamedObject("base64", 0).
+	bas.AddGlobal("hex", bas.NewNamedObject("hex", 0).SetPrototype(encDecProto.Prototype()).ToValue())
+	bas.AddGlobal("base64", bas.NewNamedObject("base64", 0).
 		SetProp("std", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base64.StdEncoding)).ToValue()).
 		SetProp("url", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base64.URLEncoding)).ToValue()).
 		SetProp("std2", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base64.StdEncoding.WithPadding(-1))).ToValue()).
 		SetProp("url2", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base64.URLEncoding.WithPadding(-1))).ToValue()).
 		SetPrototype(encDecProto).
 		ToValue())
-	bas.AddGlobal("base32", bas.NamedObject("base32", 0).
+	bas.AddGlobal("base32", bas.NewNamedObject("base32", 0).
 		SetProp("std", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base32.StdEncoding)).ToValue()).
 		SetProp("hex", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base32.HexEncoding)).ToValue()).
 		SetProp("std2", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base32.StdEncoding.WithPadding(-1))).ToValue()).
@@ -517,7 +523,7 @@ func init() {
 			}
 			return bas.Int(resp.StatusCode), bas.ValueOf(hdr), buf, bas.ValueOf(client.Jar)
 		}
-		if f := args.Prop("async"); bas.IsCallable(f) {
+		if f := args.Prop("async"); f.IsObject() {
 			go func(e *bas.Env) {
 				code, hdr, buf, jar := send(e, false)
 				e.Call(f.Object(), code, hdr, buf, jar)
@@ -537,7 +543,7 @@ func init() {
 	bas.AddGlobalMethod("buffer", func(e *bas.Env) {
 		b := &internal.LimitedBuffer{Limit: e.Get(1).Maybe().Int(0)}
 		b.Write(bas.ToReadonlyBytes(e.Get(0)))
-		e.A = bas.NamedObject("Buffer", 0).
+		e.A = bas.NewNamedObject("Buffer", 0).
 			SetPrototype(bas.Proto.ReadWriter).
 			SetProp("_f", bas.ValueOf(b)).
 			SetMethod("reset", func(e *bas.Env) { e.ThisProp("_f").(*internal.LimitedBuffer).Reset() }).

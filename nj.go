@@ -2,6 +2,7 @@ package nj
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"sync/atomic"
@@ -12,9 +13,17 @@ import (
 	"github.com/coyove/nj/parser"
 )
 
+type LoadOptions struct {
+	Globals      *bas.Object
+	MaxStackSize int64
+	Stdout       io.Writer
+	Stderr       io.Writer
+	Stdin        io.Reader
+}
+
 var loadIndex int64
 
-func LoadFile(path string, opt *bas.Environment) (*bas.Program, error) {
+func LoadFile(path string, opt *LoadOptions) (*bas.Program, error) {
 	code, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -22,11 +31,11 @@ func LoadFile(path string, opt *bas.Environment) (*bas.Program, error) {
 	return loadCode(*(*string)(unsafe.Pointer(&code)), path, opt)
 }
 
-func LoadString(code string, opt *bas.Environment) (*bas.Program, error) {
+func LoadString(code string, opt *LoadOptions) (*bas.Program, error) {
 	return loadCode(code, fmt.Sprintf("<memory-%d>", atomic.AddInt64(&loadIndex, 1)), opt)
 }
 
-func loadCode(code, name string, opt *bas.Environment) (*bas.Program, error) {
+func loadCode(code, name string, opt *LoadOptions) (*bas.Program, error) {
 	n, err := parser.Parse(code, name)
 	if err != nil {
 		return nil, err

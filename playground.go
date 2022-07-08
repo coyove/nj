@@ -51,7 +51,7 @@ for i=0,#g,3 do
     end
 end`
 
-func PlaygroundHandler(defaultCode string, opt *bas.Environment) func(w http.ResponseWriter, r *http.Request) {
+func PlaygroundHandler(defaultCode string, opt *LoadOptions) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() { recover() }()
 
@@ -134,9 +134,8 @@ func PlaygroundHandler(defaultCode string, opt *bas.Environment) func(w http.Res
 			return
 		}
 		p.MaxStackSize = 100
-		p.Deadline = start.Add(time.Second * 2)
-		bas.Stdout = bufOut
-		bas.Stderr = bufOut
+		p.Stdout = bufOut
+		p.Stderr = bufOut
 		code := p.GoString()
 		v, err := p.Run()
 		if err != nil {

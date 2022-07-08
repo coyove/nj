@@ -52,13 +52,6 @@ func (env *Env) Runtime() Runtime {
 	return env.runtime
 }
 
-func (env *Env) SourceFilename() string {
-	if env.Global == nil {
-		return ""
-	}
-	return env.Global.File
-}
-
 func (env *Env) stackOffset() uint32 {
 	return env.stackOffsetFlag & internal.MaxStackSize
 }
@@ -75,9 +68,9 @@ func (env *Env) grow(newSize int) {
 	s := *env.stack
 	sz := int(env.stackOffset()) + newSize
 	if sz > cap(s) {
-		if env.Global != nil && env.Global.MaxStackSize > 0 && int64(sz) > env.Global.MaxStackSize {
-			panic("stack overflow")
-		}
+		// if env.Global != nil && env.Global.MaxStackSize > 0 && int64(sz) > env.Global.MaxStackSize {
+		// 	panic("stack overflow")
+		// }
 		old := s
 		s = make([]Value, sz+newSize)
 		copy(s, old)
@@ -214,4 +207,11 @@ func (e *Env) Call(m *Object, args ...Value) (res Value) {
 func (e *Env) Call2(m *Object, args ...Value) (res Value, err error) {
 	res = CallObject(m, e.runtime, &err, m.this, args...)
 	return
+}
+
+func (e *Env) MustGlobal() *Program {
+	if e.Global != nil {
+		return e.Global
+	}
+	panic("calling out of program")
 }

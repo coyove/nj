@@ -27,27 +27,27 @@ var Proto = struct {
 	ReadWriteCloser,
 	ReadWriteSeekCloser *Object
 }{
-	StaticObject:        NamedObject("staticobject", 0),        // empty
-	Bool:                NewObject(0),                          // filled in lib_init.go
-	Str:                 NewObject(0),                          // filled in lib_init.go
-	Bytes:               NewObject(0),                          // filled in lib_init.go
-	Int:                 NewObject(0),                          // filled in lib_init.go
-	Float:               NewObject(0),                          // filled in lib_init.go
-	Func:                NewObject(0),                          // filled in lib_init.go
-	Array:               NewObject(0),                          // filled in lib_init.go
-	Error:               NewObject(0),                          // filled in lib_init.go
-	Channel:             NewObject(0),                          // filled in lib_init.go
-	Native:              NewObject(0),                          // filled in lib_init.go
-	NativeMap:           NewObject(0),                          // filled in lib_init.go
-	NativePtr:           NewObject(0),                          // filled in lib_init.go
-	NativeIntf:          NewObject(0),                          // filled in lib_init.go
-	Reader:              NamedObject("Reader", 0),              // filled in io.go
-	Writer:              NamedObject("Writer", 0),              // filled in io.go
-	Seeker:              NamedObject("Seeker", 0),              // filled in io.go
-	Closer:              NamedObject("Closer", 0),              // filled in io.go
-	ReadWriter:          NamedObject("ReadWriter", 0),          // filled in io.go
-	ReadCloser:          NamedObject("ReadCloser", 0),          // filled in io.go
-	WriteCloser:         NamedObject("WriteCloser", 0),         // filled in io.go
-	ReadWriteCloser:     NamedObject("ReadWriteCloser", 0),     // filled in io.go
-	ReadWriteSeekCloser: NamedObject("ReadWriteSeekCloser", 0), // filled in io.go
+	StaticObject:        NewNamedObject("staticobject", 0),        // empty
+	Bool:                NewObject(0),                             // filled in lib_init.go
+	Str:                 NewObject(0),                             // filled in lib_init.go
+	Bytes:               NewObject(0),                             // filled in lib_init.go
+	Int:                 NewObject(0),                             // filled in lib_init.go
+	Float:               NewObject(0),                             // filled in lib_init.go
+	Func:                NewObject(0),                             // filled in lib_init.go
+	Array:               NewObject(0),                             // filled in lib_init.go
+	Error:               NewObject(0),                             // filled in lib_init.go
+	Channel:             NewObject(0),                             // filled in lib_init.go
+	Native:              NewObject(0),                             // filled in lib_init.go
+	NativeMap:           NewObject(0),                             // filled in lib_init.go
+	NativePtr:           NewObject(0),                             // filled in lib_init.go
+	NativeIntf:          NewObject(0),                             // filled in lib_init.go
+	Reader:              NewNamedObject("Reader", 0),              // filled in io.go
+	Writer:              NewNamedObject("Writer", 0),              // filled in io.go
+	Seeker:              NewNamedObject("Seeker", 0),              // filled in io.go
+	Closer:              NewNamedObject("Closer", 0),              // filled in io.go
+	ReadWriter:          NewNamedObject("ReadWriter", 0),          // filled in io.go
+	ReadCloser:          NewNamedObject("ReadCloser", 0),          // filled in io.go
+	WriteCloser:         NewNamedObject("WriteCloser", 0),         // filled in io.go
+	ReadWriteCloser:     NewNamedObject("ReadWriteCloser", 0),     // filled in io.go
+	ReadWriteSeekCloser: NewNamedObject("ReadWriteSeekCloser", 0), // filled in io.go
 }

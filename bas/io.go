@@ -157,7 +157,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			return rd.Read(p)
 		}
 	case typ.Object:
-		if rb := Value(m).Object().Prop("readbuf"); IsCallable(rb) {
+		if rb := Value(m).Object().Prop("readbuf"); rb.IsObject() {
 			t := Call(rb.Object(), Bytes(p)).AssertPrototype(Proto.Array, "readbuf result").Native()
 			n := t.Get(0).AssertType(typ.Number, "readbuf result").Int()
 			if IsError(t.Get(1)) {
@@ -165,14 +165,14 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			}
 			return int(n), nil
 		}
-		if rb := Value(m).Object().Prop("readbytes"); IsCallable(rb) {
+		if rb := Value(m).Object().Prop("readbytes"); rb.IsObject() {
 			v := Call(rb.Object(), Int(len(p)))
 			if v == Nil {
 				return 0, io.EOF
 			}
 			return copy(p, v.AssertPrototype(Proto.Bytes, "readbytes result").Native().Unwrap().([]byte)), nil
 		}
-		if rb := Value(m).Object().Prop("read"); IsCallable(rb) {
+		if rb := Value(m).Object().Prop("read"); rb.IsObject() {
 			v := Call(rb.Object(), Int(len(p)))
 			if v == Nil {
 				return 0, io.EOF
@@ -194,21 +194,21 @@ func (m ValueIO) Write(p []byte) (int, error) {
 			return rd.Write(p)
 		}
 	case typ.Object:
-		if rb := Value(m).Object().Prop("write"); IsCallable(rb) {
+		if rb := Value(m).Object().Prop("write"); rb.IsObject() {
 			v := Call(rb.Object(), UnsafeStr(p))
 			if IsError(v) {
 				return 0, ToError(v)
 			}
 			return v.AssertType(typ.Number, "write result").Int(), nil
 		}
-		if rb := Value(m).Object().Prop("writebytes"); IsCallable(rb) {
+		if rb := Value(m).Object().Prop("writebytes"); rb.IsObject() {
 			v := Call(rb.Object(), Bytes(p))
 			if IsError(v) {
 				return 0, ToError(v)
 			}
 			return v.AssertType(typ.Number, "writebytes result").Int(), nil
 		}
-		if rb := Value(m).Object().Prop("writebuf"); IsCallable(rb) {
+		if rb := Value(m).Object().Prop("writebuf"); rb.IsObject() {
 			t := Call(rb.Object(), Bytes(p)).AssertPrototype(Proto.Array, "writebuf result").Native()
 			n := t.Get(0).AssertType(typ.Number, "writebuf result").Int()
 			if IsError(t.Get(1)) {

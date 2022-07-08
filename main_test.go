@@ -53,7 +53,7 @@ func runFile(t *testing.T, path string) {
 		flag.Parse()
 	}
 
-	b, err := LoadFile(path, &bas.Environment{
+	b, err := LoadFile(path, &LoadOptions{
 		Globals: bas.NewObject(0).
 			SetProp("syncMap", bas.ValueOf(&sync.Map{})).
 			SetProp("structAddrTest", bas.ValueOf(&testStruct{2})).
@@ -130,7 +130,7 @@ a=a+n
 return a
 end
 return foo
-`, &bas.Environment{Globals: bas.NewObject(0).SetProp("init", bas.Int(1))})
+`, &LoadOptions{Globals: bas.NewObject(0).SetProp("init", bas.Int(1))})
 		v, _ := cls.Run()
 		if v := bas.Call(v.Object(), bas.Int64(10)); v.Int64() != 11 {
 			t.Fatal(v)
@@ -345,7 +345,7 @@ return add`, nil)
 	p2, _ := LoadString(`
 local a = 100
 return [a + add(), a + add(), a + add()]
-`, &bas.Environment{Globals: bas.NewObject(0).SetProp("add", bas.ValueOf(add))})
+`, &LoadOptions{Globals: bas.NewObject(0).SetProp("add", bas.ValueOf(add))})
 	v, err := p2.Run()
 	if err != nil {
 		panic(err)
@@ -449,7 +449,7 @@ func TestACall(t *testing.T) {
 	}
 
 	foo = MustRun(LoadString(`m.a = 11
-    return m.pow2()`, &bas.Environment{
+    return m.pow2()`, &LoadOptions{
 		Globals: bas.NewObject(0).
 			SetProp("m", bas.NewObject(0).SetPrototype(bas.NewObject(0).
 				SetProp("a", bas.Int64(0)).
@@ -465,7 +465,7 @@ func TestACall(t *testing.T) {
 	foo = MustRun(LoadString(`function foo(m...)
 	return sum(m.concat(m)...) + sum2(m[:2]...)
     end
-    return foo`, &bas.Environment{
+    return foo`, &LoadOptions{
 		Globals: bas.NewObject(0).
 			SetProp("sum", bas.ValueOf(func(a ...int) int {
 				s := 0
@@ -500,7 +500,7 @@ func TestReflectedValue(t *testing.T) {
 	p[0] = 99
 	return v, v + 1, nil
 	end
-	bar(foo)`, &bas.Environment{Globals: bas.NewObject(0).
+	bar(foo)`, &LoadOptions{Globals: bas.NewObject(0).
 		SetProp("bar", bas.ValueOf(func(cb func(a int, p []byte) (int, int, error)) {
 			buf := []byte{0}
 			a, b, _ := cb(10, buf)
@@ -543,11 +543,11 @@ func BenchmarkGoJSON(b *testing.B) {
 	}
 }
 
-// func BenchmarkGJSON(b *testing.B) {
-// 	for i := 0; i < b.N; i++ {
-// 		bas.ValueOf(gjson.Parse(jsonTest))
-// 	}
-// }
+func BenchmarkCompile(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		LoadString("function(a, b) a + b end", nil)
+	}
+}
 
 // func TestRunTimeout(t *testing.T) {
 // 	o := bas.NewObject(0)
