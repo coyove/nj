@@ -29,14 +29,18 @@ type Runtime struct {
 	stack0 Stacktrace   // 0
 }
 
-func (r Runtime) Stacktrace() []Stacktrace {
+func (r Runtime) Stacktrace(copy bool) []Stacktrace {
 	if r.stack0.Callable == nil {
 		return nil
 	}
 	if r.stack1.Callable == nil {
 		return []Stacktrace{r.stack0}
 	}
-	return append(append([]Stacktrace{}, r.stackN...), r.stack1, r.stack0)
+	s := append(r.stackN, r.stack1, r.stack0)
+	if copy {
+		return append([]Stacktrace{}, s...)
+	}
+	return s
 }
 
 func (r Runtime) push(k Stacktrace) Runtime {

@@ -149,7 +149,7 @@ func CallObject(m *Object, r Runtime, outErr *error, this Value, args ...Value) 
 	}
 
 	if c.Native != nil {
-		defer relayPanic(func() []Stacktrace { return newEnv.runtime.Stacktrace() })
+		defer relayPanic(func() []Stacktrace { return newEnv.runtime.Stacktrace(false) })
 		newEnv.runtime = r.push(Stacktrace{
 			Callable:        m,
 			stackOffsetFlag: internal.FlagNativeCall,
@@ -169,7 +169,7 @@ func CallObject(m *Object, r Runtime, outErr *error, this Value, args ...Value) 
 	}
 	newEnv.growZero(int(c.StackSize), int(c.NumParams))
 
-	return internalExecCursorLoop(newEnv, m, r.Stacktrace())
+	return internalExecCursorLoop(newEnv, m, r.Stacktrace(false))
 }
 
 func (o *Object) funcSig() string {
@@ -194,121 +194,113 @@ func (obj *Object) GoString() string {
 }
 
 func (obj *Object) printAll(w io.Writer, toplevel bool) {
-	defer func() {
-		internal.WriteString(w, "keyvalue)\n")
-		ki := 0
-		obj.Foreach(func(k Value, v *Value) bool {
-			fmt.Fprintf(w, "%d)\t%v\t%v\n", ki, k, *v)
-			ki++
-			return true
-		})
-		internal.WriteString(w, "endkeyvalue)\n")
-	}()
-
 	c, p := obj.fun, obj.fun.LoadGlobal
+	internal.WriteString(w, "start)\t"+obj.funcSig()+"\n")
 	if c.Native != nil {
 		internal.WriteString(w, "0)\t0\tnative code\n")
-		return
-	}
-
-	internal.WriteString(w, "start)\t"+obj.funcSig()+"\n")
-
-	if c == p.top.fun {
-		internal.WriteString(w, "source)\t"+c.LoadGlobal.file+"\n")
-	}
-
-	readAddr := func(a uint16, rValue bool) string {
-		if a == typ.RegA {
-			return "a"
+	} else {
+		if c == p.top.fun {
+			internal.WriteString(w, "source)\t"+c.LoadGlobal.file+"\n")
 		}
 
-		suffix := ""
-		if rValue {
-			if a > typ.RegLocalMask || toplevel {
-				x := (*p.stack)[a&typ.RegLocalMask]
-				if x != Nil {
-					suffix = ":" + detail(x)
+		readAddr := func(a uint16, rValue bool) string {
+			if a == typ.RegA {
+				return "a"
+			}
+
+			suffix := ""
+			if rValue {
+				if a > typ.RegLocalMask || toplevel {
+					x := (*p.stack)[a&typ.RegLocalMask]
+					if x != Nil {
+						suffix = ":" + detail(x)
+					}
 				}
 			}
-		}
 
-		if a > typ.RegLocalMask {
-			return fmt.Sprintf("g(%d)", a&typ.RegLocalMask) + suffix
-		}
-		return fmt.Sprintf("sp(%d)", a&typ.RegLocalMask) + suffix
-	}
-
-	oldpos := c.CodeSeg.Pos
-
-	for i, inst := range c.CodeSeg.Code {
-		cursor := uint32(i) + 1
-		bop, a, b, c := inst.Opcode, inst.A, inst.B, inst.C
-
-		if oldpos.Len() > 0 {
-			_, op, line := oldpos.Read(0)
-			// log.Println(cursor, splitInst, unsafe.Pointer(&Pos))
-			for uint32(cursor) > op && oldpos.Len() > 0 {
-				op, line = oldpos.Pop()
+			if a > typ.RegLocalMask {
+				return fmt.Sprintf("g(%d)", a&typ.RegLocalMask) + suffix
 			}
-			internal.WriteString(w, fmt.Sprintf("%d)\t%d\t", line, cursor-1))
-		} else {
-			internal.WriteString(w, fmt.Sprintf("$)\t%d\t", cursor-1))
+			return fmt.Sprintf("sp(%d)", a&typ.RegLocalMask) + suffix
 		}
 
-		switch bop {
-		case typ.OpSet:
-			internal.WriteString(w, readAddr(a, false)+" = "+readAddr(b, false))
-		case typ.OpCreateArray:
-			internal.WriteString(w, "createarray")
-		case typ.OpCreateObject:
-			internal.WriteString(w, "createobject")
-		case typ.OpLoadFunc:
-			if a == typ.RegA {
-				internal.WriteString(w, "loadself")
+		oldpos := c.CodeSeg.Pos
+
+		for i, inst := range c.CodeSeg.Code {
+			cursor := uint32(i) + 1
+			bop, a, b, c := inst.Opcode, inst.A, inst.B, inst.C
+
+			if oldpos.Len() > 0 {
+				_, op, line := oldpos.Read(0)
+				// log.Println(cursor, splitInst, unsafe.Pointer(&Pos))
+				for uint32(cursor) > op && oldpos.Len() > 0 {
+					op, line = oldpos.Pop()
+				}
+				internal.WriteString(w, fmt.Sprintf("%d)\t%d\t", line, cursor-1))
 			} else {
-				cls := p.functions[a]
-				internal.WriteString(w, fmt.Sprintf("loadfunc(%d)\n", a))
-				cls.printAll(w, false)
+				internal.WriteString(w, fmt.Sprintf("$)\t%d\t", cursor-1))
 			}
-		case typ.OpTailCall, typ.OpCall, typ.OpTryCall:
-			if b != typ.RegPhantom {
-				internal.WriteString(w, "push "+readAddr(b, false)+" -> ")
-			}
+
 			switch bop {
-			case typ.OpTailCall:
-				internal.WriteString(w, "tail")
-			case typ.OpTryCall:
-				internal.WriteString(w, "try")
+			case typ.OpSet:
+				internal.WriteString(w, readAddr(a, false)+" = "+readAddr(b, false))
+			case typ.OpCreateArray:
+				internal.WriteString(w, "createarray")
+			case typ.OpCreateObject:
+				internal.WriteString(w, "createobject")
+			case typ.OpLoadFunc:
+				if a == typ.RegA {
+					internal.WriteString(w, "loadself")
+				} else {
+					cls := p.functions[a]
+					internal.WriteString(w, fmt.Sprintf("loadfunc(%d)\n", a))
+					cls.printAll(w, false)
+				}
+			case typ.OpTailCall, typ.OpCall, typ.OpTryCall:
+				if b != typ.RegPhantom {
+					internal.WriteString(w, "push "+readAddr(b, false)+" -> ")
+				}
+				switch bop {
+				case typ.OpTailCall:
+					internal.WriteString(w, "tail")
+				case typ.OpTryCall:
+					internal.WriteString(w, "try")
+				}
+				internal.WriteString(w, "call "+readAddr(a, true))
+			case typ.OpIfNot, typ.OpJmp:
+				dest := inst.D()
+				pos2 := uint32(int32(cursor) + dest)
+				if bop == typ.OpIfNot {
+					internal.WriteString(w, "if not $a ")
+				}
+				internal.WriteString(w, fmt.Sprintf("jmp %d to %d", dest, pos2))
+			case typ.OpInc:
+				internal.WriteString(w, "inc "+readAddr(a, false)+" "+readAddr(b, false))
+				if c != 0 {
+					internal.WriteString(w, fmt.Sprintf(" jmp %d to %d", int16(c), int32(cursor)+int32(int16(c))))
+				}
+			default:
+				if bop == typ.OpLoad {
+					internal.WriteString(w, "load "+readAddr(a, false)+" "+readAddr(b, false)+" -> "+readAddr(c, false))
+				} else if bop == typ.OpStore {
+					internal.WriteString(w, "store "+readAddr(a, false)+" "+readAddr(b, false)+" <- "+readAddr(c, false))
+				} else if us, ok := typ.UnaryOpcode[bop]; ok {
+					internal.WriteString(w, us+" "+readAddr(a, false))
+				} else if bs, ok := typ.BinaryOpcode[bop]; ok {
+					internal.WriteString(w, bs+" "+readAddr(a, false)+" "+readAddr(b, false))
+				} else {
+					internal.WriteString(w, fmt.Sprintf("? %02x", bop))
+				}
 			}
-			internal.WriteString(w, "call "+readAddr(a, true))
-		case typ.OpIfNot, typ.OpJmp:
-			dest := inst.D()
-			pos2 := uint32(int32(cursor) + dest)
-			if bop == typ.OpIfNot {
-				internal.WriteString(w, "if not $a ")
-			}
-			internal.WriteString(w, fmt.Sprintf("jmp %d to %d", dest, pos2))
-		case typ.OpInc:
-			internal.WriteString(w, "inc "+readAddr(a, false)+" "+readAddr(b, false))
-			if c != 0 {
-				internal.WriteString(w, fmt.Sprintf(" jmp %d to %d", int16(c), int32(cursor)+int32(int16(c))))
-			}
-		default:
-			if bop == typ.OpLoad {
-				internal.WriteString(w, "load "+readAddr(a, false)+" "+readAddr(b, false)+" -> "+readAddr(c, false))
-			} else if bop == typ.OpStore {
-				internal.WriteString(w, "store "+readAddr(a, false)+" "+readAddr(b, false)+" <- "+readAddr(c, false))
-			} else if us, ok := typ.UnaryOpcode[bop]; ok {
-				internal.WriteString(w, us+" "+readAddr(a, false))
-			} else if bs, ok := typ.BinaryOpcode[bop]; ok {
-				internal.WriteString(w, bs+" "+readAddr(a, false)+" "+readAddr(b, false))
-			} else {
-				internal.WriteString(w, fmt.Sprintf("? %02x", bop))
-			}
+
+			internal.WriteString(w, "\n")
 		}
-
-		internal.WriteString(w, "\n")
 	}
-
-	internal.WriteString(w, "end)\t"+obj.funcSig()+"\n")
+	ki := 0
+	obj.Foreach(func(k Value, v *Value) bool {
+		fmt.Fprintf(w, "prop%d)\t%v\t%v\n", ki, k, *v)
+		ki++
+		return true
+	})
+	internal.WriteString(w, "end)\t"+obj.funcSig())
 }

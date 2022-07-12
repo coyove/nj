@@ -189,12 +189,13 @@ func Bytes(b []byte) Value {
 func Error(e *Env, err error) Value {
 	if err == nil {
 		return Nil
-	} else if _, ok := err.(*ExecError); ok {
+	}
+	if _, ok := err.(*ExecError); ok {
 		return NewNativeWithMeta(err, errorNativeMeta).ToValue()
 	}
 	ee := &ExecError{root: err}
 	if e != nil {
-		ee.stacks = e.Runtime().Stacktrace()
+		ee.stacks = e.Runtime().Stacktrace(true)
 	}
 	return NewNativeWithMeta(ee, errorNativeMeta).ToValue()
 }

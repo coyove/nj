@@ -3,7 +3,6 @@ package bas
 var ObjectProto Object
 
 var Proto = struct {
-	StaticObject,
 	Bool,
 	Str,
 	Bytes,
@@ -27,7 +26,6 @@ var Proto = struct {
 	ReadWriteCloser,
 	ReadWriteSeekCloser *Object
 }{
-	StaticObject:        NewNamedObject("staticobject", 0),        // empty
 	Bool:                NewObject(0),                             // filled in lib_init.go
 	Str:                 NewObject(0),                             // filled in lib_init.go
 	Bytes:               NewObject(0),                             // filled in lib_init.go

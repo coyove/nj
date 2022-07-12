@@ -101,8 +101,8 @@ func init() {
 
 	// Debug libraries
 	AddGlobal("debug", NewNamedObject("debug", 0).
-		SetMethod("self", func(e *Env) { e.A = e.Runtime().stack1.Callable.ToValue() }).
-		SetMethod("locals", func(e *Env) {
+		SetProp("self", Func("self", func(e *Env) { e.A = e.Runtime().stack1.Callable.ToValue() })).
+		SetProp("locals", Func("locals", func(e *Env) {
 			locals := e.Runtime().stack1.Callable.fun.Locals
 			start := e.stackOffset() - uint32(e.Runtime().stack1.Callable.fun.StackSize)
 			if e.Get(0).IsTrue() {
@@ -119,30 +119,29 @@ func init() {
 				}
 				e.A = newArray(r...).ToValue()
 			}
-		}).
-		SetMethod("globals", func(e *Env) {
+		})).
+		SetProp("globals", Func("globals", func(e *Env) {
 			var r []Value
 			for i, name := range e.MustGlobal().top.fun.Locals {
 				r = append(r, Int(i), Str(name), (*e.Global.stack)[i])
 			}
 			e.A = Array(r...)
-		}).
-		SetMethod("set", func(e *Env) {
+		})).
+		SetProp("set", Func("set", func(e *Env) {
 			(*e.MustGlobal().stack)[e.Int64(0)] = e.Get(1)
-		}).
-		SetMethod("trace", func(env *Env) {
-			stacks := env.Runtime().Stacktrace()
+		})).
+		SetProp("trace", Func("trace", func(env *Env) {
+			stacks := env.Runtime().Stacktrace(false)
 			lines := make([]Value, 0, len(stacks))
 			for i := len(stacks) - 1 - env.Get(0).Maybe().Int(0); i >= 0; i-- {
 				r := stacks[i]
 				lines = append(lines, Str(r.Callable.fun.Name), Int64(int64(r.sourceLine())), Int64(int64(r.Cursor-1)))
 			}
 			env.A = newArray(lines...).ToValue()
-		}).
-		SetMethod("disfunc", func(e *Env) {
+		})).
+		SetProp("disfunc", Func("disfunc", func(e *Env) {
 			e.A = Str(e.Object(0).GoString())
-		}).
-		SetPrototype(Proto.StaticObject).
+		})).
 		ToValue())
 
 	AddGlobalMethod("type", func(e *Env) { e.A = Str(e.Get(0).Type().String()) })
@@ -199,18 +198,16 @@ func init() {
 		SetProp("writecloser", Proto.WriteCloser.ToValue()).
 		SetProp("readwritecloser", Proto.ReadWriteCloser.ToValue()).
 		SetProp("readwriteseekcloser", Proto.ReadWriteSeekCloser.ToValue()).
-		SetMethod("write", func(e *Env) {
+		SetProp("write", Func("write", func(e *Env) {
 			w := NewWriter(e.Get(0))
 			for _, a := range e.Stack()[1:] {
 				w.Write(ToReadonlyBytes(a))
 			}
-		}).
-		SetPrototype(Proto.StaticObject).
+		})).
 		ToValue())
 
 	ObjectProto = *NewNamedObject("object", 0).
 		SetMethod("new", func(e *Env) { e.A = NewObject(e.Get(0).Maybe().Int(0)).ToValue() }).
-		SetMethod("newstatic", func(e *Env) { e.A = NewObject(e.Get(0).Maybe().Int(0)).SetPrototype(Proto.StaticObject).ToValue() }).
 		SetMethod("find", func(e *Env) { e.A = e.Object(-1).Find(e.Get(0)) }).
 		SetMethod("set", func(e *Env) { e.A = e.Object(-1).Set(e.Get(0), e.Get(1)) }).
 		SetMethod("get", func(e *Env) { e.A = e.Object(-1).Get(e.Get(0)) }).
@@ -249,9 +246,7 @@ func init() {
 			e.Object(-1).rawPrint(p, typ.MarshalToJSON, true)
 			e.A = UnsafeStr(p.Bytes())
 		}).
-		SetMethod("print", func(e *Env) {
-			e.A = Str(e.Object(-1).GoString())
-		}).
+		SetMethod("printed", func(e *Env) { e.A = Str(e.Object(-1).GoString()) }).
 		SetMethod("pure", func(e *Env) { e.A = e.Object(-1).Copy(false).SetPrototype(&ObjectProto).ToValue() }).
 		SetMethod("next", func(e *Env) { e.A = newArray(e.Object(-1).NextKeyValue(e.Get(0))).ToValue() })
 	ObjectProto.SetPrototype(nil) // object is the topmost 'object', it should not have any prototype
@@ -312,7 +307,6 @@ func init() {
 		SetPrototype(&ObjectProto)
 
 	AddGlobal("object", ObjectProto.ToValue())
-	AddGlobal("staticobject", Proto.StaticObject.ToValue())
 	AddGlobal("func", Proto.Func.ToValue())
 	AddGlobal("callable", Proto.Func.ToValue())
 
@@ -424,7 +418,7 @@ func init() {
 	AddGlobal("bytes", Proto.Bytes.ToValue())
 
 	*Proto.Error = *Func("error", func(e *Env) {
-		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.Runtime().Stacktrace()})
+		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.Runtime().Stacktrace(true)})
 	}).Object().
 		SetMethod("error", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).root) }).
 		SetMethod("getcause", func(e *Env) { e.A = NewNative(e.Native(-1).Unwrap().(*ExecError).root).ToValue() }).

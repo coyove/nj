@@ -199,8 +199,8 @@ func init() {
 		SetProp("NEG_INF", bas.Float64(math.Inf(-1))).
 		SetProp("PI", bas.Float64(math.Pi)).
 		SetProp("E", bas.Float64(math.E)).
-		SetMethod("randomseed", func(e *bas.Env) { rand.Seed(e.Get(0).Maybe().Int64(1)) }).
-		SetMethod("random", func(e *bas.Env) {
+		SetProp("randomseed", bas.Func("randomseed", func(e *bas.Env) { rand.Seed(e.Get(0).Maybe().Int64(1)) })).
+		SetProp("random", bas.Func("random", func(e *bas.Env) {
 			switch len(e.Stack()) {
 			case 2:
 				ai, bi := e.Int64(0), e.Int64(1)
@@ -210,14 +210,14 @@ func init() {
 			default:
 				e.A = bas.Float64(rand.Float64())
 			}
-		}).
-		SetMethod("sqrt", func(e *bas.Env) { e.A = bas.Float64(math.Sqrt(e.Float64(0))) }).
-		SetMethod("floor", func(e *bas.Env) { e.A = bas.Float64(math.Floor(e.Float64(0))) }).
-		SetMethod("ceil", func(e *bas.Env) { e.A = bas.Float64(math.Ceil(e.Float64(0))) }).
-		SetMethod("min", func(e *bas.Env) { mathMinMax(e, false) }).
-		SetMethod("max", func(e *bas.Env) { mathMinMax(e, true) }).
-		SetMethod("pow", func(e *bas.Env) { e.A = bas.Float64(math.Pow(e.Float64(0), e.Float64(1))) }).
-		SetMethod("abs", func(e *bas.Env) {
+		})).
+		SetProp("sqrt", bas.Func("sqrt", func(e *bas.Env) { e.A = bas.Float64(math.Sqrt(e.Float64(0))) })).
+		SetProp("floor", bas.Func("floor", func(e *bas.Env) { e.A = bas.Float64(math.Floor(e.Float64(0))) })).
+		SetProp("ceil", bas.Func("ceil", func(e *bas.Env) { e.A = bas.Float64(math.Ceil(e.Float64(0))) })).
+		SetProp("min", bas.Func("min", func(e *bas.Env) { mathMinMax(e, false) })).
+		SetProp("max", bas.Func("max", func(e *bas.Env) { mathMinMax(e, true) })).
+		SetProp("pow", bas.Func("pow", func(e *bas.Env) { e.A = bas.Float64(math.Pow(e.Float64(0), e.Float64(1))) })).
+		SetProp("abs", bas.Func("abs", func(e *bas.Env) {
 			if e.A = e.Num(0); e.A.IsInt64() {
 				if i := e.A.Int64(); i < 0 {
 					e.A = bas.Int64(-i)
@@ -225,29 +225,28 @@ func init() {
 			} else {
 				e.A = bas.Float64(math.Abs(e.A.Float64()))
 			}
-		}).
-		SetMethod("remainder", func(e *bas.Env) { e.A = bas.Float64(math.Remainder(e.Float64(0), e.Float64(1))) }).
-		SetMethod("mod", func(e *bas.Env) { e.A = bas.Float64(math.Mod(e.Float64(0), e.Float64(1))) }).
-		SetMethod("cos", func(e *bas.Env) { e.A = bas.Float64(math.Cos(e.Float64(0))) }).
-		SetMethod("sin", func(e *bas.Env) { e.A = bas.Float64(math.Sin(e.Float64(0))) }).
-		SetMethod("tan", func(e *bas.Env) { e.A = bas.Float64(math.Tan(e.Float64(0))) }).
-		SetMethod("acos", func(e *bas.Env) { e.A = bas.Float64(math.Acos(e.Float64(0))) }).
-		SetMethod("asin", func(e *bas.Env) { e.A = bas.Float64(math.Asin(e.Float64(0))) }).
-		SetMethod("atan", func(e *bas.Env) { e.A = bas.Float64(math.Atan(e.Float64(0))) }).
-		SetMethod("atan2", func(e *bas.Env) { e.A = bas.Float64(math.Atan2(e.Float64(0), e.Float64(1))) }).
-		SetMethod("ldexp", func(e *bas.Env) { e.A = bas.Float64(math.Ldexp(e.Float64(0), e.Int(0))) }).
-		SetMethod("modf", func(e *bas.Env) {
+		})).
+		SetProp("remainder", bas.Func("remainder", func(e *bas.Env) { e.A = bas.Float64(math.Remainder(e.Float64(0), e.Float64(1))) })).
+		SetProp("mod", bas.Func("mod", func(e *bas.Env) { e.A = bas.Float64(math.Mod(e.Float64(0), e.Float64(1))) })).
+		SetProp("cos", bas.Func("cos", func(e *bas.Env) { e.A = bas.Float64(math.Cos(e.Float64(0))) })).
+		SetProp("sin", bas.Func("sin", func(e *bas.Env) { e.A = bas.Float64(math.Sin(e.Float64(0))) })).
+		SetProp("tan", bas.Func("tan", func(e *bas.Env) { e.A = bas.Float64(math.Tan(e.Float64(0))) })).
+		SetProp("acos", bas.Func("acos", func(e *bas.Env) { e.A = bas.Float64(math.Acos(e.Float64(0))) })).
+		SetProp("asin", bas.Func("asin", func(e *bas.Env) { e.A = bas.Float64(math.Asin(e.Float64(0))) })).
+		SetProp("atan", bas.Func("atan", func(e *bas.Env) { e.A = bas.Float64(math.Atan(e.Float64(0))) })).
+		SetProp("atan2", bas.Func("atan2", func(e *bas.Env) { e.A = bas.Float64(math.Atan2(e.Float64(0), e.Float64(1))) })).
+		SetProp("ldexp", bas.Func("ldexp", func(e *bas.Env) { e.A = bas.Float64(math.Ldexp(e.Float64(0), e.Int(0))) })).
+		SetProp("modf", bas.Func("modf", func(e *bas.Env) {
 			a, b := math.Modf(e.Float64(0))
 			e.A = bas.Array(bas.Float64(a), bas.Float64(b))
-		}).
-		SetPrototype(bas.Proto.StaticObject).
+		})).
 		ToValue())
 
 	bas.AddGlobal("os", bas.NewNamedObject("os", 0).
 		SetProp("pid", bas.Int(os.Getpid())).
 		SetProp("numcpus", bas.Int(runtime.NumCPU())).
 		SetProp("args", bas.ValueOf(os.Args)).
-		SetMethod("environ", func(e *bas.Env) {
+		SetProp("environ", bas.Func("environ", func(e *bas.Env) {
 			if env := os.Environ(); e.Get(0).IsTrue() {
 				obj := bas.NewObject(len(env))
 				for _, e := range env {
@@ -259,8 +258,8 @@ func init() {
 			} else {
 				e.A = bas.ValueOf(env)
 			}
-		}).
-		SetMethod("shell", func(e *bas.Env) {
+		})).
+		SetProp("shell", bas.Func("shell", func(e *bas.Env) {
 			win := runtime.GOOS == "windows"
 			p := exec.Command(internal.IfStr(win, "cmd", "sh"), internal.IfStr(win, "/c", "-c"), e.Str(0))
 			opt := e.Get(1).Maybe().Object(nil)
@@ -292,9 +291,9 @@ func init() {
 				panic("timeout")
 			}
 			e.A = bas.Bytes(stdout.Bytes())
-		}).
-		SetMethod("readdir", func(e *bas.Env) { e.A = valueOrPanic(ioutil.ReadDir(e.Str(0))) }).
-		SetMethod("remove", func(e *bas.Env) {
+		})).
+		SetProp("readdir", bas.Func("readdir", func(e *bas.Env) { e.A = valueOrPanic(ioutil.ReadDir(e.Str(0))) })).
+		SetProp("remove", bas.Func("remove", func(e *bas.Env) {
 			path := e.Str(0)
 			fi, err := os.Stat(path)
 			internal.PanicErr(err)
@@ -303,19 +302,17 @@ func init() {
 			} else {
 				internal.PanicErr(os.Remove(path))
 			}
-		}).
-		SetMethod("pstat", func(e *bas.Env) {
+		})).
+		SetProp("pstat", bas.Func("pstat", func(e *bas.Env) {
 			fi, err := os.Stat(e.Str(0))
 			_ = err == nil && e.SetA(bas.ValueOf(fi)) || e.SetA(bas.Nil)
-		}).
-		SetPrototype(bas.Proto.StaticObject).
+		})).
 		ToValue())
 
 	bas.AddGlobal("sync", bas.NewNamedObject("sync", 0).
-		SetMethod("mutex", func(e *bas.Env) { e.A = bas.ValueOf(&sync.Mutex{}) }).
-		SetMethod("rwmutex", func(e *bas.Env) { e.A = bas.ValueOf(&sync.RWMutex{}) }).
-		SetMethod("waitgroup", func(e *bas.Env) { e.A = bas.ValueOf(&sync.WaitGroup{}) }).
-		SetPrototype(bas.Proto.StaticObject).
+		SetProp("mutex", bas.Func("mutex", func(e *bas.Env) { e.A = bas.ValueOf(&sync.Mutex{}) })).
+		SetProp("rwmutex", bas.Func("rwmutex", func(e *bas.Env) { e.A = bas.ValueOf(&sync.RWMutex{}) })).
+		SetProp("waitgroup", bas.Func("waitgroup", func(e *bas.Env) { e.A = bas.ValueOf(&sync.WaitGroup{}) })).
 		ToValue())
 
 	encDecProto := bas.NewNamedObject("EncodeDecode", 0).

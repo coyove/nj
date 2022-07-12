@@ -39,7 +39,7 @@ var (
 	stringsArrayMeta  = &NativeMeta{}
 	errorNativeMeta   = &NativeMeta{}
 	genericMetaCache  sync.Map
-	nativeGoObject    = NewObject(0).SetPrototype(Proto.StaticObject)
+	nativeGoObject    = NewObject(0)
 )
 
 func init() {
