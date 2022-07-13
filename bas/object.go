@@ -74,6 +74,7 @@ func (m *Object) HasPrototype(proto *Object) bool {
 	return false
 }
 
+// Size returns the total slots in the object, one slot is 16-bytes on 64bit platform.
 func (m *Object) Size() int {
 	if m == nil {
 		return 0
@@ -81,6 +82,7 @@ func (m *Object) Size() int {
 	return len(m.items)
 }
 
+// Len returns the count of items in the object.
 func (m *Object) Len() int {
 	if m == nil {
 		return 0
@@ -96,17 +98,20 @@ func (m *Object) Clear() {
 	m.count = 0
 }
 
+// Prop finds property "k", short for Find(Str(k))
 func (m *Object) Prop(k string) (v Value) {
 	return m.Find(Str(k))
 }
 
+// SetProp sets property "k", short for Set(Str(k), v)
 func (m *Object) SetProp(k string, v Value) *Object {
 	m.Set(Str(k), v)
 	return m
 }
 
-func (m *Object) SetMethod(k string, v func(*Env)) *Object {
-	f := Func(k, v)
+// SetMethod binds method "fun" to "k" in the object
+func (m *Object) SetMethod(k string, fun func(*Env)) *Object {
+	f := Func(k, fun)
 	f.Object().fun.Method = true
 	m.Set(Str(k), f)
 	return m
@@ -171,6 +176,7 @@ func (m *Object) findHash(k Value) int {
 	}
 }
 
+// Contains tests whether the object (and/or its prototypes) contains "k"
 func (m *Object) Contains(k Value, includePrototypes bool) bool {
 	if m == nil || k == Nil {
 		return false
@@ -318,11 +324,11 @@ func (m *Object) NextKeyValue(k Value) (Value, Value) {
 
 func (m *Object) String() string {
 	p := &bytes.Buffer{}
-	m.rawPrint(p, typ.MarshalToString, false)
+	m.rawPrint(p, typ.MarshalToString)
 	return p.String()
 }
 
-func (m *Object) rawPrint(p io.Writer, j typ.MarshalType, showProto bool) {
+func (m *Object) rawPrint(p io.Writer, j typ.MarshalType) {
 	if m == nil {
 		internal.WriteString(p, internal.IfStr(j == typ.MarshalToJSON, "null", "nil"))
 		return
@@ -351,11 +357,6 @@ func (m *Object) rawPrint(p io.Writer, j typ.MarshalType, showProto bool) {
 		needComma = true
 		return true
 	})
-	if m.parent != nil && showProto && m.parent != &ObjectProto {
-		internal.WriteString(p, internal.IfStr(needComma, ",", ""))
-		internal.WriteString(p, internal.IfStr(j == typ.MarshalToJSON, "\"<proto>\":", "<proto>="))
-		m.parent.rawPrint(p, j, true)
-	}
 	internal.WriteString(p, "}")
 }
 

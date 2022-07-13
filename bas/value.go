@@ -448,7 +448,7 @@ func (v Value) Stringify(p io.Writer, j typ.MarshalType) {
 	case typ.String:
 		internal.WriteString(p, internal.IfQuote(j == typ.MarshalToJSON, v.Str()))
 	case typ.Object:
-		v.Object().rawPrint(p, j, false)
+		v.Object().rawPrint(p, j)
 	case typ.Native:
 		v.Native().Marshal(p, j)
 	default:

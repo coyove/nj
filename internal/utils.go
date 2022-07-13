@@ -18,6 +18,7 @@ var (
 	GrowEnvStack  func(env unsafe.Pointer, sz int)
 	SetEnvStack   func(env unsafe.Pointer, stack unsafe.Pointer)
 	CreateRawFunc func(name string, variadic bool, numParams byte, stackSize uint16, locals []string, code Packet) unsafe.Pointer
+	NewProgram    func(coreStack, top, symbols unsafe.Pointer, funcs interface{}) unsafe.Pointer
 
 	unnamedFuncIndex int64
 )

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -75,6 +76,21 @@ func init() {
 		obj.fun.Locals = locals
 		obj.fun.Method = strings.Contains(name, ".")
 		return unsafe.Pointer(obj)
+	}
+	internal.NewProgram = func(coreStack, top, symbols unsafe.Pointer, funcs interface{}) unsafe.Pointer {
+		cls := &Program{top: (*Object)(top)}
+		cls.stack = (*Env)(coreStack).stack
+		cls.symbols = (*Object)(symbols)
+		cls.functions = funcs.([]*Object)
+		cls.Stdout = os.Stdout
+		cls.Stdin = os.Stdin
+		cls.Stderr = os.Stderr
+
+		cls.top.fun.LoadGlobal = cls
+		for _, f := range cls.functions {
+			f.fun.LoadGlobal = cls
+		}
+		return unsafe.Pointer(cls)
 	}
 	objEmptyFunc.Native = func(e *Env) { e.A = e.A.Object().Copy(true).ToValue() }
 
@@ -237,13 +253,13 @@ func init() {
 		}).
 		SetMethod("foreach", func(e *Env) {
 			f := e.Object(0)
-			e.Object(-1).Foreach(func(k Value, v *Value) bool { return e.Call(f, k, *v) != False })
+			e.Object(-1).Foreach(func(k Value, v *Value) bool { return f.Call(e, k, *v) != False })
 		}).
 		SetMethod("contains", func(e *Env) { e.A = Bool(e.Object(-1).Contains(e.Get(0), e.Get(1).Maybe().Bool())) }).
 		SetMethod("merge", func(e *Env) { e.A = e.Object(-1).Merge(e.Object(0)).ToValue() }).
 		SetMethod("tostring", func(e *Env) {
 			p := &bytes.Buffer{}
-			e.Object(-1).rawPrint(p, typ.MarshalToJSON, true)
+			e.Object(-1).rawPrint(p, typ.MarshalToJSON)
 			e.A = UnsafeStr(p.Bytes())
 		}).
 		SetMethod("printed", func(e *Env) { e.A = Str(e.Object(-1).GoString()) }).
@@ -254,14 +270,14 @@ func init() {
 	*Proto.Func = *NewNamedObject("function", 0).
 		SetMethod("ismethod", func(e *Env) { e.A = Bool(e.Object(-1).fun.Method) }).
 		SetMethod("apply", func(e *Env) { e.A = CallObject(e.Object(-1), e.runtime, nil, e.Get(0), e.Stack()[1:]...) }).
-		SetMethod("call", func(e *Env) { e.A = e.Call(e.Object(-1), e.Stack()...) }).
+		SetMethod("call", func(e *Env) { e.A = e.Object(-1).Call(e, e.Stack()...) }).
 		SetMethod("try", func(e *Env) {
-			a, err := e.Call2(e.Object(-1), e.Stack()...)
+			a, err := e.Object(-1).TryCall(e, e.Stack()...)
 			_ = err == nil && e.SetA(a) || e.SetA(Error(e, err))
 		}).
 		SetMethod("after", func(e *Env) {
 			f, args, e2 := e.Object(-1), e.CopyStack()[1:], EnvForAsyncCall(e)
-			t := time.AfterFunc(time.Duration(e.Float64(0)*1e6)*1e3, func() { e2.Call(f, args...) })
+			t := time.AfterFunc(time.Duration(e.Float64(0)*1e6)*1e3, func() { f.Call(e2, args...) })
 			e.A = NewNamedObject("Timer", 0).
 				SetProp("t", ValueOf(t)).
 				SetMethod("stop", func(e *Env) { e.A = Bool(e.ThisProp("t").(*time.Timer).Stop()) }).
@@ -273,7 +289,7 @@ func init() {
 			w := make(chan Value, 1)
 			e2 := EnvForAsyncCall(e)
 			go func(f *Object, args []Value) {
-				if v, err := e2.Call2(f, args...); err != nil {
+				if v, err := f.TryCall(e2, args...); err != nil {
 					w <- Error(e2, err)
 				} else {
 					w <- v
@@ -298,7 +314,7 @@ func init() {
 				o := e.runtime.stack0.Callable
 				f := o.Prop("_l").Object()
 				stk := append(o.Prop("_c").Native().Values(), e.Stack()...)
-				e.A = e.Call(f, stk...)
+				e.A = f.Call(e, stk...)
 			}).Object().
 				SetProp("_l", lambda.ToValue()).
 				SetProp("_c", Array(c...)).
@@ -365,7 +381,7 @@ func init() {
 			src, ff := e.Native(-1), e.Object(0)
 			dest := make([]Value, 0, src.Len())
 			for i := 0; i < src.Len(); i++ {
-				if v := src.Get(i); e.Call(ff, v).IsTrue() {
+				if v := src.Get(i); ff.Call(e, v).IsTrue() {
 					dest = append(dest, v)
 				}
 			}
@@ -397,7 +413,7 @@ func init() {
 			a, rev := e.Native(-1), e.Get(0).Maybe().Bool()
 			if kf := e.Get(1).Maybe().Func(nil); kf == nil {
 				sort.Slice(a.Unwrap(), func(i, j int) bool {
-					return Less(e.Call(kf, a.Get(i)), e.Call(kf, a.Get(j))) != rev
+					return Less(kf.Call(e, a.Get(i)), kf.Call(e, a.Get(j))) != rev
 				})
 			} else {
 				sort.Slice(a.Unwrap(), func(i, j int) bool { return Less(a.Get(i), a.Get(j)) != rev })
@@ -671,14 +687,14 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 
 	work := func(e *Env, fun *Object, outError *error, p payload) {
 		if p.i == -1 {
-			res, err := e.Call2(fun, p.k, *p.v)
+			res, err := fun.TryCall(e, p.k, *p.v)
 			if err != nil {
 				*outError = err
 			} else {
 				*p.v = res
 			}
 		} else {
-			res, err := e.Call2(fun, Int(p.i), p.k)
+			res, err := fun.TryCall(e, Int(p.i), p.k)
 			if err != nil {
 				*outError = err
 			} else {

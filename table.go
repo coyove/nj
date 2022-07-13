@@ -388,7 +388,6 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *LoadOptions) (
 
 	// Load nil first to ensure its address == 0
 	table.borrowAddress()
-
 	obj, stk := bas.GetGlobalsStack()
 	internal.SetEnvStack(unsafe.Pointer(coreStack), unsafe.Pointer(&stk))
 	table.sym = *obj
@@ -418,14 +417,20 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *LoadOptions) (
 		return true
 	})
 
-	cls = bas.NewProgram(name, source, coreStack, (*bas.Object)(internal.CreateRawFunc(
-		"main",
-		false,
-		0,
-		table.vp,
-		table.symbolsToDebugLocals(),
-		table.codeSeg,
-	)), &table.sym, table.funcs)
+	cls = (*bas.Program)(internal.NewProgram(
+		unsafe.Pointer(coreStack),
+		internal.CreateRawFunc(
+			"main",
+			false,
+			0,
+			table.vp,
+			table.symbolsToDebugLocals(),
+			table.codeSeg,
+		),
+		unsafe.Pointer(&table.sym),
+		table.funcs))
+	cls.File = name
+	cls.Source = source
 	if env != nil {
 		cls.MaxStackSize = env.MaxStackSize
 		cls.Globals = env.Globals
@@ -433,6 +438,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *LoadOptions) (
 		cls.Stderr = internal.Or(env.Stderr, cls.Stderr).(io.Writer)
 		cls.Stdin = internal.Or(env.Stdin, cls.Stdin).(io.Reader)
 	}
+
 	coreStack.Set(int(gi), bas.ValueOf(cls))
 	return cls, err
 }

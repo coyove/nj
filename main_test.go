@@ -132,11 +132,11 @@ end
 return foo
 `, &LoadOptions{Globals: bas.NewObject(0).SetProp("init", bas.Int(1))})
 		v, _ := cls.Run()
-		if v := bas.Call(v.Object(), bas.Int64(10)); v.Int64() != 11 {
+		if v := v.Object().Call(nil, bas.Int64(10)); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v := bas.Call(v.Object(), bas.Int64(100)); v.Int64() != 111 {
+		if v := v.Object().Call(nil, bas.Int64(100)); v.Int64() != 111 {
 			t.Fatal(v)
 		}
 	}
@@ -153,15 +153,15 @@ end
 return foo
 `, nil)
 		v, _ := cls.Run()
-		if v := bas.Call(v.Object(), bas.Array(bas.Int64(1), bas.Int64(2), bas.Int64(3), bas.Int64(4))); v.Int64() != 11 {
+		if v := v.Object().Call(nil, bas.Array(bas.Int64(1), bas.Int64(2), bas.Int64(3), bas.Int64(4))); v.Int64() != 11 {
 			t.Fatal(v)
 		}
 
-		if v := bas.Call(v.Object(), bas.Array(bas.Int64(10), bas.Int64(20))); v.Int64() != 41 {
+		if v := v.Object().Call(nil, bas.Array(bas.Int64(10), bas.Int64(20))); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 
-		if v := bas.Call(v.Object()); v.Int64() != 41 {
+		if v := v.Object().Call(nil); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 	}
@@ -429,13 +429,13 @@ func TestACall(t *testing.T) {
 	a0 = 0 a1 = 1 a2 = 2 a3 = 3
     end
     return foo`, nil))
-	bas.Call(foo.Object(), bas.Nil, bas.Int64(1), bas.Int64(2))
+	foo.Object().Call(nil, bas.Nil, bas.Int64(1), bas.Int64(2))
 
 	foo = MustRun(LoadString(`function foo(a, b, m...)
 	assert(a == 1 and #(m) == 0)
     end
     return foo`, nil))
-	bas.Call(foo.Object(), bas.Int64(1))
+	foo.Object().Call(nil, bas.Int64(1))
 
 	foo = MustRun(LoadString(`m = {a=1}
 	function m.pow2()
@@ -443,7 +443,7 @@ func TestACall(t *testing.T) {
 	end
 	a = new(m, {a=10})
     return a`, nil))
-	v := bas.Call(foo.Object().Prop("pow2").Object())
+	v := foo.Object().Prop("pow2").Object().Call(nil)
 	if v.Int64() != 100 {
 		t.Fatal(v)
 	}
@@ -478,7 +478,7 @@ func TestACall(t *testing.T) {
 				return a + b
 			})),
 	}))
-	v = bas.Call(foo.Object(), bas.Int64(1), bas.Int64(2), bas.Int64(3))
+	v = foo.Object().Call(nil, bas.Int64(1), bas.Int64(2), bas.Int64(3))
 	if v.Int64() != 15 {
 		t.Fatal(v)
 	}

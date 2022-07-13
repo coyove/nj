@@ -50,9 +50,8 @@ func init() {
 		ToValue())
 	bas.AddGlobalMethod("loadfile", func(e *bas.Env) {
 		path := e.Str(0)
-		file, _ := e.MustGlobal().FileSource()
-		if e.Get(1).Maybe().Bool() && file != "" {
-			path = filepath.Join(filepath.Dir(file), path)
+		if e.Get(1).Maybe().Bool() && e.MustGlobal().File != "" {
+			path = filepath.Join(filepath.Dir(e.MustGlobal().File), path)
 		}
 		e.A = MustRun(LoadFile(path, &LoadOptions{
 			MaxStackSize: e.MustGlobal().MaxStackSize,
@@ -523,7 +522,7 @@ func init() {
 		if f := args.Prop("async"); f.IsObject() {
 			go func(e *bas.Env) {
 				code, hdr, buf, jar := send(e, false)
-				e.Call(f.Object(), code, hdr, buf, jar)
+				f.Object().Call(e, code, hdr, buf, jar)
 			}(bas.EnvForAsyncCall(e))
 			return
 		}
@@ -532,7 +531,7 @@ func init() {
 	for _, m := range []string{"get", "post", "put", "delete", "head", "patch"} {
 		httpLib = httpLib.SetMethod(m, func(e *bas.Env) {
 			ex := e.Get(1).Maybe().Object(nil)
-			e.A = e.Call(e.Object(-1), bas.NewObject(0).SetProp("method", bas.Str(m)).SetProp("url", e.Get(0)).Merge(ex).ToValue())
+			e.A = e.Object(-1).Call(e, bas.NewObject(0).SetProp("method", bas.Str(m)).SetProp("url", e.Get(0)).Merge(ex).ToValue())
 		})
 	}
 	bas.AddGlobal("http", httpLib.ToValue())

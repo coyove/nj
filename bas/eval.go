@@ -78,7 +78,7 @@ func (e *ExecError) Error() string {
 				msg.WriteString(" (tailcall)")
 			}
 			msg.WriteString("\n\t")
-			line, ok := internal.LineOf(r.Callable.fun.LoadGlobal.source, int(ln))
+			line, ok := internal.LineOf(r.Callable.fun.LoadGlobal.Source, int(ln))
 			if ok {
 				msg.WriteString(strings.TrimSpace(line))
 			} else {
@@ -464,7 +464,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					stackEnv.runtime.stack1 = retStack[len(retStack)-1]
 					stackEnv.runtime.stackN = retStack[:len(retStack)-1]
 				}
-				a, err := stackEnv.Call2(a.Object(), stackEnv.Stack()...)
+				a, err := a.Object().TryCall(&stackEnv, stackEnv.Stack()...)
 				_ = err == nil && env.SetA(a) || env.SetA(Error(&stackEnv, err))
 				stackEnv.runtime = Runtime{}
 				stackEnv.Clear()

@@ -258,7 +258,7 @@ func toTypePtrStruct(v Value, t reflect.Type, interopFuncs *[]func()) reflect.Va
 			for i := range args {
 				a = append(a, ValueOf(args[i].Interface()))
 			}
-			out := Call(v.Object(), a...)
+			out := v.Object().Call(nil, a...)
 			if to := t.NumOut(); to == 1 {
 				results = []reflect.Value{toTypePtrStruct(out, t.Out(0), interopFuncs)}
 			} else if to > 1 {

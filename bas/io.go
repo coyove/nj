@@ -158,7 +158,7 @@ func (m ValueIO) Read(p []byte) (int, error) {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("readbuf"); rb.IsObject() {
-			t := Call(rb.Object(), Bytes(p)).AssertPrototype(Proto.Array, "readbuf result").Native()
+			t := rb.Object().Call(nil, Bytes(p)).AssertPrototype(Proto.Array, "readbuf result").Native()
 			n := t.Get(0).AssertType(typ.Number, "readbuf result").Int()
 			if IsError(t.Get(1)) {
 				return int(n), ToErrorRootCause(t.Get(1)).(error)
@@ -166,14 +166,14 @@ func (m ValueIO) Read(p []byte) (int, error) {
 			return int(n), nil
 		}
 		if rb := Value(m).Object().Prop("readbytes"); rb.IsObject() {
-			v := Call(rb.Object(), Int(len(p)))
+			v := rb.Object().Call(nil, Int(len(p)))
 			if v == Nil {
 				return 0, io.EOF
 			}
 			return copy(p, v.AssertPrototype(Proto.Bytes, "readbytes result").Native().Unwrap().([]byte)), nil
 		}
 		if rb := Value(m).Object().Prop("read"); rb.IsObject() {
-			v := Call(rb.Object(), Int(len(p)))
+			v := rb.Object().Call(nil, Int(len(p)))
 			if v == Nil {
 				return 0, io.EOF
 			}
@@ -195,21 +195,21 @@ func (m ValueIO) Write(p []byte) (int, error) {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("write"); rb.IsObject() {
-			v := Call(rb.Object(), UnsafeStr(p))
+			v := rb.Object().Call(nil, UnsafeStr(p))
 			if IsError(v) {
 				return 0, ToError(v)
 			}
 			return v.AssertType(typ.Number, "write result").Int(), nil
 		}
 		if rb := Value(m).Object().Prop("writebytes"); rb.IsObject() {
-			v := Call(rb.Object(), Bytes(p))
+			v := rb.Object().Call(nil, Bytes(p))
 			if IsError(v) {
 				return 0, ToError(v)
 			}
 			return v.AssertType(typ.Number, "writebytes result").Int(), nil
 		}
 		if rb := Value(m).Object().Prop("writebuf"); rb.IsObject() {
-			t := Call(rb.Object(), Bytes(p)).AssertPrototype(Proto.Array, "writebuf result").Native()
+			t := rb.Object().Call(nil, Bytes(p)).AssertPrototype(Proto.Array, "writebuf result").Native()
 			n := t.Get(0).AssertType(typ.Number, "writebuf result").Int()
 			if IsError(t.Get(1)) {
 				return int(n), ToErrorRootCause(t.Get(1)).(error)
@@ -228,7 +228,7 @@ func (m ValueIO) Close() error {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("close"); rb.IsObject() {
-			if v := Call(rb.Object()); IsError(v) {
+			if v := rb.Object().Call(nil); IsError(v) {
 				return ToError(v)
 			}
 			return nil

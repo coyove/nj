@@ -204,15 +204,6 @@ func (env *Env) SetA(a Value) bool {
 	return true
 }
 
-func (e *Env) Call(m *Object, args ...Value) (res Value) {
-	return CallObject(m, e.runtime, nil, m.this, args...)
-}
-
-func (e *Env) Call2(m *Object, args ...Value) (res Value, err error) {
-	res = CallObject(m, e.runtime, &err, m.this, args...)
-	return
-}
-
 func (e *Env) MustGlobal() *Program {
 	if e.Global != nil {
 		return e.Global

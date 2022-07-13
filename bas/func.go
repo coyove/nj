@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -30,32 +29,14 @@ type Program struct {
 	stack     *[]Value
 	functions []*Object
 	stopped   bool
-	file      string
-	source    string
 
+	File         string
+	Source       string
 	MaxStackSize int64
 	Globals      *Object
 	Stdout       io.Writer
 	Stderr       io.Writer
 	Stdin        io.Reader
-}
-
-func NewProgram(file, source string, coreStack *Env, top, symbols *Object, funcs []*Object) *Program {
-	cls := &Program{top: top}
-	cls.stack = coreStack.stack
-	cls.symbols = symbols
-	cls.functions = funcs
-	cls.file = file
-	cls.source = source
-	cls.Stdout = os.Stdout
-	cls.Stdin = os.Stdin
-	cls.Stderr = os.Stderr
-
-	cls.top.fun.LoadGlobal = cls
-	for _, f := range cls.functions {
-		f.fun.LoadGlobal = cls
-	}
-	return cls
 }
 
 // Func creates a callable object
@@ -86,10 +67,6 @@ func (p *Program) Run() (v1 Value, err error) {
 func (p *Program) Stop() {
 	p.stopped = true
 	return
-}
-
-func (p *Program) FileSource() (string, string) {
-	return p.file, p.source
 }
 
 func (p *Program) GoString() string {
@@ -127,11 +104,14 @@ func EnvForAsyncCall(e *Env) *Env {
 	return &e2
 }
 
-func Call(m *Object, args ...Value) (res Value) {
+func (m *Object) Call(e *Env, args ...Value) (res Value) {
+	if e != nil {
+		return CallObject(m, e.runtime, nil, m.this, args...)
+	}
 	return CallObject(m, Runtime{}, nil, m.this, args...)
 }
 
-func Call2(m *Object, args ...Value) (res Value, err error) {
+func (m *Object) TryCall(e *Env, args ...Value) (res Value, err error) {
 	res = CallObject(m, Runtime{}, &err, m.this, args...)
 	return
 }
@@ -196,11 +176,14 @@ func (obj *Object) GoString() string {
 func (obj *Object) printAll(w io.Writer, toplevel bool) {
 	c, p := obj.fun, obj.fun.LoadGlobal
 	internal.WriteString(w, "start)\t"+obj.funcSig()+"\n")
+	if obj.parent != nil {
+		internal.WriteString(w, "proto)\t"+obj.parent.Name()+"\n")
+	}
 	if c.Native != nil {
 		internal.WriteString(w, "0)\t0\tnative code\n")
 	} else {
 		if c == p.top.fun {
-			internal.WriteString(w, "source)\t"+c.LoadGlobal.file+"\n")
+			internal.WriteString(w, "source)\t"+c.LoadGlobal.File+"\n")
 		}
 
 		readAddr := func(a uint16, rValue bool) string {
