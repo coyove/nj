@@ -210,3 +210,15 @@ func (e *Env) MustGlobal() *Program {
 	}
 	panic("calling out of program")
 }
+
+func (e *Env) Copy() *Env {
+	stk := e.CopyStack()
+	e2 := &Env{}
+	e2.A = e.A
+	e2.Global = e.Global
+	e2.stack = &stk
+	e2.stackOffsetFlag = e.stackOffsetFlag - e.stackOffset()
+	e2.runtime = e.runtime
+	e2.runtime.stackN = append([]Stacktrace{}, e2.runtime.stackN...)
+	return e2
+}

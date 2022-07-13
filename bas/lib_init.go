@@ -276,7 +276,7 @@ func init() {
 			_ = err == nil && e.SetA(a) || e.SetA(Error(e, err))
 		}).
 		SetMethod("after", func(e *Env) {
-			f, args, e2 := e.Object(-1), e.CopyStack()[1:], EnvForAsyncCall(e)
+			f, args, e2 := e.Object(-1), e.CopyStack()[1:], e.Copy()
 			t := time.AfterFunc(time.Duration(e.Float64(0)*1e6)*1e3, func() { f.Call(e2, args...) })
 			e.A = NewNamedObject("Timer", 0).
 				SetProp("t", ValueOf(t)).
@@ -287,7 +287,7 @@ func init() {
 			f := e.Object(-1)
 			args := e.CopyStack()
 			w := make(chan Value, 1)
-			e2 := EnvForAsyncCall(e)
+			e2 := e.Copy()
 			go func(f *Object, args []Value) {
 				if v, err := f.TryCall(e2, args...); err != nil {
 					w <- Error(e2, err)
@@ -728,7 +728,7 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 					}
 					work(e, fun, &outError, p)
 				}
-			}(EnvForAsyncCall(e))
+			}(e.Copy())
 		}
 
 		if t.IsArray() {

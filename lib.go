@@ -523,7 +523,7 @@ func init() {
 			go func(e *bas.Env) {
 				code, hdr, buf, jar := send(e, false)
 				f.Object().Call(e, code, hdr, buf, jar)
-			}(bas.EnvForAsyncCall(e))
+			}(e.Copy())
 			return
 		}
 		e.A = bas.Array(send(e, true))

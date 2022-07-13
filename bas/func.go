@@ -98,12 +98,6 @@ func (p *Program) LocalsObject() *Object {
 	return r
 }
 
-func EnvForAsyncCall(e *Env) *Env {
-	e2 := *e
-	e2.runtime.stackN = append([]Stacktrace{}, e2.runtime.stackN...)
-	return &e2
-}
-
 func (m *Object) Call(e *Env, args ...Value) (res Value) {
 	if e != nil {
 		return CallObject(m, e.runtime, nil, m.this, args...)
