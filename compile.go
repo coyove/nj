@@ -224,7 +224,7 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	params := nodes[2]
 	newtable := newSymTable(table.options)
 	newtable.name = table.name
-	newtable.codeSeg.Pos = &internal.VByte32{Name: table.name}
+	newtable.codeSeg.Pos.Name = table.name
 	newtable.global = table.getGlobal()
 	newtable.parent = table
 

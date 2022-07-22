@@ -316,12 +316,14 @@ func TestHashcodeDist(t *testing.T) {
 	}
 
 	z := map[uint64]int{}
+	m := NewObject(0)
 	rand.Seed(time.Now().Unix())
 	for i := 0; i < 1e6; i++ {
 		v := Int64(int64(i)).HashCode() % 32
 		z[v]++
+		m.Set(Int(i), Int(i))
 	}
-	fmt.Println(z)
+	fmt.Println(z, m.density(), m.Size())
 
 	z = map[uint64]int{}
 	for i := 0; i < 1e6; i++ {
@@ -338,11 +340,14 @@ func TestHashcodeDist(t *testing.T) {
 	fmt.Println((z))
 
 	z = map[uint64]int{}
+	m.Clear()
 	for i := 0; i < 1e6; i++ {
-		v := Str(fmt.Sprintf("%016x", rand.Uint64())).HashCode() % 32
+		x := fmt.Sprintf("%016x", rand.Uint64())
+		v := Str(x).HashCode() % 32
 		z[v]++
+		m.Set(Str(x), Str(x))
 	}
-	fmt.Println((z))
+	fmt.Println(z, m.density(), m.Size())
 }
 
 func BenchmarkStr(b *testing.B) {

@@ -371,7 +371,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *LoadOptions) (
 	table := newSymTable(env)
 	table.collectConstMode = true
 	table.name = name
-	table.codeSeg.Pos = &internal.VByte32{Name: name}
+	table.codeSeg.Pos.Name = name
 	coreStack := bas.NewEnv()
 
 	push := func(k, v bas.Value) uint16 {

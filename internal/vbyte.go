@@ -58,7 +58,7 @@ func (p *VByte32) Read(i int) (next int, idx, line uint32) {
 
 type Packet struct {
 	Code []typ.Inst
-	Pos  *VByte32
+	Pos  VByte32
 }
 
 func (b *Packet) check() {
@@ -123,9 +123,6 @@ func (b *Packet) WriteJmpInst(op byte, d int) {
 func (b *Packet) WriteLineNum(line uint32) {
 	if line == 0 {
 		ShouldNotHappen()
-	}
-	if b.Pos == nil {
-		b.Pos = &VByte32{}
 	}
 	b.Pos.Append(uint32(len(b.Code)), line)
 }

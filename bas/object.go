@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
@@ -405,4 +406,31 @@ var resizeHash = func(m *Object, newSize int) {
 		}
 	}
 	m.items = tmp.items
+}
+
+func (m *Object) density() float64 {
+	num := len(m.items)
+	if num <= 0 || m.count <= 0 {
+		return math.NaN()
+	}
+
+	var maxRun int
+	for i := 0; i < num; {
+		if m.items[i].key == Nil {
+			i++
+			continue
+		}
+		run := 1
+		for i++; i < num; i++ {
+			if m.items[i].key != Nil {
+				run++
+			} else {
+				break
+			}
+		}
+		if run > maxRun {
+			maxRun = run
+		}
+	}
+	return float64(maxRun) / (float64(num) / float64(m.count))
 }
