@@ -263,6 +263,7 @@ func init() {
 			e.A = UnsafeStr(p.Bytes())
 		}).
 		SetMethod("printed", func(e *Env) { e.A = Str(e.Object(-1).GoString()) }).
+		SetMethod("debugprinted", func(e *Env) { e.A = Str(e.Object(-1).DebugString()) }).
 		SetMethod("pure", func(e *Env) { e.A = e.Object(-1).Copy(false).SetPrototype(&ObjectProto).ToValue() }).
 		SetMethod("next", func(e *Env) { e.A = newArray(e.Object(-1).NextKeyValue(e.Get(0))).ToValue() })
 	ObjectProto.SetPrototype(nil) // object is the topmost 'object', it should not have any prototype

@@ -348,6 +348,12 @@ func TestHashcodeDist(t *testing.T) {
 		m.Set(Str(x), Str(x))
 	}
 	fmt.Println(z, m.density(), m.Size())
+
+	m = NewObject(0)
+	for i := 0; i < 20; i++ {
+		m.Set(Int(i), Int(i))
+	}
+	fmt.Println(m.DebugString())
 }
 
 func BenchmarkStr(b *testing.B) {
@@ -360,6 +366,36 @@ func BenchmarkStrHashCode(b *testing.B) {
 	x := Str(randString() + randString())
 	for i := 0; i < b.N; i++ {
 		x.HashCode()
+	}
+}
+
+func BenchmarkContains(b *testing.B) {
+	m := NewObject(0)
+	k2 := []Value{}
+	for i := 0; i < 1e3; i++ {
+		k := randString()
+		m.Set(Str(k), Int(0))
+		k2 = append(k2, Str(randString()))
+	}
+	for i := 0; i < b.N; i++ {
+		if m.Contains(k2[rand.Intn(len(k2))], false) {
+			b.Fatal()
+		}
+	}
+}
+
+func BenchmarkContainsNative(b *testing.B) {
+	k2 := []string{}
+	m := map[string]bool{}
+	for i := 0; i < 1e3; i++ {
+		k := randString()
+		m[k] = true
+		k2 = append(k2, randString())
+	}
+	for i := 0; i < b.N; i++ {
+		if m[k2[rand.Intn(len(k2))]] {
+			b.Fatal()
+		}
 	}
 }
 

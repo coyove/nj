@@ -309,7 +309,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			stackEnv.Clear()
 		case typ.OpCreateObject:
 			stk := stackEnv.Stack()
-			o := NewObject(len(stk))
+			o := NewObject(len(stk) / 2)
 			for i := 0; i < len(stk); i += 2 {
 				o.Set(stk[i], stk[i+1])
 			}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
@@ -26,18 +28,11 @@ type hashItem struct {
 	pDeleted bool
 }
 
-func (i hashItem) String() string {
-	if i.pDeleted {
-		return fmt.Sprintf("deleted(+%d)", i.dist)
-	}
-	return fmt.Sprintf("%v=%v(+%d)", i.key, i.val, i.dist)
-}
-
-func NewObject(preallocateSize int) *Object {
-	preallocateSize *= 2
+func NewObject(size int) *Object {
+	size *= 2
 	obj := &Object{}
-	if preallocateSize > 0 {
-		obj.items = make([]hashItem, preallocateSize)
+	if size > 0 {
+		obj.items = make([]hashItem, size)
 	}
 	obj.this = obj.ToValue()
 	obj.parent = &ObjectProto
@@ -45,8 +40,8 @@ func NewObject(preallocateSize int) *Object {
 	return obj
 }
 
-func NewNamedObject(name string, preallocateSize int) *Object {
-	return NewObject(preallocateSize).setName(name)
+func NewNamedObject(name string, size int) *Object {
+	return NewObject(size).setName(name)
 }
 
 func (m *Object) setName(name string) *Object {
@@ -197,7 +192,7 @@ func (m *Object) Set(k, v Value) (prev Value) {
 	if len(m.items) <= 0 {
 		m.items = make([]hashItem, 8)
 	}
-	if int(m.count) >= len(m.items)/2+1 {
+	if int(m.count) >= len(m.items)*3/4 {
 		resizeHash(m, len(m.items)*2)
 	}
 	return m.setHash(hashItem{key: k, val: v})
@@ -433,4 +428,23 @@ func (m *Object) density() float64 {
 		}
 	}
 	return float64(maxRun) / (float64(num) / float64(m.count))
+}
+
+func (m *Object) DebugString() string {
+	p := bytes.Buffer{}
+	for idx, i := range m.items {
+		p.WriteString(strconv.Itoa(idx) + ":")
+		if i.pDeleted {
+			p.WriteString("\t" + strings.Repeat(".", int(i.dist)) + "deleted\n")
+		} else if i.key == Nil {
+			p.WriteString("\t-\n")
+		} else {
+			at := i.key.HashCode() % uint64(len(m.items))
+			if i.dist > 0 {
+				p.WriteString(fmt.Sprintf("^%d", at))
+			}
+			p.WriteString("\t" + strings.Repeat(".", int(i.dist)) + fmt.Sprintf("%v\n", i.key))
+		}
+	}
+	return p.String()
 }

@@ -401,20 +401,16 @@ func (v Value) Equal(r Value) bool {
 func (v Value) HashCode() uint64 {
 	if typ.ValueType(v.v) == typ.String {
 		return uint64(strhash(v.p, 0))
-		// code := uint64(5381)
-		// for _, r := range v.Str() {
-		// 	code = code*33 + uint64(r)
-		// }
-		// return code
 	}
-	return (v.v)*uint64(uintptr(v.p)) ^ (v.v >> 33)
-	// v.v ^= uint64(uintptr(v.p))
-	// v.v ^= v.v >> 33
-	// v.v *= 0xff51afd7ed558ccd
-	// v.v ^= v.v >> 33
-	// v.v *= 0xc4ceb9fe1a85ec53
-	// v.v ^= v.v >> 33
-	// return v.v
+
+	// return (v.v)*uint64(uintptr(v.p)) ^ (v.v >> 33)
+	x := v.v ^ uint64(uintptr(v.p)-uintptr(baseStart))
+	x ^= x >> 33
+	x *= 0xff51afd7ed558ccd
+	x ^= x >> 33
+	// x *= 0xc4ceb9fe1a85ec53
+	// x ^= x >> 33
+	return x
 }
 
 func (v Value) String() string {
