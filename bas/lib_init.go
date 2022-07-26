@@ -57,30 +57,23 @@ func AddGlobalMethod(k string, f func(*Env)) {
 }
 
 func init() {
-	internal.GrowEnvStack = func(env unsafe.Pointer, sz int) {
-		(*Env)(env).grow(sz)
-	}
-	internal.SetEnvStack = func(env unsafe.Pointer, stack unsafe.Pointer) {
-		(*Env)(env).stack = (*[]Value)(stack)
-	}
-	internal.CreateRawFunc = func(name string,
-		variadic bool, numParams byte, stackSize uint16, locals []string, code internal.Packet) unsafe.Pointer {
+	internal.NewFunc = func(f string, varg bool, np byte, ss uint16, locals []string, code internal.Packet) interface{} {
 		obj := NewObject(0)
 		obj.SetPrototype(Proto.Func)
 		obj.fun = &funcbody{}
-		obj.fun.Variadic = variadic
-		obj.fun.NumParams = numParams
-		obj.fun.Name = name
-		obj.fun.StackSize = stackSize
+		obj.fun.Variadic = varg
+		obj.fun.NumParams = np
+		obj.fun.Name = f
+		obj.fun.StackSize = ss
 		obj.fun.CodeSeg = code
 		obj.fun.Locals = locals
-		obj.fun.Method = strings.Contains(name, ".")
-		return unsafe.Pointer(obj)
+		obj.fun.Method = strings.Contains(f, ".")
+		return obj
 	}
-	internal.NewProgram = func(coreStack, top, symbols unsafe.Pointer, funcs interface{}) unsafe.Pointer {
-		cls := &Program{top: (*Object)(top)}
-		cls.stack = (*Env)(coreStack).stack
-		cls.symbols = (*Object)(symbols)
+	internal.NewProgram = func(coreStack, top, symbols, funcs interface{}) interface{} {
+		cls := &Program{top: top.(*Object)}
+		cls.stack = coreStack.(*[]Value)
+		cls.symbols = symbols.(*Object)
 		cls.functions = funcs.([]*Object)
 		cls.Stdout = os.Stdout
 		cls.Stdin = os.Stdin
@@ -90,7 +83,7 @@ func init() {
 		for _, f := range cls.functions {
 			f.fun.LoadGlobal = cls
 		}
-		return unsafe.Pointer(cls)
+		return cls
 	}
 	objEmptyFunc.Native = func(e *Env) { e.A = e.A.Object().Copy(true).ToValue() }
 

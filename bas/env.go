@@ -18,10 +18,6 @@ type Env struct {
 	runtime         Runtime
 }
 
-func NewEnv() *Env {
-	return &Env{stack: new([]Value)}
-}
-
 type Runtime struct {
 	// Stacktrace layout: N, N-1, ..., 2, 1, 0(current)
 	stackN []Stacktrace // [N, N-1, ..., 2]

@@ -3,7 +3,6 @@ package nj
 import (
 	"fmt"
 	"io"
-	"unsafe"
 
 	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
@@ -365,43 +364,42 @@ func (table *symTable) getGlobal() *symTable {
 	return table
 }
 
-func compileNodeTopLevel(name, source string, n parser.Node, env *LoadOptions) (cls *bas.Program, err error) {
+func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (cls *bas.Program, err error) {
 	defer internal.CatchError(&err)
 
-	table := newSymTable(env)
-	table.collectConstMode = true
+	table := newSymTable(opt)
 	table.name = name
 	table.codeSeg.Pos.Name = name
-	coreStack := bas.NewEnv()
+	// Load nil first to ensure its address == 0
+	table.borrowAddress()
+
+	obj, coreStack := bas.GetGlobalsStack()
 
 	push := func(k, v bas.Value) uint16 {
 		idx, ok := table.get(k)
 		if ok {
-			coreStack.Set(int(idx), v)
+			coreStack[idx] = v
 		} else {
-			idx = uint16(coreStack.Size())
+			idx = uint16(len(coreStack))
 			table.put(k, idx)
-			coreStack.Push(v)
+			coreStack = append(coreStack, v)
 		}
 		return idx
 	}
 
-	// Load nil first to ensure its address == 0
-	table.borrowAddress()
-	obj, stk := bas.GetGlobalsStack()
-	internal.SetEnvStack(unsafe.Pointer(coreStack), unsafe.Pointer(&stk))
 	table.sym = *obj
 
-	if env != nil && env.Globals != nil {
-		env.Globals.Foreach(func(k bas.Value, v *bas.Value) bool { push(k, *v); return true })
+	if opt != nil && opt.Globals != nil {
+		opt.Globals.Foreach(func(k bas.Value, v *bas.Value) bool { push(k, *v); return true })
 	}
 
 	gi := push(bas.Str("PROGRAM"), bas.Nil)
 	push(bas.Str("SOURCE_CODE"), bas.Str(source))
 
-	table.vp = uint16(coreStack.Size())
+	table.vp = uint16(len(coreStack))
 
 	// Find and fill consts
+	table.collectConstMode = true
 	table.loadConst(bas.True)
 	table.loadConst(bas.False)
 	table.collectConsts(n)
@@ -411,15 +409,15 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *LoadOptions) (
 	table.codeSeg.WriteInst(typ.OpRet, typ.RegA, 0)
 	table.patchGoto()
 
-	internal.GrowEnvStack(unsafe.Pointer(coreStack), int(table.vp))
+	coreStack = append(coreStack, make([]bas.Value, table.vp)...)
 	table.constMap.Foreach(func(konst bas.Value, addr *bas.Value) bool {
-		coreStack.Set(int(addr.Int64()), konst)
+		coreStack[addr.Int64()&typ.RegLocalMask] = konst
 		return true
 	})
 
-	cls = (*bas.Program)(internal.NewProgram(
-		unsafe.Pointer(coreStack),
-		internal.CreateRawFunc(
+	cls = internal.NewProgram(
+		&coreStack,
+		internal.NewFunc(
 			"main",
 			false,
 			0,
@@ -427,18 +425,18 @@ func compileNodeTopLevel(name, source string, n parser.Node, env *LoadOptions) (
 			table.symbolsToDebugLocals(),
 			table.codeSeg,
 		),
-		unsafe.Pointer(&table.sym),
-		table.funcs))
+		&table.sym,
+		table.funcs).(*bas.Program)
 	cls.File = name
 	cls.Source = source
-	if env != nil {
-		cls.MaxStackSize = env.MaxStackSize
-		cls.Globals = env.Globals
-		cls.Stdout = internal.Or(env.Stdout, cls.Stdout).(io.Writer)
-		cls.Stderr = internal.Or(env.Stderr, cls.Stderr).(io.Writer)
-		cls.Stdin = internal.Or(env.Stdin, cls.Stdin).(io.Reader)
+	if opt != nil {
+		cls.MaxStackSize = opt.MaxStackSize
+		cls.Globals = opt.Globals
+		cls.Stdout = internal.Or(opt.Stdout, cls.Stdout).(io.Writer)
+		cls.Stderr = internal.Or(opt.Stderr, cls.Stderr).(io.Writer)
+		cls.Stdin = internal.Or(opt.Stdin, cls.Stdin).(io.Reader)
 	}
 
-	coreStack.Set(int(gi), bas.ValueOf(cls))
+	coreStack[gi] = bas.ValueOf(cls)
 	return cls, err
 }

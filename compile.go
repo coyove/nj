@@ -264,14 +264,14 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	code := newtable.codeSeg
 	code.WriteInst(typ.OpRet, typ.RegGlobalFlag, 0) // return nil
 
-	obj := (*bas.Object)(internal.CreateRawFunc(
+	obj := internal.NewFunc(
 		nodes[1].Sym(),
 		varargIdx >= 0,
 		byte(len(params.Nodes())),
 		newtable.vp,
 		newtable.symbolsToDebugLocals(),
 		code,
-	))
+	).(*bas.Object)
 	funcIdx := uint16(len(table.getGlobal().funcs))
 	table.getGlobal().funcs = append(table.getGlobal().funcs, obj)
 	table.codeSeg.WriteInst(typ.OpLoadFunc, funcIdx, 0)
