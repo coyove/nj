@@ -28,7 +28,7 @@ var globals struct {
 	stack []Value
 }
 
-func GetGlobals() *Object {
+func Globals() *Object {
 	return globals.store.Copy(true)
 }
 
@@ -61,13 +61,13 @@ func init() {
 		obj := NewObject(0)
 		obj.SetPrototype(Proto.Func)
 		obj.fun = &funcbody{}
-		obj.fun.Variadic = varg
-		obj.fun.NumParams = np
-		obj.fun.Name = f
-		obj.fun.StackSize = ss
-		obj.fun.CodeSeg = code
-		obj.fun.Locals = locals
-		obj.fun.Method = strings.Contains(f, ".")
+		obj.fun.varg = varg
+		obj.fun.numParams = np
+		obj.fun.name = f
+		obj.fun.stackSize = ss
+		obj.fun.codeSeg = code
+		obj.fun.locals = locals
+		obj.fun.method = strings.Contains(f, ".")
 		return obj
 	}
 	internal.NewProgram = func(coreStack, top, symbols, funcs interface{}) interface{} {
@@ -79,13 +79,13 @@ func init() {
 		cls.Stdin = os.Stdin
 		cls.Stderr = os.Stderr
 
-		cls.top.fun.LoadGlobal = cls
+		cls.top.fun.loadGlobal = cls
 		for _, f := range cls.functions {
-			f.fun.LoadGlobal = cls
+			f.fun.loadGlobal = cls
 		}
 		return cls
 	}
-	objEmptyFunc.Native = func(e *Env) { e.A = e.A.Object().Copy(true).ToValue() }
+	objEmptyFunc.native = func(e *Env) { e.A = e.A.Object().Copy(true).ToValue() }
 
 	AddGlobal("VERSION", Int64(Version))
 	AddGlobalMethod("globals", func(e *Env) {
@@ -112,8 +112,8 @@ func init() {
 	AddGlobal("debug", NewNamedObject("debug", 0).
 		SetProp("self", Func("self", func(e *Env) { e.A = e.Runtime().stack1.Callable.ToValue() })).
 		SetProp("locals", Func("locals", func(e *Env) {
-			locals := e.Runtime().stack1.Callable.fun.Locals
-			start := e.stackOffset() - uint32(e.Runtime().stack1.Callable.fun.StackSize)
+			locals := e.Runtime().stack1.Callable.fun.locals
+			start := e.stackOffset() - uint32(e.Runtime().stack1.Callable.fun.stackSize)
 			if e.Get(0).IsTrue() {
 				r := NewObject(0)
 				for i, name := range locals {
@@ -131,7 +131,7 @@ func init() {
 		})).
 		SetProp("globals", Func("globals", func(e *Env) {
 			var r []Value
-			for i, name := range e.MustGlobal().top.fun.Locals {
+			for i, name := range e.MustGlobal().top.fun.locals {
 				r = append(r, Int(i), Str(name), (*e.Global.stack)[i])
 			}
 			e.A = Array(r...)
@@ -144,7 +144,7 @@ func init() {
 			lines := make([]Value, 0, len(stacks))
 			for i := len(stacks) - 1 - env.Get(0).Maybe().Int(0); i >= 0; i-- {
 				r := stacks[i]
-				lines = append(lines, Str(r.Callable.fun.Name), Int64(int64(r.sourceLine())), Int64(int64(r.Cursor-1)))
+				lines = append(lines, Str(r.Callable.fun.name), Int64(int64(r.sourceLine())), Int64(int64(r.Cursor-1)))
 			}
 			env.A = newArray(lines...).ToValue()
 		})).
@@ -262,7 +262,7 @@ func init() {
 	ObjectProto.SetPrototype(nil) // object is the topmost 'object', it should not have any prototype
 
 	*Proto.Func = *NewNamedObject("function", 0).
-		SetMethod("ismethod", func(e *Env) { e.A = Bool(e.Object(-1).fun.Method) }).
+		SetMethod("ismethod", func(e *Env) { e.A = Bool(e.Object(-1).fun.method) }).
 		SetMethod("apply", func(e *Env) { e.A = CallObject(e.Object(-1), e.runtime, nil, e.Get(0), e.Stack()[1:]...) }).
 		SetMethod("call", func(e *Env) { e.A = e.Object(-1).Call(e, e.Stack()...) }).
 		SetMethod("try", func(e *Env) {

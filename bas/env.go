@@ -97,22 +97,20 @@ func (env *Env) Set(index int, value Value) {
 	env._set(uint16(index)&typ.RegLocalMask, value)
 }
 
-// Clear clears the current stack
-func (env *Env) Clear() {
+func (env *Env) clear() {
 	*env.stack = (*env.stack)[:env.stackOffset()]
 	env.A = Value{}
 }
 
-// Push pushes a value into the current stack
-func (env *Env) Push(v Value) {
+func (env *Env) push(v Value) {
 	*env.stack = append(*env.stack, v)
 }
 
-func (env *Env) PushVararg(v []Value) {
+func (env *Env) pushVararg(v []Value) {
 	*env.stack = append(*env.stack, v...)
 }
 
-func (env *Env) Prepend(v Value) {
+func (env *Env) prepend(v Value) {
 	*env.stack = append(*env.stack, Nil)
 	copy((*env.stack)[env.stackOffset()+1:], (*env.stack)[env.stackOffset():])
 	(*env.stack)[env.stackOffset()] = v

@@ -274,7 +274,7 @@ func BenchmarkGoCompiling(b *testing.B) {
 }
 
 func TestBigList(t *testing.T) {
-	n := typ.RegMaxAddress/2 - bas.GetGlobals().Len()
+	n := typ.RegMaxAddress/2 - bas.Globals().Len()
 
 	makeCode := func(n int) string {
 		buf := bytes.Buffer{}

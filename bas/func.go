@@ -9,18 +9,18 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
-var objEmptyFunc = &funcbody{Name: "object"}
+var objEmptyFunc = &funcbody{name: "object"}
 
 type funcbody struct {
-	CodeSeg    internal.Packet
-	StackSize  uint16
-	NumParams  byte
-	Variadic   bool
-	Method     bool
-	Native     func(env *Env)
-	Name       string
-	LoadGlobal *Program
-	Locals     []string
+	name       string
+	codeSeg    internal.Packet
+	stackSize  uint16
+	numParams  byte
+	varg       bool
+	method     bool
+	native     func(env *Env)
+	loadGlobal *Program
+	locals     []string
 }
 
 type Program struct {
@@ -48,7 +48,7 @@ func Func(name string, f func(*Env)) Value {
 		f = func(*Env) {}
 	}
 	obj := NewObject(0)
-	obj.fun = &funcbody{Name: name, Native: f}
+	obj.fun = &funcbody{name: name, native: f}
 	obj.SetPrototype(Proto.Func)
 	return obj.ToValue()
 }
@@ -91,8 +91,8 @@ func (p *Program) Set(k string, v Value) (ok bool) {
 }
 
 func (p *Program) LocalsObject() *Object {
-	r := NewObject(len(p.top.fun.Locals))
-	for i, name := range p.top.fun.Locals {
+	r := NewObject(len(p.top.fun.locals))
+	for i, name := range p.top.fun.locals {
 		r.Set(Str(name), (*p.stack)[i])
 	}
 	return r
@@ -106,7 +106,11 @@ func (m *Object) Call(e *Env, args ...Value) (res Value) {
 }
 
 func (m *Object) TryCall(e *Env, args ...Value) (res Value, err error) {
-	res = CallObject(m, Runtime{}, &err, m.this, args...)
+	if e != nil {
+		res = CallObject(m, e.runtime, &err, m.this, args...)
+	} else {
+		res = CallObject(m, Runtime{}, &err, m.this, args...)
+	}
 	return
 }
 
@@ -114,7 +118,7 @@ func CallObject(m *Object, r Runtime, outErr *error, this Value, args ...Value) 
 	c := m.fun
 	newEnv := Env{
 		A:      this,
-		Global: c.LoadGlobal,
+		Global: c.loadGlobal,
 		stack:  &args,
 	}
 
@@ -122,42 +126,42 @@ func CallObject(m *Object, r Runtime, outErr *error, this Value, args ...Value) 
 		defer internal.CatchError(outErr)
 	}
 
-	if c.Native != nil {
+	if c.native != nil {
 		defer relayPanic(func() []Stacktrace { return newEnv.runtime.Stacktrace(false) })
 		newEnv.runtime = r.push(Stacktrace{
 			Callable:        m,
 			stackOffsetFlag: internal.FlagNativeCall,
 		})
-		c.Native(&newEnv)
+		c.native(&newEnv)
 		return newEnv.A
 	}
 
-	if c.Variadic {
+	if c.varg {
 		s := *newEnv.stack
-		if len(s) > int(c.NumParams)-1 {
-			s[c.NumParams-1] = newArray(append([]Value{}, s[c.NumParams-1:]...)...).ToValue()
+		if len(s) > int(c.numParams)-1 {
+			s[c.numParams-1] = newArray(append([]Value{}, s[c.numParams-1:]...)...).ToValue()
 		} else {
-			newEnv.grow(int(c.NumParams))
-			newEnv._set(uint16(c.NumParams)-1, newArray().ToValue())
+			newEnv.grow(int(c.numParams))
+			newEnv._set(uint16(c.numParams)-1, newArray().ToValue())
 		}
 	}
-	newEnv.growZero(int(c.StackSize), int(c.NumParams))
+	newEnv.growZero(int(c.stackSize), int(c.numParams))
 
 	return internalExecCursorLoop(newEnv, m, r.Stacktrace(false))
 }
 
 func (o *Object) funcSig() string {
 	c := o.fun
-	p := bytes.NewBufferString(c.Name)
-	p.WriteString(internal.IfStr(c.Method, "([this],", "("))
-	if c.Native != nil {
+	p := bytes.NewBufferString(c.name)
+	p.WriteString(internal.IfStr(c.method, "([this],", "("))
+	if c.native != nil {
 		p.WriteString("...")
 	} else {
-		for i := 0; i < int(c.NumParams); i++ {
+		for i := 0; i < int(c.numParams); i++ {
 			fmt.Fprintf(p, "a%d,", i)
 		}
 	}
-	internal.CloseBuffer(p, internal.IfStr(c.Variadic, "...)", ")"))
+	internal.CloseBuffer(p, internal.IfStr(c.varg, "...)", ")"))
 	return p.String()
 }
 
@@ -168,16 +172,16 @@ func (obj *Object) GoString() string {
 }
 
 func (obj *Object) printAll(w io.Writer, toplevel bool) {
-	c, p := obj.fun, obj.fun.LoadGlobal
+	c, p := obj.fun, obj.fun.loadGlobal
 	internal.WriteString(w, "start)\t"+obj.funcSig()+"\n")
 	if obj.parent != nil {
 		internal.WriteString(w, "proto)\t"+obj.parent.Name()+"\n")
 	}
-	if c.Native != nil {
+	if c.native != nil {
 		internal.WriteString(w, "0)\t0\tnative code\n")
 	} else {
 		if c == p.top.fun {
-			internal.WriteString(w, "source)\t"+c.LoadGlobal.File+"\n")
+			internal.WriteString(w, "source)\t"+c.loadGlobal.File+"\n")
 		}
 
 		readAddr := func(a uint16, rValue bool) string {
@@ -201,9 +205,9 @@ func (obj *Object) printAll(w io.Writer, toplevel bool) {
 			return fmt.Sprintf("sp(%d)", a&typ.RegLocalMask) + suffix
 		}
 
-		oldpos := c.CodeSeg.Pos
+		oldpos := c.codeSeg.Pos
 
-		for i, inst := range c.CodeSeg.Code {
+		for i, inst := range c.codeSeg.Code {
 			cursor := uint32(i) + 1
 			bop, a, b, c := inst.Opcode, inst.A, inst.B, inst.C
 

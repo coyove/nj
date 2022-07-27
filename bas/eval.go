@@ -30,7 +30,7 @@ func (r *Stacktrace) IsNativeCall() bool {
 }
 
 func (r *Stacktrace) sourceLine() (src uint32) {
-	posv := r.Callable.fun.CodeSeg.Pos
+	posv := r.Callable.fun.codeSeg.Pos
 	lastLine := uint32(math.MaxUint32)
 	if posv.Len() > 0 {
 		_, op, line := posv.Read(0)
@@ -65,12 +65,12 @@ func (e *ExecError) Error() string {
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
 		if r.IsNativeCall() {
-			msg.WriteString(fmt.Sprintf("%s at native\n\t<native code>\n", r.Callable.fun.Name))
+			msg.WriteString(fmt.Sprintf("%s at native\n\t<native code>\n", r.Callable.fun.name))
 		} else {
 			ln := r.sourceLine()
 			msg.WriteString(fmt.Sprintf("%s at %s:%d (i%d)",
-				r.Callable.fun.Name,
-				r.Callable.fun.CodeSeg.Pos.Name,
+				r.Callable.fun.name,
+				r.Callable.fun.codeSeg.Pos.Name,
 				ln,
 				r.Cursor-1, // the recorded cursor was advanced by 1 already
 			))
@@ -78,7 +78,7 @@ func (e *ExecError) Error() string {
 				msg.WriteString(" (tailcall)")
 			}
 			msg.WriteString("\n\t")
-			line, ok := internal.LineOf(r.Callable.fun.LoadGlobal.Source, int(ln))
+			line, ok := internal.LineOf(r.Callable.fun.loadGlobal.Source, int(ln))
 			if ok {
 				msg.WriteString(strings.TrimSpace(line))
 			} else {
@@ -122,7 +122,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		return retStack
 	})
 
-	code := K.fun.CodeSeg.Code
+	code := K.fun.codeSeg.Code
 	for {
 		v := code[cursor]
 		bop, opa, opb, opc := v.Opcode, v.A, v.B, v.C
@@ -306,7 +306,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 		case typ.OpCreateArray:
 			env.A = newArray(append([]Value{}, stackEnv.Stack()...)...).ToValue()
-			stackEnv.Clear()
+			stackEnv.clear()
 		case typ.OpCreateObject:
 			stk := stackEnv.Stack()
 			o := NewObject(len(stk) / 2)
@@ -314,7 +314,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				o.Set(stk[i], stk[i+1])
 			}
 			env.A = o.ToValue()
-			stackEnv.Clear()
+			stackEnv.clear()
 		case typ.OpIsProto:
 			if a, b := env._get(opa), env._get(opb); a.Equal(b) {
 				env.A = True
@@ -387,7 +387,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				internal.Panic("can't slice %v", detail(a))
 			}
 		case typ.OpPush:
-			stackEnv.Push(env._get(opa))
+			stackEnv.push(env._get(opa))
 		case typ.OpPushUnpack:
 			switch a := env._get(opa); a.Type() {
 			case typ.Native:
@@ -405,11 +405,11 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			r := retStack[len(retStack)-1]
 			cursor = r.Cursor
 			K = r.Callable
-			code = K.fun.CodeSeg.Code
+			code = K.fun.codeSeg.Code
 			env.stackOffsetFlag = r.stackOffsetFlag
 			env.A = v
-			env.Global = K.fun.LoadGlobal
-			*env.stack = (*env.stack)[:env.stackOffset()+uint32(r.Callable.fun.StackSize)]
+			env.Global = K.fun.loadGlobal
+			*env.stack = (*env.stack)[:env.stackOffset()+uint32(r.Callable.fun.stackSize)]
 			stackEnv.stackOffsetFlag = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
 		case typ.OpLoadFunc:
@@ -429,11 +429,11 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				internal.Panic("%v not callable", detail(a))
 			}
 			if opb != typ.RegPhantom {
-				stackEnv.Push(env._get(opb))
+				stackEnv.push(env._get(opb))
 			}
 			stackEnv.A = a.Object().this
-			if cls.Variadic {
-				s, w := stackEnv.Stack(), int(cls.NumParams)-1
+			if cls.varg {
+				s, w := stackEnv.Stack(), int(cls.numParams)-1
 				if len(s) > w {
 					s[w] = newArray(append([]Value{}, s[w:]...)...).ToValue()
 				} else {
@@ -467,25 +467,25 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				a, err := a.Object().TryCall(&stackEnv, stackEnv.Stack()...)
 				_ = err == nil && env.SetA(a) || env.SetA(Error(&stackEnv, err))
 				stackEnv.runtime = Runtime{}
-				stackEnv.Clear()
-			} else if cls.Native != nil {
+				stackEnv.clear()
+			} else if cls.native != nil {
 				stackEnv.Global = env.Global
 				stackEnv.runtime.stack0 = Stacktrace{Callable: obj, stackOffsetFlag: internal.FlagNativeCall}
 				stackEnv.runtime.stack1 = last
 				stackEnv.runtime.stackN = retStack
-				cls.Native(&stackEnv)
+				cls.native(&stackEnv)
 				stackEnv.runtime = Runtime{}
 				env.A = stackEnv.A
-				stackEnv.Clear()
+				stackEnv.clear()
 			} else {
-				stackEnv.growZero(int(cls.StackSize), int(cls.NumParams))
+				stackEnv.growZero(int(cls.stackSize), int(cls.numParams))
 
 				// Switch 'env' to 'stackEnv' and clear 'stackEnv'
 				cursor = 0
 				K = obj
-				code = obj.fun.CodeSeg.Code
+				code = obj.fun.codeSeg.Code
 				env.stackOffsetFlag = stackEnv.stackOffsetFlag
-				env.Global = cls.LoadGlobal
+				env.Global = cls.loadGlobal
 				env.A = stackEnv.A
 
 				if bop == typ.OpCall {

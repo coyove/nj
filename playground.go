@@ -97,7 +97,7 @@ func PlaygroundHandler(defaultCode string, opt *LoadOptions) func(w http.Respons
 					}
 				}
 			}
-			x := bas.GetGlobals()
+			x := bas.Globals()
 			if opt != nil {
 				x.Merge(opt.Globals)
 			}

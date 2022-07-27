@@ -45,7 +45,7 @@ func NewNamedObject(name string, size int) *Object {
 }
 
 func (m *Object) setName(name string) *Object {
-	m.fun = &funcbody{Name: name, Native: func(*Env) {}}
+	m.fun = &funcbody{name: name, native: func(*Env) {}}
 	return m
 }
 
@@ -108,7 +108,7 @@ func (m *Object) SetProp(k string, v Value) *Object {
 // SetMethod binds method "fun" to "k" in the object
 func (m *Object) SetMethod(k string, fun func(*Env)) *Object {
 	f := Func(k, fun)
-	f.Object().fun.Method = true
+	f.Object().fun.method = true
 	m.Set(Str(k), f)
 	return m
 }
@@ -136,7 +136,7 @@ func (m *Object) find(k Value, findPrototype, setReceiver bool) (v Value) {
 		v = m.parent.find(k, findPrototype, false)
 	}
 	if setReceiver && v.IsObject() {
-		if obj := v.Object(); obj.fun.Method {
+		if obj := v.Object(); obj.fun.method {
 			f := obj.Copy(false)
 			f.this = m.ToValue()
 			v = f.ToValue()
@@ -365,9 +365,9 @@ func (m *Object) ToValue() Value {
 
 func (m *Object) Name() string {
 	if m != nil {
-		return m.fun.Name
+		return m.fun.name
 	}
-	return objEmptyFunc.Name
+	return objEmptyFunc.name
 }
 
 func (m *Object) Copy(copyData bool) *Object {

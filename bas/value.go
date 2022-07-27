@@ -152,8 +152,10 @@ func Str(s string) Value {
 }
 
 // UnsafeStr creates a string value from []byte, its content may change if []byte changed
-func UnsafeStr(s []byte) Value {
-	return Str(*(*string)(unsafe.Pointer(&s)))
+func UnsafeStr(b []byte) Value {
+	var s string
+	*(*[2]uintptr)(unsafe.Pointer(&s)) = *(*[2]uintptr)(unsafe.Pointer(&b))
+	return Str(s)
 }
 
 // Byte creates a one-byte string value
