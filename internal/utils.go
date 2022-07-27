@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"unicode/utf8"
 	"unsafe"
 )
 
@@ -123,10 +124,18 @@ func LineOf(text string, line int) (string, bool) {
 		idx := strings.IndexByte(text, '\n')
 		line--
 		if line == 0 {
-			if idx == -1 {
-				return text, true
+			if idx >= 0 {
+				text = text[:idx]
 			}
-			return text[:idx], true
+			if trunc := 256; len(text) > trunc {
+				for i := trunc - 1; i >= 0; i-- {
+					if r, _ := utf8.DecodeLastRuneInString(text[:i]); r != utf8.RuneError {
+						text = text[:i] + " ... truncated code"
+						break
+					}
+				}
+			}
+			return text, true
 		}
 		if idx == -1 {
 			break
@@ -213,13 +222,13 @@ NEXT:
 			v := args[ai]
 			if sn, ok := v.(SprintfNumber); ok {
 				if preferNumber == 'i' {
-					v = sn.I
+					v = sn.Int
 				} else if preferNumber == 'f' {
-					v = sn.F
+					v = sn.Float
 				} else if sn.IsInt {
-					v = sn.I
+					v = sn.Int
 				} else {
-					v = sn.F
+					v = sn.Float
 				}
 			}
 			fmt.Fprintf(w, tmp.String(), v)
@@ -229,7 +238,7 @@ NEXT:
 }
 
 type SprintfNumber struct {
-	I     int64
-	F     float64
+	Int   int64
+	Float float64
 	IsInt bool
 }

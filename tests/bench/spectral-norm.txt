@@ -45,7 +45,7 @@ function ATimesTransp(v, u)
      TimesTranspVec.map(payload, os.numcpus)
 end
 
-n = 5500
+n = 550
 u = array.make(n) 
 v = array.make(n) 
  

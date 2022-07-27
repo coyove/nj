@@ -543,12 +543,6 @@ func BenchmarkGoJSON(b *testing.B) {
 	}
 }
 
-func BenchmarkCompile(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		LoadString("function(a, b) a + b end", nil)
-	}
-}
-
 // func TestRunTimeout(t *testing.T) {
 // 	o := bas.NewObject(0)
 // 	p, _ := LoadString("for i=0,1e8 do z.a = i end", &bas.Environment{

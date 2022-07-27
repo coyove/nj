@@ -21,12 +21,11 @@ type symTable struct {
 	name    string
 	options *LoadOptions
 
+	// toplevel symtable
 	global *symTable
-	parent *symTable
 
 	codeSeg internal.Packet
 
-	// toplevel symtable
 	funcs []*bas.Object
 
 	// variable lookup

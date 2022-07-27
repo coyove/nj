@@ -133,7 +133,7 @@ func PlaygroundHandler(defaultCode string, opt *LoadOptions) func(w http.Respons
 			writeJSON(w, map[string]interface{}{"error": err.Error()})
 			return
 		}
-		p.MaxStackSize = 100
+		p.MaxStackSize = 1000
 		p.Stdout = bufOut
 		p.Stderr = bufOut
 		code := p.GoString()

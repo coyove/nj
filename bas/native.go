@@ -240,7 +240,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 		return bytesArrayMeta
 	case []string:
 		return stringsArrayMeta
-	case error:
+	case *ExecError:
 		return errorNativeMeta
 	}
 	rt := reflect.TypeOf(v)

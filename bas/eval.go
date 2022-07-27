@@ -425,13 +425,10 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 			obj := a.Object()
 			cls := obj.fun
-			if cls == nil {
-				internal.Panic("%v not callable", detail(a))
-			}
 			if opb != typ.RegPhantom {
 				stackEnv.push(env._get(opb))
 			}
-			stackEnv.A = a.Object().this
+			stackEnv.A = obj.this
 			if cls.varg {
 				s, w := stackEnv.Stack(), int(cls.numParams)-1
 				if len(s) > w {
@@ -442,14 +439,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				}
 			}
 
-			if g := env.Global; g != nil {
-				if g.MaxStackSize > 0 && int64(len(*g.stack)) > g.MaxStackSize {
-					panic("stack overflow")
-				}
-				if g.stopped {
-					panic("program stopped")
-				}
-			}
+			env.checkStackOverflow()
 
 			last := Stacktrace{
 				Callable:        K,
@@ -464,7 +454,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					stackEnv.runtime.stack1 = retStack[len(retStack)-1]
 					stackEnv.runtime.stackN = retStack[:len(retStack)-1]
 				}
-				a, err := a.Object().TryCall(&stackEnv, stackEnv.Stack()...)
+				a, err := obj.TryCall(&stackEnv, stackEnv.Stack()...)
 				_ = err == nil && env.SetA(a) || env.SetA(Error(&stackEnv, err))
 				stackEnv.runtime = Runtime{}
 				stackEnv.clear()
@@ -503,6 +493,4 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 		}
 	}
-
-	panic("stop")
 }

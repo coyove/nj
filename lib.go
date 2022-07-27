@@ -58,22 +58,17 @@ func init() {
 			Globals:      e.MustGlobal().Globals,
 		}))
 	})
-	bas.AddGlobalMethod("eval", func(e *bas.Env) {
-		opts := e.Get(1).Maybe().Object(nil)
-		if opts.Prop("ast").IsTrue() {
-			v, err := parser.Parse(e.Str(0), "")
-			internal.PanicErr(err)
-			e.A = bas.ValueOf(v)
-			return
-		}
+	bas.AddGlobal("eval", bas.Func("eval", func(e *bas.Env) {
 		p, err := LoadString(e.Str(0), &LoadOptions{
-			Globals: opts.Prop("globals").Maybe().Object(nil),
+			Globals: e.Get(1).Maybe().Object(nil),
 		})
 		internal.PanicErr(err)
-		v, err := p.Run()
-		internal.PanicErr(err)
-		_ = opts.Prop("returnglobals").IsTrue() && e.SetA(p.LocalsObject().ToValue()) || e.SetA(v)
-	})
+		e.A = valueOrPanic(p.Run())
+	}).Object().
+		SetProp("parse", bas.Func("parse", func(e *bas.Env) {
+			e.A = valueOrPanic(parser.Parse(e.Str(0), "eval.parse"))
+		})).
+		ToValue())
 
 	bas.AddGlobal("stdout", bas.ValueOf(os.Stdout))
 	bas.AddGlobal("stdin", bas.ValueOf(os.Stdin))

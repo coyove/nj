@@ -660,7 +660,7 @@ func EnvFprintf(env *Env, start int, p io.Writer) {
 	args := make([]interface{}, 0)
 	for i := start + 1; i < env.Size(); i++ {
 		if v := env.Get(i); v.Type() == typ.Number {
-			args = append(args, internal.SprintfNumber{I: v.Int64(), F: v.Float64(), IsInt: v.IsInt64()})
+			args = append(args, internal.SprintfNumber{Int: v.Int64(), Float: v.Float64(), IsInt: v.IsInt64()})
 		} else {
 			args = append(args, v.Interface())
 		}

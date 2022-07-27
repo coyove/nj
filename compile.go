@@ -226,7 +226,6 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	newtable.name = table.name
 	newtable.codeSeg.Pos.Name = table.name
 	newtable.global = table.getGlobal()
-	newtable.parent = table
 
 	varargIdx := -1
 	for i, p := range params.Nodes() {
