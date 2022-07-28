@@ -26,8 +26,6 @@ type symTable struct {
 
 	codeSeg internal.Packet
 
-	funcs []*bas.Object
-
 	// variable lookup
 	sym       bas.Object   // str -> address: uint16
 	maskedSym []bas.Object // str -> address: uint16
@@ -38,6 +36,7 @@ type symTable struct {
 
 	collectConstMode bool
 	constMap         bas.Object // value -> address: uint16
+	funcsMap         bas.Object // func name -> address: uint16
 
 	reusableTmps      bas.Object // address: uint16 -> used: bool
 	reusableTmpsArray []uint16
@@ -350,7 +349,14 @@ func (table *symTable) collectConsts(node parser.Node) {
 	case parser.STR, parser.FLOAT, parser.INT:
 		table.loadConst(node.Value)
 	case parser.NODES:
-		for _, n := range node.Nodes() {
+		nodes := node.Nodes()
+		if len(nodes) == 4 && nodes[0].Value == parser.SFunc.Value {
+			addr := int(typ.RegGlobalFlag | table.borrowAddressNoReuse())
+			if table.getGlobal().funcsMap.Set(nodes[1].Value, bas.Int(addr)) != bas.Nil {
+				table.panicnode(nodes[1], "duplicated function names")
+			}
+		}
+		for _, n := range nodes {
 			table.collectConsts(n)
 		}
 	}
@@ -397,7 +403,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 
 	table.vp = uint16(len(coreStack))
 
-	// Find and fill consts
+	// Search constants and functions
 	table.collectConstMode = true
 	table.loadConst(bas.True)
 	table.loadConst(bas.False)
@@ -408,7 +414,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 	table.codeSeg.WriteInst(typ.OpRet, typ.RegA, 0)
 	table.patchGoto()
 
-	coreStack = append(coreStack, make([]bas.Value, table.vp)...)
+	coreStack = append(coreStack, make([]bas.Value, int(table.vp)-len(coreStack))...)
 	table.constMap.Foreach(func(konst bas.Value, addr *bas.Value) bool {
 		coreStack[addr.Int64()&typ.RegLocalMask] = konst
 		return true
@@ -425,7 +431,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 			table.codeSeg,
 		),
 		&table.sym,
-		table.funcs).(*bas.Program)
+		&table.funcsMap).(*bas.Program)
 	cls.File = name
 	cls.Source = source
 	if opt != nil {

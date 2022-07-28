@@ -290,6 +290,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	f, _ := LoadString(makeCode(n), nil)
+	// fmt.Println(f.GoString())
 	v2, err := f.Run()
 	if err != nil {
 		t.Fatal(err)

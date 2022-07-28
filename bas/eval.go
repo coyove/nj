@@ -412,11 +412,11 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			*env.stack = (*env.stack)[:env.stackOffset()+uint32(r.Callable.fun.stackSize)]
 			stackEnv.stackOffsetFlag = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
-		case typ.OpLoadFunc:
-			if opa == typ.RegA {
+		case typ.OpCopyFunction:
+			if opa == typ.RegPhantom {
 				env.A = K.ToValue()
 			} else {
-				env.A = env.Global.functions[opa].ToValue()
+				env.A = env._get(opa).Object().Copy(false).ToValue()
 			}
 		case typ.OpCall, typ.OpTryCall, typ.OpTailCall:
 			a := env._get(opa)

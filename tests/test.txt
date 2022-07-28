@@ -149,13 +149,13 @@ do
     end
 end
 
-function deepadd(a)
+function deepadd2(a)
     if (a <= 0) then return 0 end
-    return add(a, deepadd(a - 1))
+    return add(a, deepadd2(a - 1))
 end
 
 e = 100000
-assert( deepadd(e) == (1 + e) * (e / 2 ))
+assert( deepadd2(e) == (1 + e) * (e / 2 ))
  
 a = 2
 assert( 1 + 2 *3/4 == 2.5)
@@ -213,16 +213,16 @@ x = double(1, 2, 3)
 assert(x[0] + x[1] + x[2] == 12)
 print(x)
 
-function double(k, args...)
+function double2(k, args...)
     for i=0,#(args) do
         args[i] = args[i] * k
     end
     return args
 end
 
-x = double(3, 1)
+x = double2(3, 1)
 assert(x[0] == 3)
-x = double(4, 1, 2, 3)
+x = double2(4, 1, 2, 3)
 assert(x[0] + x[1] + x[2] == 24)
 
 function test_return(a)

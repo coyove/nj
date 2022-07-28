@@ -27,7 +27,7 @@ type Program struct {
 	top       *Object
 	symbols   *Object
 	stack     *[]Value
-	functions []*Object
+	functions *Object
 	stopped   bool
 
 	File         string
@@ -70,7 +70,14 @@ func (p *Program) Stop() {
 }
 
 func (p *Program) GoString() string {
-	return p.top.GoString()
+	x := &bytes.Buffer{}
+	p.top.printAll(x)
+	p.functions.Foreach(func(_ Value, f *Value) bool {
+		x.WriteByte('\n')
+		f.Object().printAll(x)
+		return true
+	})
+	return x.String()
 }
 
 func (p *Program) Get(k string) (v Value, ok bool) {
@@ -167,21 +174,21 @@ func (o *Object) funcSig() string {
 
 func (obj *Object) GoString() string {
 	buf := &bytes.Buffer{}
-	obj.printAll(buf, true)
+	obj.printAll(buf)
 	return buf.String()
 }
 
-func (obj *Object) printAll(w io.Writer, toplevel bool) {
-	c, p := obj.fun, obj.fun.loadGlobal
+func (obj *Object) printAll(w io.Writer) {
+	cls, p := obj.fun, obj.fun.loadGlobal
 	internal.WriteString(w, "start)\t"+obj.funcSig()+"\n")
 	if obj.parent != nil {
 		internal.WriteString(w, "proto)\t"+obj.parent.Name()+"\n")
 	}
-	if c.native != nil {
+	if cls.native != nil {
 		internal.WriteString(w, "0)\t0\tnative code\n")
 	} else {
-		if c == p.top.fun {
-			internal.WriteString(w, "source)\t"+c.loadGlobal.File+"\n")
+		if cls == p.top.fun {
+			internal.WriteString(w, "source)\t"+cls.loadGlobal.File+"\n")
 		}
 
 		readAddr := func(a uint16, rValue bool) string {
@@ -190,12 +197,10 @@ func (obj *Object) printAll(w io.Writer, toplevel bool) {
 			}
 
 			suffix := ""
-			if rValue {
-				if a > typ.RegLocalMask || toplevel {
-					x := (*p.stack)[a&typ.RegLocalMask]
-					if x != Nil {
-						suffix = ":" + detail(x)
-					}
+			if addr := a & typ.RegLocalMask; rValue && int(addr) < len(*p.stack) {
+				x := (*p.stack)[addr]
+				if x != Nil {
+					suffix = ":" + detail(x)
 				}
 			}
 
@@ -205,9 +210,9 @@ func (obj *Object) printAll(w io.Writer, toplevel bool) {
 			return fmt.Sprintf("sp(%d)", a&typ.RegLocalMask) + suffix
 		}
 
-		oldpos := c.codeSeg.Pos
+		oldpos := cls.codeSeg.Pos
 
-		for i, inst := range c.codeSeg.Code {
+		for i, inst := range cls.codeSeg.Code {
 			cursor := uint32(i) + 1
 			bop, a, b, c := inst.Opcode, inst.A, inst.B, inst.C
 
@@ -229,13 +234,11 @@ func (obj *Object) printAll(w io.Writer, toplevel bool) {
 				internal.WriteString(w, "createarray")
 			case typ.OpCreateObject:
 				internal.WriteString(w, "createobject")
-			case typ.OpLoadFunc:
-				if a == typ.RegA {
-					internal.WriteString(w, "loadself")
+			case typ.OpCopyFunction:
+				if a == typ.RegPhantom {
+					internal.WriteString(w, "moveself")
 				} else {
-					cls := p.functions[a]
-					internal.WriteString(w, fmt.Sprintf("loadfunc(%d)\n", a))
-					cls.printAll(w, false)
+					internal.WriteString(w, "copyfunction "+readAddr(a, true))
 				}
 			case typ.OpTailCall, typ.OpCall, typ.OpTryCall:
 				if b != typ.RegPhantom {

@@ -219,7 +219,7 @@ func compileCall(table *symTable, nodes []parser.Node) uint16 {
 	return typ.RegA
 }
 
-// [function name [paramlist] [chain ...] docstring]
+// [function name [paramlist] [chain ...]]
 func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	params := nodes[2]
 	newtable := newSymTable(table.options)
@@ -255,7 +255,7 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	}
 	if a := newtable.sym.Get(staticSelf); a != bas.Nil {
 		newtable.codeSeg.Code = append([]typ.Inst{
-			{Opcode: typ.OpLoadFunc, A: typ.RegA},
+			{Opcode: typ.OpCopyFunction, A: typ.RegPhantom},
 			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: typ.RegA},
 		}, newtable.codeSeg.Code...)
 	}
@@ -271,9 +271,14 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 		newtable.symbolsToDebugLocals(),
 		code,
 	).(*bas.Object)
-	funcIdx := uint16(len(table.getGlobal().funcs))
-	table.getGlobal().funcs = append(table.getGlobal().funcs, obj)
-	table.codeSeg.WriteInst(typ.OpLoadFunc, funcIdx, 0)
+	//funcIdx := uint16(len(table.getGlobal().funcs))
+	//table.getGlobal().funcs = append(table.getGlobal().funcs, obj)
+	fm := &table.getGlobal().funcsMap
+	fidx := fm.Get(nodes[1].Value)
+	fm.Set(fidx, obj.ToValue())
+	fm.Delete(nodes[1].Value)
+	table.getGlobal().constMap.Set(obj.ToValue(), fidx)
+	table.codeSeg.WriteInst(typ.OpCopyFunction, uint16(fidx.Int()), 0)
 	table.codeSeg.WriteLineNum(nodes[0].Line())
 	return typ.RegA
 }

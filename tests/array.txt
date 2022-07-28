@@ -21,3 +21,7 @@ assert(a[10], 100)
 
 syncMap.Store("a", 1)
 assert(syncMap.Load("a")[0], 1)
+
+
+function curry(f, args...)
+end

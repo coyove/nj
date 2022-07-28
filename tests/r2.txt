@@ -36,7 +36,7 @@ end
 local a, b, c = foo1(1, 2, 3)
 assert(a == 1 and b + c == 5)
 
-function foo1(a, b, c, x)
+function foo2(a, b, c, x)
     local tmp = [a, b, c]
 	if x then
 		for i = 0, #(x) do tmp.append(x[i]) end
@@ -44,7 +44,7 @@ function foo1(a, b, c, x)
     return tmp
 end
 
-local _, _, _, x,y = foo1(1,2,3,["4",5])
+local _, _, _, x,y = foo2(1,2,3,["4",5])
 assert(x == "4" and y == 5)
 
 function remove(el, arr)
@@ -105,9 +105,9 @@ assert([1,2] is not object)
 assert(native is not object)
 
 
-function foo(k) debug.self()[k] = k end
-for i=0,10 do foo(i) end
-for i=0,10 do assert(foo[i], i) end
+function foo3(k) debug.self()[k] = k end
+for i=0,10 do foo3(i) end
+for i=0,10 do assert(foo3[i], i) end
 
 oneline = new(io.writer)
 
@@ -179,3 +179,4 @@ equals(bigint("10000000000000000000000000001")))
 local f = eval("a=1 return function(n) a +=n a end")
 assert(f(1), 2)
 assert(f(2), 4)
+

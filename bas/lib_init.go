@@ -74,15 +74,16 @@ func init() {
 		cls := &Program{top: top.(*Object)}
 		cls.stack = coreStack.(*[]Value)
 		cls.symbols = symbols.(*Object)
-		cls.functions = funcs.([]*Object)
+		cls.functions = funcs.(*Object)
 		cls.Stdout = os.Stdout
 		cls.Stdin = os.Stdin
 		cls.Stderr = os.Stderr
 
 		cls.top.fun.loadGlobal = cls
-		for _, f := range cls.functions {
-			f.fun.loadGlobal = cls
-		}
+		cls.functions.Foreach(func(_ Value, f *Value) bool {
+			f.Object().fun.loadGlobal = cls
+			return true
+		})
 		return cls
 	}
 	objEmptyFunc.native = func(e *Env) { e.A = e.A.Object().Copy(true).ToValue() }
@@ -263,6 +264,7 @@ func init() {
 
 	*Proto.Func = *NewNamedObject("function", 0).
 		SetMethod("ismethod", func(e *Env) { e.A = Bool(e.Object(-1).fun.method) }).
+		SetMethod("argcount", func(e *Env) { e.A = Int(int(e.Object(-1).fun.numParams)) }).
 		SetMethod("apply", func(e *Env) { e.A = CallObject(e.Object(-1), e.runtime, nil, e.Get(0), e.Stack()[1:]...) }).
 		SetMethod("call", func(e *Env) { e.A = e.Object(-1).Call(e, e.Stack()...) }).
 		SetMethod("try", func(e *Env) {
