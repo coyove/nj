@@ -91,5 +91,5 @@ var UnaryOpcode = map[byte]string{
 	OpRet:        AReturn,
 	OpLen:        ALen,
 	OpPush:       "push",
-	OpPushUnpack: "pushvararg",
+	OpPushUnpack: "pushvarg",
 }

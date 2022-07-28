@@ -120,6 +120,8 @@ func TestFileR2(t *testing.T) { runFile(t, "tests/r2.txt") }
 
 func TestFileStringIndex(t *testing.T) { runFile(t, "tests/indexstr.txt") }
 
+func TestFileCurry(t *testing.T) { runFile(t, "tests/curry.txt") }
+
 func TestReturnFunction(t *testing.T) {
 	{
 		cls, _ := LoadString(`

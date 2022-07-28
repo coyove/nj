@@ -32,12 +32,14 @@ func (r *Stacktrace) IsNativeCall() bool {
 func (r *Stacktrace) sourceLine() (src uint32) {
 	posv := r.Callable.fun.codeSeg.Pos
 	lastLine := uint32(math.MaxUint32)
+	cursor := r.Cursor - 1
 	if posv.Len() > 0 {
 		_, op, line := posv.Read(0)
-		for r.Cursor > op && posv.Len() > 0 {
+		for cursor > op && posv.Len() > 0 {
 			op, line = posv.Pop()
+			// fmt.Println(r.Callable.fun.name, cursor, op, line)
 		}
-		if r.Cursor <= op {
+		if cursor <= op {
 			return line
 		}
 		lastLine = line
@@ -98,7 +100,7 @@ func relayPanic(onPanic func() []Stacktrace) {
 
 		e := &ExecError{}
 		e.root = r
-		e.stacks = onPanic()
+		e.stacks = append([]Stacktrace{}, onPanic()...)
 		panic(e)
 	}
 }
@@ -412,8 +414,8 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			*env.stack = (*env.stack)[:env.stackOffset()+uint32(r.Callable.fun.stackSize)]
 			stackEnv.stackOffsetFlag = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
-		case typ.OpCopyFunction:
-			if opa == typ.RegPhantom {
+		case typ.OpFunction:
+			if opa == typ.RegA {
 				env.A = K.ToValue()
 			} else {
 				env.A = env._get(opa).Object().Copy(false).ToValue()

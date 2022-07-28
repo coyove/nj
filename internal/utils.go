@@ -80,7 +80,7 @@ func IfStr(v bool, t, f string) string {
 }
 
 func WriteString(w io.Writer, s string) (int, error) {
-	x := struct {
+	var x = struct {
 		a string
 		b int
 	}{s, len(s)}

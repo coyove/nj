@@ -49,7 +49,7 @@ nativeVarargTest4(m, 99)
 assert(object.contains.apply(m, "Next"))
 assert(m.T.A, 99)
 
-function dict() return new(new(this)) end
+function dict() return new(new(self)) end
 
 function dict.next2()
     local k, v = this.next(this.proto()._iter)

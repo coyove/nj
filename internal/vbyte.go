@@ -15,8 +15,9 @@ const (
 )
 
 type VByte32 struct {
-	Name string
-	b    []byte
+	Name   string
+	b      []byte
+	Offset uint32
 }
 
 func (p *VByte32) Len() int {
@@ -42,7 +43,7 @@ func (p *VByte32) Pop() (idx, line uint32) {
 		return
 	}
 	p.b = p.b[n+n2:]
-	return uint32(a), uint32(b)
+	return uint32(a) + p.Offset, uint32(b)
 }
 
 func (p *VByte32) Read(i int) (next int, idx, line uint32) {
@@ -53,7 +54,7 @@ func (p *VByte32) Read(i int) (next int, idx, line uint32) {
 		next = p.Len() + 1
 		return
 	}
-	return i + n + n2, uint32(a), uint32(b)
+	return i + n + n2, uint32(a) + p.Offset, uint32(b)
 }
 
 type Packet struct {
@@ -124,7 +125,7 @@ func (b *Packet) WriteLineNum(line uint32) {
 	if line == 0 {
 		ShouldNotHappen()
 	}
-	b.Pos.Append(uint32(len(b.Code)), line)
+	b.Pos.Append(uint32(len(b.Code)-1), line)
 }
 
 func (b *Packet) TruncLast() {

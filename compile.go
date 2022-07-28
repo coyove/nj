@@ -252,12 +252,14 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 		newtable.codeSeg.Code = append([]typ.Inst{
 			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: typ.RegA},
 		}, newtable.codeSeg.Code...)
+		newtable.codeSeg.Pos.Offset = 1
 	}
 	if a := newtable.sym.Get(staticSelf); a != bas.Nil {
 		newtable.codeSeg.Code = append([]typ.Inst{
-			{Opcode: typ.OpCopyFunction, A: typ.RegPhantom},
+			{Opcode: typ.OpFunction, A: typ.RegA},
 			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: typ.RegA},
 		}, newtable.codeSeg.Code...)
+		newtable.codeSeg.Pos.Offset = 2
 	}
 
 	code := newtable.codeSeg
@@ -278,7 +280,7 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	fm.Set(fidx, obj.ToValue())
 	fm.Delete(nodes[1].Value)
 	table.getGlobal().constMap.Set(obj.ToValue(), fidx)
-	table.codeSeg.WriteInst(typ.OpCopyFunction, uint16(fidx.Int()), 0)
+	table.codeSeg.WriteInst(typ.OpFunction, uint16(fidx.Int()), 0)
 	table.codeSeg.WriteLineNum(nodes[0].Line())
 	return typ.RegA
 }

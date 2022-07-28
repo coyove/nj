@@ -107,26 +107,30 @@ func (p *Program) LocalsObject() *Object {
 
 func (m *Object) Call(e *Env, args ...Value) (res Value) {
 	if e != nil {
-		return CallObject(m, e.runtime, nil, m.this, args...)
+		return callobj(m, e.runtime, e.Global, nil, m.this, args...)
 	}
-	return CallObject(m, Runtime{}, nil, m.this, args...)
+	return callobj(m, Runtime{}, nil, nil, m.this, args...)
 }
 
 func (m *Object) TryCall(e *Env, args ...Value) (res Value, err error) {
 	if e != nil {
-		res = CallObject(m, e.runtime, &err, m.this, args...)
+		res = callobj(m, e.runtime, e.Global, &err, m.this, args...)
 	} else {
-		res = CallObject(m, Runtime{}, &err, m.this, args...)
+		res = callobj(m, Runtime{}, nil, &err, m.this, args...)
 	}
 	return
 }
 
-func CallObject(m *Object, r Runtime, outErr *error, this Value, args ...Value) (res Value) {
+func callobj(m *Object, r Runtime, g *Program, outErr *error, this Value, args ...Value) (res Value) {
 	c := m.fun
 	newEnv := Env{
 		A:      this,
 		Global: c.loadGlobal,
 		stack:  &args,
+	}
+
+	if c.loadGlobal == nil {
+		newEnv.Global = g
 	}
 
 	if outErr != nil {
@@ -197,7 +201,7 @@ func (obj *Object) printAll(w io.Writer) {
 			}
 
 			suffix := ""
-			if addr := a & typ.RegLocalMask; rValue && int(addr) < len(*p.stack) {
+			if addr := a & typ.RegLocalMask; a != addr && rValue && int(addr) < len(*p.stack) {
 				x := (*p.stack)[addr]
 				if x != Nil {
 					suffix = ":" + detail(x)
@@ -217,12 +221,12 @@ func (obj *Object) printAll(w io.Writer) {
 			bop, a, b, c := inst.Opcode, inst.A, inst.B, inst.C
 
 			if oldpos.Len() > 0 {
+				c1 := cursor - 1
 				_, op, line := oldpos.Read(0)
-				// log.Println(cursor, splitInst, unsafe.Pointer(&Pos))
-				for uint32(cursor) > op && oldpos.Len() > 0 {
+				for uint32(c1) > op && oldpos.Len() > 0 {
 					op, line = oldpos.Pop()
 				}
-				internal.WriteString(w, fmt.Sprintf("%d)\t%d\t", line, cursor-1))
+				internal.WriteString(w, fmt.Sprintf("%d)\t%d\t", line, c1))
 			} else {
 				internal.WriteString(w, fmt.Sprintf("$)\t%d\t", cursor-1))
 			}
@@ -234,8 +238,8 @@ func (obj *Object) printAll(w io.Writer) {
 				internal.WriteString(w, "createarray")
 			case typ.OpCreateObject:
 				internal.WriteString(w, "createobject")
-			case typ.OpCopyFunction:
-				if a == typ.RegPhantom {
+			case typ.OpFunction:
+				if a == typ.RegA {
 					internal.WriteString(w, "moveself")
 				} else {
 					internal.WriteString(w, "copyfunction "+readAddr(a, true))

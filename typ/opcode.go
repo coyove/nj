@@ -49,7 +49,7 @@ const (
 	OpBitURsh
 	OpIfNot
 	OpJmp
-	OpCopyFunction
+	OpFunction
 	OpPush
 	OpPushUnpack
 	OpCreateArray
