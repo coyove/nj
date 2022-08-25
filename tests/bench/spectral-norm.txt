@@ -1,5 +1,5 @@
 n = 0 
-nCPU = os.numcpus
+nCPU = 1 -- os.numcpus
 
 function A(i, j)
     return ((i+j)*(i+j+1)//2 + i + 1) 

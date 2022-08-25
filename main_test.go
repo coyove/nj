@@ -263,6 +263,12 @@ func init() {
 	}
 }
 
+func BenchmarkParsing(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_parser.Parse("(a+1)", "")
+	}
+}
+
 func BenchmarkCompiling(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		LoadString("(a+1)", nil)

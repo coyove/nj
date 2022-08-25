@@ -20,6 +20,7 @@ var (
 	NewProgram func(coreStack, top, symbols, funcs interface{}) interface{}
 
 	unnamedFuncIndex int64
+	debugMode        = os.Getenv("njd") != ""
 )
 
 func UnnamedFunc() string {
@@ -44,7 +45,7 @@ func PanicErr(err error) {
 }
 
 func IsDebug() bool {
-	return os.Getenv("njd") != ""
+	return debugMode
 }
 
 func CatchError(err *error) {
