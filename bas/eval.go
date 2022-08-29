@@ -127,10 +127,10 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 	code := K.fun.codeSeg.Code
 	for {
 		v := code[cursor]
-		bop, opa, opb, opc := v.Opcode, v.A, v.B, v.C
+		opa, opb := v.A, v.B
 		cursor++
 
-		switch bop {
+		switch v.Opcode {
 		case typ.OpSet:
 			env._set(opa, env._get(opb))
 		case typ.OpInc:
@@ -148,7 +148,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				internal.Panic("inc "+errNeedNumbersOrStrings, detail(va), detail(vb))
 			}
 			env._set(opa, env.A)
-			cursor = uint32(int32(cursor) + int32(int16(opc)))
+			cursor = uint32(int32(cursor) + int32(int16(v.C)))
 		case typ.OpNext:
 			va, vb := env._get(opa), env._get(opb)
 			switch va.Type() {
@@ -324,7 +324,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				env.A = Bool(HasPrototype(a, b.AssertType(typ.Object, "isprototype").Object()))
 			}
 		case typ.OpStore:
-			subject, k, v := env._get(opa), env._get(opb), env._get(opc)
+			subject, k, v := env._get(opa), env._get(opb), env._get(v.C)
 			switch subject.Type() {
 			case typ.Object:
 				subject.Object().Set(k, v)
@@ -366,9 +366,9 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			default:
 				internal.Panic("invalid load: %v, key: %v", detail(a), detail(idx))
 			}
-			env._set(opc, env.A)
+			env._set(v.C, env.A)
 		case typ.OpSlice:
-			a, start, end := env._get(opa), env._get(opb), env._get(opc)
+			a, start, end := env._get(opa), env._get(opb), env._get(v.C)
 			if start.Type()+end.Type() != typ.Number+typ.Number {
 				internal.Panic("slice "+errNeedNumbers, detail(start), detail(end))
 			}
@@ -449,7 +449,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				stackOffsetFlag: env.stackOffsetFlag,
 			}
 
-			if bop == typ.OpTryCall {
+			if v.Opcode == typ.OpTryCall {
 				stackEnv.Global = env.Global
 				stackEnv.runtime.stack0 = last
 				if len(retStack) > 0 {
@@ -480,7 +480,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				env.Global = cls.loadGlobal
 				env.A = stackEnv.A
 
-				if bop == typ.OpCall {
+				if v.Opcode == typ.OpCall {
 					retStack = append(retStack, last)
 				} else {
 					env.stackOffsetFlag |= internal.FlagTailCall

@@ -42,8 +42,10 @@ var (
 	Nil     = Value{}
 	Zero    = Int64(0)
 	NullStr = Str("")
-	False   = Bool(false)
-	True    = Bool(true)
+	False   = Value{uint64(typ.Bool), falseMarker}
+	True    = Value{uint64(typ.Bool), trueMarker}
+
+	tf = [2]Value{False, True}
 )
 
 const (
@@ -64,8 +66,7 @@ func (v Value) IsValue() {}
 
 // Type returns the type of value
 func (v Value) Type() typ.ValueType {
-	if uintptr(v.p)^baseStart < baseLength {
-		// if uintptr(v.p) >= baseStart && uintptr(v.p) < baseEnd {
+	if uintptr(v.p)&0xffffffffffffff00 == baseStart {
 		return typ.ValueType(uintptr(v.p) & 7)
 	}
 	return typ.ValueType(v.v)
@@ -94,9 +95,9 @@ func (v Value) IsNil() bool { return v == Nil }
 // Bool creates a boolean value
 func Bool(v bool) Value {
 	if v {
-		return Value{uint64(typ.Bool), trueMarker}
+		return True
 	}
-	return Value{uint64(typ.Bool), falseMarker}
+	return False
 }
 
 // Float64 creates a number value

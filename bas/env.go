@@ -11,9 +11,9 @@ import (
 // stack contains arguments used by the execution and is a global shared value, local can only use stack[stackOffset:]
 // A stores the result of the execution
 type Env struct {
+	stack           *[]Value
 	Global          *Program
 	A               Value
-	stack           *[]Value
 	stackOffsetFlag uint32
 	runtime         Runtime
 }

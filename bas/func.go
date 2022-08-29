@@ -24,9 +24,9 @@ type funcbody struct {
 }
 
 type Program struct {
+	stack     *[]Value
 	top       *Object
 	symbols   *Object
-	stack     *[]Value
 	functions *Object
 	stopped   bool
 
