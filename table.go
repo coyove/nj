@@ -302,7 +302,15 @@ func (table *symTable) writeInst2(op byte, n0, n1 parser.Node) {
 		internal.ShouldNotHappen(n0, n1)
 	}
 	var tmp []uint16
+	// if op == typ.OpAdd && n1.Type() == parser.INT && n1.Int64() >= math.MinInt32 && n1.Int64() <= math.MaxInt32 {
+	// 	table.codeSeg.WriteInstImm(typ.OpAddImm, table.compileAtom(n0, &tmp), int32(n1.Int64()))
+	// } else if op == typ.OpSub && n1.Type() == parser.INT && n1.Int64() >= math.MinInt32 && n1.Int64() <= math.MaxInt32 {
+	// 	table.codeSeg.WriteInstImm(typ.OpSubImm, table.compileAtom(n0, &tmp), int32(n1.Int64()))
+	// } else if op == typ.OpLess && n1.Type() == parser.INT && n1.Int64() >= math.MinInt32 && n1.Int64() <= math.MaxInt32 {
+	// 	table.codeSeg.WriteInstImm(typ.OpLessImm, table.compileAtom(n0, &tmp), int32(n1.Int64()))
+	// } else {
 	table.codeSeg.WriteInst(op, table.compileAtom(n0, &tmp), table.compileAtom(n1, &tmp))
+	// }
 	table.freeAddr(tmp)
 }
 

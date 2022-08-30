@@ -134,17 +134,13 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpSet:
 			env._set(opa, env._get(opb))
 		case typ.OpInc:
-			va, vb := env._get(opa), env._get(opb)
-			switch va.Type() + vb.Type() {
-			case typ.Number + typ.Number:
-				if va.IsInt64() && vb.IsInt64() {
-					env.A = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
-				} else {
-					env.A = Float64(va.Float64() + vb.Float64())
-				}
-			case typ.String + typ.String:
+			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
+				env.A = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
+			} else if va.PType() == typ.Number && vb.PType() == typ.Number {
+				env.A = Float64(va.Float64() + vb.Float64())
+			} else if va.PType() == typ.String && vb.PType() == typ.String {
 				env.A = Str(va.Str() + vb.Str())
-			default:
+			} else {
 				internal.Panic("inc "+errNeedNumbersOrStrings, detail(va), detail(vb))
 			}
 			env._set(opa, env.A)
@@ -179,55 +175,47 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpLen:
 			env.A = Int(Len(env._get(opa)))
 		case typ.OpAdd:
-			va, vb := env._get(opa), env._get(opb)
-			switch va.Type() + vb.Type() {
-			case typ.Number + typ.Number:
-				if sum := va.UnsafeAddr() + vb.UnsafeAddr(); sum == int64Marker2 {
-					env.A = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
-				} else {
-					env.A = Float64(va.Float64() + vb.Float64())
-				}
-			case typ.String + typ.String:
+			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
+				env.A = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
+			} else if va.PType() == typ.Number && vb.PType() == typ.Number {
+				env.A = Float64(va.Float64() + vb.Float64())
+			} else if x := va.Type() + vb.Type(); x == typ.String*2 {
 				env.A = Str(va.Str() + vb.Str())
-			case typ.String + typ.Number:
+			} else if x == typ.String+typ.Number {
 				env.A = Str(va.String() + vb.String())
-			default:
+			} else {
 				internal.Panic("add "+errNeedNumbersOrStrings, detail(va), detail(vb))
 			}
 		case typ.OpSub:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
-				if sum := va.UnsafeAddr() + vb.UnsafeAddr(); sum == int64Marker2 {
-					env.A = Int64(va.UnsafeInt64() - vb.UnsafeInt64())
-				} else {
-					env.A = Float64(va.Float64() - vb.Float64())
-				}
+			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
+				env.A = Int64(va.UnsafeInt64() - vb.UnsafeInt64())
+			} else if va.PType() == typ.Number && vb.PType() == typ.Number {
+				env.A = Float64(va.Float64() - vb.Float64())
 			} else {
 				internal.Panic("sub "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpMul:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
-				if sum := va.UnsafeAddr() + vb.UnsafeAddr(); sum == int64Marker2 {
-					env.A = Int64(va.UnsafeInt64() * vb.UnsafeInt64())
-				} else {
-					env.A = Float64(va.Float64() * vb.Float64())
-				}
+			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
+				env.A = Int64(va.UnsafeInt64() * vb.UnsafeInt64())
+			} else if va.PType() == typ.Number && vb.PType() == typ.Number {
+				env.A = Float64(va.Float64() * vb.Float64())
 			} else {
 				internal.Panic("mul "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpDiv:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
+			if va, vb := env._get(opa), env._get(opb); va.PType() == typ.Number && vb.PType() == typ.Number {
 				env.A = Float64(va.Float64() / vb.Float64())
 			} else {
 				internal.Panic("div "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpIDiv:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
+			if va, vb := env._get(opa), env._get(opb); va.PType() == typ.Number && vb.PType() == typ.Number {
 				env.A = Int64(va.Int64() / vb.Int64())
 			} else {
 				internal.Panic("idiv "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpMod:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
+			if va, vb := env._get(opa), env._get(opb); va.PType() == typ.Number && vb.PType() == typ.Number {
 				env.A = Int64(va.Int64() % vb.Int64())
 			} else {
 				internal.Panic("mod "+errNeedNumbers, detail(va), detail(vb))
@@ -237,29 +225,23 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpNeq:
 			env.A = Bool(!env._get(opa).Equal(env._get(opb)))
 		case typ.OpLess:
-			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
-			case typ.Number + typ.Number:
-				if sum := va.UnsafeAddr() + vb.UnsafeAddr(); sum == int64Marker2 {
-					env.A = Bool(va.UnsafeInt64() < vb.UnsafeInt64())
-				} else {
-					env.A = Bool(va.Float64() < vb.Float64())
-				}
-			case typ.String + typ.String:
+			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
+				env.A = Bool(va.UnsafeInt64() < vb.UnsafeInt64())
+			} else if va.PType() == typ.Number && vb.PType() == typ.Number {
+				env.A = Bool(va.Float64() < vb.Float64())
+			} else if va.Type() == typ.String && vb.Type() == typ.String {
 				env.A = Bool(lessStr(va, vb))
-			default:
+			} else {
 				internal.Panic("comparison "+errNeedNumbersOrStrings, detail(va), detail(vb))
 			}
 		case typ.OpLessEq:
-			switch va, vb := env._get(opa), env._get(opb); va.Type() + vb.Type() {
-			case typ.Number + typ.Number:
-				if sum := va.UnsafeAddr() + vb.UnsafeAddr(); sum == int64Marker2 {
-					env.A = Bool(va.UnsafeInt64() <= vb.UnsafeInt64())
-				} else {
-					env.A = Bool(va.Float64() <= vb.Float64())
-				}
-			case typ.String + typ.String:
+			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
+				env.A = Bool(va.UnsafeInt64() <= vb.UnsafeInt64())
+			} else if va.PType() == typ.Number && vb.PType() == typ.Number {
+				env.A = Bool(va.Float64() <= vb.Float64())
+			} else if va.Type() == typ.String && vb.Type() == typ.String {
 				env.A = Bool(!lessStr(vb, va))
-			default:
+			} else {
 				internal.Panic("comparison "+errNeedNumbersOrStrings, detail(va), detail(vb))
 			}
 		case typ.OpNot:

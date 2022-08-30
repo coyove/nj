@@ -72,6 +72,10 @@ func (v Value) Type() typ.ValueType {
 	return typ.ValueType(v.v)
 }
 
+func (v Value) PType() typ.ValueType {
+	return typ.ValueType(uintptr(v.p) & 7)
+}
+
 // IsFalse tests whether value is falsy: nil, false, empty string or 0
 func (v Value) IsFalse() bool { return v.v == 0 || v.p == falseMarker }
 
