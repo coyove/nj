@@ -421,6 +421,9 @@ func (a *Native) Copy(start, end int, from *Native) {
 }
 
 func (a *Native) Concat(b *Native) {
+	if b == nil {
+		return
+	}
 	if a.meta == internalArrayMeta || b.meta == internalArrayMeta {
 	} else if a.meta != b.meta {
 		internal.Panic("concat array with different types: from %q to %q", b.meta.Name, a.meta.Name)

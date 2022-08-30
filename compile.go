@@ -75,7 +75,7 @@ func (table *symTable) writeNodes3(bop byte, nodes []parser.Node) uint16 {
 		table.writeInst3(bop, nodes[1], nodes[2], nodes[3])
 	case typ.OpLoad: // special binary
 		table.writeInst3(bop, nodes[1], nodes[2], nodeRegA)
-	case typ.OpNot, typ.OpRet, typ.OpBitNot, typ.OpLen: // unary
+	case typ.OpNot, typ.OpRet, typ.OpLen: // unary
 		table.writeInst1(bop, nodes[1])
 	default: // binary
 		table.writeInst2(bop, nodes[1], nodes[2])
@@ -91,6 +91,19 @@ func makeOPCompiler(op byte) func(table *symTable, nodes []parser.Node) uint16 {
 			table.codeSeg.WriteLineNum(p)
 		}
 		return yx
+	}
+}
+
+func makeBitOPCompiler(a byte) func(table *symTable, nodes []parser.Node) uint16 {
+	return func(table *symTable, nodes []parser.Node) uint16 {
+		nodes = append([]parser.Node{}, nodes...) // duplicate
+		table.collapse(nodes[1:], true)
+		table.writeInst3(typ.OpBitOp, nodes[1], nodes[2], parser.Addr(uint16(a)))
+		table.freeAddr(nodes[1:])
+		if p := nodes[0].Line(); p > 0 {
+			table.codeSeg.WriteLineNum(p)
+		}
+		return typ.RegA
 	}
 }
 

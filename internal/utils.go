@@ -81,11 +81,9 @@ func IfStr(v bool, t, f string) string {
 }
 
 func WriteString(w io.Writer, s string) (int, error) {
-	var x = struct {
-		a string
-		b int
-	}{s, len(s)}
-	return w.Write(*(*[]byte)(unsafe.Pointer(&x)))
+	var x []byte
+	*(*string)(unsafe.Pointer(&x)) = s
+	return w.Write(x)
 }
 
 func IfQuote(v bool, s string) string {

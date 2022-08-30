@@ -1344,7 +1344,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line parser.go.y:237
 		{
-			yyVAL.expr = Nodes((SBitNot), yyDollar[2].expr).At(yyDollar[1].token)
+			yyVAL.expr = Nodes(SBitXor, Int(-1), yyDollar[2].expr).At(yyDollar[1].token)
 		}
 	case 69:
 		yyDollar = yyS[yypt-2 : yypt+1]

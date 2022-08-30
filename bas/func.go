@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -55,6 +56,10 @@ func Func(name string, f func(*Env)) Value {
 
 func (p *Program) Run() (v1 Value, err error) {
 	p.stopped = false
+	if p.MaxStackSize <= 0 {
+		p.MaxStackSize = math.MaxInt64
+	}
+
 	defer internal.CatchError(&err)
 	newEnv := Env{
 		Global: p,
@@ -209,9 +214,9 @@ func (obj *Object) printAll(w io.Writer) {
 			}
 
 			if a > typ.RegLocalMask {
-				return fmt.Sprintf("g(%d)", a&typ.RegLocalMask) + suffix
+				return fmt.Sprintf("g%d", a&typ.RegLocalMask) + suffix
 			}
-			return fmt.Sprintf("sp(%d)", a&typ.RegLocalMask) + suffix
+			return fmt.Sprintf("sp+%d", a&typ.RegLocalMask) + suffix
 		}
 
 		oldpos := cls.codeSeg.Pos
@@ -267,12 +272,16 @@ func (obj *Object) printAll(w io.Writer) {
 				if c != 0 {
 					internal.WriteString(w, fmt.Sprintf(" jmp %d to %d", int16(c), int32(cursor)+int32(int16(c))))
 				}
+			case typ.OpBitOp:
+				internal.WriteString(w, "bitop ")
+				internal.WriteString(w, [...]string{"and ", "or ", "xor ", "lsh ", "rsh ", "ursh "}[c])
+				internal.WriteString(w, readAddr(a, false)+" "+readAddr(b, false))
+			case typ.OpLoad:
+				internal.WriteString(w, "load "+readAddr(a, false)+" "+readAddr(b, false)+" -> "+readAddr(c, false))
+			case typ.OpStore:
+				internal.WriteString(w, "store "+readAddr(a, false)+" "+readAddr(b, false)+" <- "+readAddr(c, false))
 			default:
-				if bop == typ.OpLoad {
-					internal.WriteString(w, "load "+readAddr(a, false)+" "+readAddr(b, false)+" -> "+readAddr(c, false))
-				} else if bop == typ.OpStore {
-					internal.WriteString(w, "store "+readAddr(a, false)+" "+readAddr(b, false)+" <- "+readAddr(c, false))
-				} else if us, ok := typ.UnaryOpcode[bop]; ok {
+				if us, ok := typ.UnaryOpcode[bop]; ok {
 					internal.WriteString(w, us+" "+readAddr(a, false))
 				} else if bs, ok := typ.BinaryOpcode[bop]; ok {
 					internal.WriteString(w, bs+" "+readAddr(a, false)+" "+readAddr(b, false))

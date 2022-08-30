@@ -102,13 +102,13 @@ assert(worker.map([0], os.numcpus)[0] == 'finished')
 
 -- closure
 function foo(a)
-    return function(a, b)
-        return function(ab, c)
-            ab.a = ab.a + 1
-            if c == 6 then panic(ab.a + ab.b + c) end
-            return ab.a + ab.b + c
-        end.closure(a=a, b=b)
-    end.closure(a)
+    return function(b)
+        return function(c)
+            self.a = self.a + 1
+            if c == 6 then panic(self.a + self.b + c) end
+            return self.a + self.b + c
+        end.closure()
+    end.closure()
 end
 bar = foo(2)(3)
 assert(bar(4), 10)
@@ -120,6 +120,17 @@ assert(bar(5), 12)
 assert(bar.try(6).error(), 14)
 local x, _, _ = bar.try(6)
 assert(x.error(), 15)
+
+function addcls(a)
+    local a = 3
+    return function(b)
+        local b = 2
+        return function(c)
+            return self.a + self.b + c
+        end.closure()
+    end.closure()
+end
+assert(addcls(1)(2)(3), 8)
 
 print.try("native try call")
 assert(function(x) assert(x, 1) x end?(1) is (1))

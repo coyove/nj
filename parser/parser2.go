@@ -61,7 +61,6 @@ var (
 	SBitAnd   = staticSym(typ.ABitAnd)
 	SBitOr    = staticSym(typ.ABitOr)
 	SBitXor   = staticSym(typ.ABitXor)
-	SBitNot   = staticSym(typ.ABitNot)
 	SBitLsh   = staticSym(typ.ABitLsh)
 	SBitRsh   = staticSym(typ.ABitRsh)
 	SBitURsh  = staticSym(typ.ABitURsh)

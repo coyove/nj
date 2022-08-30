@@ -77,9 +77,9 @@ do
 end
 
 function intersect(a, b)
-	a.foreach(function(b, k, v)
-		if not b.contains(k) then return object.DELETE_CONTINUE end
-	end.closure(b))
+	a.foreach(function(k, v)
+		if not self.b.contains(k) then return false end
+	end.closure())
 	return a
 end
 
@@ -180,3 +180,13 @@ local f = eval("a=1 return function(n) a +=n a end")
 assert(f(1), 2)
 assert(f(2), 4)
 
+function clsrec(a)
+    a += 1
+    local N = function()
+        if self.a == 1 then return 1 end 
+        self.a -= 1
+        return self.a * self.N()
+    end
+    return N.closure()
+end
+assert(clsrec(5)(), 120)

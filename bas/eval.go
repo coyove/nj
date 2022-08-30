@@ -246,47 +246,24 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 		case typ.OpNot:
 			env.A = Bool(env._get(opa).IsFalse())
-		case typ.OpBitAnd:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
+		case typ.OpBitOp:
+			va, vb := env._get(opa), env._get(opb)
+			if !va.IsInt64() || !vb.IsInt64() {
+				internal.Panic("bitwise operation requires integer numbers, got %v and %v", detail(va), detail(vb))
+			}
+			switch v.C {
+			case 0:
 				env.A = Int64(va.Int64() & vb.Int64())
-			} else {
-				internal.Panic("bitwise and "+errNeedNumbers, detail(va), detail(vb))
-			}
-		case typ.OpBitOr:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
+			case 1:
 				env.A = Int64(va.Int64() | vb.Int64())
-			} else {
-				internal.Panic("bitwise or "+errNeedNumbers, detail(va), detail(vb))
-			}
-		case typ.OpBitXor:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
+			case 2:
 				env.A = Int64(va.Int64() ^ vb.Int64())
-			} else {
-				internal.Panic("bitwise xor "+errNeedNumbers, detail(va), detail(vb))
-			}
-		case typ.OpBitLsh:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
+			case 3:
 				env.A = Int64(va.Int64() << vb.Int64())
-			} else {
-				internal.Panic("bitwise lsh "+errNeedNumbers, detail(va), detail(vb))
-			}
-		case typ.OpBitRsh:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
+			case 4:
 				env.A = Int64(va.Int64() >> vb.Int64())
-			} else {
-				internal.Panic("bitwise rsh "+errNeedNumbers, detail(va), detail(vb))
-			}
-		case typ.OpBitURsh:
-			if va, vb := env._get(opa), env._get(opb); va.Type()+vb.Type() == typ.Number+typ.Number {
+			case 5:
 				env.A = Int64(int64(uint64(va.Int64()) >> vb.Int64()))
-			} else {
-				internal.Panic("bitwise ursh "+errNeedNumbers, detail(va), detail(vb))
-			}
-		case typ.OpBitNot:
-			if a := env._get(opa); a.Type() == typ.Number {
-				env.A = Int64(^a.Int64())
-			} else {
-				internal.Panic("bitwise not "+errNeedNumber, detail(a))
 			}
 		case typ.OpCreateArray:
 			env.A = newArray(append([]Value{}, stackEnv.Stack()...)...).ToValue()
@@ -326,8 +303,6 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			env.A = v
 		case typ.OpLoad:
 			switch a, idx := env._get(opa), env._get(opb); a.Type() {
-			case typ.Nil, typ.Number, typ.Bool:
-				env.A = Nil
 			case typ.Object:
 				env.A = a.Object().Find(idx)
 			case typ.Native:
@@ -346,7 +321,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					env.A = setObjectRecv(Proto.Str.Find(idx), a)
 				}
 			default:
-				internal.Panic("invalid load: %v, key: %v", detail(a), detail(idx))
+				env.A = Nil
 			}
 			env._set(v.C, env.A)
 		case typ.OpSlice:
@@ -419,7 +394,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					s[w] = newArray(append([]Value{}, s[w:]...)...).ToValue()
 				} else {
 					stackEnv.grow(w + 1)
-					stackEnv._set(uint16(w), newArray().ToValue())
+					stackEnv._set(uint16(w), Nil)
 				}
 			}
 

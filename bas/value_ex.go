@@ -73,6 +73,17 @@ func (v MaybeValue) Float64(defaultValue float64) float64 {
 	}
 }
 
+func (v MaybeValue) Native(defaultValue *Native) *Native {
+	switch t := Value(v).Type(); t {
+	case typ.Native:
+		return Value(v).Native()
+	case typ.Nil:
+		return defaultValue
+	default:
+		panic("Native: expects native or nil, got " + detail(Value(v)))
+	}
+}
+
 func (v MaybeValue) Object(defaultValue *Object) *Object {
 	switch t := Value(v).Type(); t {
 	case typ.Object:

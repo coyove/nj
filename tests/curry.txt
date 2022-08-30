@@ -14,7 +14,7 @@ function curry(f, args...)
         return new_cf
     end
     cf.f = f
-    cf.args = args
+    cf.args = args or []
     cf.args_needed = ac - #args
     return cf
 end

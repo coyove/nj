@@ -117,12 +117,6 @@ func (n Node) Nodes() []Node {
 }
 
 func Nodes(args ...Node) Node {
-	if len(args) == 2 {
-		op, a := args[0].Value, args[1]
-		if a.IsNum() && op == SBitNot.Value {
-			return Int(^a.Int64())
-		}
-	}
 	if len(args) == 3 {
 		op, a, b := args[0].Value, args[1], args[2]
 		if op == SAdd.Value && a.Type() == STR && b.Type() == STR {

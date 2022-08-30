@@ -219,7 +219,7 @@ func (e *Env) Copy() *Env {
 
 func (e *Env) checkStackOverflow() {
 	if g := e.Global; g != nil {
-		if g.MaxStackSize > 0 && int64(len(*g.stack)) > g.MaxStackSize {
+		if int64(len(*g.stack)) > g.MaxStackSize {
 			panic("stack overflow")
 		}
 		if g.stopped {

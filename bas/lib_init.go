@@ -309,17 +309,19 @@ func init() {
 			e.A = multiMap(e, e.Object(-1), e.Get(0), e.Get(1).Maybe().Int(1))
 		}).
 		SetMethod("closure", func(e *Env) {
-			lambda := e.Object(-1)
-			c := e.CopyStack()
+			scope := e.Runtime().stack1.Callable
+			lambda := e.Object(-1).Merge(scope).Merge(e.Get(0).Maybe().Object(nil))
+			start := e.stackOffset() - uint32(e.Runtime().stack1.Callable.fun.stackSize)
+			for i, name := range scope.fun.locals {
+				if name == "" {
+					continue
+				}
+				lambda.SetProp(name, (*e.stack)[start+uint32(i)])
+			}
 			e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
-				o := e.runtime.stack0.Callable
-				f := o.Prop("_l").Object()
-				stk := append(o.Prop("_c").Native().Values(), e.Stack()...)
-				e.A = f.Call(e, stk...)
-			}).Object().
-				SetProp("_l", lambda.ToValue()).
-				SetProp("_c", Array(c...)).
-				ToValue()
+				f := e.runtime.stack0.Callable.Prototype()
+				e.A = f.Call(e, e.Stack()...)
+			}).Object().SetPrototype(lambda).ToValue()
 		}).
 		SetPrototype(&ObjectProto)
 
@@ -409,7 +411,7 @@ func init() {
 			}
 		}).
 		SetMethod("copy", func(e *Env) { e.Native(-1).Copy(e.Int(0), e.Int(1), e.Native(2)) }).
-		SetMethod("concat", func(e *Env) { e.Native(-1).Concat(e.Native(0)) }).
+		SetMethod("concat", func(e *Env) { e.Native(-1).Concat(e.Get(0).Maybe().Native(nil)) }).
 		SetMethod("sort", func(e *Env) {
 			a, rev := e.Native(-1), e.Get(0).Maybe().Bool()
 			if kf := e.Get(1).Maybe().Func(nil); kf == nil {

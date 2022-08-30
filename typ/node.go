@@ -35,7 +35,6 @@ const (
 	ABitAnd   = "bitand"
 	ABitOr    = "bitor"
 	ABitXor   = "bitxor"
-	ABitNot   = "bitnot"
 	ABitLsh   = "bitlsh"
 	ABitRsh   = "bitrsh"
 	ABitURsh  = "bitursh"
@@ -75,18 +74,11 @@ var BinaryOpcode = map[byte]string{
 	OpLess:    ALess,
 	OpLessEq:  ALessEq,
 	OpLoad:    ALoad,
-	OpBitAnd:  ABitAnd,
-	OpBitOr:   ABitOr,
-	OpBitXor:  ABitXor,
-	OpBitLsh:  ABitLsh,
-	OpBitRsh:  ABitRsh,
-	OpBitURsh: ABitURsh,
 	OpNext:    ANext,
 	OpIsProto: AIs,
 }
 
 var UnaryOpcode = map[byte]string{
-	OpBitNot:     ABitNot,
 	OpNot:        ANot,
 	OpRet:        AReturn,
 	OpLen:        ALen,

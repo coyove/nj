@@ -42,8 +42,8 @@ var (
 	Nil     = Value{}
 	Zero    = Int64(0)
 	NullStr = Str("")
-	False   = Value{uint64(typ.Bool), falseMarker}
-	True    = Value{uint64(typ.Bool), trueMarker}
+	False   = Value{0, falseMarker}
+	True    = Value{1, trueMarker}
 
 	tf = [2]Value{False, True}
 )
@@ -77,10 +77,10 @@ func (v Value) PType() typ.ValueType {
 }
 
 // IsFalse tests whether value is falsy: nil, false, empty string or 0
-func (v Value) IsFalse() bool { return v.v == 0 || v.p == falseMarker }
+func (v Value) IsFalse() bool { return v.v == 0 }
 
 // IsTrue returns the same way as !IsFalse()
-func (v Value) IsTrue() bool { return !v.IsFalse() }
+func (v Value) IsTrue() bool { return v.v != 0 }
 
 // IsInt64 tests whether value is an integer number
 func (v Value) IsInt64() bool { return v.p == int64Marker }
