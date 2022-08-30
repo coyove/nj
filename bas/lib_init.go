@@ -101,7 +101,7 @@ func init() {
 			o := e.runtime.stack0.Callable
 			init := o.Prop("_init").Object()
 			n := o.Copy(true).SetPrototype(o)
-			callobj(init, e.runtime, e.Global, nil, n.ToValue(), e.Stack()...)
+			callobj(init, e.runtime, e.global, nil, n.ToValue(), e.Stack()...)
 			e.A = n.ToValue()
 		}).Object().
 			Merge(e.Object(2)).
@@ -111,10 +111,10 @@ func init() {
 
 	// Debug libraries
 	AddGlobal("debug", NewNamedObject("debug", 0).
-		SetProp("self", Func("self", func(e *Env) { e.A = e.Runtime().stack1.Callable.ToValue() })).
+		SetProp("self", Func("self", func(e *Env) { e.A = e.runtime.stack1.Callable.ToValue() })).
 		SetProp("locals", Func("locals", func(e *Env) {
-			locals := e.Runtime().stack1.Callable.fun.locals
-			start := e.stackOffset() - uint32(e.Runtime().stack1.Callable.fun.stackSize)
+			locals := e.runtime.stack1.Callable.fun.locals
+			start := e.stackOffset() - uint32(e.runtime.stack1.Callable.fun.stackSize)
 			if e.Get(0).IsTrue() {
 				r := NewObject(0)
 				for i, name := range locals {
@@ -133,7 +133,7 @@ func init() {
 		SetProp("globals", Func("globals", func(e *Env) {
 			var r []Value
 			for i, name := range e.MustGlobal().top.fun.locals {
-				r = append(r, Int(i), Str(name), (*e.Global.stack)[i])
+				r = append(r, Int(i), Str(name), (*e.global.stack)[i])
 			}
 			e.A = Array(r...)
 		})).
@@ -141,7 +141,7 @@ func init() {
 			(*e.MustGlobal().stack)[e.Int64(0)] = e.Get(1)
 		})).
 		SetProp("trace", Func("trace", func(env *Env) {
-			stacks := env.Runtime().Stacktrace(false)
+			stacks := env.runtime.Stacktrace(false)
 			lines := make([]Value, 0, len(stacks))
 			for i := len(stacks) - 1 - env.Get(0).Maybe().Int(0); i >= 0; i-- {
 				r := stacks[i]
@@ -156,7 +156,7 @@ func init() {
 
 	AddGlobalMethod("type", func(e *Env) { e.A = Str(e.Get(0).Type().String()) })
 	AddGlobalMethod("apply", func(e *Env) {
-		e.A = callobj(e.Object(0), e.runtime, e.Global, nil, e.Get(1), e.Stack()[2:]...)
+		e.A = callobj(e.Object(0), e.runtime, e.global, nil, e.Get(1), e.Stack()[2:]...)
 	})
 	AddGlobalMethod("panic", func(e *Env) {
 		v := e.Get(0)
@@ -269,7 +269,7 @@ func init() {
 		SetMethod("isvarg", func(e *Env) { e.A = Bool(e.Object(-1).fun.varg) }).
 		SetMethod("argcount", func(e *Env) { e.A = Int(int(e.Object(-1).fun.numParams)) }).
 		SetMethod("apply", func(e *Env) {
-			e.A = callobj(e.Object(-1), e.runtime, e.Global, nil, e.Get(0), e.Stack()[1:]...)
+			e.A = callobj(e.Object(-1), e.runtime, e.global, nil, e.Get(0), e.Stack()[1:]...)
 		}).
 		SetMethod("call", func(e *Env) { e.A = e.Object(-1).Call(e, e.Stack()...) }).
 		SetMethod("try", func(e *Env) {
@@ -309,19 +309,16 @@ func init() {
 			e.A = multiMap(e, e.Object(-1), e.Get(0), e.Get(1).Maybe().Int(1))
 		}).
 		SetMethod("closure", func(e *Env) {
-			scope := e.Runtime().stack1.Callable
+			scope := e.runtime.stack1.Callable
 			lambda := e.Object(-1).Merge(scope).Merge(e.Get(0).Maybe().Object(nil))
-			start := e.stackOffset() - uint32(e.Runtime().stack1.Callable.fun.stackSize)
+			start := e.stackOffset() - uint32(scope.fun.stackSize)
 			for i, name := range scope.fun.locals {
 				if name == "" {
 					continue
 				}
 				lambda.SetProp(name, (*e.stack)[start+uint32(i)])
 			}
-			e.A = Func("<closure-"+lambda.Name()+">", func(e *Env) {
-				f := e.runtime.stack0.Callable.Prototype()
-				e.A = f.Call(e, e.Stack()...)
-			}).Object().SetPrototype(lambda).ToValue()
+			e.A = lambda.ToValue()
 		}).
 		SetPrototype(&ObjectProto)
 
@@ -437,7 +434,7 @@ func init() {
 	AddGlobal("bytes", Proto.Bytes.ToValue())
 
 	*Proto.Error = *Func("error", func(e *Env) {
-		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.Runtime().Stacktrace(true)})
+		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.runtime.Stacktrace(true)})
 	}).Object().
 		SetMethod("error", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).root) }).
 		SetMethod("getcause", func(e *Env) { e.A = NewNative(e.Native(-1).Unwrap().(*ExecError).root).ToValue() }).

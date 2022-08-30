@@ -56,7 +56,7 @@ const (
 	errNeedNumbersOrStrings = "operator requires numbers or strings, got %v and %v"
 )
 
-// Value is the basic data type used by the intepreter, an empty Value naturally represent nil
+// Value is the basic data type used by the intepreter, an empty Value naturally represent nil.
 type Value struct {
 	v uint64
 	p unsafe.Pointer
@@ -64,7 +64,7 @@ type Value struct {
 
 func (v Value) IsValue() {}
 
-// Type returns the type of value
+// Type returns the type of value.
 func (v Value) Type() typ.ValueType {
 	if uintptr(v.p)&0xffffffffffffff00 == baseStart {
 		return typ.ValueType(uintptr(v.p) & 7)
@@ -72,31 +72,31 @@ func (v Value) Type() typ.ValueType {
 	return typ.ValueType(v.v)
 }
 
-func (v Value) PType() typ.ValueType {
+func (v Value) pType() typ.ValueType {
 	return typ.ValueType(uintptr(v.p) & 7)
 }
 
-// IsFalse tests whether value is falsy: nil, false, empty string or 0
+// IsFalse returns true if value is falsy: nil, false, empty string or 0.
 func (v Value) IsFalse() bool { return v.v == 0 }
 
-// IsTrue returns the same way as !IsFalse()
+// IsTrue returns true if value is not falsy.
 func (v Value) IsTrue() bool { return v.v != 0 }
 
-// IsInt64 tests whether value is an integer number
+// IsInt64 returns true if value is an integer number.
 func (v Value) IsInt64() bool { return v.p == int64Marker }
 
-// IsObject tests whether value is an object
+// IsObject returns true if value is an object.
 func (v Value) IsObject() bool { return v.Type() == typ.Object }
 
-// IsArray tests whether value is a native array
+// IsArray returns true if value is an array.
 func (v Value) IsArray() bool {
 	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(Proto.Array)
 }
 
-// IsNil tests whether value is nil
+// IsNil returns true if value is nil.
 func (v Value) IsNil() bool { return v == Nil }
 
-// Bool creates a boolean value
+// Bool creates a boolean value.
 func Bool(v bool) Value {
 	if v {
 		return True
@@ -104,7 +104,7 @@ func Bool(v bool) Value {
 	return False
 }
 
-// Float64 creates a number value
+// Float64 creates a number value.
 func Float64(f float64) Value {
 	if float64(int64(f)) == f {
 		// if math.Floor(f) == f {
@@ -113,17 +113,17 @@ func Float64(f float64) Value {
 	return Value{v: math.Float64bits(f), p: float64Marker}
 }
 
-// Int creates a number value
+// Int creates a number value.
 func Int(i int) Value {
 	return Int64(int64(i))
 }
 
-// Int64 creates a number value
+// Int64 creates a number value.
 func Int64(i int64) Value {
 	return Value{v: uint64(i), p: int64Marker}
 }
 
-// Str creates a string value
+// Str creates a string value.
 func Str(s string) Value {
 	if len(s) <= 8 { // payload 8b
 		var x [8]byte
@@ -156,20 +156,20 @@ func Str(s string) Value {
 	return Value{v: uint64(typ.String), p: unsafe.Pointer(&s)}
 }
 
-// UnsafeStr creates a string value from []byte, its content may change if []byte changed
+// UnsafeStr creates a string value from []byte, its content may change if []byte changed.
 func UnsafeStr(b []byte) Value {
 	var s string
 	*(*[2]uintptr)(unsafe.Pointer(&s)) = *(*[2]uintptr)(unsafe.Pointer(&b))
 	return Str(s)
 }
 
-// Byte creates a one-byte string value
+// Byte creates a one-byte string value.
 func Byte(s byte) Value {
 	x := [8]byte{s, s, s, s, s, s, s, s + 1}
 	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStrMarker) + 8)}
 }
 
-// Rune creates a one-rune string value encoded in UTF-8
+// Rune creates a one-rune string value encoded in UTF-8.
 func Rune(r rune) Value {
 	x := [8]byte{}
 	n := utf8.EncodeRune(x[:], r)
@@ -187,12 +187,12 @@ func Rune(r rune) Value {
 	return Value{v: binary.BigEndian.Uint64(x[:]), p: unsafe.Pointer(uintptr(smallStrMarker) + uintptr(n)*8)}
 }
 
-// Bytes creates a bytes array
+// Bytes creates a bytes array.
 func Bytes(b []byte) Value {
 	return NewNativeWithMeta(b, bytesArrayMeta).ToValue()
 }
 
-// Error creates a builtin error, env can be nil
+// Error creates an error, first argument can be nil, indicating that the returned error has no stacktrace.
 func Error(e *Env, err error) Value {
 	if err == nil {
 		return Nil
@@ -202,7 +202,7 @@ func Error(e *Env, err error) Value {
 	}
 	ee := &ExecError{root: err}
 	if e != nil {
-		ee.stacks = e.Runtime().Stacktrace(true)
+		ee.stacks = e.runtime.Stacktrace(true)
 	}
 	return NewNativeWithMeta(ee, errorNativeMeta).ToValue()
 }
@@ -211,7 +211,7 @@ func Array(v ...Value) Value {
 	return newArray(v...).ToValue()
 }
 
-// ValueOf creates a `Value` from golang `interface{}`
+// ValueOf creates a Value from any golang types.
 func ValueOf(i interface{}) Value {
 	switch v := i.(type) {
 	case nil:
@@ -304,7 +304,7 @@ func (v Value) isSmallString() bool {
 	return uintptr(v.p) >= uintptr(smallStrMarker) && uintptr(v.p) <= uintptr(smallStrMarker)+8*8
 }
 
-// Str returns value as a string without checking Type()
+// Str returns value as a string, Type() should be checked beforehand.
 func (v Value) Str() string {
 	if v.isSmallString() {
 		buf := make([]byte, 8)
@@ -315,10 +315,10 @@ func (v Value) Str() string {
 	return *(*string)(v.p)
 }
 
-// Int returns value as an integer without checking Type()
+// Int returns value as an int.
 func (v Value) Int() int { return int(v.Int64()) }
 
-// Int64 returns value as an integer without checking Type()
+// Int64 returns value as an int64 (floats will be truncated to integers), Type() should be checked beforehand.
 func (v Value) Int64() int64 {
 	if v.p == int64Marker {
 		return int64(v.v)
@@ -326,7 +326,7 @@ func (v Value) Int64() int64 {
 	return int64(math.Float64frombits(v.v))
 }
 
-// Float64 returns value as a float without checking Type()
+// Float64 returns value as a float (integers will be promoted to floats), Type() should be checked beforehand.
 func (v Value) Float64() float64 {
 	if v.p == int64Marker {
 		return float64(int64(v.v))
@@ -334,13 +334,13 @@ func (v Value) Float64() float64 {
 	return math.Float64frombits(v.v)
 }
 
-// Bool returns value as a boolean without checking Type()
+// Bool returns value as a boolean, Type() should be checked beforehand.
 func (v Value) Bool() bool { return v.p == trueMarker }
 
-// Object returns value as an object without checking Type()
+// Object returns value as an Object, Type() should be checked beforehand.
 func (v Value) Object() *Object { return (*Object)(v.p) }
 
-// Native returns value as a sequence without checking Type()
+// Native returns value as a Native, Type() should be checked beforehand.
 func (v Value) Native() *Native { return (*Native)(v.p) }
 
 // Interface returns value as an interface{}
@@ -363,10 +363,12 @@ func (v Value) Interface() interface{} {
 	return nil
 }
 
-func (v Value) UnsafeAddr() uintptr { return uintptr(v.p) }
+func (v Value) unsafeAddr() uintptr { return uintptr(v.p) }
 
+// UnsafeInt64 returns value as an int64 without any type-checkings.
 func (v Value) UnsafeInt64() int64 { return int64(v.v) }
 
+// AssertType asserts the type of value. 'msg' will be panicked out if failed.
 func (v Value) AssertType(t typ.ValueType, msg string) Value {
 	if v.Type() != t {
 		if msg != "" {
@@ -377,6 +379,7 @@ func (v Value) AssertType(t typ.ValueType, msg string) Value {
 	return v
 }
 
+// AssertType2 asserts the type of value ('t1' or 't2'). 'msg' will be panicked out if failed.
 func (v Value) AssertType2(t1, t2 typ.ValueType, msg string) Value {
 	if vt := v.Type(); vt != t1 && vt != t2 {
 		if msg != "" {
@@ -387,6 +390,7 @@ func (v Value) AssertType2(t1, t2 typ.ValueType, msg string) Value {
 	return v
 }
 
+// AssertPrototype asserts the prototype of value. 'msg' will be panicked out if failed.
 func (v Value) AssertPrototype(p *Object, msg string) Value {
 	if !HasPrototype(v, p) {
 		if msg != "" {
@@ -397,7 +401,7 @@ func (v Value) AssertPrototype(p *Object, msg string) Value {
 	return v
 }
 
-// Equal tests whether two values are equal
+// Equal returns true if two values are equal.
 func (v Value) Equal(r Value) bool {
 	if v == r {
 		return true
@@ -405,6 +409,7 @@ func (v Value) Equal(r Value) bool {
 	return v.v == uint64(typ.String) && v.v == r.v && *(*string)(v.p) == *(*string)(r.p)
 }
 
+// HashCode returns the hash of value.
 func (v Value) HashCode() uint64 {
 	if typ.ValueType(v.v) == typ.String {
 		return uint64(strhash(v.p, 0))

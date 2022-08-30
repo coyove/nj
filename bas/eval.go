@@ -136,9 +136,9 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpInc:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
-			} else if va.PType() == typ.Number && vb.PType() == typ.Number {
+			} else if va.pType() == typ.Number && vb.pType() == typ.Number {
 				env.A = Float64(va.Float64() + vb.Float64())
-			} else if va.PType() == typ.String && vb.PType() == typ.String {
+			} else if va.pType() == typ.String && vb.pType() == typ.String {
 				env.A = Str(va.Str() + vb.Str())
 			} else {
 				internal.Panic("inc "+errNeedNumbersOrStrings, detail(va), detail(vb))
@@ -177,7 +177,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpAdd:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
-			} else if va.PType() == typ.Number && vb.PType() == typ.Number {
+			} else if va.pType() == typ.Number && vb.pType() == typ.Number {
 				env.A = Float64(va.Float64() + vb.Float64())
 			} else if x := va.Type() + vb.Type(); x == typ.String*2 {
 				env.A = Str(va.Str() + vb.Str())
@@ -189,7 +189,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpSub:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Int64(va.UnsafeInt64() - vb.UnsafeInt64())
-			} else if va.PType() == typ.Number && vb.PType() == typ.Number {
+			} else if va.pType() == typ.Number && vb.pType() == typ.Number {
 				env.A = Float64(va.Float64() - vb.Float64())
 			} else {
 				internal.Panic("sub "+errNeedNumbers, detail(va), detail(vb))
@@ -197,25 +197,25 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpMul:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Int64(va.UnsafeInt64() * vb.UnsafeInt64())
-			} else if va.PType() == typ.Number && vb.PType() == typ.Number {
+			} else if va.pType() == typ.Number && vb.pType() == typ.Number {
 				env.A = Float64(va.Float64() * vb.Float64())
 			} else {
 				internal.Panic("mul "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpDiv:
-			if va, vb := env._get(opa), env._get(opb); va.PType() == typ.Number && vb.PType() == typ.Number {
+			if va, vb := env._get(opa), env._get(opb); va.pType() == typ.Number && vb.pType() == typ.Number {
 				env.A = Float64(va.Float64() / vb.Float64())
 			} else {
 				internal.Panic("div "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpIDiv:
-			if va, vb := env._get(opa), env._get(opb); va.PType() == typ.Number && vb.PType() == typ.Number {
+			if va, vb := env._get(opa), env._get(opb); va.pType() == typ.Number && vb.pType() == typ.Number {
 				env.A = Int64(va.Int64() / vb.Int64())
 			} else {
 				internal.Panic("idiv "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpMod:
-			if va, vb := env._get(opa), env._get(opb); va.PType() == typ.Number && vb.PType() == typ.Number {
+			if va, vb := env._get(opa), env._get(opb); va.pType() == typ.Number && vb.pType() == typ.Number {
 				env.A = Int64(va.Int64() % vb.Int64())
 			} else {
 				internal.Panic("mod "+errNeedNumbers, detail(va), detail(vb))
@@ -227,7 +227,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpLess:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Bool(va.UnsafeInt64() < vb.UnsafeInt64())
-			} else if va.PType() == typ.Number && vb.PType() == typ.Number {
+			} else if va.pType() == typ.Number && vb.pType() == typ.Number {
 				env.A = Bool(va.Float64() < vb.Float64())
 			} else if va.Type() == typ.String && vb.Type() == typ.String {
 				env.A = Bool(lessStr(va, vb))
@@ -237,7 +237,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpLessEq:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Bool(va.UnsafeInt64() <= vb.UnsafeInt64())
-			} else if va.PType() == typ.Number && vb.PType() == typ.Number {
+			} else if va.pType() == typ.Number && vb.pType() == typ.Number {
 				env.A = Bool(va.Float64() <= vb.Float64())
 			} else if va.Type() == typ.String && vb.Type() == typ.String {
 				env.A = Bool(!lessStr(vb, va))
@@ -367,7 +367,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			code = K.fun.codeSeg.Code
 			env.stackOffsetFlag = r.stackOffsetFlag
 			env.A = v
-			env.Global = K.fun.loadGlobal
+			env.global = K.fun.loadGlobal
 			*env.stack = (*env.stack)[:env.stackOffset()+uint32(r.Callable.fun.stackSize)]
 			stackEnv.stackOffsetFlag = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
@@ -407,7 +407,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 
 			if v.Opcode == typ.OpTryCall {
-				stackEnv.Global = env.Global
+				stackEnv.global = env.global
 				stackEnv.runtime.stack0 = last
 				if len(retStack) > 0 {
 					stackEnv.runtime.stack1 = retStack[len(retStack)-1]
@@ -415,15 +415,15 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				}
 				a, err := obj.TryCall(&stackEnv, stackEnv.Stack()...)
 				_ = err == nil && env.SetA(a) || env.SetA(Error(&stackEnv, err))
-				stackEnv.runtime = Runtime{}
+				stackEnv.runtime = stacktraces{}
 				stackEnv.clear()
 			} else if cls.native != nil {
-				stackEnv.Global = env.Global
+				stackEnv.global = env.global
 				stackEnv.runtime.stack0 = Stacktrace{Callable: obj, stackOffsetFlag: internal.FlagNativeCall}
 				stackEnv.runtime.stack1 = last
 				stackEnv.runtime.stackN = retStack
 				cls.native(&stackEnv)
-				stackEnv.runtime = Runtime{}
+				stackEnv.runtime = stacktraces{}
 				env.A = stackEnv.A
 				stackEnv.clear()
 			} else {
@@ -434,7 +434,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				K = obj
 				code = obj.fun.codeSeg.Code
 				env.stackOffsetFlag = stackEnv.stackOffsetFlag
-				env.Global = cls.loadGlobal
+				env.global = cls.loadGlobal
 				env.A = stackEnv.A
 
 				if v.Opcode == typ.OpCall {

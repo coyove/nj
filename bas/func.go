@@ -62,7 +62,7 @@ func (p *Program) Run() (v1 Value, err error) {
 
 	defer internal.CatchError(&err)
 	newEnv := Env{
-		Global: p,
+		global: p,
 		stack:  p.stack,
 	}
 	v1 = internalExecCursorLoop(newEnv, p.top, nil)
@@ -112,30 +112,30 @@ func (p *Program) LocalsObject() *Object {
 
 func (m *Object) Call(e *Env, args ...Value) (res Value) {
 	if e != nil {
-		return callobj(m, e.runtime, e.Global, nil, m.this, args...)
+		return callobj(m, e.runtime, e.global, nil, m.this, args...)
 	}
-	return callobj(m, Runtime{}, nil, nil, m.this, args...)
+	return callobj(m, stacktraces{}, nil, nil, m.this, args...)
 }
 
 func (m *Object) TryCall(e *Env, args ...Value) (res Value, err error) {
 	if e != nil {
-		res = callobj(m, e.runtime, e.Global, &err, m.this, args...)
+		res = callobj(m, e.runtime, e.global, &err, m.this, args...)
 	} else {
-		res = callobj(m, Runtime{}, nil, &err, m.this, args...)
+		res = callobj(m, stacktraces{}, nil, &err, m.this, args...)
 	}
 	return
 }
 
-func callobj(m *Object, r Runtime, g *Program, outErr *error, this Value, args ...Value) (res Value) {
+func callobj(m *Object, r stacktraces, g *Program, outErr *error, this Value, args ...Value) (res Value) {
 	c := m.fun
 	newEnv := Env{
 		A:      this,
-		Global: c.loadGlobal,
+		global: c.loadGlobal,
 		stack:  &args,
 	}
 
 	if c.loadGlobal == nil {
-		newEnv.Global = g
+		newEnv.global = g
 	}
 
 	if outErr != nil {
@@ -264,7 +264,7 @@ func (obj *Object) printAll(w io.Writer) {
 				dest := inst.D()
 				pos2 := uint32(int32(cursor) + dest)
 				if bop == typ.OpIfNot {
-					internal.WriteString(w, "if not $a ")
+					internal.WriteString(w, "if not a ")
 				}
 				internal.WriteString(w, fmt.Sprintf("jmp %d to %d", dest, pos2))
 			case typ.OpInc:
@@ -279,7 +279,7 @@ func (obj *Object) printAll(w io.Writer) {
 			case typ.OpLoad:
 				internal.WriteString(w, "load "+readAddr(a, false)+" "+readAddr(b, false)+" -> "+readAddr(c, false))
 			case typ.OpStore:
-				internal.WriteString(w, "store "+readAddr(a, false)+" "+readAddr(b, false)+" <- "+readAddr(c, false))
+				internal.WriteString(w, "store "+readAddr(c, false)+" -> "+readAddr(a, false)+" "+readAddr(b, false))
 			default:
 				if us, ok := typ.UnaryOpcode[bop]; ok {
 					internal.WriteString(w, us+" "+readAddr(a, false))

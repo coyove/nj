@@ -190,3 +190,29 @@ function clsrec(a)
     return N.closure()
 end
 assert(clsrec(5)(), 120)
+
+function createlinklist(a...)
+    if #a == 0 then return end
+    local head = [a[0], nil]
+    local tmp = head
+    for i=1,#a do
+        tmp[1] = [a[i], nil]
+        tmp = tmp[1]
+    end
+    return head
+end
+
+function reverselinklist(lst)
+    if not lst then return lst end
+    local dummy = ['lead', nil]
+    while lst do
+        local old = dummy[1]
+        local x = [lst[0], old]
+        dummy[1] = x
+        lst = lst[1]
+    end
+    return dummy[1]
+end
+
+ll = createlinklist(1, 2, 3, 4)
+print(ll, reverselinklist(ll))

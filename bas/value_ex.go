@@ -182,8 +182,8 @@ func DeepEqual(a, b Value) bool {
 
 func lessStr(a, b Value) bool {
 	if a.isSmallString() && b.isSmallString() {
-		al := (a.UnsafeAddr() - uintptr(smallStrMarker)) / 8 * 8
-		bl := (b.UnsafeAddr() - uintptr(smallStrMarker)) / 8 * 8
+		al := (a.unsafeAddr() - uintptr(smallStrMarker)) / 8 * 8
+		bl := (b.unsafeAddr() - uintptr(smallStrMarker)) / 8 * 8
 		av := a.v >> (64 - al)
 		bv := b.v >> (64 - bl)
 		return av < bv
@@ -205,7 +205,7 @@ func Less(a, b Value) bool {
 	case typ.String:
 		return lessStr(a, b)
 	}
-	return a.UnsafeAddr() < b.UnsafeAddr()
+	return a.unsafeAddr() < b.unsafeAddr()
 }
 
 func HasPrototype(a Value, p *Object) bool {

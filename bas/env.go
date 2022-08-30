@@ -8,24 +8,24 @@ import (
 )
 
 // Env is the environment for a function to run within.
-// stack contains arguments used by the execution and is a global shared value, local can only use stack[stackOffset:]
-// A stores the result of the execution
+// 'stack' represents the global stack, a running function use 'stack[stackOffset:]' as its local stack.
+// 'A' stores the result of the execution. 'global' is the topmost function scope, a.k.a. Program.
 type Env struct {
 	stack           *[]Value
-	Global          *Program
+	global          *Program
 	A               Value
 	stackOffsetFlag uint32
-	runtime         Runtime
+	runtime         stacktraces
 }
 
-type Runtime struct {
+type stacktraces struct {
 	// Stacktrace layout: N, N-1, ..., 2, 1, 0(current)
 	stackN []Stacktrace // [N, N-1, ..., 2]
-	stack1 Stacktrace   // 1. if null, then Stack0 is the only one in stacktrace
+	stack1 Stacktrace   // 1. If nil, then 'stack0' is the only one in stacktrace
 	stack0 Stacktrace   // 0
 }
 
-func (r Runtime) Stacktrace(copy bool) []Stacktrace {
+func (r stacktraces) Stacktrace(copy bool) []Stacktrace {
 	if r.stack0.Callable == nil {
 		return nil
 	}
@@ -39,17 +39,13 @@ func (r Runtime) Stacktrace(copy bool) []Stacktrace {
 	return s
 }
 
-func (r Runtime) push(k Stacktrace) Runtime {
+func (r stacktraces) push(k Stacktrace) stacktraces {
 	if r.stack1.Callable != nil {
 		r.stackN = append(r.stackN, r.stack1)
 	}
 	r.stack1 = r.stack0
 	r.stack0 = k
 	return r
-}
-
-func (env *Env) Runtime() Runtime {
-	return env.runtime
 }
 
 func (env *Env) stackOffset() uint32 {
@@ -78,8 +74,7 @@ func (env *Env) grow(newSize int) {
 	*env.stack = s[:sz]
 }
 
-// Get gets a value from the current stack
-// Get(-1) means env.A
+// Get gets value at 'index' in current stack, Get(-1) means env.A.
 func (env *Env) Get(index int) Value {
 	if index == -1 {
 		return env.A
@@ -92,7 +87,7 @@ func (env *Env) Get(index int) Value {
 	return Nil
 }
 
-// Set sets a value in the current stack
+// Set sets 'value' at 'index' in current stack.
 func (env *Env) Set(index int, value Value) {
 	env._set(uint16(index)&typ.RegLocalMask, value)
 }
@@ -106,16 +101,6 @@ func (env *Env) push(v Value) {
 	*env.stack = append(*env.stack, v)
 }
 
-func (env *Env) pushVararg(v []Value) {
-	*env.stack = append(*env.stack, v...)
-}
-
-func (env *Env) prepend(v Value) {
-	*env.stack = append(*env.stack, Nil)
-	copy((*env.stack)[env.stackOffset()+1:], (*env.stack)[env.stackOffset():])
-	(*env.stack)[env.stackOffset()] = v
-}
-
 func (env *Env) Size() int {
 	return len(*env.stack) - int(env.stackOffset())
 }
@@ -125,7 +110,7 @@ func (env *Env) _get(yx uint16) Value {
 		return env.A
 	}
 	if yx > typ.RegLocalMask {
-		return (*env.Global.stack)[yx&typ.RegLocalMask]
+		return (*env.global.stack)[yx&typ.RegLocalMask]
 	}
 	return (*env.stack)[uint32(yx)+(env.stackOffset())]
 }
@@ -134,14 +119,16 @@ func (env *Env) _set(yx uint16, v Value) {
 	if yx == typ.RegA {
 		env.A = v
 	} else if yx > typ.RegLocalMask {
-		(*env.Global.stack)[yx&typ.RegLocalMask] = v
+		(*env.global.stack)[yx&typ.RegLocalMask] = v
 	} else {
 		(*env.stack)[uint32(yx)+env.stackOffset()] = v
 	}
 }
 
+// Stack returns current stack as a reference.
 func (env *Env) Stack() []Value { return (*env.stack)[env.stackOffset():] }
 
+// CopyStack returns a copy of current stack.
 func (env *Env) CopyStack() []Value { return append([]Value{}, env.Stack()...) }
 
 func (env *Env) String() string {
@@ -151,22 +138,31 @@ func (env *Env) String() string {
 	return buf.String()
 }
 
+// Bool returns value at 'idx' in current stack and asserts its Type() to be a boolean.
 func (env *Env) Bool(idx int) bool { return env.mustBe(typ.Bool, idx).Bool() }
 
+// Str returns value at 'idx' in current stack and asserts its Type() to be a string.
 func (env *Env) Str(idx int) string { return env.mustBe(typ.String, idx).String() }
 
+// Num returns value at 'idx' in current stack and asserts its Type() to be a number.
 func (env *Env) Num(idx int) Value { return env.mustBe(typ.Number, idx) }
 
+// Int64 returns value at 'idx' in current stack and asserts its Type() to be a number.
 func (env *Env) Int64(idx int) int64 { return env.mustBe(typ.Number, idx).Int64() }
 
+// Int returns value at 'idx' in current stack and asserts its Type() to be a number.
 func (env *Env) Int(idx int) int { return env.mustBe(typ.Number, idx).Int() }
 
+// Float64 returns value at 'idx' in current stack and asserts its Type() to be a number.
 func (env *Env) Float64(idx int) float64 { return env.mustBe(typ.Number, idx).Float64() }
 
+// Object returns value at 'idx' in current stack and asserts its Type() to be an Object.
 func (env *Env) Object(idx int) *Object { return env.mustBe(typ.Object, idx).Object() }
 
+// Native returns value at 'idx' in current stack and asserts its Type() to be a Native.
 func (env *Env) Native(idx int) *Native { return env.mustBe(typ.Native, idx).Native() }
 
+// Interface returns value at 'idx' in current stack as interface{}
 func (env *Env) Interface(idx int) interface{} {
 	if idx == -1 {
 		return env.A.Interface()
@@ -174,6 +170,7 @@ func (env *Env) Interface(idx int) interface{} {
 	return env.Get(idx).Interface()
 }
 
+// ThisProp returns value by property 'k' of 'this'.
 func (env *Env) ThisProp(k string) interface{} {
 	return env.Object(-1).Prop(k).Interface()
 }
@@ -199,8 +196,8 @@ func (env *Env) SetA(a Value) bool {
 }
 
 func (e *Env) MustGlobal() *Program {
-	if e.Global != nil {
-		return e.Global
+	if e.global != nil {
+		return e.global
 	}
 	panic("calling out of program")
 }
@@ -209,7 +206,7 @@ func (e *Env) Copy() *Env {
 	stk := e.CopyStack()
 	e2 := &Env{}
 	e2.A = e.A
-	e2.Global = e.Global
+	e2.global = e.global
 	e2.stack = &stk
 	e2.stackOffsetFlag = e.stackOffsetFlag - e.stackOffset()
 	e2.runtime = e.runtime
@@ -218,7 +215,7 @@ func (e *Env) Copy() *Env {
 }
 
 func (e *Env) checkStackOverflow() {
-	if g := e.Global; g != nil {
+	if g := e.global; g != nil {
 		if int64(len(*g.stack)) > g.MaxStackSize {
 			panic("stack overflow")
 		}
