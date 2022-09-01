@@ -13,20 +13,20 @@ import (
 var objEmptyFunc = &funcbody{name: "object"}
 
 type funcbody struct {
-	name       string
-	codeSeg    internal.Packet
-	stackSize  uint16
-	numParams  byte
-	varg       bool
-	method     bool
-	native     func(env *Env)
-	loadGlobal *Program
-	locals     []string
+	name      string
+	codeSeg   internal.Packet
+	stackSize uint16
+	numParams byte
+	varg      bool
+	method    bool
+	native    func(env *Env)
+	top       *Program
+	locals    []string
 }
 
 type Program struct {
 	stack     *[]Value
-	top       *Object
+	main      *Object
 	symbols   *Object
 	functions *Object
 	stopped   bool
@@ -62,13 +62,14 @@ func (p *Program) Run() (v1 Value, err error) {
 
 	defer internal.CatchError(&err)
 	newEnv := Env{
-		global: p,
-		stack:  p.stack,
+		top:   p,
+		stack: p.stack,
 	}
-	v1 = internalExecCursorLoop(newEnv, p.top, nil)
+	v1 = internalExecCursorLoop(newEnv, p.main, nil)
 	return
 }
 
+// Stop stops the program from running unsafely, it can't stop any Go-native functions or goroutines.
 func (p *Program) Stop() {
 	p.stopped = true
 	return
@@ -76,7 +77,7 @@ func (p *Program) Stop() {
 
 func (p *Program) GoString() string {
 	x := &bytes.Buffer{}
-	p.top.printAll(x)
+	p.main.printAll(x)
 	p.functions.Foreach(func(_ Value, f *Value) bool {
 		x.WriteByte('\n')
 		f.Object().printAll(x)
@@ -103,8 +104,8 @@ func (p *Program) Set(k string, v Value) (ok bool) {
 }
 
 func (p *Program) LocalsObject() *Object {
-	r := NewObject(len(p.top.fun.locals))
-	for i, name := range p.top.fun.locals {
+	r := NewObject(len(p.main.fun.locals))
+	for i, name := range p.main.fun.locals {
 		r.Set(Str(name), (*p.stack)[i])
 	}
 	return r
@@ -112,14 +113,14 @@ func (p *Program) LocalsObject() *Object {
 
 func (m *Object) Call(e *Env, args ...Value) (res Value) {
 	if e != nil {
-		return callobj(m, e.runtime, e.global, nil, m.this, args...)
+		return callobj(m, e.runtime, e.top, nil, m.this, args...)
 	}
 	return callobj(m, stacktraces{}, nil, nil, m.this, args...)
 }
 
 func (m *Object) TryCall(e *Env, args ...Value) (res Value, err error) {
 	if e != nil {
-		res = callobj(m, e.runtime, e.global, &err, m.this, args...)
+		res = callobj(m, e.runtime, e.top, &err, m.this, args...)
 	} else {
 		res = callobj(m, stacktraces{}, nil, &err, m.this, args...)
 	}
@@ -129,13 +130,13 @@ func (m *Object) TryCall(e *Env, args ...Value) (res Value, err error) {
 func callobj(m *Object, r stacktraces, g *Program, outErr *error, this Value, args ...Value) (res Value) {
 	c := m.fun
 	newEnv := Env{
-		A:      this,
-		global: c.loadGlobal,
-		stack:  &args,
+		A:     this,
+		top:   c.top,
+		stack: &args,
 	}
 
-	if c.loadGlobal == nil {
-		newEnv.global = g
+	if c.top == nil {
+		newEnv.top = g
 	}
 
 	if outErr != nil {
@@ -188,7 +189,7 @@ func (obj *Object) GoString() string {
 }
 
 func (obj *Object) printAll(w io.Writer) {
-	cls, p := obj.fun, obj.fun.loadGlobal
+	cls, p := obj.fun, obj.fun.top
 	internal.WriteString(w, "start)\t"+obj.funcSig()+"\n")
 	if obj.parent != nil {
 		internal.WriteString(w, "proto)\t"+obj.parent.Name()+"\n")
@@ -196,8 +197,8 @@ func (obj *Object) printAll(w io.Writer) {
 	if cls.native != nil {
 		internal.WriteString(w, "0)\t0\tnative code\n")
 	} else {
-		if cls == p.top.fun {
-			internal.WriteString(w, "source)\t"+cls.loadGlobal.File+"\n")
+		if cls == p.main.fun {
+			internal.WriteString(w, "source)\t"+cls.top.File+"\n")
 		}
 
 		readAddr := func(a uint16, rValue bool) string {

@@ -107,7 +107,7 @@ func (m *Object) SetProp(k string, v Value) *Object {
 
 // SetMethod binds method "fun" to "k" in the object
 func (m *Object) SetMethod(k string, fun func(*Env)) *Object {
-	f := Func(k, fun)
+	f := Func(m.Name()+"."+k, fun)
 	f.Object().fun.method = true
 	m.Set(Str(k), f)
 	return m

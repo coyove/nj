@@ -71,7 +71,7 @@ func init() {
 		return obj
 	}
 	internal.NewProgram = func(coreStack, top, symbols, funcs interface{}) interface{} {
-		cls := &Program{top: top.(*Object)}
+		cls := &Program{main: top.(*Object)}
 		cls.stack = coreStack.(*[]Value)
 		cls.symbols = symbols.(*Object)
 		cls.functions = funcs.(*Object)
@@ -79,9 +79,9 @@ func init() {
 		cls.Stdin = os.Stdin
 		cls.Stderr = os.Stderr
 
-		cls.top.fun.loadGlobal = cls
+		cls.main.fun.top = cls
 		cls.functions.Foreach(func(_ Value, f *Value) bool {
-			f.Object().fun.loadGlobal = cls
+			f.Object().fun.top = cls
 			return true
 		})
 		return cls
@@ -90,7 +90,7 @@ func init() {
 
 	AddGlobal("VERSION", Int64(Version))
 	AddGlobalMethod("globals", func(e *Env) {
-		e.A = e.MustGlobal().LocalsObject().ToValue()
+		e.A = e.MustProgram().LocalsObject().ToValue()
 	})
 	AddGlobalMethod("new", func(e *Env) {
 		m := e.Object(0)
@@ -101,7 +101,7 @@ func init() {
 			o := e.runtime.stack0.Callable
 			init := o.Prop("_init").Object()
 			n := o.Copy(true).SetPrototype(o)
-			callobj(init, e.runtime, e.global, nil, n.ToValue(), e.Stack()...)
+			callobj(init, e.runtime, e.top, nil, n.ToValue(), e.Stack()...)
 			e.A = n.ToValue()
 		}).Object().
 			Merge(e.Object(2)).
@@ -132,13 +132,13 @@ func init() {
 		})).
 		SetProp("globals", Func("globals", func(e *Env) {
 			var r []Value
-			for i, name := range e.MustGlobal().top.fun.locals {
-				r = append(r, Int(i), Str(name), (*e.global.stack)[i])
+			for i, name := range e.MustProgram().main.fun.locals {
+				r = append(r, Int(i), Str(name), (*e.top.stack)[i])
 			}
 			e.A = Array(r...)
 		})).
 		SetProp("set", Func("set", func(e *Env) {
-			(*e.MustGlobal().stack)[e.Int64(0)] = e.Get(1)
+			(*e.MustProgram().stack)[e.Int64(0)] = e.Get(1)
 		})).
 		SetProp("trace", Func("trace", func(env *Env) {
 			stacks := env.runtime.Stacktrace(false)
@@ -156,7 +156,7 @@ func init() {
 
 	AddGlobalMethod("type", func(e *Env) { e.A = Str(e.Get(0).Type().String()) })
 	AddGlobalMethod("apply", func(e *Env) {
-		e.A = callobj(e.Object(0), e.runtime, e.global, nil, e.Get(1), e.Stack()[2:]...)
+		e.A = callobj(e.Object(0), e.runtime, e.top, nil, e.Get(1), e.Stack()[2:]...)
 	})
 	AddGlobalMethod("panic", func(e *Env) {
 		v := e.Get(0)
@@ -269,7 +269,7 @@ func init() {
 		SetMethod("isvarg", func(e *Env) { e.A = Bool(e.Object(-1).fun.varg) }).
 		SetMethod("argcount", func(e *Env) { e.A = Int(int(e.Object(-1).fun.numParams)) }).
 		SetMethod("apply", func(e *Env) {
-			e.A = callobj(e.Object(-1), e.runtime, e.global, nil, e.Get(0), e.Stack()[1:]...)
+			e.A = callobj(e.Object(-1), e.runtime, e.top, nil, e.Get(0), e.Stack()[1:]...)
 		}).
 		SetMethod("call", func(e *Env) { e.A = e.Object(-1).Call(e, e.Stack()...) }).
 		SetMethod("try", func(e *Env) {

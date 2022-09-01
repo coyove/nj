@@ -50,12 +50,12 @@ func init() {
 		ToValue())
 	bas.AddGlobalMethod("loadfile", func(e *bas.Env) {
 		path := e.Str(0)
-		if e.Get(1).Maybe().Bool() && e.MustGlobal().File != "" {
-			path = filepath.Join(filepath.Dir(e.MustGlobal().File), path)
+		if e.Get(1).Maybe().Bool() && e.MustProgram().File != "" {
+			path = filepath.Join(filepath.Dir(e.MustProgram().File), path)
 		}
 		e.A = MustRun(LoadFile(path, &LoadOptions{
-			MaxStackSize: e.MustGlobal().MaxStackSize,
-			Globals:      e.MustGlobal().Globals,
+			MaxStackSize: e.MustProgram().MaxStackSize,
+			Globals:      e.MustProgram().Globals,
 		}))
 	})
 	bas.AddGlobal("eval", bas.Func("eval", func(e *bas.Env) {
@@ -74,25 +74,25 @@ func init() {
 	bas.AddGlobal("stdin", bas.ValueOf(os.Stdin))
 	bas.AddGlobal("stderr", bas.ValueOf(os.Stderr))
 	bas.AddGlobal("printf", bas.Func("printf", func(e *bas.Env) {
-		bas.EnvFprintf(e, 0, e.MustGlobal().Stdout)
+		bas.EnvFprintf(e, 0, e.MustProgram().Stdout)
 	}))
 	bas.AddGlobal("println", bas.Func("println", func(e *bas.Env) {
 		for _, a := range e.Stack() {
-			fmt.Fprint(e.MustGlobal().Stdout, a.String(), " ")
+			fmt.Fprint(e.MustProgram().Stdout, a.String(), " ")
 		}
-		fmt.Fprintln(e.MustGlobal().Stdout)
+		fmt.Fprintln(e.MustProgram().Stdout)
 	}))
 	bas.AddGlobal("print", bas.Func("print", func(e *bas.Env) {
 		for _, a := range e.Stack() {
-			fmt.Fprint(e.MustGlobal().Stdout, a.String())
+			fmt.Fprint(e.MustProgram().Stdout, a.String())
 		}
-		fmt.Fprintln(e.MustGlobal().Stdout)
+		fmt.Fprintln(e.MustProgram().Stdout)
 	}))
 	bas.AddGlobalMethod("scanln", func(env *bas.Env) {
 		prompt, n := env.Get(0), env.Get(1)
-		fmt.Fprint(env.MustGlobal().Stdout, prompt.Maybe().Str(""))
+		fmt.Fprint(env.MustProgram().Stdout, prompt.Maybe().Str(""))
 		var results []bas.Value
-		var r io.Reader = env.MustGlobal().Stdin
+		var r io.Reader = env.MustProgram().Stdin
 		for i := n.Maybe().Int64(1); i > 0; i-- {
 			var s string
 			if _, err := fmt.Fscan(r, &s); err != nil {
@@ -641,7 +641,7 @@ func parseJSON(v interface{}) bas.Value {
 		}
 		return bas.Array(a...)
 	case map[string]interface{}:
-		a := bas.NewObject(len(v) / 2)
+		a := bas.NewObject(len(v))
 		for k, v := range v {
 			a.SetProp(k, parseJSON(v))
 		}

@@ -80,7 +80,7 @@ func (e *ExecError) Error() string {
 				msg.WriteString(" (tailcall)")
 			}
 			msg.WriteString("\n\t")
-			line, ok := internal.LineOf(r.Callable.fun.loadGlobal.Source, int(ln))
+			line, ok := internal.LineOf(r.Callable.fun.top.Source, int(ln))
 			if ok {
 				msg.WriteString(strings.TrimSpace(line))
 			} else {
@@ -367,7 +367,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			code = K.fun.codeSeg.Code
 			env.stackOffsetFlag = r.stackOffsetFlag
 			env.A = v
-			env.global = K.fun.loadGlobal
+			env.top = K.fun.top
 			*env.stack = (*env.stack)[:env.stackOffset()+uint32(r.Callable.fun.stackSize)]
 			stackEnv.stackOffsetFlag = uint32(len(*env.stack))
 			retStack = retStack[:len(retStack)-1]
@@ -407,7 +407,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 
 			if v.Opcode == typ.OpTryCall {
-				stackEnv.global = env.global
+				stackEnv.top = env.top
 				stackEnv.runtime.stack0 = last
 				if len(retStack) > 0 {
 					stackEnv.runtime.stack1 = retStack[len(retStack)-1]
@@ -418,7 +418,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				stackEnv.runtime = stacktraces{}
 				stackEnv.clear()
 			} else if cls.native != nil {
-				stackEnv.global = env.global
+				stackEnv.top = env.top
 				stackEnv.runtime.stack0 = Stacktrace{Callable: obj, stackOffsetFlag: internal.FlagNativeCall}
 				stackEnv.runtime.stack1 = last
 				stackEnv.runtime.stackN = retStack
@@ -434,7 +434,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				K = obj
 				code = obj.fun.codeSeg.Code
 				env.stackOffsetFlag = stackEnv.stackOffsetFlag
-				env.global = cls.loadGlobal
+				env.top = cls.top
 				env.A = stackEnv.A
 
 				if v.Opcode == typ.OpCall {

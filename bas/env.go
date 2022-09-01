@@ -2,6 +2,7 @@ package bas
 
 import (
 	"bytes"
+	"unsafe"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -12,7 +13,7 @@ import (
 // 'A' stores the result of the execution. 'global' is the topmost function scope, a.k.a. Program.
 type Env struct {
 	stack           *[]Value
-	global          *Program
+	top             *Program
 	A               Value
 	stackOffsetFlag uint32
 	runtime         stacktraces
@@ -64,9 +65,6 @@ func (env *Env) grow(newSize int) {
 	s := *env.stack
 	sz := int(env.stackOffset()) + newSize
 	if sz > cap(s) {
-		// if env.Global != nil && env.Global.MaxStackSize > 0 && int64(sz) > env.Global.MaxStackSize {
-		// 	panic("stack overflow")
-		// }
 		old := s
 		s = make([]Value, sz+newSize)
 		copy(s, old)
@@ -110,18 +108,26 @@ func (env *Env) _get(yx uint16) Value {
 		return env.A
 	}
 	if yx > typ.RegLocalMask {
-		return (*env.global.stack)[yx&typ.RegLocalMask]
+		offset := uintptr(yx&typ.RegLocalMask) * ValueSize
+		return *(*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.top.stack)) + offset))
+		// return (*env.global.stack)[yx&typ.RegLocalMask]
 	}
-	return (*env.stack)[uint32(yx)+(env.stackOffset())]
+	offset := uintptr(uint32(yx)+env.stackOffset()) * ValueSize
+	return *(*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.stack)) + offset))
+	// return (*env.stack)[uint32(yx)+env.stackOffset()]
 }
 
 func (env *Env) _set(yx uint16, v Value) {
 	if yx == typ.RegA {
 		env.A = v
 	} else if yx > typ.RegLocalMask {
-		(*env.global.stack)[yx&typ.RegLocalMask] = v
+		offset := uintptr(yx&typ.RegLocalMask) * ValueSize
+		*(*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.top.stack)) + offset)) = v
+		// (*env.global.stack)[yx&typ.RegLocalMask] = v
 	} else {
-		(*env.stack)[uint32(yx)+env.stackOffset()] = v
+		offset := uintptr(uint32(yx)+env.stackOffset()) * ValueSize
+		*(*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.stack)) + offset)) = v
+		//(*env.stack)[uint32(yx)+env.stackOffset()] = v
 	}
 }
 
@@ -170,7 +176,7 @@ func (env *Env) Interface(idx int) interface{} {
 	return env.Get(idx).Interface()
 }
 
-// ThisProp returns value by property 'k' of 'this'.
+// ThisProp returns value, by property 'k' of 'this', as interface{}.
 func (env *Env) ThisProp(k string) interface{} {
 	return env.Object(-1).Prop(k).Interface()
 }
@@ -179,12 +185,12 @@ func (env *Env) mustBe(t typ.ValueType, idx int) (v Value) {
 	if idx == -1 {
 		v = env.A
 		if v.Type() != t {
-			internal.Panic("argument 'this' should be %v, not %v", t, detail(v))
+			internal.Panic("expects 'this' to be %v, got %v", t, detail(v))
 		}
 	} else {
 		v = env.Get(idx)
 		if v.Type() != t {
-			internal.Panic("argument %d expects %v, got %v", idx+1, t, detail(v))
+			internal.Panic("expects argument #%d to be %v, got %v", idx+1, t, detail(v))
 		}
 	}
 	return v
@@ -195,18 +201,18 @@ func (env *Env) SetA(a Value) bool {
 	return true
 }
 
-func (e *Env) MustGlobal() *Program {
-	if e.global != nil {
-		return e.global
+func (e *Env) MustProgram() *Program {
+	if e.top != nil {
+		return e.top
 	}
-	panic("calling out of program")
+	panic("out of program")
 }
 
 func (e *Env) Copy() *Env {
 	stk := e.CopyStack()
 	e2 := &Env{}
 	e2.A = e.A
-	e2.global = e.global
+	e2.top = e.top
 	e2.stack = &stk
 	e2.stackOffsetFlag = e.stackOffsetFlag - e.stackOffset()
 	e2.runtime = e.runtime
@@ -215,7 +221,7 @@ func (e *Env) Copy() *Env {
 }
 
 func (e *Env) checkStackOverflow() {
-	if g := e.global; g != nil {
+	if g := e.top; g != nil {
 		if int64(len(*g.stack)) > g.MaxStackSize {
 			panic("stack overflow")
 		}

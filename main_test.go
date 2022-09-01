@@ -84,12 +84,12 @@ func runFile(t *testing.T, path string) {
 				}
 			})).
 			SetProp("findGlobal", bas.ValueOf(func(env *bas.Env) {
-				v, err := env.MustGlobal().Get("G_FLAG")
+				v, err := env.MustProgram().Get("G_FLAG")
 				fmt.Println(err)
 				if v.IsFalse() {
 					panic("findGlobal failed")
 				}
-				env.MustGlobal().Set("G_FLAG", bas.Str("ok"))
+				env.MustProgram().Set("G_FLAG", bas.Str("ok"))
 				fmt.Println("find global")
 			})).
 			SetProp("G", bas.Str("test")),
