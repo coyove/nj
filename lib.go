@@ -50,7 +50,7 @@ func init() {
 		ToValue())
 	bas.AddGlobalMethod("loadfile", func(e *bas.Env) {
 		path := e.Str(0)
-		if e.Get(1).Maybe().Bool() && e.MustProgram().File != "" {
+		if e.Get(1).NilBool() && e.MustProgram().File != "" {
 			path = filepath.Join(filepath.Dir(e.MustProgram().File), path)
 		}
 		e.A = MustRun(LoadFile(path, &LoadOptions{
@@ -60,7 +60,7 @@ func init() {
 	})
 	bas.AddGlobal("eval", bas.Func("eval", func(e *bas.Env) {
 		p, err := LoadString(e.Str(0), &LoadOptions{
-			Globals: e.Get(1).Maybe().Object(nil),
+			Globals: e.Get(1).NilObject(nil),
 		})
 		internal.PanicErr(err)
 		e.A = valueOrPanic(p.Run())
@@ -90,10 +90,10 @@ func init() {
 	}))
 	bas.AddGlobalMethod("scanln", func(env *bas.Env) {
 		prompt, n := env.Get(0), env.Get(1)
-		fmt.Fprint(env.MustProgram().Stdout, prompt.Maybe().Str(""))
+		fmt.Fprint(env.MustProgram().Stdout, prompt.NilStr(""))
 		var results []bas.Value
 		var r io.Reader = env.MustProgram().Stdin
-		for i := n.Maybe().Int64(1); i > 0; i-- {
+		for i := n.NilInt64(1); i > 0; i-- {
 			var s string
 			if _, err := fmt.Fscan(r, &s); err != nil {
 				break
@@ -106,7 +106,7 @@ func init() {
 	bas.AddGlobalMethod("Go_time", func(e *bas.Env) {
 		if e.Size() > 0 {
 			e.A = bas.ValueOf(time.Date(e.Int(0), time.Month(e.Int(1)), e.Int(2),
-				e.Get(3).Maybe().Int(0), e.Get(4).Maybe().Int(0), e.Get(5).Maybe().Int(0), e.Get(6).Maybe().Int(0), time.UTC))
+				e.Get(3).NilInt(0), e.Get(4).NilInt(0), e.Get(5).NilInt(0), e.Get(6).NilInt(0), time.UTC))
 		} else {
 			e.A = bas.ValueOf(time.Now())
 		}
@@ -132,7 +132,7 @@ func init() {
 			e.A = bas.NewNative(e.ThisProp("_rx").(*regexp.Regexp).FindStringSubmatch(e.Str(0))).ToValue()
 		}).
 		SetMethod("findall", func(e *bas.Env) {
-			m := e.ThisProp("_rx").(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).Maybe().Int(-1))
+			m := e.ThisProp("_rx").(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).NilInt(-1))
 			e.A = bas.NewNative(m).ToValue()
 		}).
 		SetMethod("replace", func(e *bas.Env) {
@@ -141,7 +141,7 @@ func init() {
 		ToValue())
 
 	bas.AddGlobal("open", bas.Func("open", func(e *bas.Env) {
-		path, flag, perm := e.Str(0), e.Get(1).Maybe().Str("r"), e.Get(2).Maybe().Int64(0644)
+		path, flag, perm := e.Str(0), e.Get(1).NilStr("r"), e.Get(2).NilInt64(0644)
 		var opt int
 		for _, f := range flag {
 			switch f {
@@ -193,7 +193,7 @@ func init() {
 		SetProp("NEG_INF", bas.Float64(math.Inf(-1))).
 		SetProp("PI", bas.Float64(math.Pi)).
 		SetProp("E", bas.Float64(math.E)).
-		SetProp("randomseed", bas.Func("randomseed", func(e *bas.Env) { rand.Seed(e.Get(0).Maybe().Int64(1)) })).
+		SetProp("randomseed", bas.Func("randomseed", func(e *bas.Env) { rand.Seed(e.Get(0).NilInt64(1)) })).
 		SetProp("random", bas.Func("random", func(e *bas.Env) {
 			switch len(e.Stack()) {
 			case 2:
@@ -256,14 +256,14 @@ func init() {
 		SetProp("shell", bas.Func("shell", func(e *bas.Env) {
 			win := runtime.GOOS == "windows"
 			p := exec.Command(internal.IfStr(win, "cmd", "sh"), internal.IfStr(win, "/c", "-c"), e.Str(0))
-			opt := e.Get(1).Maybe().Object(nil)
-			opt.Prop("env").Maybe().Object(nil).Foreach(func(k bas.Value, v *bas.Value) bool {
+			opt := e.Get(1).NilObject(nil)
+			opt.Prop("env").NilObject(nil).Foreach(func(k bas.Value, v *bas.Value) bool {
 				p.Env = append(p.Env, k.String()+"="+v.String())
 				return true
 			})
 			stdout := &bytes.Buffer{}
 			p.Stdout, p.Stderr = stdout, stdout
-			p.Dir = opt.Prop("dir").Maybe().Str("")
+			p.Dir = opt.Prop("dir").NilStr("")
 			if tmp := opt.Prop("stdout"); tmp != bas.Nil {
 				p.Stdout = bas.NewWriter(tmp)
 			}
@@ -274,7 +274,7 @@ func init() {
 				p.Stdin = bas.NewReader(tmp)
 			}
 
-			to := opt.Prop("timeout").Maybe().Float64(1 << 30)
+			to := opt.Prop("timeout").NilFloat64(1 << 30)
 			out := make(chan error)
 			go func() { out <- p.Run() }()
 			select {
@@ -388,7 +388,7 @@ func init() {
 					tt = time.Now()
 				}
 			}
-			e.A = bas.Str(tt.Format(getTimeFormat(e.Get(0).Maybe().Str(""))))
+			e.A = bas.Str(tt.Format(getTimeFormat(e.Get(0).NilStr(""))))
 		}).
 		ToValue())
 
@@ -401,15 +401,15 @@ func init() {
 
 	httpLib := bas.Func("http", func(e *bas.Env) {
 		args := e.Object(0)
-		to := args.Prop("timeout").Maybe().Float64(1 << 30)
-		method := strings.ToUpper(args.Find(bas.Str("method")).Maybe().Str("GET"))
+		to := args.Prop("timeout").NilFloat64(1 << 30)
+		method := strings.ToUpper(args.Find(bas.Str("method")).NilStr("GET"))
 
-		u, err := url.Parse(args.Find(bas.Str("url")).Maybe().Str("bad://%url%"))
+		u, err := url.Parse(args.Find(bas.Str("url")).NilStr("bad://%url%"))
 		internal.PanicErr(err)
 
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Find(bas.Str(k))
-			x.Maybe().Object(nil).Foreach(func(k bas.Value, v *bas.Value) bool { add(k.String(), v.String()); return true })
+			x.NilObject(nil).Foreach(func(k bas.Value, v *bas.Value) bool { add(k.String(), v.String()); return true })
 		}
 
 		additionalQueries := u.Query()
@@ -444,7 +444,7 @@ func init() {
 				x.Object().Foreach(func(k bas.Value, v *bas.Value) bool {
 					key, rd := k.String(), *v
 					if rd.Type() == typ.Native && bas.Len(rd) == 2 { // [filename, reader]
-						part, err := writer.CreateFormFile(key, rd.Native().Get(0).Maybe().Str(""))
+						part, err := writer.CreateFormFile(key, rd.Native().Get(0).NilStr(""))
 						internal.PanicErr(err)
 						_, err = io.Copy(part, bas.NewReader(rd.Native().Get(1)))
 						internal.PanicErr(err)
@@ -489,7 +489,7 @@ func init() {
 				return http.ErrUseLastResponse
 			}
 		}
-		if p := args.Find(bas.Str("proxy")).Maybe().Str(""); p != "" {
+		if p := args.Find(bas.Str("proxy")).NilStr(""); p != "" {
 			client.Transport = &http.Transport{
 				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
 			}
@@ -525,14 +525,14 @@ func init() {
 	}).Object()
 	for _, m := range []string{"get", "post", "put", "delete", "head", "patch"} {
 		httpLib = httpLib.SetMethod(m, func(e *bas.Env) {
-			ex := e.Get(1).Maybe().Object(nil)
+			ex := e.Get(1).NilObject(nil)
 			e.A = e.Object(-1).Call(e, bas.NewObject(0).SetProp("method", bas.Str(m)).SetProp("url", e.Get(0)).Merge(ex).ToValue())
 		})
 	}
 	bas.AddGlobal("http", httpLib.ToValue())
 
 	bas.AddGlobalMethod("buffer", func(e *bas.Env) {
-		b := &internal.LimitedBuffer{Limit: e.Get(1).Maybe().Int(0)}
+		b := &internal.LimitedBuffer{Limit: e.Get(1).NilInt(0)}
 		b.Write(bas.ToReadonlyBytes(e.Get(0)))
 		e.A = bas.NewNamedObject("Buffer", 0).
 			SetPrototype(bas.Proto.ReadWriter).

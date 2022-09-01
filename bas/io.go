@@ -60,8 +60,8 @@ func init() {
 		SetMethod("readlines", func(e *Env) {
 			e.A = NewNativeWithMeta(&ioReadlinesStruct{
 				rd:    bufio.NewReader(e.ThisProp("_f").(io.Reader)),
-				delim: e.Get(0).Maybe().Str("\n")[0],
-				bytes: e.Get(1).Maybe().Bool(),
+				delim: e.Get(0).NilStr("\n")[0],
+				bytes: e.Get(1).NilBool(),
 			}, ioReadlinesIter).ToValue()
 		})
 
@@ -83,7 +83,7 @@ func init() {
 		SetMethod("pipe", func(e *Env) {
 			var wn int64
 			var err error
-			if n := e.Get(1).Maybe().Int64(0); n > 0 {
+			if n := e.Get(1).NilInt64(0); n > 0 {
 				wn, err = io.CopyN(NewWriter(e.Get(-1)), NewReader(e.Get(0)), n)
 			} else {
 				wn, err = io.Copy(NewWriter(e.Get(-1)), NewReader(e.Get(0)))
@@ -240,7 +240,7 @@ func (m ValueIO) Close() error {
 func ioRead(e *Env) []byte {
 	f := e.ThisProp("_f").(io.Reader)
 	if n := e.Get(0); n.Type() == typ.Number {
-		p := make([]byte, n.Maybe().Int64(0))
+		p := make([]byte, n.NilInt64(0))
 		rn, err := f.Read(p)
 		if err == nil || rn > 0 {
 			return p[:rn]

@@ -143,7 +143,7 @@ func init() {
 		SetProp("trace", Func("trace", func(env *Env) {
 			stacks := env.runtime.Stacktrace(false)
 			lines := make([]Value, 0, len(stacks))
-			for i := len(stacks) - 1 - env.Get(0).Maybe().Int(0); i >= 0; i-- {
+			for i := len(stacks) - 1 - env.Get(0).NilInt(0); i >= 0; i-- {
 				r := stacks[i]
 				lines = append(lines, Str(r.Callable.fun.name), Int64(int64(r.sourceLine())), Int64(int64(r.Cursor-1)))
 			}
@@ -182,7 +182,7 @@ func init() {
 		if v := e.Get(0); v.Type() == typ.Number {
 			e.A = Int64(v.Int64())
 		} else {
-			v, err := strconv.ParseInt(v.String(), e.Get(1).Maybe().Int(0), 64)
+			v, err := strconv.ParseInt(v.String(), e.Get(1).NilInt(0), 64)
 			internal.PanicErr(err)
 			e.A = Int64(v)
 		}
@@ -219,13 +219,13 @@ func init() {
 		ToValue())
 
 	ObjectProto = *NewNamedObject("object", 0).
-		SetMethod("new", func(e *Env) { e.A = NewObject(e.Get(0).Maybe().Int(0)).ToValue() }).
+		SetMethod("new", func(e *Env) { e.A = NewObject(e.Get(0).NilInt(0)).ToValue() }).
 		SetMethod("find", func(e *Env) { e.A = e.Object(-1).Find(e.Get(0)) }).
 		SetMethod("set", func(e *Env) { e.A = e.Object(-1).Set(e.Get(0), e.Get(1)) }).
 		SetMethod("get", func(e *Env) { e.A = e.Object(-1).Get(e.Get(0)) }).
 		SetMethod("delete", func(e *Env) { e.A = e.Object(-1).Delete(e.Get(0)) }).
 		SetMethod("clear", func(e *Env) { e.Object(-1).Clear() }).
-		SetMethod("copy", func(e *Env) { e.A = e.Object(-1).Copy(e.Get(0).Maybe().Bool()).ToValue() }).
+		SetMethod("copy", func(e *Env) { e.A = e.Object(-1).Copy(e.Get(0).NilBool()).ToValue() }).
 		SetMethod("proto", func(e *Env) { e.A = e.Object(-1).Prototype().ToValue() }).
 		SetMethod("setproto", func(e *Env) { e.Object(-1).SetPrototype(e.Object(0)) }).
 		SetMethod("size", func(e *Env) { e.A = Int(e.Object(-1).Size()) }).
@@ -251,7 +251,7 @@ func init() {
 			f := e.Object(0)
 			e.Object(-1).Foreach(func(k Value, v *Value) bool { return f.Call(e, k, *v) != False })
 		}).
-		SetMethod("contains", func(e *Env) { e.A = Bool(e.Object(-1).Contains(e.Get(0), e.Get(1).Maybe().Bool())) }).
+		SetMethod("contains", func(e *Env) { e.A = Bool(e.Object(-1).Contains(e.Get(0), e.Get(1).NilBool())) }).
 		SetMethod("merge", func(e *Env) { e.A = e.Object(-1).Merge(e.Object(0)).ToValue() }).
 		SetMethod("tostring", func(e *Env) {
 			p := &bytes.Buffer{}
@@ -306,11 +306,11 @@ func init() {
 			if !e.Get(0).IsArray() {
 				e.Get(0).AssertType(typ.Object, "map")
 			}
-			e.A = multiMap(e, e.Object(-1), e.Get(0), e.Get(1).Maybe().Int(1))
+			e.A = multiMap(e, e.Object(-1), e.Get(0), e.Get(1).NilInt(1))
 		}).
 		SetMethod("closure", func(e *Env) {
 			scope := e.runtime.stack1.Callable
-			lambda := e.Object(-1).Merge(scope).Merge(e.Get(0).Maybe().Object(nil))
+			lambda := e.Object(-1).Merge(scope).Merge(e.Get(0).NilObject(nil))
 			start := e.stackOffset() - uint32(scope.fun.stackSize)
 			for i, name := range scope.fun.locals {
 				if name == "" {
@@ -408,10 +408,10 @@ func init() {
 			}
 		}).
 		SetMethod("copy", func(e *Env) { e.Native(-1).Copy(e.Int(0), e.Int(1), e.Native(2)) }).
-		SetMethod("concat", func(e *Env) { e.Native(-1).Concat(e.Get(0).Maybe().Native(nil)) }).
+		SetMethod("concat", func(e *Env) { e.Native(-1).Concat(e.Get(0).NilNative(nil)) }).
 		SetMethod("sort", func(e *Env) {
-			a, rev := e.Native(-1), e.Get(0).Maybe().Bool()
-			if kf := e.Get(1).Maybe().Func(nil); kf == nil {
+			a, rev := e.Native(-1), e.Get(0).NilBool()
+			if kf := e.Get(1).NilObject(nil); kf == nil {
 				sort.Slice(a.Unwrap(), func(i, j int) bool {
 					return Less(kf.Call(e, a.Get(i)), kf.Call(e, a.Get(j))) != rev
 				})
@@ -507,7 +507,7 @@ func init() {
 
 	*Proto.Channel = *Func("channel", func(e *Env) {
 		rv := reflect.ValueOf(e.Interface(0))
-		_ = rv.Kind() == reflect.Chan && e.SetA(ValueOf(rv.Interface())) || e.SetA(ValueOf(make(chan Value, e.Get(0).Maybe().Int64(0))))
+		_ = rv.Kind() == reflect.Chan && e.SetA(ValueOf(rv.Interface())) || e.SetA(ValueOf(make(chan Value, e.Get(0).NilInt64(0))))
 	}).Object().
 		SetMethod("len", func(e *Env) { e.A = Int(e.Native(-1).Len()) }).
 		SetMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
@@ -524,7 +524,7 @@ func init() {
 		SetMethod("sendmulti", func(e *Env) {
 			var cases []reflect.SelectCase
 			var channels []Value
-			if e.Get(1).Maybe().Bool() {
+			if e.Get(1).NilBool() {
 				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectDefault})
 				channels = append(channels, Str("default"))
 			}
@@ -545,7 +545,7 @@ func init() {
 		SetMethod("recvmulti", func(e *Env) {
 			var cases []reflect.SelectCase
 			var channels []Value
-			if e.Get(1).Maybe().Bool() {
+			if e.Get(1).NilBool() {
 				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectDefault})
 				channels = append(channels, Str("default"))
 			}
@@ -577,7 +577,7 @@ func init() {
 		SetMethod("iequals", func(e *Env) { e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0))) }).
 		SetMethod("contains", func(e *Env) { e.A = Bool(strings.Contains(e.Str(-1), e.Str(0))) }).
 		SetMethod("split", func(e *Env) {
-			if n := e.Get(1).Maybe().Int(0); n == 0 {
+			if n := e.Get(1).NilInt(0); n == 0 {
 				e.A = NewNativeWithMeta(strings.Split(e.Str(-1), e.Str(0)), stringsArrayMeta).ToValue()
 			} else {
 				e.A = NewNativeWithMeta(strings.SplitN(e.Str(-1), e.Str(0), n), stringsArrayMeta).ToValue()
@@ -596,7 +596,7 @@ func init() {
 			e.A = UnsafeStr(buf.Bytes())
 		}).
 		SetMethod("replace", func(e *Env) {
-			e.A = Str(strings.Replace(e.Str(-1), e.Str(0), e.Str(1), e.Get(2).Maybe().Int(-1)))
+			e.A = Str(strings.Replace(e.Str(-1), e.Str(0), e.Str(1), e.Get(2).NilInt(-1)))
 		}).
 		SetMethod("glob", func(e *Env) {
 			m, err := filepath.Match(e.Str(-1), e.Str(0))
@@ -604,7 +604,7 @@ func init() {
 			e.A = Bool(m)
 		}).
 		SetMethod("find", func(e *Env) {
-			start, end := e.Get(1).Maybe().Int(0), e.Get(2).Maybe().Int(Len(e.Get(-1)))
+			start, end := e.Get(1).NilInt(0), e.Get(2).NilInt(Len(e.Get(-1)))
 			e.A = Int(strings.Index(e.Str(-1)[start:end], e.Str(0)))
 		}).
 		SetMethod("findsub", func(e *Env) {
@@ -615,7 +615,7 @@ func init() {
 		SetMethod("findlast", func(e *Env) { e.A = Int(strings.LastIndex(e.Str(-1), e.Str(0))) }).
 		SetMethod("sub", func(e *Env) {
 			s := e.Str(-1)
-			st, en := e.Int(0), e.Get(1).Maybe().Int(len(s))
+			st, en := e.Int(0), e.Get(1).NilInt(len(s))
 			for ; st < 0 && len(s) > 0; st += len(s) {
 			}
 			for ; en < 0 && len(s) > 0; en += len(s) {
@@ -623,7 +623,7 @@ func init() {
 			e.A = Str(s[st:en])
 		}).
 		SetMethod("trim", func(e *Env) {
-			cutset := e.Get(0).Maybe().Str("")
+			cutset := e.Get(0).NilStr("")
 			_ = cutset == "" && e.SetA(Str(strings.TrimSpace(e.Str(-1)))) || e.SetA(Str(strings.Trim(e.Str(-1), e.Str(0))))
 		}).
 		SetMethod("trimprefix", func(e *Env) { e.A = Str(strings.TrimPrefix(e.Str(-1), e.Str(0))) }).
@@ -640,7 +640,7 @@ func init() {
 		SetMethod("lower", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }).
 		SetMethod("chars", func(e *Env) {
 			var r []Value
-			for s, code := e.Str(-1), e.Get(0).Maybe().Bool(); len(s) > 0; {
+			for s, code := e.Str(-1), e.Get(0).NilBool(); len(s) > 0; {
 				rn, sz := utf8.DecodeRuneInString(s)
 				if sz == 0 {
 					break

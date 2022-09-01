@@ -463,5 +463,3 @@ func (v Value) Stringify(p io.Writer, j typ.MarshalType) {
 		internal.WriteString(p, internal.IfStr(j == typ.MarshalToJSON, "null", "nil"))
 	}
 }
-
-func (v Value) Maybe() MaybeValue { return MaybeValue(v) }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strconv"
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
@@ -18,9 +19,7 @@ var (
 	valueType    = reflect.TypeOf(Value{})
 )
 
-type MaybeValue Value
-
-func (v MaybeValue) Str(defaultValue string) string {
+func (v Value) NilStr(defaultValue string) string {
 	switch t := Value(v).Type(); t {
 	case typ.String:
 		return Value(v).Str()
@@ -32,71 +31,81 @@ func (v MaybeValue) Str(defaultValue string) string {
 		}
 		fallthrough
 	default:
-		panic("Str: expects string, bytes or nil, got " + detail(Value(v)))
+		panic("NilStr: expects string, bytes or nil, got " + detail(Value(v)))
 	}
 }
 
-func (v MaybeValue) Bool() bool {
+func (v Value) NilBool() bool {
 	switch t := Value(v).Type(); t {
 	case typ.Number, typ.Bool:
 		return Value(v).IsTrue()
 	case typ.Nil:
 		return false
 	default:
-		panic("Bool: expects boolean or nil, got " + detail(Value(v)))
+		panic("NilBool: expects boolean or nil, got " + detail(Value(v)))
 	}
 }
 
-func (v MaybeValue) Int64(defaultValue int64) int64 {
+func (v Value) NilInt64(defaultValue int64) int64 {
 	switch t := Value(v).Type(); t {
 	case typ.Number:
 		return Value(v).Int64()
 	case typ.Nil:
 		return defaultValue
 	default:
-		panic("Int64: expects integer number or nil, got " + detail(Value(v)))
+		panic("NilInt64: expects integer number or nil, got " + detail(Value(v)))
 	}
 }
 
-func (v MaybeValue) Int(defaultValue int) int {
-	return int(v.Int64(int64(defaultValue)))
+func (v Value) NilInt(defaultValue int) int {
+	return int(v.NilInt64(int64(defaultValue)))
 }
 
-func (v MaybeValue) Float64(defaultValue float64) float64 {
+func (v Value) NilFloat64(defaultValue float64) float64 {
 	switch t := Value(v).Type(); t {
 	case typ.Number:
 		return Value(v).Float64()
 	case typ.Nil:
 		return defaultValue
 	default:
-		panic("Float64: expects float number or nil, got " + detail(Value(v)))
+		panic("NilFloat64: expects float number or nil, got " + detail(Value(v)))
 	}
 }
 
-func (v MaybeValue) Native(defaultValue *Native) *Native {
+func (v Value) NilArray(minSize int) []Value {
+	switch t := Value(v).Type(); t {
+	case typ.Nil:
+		if minSize <= 0 {
+			return nil
+		}
+	case typ.Native:
+		if a, ok := v.Native().Unwrap().([]Value); ok && len(a) >= minSize {
+			return a
+		}
+	}
+	panic("NilArray: expects array with at least " + strconv.Itoa(minSize) + " values, got " + detail(Value(v)))
+}
+
+func (v Value) NilNative(defaultValue *Native) *Native {
 	switch t := Value(v).Type(); t {
 	case typ.Native:
 		return Value(v).Native()
 	case typ.Nil:
 		return defaultValue
 	default:
-		panic("Native: expects native or nil, got " + detail(Value(v)))
+		panic("NilNative: expects native or nil, got " + detail(Value(v)))
 	}
 }
 
-func (v MaybeValue) Object(defaultValue *Object) *Object {
+func (v Value) NilObject(defaultValue *Object) *Object {
 	switch t := Value(v).Type(); t {
 	case typ.Object:
 		return Value(v).Object()
 	case typ.Nil:
 		return defaultValue
 	default:
-		panic("Object: expects object or nil, got " + detail(Value(v)))
+		panic("NilObject: expects object or nil, got " + detail(Value(v)))
 	}
-}
-
-func (v MaybeValue) Func(defaultValue *Object) *Object {
-	return v.Object(defaultValue)
 }
 
 func ToError(v Value) error {
@@ -390,4 +399,7 @@ func detail(v Value) string {
 	default:
 		return v.Type().String()
 	}
+}
+
+func (v Value) AssertShape() {
 }
