@@ -586,7 +586,7 @@ func TestFormat(t *testing.T) {
 		{"% +20X", math.NaN(), "                +NaN"},
 		{"% -20g", math.NaN(), " NaN                "},
 		{"%+-20G", math.NaN(), "+NaN                "},
-		// Zero padmath.ding does not apply to infinities and NaN.
+		// Zero padding does not apply to infinities and NaN.
 		{"%+020e", math.Inf(1), "                +Inf"},
 		{"%+020x", math.Inf(1), "                +Inf"},
 		{"%-020f", math.Inf(-1), "-Inf                "},
@@ -598,5 +598,40 @@ func TestFormat(t *testing.T) {
 		if v := sprintf(p.f, p.v); v != p.res {
 			t.Fatal(p.f, p.v, "->", v, p.res)
 		}
+	}
+}
+
+func TestShape(t *testing.T) {
+	Shape("")
+	Shape(",")
+	Shape("[")
+	Shape("]")
+	Shape("[,]")
+
+	Shape("i")(Int(1))
+	Shape("n")(Int(1))
+	Shape("n")(Float64(1))
+	Shape("(i)")(Array(Int(1)))
+	Shape("(i i)")(Array(Int(1), Int(2)))
+	Shape("[i i]")(Array(Int(1), Int(2)))
+	Shape("[i i]")(Array(Int(1), Int(2), Int(3), Int(4)))
+	Shape("[i,i]")(Array())
+	Shape("(i,is)")(Array(Int(1), Int(2)))
+	Shape("(i,is)")(Array(Int(1), Str("2")))
+	Shape("([] is)")(Array(Array(Int(1)), Str("2")))
+	Shape("([@*int] is)")(Array(Array(NewNative(new(int)).ToValue()), Str("2")))
+	Shape("E")(Error(nil, fmt.Errorf("test")))
+
+	o := NewObject(10)
+	o.Set(Int(1), Array())
+	o.Set(Int(2), Array())
+	Shape("({i:[]} is)")(Array(o.ToValue(), Str("2")))
+}
+
+func BenchmarkShape(b *testing.B) {
+	s := Shape("[i,i]")
+	v := Array(Int(1), Int(2))
+	for i := 0; i < b.N; i++ {
+		s(v)
 	}
 }
