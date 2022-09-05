@@ -400,6 +400,3 @@ func detail(v Value) string {
 		return v.Type().String()
 	}
 }
-
-func (v Value) AssertShape() {
-}

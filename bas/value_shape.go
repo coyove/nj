@@ -3,14 +3,16 @@ package bas
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
 
 type shape interface {
-	assert(Value, string)
+	assert(Value, string) error
 	add(shape)
 	String() string
 }
@@ -24,31 +26,36 @@ func (sa *shaperArray) add(s shape) {
 	sa.shapes = append(sa.shapes, s)
 }
 
-func (sa *shaperArray) assert(v Value, msg string) {
+func (sa *shaperArray) assert(v Value, msg string) error {
 	arr, ok := v.Interface().([]Value)
 	if !ok {
-		panic(fmt.Sprintf("pattern %q expects array, got %v", msg, detail(v)))
+		return fmt.Errorf("pattern %q expects array, got %v", msg, detail(v))
 	}
 	if sa.fixed {
 		if len(arr) != len(sa.shapes) {
-			panic(fmt.Sprintf("pattern %q expects array with %d elements, got %d", msg, len(sa.shapes), len(arr)))
+			return fmt.Errorf("pattern %q expects array with %d elements, got %d", msg, len(sa.shapes), len(arr))
 		}
 		for i, s := range sa.shapes {
-			s.assert(arr[i], msg)
+			if err := s.assert(arr[i], msg); err != nil {
+				return err
+			}
 		}
 	} else {
 		if len(sa.shapes) == 0 {
-			return
+			return nil
 		}
 		if len(arr)%len(sa.shapes) != 0 {
-			panic(fmt.Sprintf("pattern %q expects array with %dN elements, got %d", msg, len(sa.shapes), len(arr)))
+			return fmt.Errorf("pattern %q expects array with %d*N elements, got %d", msg, len(sa.shapes), len(arr))
 		}
 		for i := 0; i < len(arr); i += len(sa.shapes) {
 			for j, s := range sa.shapes {
-				s.assert(arr[i+j], msg)
+				if err := s.assert(arr[i+j], msg); err != nil {
+					return err
+				}
 			}
 		}
 	}
+	return nil
 }
 
 func (sa *shaperArray) String() string {
@@ -83,25 +90,30 @@ func (sa *shaperObject) add(s shape) {
 		sa.value = s
 		return
 	}
-	panic(fmt.Errorf("expects object shape in form of '{key:value}', got too many shapes"))
 }
 
-func (sa *shaperObject) assert(v Value, msg string) {
+func (sa *shaperObject) assert(v Value, msg string) error {
 	if !v.IsObject() {
-		panic(fmt.Sprintf("pattern %q expects object, got %v", msg, detail(v)))
+		return fmt.Errorf("pattern %q expects object, got %v", msg, detail(v))
 	}
 	if sa.key == nil && sa.value == nil {
-		return
+		return nil
 	}
+	var err error
 	v.Object().Foreach(func(k Value, v *Value) bool {
 		if sa.key != nil {
-			sa.key.assert(k, msg)
+			if err = sa.key.assert(k, msg); err != nil {
+				return false
+			}
 		}
 		if sa.value != nil {
-			sa.value.assert(*v, msg)
+			if err = sa.value.assert(*v, msg); err != nil {
+				return false
+			}
 		}
 		return true
 	})
+	return err
 }
 
 func (sa *shaperObject) String() string {
@@ -132,13 +144,14 @@ type shaperNative struct {
 func (sa *shaperNative) add(s shape) {
 }
 
-func (sa *shaperNative) assert(v Value, msg string) {
+func (sa *shaperNative) assert(v Value, msg string) error {
 	if v.Type() != typ.Native {
-		panic(fmt.Sprintf("pattern %q expects native, got %v", msg, detail(v)))
+		return fmt.Errorf("pattern %q expects native, got %v", msg, detail(v))
 	}
 	if v.Native().meta.Name != sa.name {
-		panic(fmt.Sprintf("pattern %q expects %s, got %s", msg, sa.name, v.Native().meta.Name))
+		return fmt.Errorf("pattern %q expects %s, got %s", msg, sa.name, v.Native().meta.Name)
 	}
+	return nil
 }
 
 func (sa *shaperNative) String() string {
@@ -152,20 +165,22 @@ type shaperPrimitive struct {
 func (sa *shaperPrimitive) add(s shape) {
 }
 
-func (sa *shaperPrimitive) assert(v Value, msg string) {
+func (sa *shaperPrimitive) assert(v Value, msg string) error {
 	if sa.verbs == "" {
-		return
+		return nil
 	}
 	ok := false
+	any := strings.IndexByte(sa.verbs, '_') >= 0 || strings.IndexByte(sa.verbs, 'v') >= 0
+
 	switch v.Type() {
 	case typ.Nil:
-		ok = strings.IndexByte(sa.verbs, '_') >= 0 || strings.IndexByte(sa.verbs, 'v') >= 0
+		ok = any
 	case typ.Bool:
 		ok = strings.IndexByte(sa.verbs, 'b') >= 0
 	case typ.Number:
 		if strings.IndexByte(sa.verbs, 'i') >= 0 {
 			if !v.IsInt64() {
-				panic(fmt.Sprintf("pattern %q expects integer, got %v", msg, v))
+				return fmt.Errorf("pattern %q expects integer, got %v", msg, v)
 			}
 			ok = true
 		} else {
@@ -176,6 +191,8 @@ func (sa *shaperPrimitive) assert(v Value, msg string) {
 	case typ.Object:
 		ok = strings.IndexByte(sa.verbs, 'o') >= 0
 	}
+
+	ok = ok || any
 	if !ok {
 		if IsError(v) && strings.IndexByte(sa.verbs, 'E') >= 0 {
 			ok = true
@@ -184,9 +201,10 @@ func (sa *shaperPrimitive) assert(v Value, msg string) {
 			ok = true
 		}
 		if !ok {
-			panic(fmt.Sprintf("pattern %q expects %q, got %v", msg, sa.verbs, detail(v)))
+			return fmt.Errorf("pattern %q expects %q, got %v", msg, sa.verbs, detail(v))
 		}
 	}
+	return nil
 }
 
 func (sa *shaperPrimitive) String() string {
@@ -209,11 +227,13 @@ func shapeNextToken(s string) (token, rest string) {
 	return s, ""
 }
 
-func Shape(s string) func(v Value) {
+var shapeCache sync.Map
+
+func Shape(s string) func(v Value) error {
 	var until byte
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
-		return func(Value) {}
+		return func(Value) error { return nil }
 	}
 
 	old := s
@@ -226,17 +246,23 @@ func Shape(s string) func(v Value) {
 		until, s = '}', s[1:]
 	}
 
-	x := shapeScan(&s, until)
-	if x == nil {
-		return func(Value) {}
+	if f, ok := shapeCache.Load(old); ok {
+		return f.(func(Value) error)
 	}
 
-	return func(v Value) {
-		x.assert(v, old)
+	x := shapeScan(old, &s, until)
+	if x == nil {
+		return func(Value) error { return nil }
 	}
+
+	f := func(v Value) error {
+		return x.assert(v, old)
+	}
+	shapeCache.Store(old, f)
+	return f
 }
 
-func shapeScan(s *string, until byte) shape {
+func shapeScan(p string, s *string, until byte) shape {
 	var sa shape
 	switch until {
 	case ')':
@@ -251,17 +277,17 @@ func shapeScan(s *string, until byte) shape {
 		var token string
 		token, *s = shapeNextToken(*s)
 		if token == "" {
-			return nil
+			panic("invalid shape form: " + strconv.Quote(p))
 		}
 		switch token[0] {
 		case until:
 			return sa
 		case '(':
-			sa.add(shapeScan(s, ')'))
+			sa.add(shapeScan(p, s, ')'))
 		case '[':
-			sa.add(shapeScan(s, ']'))
+			sa.add(shapeScan(p, s, ']'))
 		case '{':
-			sa.add(shapeScan(s, '}'))
+			sa.add(shapeScan(p, s, '}'))
 		case ':':
 		case '@':
 			sa2 := &shaperNative{name: token[1:]}
@@ -279,4 +305,14 @@ func shapeScan(s *string, until byte) shape {
 	}
 
 	return sa
+}
+
+func (v Value) AssertShape(shape, msg string) Value {
+	if err := Shape(shape)(v); err != nil {
+		if msg == "" {
+			panic(err)
+		}
+		panic(fmt.Errorf("%s: %v", msg, err))
+	}
+	return v
 }

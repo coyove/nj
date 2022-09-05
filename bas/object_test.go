@@ -602,35 +602,53 @@ func TestFormat(t *testing.T) {
 }
 
 func TestShape(t *testing.T) {
-	Shape("")
-	Shape(",")
-	Shape("[")
-	Shape("]")
-	Shape("[,]")
+	assertError := func(f bool, err error) {
+		if (err == nil) == f {
+			t.Fatal(err, string(debug.Stack()))
+		}
+	}
 
-	Shape("i")(Int(1))
-	Shape("n")(Int(1))
-	Shape("n")(Float64(1))
-	Shape("(i)")(Array(Int(1)))
-	Shape("(i i)")(Array(Int(1), Int(2)))
-	Shape("[i i]")(Array(Int(1), Int(2)))
-	Shape("[i i]")(Array(Int(1), Int(2), Int(3), Int(4)))
-	Shape("[i,i]")(Array())
-	Shape("(i,is)")(Array(Int(1), Int(2)))
-	Shape("(i,is)")(Array(Int(1), Str("2")))
-	Shape("([] is)")(Array(Array(Int(1)), Str("2")))
-	Shape("([@*int] is)")(Array(Array(NewNative(new(int)).ToValue()), Str("2")))
-	Shape("E")(Error(nil, fmt.Errorf("test")))
+	Shape("")
+	// Shape(",")
+	// Shape("[")
+	// Shape("]")
+	// Shape("[,]")
+
+	assertError(false, Shape("i")(Int(1)))
+	assertError(false, Shape("n")(Int(1)))
+	assertError(false, Shape("n")(Float64(1)))
+	assertError(false, Shape("(i)")(Array(Int(1))))
+	assertError(false, Shape("(i i)")(Array(Int(1), Int(2))))
+	assertError(false, Shape("[i i]")(Array(Int(1), Int(2))))
+	assertError(false, Shape("[i i]")(Array(Int(1), Int(2), Int(3), Int(4))))
+	assertError(false, Shape("[i,i]")(Array()))
+	assertError(false, Shape("(i,is)")(Array(Int(1), Int(2))))
+	assertError(false, Shape("(i,is)")(Array(Int(1), Str("2"))))
+	assertError(false, Shape("([] is)")(Array(Array(Int(1)), Str("2"))))
+	assertError(false, Shape("([@*int] is)")(Array(Array(NewNative(new(int)).ToValue()), Str("2"))))
+	assertError(false, Shape("E")(Error(nil, fmt.Errorf("test"))))
+	assertError(true, Shape("[i]")(Array(Int(1), Float64(0.5))))
+	assertError(false, Shape("{} ")(NewObject(0).ToValue()))
 
 	o := NewObject(10)
 	o.Set(Int(1), Array())
 	o.Set(Int(2), Array())
-	Shape("({i:[]} is)")(Array(o.ToValue(), Str("2")))
+	assertError(false, Shape("({i:[]} is)")(Array(o.ToValue(), Str("2"))))
+
+	o.Clear()
+	o.Set(Int(1), True)
+	o.Set(Int(2), Str(""))
+	assertError(false, Shape("{}")(o.ToValue()))
+	assertError(false, Shape("{i}")(o.ToValue()))
+	assertError(false, Shape("{i v}")(o.ToValue()))
+
+	o.Clear()
+	assertError(false, Shape("{i}")(o.ToValue()))
 }
 
 func BenchmarkShape(b *testing.B) {
-	s := Shape("[i,i]")
 	v := Array(Int(1), Int(2))
+	s := Shape("[i,i]")
 	for i := 0; i < b.N; i++ {
 		s(v)
 	}

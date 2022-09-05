@@ -55,7 +55,7 @@ func init() {
 		}).
 		SetMethod("readbuf", func(e *Env) {
 			rn, err := e.ThisProp("_f").(io.Reader).Read(e.Native(0).Unwrap().([]byte))
-			e.A = newArray(Int(rn), Error(e, err)).ToValue() // return in Go style
+			e.A = Array(Int(rn), Error(e, err)) // return in Go style
 		}).
 		SetMethod("readlines", func(e *Env) {
 			e.A = NewNativeWithMeta(&ioReadlinesStruct{
@@ -158,26 +158,25 @@ func (m ValueIO) Read(p []byte) (int, error) {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Prop("readbuf"); rb.IsObject() {
-			t := rb.Object().Call(nil, Bytes(p)).AssertPrototype(Proto.Array, "readbuf result").Native()
-			n := t.Get(0).AssertType(typ.Number, "readbuf result").Int()
+			t := rb.Object().Call(nil, Bytes(p)).AssertShape("(i, Ev)", "Reader.readbuf").Native()
 			if IsError(t.Get(1)) {
-				return int(n), ToErrorRootCause(t.Get(1)).(error)
+				return t.Get(0).Int(), ToErrorRootCause(t.Get(1)).(error)
 			}
-			return int(n), nil
+			return t.Get(0).Int(), nil
 		}
 		if rb := Value(m).Object().Prop("readbytes"); rb.IsObject() {
 			v := rb.Object().Call(nil, Int(len(p)))
 			if v == Nil {
 				return 0, io.EOF
 			}
-			return copy(p, v.AssertPrototype(Proto.Bytes, "readbytes result").Native().Unwrap().([]byte)), nil
+			return copy(p, v.AssertPrototype(Proto.Bytes, "Reader.readbytes").Native().Unwrap().([]byte)), nil
 		}
 		if rb := Value(m).Object().Prop("read"); rb.IsObject() {
 			v := rb.Object().Call(nil, Int(len(p)))
 			if v == Nil {
 				return 0, io.EOF
 			}
-			return copy(p, v.AssertType(typ.String, "read result").Str()), nil
+			return copy(p, v.AssertType(typ.String, "Reader.read").Str()), nil
 		}
 	}
 	return 0, fmt.Errorf("reader not implemented")
@@ -199,22 +198,21 @@ func (m ValueIO) Write(p []byte) (int, error) {
 			if IsError(v) {
 				return 0, ToError(v)
 			}
-			return v.AssertType(typ.Number, "write result").Int(), nil
+			return v.AssertType(typ.Number, "Writer.write").Int(), nil
 		}
 		if rb := Value(m).Object().Prop("writebytes"); rb.IsObject() {
 			v := rb.Object().Call(nil, Bytes(p))
 			if IsError(v) {
 				return 0, ToError(v)
 			}
-			return v.AssertType(typ.Number, "writebytes result").Int(), nil
+			return v.AssertType(typ.Number, "Writer.writebytes").Int(), nil
 		}
 		if rb := Value(m).Object().Prop("writebuf"); rb.IsObject() {
-			t := rb.Object().Call(nil, Bytes(p)).AssertPrototype(Proto.Array, "writebuf result").Native()
-			n := t.Get(0).AssertType(typ.Number, "writebuf result").Int()
+			t := rb.Object().Call(nil, Bytes(p)).AssertShape("(i, Ev)", "Writer.writebuf").Native()
 			if IsError(t.Get(1)) {
-				return int(n), ToErrorRootCause(t.Get(1)).(error)
+				return t.Get(0).Int(), ToErrorRootCause(t.Get(1)).(error)
 			}
-			return int(n), nil
+			return t.Get(0).Int(), nil
 		}
 	}
 	return 0, fmt.Errorf("writer not implemented")
