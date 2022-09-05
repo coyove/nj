@@ -181,7 +181,7 @@ assert("10"==nativeVarargTest2("1"))
 assert("11"==nativeVarargTest2("1", 2))
 
 assert(intAlias(1e9).Unix() == 1)
-print(Go_time().Format("2006-01-02"))
+print(time.now().Format("2006-01-02"))
 
 println("boolean test")
 boolConvert(true)

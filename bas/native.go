@@ -207,6 +207,10 @@ func NewEmptyNativeMeta(name string, proto *Object) *NativeMeta {
 	if proto == nil {
 		proto = Proto.Native
 	}
+	return newEmptyNativeMetaInternal(name, proto)
+}
+
+func newEmptyNativeMetaInternal(name string, proto *Object) *NativeMeta {
 	return &NativeMeta{name, proto,
 		sgLenNotSupported,
 		sgSizeNotSupported,

@@ -104,7 +104,7 @@ func init() {
 			callobj(init, e.runtime, e.top, nil, n.ToValue(), e.Stack()...)
 			e.A = n.ToValue()
 		}).Object().
-			Merge(e.Object(2)).
+			Merge(e.Get(2).NilObject(nil)).
 			SetProp("_init", e.Object(1).ToValue()).
 			ToValue()
 	})
@@ -201,17 +201,8 @@ func init() {
 	AddGlobal("float", Proto.Float.ToValue())
 
 	AddGlobal("io", NewNamedObject("io", 0).
-		SetProp("reader", Proto.Reader.ToValue()).
-		SetProp("writer", Proto.Writer.ToValue()).
-		SetProp("seeker", Proto.Seeker.ToValue()).
-		SetProp("closer", Proto.Closer.ToValue()).
-		SetProp("readwriter", Proto.ReadWriter.ToValue()).
-		SetProp("readcloser", Proto.ReadCloser.ToValue()).
-		SetProp("writecloser", Proto.WriteCloser.ToValue()).
-		SetProp("readwritecloser", Proto.ReadWriteCloser.ToValue()).
-		SetProp("readwriteseekcloser", Proto.ReadWriteSeekCloser.ToValue()).
 		SetProp("write", Func("write", func(e *Env) {
-			w := NewWriter(e.Get(0))
+			w := e.Get(0).Writer()
 			for _, a := range e.Stack()[1:] {
 				w.Write(ToReadonlyBytes(a))
 			}

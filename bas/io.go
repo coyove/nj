@@ -44,7 +44,7 @@ func init() {
 		panic(er)
 	}
 
-	Proto.Reader.
+	Proto.Reader.Proto.
 		SetMethod("read", func(e *Env) {
 			buf := ioRead(e)
 			_ = buf == nil && e.SetA(Nil) || e.SetA(UnsafeStr(buf))
@@ -54,70 +54,60 @@ func init() {
 			_ = buf == nil && e.SetA(Nil) || e.SetA(Bytes(buf))
 		}).
 		SetMethod("readbuf", func(e *Env) {
-			rn, err := e.ThisProp("_f").(io.Reader).Read(e.Native(0).Unwrap().([]byte))
+			rn, err := e.A.Reader().Read(e.Native(0).Unwrap().([]byte))
 			e.A = Array(Int(rn), Error(e, err)) // return in Go style
 		}).
 		SetMethod("readlines", func(e *Env) {
 			e.A = NewNativeWithMeta(&ioReadlinesStruct{
-				rd:    bufio.NewReader(e.ThisProp("_f").(io.Reader)),
+				rd:    bufio.NewReader(e.A.Reader()),
 				delim: e.Get(0).NilStr("\n")[0],
 				bytes: e.Get(1).NilBool(),
 			}, ioReadlinesIter).ToValue()
 		})
 
-	Proto.Writer.
+	Proto.Writer.Proto.
 		SetMethod("write", func(e *Env) {
-			wn, err := e.ThisProp("_f").(io.Writer).Write(ToReadonlyBytes(e.Get(0)))
+			wn, err := e.A.Writer().Write(ToReadonlyBytes(e.Get(0)))
 			internal.PanicErr(err)
 			e.A = Int(wn)
 		}).
 		SetMethod("writebytes", func(e *Env) {
-			wn, err := e.ThisProp("_f").(io.Writer).Write(ToReadonlyBytes(e.Get(0)))
+			wn, err := e.A.Writer().Write(ToReadonlyBytes(e.Get(0)))
 			internal.PanicErr(err)
 			e.A = Int(wn)
 		}).
 		SetMethod("writebuf", func(e *Env) {
-			wn, err := e.ThisProp("_f").(io.Writer).Write(ToReadonlyBytes(e.Get(0)))
+			wn, err := e.A.Writer().Write(ToReadonlyBytes(e.Get(0)))
 			e.A = Array(Int(wn), Error(e, err))
 		}).
 		SetMethod("pipe", func(e *Env) {
 			var wn int64
 			var err error
 			if n := e.Get(1).NilInt64(0); n > 0 {
-				wn, err = io.CopyN(NewWriter(e.Get(-1)), NewReader(e.Get(0)), n)
+				wn, err = io.CopyN(e.Get(-1).Writer(), e.Get(0).Reader(), n)
 			} else {
-				wn, err = io.Copy(NewWriter(e.Get(-1)), NewReader(e.Get(0)))
+				wn, err = io.Copy(e.Get(-1).Writer(), e.Get(0).Reader())
 			}
 			internal.PanicErr(err)
 			e.A = Int64(wn)
 		})
 
-	Proto.Seeker.
-		SetMethod("seek", func(e *Env) {
-			f := e.ThisProp("_f").(io.Seeker)
-			wn, err := f.Seek(e.Int64(0), e.Int(1))
-			internal.PanicErr(err)
-			e.A = Int64(wn)
-		})
-
-	Proto.Closer.
+	Proto.Closer.Proto.
 		SetMethod("close", func(e *Env) {
-			internal.PanicErr(e.ThisProp("_f").(io.Closer).Close())
+			internal.PanicErr(e.A.Closer().Close())
 		})
 
-	Proto.ReadWriter.Merge(Proto.Reader).Merge(Proto.Writer)
+	Proto.ReadWriter.Proto.Merge(Proto.Reader.Proto).Merge(Proto.Writer.Proto)
 
-	Proto.ReadCloser.Merge(Proto.Reader).Merge(Proto.Closer)
+	Proto.ReadCloser.Proto.Merge(Proto.Reader.Proto).Merge(Proto.Closer.Proto)
 
-	Proto.WriteCloser.Merge(Proto.Writer).Merge(Proto.Closer)
+	Proto.WriteCloser.Proto.Merge(Proto.Writer.Proto).Merge(Proto.Closer.Proto)
 
-	Proto.ReadWriteCloser.Merge(Proto.ReadWriter).Merge(Proto.Closer)
-
-	Proto.ReadWriteSeekCloser.Merge(Proto.ReadWriteCloser).Merge(Proto.Seeker)
+	Proto.ReadWriteCloser.Proto.Merge(Proto.ReadWriter.Proto).Merge(Proto.Closer.Proto)
 }
 
 // NewReader creates an io.Reader from value if possible
-func NewReader(v Value) io.Reader {
+func (v Value) Reader() io.Reader {
 	switch rd := v.Interface().(type) {
 	case io.Reader:
 		return rd
@@ -130,7 +120,7 @@ func NewReader(v Value) io.Reader {
 }
 
 // NewWriter creates an io.Writer from value if possible
-func NewWriter(v Value) io.Writer {
+func (v Value) Writer() io.Writer {
 	switch rd := v.Interface().(type) {
 	case io.Writer:
 		return rd
@@ -143,7 +133,7 @@ func NewWriter(v Value) io.Writer {
 }
 
 // NewCloser creates an io.Closer from value if possible
-func NewCloser(v Value) io.Closer {
+func (v Value) Closer() io.Closer {
 	if rd, ok := v.Interface().(io.Closer); ok {
 		return rd
 	}
@@ -236,9 +226,9 @@ func (m ValueIO) Close() error {
 }
 
 func ioRead(e *Env) []byte {
-	f := e.ThisProp("_f").(io.Reader)
+	f := e.A.Reader()
 	if n := e.Get(0); n.Type() == typ.Number {
-		p := make([]byte, n.NilInt64(0))
+		p := make([]byte, n.Int())
 		rn, err := f.Read(p)
 		if err == nil || rn > 0 {
 			return p[:rn]

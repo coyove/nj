@@ -109,7 +109,7 @@ function foo3(k) debug.self()[k] = k end
 for i=0,10 do foo3(i) end
 for i=0,10 do assert(foo3[i], i) end
 
-oneline = new(io.writer)
+oneline = {}
 
 function oneline.write(b)
     x = #b
@@ -122,6 +122,10 @@ end
 ol = new(oneline, buf='')
 os.shell("ls -al", stdout=ol)
 print(ol.buf)
+
+ol = buffer()
+os.shell("whoami", stdout=ol)
+print(ol.value().trim())
 
 local bigint = createprototype("bigint", function(s)
     this.buf = bytes(0)
