@@ -473,7 +473,7 @@ func init() {
 					rv.SetMapIndex(i.Key(), i.Value())
 				}
 			} else {
-				src.AssertType2(typ.Native, typ.Object, "nativemap.merge")
+				src.AssertShape("^nativemap|object", "nativemap.merge")
 			}
 		}).
 		SetPrototype(Proto.Native)

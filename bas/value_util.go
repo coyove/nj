@@ -109,22 +109,22 @@ func (v Value) NilObject(defaultValue *Object) *Object {
 }
 
 func ToError(v Value) error {
-	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(errorNativeMeta.Proto) {
-		return Value(v).Native().Unwrap().(*ExecError)
+	if IsError(v) {
+		return v.Native().Unwrap().(*ExecError)
 	}
 	panic("ToError: not error: " + detail(v))
 }
 
 func ToErrorRootCause(v Value) interface{} {
-	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(errorNativeMeta.Proto) {
-		return Value(v).Native().Unwrap().(*ExecError).root
+	if IsError(v) {
+		return v.Native().Unwrap().(*ExecError).root
 	}
 	panic("ToErrorRootCause: not error: " + detail(v))
 }
 
 func ToBytes(v Value) []byte {
-	if Value(v).Type() == typ.Native && Value(v).Native().meta.Proto.HasPrototype(bytesArrayMeta.Proto) {
-		return Value(v).Native().Unwrap().([]byte)
+	if IsBytes(v) {
+		return v.Native().Unwrap().([]byte)
 	}
 	panic("ToBytes: not []byte: " + detail(v))
 }
@@ -267,7 +267,7 @@ func toTypePtrStruct(v Value, t reflect.Type, interopFuncs *[]func()) reflect.Va
 		return reflect.Zero(t)
 	}
 	if t.Implements(ioWriterType) || t.Implements(ioReaderType) || t.Implements(ioCloserType) {
-		return reflect.ValueOf(ValueIO(v))
+		return reflect.ValueOf(valueIO(v))
 	}
 	if t.Implements(errType) {
 		return reflect.ValueOf(ToError(v))

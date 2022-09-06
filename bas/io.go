@@ -12,7 +12,7 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
-type ValueIO Value
+type valueIO Value
 
 func init() {
 	ioReadlinesIter = NewEmptyNativeMeta("readlines", Proto.Native)
@@ -106,7 +106,7 @@ func init() {
 	Proto.ReadWriteCloser.Proto.Merge(Proto.ReadWriter.Proto).Merge(Proto.Closer.Proto)
 }
 
-// NewReader creates an io.Reader from value if possible
+// Reader creates an io.Reader from value, Read() may fail if value doesn't support reading.
 func (v Value) Reader() io.Reader {
 	switch rd := v.Interface().(type) {
 	case io.Reader:
@@ -116,10 +116,10 @@ func (v Value) Reader() io.Reader {
 	case string:
 		return strings.NewReader(v.Str())
 	}
-	return ValueIO(v)
+	return valueIO(v)
 }
 
-// NewWriter creates an io.Writer from value if possible
+// Writer creates an io.Writer from value, Write() may fail if value doesn't support writing.
 func (v Value) Writer() io.Writer {
 	switch rd := v.Interface().(type) {
 	case io.Writer:
@@ -129,18 +129,18 @@ func (v Value) Writer() io.Writer {
 		w.Reset()
 		return w
 	}
-	return ValueIO(v)
+	return valueIO(v)
 }
 
-// NewCloser creates an io.Closer from value if possible
+// Closer creates an io.Closer from value, Close() may fail if value doesn't support closing.
 func (v Value) Closer() io.Closer {
 	if rd, ok := v.Interface().(io.Closer); ok {
 		return rd
 	}
-	return ValueIO(v)
+	return valueIO(v)
 }
 
-func (m ValueIO) Read(p []byte) (int, error) {
+func (m valueIO) Read(p []byte) (int, error) {
 	switch Value(m).Type() {
 	case typ.Native:
 		if rd, _ := Value(m).Interface().(io.Reader); rd != nil {
@@ -172,11 +172,11 @@ func (m ValueIO) Read(p []byte) (int, error) {
 	return 0, fmt.Errorf("reader not implemented")
 }
 
-func (m ValueIO) WriteString(p string) (int, error) {
+func (m valueIO) WriteString(p string) (int, error) {
 	return m.Write([]byte(p))
 }
 
-func (m ValueIO) Write(p []byte) (int, error) {
+func (m valueIO) Write(p []byte) (int, error) {
 	switch Value(m).Type() {
 	case typ.Native:
 		if rd, _ := Value(m).Interface().(io.Writer); rd != nil {
@@ -208,7 +208,7 @@ func (m ValueIO) Write(p []byte) (int, error) {
 	return 0, fmt.Errorf("writer not implemented")
 }
 
-func (m ValueIO) Close() error {
+func (m valueIO) Close() error {
 	switch Value(m).Type() {
 	case typ.Native:
 		if rd, _ := Value(m).Interface().(io.Closer); rd != nil {

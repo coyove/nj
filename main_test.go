@@ -364,6 +364,12 @@ return [a + add(), a + add(), a + add()]
 		t.Fatal(v, v1, err, p2.GoString())
 	}
 
+	add = MustRun(LoadString("function foo(a) panic(a) end return function(b) foo(b) + 1 end", nil))
+	_, err = add.Object().TryCall(nil, bas.Int(10))
+	if err.(*bas.ExecError).GetCause() != bas.Int(10) {
+		t.Fatal(err)
+	}
+	fmt.Println(err)
 }
 
 func TestNumberLexer(t *testing.T) {

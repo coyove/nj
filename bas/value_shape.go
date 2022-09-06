@@ -99,17 +99,26 @@ func (sa *shaperObject) assert(v Value, msg string) error {
 	if sa.key == nil && sa.value == nil {
 		return nil
 	}
-	var err error
-	v.Object().Foreach(func(k Value, v *Value) bool {
-		if sa.key != nil {
-			if err = sa.key.assert(k, msg); err != nil {
-				return false
+	if sa.key != nil && sa.value == nil {
+		sp, ok := sa.key.(*shaperNative)
+		if !ok {
+			return fmt.Errorf("invalid pattern %q, expects object form: {prototype}", msg)
+		}
+		for p := v.Object(); p != nil; p = p.parent {
+			if p.Name() == sp.name {
+				return nil
 			}
 		}
-		if sa.value != nil {
-			if err = sa.value.assert(*v, msg); err != nil {
-				return false
-			}
+		return fmt.Errorf("pattern %q expects object of prototype %v", msg, sp.name)
+	}
+
+	var err error
+	v.Object().Foreach(func(k Value, v *Value) bool {
+		if err = sa.key.assert(k, msg); err != nil {
+			return false
+		}
+		if err = sa.value.assert(*v, msg); err != nil {
+			return false
 		}
 		return true
 	})
@@ -120,18 +129,13 @@ func (sa *shaperObject) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteByte('{')
 	if sa.key == nil && sa.value == nil {
+	} else if sa.key != nil && sa.value == nil {
+		buf.WriteString("@")
+		buf.WriteString(sa.key.String())
 	} else {
-		if sa.key == nil {
-			buf.WriteString("any")
-		} else {
-			buf.WriteString(sa.key.String())
-		}
+		buf.WriteString(sa.key.String())
 		buf.WriteByte(':')
-		if sa.value == nil {
-			buf.WriteString("any")
-		} else {
-			buf.WriteString(sa.value.String())
-		}
+		buf.WriteString(sa.value.String())
 	}
 	buf.WriteByte('}')
 	return buf.String()
@@ -211,13 +215,38 @@ func (sa *shaperPrimitive) String() string {
 	return sa.verbs
 }
 
+type shaperOr struct {
+	shapes []shape
+}
+
+func (sa *shaperOr) add(s shape) {
+	sa.shapes = append(sa.shapes, s)
+}
+
+func (sa *shaperOr) assert(v Value, msg string) error {
+	for _, s := range sa.shapes {
+		if s.assert(v, msg) == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("pattern %q expects %v, got %v", msg, sa, detail(v))
+}
+
+func (sa *shaperOr) String() string {
+	x := make([]string, len(sa.shapes))
+	for i := range sa.shapes {
+		x[i] = sa.shapes[i].String()
+	}
+	return "<" + strings.Join(x, ",") + ">"
+}
+
 func shapeNextToken(s string) (token, rest string) {
 	s = strings.TrimSpace(s)
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
 		case ',':
 			return s[:i], s[i+1:]
-		case '(', '[', '{', ':', ')', ']', '}', ' ':
+		case '<', '(', '[', '{', ':', ')', ']', '}', '>', ' ':
 			if i == 0 {
 				return s[:1], s[1:]
 			}
@@ -244,6 +273,8 @@ func Shape(s string) func(v Value) error {
 		until, s = ']', s[1:]
 	case '{':
 		until, s = '}', s[1:]
+	case '<':
+		until, s = '>', s[1:]
 	}
 
 	if f, ok := shapeCache.Load(old); ok {
@@ -271,6 +302,8 @@ func shapeScan(p string, s *string, until byte) shape {
 		sa = &shaperArray{}
 	case '}':
 		sa = &shaperObject{}
+	case '>':
+		sa = &shaperOr{}
 	}
 
 	for len(*s) > 0 {
@@ -288,6 +321,8 @@ func shapeScan(p string, s *string, until byte) shape {
 			sa.add(shapeScan(p, s, ']'))
 		case '{':
 			sa.add(shapeScan(p, s, '}'))
+		case '<':
+			sa.add(shapeScan(p, s, '>'))
 		case ':':
 		case '@':
 			sa2 := &shaperNative{name: token[1:]}

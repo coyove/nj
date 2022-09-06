@@ -25,6 +25,7 @@ type Object struct {
 type hashItem struct {
 	key, val Value
 	dist     int32
+	hash16   uint16
 	pDeleted bool
 }
 
@@ -130,7 +131,7 @@ func (m *Object) Find(k Value) (v Value) {
 }
 
 func (m *Object) find(k Value, findPrototype, setReceiver bool) (v Value) {
-	if idx := m.findHash(k); idx >= 0 {
+	if idx := m.findValue(k); idx >= 0 {
 		v = m.items[idx].val
 	} else if findPrototype && m.parent != nil {
 		v = m.parent.find(k, findPrototype, false)
@@ -145,12 +146,12 @@ func (m *Object) find(k Value, findPrototype, setReceiver bool) (v Value) {
 	return v
 }
 
-func (m *Object) findHash(k Value) int {
+func (m *Object) findValue(k Value) int {
 	num := len(m.items)
 	if num <= 0 {
 		return -1
 	}
-	idx := int(k.HashCode() % uint64(num))
+	idx := int(k.HashCode() % uint32(num))
 	idxStart := idx
 
 	for {
@@ -177,7 +178,7 @@ func (m *Object) Contains(k Value, includePrototypes bool) bool {
 	if m == nil || k == Nil {
 		return false
 	}
-	found := m.findHash(k) >= 0
+	found := m.findValue(k) >= 0
 	if !found && includePrototypes {
 		found = m.parent.Contains(k, true)
 	}
@@ -203,7 +204,7 @@ func (m *Object) Delete(k Value) (prev Value) {
 	if k == Nil {
 		internal.Panic("object delete with nil key")
 	}
-	idx := m.findHash(k)
+	idx := m.findValue(k)
 	if idx < 0 {
 		return Nil
 	}
@@ -216,7 +217,7 @@ func (m *Object) Delete(k Value) (prev Value) {
 
 func (m *Object) setHash(incoming hashItem) (prev Value) {
 	num := len(m.items)
-	idx := int(incoming.key.HashCode() % uint64(num))
+	idx := int(incoming.key.HashCode() % uint32(num))
 
 	for idxStart := idx; ; {
 		e := &m.items[idx]
@@ -311,7 +312,7 @@ func (m *Object) NextKeyValue(k Value) (Value, Value) {
 	if k == Nil {
 		return m.nextHashPair(0)
 	}
-	idx := m.findHash(k)
+	idx := m.findValue(k)
 	if idx < 0 {
 		return Nil, Nil
 	}
@@ -439,7 +440,7 @@ func (m *Object) DebugString() string {
 		} else if i.key == Nil {
 			p.WriteString("\t-\n")
 		} else {
-			at := i.key.HashCode() % uint64(len(m.items))
+			at := i.key.HashCode() % uint32(len(m.items))
 			if i.dist > 0 {
 				p.WriteString(fmt.Sprintf("^%d", at))
 			}

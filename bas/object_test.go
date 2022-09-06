@@ -25,7 +25,7 @@ func randInt(len, idx int) int {
 	buf := make([]byte, 6)
 	rand.Read(buf)
 	v := rand.Int()
-	if Int(v).HashCode()%uint64(len) == uint64(idx) {
+	if Int(v).HashCode()%uint32(len) == uint32(idx) {
 		return v
 	}
 	return randInt(len, idx)
@@ -315,7 +315,7 @@ func TestHashcodeDist(t *testing.T) {
 		fmt.Println(Str(a).HashCode() % 32)
 	}
 
-	z := map[uint64]int{}
+	z := map[uint32]int{}
 	m := NewObject(0)
 	rand.Seed(time.Now().Unix())
 	for i := 0; i < 1e6; i++ {
@@ -325,21 +325,21 @@ func TestHashcodeDist(t *testing.T) {
 	}
 	fmt.Println(z, m.density(), m.Size())
 
-	z = map[uint64]int{}
+	z = map[uint32]int{}
 	for i := 0; i < 1e6; i++ {
 		v := Int64(rand.Int63()).HashCode() % 32
 		z[v]++
 	}
 	fmt.Println((z))
 
-	z = map[uint64]int{}
+	z = map[uint32]int{}
 	for i := 0; i < 1e6; i++ {
 		v := Str(randString()).HashCode() % 32
 		z[v]++
 	}
 	fmt.Println((z))
 
-	z = map[uint64]int{}
+	z = map[uint32]int{}
 	m.Clear()
 	for i := 0; i < 1e6; i++ {
 		x := fmt.Sprintf("%016x", rand.Uint64())
@@ -644,6 +644,7 @@ func TestShape(t *testing.T) {
 
 	o.Clear()
 	assertError(false, Shape("{i}")(o.ToValue()))
+	assertError(false, Shape("<i,{}>")(o.ToValue()))
 }
 
 func BenchmarkShape(b *testing.B) {

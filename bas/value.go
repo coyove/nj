@@ -17,6 +17,9 @@ import (
 //go:linkname strhash runtime.strhash
 func strhash(p unsafe.Pointer, h uintptr) uintptr
 
+//go:linkname memhash64 runtime.memhash64
+func memhash64(p unsafe.Pointer, h uintptr) uintptr
+
 var (
 	baseMarker = func() []byte {
 		// Ensures baseMarker is at least 256 bytes long and its memory aligns with 256 bytes
@@ -44,8 +47,6 @@ var (
 	NullStr = Str("")
 	False   = Value{0, falseMarker}
 	True    = Value{1, trueMarker}
-
-	tf = [2]Value{False, True}
 )
 
 const (
@@ -379,17 +380,6 @@ func (v Value) AssertType(t typ.ValueType, msg string) Value {
 	return v
 }
 
-// AssertType2 asserts the type of value ('t1' or 't2'). 'msg' will be panicked out if failed.
-func (v Value) AssertType2(t1, t2 typ.ValueType, msg string) Value {
-	if vt := v.Type(); vt != t1 && vt != t2 {
-		if msg != "" {
-			internal.Panic("%s: expects %v or %v, got %v", msg, t1, t2, detail(v))
-		}
-		internal.Panic("expects %v or %v, got %v", t1, t2, detail(v))
-	}
-	return v
-}
-
 // AssertPrototype asserts the prototype of value. 'msg' will be panicked out if failed.
 func (v Value) AssertPrototype(p *Object, msg string) Value {
 	if !HasPrototype(v, p) {
@@ -410,19 +400,24 @@ func (v Value) Equal(r Value) bool {
 }
 
 // HashCode returns the hash of value.
-func (v Value) HashCode() uint64 {
+func (v Value) HashCode() uint32 {
 	if typ.ValueType(v.v) == typ.String {
-		return uint64(strhash(v.p, 0))
+		return uint32(strhash(v.p, 0))
 	}
 
-	// return (v.v)*uint64(uintptr(v.p)) ^ (v.v >> 33)
-	x := v.v ^ uint64(uintptr(v.p)-uintptr(baseStart))
-	x ^= x >> 33
-	x *= 0xff51afd7ed558ccd
-	x ^= x >> 33
-	// x *= 0xc4ceb9fe1a85ec53
-	// x ^= x >> 33
-	return x
+	x := uint64(uintptr(v.p))
+	xp := uintptr(unsafe.Pointer(&x))
+	h := memhash64(unsafe.Pointer(xp^0), uintptr(v.v))
+	return uint32(h)
+
+	// x := v.v ^ uint64(uintptr(v.p))
+	// h := uint32(x) ^ uint32(x>>32)
+	// h ^= h >> 16
+	// h *= 0x85ebca6b
+	// h ^= h >> 13
+	// // h *= 0xc2b2ae35
+	// // h ^= h >> 16
+	// return h
 }
 
 func (v Value) String() string {
