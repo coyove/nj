@@ -104,7 +104,7 @@ func init() {
 			callobj(init, e.runtime, e.top, nil, n.ToValue(), e.Stack()...)
 			e.A = n.ToValue()
 		}).Object().
-			Merge(e.Get(2).NilObject(nil)).
+			Merge(e.Shape(2, "No").Object()).
 			SetProp("_init", e.Object(1).ToValue()).
 			ToValue()
 	})
@@ -216,7 +216,7 @@ func init() {
 		SetMethod("get", func(e *Env) { e.A = e.Object(-1).Get(e.Get(0)) }).
 		SetMethod("delete", func(e *Env) { e.A = e.Object(-1).Delete(e.Get(0)) }).
 		SetMethod("clear", func(e *Env) { e.Object(-1).Clear() }).
-		SetMethod("copy", func(e *Env) { e.A = e.Object(-1).Copy(e.Get(0).NilBool()).ToValue() }).
+		SetMethod("copy", func(e *Env) { e.A = e.Object(-1).Copy(e.Shape(0, "Nb").IsTrue()).ToValue() }).
 		SetMethod("proto", func(e *Env) { e.A = e.Object(-1).Prototype().ToValue() }).
 		SetMethod("setproto", func(e *Env) { e.Object(-1).SetPrototype(e.Object(0)) }).
 		SetMethod("size", func(e *Env) { e.A = Int(e.Object(-1).Size()) }).
@@ -242,7 +242,9 @@ func init() {
 			f := e.Object(0)
 			e.Object(-1).Foreach(func(k Value, v *Value) bool { return f.Call(e, k, *v) != False })
 		}).
-		SetMethod("contains", func(e *Env) { e.A = Bool(e.Object(-1).Contains(e.Get(0), e.Get(1).NilBool())) }).
+		SetMethod("contains", func(e *Env) {
+			e.A = Bool(e.Object(-1).Contains(e.Get(0), e.Shape(1, "Nb").IsTrue()))
+		}).
 		SetMethod("merge", func(e *Env) { e.A = e.Object(-1).Merge(e.Object(0)).ToValue() }).
 		SetMethod("tostring", func(e *Env) {
 			p := &bytes.Buffer{}
@@ -270,10 +272,7 @@ func init() {
 		SetMethod("after", func(e *Env) {
 			f, args, e2 := e.Object(-1), e.CopyStack()[1:], e.Copy()
 			t := time.AfterFunc(time.Duration(e.Float64(0)*1e6)*1e3, func() { f.Call(e2, args...) })
-			e.A = NewNamedObject("Timer", 0).
-				SetProp("t", ValueOf(t)).
-				SetMethod("stop", func(e *Env) { e.A = Bool(e.ThisProp("t").(*time.Timer).Stop()) }).
-				ToValue()
+			e.A = NewNative(t).ToValue()
 		}).
 		SetMethod("go", func(e *Env) {
 			f := e.Object(-1)
@@ -287,11 +286,7 @@ func init() {
 					w <- v
 				}
 			}(f, args)
-			e.A = NewNamedObject("Goroutine", 0).
-				SetProp("f", f.ToValue()).
-				SetProp("w", NewNative(w).ToValue()).
-				SetMethod("wait", func(e *Env) { e.A = <-e.ThisProp("w").(chan Value) }).
-				ToValue()
+			e.A = NewNative(w).ToValue()
 		}).
 		SetMethod("map", func(e *Env) {
 			if !e.Get(0).IsArray() {
@@ -301,7 +296,7 @@ func init() {
 		}).
 		SetMethod("closure", func(e *Env) {
 			scope := e.runtime.stack1.Callable
-			lambda := e.Object(-1).Merge(scope).Merge(e.Get(0).NilObject(nil))
+			lambda := e.Object(-1).Merge(scope).Merge(e.Shape(0, "No").Object())
 			start := e.stackOffset() - uint32(scope.fun.stackSize)
 			for i, name := range scope.fun.locals {
 				if name == "" {
@@ -399,10 +394,10 @@ func init() {
 			}
 		}).
 		SetMethod("copy", func(e *Env) { e.Native(-1).Copy(e.Int(0), e.Int(1), e.Native(2)) }).
-		SetMethod("concat", func(e *Env) { e.Native(-1).Concat(e.Get(0).NilNative(nil)) }).
+		SetMethod("concat", func(e *Env) { e.Native(-1).Concat(e.Shape(0, "<N,@native>").Native()) }).
 		SetMethod("sort", func(e *Env) {
-			a, rev := e.Native(-1), e.Get(0).NilBool()
-			if kf := e.Get(1).NilObject(nil); kf == nil {
+			a, rev := e.Native(-1), e.Shape(0, "Nb").IsTrue()
+			if kf := e.Shape(1, "No").Object(); kf != nil {
 				sort.Slice(a.Unwrap(), func(i, j int) bool {
 					return Less(kf.Call(e, a.Get(i)), kf.Call(e, a.Get(j))) != rev
 				})
@@ -473,7 +468,7 @@ func init() {
 					rv.SetMapIndex(i.Key(), i.Value())
 				}
 			} else {
-				src.AssertShape("^nativemap|object", "nativemap.merge")
+				src.AssertShape("<@nativemap,@object>", "nativemap.merge")
 			}
 		}).
 		SetPrototype(Proto.Native)
@@ -515,7 +510,7 @@ func init() {
 		SetMethod("sendmulti", func(e *Env) {
 			var cases []reflect.SelectCase
 			var channels []Value
-			if e.Get(1).NilBool() {
+			if e.Shape(1, "Nb").IsTrue() {
 				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectDefault})
 				channels = append(channels, Str("default"))
 			}
@@ -536,7 +531,7 @@ func init() {
 		SetMethod("recvmulti", func(e *Env) {
 			var cases []reflect.SelectCase
 			var channels []Value
-			if e.Get(1).NilBool() {
+			if e.Shape(1, "Nb").IsTrue() {
 				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectDefault})
 				channels = append(channels, Str("default"))
 			}
@@ -631,7 +626,7 @@ func init() {
 		SetMethod("lower", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }).
 		SetMethod("chars", func(e *Env) {
 			var r []Value
-			for s, code := e.Str(-1), e.Get(0).NilBool(); len(s) > 0; {
+			for s, code := e.Str(-1), e.Shape(0, "Nb").IsTrue(); len(s) > 0; {
 				rn, sz := utf8.DecodeRuneInString(s)
 				if sz == 0 {
 					break

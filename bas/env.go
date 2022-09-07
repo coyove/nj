@@ -176,9 +176,17 @@ func (env *Env) Interface(idx int) interface{} {
 	return env.Get(idx).Interface()
 }
 
-// ThisProp returns value, by property 'k' of 'this', as interface{}.
-func (env *Env) ThisProp(k string) interface{} {
-	return env.Object(-1).Prop(k).Interface()
+func (env *Env) Shape(idx int, s string) Value {
+	v := env.Get(idx)
+	if err := TestShapeFast(v, s); err != nil {
+		internal.Panic("argument #%d: %v", idx, err)
+	}
+	return v
+}
+
+// ThisProp returns value by property 'k' of 'this'.
+func (env *Env) ThisProp(k string) Value {
+	return env.Object(-1).Prop(k)
 }
 
 func (env *Env) mustBe(t typ.ValueType, idx int) (v Value) {

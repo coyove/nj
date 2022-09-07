@@ -3,6 +3,7 @@ package bas
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -99,26 +100,15 @@ func (sa *shaperObject) assert(v Value, msg string) error {
 	if sa.key == nil && sa.value == nil {
 		return nil
 	}
-	if sa.key != nil && sa.value == nil {
-		sp, ok := sa.key.(*shaperNative)
-		if !ok {
-			return fmt.Errorf("invalid pattern %q, expects object form: {prototype}", msg)
-		}
-		for p := v.Object(); p != nil; p = p.parent {
-			if p.Name() == sp.name {
-				return nil
-			}
-		}
-		return fmt.Errorf("pattern %q expects object of prototype %v", msg, sp.name)
-	}
-
 	var err error
 	v.Object().Foreach(func(k Value, v *Value) bool {
 		if err = sa.key.assert(k, msg); err != nil {
 			return false
 		}
-		if err = sa.value.assert(*v, msg); err != nil {
-			return false
+		if sa.value != nil {
+			if err = sa.value.assert(*v, msg); err != nil {
+				return false
+			}
 		}
 		return true
 	})
@@ -129,36 +119,51 @@ func (sa *shaperObject) String() string {
 	buf := bytes.Buffer{}
 	buf.WriteByte('{')
 	if sa.key == nil && sa.value == nil {
-	} else if sa.key != nil && sa.value == nil {
-		buf.WriteString("@")
-		buf.WriteString(sa.key.String())
 	} else {
 		buf.WriteString(sa.key.String())
 		buf.WriteByte(':')
-		buf.WriteString(sa.value.String())
+		if sa.value == nil {
+			buf.WriteString("any")
+		} else {
+			buf.WriteString(sa.value.String())
+		}
 	}
 	buf.WriteByte('}')
 	return buf.String()
 }
 
-type shaperNative struct {
+type shaperPrototype struct {
 	name string
 }
 
-func (sa *shaperNative) add(s shape) {
+func (sa *shaperPrototype) add(s shape) {
 }
 
-func (sa *shaperNative) assert(v Value, msg string) error {
-	if v.Type() != typ.Native {
-		return fmt.Errorf("pattern %q expects native, got %v", msg, detail(v))
+func (sa *shaperPrototype) assert(v Value, msg string) error {
+	switch v.Type() {
+	case typ.Native:
+		if v.Native().meta.Name == sa.name {
+			return nil
+		}
+		for p := v.Native().meta.Proto; p != nil; p = p.parent {
+			if p.Name() == sa.name {
+				return nil
+			}
+		}
+		return fmt.Errorf("pattern %q expects native of prototype/name %v", msg, sa.name)
+	case typ.Object:
+		for p := v.Object(); p != nil; p = p.parent {
+			if p.Name() == sa.name {
+				return nil
+			}
+		}
+		return fmt.Errorf("pattern %q expects object of prototype %v", msg, sa.name)
+	default:
+		return fmt.Errorf("pattern %q expects native or object, got %v", msg, detail(v))
 	}
-	if v.Native().meta.Name != sa.name {
-		return fmt.Errorf("pattern %q expects %s, got %s", msg, sa.name, v.Native().meta.Name)
-	}
-	return nil
 }
 
-func (sa *shaperNative) String() string {
+func (sa *shaperPrototype) String() string {
 	return "@" + sa.name
 }
 
@@ -178,15 +183,12 @@ func (sa *shaperPrimitive) assert(v Value, msg string) error {
 
 	switch v.Type() {
 	case typ.Nil:
-		ok = any
+		ok = strings.IndexByte(sa.verbs, 'N') >= 0
 	case typ.Bool:
 		ok = strings.IndexByte(sa.verbs, 'b') >= 0
 	case typ.Number:
 		if strings.IndexByte(sa.verbs, 'i') >= 0 {
-			if !v.IsInt64() {
-				return fmt.Errorf("pattern %q expects integer, got %v", msg, v)
-			}
-			ok = true
+			ok = v.IsInt64()
 		} else {
 			ok = strings.IndexByte(sa.verbs, 'n') >= 0
 		}
@@ -197,22 +199,68 @@ func (sa *shaperPrimitive) assert(v Value, msg string) error {
 	}
 
 	ok = ok || any
+
+	if !ok && IsError(v) && strings.IndexByte(sa.verbs, 'E') >= 0 {
+		ok = true
+	}
+	if !ok && IsBytes(v) && strings.IndexByte(sa.verbs, 'B') >= 0 {
+		ok = true
+	}
+	if !ok && strings.IndexByte(sa.verbs, 'R') >= 0 {
+		switch v.Interface().(type) {
+		case string, []byte, io.Reader, *Object:
+			ok = true
+		}
+	}
+	if !ok && strings.IndexByte(sa.verbs, 'W') >= 0 {
+		switch v.Interface().(type) {
+		case io.Writer, *Object:
+			ok = true
+		}
+	}
+	if !ok && strings.IndexByte(sa.verbs, 'C') >= 0 {
+		switch v.Interface().(type) {
+		case io.Closer, *Object:
+			ok = true
+		}
+	}
 	if !ok {
-		if IsError(v) && strings.IndexByte(sa.verbs, 'E') >= 0 {
-			ok = true
-		}
-		if IsBytes(v) && strings.IndexByte(sa.verbs, 'B') >= 0 {
-			ok = true
-		}
-		if !ok {
-			return fmt.Errorf("pattern %q expects %q, got %v", msg, sa.verbs, detail(v))
-		}
+		return fmt.Errorf("pattern %q expects %v, got %v", msg, sa, detail(v))
 	}
 	return nil
 }
 
 func (sa *shaperPrimitive) String() string {
-	return sa.verbs
+	var buf []string
+	for _, b := range sa.verbs {
+		switch b {
+		case 'i':
+			buf = append(buf, "int")
+		case 'n':
+			buf = append(buf, "number")
+		case 'b':
+			buf = append(buf, "bool")
+		case 's':
+			buf = append(buf, "string")
+		case 'o':
+			buf = append(buf, "object")
+		case 'N':
+			buf = append(buf, "nil")
+		case 'E':
+			buf = append(buf, "@error")
+		case 'B':
+			buf = append(buf, "@bytes")
+		case 'R':
+			buf = append(buf, "Reader")
+		case 'W':
+			buf = append(buf, "Writer")
+		case 'C':
+			buf = append(buf, "Closer")
+		default:
+			buf = append(buf, "any")
+		}
+	}
+	return "<" + strings.Join(buf, ",") + ">"
 }
 
 type shaperOr struct {
@@ -258,7 +306,7 @@ func shapeNextToken(s string) (token, rest string) {
 
 var shapeCache sync.Map
 
-func Shape(s string) func(v Value) error {
+func NewShape(s string) func(v Value) error {
 	var until byte
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
@@ -325,7 +373,7 @@ func shapeScan(p string, s *string, until byte) shape {
 			sa.add(shapeScan(p, s, '>'))
 		case ':':
 		case '@':
-			sa2 := &shaperNative{name: token[1:]}
+			sa2 := &shaperPrototype{name: token[1:]}
 			if sa == nil {
 				return sa2
 			}
@@ -342,8 +390,22 @@ func shapeScan(p string, s *string, until byte) shape {
 	return sa
 }
 
+func TestShapeFast(v Value, shape string) (err error) {
+	switch shape[0] {
+	case '(', '[', '{', '<':
+		err = NewShape(shape)(v)
+	case '@':
+		sp := shaperPrototype{name: shape[1:]}
+		err = sp.assert(v, shape)
+	default:
+		sp := shaperPrimitive{verbs: shape}
+		err = sp.assert(v, shape)
+	}
+	return
+}
+
 func (v Value) AssertShape(shape, msg string) Value {
-	if err := Shape(shape)(v); err != nil {
+	if err := TestShapeFast(v, shape); err != nil {
 		if msg == "" {
 			panic(err)
 		}

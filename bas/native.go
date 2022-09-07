@@ -144,7 +144,7 @@ func init() {
 		sgArrayNext,
 	}
 	*stringsArrayMeta = NativeMeta{
-		"[]string",
+		"strings",
 		Proto.Array,
 		func(a *Native) int { return len((a.any).([]string)) },
 		func(a *Native) int { return cap((a.any).([]string)) },

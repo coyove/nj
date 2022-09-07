@@ -61,7 +61,7 @@ func init() {
 			e.A = NewNativeWithMeta(&ioReadlinesStruct{
 				rd:    bufio.NewReader(e.A.Reader()),
 				delim: e.Get(0).NilStr("\n")[0],
-				bytes: e.Get(1).NilBool(),
+				bytes: e.Shape(1, "Nb").IsTrue(),
 			}, ioReadlinesIter).ToValue()
 		})
 

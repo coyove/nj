@@ -47,7 +47,7 @@ func init() {
 		ToValue())
 	bas.AddGlobalMethod("loadfile", func(e *bas.Env) {
 		path := e.Str(0)
-		if e.Get(1).NilBool() && e.MustProgram().File != "" {
+		if e.Shape(1, "Nb").IsTrue() && e.MustProgram().File != "" {
 			path = filepath.Join(filepath.Dir(e.MustProgram().File), path)
 		}
 		e.A = MustRun(LoadFile(path, &LoadOptions{
@@ -57,7 +57,7 @@ func init() {
 	})
 	bas.AddGlobal("eval", bas.Func("eval", func(e *bas.Env) {
 		p, err := LoadString(e.Str(0), &LoadOptions{
-			Globals: e.Get(1).NilObject(nil),
+			Globals: e.Shape(1, "No").Object(),
 		})
 		internal.PanicErr(err)
 		e.A = valueOrPanic(p.Run())
@@ -105,17 +105,20 @@ func init() {
 		e.A = bas.NewObject(1).SetPrototype(e.A.Object()).SetProp("_rx", bas.ValueOf(rx)).ToValue()
 	}).Object().
 		SetMethod("match", func(e *bas.Env) {
-			e.A = bas.Bool(e.ThisProp("_rx").(*regexp.Regexp).MatchString(e.Str(0)))
+			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
+			e.A = bas.Bool(rx.MatchString(e.Str(0)))
 		}).
 		SetMethod("find", func(e *bas.Env) {
-			e.A = bas.NewNative(e.ThisProp("_rx").(*regexp.Regexp).FindStringSubmatch(e.Str(0))).ToValue()
+			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
+			e.A = bas.NewNative(rx.FindStringSubmatch(e.Str(0))).ToValue()
 		}).
 		SetMethod("findall", func(e *bas.Env) {
-			m := e.ThisProp("_rx").(*regexp.Regexp).FindAllStringSubmatch(e.Str(0), e.Get(1).NilInt(-1))
-			e.A = bas.NewNative(m).ToValue()
+			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
+			e.A = bas.NewNative(rx.FindAllStringSubmatch(e.Str(0), e.Get(1).NilInt(-1))).ToValue()
 		}).
 		SetMethod("replace", func(e *bas.Env) {
-			e.A = bas.Str(e.ThisProp("_rx").(*regexp.Regexp).ReplaceAllString(e.Str(0), e.Str(1)))
+			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
+			e.A = bas.Str(rx.ReplaceAllString(e.Str(0), e.Str(1)))
 		}).
 		ToValue())
 
@@ -246,8 +249,8 @@ func init() {
 		SetProp("shell", bas.Func("shell", func(e *bas.Env) {
 			win := runtime.GOOS == "windows"
 			p := exec.Command(internal.IfStr(win, "cmd", "sh"), internal.IfStr(win, "/c", "-c"), e.Str(0))
-			opt := e.Get(1).NilObject(nil)
-			opt.Prop("env").NilObject(nil).Foreach(func(k bas.Value, v *bas.Value) bool {
+			opt := e.Shape(1, "No").Object()
+			opt.Prop("env").AssertShape("No", "environment").Object().Foreach(func(k bas.Value, v *bas.Value) bool {
 				p.Env = append(p.Env, k.String()+"="+v.String())
 				return true
 			})
@@ -397,12 +400,12 @@ func init() {
 		to := args.Prop("timeout").NilFloat64(1 << 30)
 		method := strings.ToUpper(args.Find(bas.Str("method")).NilStr("GET"))
 
-		u, err := url.Parse(args.Find(bas.Str("url")).NilStr("bad://%url%"))
+		u, err := url.Parse(args.Find(bas.Str("url")).AssertType(typ.String, "http URL").Str())
 		internal.PanicErr(err)
 
 		addKV := func(k string, add func(k, v string)) {
-			x := args.Find(bas.Str(k))
-			x.NilObject(nil).Foreach(func(k bas.Value, v *bas.Value) bool { add(k.String(), v.String()); return true })
+			x := args.Find(bas.Str(k)).AssertShape("No", k)
+			x.Object().Foreach(func(k bas.Value, v *bas.Value) bool { add(k.String(), v.String()); return true })
 		}
 
 		additionalQueries := u.Query()
@@ -436,6 +439,7 @@ func init() {
 			if x := args.Prop("multipart"); x.Type() == typ.Object {
 				x.Object().Foreach(func(k bas.Value, v *bas.Value) bool {
 					key, rd := k.String(), *v
+					rd.AssertShape("<s,(s,R)>", "http form data format")
 					if rd.Type() == typ.Native && bas.Len(rd) == 2 { // [filename, reader]
 						part, err := writer.CreateFormFile(key, rd.Native().Get(0).NilStr(""))
 						internal.PanicErr(err)
@@ -517,8 +521,9 @@ func init() {
 		SetProp("pathescape", bas.Func("pathescape", func(e *bas.Env) { e.A = bas.Str(url.PathEscape(e.Str(0))) })).
 		SetProp("pathunescape", bas.Func("pathunescape", func(e *bas.Env) { e.A = valueOrPanic(url.PathUnescape(e.Str(0))) }))
 	for _, m := range []string{"get", "post", "put", "delete", "head", "patch"} {
+		m := m
 		httpLib = httpLib.SetMethod(m, func(e *bas.Env) {
-			ex := e.Get(1).NilObject(nil)
+			ex := e.Shape(1, "No").Object()
 			e.A = e.Object(-1).Call(e, bas.NewObject(0).SetProp("method", bas.Str(m)).SetProp("url", e.Get(0)).Merge(ex).ToValue())
 		})
 	}

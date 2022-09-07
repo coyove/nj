@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"strconv"
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
@@ -35,17 +34,6 @@ func (v Value) NilStr(defaultValue string) string {
 	}
 }
 
-func (v Value) NilBool() bool {
-	switch t := Value(v).Type(); t {
-	case typ.Number, typ.Bool:
-		return Value(v).IsTrue()
-	case typ.Nil:
-		return false
-	default:
-		panic("NilBool: expects boolean or nil, got " + detail(Value(v)))
-	}
-}
-
 func (v Value) NilInt64(defaultValue int64) int64 {
 	switch t := Value(v).Type(); t {
 	case typ.Number:
@@ -69,42 +57,6 @@ func (v Value) NilFloat64(defaultValue float64) float64 {
 		return defaultValue
 	default:
 		panic("NilFloat64: expects float number or nil, got " + detail(Value(v)))
-	}
-}
-
-func (v Value) NilArray(minSize int) []Value {
-	switch t := Value(v).Type(); t {
-	case typ.Nil:
-		if minSize <= 0 {
-			return nil
-		}
-	case typ.Native:
-		if a, ok := v.Native().Unwrap().([]Value); ok && len(a) >= minSize {
-			return a
-		}
-	}
-	panic("NilArray: expects array with at least " + strconv.Itoa(minSize) + " values, got " + detail(Value(v)))
-}
-
-func (v Value) NilNative(defaultValue *Native) *Native {
-	switch t := Value(v).Type(); t {
-	case typ.Native:
-		return Value(v).Native()
-	case typ.Nil:
-		return defaultValue
-	default:
-		panic("NilNative: expects native or nil, got " + detail(Value(v)))
-	}
-}
-
-func (v Value) NilObject(defaultValue *Object) *Object {
-	switch t := Value(v).Type(); t {
-	case typ.Object:
-		return Value(v).Object()
-	case typ.Nil:
-		return defaultValue
-	default:
-		panic("NilObject: expects object or nil, got " + detail(Value(v)))
 	}
 }
 
