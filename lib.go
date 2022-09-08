@@ -537,7 +537,7 @@ func init() {
 
 	bas.AddGlobalMethod("buffer", func(e *bas.Env) {
 		b := &internal.LimitedBuffer{Limit: e.IntDefault(1, 0)}
-		b.Write(bas.ToReadonlyBytes(e.Get(0)))
+		bas.Write(b, e.Get(0))
 		e.A = bas.NewNativeWithMeta(b, bufferMeta).ToValue()
 	})
 }

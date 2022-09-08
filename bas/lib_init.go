@@ -205,7 +205,7 @@ func init() {
 		SetProp("write", Func("write", func(e *Env) {
 			w := e.Get(0).Writer()
 			for _, a := range e.Stack()[1:] {
-				w.Write(ToReadonlyBytes(a))
+				Write(w, a)
 			}
 		})).
 		ToValue())

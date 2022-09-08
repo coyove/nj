@@ -173,7 +173,7 @@ f1.close()
 f2.write(" world")
 f2.close()
 
-assert(open("tests/b.txt").read(), "hello world")
+assert(open("tests/b.txt").read().unsafestr(), "hello world")
 open.close()
 
 
@@ -183,7 +183,7 @@ f2.pipe(f1)
 f1.close()
 f2.close()
 
-assert(open("tests/b.txt").read(), "hello worldhello zzz")
+assert(open("tests/b.txt").read().unsafestr(), "hello worldhello zzz")
 open.close()
 
 os.remove("tests/a.txt")

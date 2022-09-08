@@ -46,15 +46,26 @@ func init() {
 
 	Proto.Reader.Proto.
 		SetMethod("read", func(e *Env) {
-			buf := ioRead(e)
-			_ = buf == nil && e.SetA(Nil) || e.SetA(UnsafeStr(buf))
-		}).
-		SetMethod("readbytes", func(e *Env) {
-			buf := ioRead(e)
+			buf := func(e *Env) []byte {
+				f := e.A.Reader()
+				if n := e.Get(0); n.Type() == typ.Number {
+					p := make([]byte, n.Int())
+					rn, err := f.Read(p)
+					if err == nil || rn > 0 {
+						return p[:rn]
+					} else if err == io.EOF {
+						return nil
+					}
+					panic(err)
+				}
+				buf, err := ioutil.ReadAll(f)
+				internal.PanicErr(err)
+				return buf
+			}(e)
 			_ = buf == nil && e.SetA(Nil) || e.SetA(Bytes(buf))
 		}).
-		SetMethod("readbuf", func(e *Env) {
-			rn, err := e.A.Reader().Read(e.Native(0).Unwrap().([]byte))
+		SetMethod("read2", func(e *Env) {
+			rn, err := e.A.Reader().Read(e.Shape(0, "B").Native().Unwrap().([]byte))
 			e.A = Array(Int(rn), Error(e, err)) // return in Go style
 		}).
 		SetMethod("readlines", func(e *Env) {
@@ -67,17 +78,12 @@ func init() {
 
 	Proto.Writer.Proto.
 		SetMethod("write", func(e *Env) {
-			wn, err := e.A.Writer().Write(ToReadonlyBytes(e.Get(0)))
+			wn, err := Write(e.A.Writer(), e.Get(0))
 			internal.PanicErr(err)
 			e.A = Int(wn)
 		}).
-		SetMethod("writebytes", func(e *Env) {
-			wn, err := e.A.Writer().Write(ToReadonlyBytes(e.Get(0)))
-			internal.PanicErr(err)
-			e.A = Int(wn)
-		}).
-		SetMethod("writebuf", func(e *Env) {
-			wn, err := e.A.Writer().Write(ToReadonlyBytes(e.Get(0)))
+		SetMethod("write2", func(e *Env) {
+			wn, err := Write(e.A.Writer(), e.Get(0))
 			e.A = Array(Int(wn), Error(e, err))
 		}).
 		SetMethod("pipe", func(e *Env) {
@@ -214,23 +220,6 @@ func (m valueIO) Close() error {
 		}
 	}
 	return fmt.Errorf("closer not implemented")
-}
-
-func ioRead(e *Env) []byte {
-	f := e.A.Reader()
-	if n := e.Get(0); n.Type() == typ.Number {
-		p := make([]byte, n.Int())
-		rn, err := f.Read(p)
-		if err == nil || rn > 0 {
-			return p[:rn]
-		} else if err == io.EOF {
-			return nil
-		}
-		panic(err)
-	}
-	buf, err := ioutil.ReadAll(f)
-	internal.PanicErr(err)
-	return buf
 }
 
 var ioReadlinesIter *NativeMeta

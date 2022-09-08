@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"unsafe"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -43,31 +42,19 @@ func ToErrorRootCause(v Value) interface{} {
 	panic("ToErrorRootCause: not error: " + detail(v))
 }
 
-func ToBytes(v Value) []byte {
-	if IsBytes(v) {
-		return v.Native().Unwrap().([]byte)
-	}
-	panic("ToBytes: not []byte: " + detail(v))
-}
-
-func ToReadonlyBytes(v Value) []byte {
+func Write(w io.Writer, v Value) (int, error) {
 	switch v.Type() {
 	case typ.Nil:
-		return nil
+		return 0, nil
 	case typ.Native:
 		if v.Native().meta.Proto.HasPrototype(bytesArrayMeta.Proto) {
-			return Value(v).Native().Unwrap().([]byte)
+			return w.Write(v.Native().Unwrap().([]byte))
 		}
 	case typ.String:
-		var s struct {
-			a string
-			i int
-		}
-		s.a = v.Str()
-		s.i = len(s.a)
-		return *(*[]byte)(unsafe.Pointer(&s))
+		return internal.WriteString(w, v.Str())
 	}
-	panic("ToReadonlyBytes: not []byte or string: " + detail(v))
+	v.Stringify(w, typ.MarshalToString)
+	return 1, nil
 }
 
 func IsBytes(v Value) bool {

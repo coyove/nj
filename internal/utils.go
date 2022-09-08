@@ -88,8 +88,12 @@ func IfInt(v bool, t, f int) int {
 }
 
 func WriteString(w io.Writer, s string) (int, error) {
+	type a struct {
+		b string
+		c int
+	}
 	var x []byte
-	*(*string)(unsafe.Pointer(&x)) = s
+	*(*a)(unsafe.Pointer(&x)) = a{s, len(s)}
 	return w.Write(x)
 }
 
