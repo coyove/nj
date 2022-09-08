@@ -331,3 +331,8 @@ if k == 'b' then m.delete(k) end
 end
 assert(#m, 3)
 assert(not m.contains('b'))
+
+function func1() end
+function func2() end
+function func1.a() end
+function func2.a() end

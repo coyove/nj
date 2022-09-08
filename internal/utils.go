@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	NewFunc    func(name string, variadic bool, np byte, ss uint16, locals []string, code Packet) interface{}
+	NewFunc    func(name string, variadic bool, np byte, ss uint16, locals, caps []string, code Packet) interface{}
 	NewProgram func(coreStack, top, symbols, funcs interface{}) interface{}
 
 	unnamedFuncIndex int64

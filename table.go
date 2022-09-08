@@ -62,6 +62,12 @@ func (table *symTable) symbolsToDebugLocals() []string {
 		x[addr.Int64()] = sym.Str()
 		return true
 	})
+	for _, s := range table.maskedSym {
+		s.Foreach(func(sym bas.Value, addr *bas.Value) bool {
+			x[addr.Int64()] = sym.Str()
+			return true
+		})
+	}
 	return x
 }
 
@@ -435,6 +441,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 			0,
 			table.vp,
 			table.symbolsToDebugLocals(),
+			nil,
 			table.codeSeg,
 		),
 		&table.sym,

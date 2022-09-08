@@ -140,24 +140,28 @@ func (sa *shaperPrototype) add(s shape) {
 }
 
 func (sa *shaperPrototype) assert(v Value, msg string) error {
+	return assertShapePrototype(v, sa.name, msg)
+}
+
+func assertShapePrototype(v Value, name, msg string) error {
 	switch v.Type() {
 	case typ.Native:
-		if v.Native().meta.Name == sa.name {
+		if v.Native().meta.Name == name {
 			return nil
 		}
 		for p := v.Native().meta.Proto; p != nil; p = p.parent {
-			if p.Name() == sa.name {
+			if p.Name() == name {
 				return nil
 			}
 		}
-		return fmt.Errorf("pattern %q expects native of prototype/name %v", msg, sa.name)
+		return fmt.Errorf("pattern %q expects native of prototype/name %v", msg, name)
 	case typ.Object:
 		for p := v.Object(); p != nil; p = p.parent {
-			if p.Name() == sa.name {
+			if p.Name() == name {
 				return nil
 			}
 		}
-		return fmt.Errorf("pattern %q expects object of prototype %v", msg, sa.name)
+		return fmt.Errorf("pattern %q expects object of prototype %v", msg, name)
 	default:
 		return fmt.Errorf("pattern %q expects native or object, got %v", msg, detail(v))
 	}
@@ -175,57 +179,54 @@ func (sa *shaperPrimitive) add(s shape) {
 }
 
 func (sa *shaperPrimitive) assert(v Value, msg string) error {
-	if sa.verbs == "" {
+	return assertShapePrimitive(v, sa.verbs, msg)
+}
+
+func assertShapePrimitive(v Value, verbs, msg string) error {
+	if verbs == "" || verbs == "_" || verbs == "v" {
 		return nil
 	}
-	ok := false
-	any := strings.IndexByte(sa.verbs, '_') >= 0 || strings.IndexByte(sa.verbs, 'v') >= 0
 
+	bm := [128]bool{}
+	for i := 0; i < len(verbs); i++ {
+		bm[verbs[i]] = true
+	}
+
+	ok := false
 	switch v.Type() {
 	case typ.Nil:
-		ok = strings.IndexByte(sa.verbs, 'N') >= 0
+		ok = bm['N']
 	case typ.Bool:
-		ok = strings.IndexByte(sa.verbs, 'b') >= 0
+		ok = bm['b']
 	case typ.Number:
-		if strings.IndexByte(sa.verbs, 'i') >= 0 {
+		if bm['i'] {
 			ok = v.IsInt64()
 		} else {
-			ok = strings.IndexByte(sa.verbs, 'n') >= 0
+			ok = bm['n']
 		}
 	case typ.String:
-		ok = strings.IndexByte(sa.verbs, 's') >= 0
+		ok = bm['s'] || bm['R']
 	case typ.Object:
-		ok = strings.IndexByte(sa.verbs, 'o') >= 0
-	}
-
-	ok = ok || any
-
-	if !ok && IsError(v) && strings.IndexByte(sa.verbs, 'E') >= 0 {
-		ok = true
-	}
-	if !ok && IsBytes(v) && strings.IndexByte(sa.verbs, 'B') >= 0 {
-		ok = true
-	}
-	if !ok && strings.IndexByte(sa.verbs, 'R') >= 0 {
-		switch v.Interface().(type) {
-		case string, []byte, io.Reader, *Object:
-			ok = true
-		}
-	}
-	if !ok && strings.IndexByte(sa.verbs, 'W') >= 0 {
-		switch v.Interface().(type) {
-		case io.Writer, *Object:
-			ok = true
-		}
-	}
-	if !ok && strings.IndexByte(sa.verbs, 'C') >= 0 {
-		switch v.Interface().(type) {
-		case io.Closer, *Object:
-			ok = true
+		ok = bm['o'] || bm['R'] || bm['W'] || bm['C']
+	case typ.Native:
+		if bm['E'] {
+			ok = IsError(v)
+		} else if bm['B'] {
+			ok = IsBytes(v)
+		} else if bm['C'] {
+			_, ok = v.Native().Unwrap().(io.Closer)
+		} else if bm['W'] {
+			_, ok = v.Native().Unwrap().(io.Writer)
+		} else if bm['R'] {
+			x := v.Native().Unwrap()
+			_, ok = x.(io.Reader)
+			if !ok {
+				_, ok = x.([]byte)
+			}
 		}
 	}
 	if !ok {
-		return fmt.Errorf("pattern %q expects %v, got %v", msg, sa, detail(v))
+		return fmt.Errorf("pattern %q expects %v, got %v", msg, verbs, detail(v))
 	}
 	return nil
 }
@@ -395,11 +396,9 @@ func TestShapeFast(v Value, shape string) (err error) {
 	case '(', '[', '{', '<':
 		err = NewShape(shape)(v)
 	case '@':
-		sp := shaperPrototype{name: shape[1:]}
-		err = sp.assert(v, shape)
+		err = assertShapePrototype(v, shape[1:], shape)
 	default:
-		sp := shaperPrimitive{verbs: shape}
-		err = sp.assert(v, shape)
+		err = assertShapePrimitive(v, shape, shape)
 	}
 	return
 }

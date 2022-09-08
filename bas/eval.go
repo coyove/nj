@@ -304,7 +304,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpLoad:
 			switch a, idx := env._get(opa), env._get(opb); a.Type() {
 			case typ.Object:
-				env.A = a.Object().Find(idx)
+				env.A = a.Object().Get(idx)
 			case typ.Native:
 				if idx.IsInt64() {
 					env.A = a.Native().Get(idx.Int())
@@ -318,7 +318,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 						env.A = Int64(int64(s[idx.UnsafeInt64()]))
 					}
 				} else {
-					env.A = setObjectRecv(Proto.Str.Find(idx), a)
+					env.A = setObjectRecv(Proto.Str.Get(idx), a)
 				}
 			default:
 				env.A = Nil
@@ -375,7 +375,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			if opa == typ.RegA {
 				env.A = K.ToValue()
 			} else {
-				env.A = env._get(opa).Object().Copy(false).ToValue()
+				env.A = env._get(opa).Object().Copy(true).ToValue()
 			}
 		case typ.OpCall, typ.OpTryCall, typ.OpTailCall:
 			a := env._get(opa)

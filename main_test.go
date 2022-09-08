@@ -458,7 +458,7 @@ func TestACall(t *testing.T) {
 	end
 	a = new(m, {a=10})
     return a`, nil))
-	v := foo.Object().Prop("pow2").Object().Call(nil)
+	v := foo.Object().Get(bas.Str("pow2")).Object().Call(nil)
 	if v.Int64() != 100 {
 		t.Fatal(v)
 	}
@@ -469,7 +469,7 @@ func TestACall(t *testing.T) {
 			SetProp("m", bas.NewObject(0).SetPrototype(bas.NewObject(0).
 				SetProp("a", bas.Int64(0)).
 				SetMethod("pow2", func(e *bas.Env) {
-					i := e.Object(-1).Prop("a").Int64()
+					i := e.Object(-1).Get(bas.Str("a")).Int64()
 					e.A = bas.Int64(i * i)
 				})).ToValue()),
 	}))

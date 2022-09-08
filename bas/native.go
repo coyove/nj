@@ -642,7 +642,7 @@ func sgMapNext(a *Native, kv Value) Value {
 }
 
 func sgGetKey(a *Native, k Value) Value {
-	f := a.meta.Proto.Find(k)
+	f := a.meta.Proto.Get(k)
 	if f != Nil {
 		f = setObjectRecv(f, a.ToValue())
 	}

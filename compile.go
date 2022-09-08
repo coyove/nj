@@ -247,7 +247,7 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 			n = p.Nodes()[1]
 			varargIdx = i
 		}
-		if newtable.sym.Contains(n.Value, false) {
+		if newtable.sym.Contains(n.Value) {
 			table.panicnode(nodes[1], "duplicated parameter %q", n.Value.Str())
 		}
 		newtable.put(n.Value, uint16(i))
@@ -267,6 +267,7 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 		}, newtable.codeSeg.Code...)
 		newtable.codeSeg.Pos.Offset = 1
 	}
+
 	if a := newtable.sym.Get(staticSelf); a != bas.Nil {
 		newtable.codeSeg.Code = append([]typ.Inst{
 			{Opcode: typ.OpFunction, A: typ.RegA},
@@ -278,12 +279,18 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 	code := newtable.codeSeg
 	code.WriteInst(typ.OpRet, typ.RegGlobalFlag, 0) // return nil
 
+	var captureList []string
+	if table.global != nil {
+		captureList = table.symbolsToDebugLocals()
+	}
+
 	obj := internal.NewFunc(
 		nodes[1].Sym(),
 		varargIdx >= 0,
 		byte(len(params.Nodes())),
 		newtable.vp,
 		newtable.symbolsToDebugLocals(),
+		captureList,
 		code,
 	).(*bas.Object)
 	//funcIdx := uint16(len(table.getGlobal().funcs))
@@ -397,7 +404,7 @@ func compileFreeAddr(table *symTable, nodes []parser.Node) uint16 {
 		if len(table.maskedSym) > 0 {
 			t = table.maskedSym[len(table.maskedSym)-1]
 		}
-		if !t.Contains(s, false) {
+		if !t.Contains(s) {
 			internal.ShouldNotHappen(nodes)
 		}
 		t.Delete(s)

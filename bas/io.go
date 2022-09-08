@@ -60,7 +60,7 @@ func init() {
 		SetMethod("readlines", func(e *Env) {
 			e.A = NewNativeWithMeta(&ioReadlinesStruct{
 				rd:    bufio.NewReader(e.A.Reader()),
-				delim: e.Get(0).NilStr("\n")[0],
+				delim: e.StrDefault(0, "\n", 1)[0],
 				bytes: e.Shape(1, "Nb").IsTrue(),
 			}, ioReadlinesIter).ToValue()
 		})
@@ -83,8 +83,8 @@ func init() {
 		SetMethod("pipe", func(e *Env) {
 			var wn int64
 			var err error
-			if n := e.Get(1).NilInt64(0); n > 0 {
-				wn, err = io.CopyN(e.Get(-1).Writer(), e.Get(0).Reader(), n)
+			if n := e.IntDefault(1, 0); n > 0 {
+				wn, err = io.CopyN(e.Get(-1).Writer(), e.Get(0).Reader(), int64(n))
 			} else {
 				wn, err = io.Copy(e.Get(-1).Writer(), e.Get(0).Reader())
 			}
@@ -147,26 +147,24 @@ func (m valueIO) Read(p []byte) (int, error) {
 			return rd.Read(p)
 		}
 	case typ.Object:
-		if rb := Value(m).Object().Prop("readbuf"); rb.IsObject() {
-			t := rb.Object().Call(nil, Bytes(p)).AssertShape("(i, Ev)", "Reader.readbuf").Native()
+		if rb := Value(m).Object().Get(Str("read2")); rb.IsObject() {
+			t := rb.Object().Call(nil, Bytes(p)).AssertShape("(i, Ev)", "Reader.read2").Native()
 			if IsError(t.Get(1)) {
 				return t.Get(0).Int(), ToErrorRootCause(t.Get(1)).(error)
 			}
 			return t.Get(0).Int(), nil
 		}
-		if rb := Value(m).Object().Prop("readbytes"); rb.IsObject() {
-			v := rb.Object().Call(nil, Int(len(p)))
-			if v == Nil {
+		if rb := Value(m).Object().Get(Str("read")); rb.IsObject() {
+			switch v := rb.Object().Call(nil, Int(len(p))); v.Type() {
+			case typ.Nil:
 				return 0, io.EOF
+			case typ.String:
+				return copy(p, v.AssertShape("sB", "Reader.read").Str()), nil
+			case typ.Native:
+				return copy(p, v.AssertShape("sB", "Reader.read").Native().Unwrap().([]byte)), nil
+			default:
+				v.AssertShape("sB", "Reader.read")
 			}
-			return copy(p, v.AssertPrototype(Proto.Bytes, "Reader.readbytes").Native().Unwrap().([]byte)), nil
-		}
-		if rb := Value(m).Object().Prop("read"); rb.IsObject() {
-			v := rb.Object().Call(nil, Int(len(p)))
-			if v == Nil {
-				return 0, io.EOF
-			}
-			return copy(p, v.AssertType(typ.String, "Reader.read").Str()), nil
 		}
 	}
 	return 0, fmt.Errorf("reader not implemented")
@@ -183,22 +181,15 @@ func (m valueIO) Write(p []byte) (int, error) {
 			return rd.Write(p)
 		}
 	case typ.Object:
-		if rb := Value(m).Object().Prop("write"); rb.IsObject() {
-			v := rb.Object().Call(nil, UnsafeStr(p))
+		if rb := Value(m).Object().Get(Str("write")); rb.IsObject() {
+			v := rb.Object().Call(nil, Bytes(p))
 			if IsError(v) {
 				return 0, ToError(v)
 			}
 			return v.AssertType(typ.Number, "Writer.write").Int(), nil
 		}
-		if rb := Value(m).Object().Prop("writebytes"); rb.IsObject() {
-			v := rb.Object().Call(nil, Bytes(p))
-			if IsError(v) {
-				return 0, ToError(v)
-			}
-			return v.AssertType(typ.Number, "Writer.writebytes").Int(), nil
-		}
-		if rb := Value(m).Object().Prop("writebuf"); rb.IsObject() {
-			t := rb.Object().Call(nil, Bytes(p)).AssertShape("(i, Ev)", "Writer.writebuf").Native()
+		if rb := Value(m).Object().Get(Str("write2")); rb.IsObject() {
+			t := rb.Object().Call(nil, Bytes(p)).AssertShape("(i, Ev)", "Writer.write2").Native()
 			if IsError(t.Get(1)) {
 				return t.Get(0).Int(), ToErrorRootCause(t.Get(1)).(error)
 			}
@@ -215,7 +206,7 @@ func (m valueIO) Close() error {
 			return rd.Close()
 		}
 	case typ.Object:
-		if rb := Value(m).Object().Prop("close"); rb.IsObject() {
+		if rb := Value(m).Object().Get(Str("close")); rb.IsObject() {
 			if v := rb.Object().Call(nil); IsError(v) {
 				return ToError(v)
 			}

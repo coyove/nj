@@ -308,9 +308,13 @@ func (v Value) isSmallString() bool {
 // Str returns value as a string, Type() should be checked beforehand.
 func (v Value) Str() string {
 	if v.isSmallString() {
+		sz := (uintptr(v.p) - uintptr(smallStrMarker)) / 8
+		if sz == 0 {
+			return ""
+		}
 		buf := make([]byte, 8)
 		binary.BigEndian.PutUint64(buf, v.v)
-		buf = buf[:(uintptr(v.p)-uintptr(smallStrMarker))/8]
+		buf = buf[:sz]
 		return *(*string)(unsafe.Pointer(&buf))
 	}
 	return *(*string)(v.p)

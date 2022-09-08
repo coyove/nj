@@ -112,6 +112,7 @@ for i=0,10 do assert(foo3[i], i) end
 oneline = {}
 
 function oneline.write(b)
+    b = b.unsafestr()
     x = #b
     b = b.replace('\n', '').replace('\t', '')
     b = re([[\s+]]).replace(b, '')
@@ -186,7 +187,7 @@ assert(f(2), 4)
 
 function clsrec(a)
     a += 1
-    local N = function()
+    function N()
         if self.a == 1 then return 1 end 
         self.a -= 1
         return self.a * self.N()
@@ -194,6 +195,23 @@ function clsrec(a)
     return N.closure()
 end
 assert(clsrec(5)(), 120)
+
+function clsarray(a, n)
+    local res = []
+    for i=0,n do
+        res.append(function()
+            do
+                return self.a * (self.i + 1)
+            end
+        end.closure())
+    end
+    return res
+end
+assert(#clsarray.caplist(), 0)
+
+for i, f in clsarray(10, 10) do
+    assert(f(), (i + 1) * 10)
+end
 
 function createlinklist(a...)
     if #a == 0 then return end

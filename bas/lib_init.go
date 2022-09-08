@@ -57,7 +57,7 @@ func AddGlobalMethod(k string, f func(*Env)) {
 }
 
 func init() {
-	internal.NewFunc = func(f string, varg bool, np byte, ss uint16, locals []string, code internal.Packet) interface{} {
+	internal.NewFunc = func(f string, varg bool, np byte, ss uint16, locals, caps []string, code internal.Packet) interface{} {
 		obj := NewObject(0)
 		obj.SetPrototype(Proto.Func)
 		obj.fun = &funcbody{}
@@ -68,6 +68,7 @@ func init() {
 		obj.fun.codeSeg = code
 		obj.fun.locals = locals
 		obj.fun.method = strings.Contains(f, ".")
+		obj.fun.caps = caps
 		return obj
 	}
 	internal.NewProgram = func(coreStack, top, symbols, funcs interface{}) interface{} {
@@ -99,7 +100,7 @@ func init() {
 	AddGlobalMethod("createprototype", func(e *Env) {
 		e.A = Func(e.Str(0), func(e *Env) {
 			o := e.runtime.stack0.Callable
-			init := o.Prop("_init").Object()
+			init := o.Get(Str("_init")).Object()
 			n := o.Copy(true).SetPrototype(o)
 			callobj(init, e.runtime, e.top, nil, n.ToValue(), e.Stack()...)
 			e.A = n.ToValue()
@@ -143,7 +144,7 @@ func init() {
 		SetProp("trace", Func("trace", func(env *Env) {
 			stacks := env.runtime.Stacktrace(false)
 			lines := make([]Value, 0, len(stacks))
-			for i := len(stacks) - 1 - env.Get(0).NilInt(0); i >= 0; i-- {
+			for i := len(stacks) - 1 - env.IntDefault(0, 0); i >= 0; i-- {
 				r := stacks[i]
 				lines = append(lines, Str(r.Callable.fun.name), Int64(int64(r.sourceLine())), Int64(int64(r.Cursor-1)))
 			}
@@ -182,7 +183,7 @@ func init() {
 		if v := e.Get(0); v.Type() == typ.Number {
 			e.A = Int64(v.Int64())
 		} else {
-			v, err := strconv.ParseInt(v.String(), e.Get(1).NilInt(0), 64)
+			v, err := strconv.ParseInt(v.String(), e.IntDefault(1, 0), 64)
 			internal.PanicErr(err)
 			e.A = Int64(v)
 		}
@@ -210,8 +211,7 @@ func init() {
 		ToValue())
 
 	ObjectProto = *NewNamedObject("object", 0).
-		SetMethod("new", func(e *Env) { e.A = NewObject(e.Get(0).NilInt(0)).ToValue() }).
-		SetMethod("find", func(e *Env) { e.A = e.Object(-1).Find(e.Get(0)) }).
+		SetMethod("new", func(e *Env) { e.A = NewObject(e.IntDefault(0, 0)).ToValue() }).
 		SetMethod("set", func(e *Env) { e.A = e.Object(-1).Set(e.Get(0), e.Get(1)) }).
 		SetMethod("get", func(e *Env) { e.A = e.Object(-1).Get(e.Get(0)) }).
 		SetMethod("delete", func(e *Env) { e.A = e.Object(-1).Delete(e.Get(0)) }).
@@ -242,9 +242,8 @@ func init() {
 			f := e.Object(0)
 			e.Object(-1).Foreach(func(k Value, v *Value) bool { return f.Call(e, k, *v) != False })
 		}).
-		SetMethod("contains", func(e *Env) {
-			e.A = Bool(e.Object(-1).Contains(e.Get(0), e.Shape(1, "Nb").IsTrue()))
-		}).
+		SetMethod("contains", func(e *Env) { e.A = Bool(e.Object(-1).Contains(e.Get(0))) }).
+		SetMethod("hasownproperty", func(e *Env) { e.A = Bool(e.Object(-1).HasOwnProperty(e.Get(0))) }).
 		SetMethod("merge", func(e *Env) { e.A = e.Object(-1).Merge(e.Object(0)).ToValue() }).
 		SetMethod("tostring", func(e *Env) {
 			p := &bytes.Buffer{}
@@ -261,6 +260,7 @@ func init() {
 		SetMethod("ismethod", func(e *Env) { e.A = Bool(e.Object(-1).fun.method) }).
 		SetMethod("isvarg", func(e *Env) { e.A = Bool(e.Object(-1).fun.varg) }).
 		SetMethod("argcount", func(e *Env) { e.A = Int(int(e.Object(-1).fun.numParams)) }).
+		SetMethod("caplist", func(e *Env) { e.A = ValueOf(e.Object(-1).fun.caps) }).
 		SetMethod("apply", func(e *Env) {
 			e.A = callobj(e.Object(-1), e.runtime, e.top, nil, e.Get(0), e.Stack()[1:]...)
 		}).
@@ -292,17 +292,17 @@ func init() {
 			if !e.Get(0).IsArray() {
 				e.Get(0).AssertType(typ.Object, "map")
 			}
-			e.A = multiMap(e, e.Object(-1), e.Get(0), e.Get(1).NilInt(1))
+			e.A = multiMap(e, e.Object(-1), e.Get(0), e.IntDefault(1, 1))
 		}).
 		SetMethod("closure", func(e *Env) {
 			scope := e.runtime.stack1.Callable
 			lambda := e.Object(-1).Merge(scope).Merge(e.Shape(0, "No").Object())
 			start := e.stackOffset() - uint32(scope.fun.stackSize)
-			for i, name := range scope.fun.locals {
+			for addr, name := range lambda.fun.caps {
 				if name == "" {
 					continue
 				}
-				lambda.SetProp(name, (*e.stack)[start+uint32(i)])
+				lambda.Set(Str(name), (*e.stack)[start+uint32(addr)])
 			}
 			e.A = lambda.ToValue()
 		}).
@@ -416,7 +416,9 @@ func init() {
 
 	*Proto.Bytes = *Func("bytes", func(e *Env) {
 		_ = e.Get(0).IsInt64() && e.SetA(ValueOf(make([]byte, e.Int(0)))) || e.SetA(ValueOf([]byte(e.Str(0))))
-	}).Object().SetPrototype(Proto.Array)
+	}).Object().
+		SetMethod("unsafestr", func(e *Env) { e.A = UnsafeStr(e.A.Native().Unwrap().([]byte)) }).
+		SetPrototype(Proto.Array)
 	AddGlobal("bytes", Proto.Bytes.ToValue())
 
 	*Proto.Error = *Func("error", func(e *Env) {
@@ -487,13 +489,13 @@ func init() {
 	AddGlobal("nativeptr", Proto.NativePtr.ToValue())
 
 	*Proto.NativeIntf = *NewNamedObject("nativeintf", 1).
-		SetProp("deref", Proto.NativePtr.Prop("deref")).
+		SetProp("deref", Proto.NativePtr.Get(Str("deref"))).
 		SetPrototype(Proto.Native)
 	AddGlobal("nativeintf", Proto.NativeIntf.ToValue())
 
 	*Proto.Channel = *Func("channel", func(e *Env) {
 		rv := reflect.ValueOf(e.Interface(0))
-		_ = rv.Kind() == reflect.Chan && e.SetA(ValueOf(rv.Interface())) || e.SetA(ValueOf(make(chan Value, e.Get(0).NilInt64(0))))
+		_ = rv.Kind() == reflect.Chan && e.SetA(ValueOf(rv.Interface())) || e.SetA(ValueOf(make(chan Value, e.IntDefault(0, 0))))
 	}).Object().
 		SetMethod("len", func(e *Env) { e.A = Int(e.Native(-1).Len()) }).
 		SetMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
@@ -563,7 +565,7 @@ func init() {
 		SetMethod("iequals", func(e *Env) { e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0))) }).
 		SetMethod("contains", func(e *Env) { e.A = Bool(strings.Contains(e.Str(-1), e.Str(0))) }).
 		SetMethod("split", func(e *Env) {
-			if n := e.Get(1).NilInt(0); n == 0 {
+			if n := e.IntDefault(1, 0); n == 0 {
 				e.A = NewNativeWithMeta(strings.Split(e.Str(-1), e.Str(0)), stringsArrayMeta).ToValue()
 			} else {
 				e.A = NewNativeWithMeta(strings.SplitN(e.Str(-1), e.Str(0), n), stringsArrayMeta).ToValue()
@@ -582,7 +584,7 @@ func init() {
 			e.A = UnsafeStr(buf.Bytes())
 		}).
 		SetMethod("replace", func(e *Env) {
-			e.A = Str(strings.Replace(e.Str(-1), e.Str(0), e.Str(1), e.Get(2).NilInt(-1)))
+			e.A = Str(strings.Replace(e.Str(-1), e.Str(0), e.Str(1), e.IntDefault(2, -1)))
 		}).
 		SetMethod("glob", func(e *Env) {
 			m, err := filepath.Match(e.Str(-1), e.Str(0))
@@ -590,7 +592,7 @@ func init() {
 			e.A = Bool(m)
 		}).
 		SetMethod("find", func(e *Env) {
-			start, end := e.Get(1).NilInt(0), e.Get(2).NilInt(Len(e.Get(-1)))
+			start, end := e.IntDefault(1, 0), e.IntDefault(2, Len(e.A))
 			e.A = Int(strings.Index(e.Str(-1)[start:end], e.Str(0)))
 		}).
 		SetMethod("findsub", func(e *Env) {
@@ -601,7 +603,7 @@ func init() {
 		SetMethod("findlast", func(e *Env) { e.A = Int(strings.LastIndex(e.Str(-1), e.Str(0))) }).
 		SetMethod("sub", func(e *Env) {
 			s := e.Str(-1)
-			st, en := e.Int(0), e.Get(1).NilInt(len(s))
+			st, en := e.Int(0), e.IntDefault(1, len(s))
 			for ; st < 0 && len(s) > 0; st += len(s) {
 			}
 			for ; en < 0 && len(s) > 0; en += len(s) {
@@ -609,7 +611,7 @@ func init() {
 			e.A = Str(s[st:en])
 		}).
 		SetMethod("trim", func(e *Env) {
-			cutset := e.Get(0).NilStr("")
+			cutset := e.StrDefault(0, "", 0)
 			_ = cutset == "" && e.SetA(Str(strings.TrimSpace(e.Str(-1)))) || e.SetA(Str(strings.Trim(e.Str(-1), e.Str(0))))
 		}).
 		SetMethod("trimprefix", func(e *Env) { e.A = Str(strings.TrimPrefix(e.Str(-1), e.Str(0))) }).

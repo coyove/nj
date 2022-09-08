@@ -150,6 +150,32 @@ func (env *Env) Bool(idx int) bool { return env.mustBe(typ.Bool, idx).Bool() }
 // Str returns value at 'idx' in current stack and asserts its Type() to be a string.
 func (env *Env) Str(idx int) string { return env.mustBe(typ.String, idx).String() }
 
+func (env *Env) StrDefault(idx int, defaultValue string, minLen int) (res string) {
+	v := env.Get(idx)
+	switch v.Type() {
+	case typ.String:
+		if Len(v) < minLen {
+			return defaultValue
+		}
+		return v.Str()
+	case typ.Nil:
+		return defaultValue
+	case typ.Native:
+		if buf, ok := v.Native().Unwrap().([]byte); ok {
+			if len(buf) < minLen {
+				return defaultValue
+			}
+			*(*[2]int)(unsafe.Pointer(&res)) = *(*[2]int)(unsafe.Pointer(&buf))
+			return
+		}
+	}
+	if minLen > 0 {
+		internal.Panic("expects argument #%d to be string and at least %db long, got %v", idx+1, minLen, detail(v))
+	}
+	internal.Panic("expects argument #%d to be string, bytes or nil, got %v", idx+1, detail(v))
+	return
+}
+
 // Num returns value at 'idx' in current stack and asserts its Type() to be a number.
 func (env *Env) Num(idx int) Value { return env.mustBe(typ.Number, idx) }
 
@@ -158,6 +184,17 @@ func (env *Env) Int64(idx int) int64 { return env.mustBe(typ.Number, idx).Int64(
 
 // Int returns value at 'idx' in current stack and asserts its Type() to be a number.
 func (env *Env) Int(idx int) int { return env.mustBe(typ.Number, idx).Int() }
+
+// IntDefault returns value at 'idx' in current stack and asserts its Type() to be a number.
+// If value is Nil, then 'defaultValue' will be returned.
+func (env *Env) IntDefault(idx int, defaultValue int) int {
+	if v := env.Get(idx); v.pType() == typ.Number {
+		return v.Int()
+	} else if v != Nil {
+		internal.Panic("expects argument #%d to be number or nil, got %v", idx+1, detail(v))
+	}
+	return defaultValue
+}
 
 // Float64 returns value at 'idx' in current stack and asserts its Type() to be a number.
 func (env *Env) Float64(idx int) float64 { return env.mustBe(typ.Number, idx).Float64() }
@@ -186,7 +223,7 @@ func (env *Env) Shape(idx int, s string) Value {
 
 // ThisProp returns value by property 'k' of 'this'.
 func (env *Env) ThisProp(k string) Value {
-	return env.Object(-1).Prop(k)
+	return env.Object(-1).Get(Str(k))
 }
 
 func (env *Env) mustBe(t typ.ValueType, idx int) (v Value) {

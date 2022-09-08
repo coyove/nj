@@ -83,11 +83,11 @@ func init() {
 		fmt.Fprintln(e.MustProgram().Stdout)
 	}))
 	bas.AddGlobalMethod("scanln", func(env *bas.Env) {
-		prompt, n := env.Get(0), env.Get(1)
-		fmt.Fprint(env.MustProgram().Stdout, prompt.NilStr(""))
+		prompt, n := env.StrDefault(0, "", 0), env.IntDefault(1, 1)
+		fmt.Fprint(env.MustProgram().Stdout, prompt)
 		var results []bas.Value
 		var r io.Reader = env.MustProgram().Stdin
-		for i := n.NilInt64(1); i > 0; i-- {
+		for i := n; i > 0; i-- {
 			var s string
 			if _, err := fmt.Fscan(r, &s); err != nil {
 				break
@@ -114,7 +114,7 @@ func init() {
 		}).
 		SetMethod("findall", func(e *bas.Env) {
 			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
-			e.A = bas.NewNative(rx.FindAllStringSubmatch(e.Str(0), e.Get(1).NilInt(-1))).ToValue()
+			e.A = bas.NewNative(rx.FindAllStringSubmatch(e.Str(0), e.IntDefault(1, -1))).ToValue()
 		}).
 		SetMethod("replace", func(e *bas.Env) {
 			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
@@ -143,7 +143,7 @@ func init() {
 		SetPrototype(bas.Proto.ReadWriteCloser.Proto))
 
 	bas.AddGlobal("open", bas.Func("open", func(e *bas.Env) {
-		path, flag, perm := e.Str(0), e.Get(1).NilStr("r"), e.Get(2).NilInt64(0644)
+		path, flag, perm := e.Str(0), e.StrDefault(1, "r", 1), e.IntDefault(2, 0644)
 		var opt int
 		for _, f := range flag {
 			switch f {
@@ -169,7 +169,7 @@ func init() {
 		e.A = bas.NewNativeWithMeta(f, fileMeta).ToValue()
 	}).Object().
 		SetMethod("close", func(e *bas.Env) {
-			if f, _ := e.Object(-1).Find(bas.Zero).Interface().(*os.File); f != nil {
+			if f, _ := e.Object(-1).Get(bas.Zero).Interface().(*os.File); f != nil {
 				internal.PanicErr(f.Close())
 			} else {
 				internal.Panic("no opened file yet")
@@ -182,7 +182,7 @@ func init() {
 		SetProp("NEG_INF", bas.Float64(math.Inf(-1))).
 		SetProp("PI", bas.Float64(math.Pi)).
 		SetProp("E", bas.Float64(math.E)).
-		SetProp("randomseed", bas.Func("randomseed", func(e *bas.Env) { rand.Seed(e.Get(0).NilInt64(1)) })).
+		SetProp("randomseed", bas.Func("randomseed", func(e *bas.Env) { rand.Seed(int64(e.IntDefault(0, 1))) })).
 		SetProp("random", bas.Func("random", func(e *bas.Env) {
 			switch len(e.Stack()) {
 			case 2:
@@ -232,7 +232,7 @@ func init() {
 		SetProp("pid", bas.Int(os.Getpid())).
 		SetProp("numcpus", bas.Int(runtime.NumCPU())).
 		SetProp("args", bas.ValueOf(os.Args)).
-		SetProp("exit", bas.Func("exit", func(e *bas.Env) { os.Exit(e.Get(0).NilInt(0)) })).
+		SetProp("exit", bas.Func("exit", func(e *bas.Env) { os.Exit(e.IntDefault(0, 0)) })).
 		SetProp("environ", bas.Func("environ", func(e *bas.Env) {
 			if env := os.Environ(); e.Get(0).IsTrue() {
 				obj := bas.NewObject(len(env))
@@ -250,24 +250,24 @@ func init() {
 			win := runtime.GOOS == "windows"
 			p := exec.Command(internal.IfStr(win, "cmd", "sh"), internal.IfStr(win, "/c", "-c"), e.Str(0))
 			opt := e.Shape(1, "No").Object()
-			opt.Prop("env").AssertShape("No", "environment").Object().Foreach(func(k bas.Value, v *bas.Value) bool {
+			opt.Get(bas.Str("env")).AssertShape("No", "environment").Object().Foreach(func(k bas.Value, v *bas.Value) bool {
 				p.Env = append(p.Env, k.String()+"="+v.String())
 				return true
 			})
 			stdout := &bytes.Buffer{}
 			p.Stdout, p.Stderr = stdout, stdout
-			p.Dir = opt.Prop("dir").NilStr("")
-			if tmp := opt.Prop("stdout"); tmp != bas.Nil {
+			p.Dir = opt.GetDefault(bas.Str("dir"), bas.NullStr).AssertShape("s", "directory").Str()
+			if tmp := opt.Get(bas.Str("stdout")); tmp != bas.Nil {
 				p.Stdout = tmp.Writer()
 			}
-			if tmp := opt.Prop("stderr"); tmp != bas.Nil {
+			if tmp := opt.Get(bas.Str("stderr")); tmp != bas.Nil {
 				p.Stderr = tmp.Writer()
 			}
-			if tmp := opt.Prop("stdin"); tmp != bas.Nil {
+			if tmp := opt.Get(bas.Str("stdin")); tmp != bas.Nil {
 				p.Stdin = tmp.Reader()
 			}
 
-			to := opt.Prop("timeout").NilFloat64(1 << 30)
+			to := opt.Get(bas.Str("timeout")).NilFloat64(1 << 30)
 			out := make(chan error)
 			go func() { out <- p.Run() }()
 			select {
@@ -372,7 +372,7 @@ func init() {
 		SetProp("sleep", bas.Func("sleep", func(e *bas.Env) { time.Sleep(time.Duration(e.Float64(0)*1e6) * 1e3) })).
 		SetProp("ymd", bas.Func("ymd", func(e *bas.Env) {
 			e.A = bas.ValueOf(time.Date(e.Int(0), time.Month(e.Int(1)), e.Int(2),
-				e.Get(3).NilInt(0), e.Get(4).NilInt(0), e.Get(5).NilInt(0), e.Get(6).NilInt(0), time.UTC))
+				e.IntDefault(3, 0), e.IntDefault(4, 0), e.IntDefault(5, 0), e.IntDefault(6, 0), time.UTC))
 		})).
 		SetProp("clock", bas.Func("clock", func(e *bas.Env) {
 			x := time.Now()
@@ -391,20 +391,20 @@ func init() {
 					tt = time.Now()
 				}
 			}
-			e.A = bas.Str(tt.Format(getTimeFormat(e.Get(0).NilStr(""))))
+			e.A = bas.Str(tt.Format(getTimeFormat(e.StrDefault(0, "", 0))))
 		})).
 		ToValue())
 
 	httpLib := bas.Func("http", func(e *bas.Env) {
 		args := e.Object(0)
-		to := args.Prop("timeout").NilFloat64(1 << 30)
-		method := strings.ToUpper(args.Find(bas.Str("method")).NilStr("GET"))
+		to := args.Get(bas.Str("timeout")).NilFloat64(1 << 30)
+		method := strings.ToUpper(args.GetDefault(bas.Str("method"), bas.Str("GET")).Str())
 
-		u, err := url.Parse(args.Find(bas.Str("url")).AssertType(typ.String, "http URL").Str())
+		u, err := url.Parse(args.Get(bas.Str("url")).AssertType(typ.String, "http URL").Str())
 		internal.PanicErr(err)
 
 		addKV := func(k string, add func(k, v string)) {
-			x := args.Find(bas.Str(k)).AssertShape("No", k)
+			x := args.Get(bas.Str(k)).AssertShape("No", k)
 			x.Object().Foreach(func(k bas.Value, v *bas.Value) bool { add(k.String(), v.String()); return true })
 		}
 
@@ -415,19 +415,19 @@ func init() {
 		var bodyReader io.Reader
 		dataForm, urlForm, jsonForm := (*multipart.Writer)(nil), false, false
 
-		if j := args.Prop("json"); j != bas.Nil {
+		if j := args.Get(bas.Str("json")); j != bas.Nil {
 			bodyReader = strings.NewReader(j.JSONString())
 			jsonForm = true
 		} else {
 			var form url.Values
-			if args.Contains(bas.Str("form"), false) {
+			if args.Contains(bas.Str("form")) {
 				form = url.Values{}
 				addKV("form", form.Add) // check "form"
 			}
 			urlForm = len(form) > 0
 			if urlForm {
 				bodyReader = strings.NewReader(form.Encode())
-			} else if rd := args.Prop("data"); rd != bas.Nil {
+			} else if rd := args.Get(bas.Str("data")); rd != bas.Nil {
 				bodyReader = rd.Reader()
 			}
 		}
@@ -436,12 +436,12 @@ func init() {
 			// Check form-data
 			payload := bytes.Buffer{}
 			writer := multipart.NewWriter(&payload)
-			if x := args.Prop("multipart"); x.Type() == typ.Object {
+			if x := args.Get(bas.Str("multipart")); x.Type() == typ.Object {
 				x.Object().Foreach(func(k bas.Value, v *bas.Value) bool {
 					key, rd := k.String(), *v
 					rd.AssertShape("<s,(s,R)>", "http form data format")
 					if rd.Type() == typ.Native && bas.Len(rd) == 2 { // [filename, reader]
-						part, err := writer.CreateFormFile(key, rd.Native().Get(0).NilStr(""))
+						part, err := writer.CreateFormFile(key, rd.Native().Get(0).Str())
 						internal.PanicErr(err)
 						_, err = io.Copy(part, rd.Native().Get(1).Reader())
 						internal.PanicErr(err)
@@ -478,15 +478,15 @@ func init() {
 		// Construct HTTP client
 		client := &http.Client{}
 		client.Timeout = time.Duration(to * float64(time.Second))
-		if v := args.Find(bas.Str("jar")); v.Type() == typ.Native {
+		if v := args.Get(bas.Str("jar")); v.Type() == typ.Native {
 			client.Jar, _ = v.Interface().(http.CookieJar)
 		}
-		if !args.Find(bas.Str("noredirect")).IsFalse() {
+		if !args.Get(bas.Str("noredirect")).IsFalse() {
 			client.CheckRedirect = func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse
 			}
 		}
-		if p := args.Find(bas.Str("proxy")).NilStr(""); p != "" {
+		if p := args.GetDefault(bas.Str("proxy"), bas.NullStr).Str(); p != "" {
 			client.Transport = &http.Transport{
 				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
 			}
@@ -500,14 +500,14 @@ func init() {
 				return err, err, err, err
 			}
 
-			if args.Prop("bodyreader").IsFalse() && args.Prop("br").IsFalse() {
+			if args.Get(bas.Str("br")).IsFalse() {
 				resp.Body.Close()
 			} else {
 				buf = bas.NewNativeWithMeta(resp.Body, bas.Proto.ReadCloser).ToValue()
 			}
 			return bas.Int(resp.StatusCode), bas.ValueOf(resp.Header), buf, bas.ValueOf(client.Jar)
 		}
-		if f := args.Prop("async"); f.IsObject() {
+		if f := args.Get(bas.Str("async")); f.IsObject() {
 			go func(e *bas.Env) {
 				code, hdr, buf, jar := send(e, false)
 				f.Object().Call(e, code, hdr, buf, jar)
@@ -536,7 +536,7 @@ func init() {
 		SetMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }))
 
 	bas.AddGlobalMethod("buffer", func(e *bas.Env) {
-		b := &internal.LimitedBuffer{Limit: e.Get(1).NilInt(0)}
+		b := &internal.LimitedBuffer{Limit: e.IntDefault(1, 0)}
 		b.Write(bas.ToReadonlyBytes(e.Get(0)))
 		e.A = bas.NewNativeWithMeta(b, bufferMeta).ToValue()
 	})

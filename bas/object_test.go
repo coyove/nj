@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/coyove/nj/internal"
+	"github.com/coyove/nj/typ"
 )
 
 func randString() string {
@@ -167,7 +168,7 @@ func benchmarkRHMap(b *testing.B, n int) {
 	}
 	for i := 0; i < b.N; i++ {
 		idx := rand.Intn(n)
-		if m.Find(Int64(int64(idx))) != Int64(int64(idx)) {
+		if m.Get(Int64(int64(idx))) != Int64(int64(idx)) {
 			b.Fatal(idx, m)
 		}
 	}
@@ -234,14 +235,14 @@ func TestRHMap(t *testing.T) {
 	fmt.Println(m.Len(), m.Size(), len(m2))
 
 	for k, v := range m2 {
-		if m.Find(Int64(k)).Int64() != v {
+		if m.Get(Int64(k)).Int64() != v {
 			m.Foreach(func(mk Value, mv *Value) bool {
 				if mk.Int64() == k {
 					t.Log(mk, *mv)
 				}
 				return true
 			})
-			t.Fatal(m.Find(Int64(k)), k, v)
+			t.Fatal(m.Get(Int64(k)), k, v)
 		}
 	}
 
@@ -378,7 +379,7 @@ func BenchmarkContains(b *testing.B) {
 		k2 = append(k2, Str(randString()))
 	}
 	for i := 0; i < b.N; i++ {
-		if m.Contains(k2[rand.Intn(len(k2))], false) {
+		if m.Contains(k2[rand.Intn(len(k2))]) {
 			b.Fatal()
 		}
 	}
@@ -663,5 +664,22 @@ func BenchmarkShape(b *testing.B) {
 	s := NewShape("[i,i]")
 	for i := 0; i < b.N; i++ {
 		s(v)
+	}
+}
+
+func BenchmarkShapeSimple(b *testing.B) {
+	v := Int(1)
+	for i := 0; i < b.N; i++ {
+		v.AssertShape("si", "")
+	}
+}
+
+func BenchmarkShapeType(b *testing.B) {
+	v := Int(1)
+	for i := 0; i < b.N; i++ {
+		switch v.Type() {
+		case typ.Number, typ.String:
+			v.AssertType(typ.Number, "")
+		}
 	}
 }

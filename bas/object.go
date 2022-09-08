@@ -95,18 +95,14 @@ func (m *Object) Clear() {
 	m.count = 0
 }
 
-// Prop finds property "k", short for Find(Str(k))
-func (m *Object) Prop(k string) (v Value) {
-	return m.Find(Str(k))
-}
-
-// SetProp sets property "k", short for Set(Str(k), v)
+// SetProp sets property 'k', which is short for Set(Str(k), v).
 func (m *Object) SetProp(k string, v Value) *Object {
 	m.Set(Str(k), v)
 	return m
 }
 
-// SetMethod binds method "fun" to "k" in the object
+// SetMethod binds method 'fun' to property 'k' in the object, and this object will probably serve as others' prototype.
+// This differs from 'Set(k, Func(fun))' because the latter one can't see and use 'this' parameter legally.
 func (m *Object) SetMethod(k string, fun func(*Env)) *Object {
 	f := Func(m.Name()+"."+k, fun)
 	f.Object().fun.method = true
@@ -114,27 +110,31 @@ func (m *Object) SetMethod(k string, fun func(*Env)) *Object {
 	return m
 }
 
-// Get retrieves the value for a given key locally.
+// Get retrieves the value for a given key.
 func (m *Object) Get(k Value) (v Value) {
 	if m == nil || k == Nil {
 		return Nil
 	}
-	return m.find(k, false, true)
+	v, _ = m.find(k, true)
+	return v
 }
 
-// Find finds the value for a given key (including prototypes)
-func (m *Object) Find(k Value) (v Value) {
+// Get retrieves the value for a given key, 'defaultValue' will be returned if not found.
+func (m *Object) GetDefault(k, defaultValue Value) (v Value) {
 	if m == nil || k == Nil {
-		return Nil
+		return defaultValue
 	}
-	return m.find(k, true, true)
+	if v, ok := m.find(k, true); ok {
+		return v
+	}
+	return defaultValue
 }
 
-func (m *Object) find(k Value, findPrototype, setReceiver bool) (v Value) {
+func (m *Object) find(k Value, setReceiver bool) (v Value, ok bool) {
 	if idx := m.findValue(k); idx >= 0 {
-		v = m.items[idx].val
-	} else if findPrototype && m.parent != nil {
-		v = m.parent.find(k, findPrototype, false)
+		v, ok = m.items[idx].val, true
+	} else if m.parent != nil {
+		v, ok = m.parent.find(k, false)
 	}
 	if setReceiver && v.IsObject() {
 		if obj := v.Object(); obj.fun.method {
@@ -143,7 +143,7 @@ func (m *Object) find(k Value, findPrototype, setReceiver bool) (v Value) {
 			v = f.ToValue()
 		}
 	}
-	return v
+	return
 }
 
 func (m *Object) findValue(k Value) int {
@@ -173,19 +173,28 @@ func (m *Object) findValue(k Value) int {
 	}
 }
 
-// Contains tests whether the object (and/or its prototypes) contains "k"
-func (m *Object) Contains(k Value, includePrototypes bool) bool {
+// Contains returns true if object contains 'k'.
+func (m *Object) Contains(k Value) bool {
 	if m == nil || k == Nil {
 		return false
 	}
 	found := m.findValue(k) >= 0
-	if !found && includePrototypes {
-		found = m.parent.Contains(k, true)
+	if !found {
+		found = m.parent.Contains(k)
 	}
 	return found
 }
 
-// Set upserts a key-value pair into the object
+// HasOwnProperty returns true if 'k' is a local property in the object.
+func (m *Object) HasOwnProperty(k Value) bool {
+	if m == nil || k == Nil {
+		return false
+	}
+	return m.findValue(k) >= 0
+}
+
+// Set upserts a key-value pair into the object, inherited key from prototypes will be
+// overwritten during this call.
 func (m *Object) Set(k, v Value) (prev Value) {
 	if k == Nil {
 		internal.Panic("object set with nil key")
@@ -199,7 +208,7 @@ func (m *Object) Set(k, v Value) (prev Value) {
 	return m.setHash(hashItem{key: k, val: v})
 }
 
-// Delete deletes a key-value pair from the object
+// Delete deletes a key-value pair from the object. Keys in prototypes are omitted and never deleted.
 func (m *Object) Delete(k Value) (prev Value) {
 	if k == Nil {
 		internal.Panic("object delete with nil key")

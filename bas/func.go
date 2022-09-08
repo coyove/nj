@@ -13,15 +13,15 @@ import (
 var objEmptyFunc = &funcbody{name: "object"}
 
 type funcbody struct {
-	name      string
-	codeSeg   internal.Packet
-	stackSize uint16
-	numParams byte
-	varg      bool
-	method    bool
-	native    func(env *Env)
-	top       *Program
-	locals    []string
+	name         string
+	codeSeg      internal.Packet
+	stackSize    uint16
+	numParams    byte
+	varg         bool
+	method       bool
+	native       func(env *Env)
+	top          *Program
+	locals, caps []string
 }
 
 type Program struct {
@@ -87,7 +87,7 @@ func (p *Program) GoString() string {
 }
 
 func (p *Program) Get(k string) (v Value, ok bool) {
-	addr := p.symbols.Prop(k)
+	addr := p.symbols.Get(Str(k))
 	if addr == Nil {
 		return Nil, false
 	}
@@ -95,7 +95,7 @@ func (p *Program) Get(k string) (v Value, ok bool) {
 }
 
 func (p *Program) Set(k string, v Value) (ok bool) {
-	addr := p.symbols.Prop(k)
+	addr := p.symbols.Get(Str(k))
 	if addr == Nil {
 		return false
 	}

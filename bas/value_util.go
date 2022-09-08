@@ -18,37 +18,6 @@ var (
 	valueType    = reflect.TypeOf(Value{})
 )
 
-func (v Value) NilStr(defaultValue string) string {
-	switch t := Value(v).Type(); t {
-	case typ.String:
-		return Value(v).Str()
-	case typ.Nil:
-		return defaultValue
-	case typ.Native:
-		if buf, ok := Value(v).Native().Unwrap().([]byte); ok {
-			return *(*string)(unsafe.Pointer(&buf))
-		}
-		fallthrough
-	default:
-		panic("NilStr: expects string, bytes or nil, got " + detail(Value(v)))
-	}
-}
-
-func (v Value) NilInt64(defaultValue int64) int64 {
-	switch t := Value(v).Type(); t {
-	case typ.Number:
-		return Value(v).Int64()
-	case typ.Nil:
-		return defaultValue
-	default:
-		panic("NilInt64: expects integer number or nil, got " + detail(Value(v)))
-	}
-}
-
-func (v Value) NilInt(defaultValue int) int {
-	return int(v.NilInt64(int64(defaultValue)))
-}
-
 func (v Value) NilFloat64(defaultValue float64) float64 {
 	switch t := Value(v).Type(); t {
 	case typ.Number:
@@ -132,7 +101,7 @@ func DeepEqual(a, b Value) bool {
 				return false
 			}
 			a.Object().Foreach(func(k Value, v *Value) bool {
-				flag = DeepEqual(b.Object().Find(k), *v)
+				flag = DeepEqual(b.Object().Get(k), *v)
 				return flag
 			})
 			return flag
