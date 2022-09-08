@@ -375,7 +375,28 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			if opa == typ.RegA {
 				env.A = K.ToValue()
 			} else {
-				env.A = env._get(opa).Object().Copy(true).ToValue()
+				o := env._get(opa).Object().Copy(true)
+				if opb == 1 {
+					o.Merge(K)
+					for addr, name := range o.fun.caps {
+						if name == "" {
+							continue
+						}
+						if uint16(addr) == v.C {
+							// Recursive closure, e.g.:
+							// function foo()
+							//   function bar()
+							//     self.bar()
+							//   end
+							//   return bar
+							// end
+							o.Set(Str(name), o.ToValue())
+						} else {
+							o.Set(Str(name), env._get(uint16(addr)))
+						}
+					}
+				}
+				env._set(v.C, o.ToValue())
 			}
 		case typ.OpCall, typ.OpTryCall, typ.OpTailCall:
 			a := env._get(opa)

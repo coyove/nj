@@ -107,8 +107,8 @@ function foo(a)
             self.a = self.a + 1
             if c == 6 then panic(self.a + self.b + c) end
             return self.a + self.b + c
-        end.closure()
-    end.closure()
+        end
+    end
 end
 bar = foo(2)(3)
 assert(bar(4), 10)
@@ -127,8 +127,8 @@ function addcls(a)
         local b = 2
         return function(c)
             return self.a + self.b + c
-        end.closure()
-    end.closure()
+        end
+    end
 end
 assert(addcls(1)(2)(3), 8)
 

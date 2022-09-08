@@ -247,9 +247,12 @@ func (obj *Object) printAll(w io.Writer) {
 			case typ.OpFunction:
 				if a == typ.RegA {
 					internal.WriteString(w, "moveself")
-				} else {
+				} else if b == 0 {
 					internal.WriteString(w, "copyfunction "+readAddr(a, true))
+				} else if b == 1 {
+					internal.WriteString(w, "copyclosure "+readAddr(a, true))
 				}
+				internal.WriteString(w, " -> "+readAddr(c, false))
 			case typ.OpTailCall, typ.OpCall, typ.OpTryCall:
 				if b != typ.RegPhantom {
 					internal.WriteString(w, "push "+readAddr(b, false)+" -> ")

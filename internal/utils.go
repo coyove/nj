@@ -80,6 +80,13 @@ func IfStr(v bool, t, f string) string {
 	return f
 }
 
+func IfInt(v bool, t, f int) int {
+	if v {
+		return t
+	}
+	return f
+}
+
 func WriteString(w io.Writer, s string) (int, error) {
 	var x []byte
 	*(*string)(unsafe.Pointer(&x)) = s

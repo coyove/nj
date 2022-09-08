@@ -79,7 +79,7 @@ func init() {
 			w.Write([]byte("["))
 			for i, v := range a.internal {
 				w.Write([]byte(internal.IfStr(i == 0, "", ",")))
-				v.Stringify(w, mt)
+				v.Stringify(w, mt.NoRec())
 			}
 			w.Write([]byte("]"))
 		},

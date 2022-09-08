@@ -210,7 +210,8 @@ func init() {
 		})).
 		ToValue())
 
-	ObjectProto = *NewNamedObject("object", 0).
+	ObjectProto = *NewNamedObject("object", 0)
+	ObjectProto.
 		SetMethod("new", func(e *Env) { e.A = NewObject(e.IntDefault(0, 0)).ToValue() }).
 		SetMethod("set", func(e *Env) { e.A = e.Object(-1).Set(e.Get(0), e.Get(1)) }).
 		SetMethod("get", func(e *Env) { e.A = e.Object(-1).Get(e.Get(0)) }).
@@ -294,18 +295,18 @@ func init() {
 			}
 			e.A = multiMap(e, e.Object(-1), e.Get(0), e.IntDefault(1, 1))
 		}).
-		SetMethod("closure", func(e *Env) {
-			scope := e.runtime.stack1.Callable
-			lambda := e.Object(-1).Merge(scope).Merge(e.Shape(0, "No").Object())
-			start := e.stackOffset() - uint32(scope.fun.stackSize)
-			for addr, name := range lambda.fun.caps {
-				if name == "" {
-					continue
-				}
-				lambda.Set(Str(name), (*e.stack)[start+uint32(addr)])
-			}
-			e.A = lambda.ToValue()
-		}).
+		// SetMethod("closure", func(e *Env) {
+		// 	scope := e.runtime.stack1.Callable
+		// 	lambda := e.Object(-1).Merge(scope).Merge(e.Shape(0, "No").Object())
+		// 	start := e.stackOffset() - uint32(scope.fun.stackSize)
+		// 	for addr, name := range lambda.fun.caps {
+		// 		if name == "" {
+		// 			continue
+		// 		}
+		// 		lambda.Set(Str(name), (*e.stack)[start+uint32(addr)])
+		// 	}
+		// 	e.A = lambda.ToValue()
+		// }).
 		SetPrototype(&ObjectProto)
 
 	AddGlobal("object", ObjectProto.ToValue())

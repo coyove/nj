@@ -455,9 +455,17 @@ func (v Value) Stringify(p io.Writer, j typ.MarshalType) {
 	case typ.String:
 		internal.WriteString(p, internal.IfQuote(j == typ.MarshalToJSON, v.Str()))
 	case typ.Object:
-		v.Object().rawPrint(p, j)
+		if j == typ.MarshalToJSON || j == typ.MarshalToString {
+			v.Object().rawPrint(p, j)
+		} else {
+			internal.WriteString(p, "@"+v.Object().Name())
+		}
 	case typ.Native:
-		v.Native().Marshal(p, j)
+		if j == typ.MarshalToJSON || j == typ.MarshalToString {
+			v.Native().Marshal(p, j)
+		} else {
+			internal.WriteString(p, "@"+v.Native().meta.Name)
+		}
 	default:
 		internal.WriteString(p, internal.IfStr(j == typ.MarshalToJSON, "null", "nil"))
 	}

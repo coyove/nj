@@ -106,6 +106,20 @@ func (b *Packet) WriteInst(op byte, opa, opb uint16) {
 				return
 			}
 		}
+		if opb == typ.RegA && len(b.Code) > 0 {
+			/*
+				form:
+					copyclosure idx 1 $a
+					set v $a
+				into:
+					copyclosure idx 1 v
+			*/
+			x := &b.Code[len(b.Code)-1]
+			if x.Opcode == typ.OpFunction && x.B == 1 {
+				x.C = opa
+				return
+			}
+		}
 	}
 	b.Code = append(b.Code, typ.Inst{Opcode: op, A: opa, B: opb})
 	b.check()

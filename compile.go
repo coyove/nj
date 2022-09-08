@@ -293,14 +293,17 @@ func compileFunction(table *symTable, nodes []parser.Node) uint16 {
 		captureList,
 		code,
 	).(*bas.Object)
-	//funcIdx := uint16(len(table.getGlobal().funcs))
-	//table.getGlobal().funcs = append(table.getGlobal().funcs, obj)
+
 	fm := &table.getGlobal().funcsMap
 	fidx := fm.Get(nodes[1].Value)
 	fm.Set(fidx, obj.ToValue())
 	fm.Delete(nodes[1].Value)
 	table.getGlobal().constMap.Set(obj.ToValue(), fidx)
-	table.codeSeg.WriteInst(typ.OpFunction, uint16(fidx.Int()), 0)
+
+	table.codeSeg.WriteInst3(typ.OpFunction, uint16(fidx.Int()),
+		uint16(internal.IfInt(table.global == nil, 0, 1)),
+		typ.RegA,
+	)
 	table.codeSeg.WriteLineNum(nodes[0].Line())
 	return typ.RegA
 }

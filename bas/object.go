@@ -357,9 +357,9 @@ func (m *Object) rawPrint(p io.Writer, j typ.MarshalType) {
 	}
 	m.Foreach(func(k Value, v *Value) bool {
 		internal.WriteString(p, internal.IfStr(needComma, ",", ""))
-		k.Stringify(p, j)
+		k.Stringify(p, j.NoRec())
 		internal.WriteString(p, internal.IfStr(j == typ.MarshalToJSON, ":", "="))
-		v.Stringify(p, j)
+		v.Stringify(p, j.NoRec())
 		needComma = true
 		return true
 	})
@@ -374,7 +374,13 @@ func (m *Object) ToValue() Value {
 }
 
 func (m *Object) Name() string {
+	if m == &ObjectProto {
+		return objEmptyFunc.name
+	}
 	if m != nil {
+		if m.fun.name == objEmptyFunc.name {
+			return m.parent.Name()
+		}
 		return m.fun.name
 	}
 	return objEmptyFunc.name
