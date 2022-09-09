@@ -17,17 +17,6 @@ var (
 	valueType    = reflect.TypeOf(Value{})
 )
 
-func (v Value) NilFloat64(defaultValue float64) float64 {
-	switch t := Value(v).Type(); t {
-	case typ.Number:
-		return Value(v).Float64()
-	case typ.Nil:
-		return defaultValue
-	default:
-		panic("NilFloat64: expects float number or nil, got " + detail(Value(v)))
-	}
-}
-
 func ToError(v Value) error {
 	if IsError(v) {
 		return v.Native().Unwrap().(*ExecError)
@@ -143,128 +132,99 @@ func HasPrototype(a Value, p *Object) bool {
 	return false
 }
 
-// ToType convert Value to reflect.Value based on reflect.Type
+// ToType converts 'v' to reflect.Value based on reflect.Type.
+// The result, even not being Zero, may be illegal to use in certain calls.
 func ToType(v Value, t reflect.Type) reflect.Value {
-	return toTypePtrStruct(v, t, nil)
-}
-
-func toTypePtrStruct(v Value, t reflect.Type, interopFuncs *[]func()) reflect.Value {
-	if t == nil {
-		return reflect.ValueOf(v.Interface())
-	}
 	if t == valueType {
 		return reflect.ValueOf(v)
 	}
-
-	vt := v.Type()
-	if interopFuncs != nil && t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct && vt == typ.Object {
-		this := v.Object()
-		vp := objectToStruct(this, t.Elem(), interopFuncs)
-		*interopFuncs = append(*interopFuncs, func() {
-			for i := 0; i < vp.NumField(); i++ {
-				f := vp.Field(i)
-				if n := vp.Type().Field(i).Name; n[0] >= 'A' && n[0] <= 'Z' {
-					this.SetProp(n, ValueOf(f.Interface()))
-				}
-			}
-		})
-		return vp.Addr()
+	if t == nil {
+		return reflect.ValueOf(v.Interface())
 	}
 
-	if vt == typ.Nil && (t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface) {
-		return reflect.Zero(t)
-	}
-	if t.Implements(ioWriterType) || t.Implements(ioReaderType) || t.Implements(ioCloserType) {
-		return reflect.ValueOf(valueIO(v))
-	}
-	if t.Implements(errType) {
-		return reflect.ValueOf(ToError(v))
-	}
-	if v.IsObject() && t.Kind() == reflect.Func {
-		return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
-			var a []Value
-			for i := range args {
-				a = append(a, ValueOf(args[i].Interface()))
-			}
-			out := v.Object().Call(nil, a...)
-			if to := t.NumOut(); to == 1 {
-				results = []reflect.Value{toTypePtrStruct(out, t.Out(0), interopFuncs)}
-			} else if to > 1 {
-				out.AssertType(typ.Native, "ToType: requires function to return multiple arguments")
-				results = make([]reflect.Value, t.NumOut())
-				for i := range results {
-					results[i] = toTypePtrStruct(out.Native().Get(i), t.Out(i), interopFuncs)
+	switch vt := v.Type(); vt {
+	case typ.Nil:
+		if t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface {
+			return reflect.Zero(t)
+		}
+	case typ.Object:
+		if t.Kind() == reflect.Func {
+			return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
+				var a []Value
+				for i := range args {
+					a = append(a, ValueOf(args[i].Interface()))
 				}
-			}
-			return
-		})
-	}
-	if vt == typ.Number && t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
-		return reflect.ValueOf(v.Interface()).Convert(t)
-	}
-	if vt == typ.Native {
-		a := v.Native()
-		if t == reflect.TypeOf(a.Unwrap()) {
-			return reflect.ValueOf(a.Unwrap())
+				out := v.Object().Call(nil, a...)
+				if to := t.NumOut(); to == 1 {
+					results = []reflect.Value{ToType(out, t.Out(0))}
+				} else if to > 1 {
+					if !out.IsArray() {
+						internal.Panic("ToType: function should return %d arguments (sig: %v)", to, t)
+					}
+					results = make([]reflect.Value, t.NumOut())
+					for i := range results {
+						results[i] = ToType(out.Native().Get(i), t.Out(i))
+					}
+				}
+				return
+			})
 		}
-		switch t.Kind() {
-		case reflect.Slice:
-			a.AssertPrototype(Proto.Array, "ToType")
-			s := reflect.MakeSlice(t, a.Len(), a.Len())
-			for i := 0; i < a.Len(); i++ {
-				s.Index(i).Set(toTypePtrStruct(a.Get(i), t.Elem(), interopFuncs))
-			}
-			return s
-		case reflect.Array:
-			a.AssertPrototype(Proto.Array, "ToType")
-			s := reflect.New(t).Elem()
-			for i := 0; i < a.Len(); i++ {
-				s.Index(i).Set(toTypePtrStruct(a.Get(i), t.Elem(), interopFuncs))
-			}
+		if t.Kind() == reflect.Map {
+			s := reflect.MakeMap(t)
+			kt, vt := t.Key(), t.Elem()
+			v.Object().Foreach(func(k Value, v *Value) bool {
+				s.SetMapIndex(ToType(k, kt), ToType(*v, vt))
+				return true
+			})
 			return s
 		}
-	}
-	if vt == typ.Object && t.Kind() == reflect.Map {
-		s := reflect.MakeMap(t)
-		kt, vt := t.Key(), t.Elem()
-		v.Object().Foreach(func(k Value, v *Value) bool {
-			s.SetMapIndex(toTypePtrStruct(k, kt, interopFuncs), toTypePtrStruct(*v, vt, interopFuncs))
-			return true
-		})
-		return s
-	}
-	if vt == typ.Object && t.Kind() == reflect.Struct {
-		return objectToStruct(v.Object(), t, interopFuncs)
-	}
-	if vt == typ.Bool && t.Kind() == reflect.Bool {
-		return reflect.ValueOf(v.Bool())
-	}
-	if vt == typ.String && t.Kind() == reflect.String {
-		return reflect.ValueOf(v.Str())
+		if t.Implements(ioWriterType) || t.Implements(ioReaderType) || t.Implements(ioCloserType) {
+			return reflect.ValueOf(valueIO(v))
+		}
+	case typ.Native:
+		a := v.Native().Unwrap()
+		if t.Implements(ioWriterType) || t.Implements(ioReaderType) || t.Implements(ioCloserType) {
+			return reflect.ValueOf(a)
+		}
+		if t.Implements(errType) {
+			return reflect.ValueOf(ToError(v))
+		}
+		if t == reflect.TypeOf(a) {
+			return reflect.ValueOf(a)
+		}
+		if v.IsArray() {
+			switch a := v.Native(); t.Kind() {
+			case reflect.Slice:
+				s := reflect.MakeSlice(t, a.Len(), a.Len())
+				for i := 0; i < a.Len(); i++ {
+					s.Index(i).Set(ToType(a.Get(i), t.Elem()))
+				}
+				return s
+			case reflect.Array:
+				s := reflect.New(t).Elem()
+				for i := 0; i < a.Len(); i++ {
+					s.Index(i).Set(ToType(a.Get(i), t.Elem()))
+				}
+				return s
+			}
+		}
+	case typ.Number:
+		if t.Kind() >= reflect.Int && t.Kind() <= reflect.Float64 {
+			return reflect.ValueOf(v.Interface()).Convert(t)
+		}
+	case typ.Bool:
+		if t.Kind() == reflect.Bool {
+			return reflect.ValueOf(v.Bool())
+		}
+	case typ.String:
+		if t.Kind() == reflect.String {
+			return reflect.ValueOf(v.Str())
+		}
 	}
 	if t.Kind() == reflect.Interface {
 		return reflect.ValueOf(v.Interface())
 	}
-
 	panic("ToType: failed to convert " + detail(v) + " to " + t.String())
-}
-
-func objectToStruct(src *Object, t reflect.Type, interopFuncs *[]func()) reflect.Value {
-	vp := reflect.New(t)
-	s := vp.Elem()
-	src.Foreach(func(k Value, v *Value) bool {
-		field := k.AssertType(typ.String, "ToStruct: field name").Str()
-		if field == "" || field[0] < 'A' || field[0] > 'Z' {
-			return true
-		}
-		f := s.FieldByName(field)
-		if !f.IsValid() {
-			internal.Panic("ToStruct: field %q not found", field)
-		}
-		f.Set(toTypePtrStruct(*v, f.Type(), interopFuncs))
-		return true
-	})
-	return s
 }
 
 func Len(v Value) int {

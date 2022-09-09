@@ -290,10 +290,7 @@ func init() {
 			e.A = NewNative(w).ToValue()
 		}).
 		SetMethod("map", func(e *Env) {
-			if !e.Get(0).IsArray() {
-				e.Get(0).AssertType(typ.Object, "map")
-			}
-			e.A = multiMap(e, e.Object(-1), e.Get(0), e.IntDefault(1, 1))
+			e.A = multiMap(e, e.Object(-1), e.Shape(0, "<@array,{}>"), e.IntDefault(1, 1))
 		}).
 		// SetMethod("closure", func(e *Env) {
 		// 	scope := e.runtime.stack1.Callable
@@ -315,6 +312,9 @@ func init() {
 
 	*Proto.Native = *NewNamedObject("native", 4).
 		SetProp("types", nativeGoObject.ToValue()).
+		SetMethod("name", func(e *Env) {
+			e.A = Str(e.Get(-1).Native().meta.Name)
+		}).
 		SetMethod("typename", func(e *Env) {
 			e.A = Str(reflect.TypeOf(e.Get(-1).Native().Unwrap()).String())
 		}).
@@ -336,7 +336,15 @@ func init() {
 					e.A = ValueOf(reflect.NewAt(t.Type, unsafe.Pointer(ptr)).Interface())
 				}
 			}
-		})
+		}).
+		SetMethod("toreader", func(e *Env) { e.Native(-1).meta = Proto.Reader }).
+		SetMethod("towriter", func(e *Env) { e.Native(-1).meta = Proto.Writer }).
+		SetMethod("tocloser", func(e *Env) { e.Native(-1).meta = Proto.Closer }).
+		SetMethod("toreadwriter", func(e *Env) { e.Native(-1).meta = Proto.ReadWriter }).
+		SetMethod("toreadcloser", func(e *Env) { e.Native(-1).meta = Proto.ReadCloser }).
+		SetMethod("towritecloser", func(e *Env) { e.Native(-1).meta = Proto.WriteCloser }).
+		SetMethod("toreadwritecloser", func(e *Env) { e.Native(-1).meta = Proto.ReadWriteCloser })
+
 	Proto.Native.SetPrototype(nil) // native prototype has no parent
 	AddGlobal("native", Proto.Native.ToValue())
 
@@ -517,8 +525,7 @@ func init() {
 				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectDefault})
 				channels = append(channels, Str("default"))
 			}
-			e.Object(0).Foreach(func(ch Value, send *Value) bool {
-				ch.AssertType(typ.Native, "sendmulti").Native().AssertPrototype(Proto.Channel, "sendmulti")
+			e.Shape(0, "{@channel:v}").Object().Foreach(func(ch Value, send *Value) bool {
 				chr := reflect.ValueOf(ch.Native().Unwrap())
 				cases = append(cases, reflect.SelectCase{
 					Dir:  reflect.SelectSend,
@@ -538,9 +545,9 @@ func init() {
 				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectDefault})
 				channels = append(channels, Str("default"))
 			}
-			x := e.Native(0).AssertPrototype(Proto.Array, "recvmulti")
+			x := e.Shape(0, "[@channel]").Native()
 			for i := 0; i < x.Len(); i++ {
-				ch := x.Get(i).AssertType(typ.Native, "recvmulti").Native().AssertPrototype(Proto.Channel, "recvmulti")
+				ch := x.Get(i).Native()
 				cases = append(cases, reflect.SelectCase{
 					Dir:  reflect.SelectRecv,
 					Chan: reflect.ValueOf(ch.Unwrap()),
@@ -548,12 +555,14 @@ func init() {
 				channels = append(channels, ch.ToValue())
 			}
 			chosen, recv, recvOK := reflect.Select(cases)
-			e.A = newArray(channels[chosen], ValueOf(recv.Interface()), Bool(recvOK)).ToValue()
+			e.A = Array(channels[chosen], ValueOf(recv.Interface()), Bool(recvOK))
 		}).
 		SetPrototype(Proto.Native)
 	AddGlobal("channel", Proto.Channel.ToValue())
 
-	AddGlobal("chr", Func("chr", func(e *Env) { e.A = Rune(rune(e.Int(0))) }))
+	AddGlobalMethod("chr", func(e *Env) { e.A = Rune(rune(e.Int(0))) })
+	AddGlobalMethod("byte", func(e *Env) { e.A = Byte(byte(e.Int(0))) })
+	AddGlobalMethod("ord", func(e *Env) { r, _ := utf8.DecodeRuneInString(e.Str(0)); e.A = Int64(int64(r)) })
 
 	*Proto.Str = *Func("str", func(e *Env) {
 		i := e.Get(0)
@@ -575,7 +584,7 @@ func init() {
 		SetMethod("join", func(e *Env) {
 			d := e.Str(-1)
 			buf := &bytes.Buffer{}
-			for x, i := e.Native(0).AssertPrototype(Proto.Array, "join"), 0; i < x.Len(); i++ {
+			for x, i := e.Shape(0, "@array").Native(), 0; i < x.Len(); i++ {
 				buf.WriteString(x.Get(i).String())
 				buf.WriteString(d)
 			}
@@ -661,6 +670,12 @@ func EnvFprintf(env *Env, start int, p io.Writer) {
 		}
 	}
 	internal.Fprintf(p, env.Str(start), args...)
+}
+
+func Fprint(w io.Writer, values ...Value) {
+	for _, v := range values {
+		v.Stringify(w, typ.MarshalToString)
+	}
 }
 
 func multiMap(e *Env, fun *Object, t Value, n int) Value {

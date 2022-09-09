@@ -94,14 +94,14 @@ func init() {
 		sgValuesNotSupported,
 		func(a *Native, idx int) Value { return Int64(int64(a.any.([]byte)[idx])) },
 		func(a *Native, idx int, v Value) {
-			a.any.([]byte)[idx] = byte(v.AssertType(typ.Number, "bytes.Set").Int())
+			a.any.([]byte)[idx] = byte(v.AssertNumber("bytes.Set").Int())
 		},
 		sgGetKey,
 		sgSetKeyNotSupported,
 		func(a *Native, v ...Value) {
 			p := a.any.([]byte)
 			for _, b := range v {
-				p = append(p, byte(b.AssertType(typ.Number, "bytes.Append").Int()))
+				p = append(p, byte(b.AssertNumber("bytes.Append").Int()))
 			}
 			a.any = p
 		},
@@ -115,7 +115,7 @@ func init() {
 			if from.meta == internalArrayMeta {
 				buf := a.any.([]byte)
 				for i := start; i < end; i++ {
-					buf[i] = byte(from.Get(i-start).AssertType(typ.Number, "bytes.Copy").Int())
+					buf[i] = byte(from.Get(i - start).AssertNumber("bytes.Copy").Int())
 				}
 			} else {
 				copy(a.any.([]byte)[start:end], from.any.([]byte))
@@ -125,7 +125,7 @@ func init() {
 			if b.meta == internalArrayMeta {
 				buf := a.any.([]byte)
 				for i := 0; i < b.Len(); i++ {
-					buf[i] = byte(b.Get(i).AssertType(typ.Number, "bytes.Concat").Int())
+					buf[i] = byte(b.Get(i).AssertNumber("bytes.Concat").Int())
 				}
 				a.any = buf
 			} else {
@@ -158,14 +158,14 @@ func init() {
 		},
 		func(a *Native, idx int) Value { return Str(a.any.([]string)[idx]) },
 		func(a *Native, idx int, v Value) {
-			a.any.([]string)[idx] = v.AssertType(typ.String, "[]string.Set").Str()
+			a.any.([]string)[idx] = v.AssertString("strings.Set")
 		},
 		sgGetKey,
 		sgSetKeyNotSupported,
 		func(a *Native, v ...Value) {
 			p := a.any.([]string)
 			for _, b := range v {
-				p = append(p, b.AssertType(typ.String, "[]string.Append").Str())
+				p = append(p, b.AssertString("strings.Append"))
 			}
 			a.any = p
 		},
@@ -177,7 +177,7 @@ func init() {
 			if from.meta == internalArrayMeta {
 				buf := a.any.([]string)
 				for i := start; i < end; i++ {
-					buf[i] = from.Get(i-start).AssertType(typ.String, "[]string.Copy").Str()
+					buf[i] = from.Get(i - start).AssertString("strings.Copy")
 				}
 			} else {
 				copy(a.any.([]byte)[start:end], from.any.([]byte))
@@ -187,7 +187,7 @@ func init() {
 			if b.meta == internalArrayMeta {
 				buf := a.any.([]string)
 				for i := 0; i < b.Len(); i++ {
-					buf[i] = b.Get(i).AssertType(typ.String, "[]string.Concat").Str()
+					buf[i] = b.Get(i).AssertString("strings.Concat")
 				}
 				a.any = buf
 			} else {
@@ -254,7 +254,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 	var a *NativeMeta
 	switch rt.Kind() {
 	default:
-		a = NewEmptyNativeMeta(rt.String(), Proto.Native)
+		a = NewEmptyNativeMeta(reflectTypeName(rt), Proto.Native)
 		a.GetKey = func(a *Native, k Value) Value {
 			if v, ok := sgReflectLoadSafe(a.any, k); ok {
 				return v
@@ -271,7 +271,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 			if rv.Kind() == reflect.Map {
 				rv.SetMapIndex(ToType(k, rv.Type().Key()), ToType(v, rv.Type().Elem()))
 			} else {
-				f := reflect.Indirect(rv).FieldByName(k.AssertType(typ.String, "key").Str())
+				f := reflect.Indirect(rv).FieldByName(k.AssertString("key"))
 				f.Set(ToType(v, f.Type()))
 			}
 		}
@@ -291,7 +291,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 		}
 		nativeGoObject.SetProp(pt.Name(), pt.ToValue())
 	case reflect.Chan:
-		a = NewEmptyNativeMeta(rt.String(), Proto.Channel)
+		a = NewEmptyNativeMeta(reflectTypeName(rt), Proto.Channel)
 		a.Len = sgLen
 		a.Size = sgSize
 		a.Next = func(a *Native, kv Value) Value {
@@ -308,7 +308,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 			return kv
 		}
 	case reflect.Array, reflect.Slice:
-		a = &NativeMeta{rt.String(), Proto.Array,
+		a = &NativeMeta{reflectTypeName(rt), Proto.Array,
 			sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgGetKey, sgSetKeyNotSupported, sgAppend, sgSlice,
 			sgSliceInplace, sgCopy, sgConcat, sgMarshal, sgArrayNext}
 		if rt.Kind() == reflect.Array {
@@ -612,7 +612,7 @@ func sgArrayNext(a *Native, kv Value) Value {
 	if kv == Nil {
 		return Array(Int(0), a.Get(0))
 	}
-	idx := kv.Native().Get(0).AssertType(typ.Number, "array iteration").Int() + 1
+	idx := kv.Native().Get(0).AssertNumber("array iteration").Int() + 1
 	if idx >= al {
 		return Nil
 	}
@@ -682,4 +682,15 @@ func sgReflectLoadSafe(v interface{}, key Value) (value Value, ok bool) {
 		return ValueOf(f.Interface()), true
 	}
 	return Nil, false
+}
+
+func reflectTypeName(t reflect.Type) string {
+	res := []byte(t.String())
+	for i := 0; i < len(res); i++ {
+		switch res[i] {
+		case '<', '(', '[', '{', ':', ')', '}', ']', '>', ' ', ',':
+			res[i] = '/'
+		}
+	}
+	return string(res)
 }

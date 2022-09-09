@@ -7,6 +7,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"time"
 	"unicode/utf8"
 	"unsafe"
 
@@ -85,6 +86,12 @@ func (v Value) IsTrue() bool { return v.v != 0 }
 
 // IsInt64 returns true if value is an integer number.
 func (v Value) IsInt64() bool { return v.p == int64Marker }
+
+// IsNumber returns true if value is a number.
+func (v Value) IsNumber() bool { return v.pType() == typ.Number }
+
+// IsString returns true if value is a string.
+func (v Value) IsString() bool { return v.Type() == typ.String }
 
 // IsObject returns true if value is an object.
 func (v Value) IsObject() bool { return v.Type() == typ.Object }
@@ -264,7 +271,6 @@ func ValueOf(i interface{}) Value {
 	if rv := reflect.ValueOf(i); rv.Kind() == reflect.Func {
 		rt := rv.Type()
 		nf := func(env *Env) {
-			var interopFuncs []func()
 			rtNumIn := rt.NumIn()
 			ins := make([]reflect.Value, 0, rtNumIn)
 			if !rt.IsVariadic() {
@@ -272,17 +278,17 @@ func ValueOf(i interface{}) Value {
 					internal.Panic("native function expects %d arguments, got %d", rtNumIn, env.Size())
 				}
 				for i := 0; i < rtNumIn; i++ {
-					ins = append(ins, toTypePtrStruct(env.Get(i), rt.In(i), &interopFuncs))
+					ins = append(ins, ToType(env.Get(i), rt.In(i)))
 				}
 			} else {
 				if env.Size() < rtNumIn-1 {
 					internal.Panic("native variadic function expects at least %d arguments, got %d", rtNumIn-1, env.Size())
 				}
 				for i := 0; i < rtNumIn-1; i++ {
-					ins = append(ins, toTypePtrStruct(env.Get(i), rt.In(i), &interopFuncs))
+					ins = append(ins, ToType(env.Get(i), rt.In(i)))
 				}
 				for i := rtNumIn - 1; i < env.Size(); i++ {
-					ins = append(ins, toTypePtrStruct(env.Get(i), rt.In(rtNumIn-1).Elem(), &interopFuncs))
+					ins = append(ins, ToType(env.Get(i), rt.In(rtNumIn-1).Elem()))
 				}
 			}
 			if outs := rv.Call(ins); len(outs) == 0 {
@@ -291,9 +297,6 @@ func ValueOf(i interface{}) Value {
 				env.A = ValueOf(outs[0].Interface())
 			} else {
 				env.A = NewNative(outs).ToValue()
-			}
-			for _, f := range interopFuncs {
-				f()
 			}
 		}
 		return Func("<"+rt.String()+">", nf)
@@ -339,6 +342,10 @@ func (v Value) Float64() float64 {
 	return math.Float64frombits(v.v)
 }
 
+func (v Value) Duration() time.Duration {
+	return time.Duration(v.Float64()*1e6) * 1e3
+}
+
 // Bool returns value as a boolean, Type() should be checked beforehand.
 func (v Value) Bool() bool { return v.p == trueMarker }
 
@@ -372,28 +379,6 @@ func (v Value) unsafeAddr() uintptr { return uintptr(v.p) }
 
 // UnsafeInt64 returns value as an int64 without any type-checkings.
 func (v Value) UnsafeInt64() int64 { return int64(v.v) }
-
-// AssertType asserts the type of value. 'msg' will be panicked out if failed.
-func (v Value) AssertType(t typ.ValueType, msg string) Value {
-	if v.Type() != t {
-		if msg != "" {
-			internal.Panic("%s: expects %v, got %v", msg, t, detail(v))
-		}
-		internal.Panic("expects %v, got %v", t, detail(v))
-	}
-	return v
-}
-
-// AssertPrototype asserts the prototype of value. 'msg' will be panicked out if failed.
-func (v Value) AssertPrototype(p *Object, msg string) Value {
-	if !HasPrototype(v, p) {
-		if msg != "" {
-			internal.Panic("%s: expects prototype %v, got %v", msg, detail(p.ToValue()), detail(v))
-		}
-		internal.Panic("expects prototype %v, got %v", detail(p.ToValue()), detail(v))
-	}
-	return v
-}
 
 // Equal returns true if two values are equal.
 func (v Value) Equal(r Value) bool {

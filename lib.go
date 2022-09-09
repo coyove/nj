@@ -96,9 +96,6 @@ func init() {
 		}
 		env.A = bas.Array(results...)
 	})
-	bas.AddGlobalMethod("chr", func(e *bas.Env) { e.A = bas.Rune(rune(e.Int(0))) })
-	bas.AddGlobalMethod("byte", func(e *bas.Env) { e.A = bas.Byte(byte(e.Int(0))) })
-	bas.AddGlobalMethod("ord", func(e *bas.Env) { r, _ := utf8.DecodeRuneInString(e.Str(0)); e.A = bas.Int64(int64(r)) })
 
 	bas.AddGlobal("re", bas.Func("RegExp", func(e *bas.Env) {
 		rx := regexp.MustCompile(e.Str(0))
@@ -267,13 +264,13 @@ func init() {
 				p.Stdin = tmp.Reader()
 			}
 
-			to := opt.Get(bas.Str("timeout")).NilFloat64(1 << 30)
+			to := opt.GetDefault(bas.Str("timeout"), bas.Float64(1<<30)).AssertNumber("timeout seconds").Duration()
 			out := make(chan error)
 			go func() { out <- p.Run() }()
 			select {
 			case r := <-out:
 				internal.PanicErr(r)
-			case <-time.After(time.Duration(to*1e6) * 1e3):
+			case <-time.After(to):
 				p.Process.Kill()
 				panic("timeout")
 			}
@@ -397,10 +394,9 @@ func init() {
 
 	httpLib := bas.Func("http", func(e *bas.Env) {
 		args := e.Object(0)
-		to := args.Get(bas.Str("timeout")).NilFloat64(1 << 30)
 		method := strings.ToUpper(args.GetDefault(bas.Str("method"), bas.Str("GET")).Str())
 
-		u, err := url.Parse(args.Get(bas.Str("url")).AssertType(typ.String, "http URL").Str())
+		u, err := url.Parse(args.Get(bas.Str("url")).AssertString("http URL"))
 		internal.PanicErr(err)
 
 		addKV := func(k string, add func(k, v string)) {
@@ -477,7 +473,7 @@ func init() {
 
 		// Construct HTTP client
 		client := &http.Client{}
-		client.Timeout = time.Duration(to * float64(time.Second))
+		client.Timeout = args.GetDefault(bas.Str("timeout"), bas.Float64(1<<30)).AssertNumber("timeout seconds").Duration()
 		if v := args.Get(bas.Str("jar")); v.Type() == typ.Native {
 			client.Jar, _ = v.Interface().(http.CookieJar)
 		}
@@ -533,7 +529,8 @@ func init() {
 		SetPrototype(bas.Proto.ReadWriter.Proto).
 		SetMethod("reset", func(e *bas.Env) { e.A.Interface().(*internal.LimitedBuffer).Reset() }).
 		SetMethod("value", func(e *bas.Env) { e.A = bas.UnsafeStr(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }).
-		SetMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }))
+		SetMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }).
+		SetPrototype(bas.Proto.Native))
 
 	bas.AddGlobalMethod("buffer", func(e *bas.Env) {
 		b := &internal.LimitedBuffer{Limit: e.IntDefault(1, 0)}

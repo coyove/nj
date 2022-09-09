@@ -657,6 +657,8 @@ func TestShape(t *testing.T) {
 
 	assertError(false, NewShape("R")(ValueOf(&bytes.Buffer{})))
 	assertError(true, NewShape("C")(ValueOf(&bytes.Buffer{})))
+
+	assertError(false, NewShape("<[],{}>")(o.ToValue()))
 }
 
 func BenchmarkShape(b *testing.B) {

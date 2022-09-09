@@ -74,7 +74,8 @@ func init() {
 				delim: e.StrDefault(0, "\n", 1)[0],
 				bytes: e.Shape(1, "Nb").IsTrue(),
 			}, ioReadlinesIter).ToValue()
-		})
+		}).
+		SetPrototype(Proto.Native)
 
 	Proto.Writer.Proto.
 		SetMethod("write", func(e *Env) {
@@ -96,20 +97,22 @@ func init() {
 			}
 			internal.PanicErr(err)
 			e.A = Int64(wn)
-		})
+		}).
+		SetPrototype(Proto.Native)
 
 	Proto.Closer.Proto.
 		SetMethod("close", func(e *Env) {
 			internal.PanicErr(e.A.Closer().Close())
-		})
+		}).
+		SetPrototype(Proto.Native)
 
-	Proto.ReadWriter.Proto.Merge(Proto.Reader.Proto).Merge(Proto.Writer.Proto)
+	Proto.ReadWriter.Proto.Merge(Proto.Reader.Proto).Merge(Proto.Writer.Proto).SetPrototype(Proto.Native)
 
-	Proto.ReadCloser.Proto.Merge(Proto.Reader.Proto).Merge(Proto.Closer.Proto)
+	Proto.ReadCloser.Proto.Merge(Proto.Reader.Proto).Merge(Proto.Closer.Proto).SetPrototype(Proto.Native)
 
-	Proto.WriteCloser.Proto.Merge(Proto.Writer.Proto).Merge(Proto.Closer.Proto)
+	Proto.WriteCloser.Proto.Merge(Proto.Writer.Proto).Merge(Proto.Closer.Proto).SetPrototype(Proto.Native)
 
-	Proto.ReadWriteCloser.Proto.Merge(Proto.ReadWriter.Proto).Merge(Proto.Closer.Proto)
+	Proto.ReadWriteCloser.Proto.Merge(Proto.ReadWriter.Proto).Merge(Proto.Closer.Proto).SetPrototype(Proto.Native)
 }
 
 // Reader creates an io.Reader from value, Read() may fail if value doesn't support reading.
@@ -192,7 +195,7 @@ func (m valueIO) Write(p []byte) (int, error) {
 			if IsError(v) {
 				return 0, ToError(v)
 			}
-			return v.AssertType(typ.Number, "Writer.write").Int(), nil
+			return v.AssertNumber("Writer.write").Int(), nil
 		}
 		if rb := Value(m).Object().Get(Str("write2")); rb.IsObject() {
 			t := rb.Object().Call(nil, Bytes(p)).AssertShape("(i, Ev)", "Writer.write2").Native()

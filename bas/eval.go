@@ -136,9 +136,9 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpInc:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
-			} else if va.pType() == typ.Number && vb.pType() == typ.Number {
+			} else if va.IsNumber() && vb.IsNumber() {
 				env.A = Float64(va.Float64() + vb.Float64())
-			} else if va.pType() == typ.String && vb.pType() == typ.String {
+			} else if va.Type() == typ.String && vb.Type() == typ.String {
 				env.A = Str(va.Str() + vb.Str())
 			} else {
 				internal.Panic("inc "+errNeedNumbersOrStrings, detail(va), detail(vb))
@@ -177,7 +177,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpAdd:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
-			} else if va.pType() == typ.Number && vb.pType() == typ.Number {
+			} else if va.IsNumber() && vb.IsNumber() {
 				env.A = Float64(va.Float64() + vb.Float64())
 			} else if x := va.Type() + vb.Type(); x == typ.String*2 {
 				env.A = Str(va.Str() + vb.Str())
@@ -189,7 +189,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpSub:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Int64(va.UnsafeInt64() - vb.UnsafeInt64())
-			} else if va.pType() == typ.Number && vb.pType() == typ.Number {
+			} else if va.IsNumber() && vb.IsNumber() {
 				env.A = Float64(va.Float64() - vb.Float64())
 			} else {
 				internal.Panic("sub "+errNeedNumbers, detail(va), detail(vb))
@@ -197,25 +197,25 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpMul:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Int64(va.UnsafeInt64() * vb.UnsafeInt64())
-			} else if va.pType() == typ.Number && vb.pType() == typ.Number {
+			} else if va.IsNumber() && vb.IsNumber() {
 				env.A = Float64(va.Float64() * vb.Float64())
 			} else {
 				internal.Panic("mul "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpDiv:
-			if va, vb := env._get(opa), env._get(opb); va.pType() == typ.Number && vb.pType() == typ.Number {
+			if va, vb := env._get(opa), env._get(opb); va.IsNumber() && vb.IsNumber() {
 				env.A = Float64(va.Float64() / vb.Float64())
 			} else {
 				internal.Panic("div "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpIDiv:
-			if va, vb := env._get(opa), env._get(opb); va.pType() == typ.Number && vb.pType() == typ.Number {
+			if va, vb := env._get(opa), env._get(opb); va.IsNumber() && vb.IsNumber() {
 				env.A = Int64(va.Int64() / vb.Int64())
 			} else {
 				internal.Panic("idiv "+errNeedNumbers, detail(va), detail(vb))
 			}
 		case typ.OpMod:
-			if va, vb := env._get(opa), env._get(opb); va.pType() == typ.Number && vb.pType() == typ.Number {
+			if va, vb := env._get(opa), env._get(opb); va.IsNumber() && vb.IsNumber() {
 				env.A = Int64(va.Int64() % vb.Int64())
 			} else {
 				internal.Panic("mod "+errNeedNumbers, detail(va), detail(vb))
@@ -227,7 +227,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpLess:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Bool(va.UnsafeInt64() < vb.UnsafeInt64())
-			} else if va.pType() == typ.Number && vb.pType() == typ.Number {
+			} else if va.IsNumber() && vb.IsNumber() {
 				env.A = Bool(va.Float64() < vb.Float64())
 			} else if va.Type() == typ.String && vb.Type() == typ.String {
 				env.A = Bool(lessStr(va, vb))
@@ -237,7 +237,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpLessEq:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Bool(va.UnsafeInt64() <= vb.UnsafeInt64())
-			} else if va.pType() == typ.Number && vb.pType() == typ.Number {
+			} else if va.IsNumber() && vb.IsNumber() {
 				env.A = Bool(va.Float64() <= vb.Float64())
 			} else if va.Type() == typ.String && vb.Type() == typ.String {
 				env.A = Bool(!lessStr(vb, va))
@@ -280,7 +280,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			if a, b := env._get(opa), env._get(opb); a.Equal(b) {
 				env.A = True
 			} else {
-				env.A = Bool(HasPrototype(a, b.AssertType(typ.Object, "isprototype").Object()))
+				env.A = Bool(HasPrototype(a, b.AssertObject("isprototype")))
 			}
 		case typ.OpStore:
 			subject, k, v := env._get(opa), env._get(opb), env._get(v.C)

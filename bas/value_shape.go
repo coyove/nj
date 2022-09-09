@@ -294,6 +294,9 @@ func shapeNextToken(s string) (token, rest string) {
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
 		case ',':
+			if i == 0 {
+				return shapeNextToken(s[1:])
+			}
 			return s[:i], s[i+1:]
 		case '<', '(', '[', '{', ':', ')', ']', '}', '>', ' ':
 			if i == 0 {
@@ -411,4 +414,25 @@ func (v Value) AssertShape(shape, msg string) Value {
 		panic(fmt.Errorf("%s: %v", msg, err))
 	}
 	return v
+}
+
+func (v Value) AssertNumber(msg string) Value {
+	if v.Type() != typ.Number {
+		internal.Panic("%s: expects number, got %v", msg, detail(v))
+	}
+	return v
+}
+
+func (v Value) AssertString(msg string) string {
+	if v.Type() != typ.String {
+		internal.Panic("%s: expects string, got %v", msg, detail(v))
+	}
+	return v.Str()
+}
+
+func (v Value) AssertObject(msg string) *Object {
+	if v.Type() != typ.Object {
+		internal.Panic("%s: expects object, got %v", msg, detail(v))
+	}
+	return v.Object()
 }

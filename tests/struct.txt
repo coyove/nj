@@ -41,14 +41,6 @@ assert(structAddrTestEmbed.T.SetFoo, nil)
 structAddrTestEmbed.natptrat('T').SetFoo(10)
 assert(structAddrTestEmbed.T.A, 10)
 
-assert(nativeVarargTest3({"T":{'A':98}}), 98)
-
-local m = {"T":{'A':98}}
-assert(not m.contains("Next"))
-nativeVarargTest4(m, 99)
-assert(object.contains.apply(m, "Next"))
-assert(m.T.A, 99)
-
 function dict() return new(new(self)) end
 
 function dict.next2()
