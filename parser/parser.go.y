@@ -258,9 +258,7 @@ prefix_expr:
 prefix_expr_call_arguments:
     ')'                                      { $$ = emptyNode } |
     expr_list comma ')'                      { $$ = $1 } |
-    expr_assign_list comma ')'               { $$ = Nodes(Nodes(SObject, $1).At($3)) } |
-    expr_list TDotDotDot comma ')'           { $$ = __dotdotdot($1) } |
-    expr_list ',' expr_assign_list comma ')' { $$ = $1.append(Nodes(SObject, $3).At($2)) }
+    expr_list TDotDotDot comma ')'           { $$ = __dotdotdot($1) }
 
 declarator_list:
     declarator { $$ = Nodes($1) } | declarator_list ',' declarator { $$ = $1.append($3) }

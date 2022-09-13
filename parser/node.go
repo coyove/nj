@@ -7,17 +7,26 @@ import (
 
 	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
-	"github.com/coyove/nj/typ"
 )
 
 type Token struct {
 	Type uint32
 	Str  string
-	Pos  typ.Position
+	Pos  Position
 }
 
 func (t *Token) String() string {
 	return t.Str
+}
+
+type Position struct {
+	Source string
+	Line   uint32
+	Column uint32
+}
+
+func (pos *Position) String() string {
+	return fmt.Sprintf("%s:%d:%d", pos.Source, pos.Line, pos.Column)
 }
 
 type Node struct {

@@ -62,3 +62,27 @@ func JmpInst(op byte, distance int) Inst {
 	}
 	return (Inst{Opcode: op}).SetD(int32(distance))
 }
+
+var BinaryOpcode = map[byte]string{
+	OpAdd:     "add",
+	OpSub:     "sub",
+	OpMul:     "mul",
+	OpDiv:     "div",
+	OpIDiv:    "idiv",
+	OpMod:     "mod",
+	OpEq:      "eq",
+	OpNeq:     "neq",
+	OpLess:    "less",
+	OpLessEq:  "lesseq",
+	OpLoad:    "load",
+	OpNext:    "next",
+	OpIsProto: "isproto",
+}
+
+var UnaryOpcode = map[byte]string{
+	OpNot:        "not",
+	OpRet:        "return",
+	OpLen:        "len",
+	OpPush:       "push",
+	OpPushUnpack: "pushvarg",
+}

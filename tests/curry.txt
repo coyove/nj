@@ -1,5 +1,5 @@
 function curry(f, args...)
-    assert(f is callable)
+    assert.shape(f, "@function")
     local ac = f.argcount()
     if f.isvarg() then ac -= 1 end
     if #args >= ac then return f.call(args...) end

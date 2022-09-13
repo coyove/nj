@@ -166,7 +166,7 @@ func init() {
 		}
 		panic(v)
 	})
-	AddGlobalMethod("assert", func(e *Env) {
+	AddGlobal("assert", Func("assert", func(e *Env) {
 		if v := e.Get(0); e.Size() <= 1 && v.IsFalse() {
 			internal.Panic("assertion failed")
 		} else if e.Size() == 2 && !v.Equal(e.Get(1)) {
@@ -174,7 +174,9 @@ func init() {
 		} else if e.Size() == 3 && !v.Equal(e.Get(1)) {
 			internal.Panic("%s: %v and %v", e.Get(2).String(), v, e.Get(1))
 		}
-	})
+	}).Object().
+		SetProp("shape", Func("shape", func(e *Env) { e.Get(0).AssertShape(e.Str(1), "") })).
+		ToValue())
 
 	*Proto.Bool = *Func("bool", func(e *Env) { e.A = Bool(e.Get(0).IsTrue()) }).Object()
 	AddGlobal("bool", Proto.Bool.ToValue())
@@ -208,6 +210,7 @@ func init() {
 				Write(w, a)
 			}
 		})).
+		SetProp("eof", Error(nil, io.EOF)).
 		ToValue())
 
 	ObjectProto = *NewNamedObject("object", 0)
@@ -654,22 +657,22 @@ func init() {
 		}).
 		SetMethod("format", func(e *Env) {
 			buf := &bytes.Buffer{}
-			EnvFprintf(e, -1, buf)
+			Fprintf(buf, e.Str(-1), e.Stack()...)
 			e.A = UnsafeStr(buf.Bytes())
 		})
 	AddGlobal("str", Proto.Str.ToValue())
 }
 
-func EnvFprintf(env *Env, start int, p io.Writer) {
-	args := make([]interface{}, 0)
-	for i := start + 1; i < env.Size(); i++ {
-		if v := env.Get(i); v.Type() == typ.Number {
+func Fprintf(w io.Writer, f string, values ...Value) {
+	args := make([]interface{}, 0, len(values))
+	for _, v := range values {
+		if v.Type() == typ.Number {
 			args = append(args, internal.SprintfNumber{Int: v.Int64(), Float: v.Float64(), IsInt: v.IsInt64()})
 		} else {
 			args = append(args, v.Interface())
 		}
 	}
-	internal.Fprintf(p, env.Str(start), args...)
+	internal.Fprintf(w, f, args...)
 }
 
 func Fprint(w io.Writer, values ...Value) {

@@ -157,7 +157,7 @@ func (m valueIO) Read(p []byte) (int, error) {
 		}
 	case typ.Object:
 		if rb := Value(m).Object().Get(Str("read2")); rb.IsObject() {
-			t := rb.Object().Call(nil, Bytes(p)).AssertShape("(i, Ev)", "Reader.read2").Native()
+			t := rb.Object().Call(nil, Bytes(p)).AssertShape("(i, EN)", "Reader.read2").Native()
 			if IsError(t.Get(1)) {
 				return t.Get(0).Int(), ToErrorRootCause(t.Get(1)).(error)
 			}
@@ -168,7 +168,7 @@ func (m valueIO) Read(p []byte) (int, error) {
 			case typ.Nil:
 				return 0, io.EOF
 			case typ.String:
-				return copy(p, v.AssertShape("sB", "Reader.read").Str()), nil
+				return copy(p, v.Str()), nil
 			case typ.Native:
 				return copy(p, v.AssertShape("sB", "Reader.read").Native().Unwrap().([]byte)), nil
 			default:
@@ -198,7 +198,7 @@ func (m valueIO) Write(p []byte) (int, error) {
 			return v.AssertNumber("Writer.write").Int(), nil
 		}
 		if rb := Value(m).Object().Get(Str("write2")); rb.IsObject() {
-			t := rb.Object().Call(nil, Bytes(p)).AssertShape("(i, Ev)", "Writer.write2").Native()
+			t := rb.Object().Call(nil, Bytes(p)).AssertShape("(i, EN)", "Writer.write2").Native()
 			if IsError(t.Get(1)) {
 				return t.Get(0).Int(), ToErrorRootCause(t.Get(1)).(error)
 			}

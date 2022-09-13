@@ -68,7 +68,7 @@ func init() {
 		ToValue())
 
 	bas.AddGlobal("printf", bas.Func("printf", func(e *bas.Env) {
-		bas.EnvFprintf(e, 0, e.MustProgram().Stdout)
+		bas.Fprintf(e.MustProgram().Stdout, e.Str(0), e.Stack()[1:]...)
 	}))
 	bas.AddGlobal("println", bas.Func("println", func(e *bas.Env) {
 		for _, a := range e.Stack() {
@@ -529,8 +529,7 @@ func init() {
 		SetPrototype(bas.Proto.ReadWriter.Proto).
 		SetMethod("reset", func(e *bas.Env) { e.A.Interface().(*internal.LimitedBuffer).Reset() }).
 		SetMethod("value", func(e *bas.Env) { e.A = bas.UnsafeStr(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }).
-		SetMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }).
-		SetPrototype(bas.Proto.Native))
+		SetMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }))
 
 	bas.AddGlobalMethod("buffer", func(e *bas.Env) {
 		b := &internal.LimitedBuffer{Limit: e.IntDefault(1, 0)}

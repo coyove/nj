@@ -279,6 +279,8 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpIsProto:
 			if a, b := env._get(opa), env._get(opb); a.Equal(b) {
 				env.A = True
+			} else if b.IsString() {
+				env.A = Bool(TestShapeFast(a, b.Str()) == nil)
 			} else {
 				env.A = Bool(HasPrototype(a, b.AssertObject("isprototype")))
 			}

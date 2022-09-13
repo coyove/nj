@@ -7,8 +7,8 @@ function makecls(f, c)
     return a
 end
 
-a = makecls(function(x, step) x.c=x.c+step return x.c end, c=0)
-b = makecls(function(x, step) x.c=x.c+step return x.c end, c=0)
+a = makecls(function(x, step) x.c=x.c+step return x.c end, {c=0})
+b = makecls(function(x, step) x.c=x.c+step return x.c end, {c=0})
 assert(a(1), 1)
 assert(b(2), 2)
 assert(a(1), 2)
@@ -22,7 +22,7 @@ end
 function timer.add(v)
     this.c = this.c + v + this.X
 end
-T1, T2 = new(timer, c=0,X=10), new(timer, c=0,X=10)
+T1, T2 = new(timer, {c=0,X=10}), new(timer, {c=0,X=10})
 T1.add(2)
 T2.add(3)
 assert(T1.c == 12 and T2.c == 13)
@@ -70,8 +70,8 @@ function CarPrototype.toString() return ('%s %s').format(this.color, this.brand)
 
 Car = new(CarPrototype, {brand=''})
 
-carA = new(Car.copy(), color='red').setBrand('ferrari')
-carB = new(Car.copy(), color='orange').setBrand('mclaren')
+carA = new(Car.copy(), {color='red'}).setBrand('ferrari')
+carB = new(Car.copy(), {color='orange'}).setBrand('mclaren')
 
 assert(carA.toString(), "red ferrari")
 assert(carB.toString(), "orange mclaren")
@@ -138,8 +138,8 @@ function cls.__str() return this.v end
 cls2 = {}
 function cls2.__str() return this.v + '2' end
 cls2 = new(cls, cls2)
-obj = new(cls, v='obj')
-obj2 = new(cls2, v='obj')
+obj = new(cls, {v='obj'})
+obj2 = new(cls2, {v='obj'})
 assert((obj).__str(), 'obj')
 assert((obj2).__str(), 'obj2')
 assert(obj2 is cls)
@@ -187,7 +187,7 @@ print(type(m))
 assert(m is nativemap)
 assert(m.c , 3)
 assert(#m, 3)
-m.merge(d=4, e=5)
+m.merge({d=4, e=5})
 assert(m.contains('e'))
 print(m.keys())
 

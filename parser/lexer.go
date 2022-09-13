@@ -12,7 +12,6 @@ import (
 
 	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
-	"github.com/coyove/nj/typ"
 )
 
 const EOF = 0xffffffff
@@ -59,7 +58,7 @@ func init() {
 }
 
 type Error struct {
-	Pos     typ.Position
+	Pos     Position
 	Message string
 	Token   string
 }
@@ -82,7 +81,7 @@ func isIdent(ch uint32, pos int) bool {
 }
 
 type Scanner struct {
-	Pos       typ.Position
+	Pos       Position
 	jsonMode  bool
 	buffer    bytes.Buffer
 	offset    int64
@@ -92,7 +91,7 @@ type Scanner struct {
 
 func NewScanner(text string, source string) *Scanner {
 	return &Scanner{
-		Pos:  typ.Position{Source: source, Line: 1, Column: 0},
+		Pos:  Position{Source: source, Line: 1, Column: 0},
 		text: text,
 	}
 }

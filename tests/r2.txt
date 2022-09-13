@@ -120,12 +120,12 @@ function oneline.write(b)
     return x
 end
 
-ol = new(oneline, buf='')
-os.shell("ls -al", stdout=ol)
+ol = new(oneline, {buf=''})
+os.shell("ls -al", {stdout=ol})
 print(ol.buf)
 
 ol = buffer()
-os.shell("whoami", stdout=ol)
+os.shell("whoami", {stdout=ol})
 print(ol.value().trim())
 
 local bigint = createprototype("bigint", function(s)
