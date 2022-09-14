@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 
 	"github.com/coyove/nj/bas"
@@ -85,11 +86,6 @@ func (n Node) Valid() bool {
 	return n.Type() != INVALID
 }
 
-func (n Node) IsNum() bool {
-	t := n.Type()
-	return t == FLOAT || t == INT
-}
-
 func (n Node) Str() string {
 	if n.Type() != STR {
 		return ""
@@ -104,18 +100,27 @@ func (n Node) Sym() string {
 	return n.Value.Str()
 }
 
-func (n Node) Num() (float64, int64, bool) {
-	if n.Type() == INT {
-		return float64(n.Int64()), n.Int64(), true
+func (n Node) numSign() (isNum bool, isNeg bool) {
+	switch n.Type() {
+	case FLOAT:
+		return true, n.UnsafeFloat64() < 0
+	case INT:
+		return true, n.UnsafeInt64() < 0
 	}
-	return n.Float64(), int64(n.Float64()), false
+	return false, false
 }
 
-func (n Node) IsNegativeNumber() bool {
-	if n.Type() == FLOAT {
-		return n.Float64() < 0
+func (n Node) IsInt16() int {
+	if n.Type() == INT {
+		a := n.Value.UnsafeInt64()
+		if a >= math.MinInt16 && a <= math.MaxInt16 {
+			if -a >= math.MinInt16 && -a <= math.MaxInt16 {
+				return 2
+			}
+			return 1
+		}
 	}
-	return n.Int64() < 0
+	return 0
 }
 
 func (n Node) Nodes() []Node {
@@ -131,7 +136,7 @@ func Nodes(args ...Node) Node {
 		if op == SAdd.Value && a.Type() == STR && b.Type() == STR {
 			return Str(a.Str() + b.Str())
 		}
-		if a.IsNum() && b.IsNum() {
+		if (a.Type() == INT || a.Type() == FLOAT) && (b.Type() == INT || b.Type() == FLOAT) {
 			switch op {
 			case SAdd.Value:
 				if a.IsInt64() && b.IsInt64() {
@@ -154,6 +159,10 @@ func Nodes(args ...Node) Node {
 				return Int(a.Int64() / b.Int64())
 			case SMod.Value:
 				return Int(a.Int64() % b.Int64())
+			}
+		}
+		if a.Type() == INT && b.Type() == INT {
+			switch op {
 			case SBitAnd.Value:
 				return Int(a.Int64() & b.Int64())
 			case SBitOr.Value:
@@ -253,12 +262,14 @@ func (n Node) String() string {
 	}
 }
 
-func (n Node) append(n2 ...Node) Node {
-	x := append(n.Native().Unwrap().([]Node), n2...)
-	return Node{NodeType: NODES, Value: bas.ValueOf(x)}
+func (n Node) append(n2 Node) Node {
+	n.Native().UnwrapFunc(func(i interface{}) interface{} {
+		return append(i.([]Node), n2)
+	})
+	return n
 }
 
-func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
+func (n Node) moveLoadStore(v Node) Node {
 	if len(n.Nodes()) == 3 {
 		if s := n.Nodes()[0].Value; s == SLoad.Value {
 			return __store(n.Nodes()[1], n.Nodes()[2], v)
@@ -267,7 +278,7 @@ func (n Node) moveLoadStore(sm func(Node, Node) Node, v Node) Node {
 	if n.Type() != SYM {
 		internal.ShouldNotHappen(n)
 	}
-	return sm(n, v)
+	return __move(n, v)
 }
 
 func (n Node) simpleJSON(lex *Lexer) bas.Value {

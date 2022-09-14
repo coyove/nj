@@ -174,6 +174,22 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 		case typ.OpLen:
 			env.A = Int(Len(env._get(opa)))
+		case typ.OpLinearABC:
+			if va := env._get(opa); va.IsInt64() {
+				env.A = Int64(va.UnsafeInt64()*int64(int16(opb)) + int64(int16(v.C)))
+			} else if va.IsNumber() {
+				env.A = Float64(va.UnsafeFloat64()*float64(int16(opb)) + float64(int16(v.C)))
+			} else {
+				internal.Panic(errNeedNumber, detail(va))
+			}
+		case typ.OpCompareABC:
+			if va := env._get(opa); va.IsInt64() {
+				env.A = Bool(va.UnsafeInt64()*int64(int16(opb)) < int64(int16(v.C)))
+			} else if va.IsNumber() {
+				env.A = Bool(va.UnsafeFloat64()*float64(int16(opb)) < float64(int16(v.C)))
+			} else {
+				internal.Panic(errNeedNumber, detail(va))
+			}
 		case typ.OpAdd:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
 				env.A = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
@@ -181,8 +197,6 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				env.A = Float64(va.Float64() + vb.Float64())
 			} else if x := va.Type() + vb.Type(); x == typ.String*2 {
 				env.A = Str(va.Str() + vb.Str())
-			} else if x == typ.String+typ.Number {
-				env.A = Str(va.String() + vb.String())
 			} else {
 				internal.Panic("add "+errNeedNumbersOrStrings, detail(va), detail(vb))
 			}

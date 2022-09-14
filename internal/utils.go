@@ -19,12 +19,16 @@ var (
 	NewFunc    func(name string, variadic bool, np byte, ss uint16, locals, caps []string, code Packet) interface{}
 	NewProgram func(coreStack, top, symbols, funcs interface{}) interface{}
 
-	unnamedFuncIndex int64
-	debugMode        = os.Getenv("njd") != ""
+	unnamedCounter int64
+	debugMode      = os.Getenv("njd") != ""
 )
 
 func UnnamedFunc() string {
-	return fmt.Sprintf("<native-%d>", atomic.AddInt64(&unnamedFuncIndex, 1))
+	return fmt.Sprintf("<native-%d>", atomic.AddInt64(&unnamedCounter, 1))
+}
+
+func UnnamedLoadString() string {
+	return fmt.Sprintf("<memory-%d>", atomic.AddInt64(&unnamedCounter, 1))
 }
 
 func ShouldNotHappen(args ...interface{}) {

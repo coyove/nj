@@ -336,3 +336,22 @@ function func1() end
 function func2() end
 function func1.a() end
 function func2.a() end
+
+a = 0
+assert(a < 1)
+assert(a < 1<<15-1)
+assert(a < 1<<15)
+assert(a < 1<<15+1)
+
+a = 1e7
+assert(1 < a)
+assert(1<<15-1 < a)
+assert(1<<15 < a)
+assert(1<<15+1 < a)
+
+assert(a-1, 9999999)
+assert(1-a, -9999999)
+assert(a+1, 10000001)
+assert(1+a, 10000001)
+assert(a+1<<15, 1e7+1<<15)
+assert(1<<15-a, 1<<15-1e7)

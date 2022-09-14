@@ -352,6 +352,14 @@ func (a *Native) Unwrap() interface{} {
 	return a.any
 }
 
+func (a *Native) UnwrapFunc(f func(interface{}) interface{}) {
+	if a.meta == internalArrayMeta {
+		a.internal = f(a.Unwrap()).([]Value)
+	} else {
+		a.any = f(a.Unwrap())
+	}
+}
+
 func (a *Native) Len() int {
 	if a.meta == internalArrayMeta {
 		return len(a.internal)

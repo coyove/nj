@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -284,6 +285,18 @@ func (obj *Object) printAll(w io.Writer) {
 				internal.WriteString(w, "load "+readAddr(a, false)+" "+readAddr(b, false)+" -> "+readAddr(c, false))
 			case typ.OpStore:
 				internal.WriteString(w, "store "+readAddr(c, false)+" -> "+readAddr(a, false)+" "+readAddr(b, false))
+			case typ.OpLinearABC:
+				if b == 1 {
+					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" + %d", int16(c)))
+				} else if b == 65535 {
+					internal.WriteString(w, "a = -"+readAddr(a, false)+fmt.Sprintf(" + %d", int16(c)))
+				} else if c == 0 {
+					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" * %d", int16(b)))
+				} else {
+					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" * %d + %d", int16(b), int16(c)))
+				}
+			case typ.OpCompareABC:
+				internal.WriteString(w, "a = "+readAddr(a, false)+internal.IfStr(b == 1, " < ", " > ")+strconv.Itoa(int(int16(c))))
 			default:
 				if us, ok := typ.UnaryOpcode[bop]; ok {
 					internal.WriteString(w, us+" "+readAddr(a, false))

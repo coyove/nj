@@ -377,8 +377,9 @@ func (v Value) Interface() interface{} {
 
 func (v Value) unsafeAddr() uintptr { return uintptr(v.p) }
 
-// UnsafeInt64 returns value as an int64 without any type-checkings.
 func (v Value) UnsafeInt64() int64 { return int64(v.v) }
+
+func (v Value) UnsafeFloat64() float64 { return math.Float64frombits(v.v) }
 
 // Equal returns true if two values are equal.
 func (v Value) Equal(r Value) bool {

@@ -46,10 +46,8 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 %left TOr
 %left TAnd
 %left '>' '<' TGte TLte TEqeq TNeq
-%left '&' '|' '^'
-%left TLsh TRsh TURsh 
-%left '+' '-' 
-%left '*' '/' '%' TIDiv
+%left '+' '-' '|' '^'
+%left '*' '/' '%' TIDiv TLsh TRsh TURsh '&'
 %left TIs
 %right UNARY /* not # -(unary) */
 
@@ -103,7 +101,7 @@ assign_stat:
             tmp := randomVarname()
             $$ = __chain(__set(tmp, $3.Nodes()[0]).At($2))
             for i, decl := range $1.Nodes() {
-                x := decl.moveLoadStore(__move, __load(tmp, Int(int64(i))).At($2)).At($2)
+                x := decl.moveLoadStore(__load(tmp, Int(int64(i))).At($2)).At($2)
                 $$ = $$.append(x)
             }
         } else {
@@ -111,7 +109,7 @@ assign_stat:
         }
     } |
     declarator op_assign expr {
-        $$ = $1.moveLoadStore(__move, Nodes($2.Node, $1, $3).At($2.Token)).At($2.Token)
+        $$ = $1.moveLoadStore(Nodes($2.Node, $1, $3).At($2.Token)).At($2.Token)
     }
 
 for_stat:
@@ -145,8 +143,8 @@ for_stat:
             __set(forEnd, $6).At($1),
             __set(forStep, $8).At($1),
         )
-        if $8.IsNum() { // step is a static number, easy case
-            if $8.IsNegativeNumber() {
+        if isNum, isNeg := $8.numSign(); isNum { // step is a static number, easy case
+            if isNeg {
                 $$ = $$.append(__loop(__inc(forVar, forStep), __if(__less(forEnd, forVar), body, breakNode).At($1)).At($1))
             } else {
                 $$ = $$.append(__loop(__inc(forVar, forStep), __if(__less(forVar, forEnd), body, breakNode).At($1)).At($1))

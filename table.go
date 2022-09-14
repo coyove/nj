@@ -3,6 +3,7 @@ package nj
 import (
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
@@ -307,15 +308,30 @@ func (table *symTable) writeInst2(op byte, n0, n1 parser.Node) {
 		internal.ShouldNotHappen(n0, n1)
 	}
 	var tmp []uint16
-	// if op == typ.OpAdd && n1.Type() == parser.INT && n1.Int64() >= math.MinInt32 && n1.Int64() <= math.MaxInt32 {
-	// 	table.codeSeg.WriteInstImm(typ.OpAddImm, table.compileAtom(n0, &tmp), int32(n1.Int64()))
-	// } else if op == typ.OpSub && n1.Type() == parser.INT && n1.Int64() >= math.MinInt32 && n1.Int64() <= math.MaxInt32 {
-	// 	table.codeSeg.WriteInstImm(typ.OpSubImm, table.compileAtom(n0, &tmp), int32(n1.Int64()))
-	// } else if op == typ.OpLess && n1.Type() == parser.INT && n1.Int64() >= math.MinInt32 && n1.Int64() <= math.MaxInt32 {
-	// 	table.codeSeg.WriteInstImm(typ.OpLessImm, table.compileAtom(n0, &tmp), int32(n1.Int64()))
-	// } else {
-	table.codeSeg.WriteInst(op, table.compileAtom(n0, &tmp), table.compileAtom(n1, &tmp))
-	// }
+	switch {
+	case op == typ.OpAdd && n1.IsInt16() > 0:
+		table.codeSeg.WriteInst3(typ.OpLinearABC, table.compileAtom(n0, &tmp), 1, uint16(int16(n1.Int64())))
+	case op == typ.OpAdd && n0.IsInt16() > 0:
+		table.codeSeg.WriteInst3(typ.OpLinearABC, table.compileAtom(n1, &tmp), 1, uint16(int16(n0.Int64())))
+	case op == typ.OpMul && n1.IsInt16() > 0:
+		table.codeSeg.WriteInst3(typ.OpLinearABC, table.compileAtom(n0, &tmp), uint16(int16(n1.Int64())), 0)
+	case op == typ.OpMul && n0.IsInt16() > 0:
+		table.codeSeg.WriteInst3(typ.OpLinearABC, table.compileAtom(n1, &tmp), uint16(int16(n0.Int64())), 0)
+	case op == typ.OpSub && n1.IsInt16() == 2:
+		table.codeSeg.WriteInst3(typ.OpLinearABC, table.compileAtom(n0, &tmp), 1, uint16(-int16(n1.Int64())))
+	case op == typ.OpSub && n0.IsInt16() > 0:
+		table.codeSeg.WriteInst3(typ.OpLinearABC, table.compileAtom(n1, &tmp), 65535 /* -1 */, uint16(int16(n0.Int64())))
+	case op == typ.OpLess && n1.IsInt16() > 0:
+		table.codeSeg.WriteInst3(typ.OpCompareABC, table.compileAtom(n0, &tmp), 1, uint16(int16(n1.Int64())))
+	case op == typ.OpLess && n0.IsInt16() == 2:
+		table.codeSeg.WriteInst3(typ.OpCompareABC, table.compileAtom(n1, &tmp), 65535, uint16(-int16(n0.Int64())))
+	case op == typ.OpLessEq && n1.IsInt16() > 0 && n1.Int64()+1 <= math.MaxInt16:
+		table.codeSeg.WriteInst3(typ.OpCompareABC, table.compileAtom(n0, &tmp), 1, uint16(int16(n1.Int64()+1)))
+	case op == typ.OpLessEq && n0.IsInt16() > 0 && -n0.Int64()+1 >= math.MinInt16:
+		table.codeSeg.WriteInst3(typ.OpCompareABC, table.compileAtom(n1, &tmp), 65535, uint16(int16(-n0.Int64()+1)))
+	default:
+		table.codeSeg.WriteInst(op, table.compileAtom(n0, &tmp), table.compileAtom(n1, &tmp))
+	}
 	table.freeAddr(tmp)
 }
 

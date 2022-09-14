@@ -125,8 +125,8 @@ func (b *Packet) WriteInst(op byte, opa, opb uint16) {
 	b.check()
 }
 
-func (b *Packet) WriteInstImm(op byte, opa uint16, imm int32) {
-	b.Code = append(b.Code, typ.Inst{Opcode: op, A: opa}.SetD(imm))
+func (b *Packet) WriteInstImm2(op byte, imm int16, opb uint16) {
+	b.Code = append(b.Code, typ.Inst{Opcode: op, B: opb, A: uint16(imm), C: 2})
 	b.check()
 }
 

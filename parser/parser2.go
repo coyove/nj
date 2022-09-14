@@ -184,7 +184,7 @@ func __moveMulti(nodes, src []Node, pos Token) Node {
 
 	res := __chain()
 	if head := nodes[0]; len(nodes) == 1 {
-		res = head.moveLoadStore(__move, src[0]).At(pos)
+		res = head.moveLoadStore(src[0]).At(pos)
 	} else {
 		// a0, ..., an = b0, ..., bn
 		names, retaddr := []Node{}, Nodes((SFreeAddr))
@@ -194,7 +194,7 @@ func __moveMulti(nodes, src []Node, pos Token) Node {
 			res = res.append(__set(names[i], src[i]).At(pos))
 		}
 		for i, v := range nodes {
-			res = res.append(v.moveLoadStore(__move, names[i]).At(pos))
+			res = res.append(v.moveLoadStore(names[i]).At(pos))
 		}
 		res = res.append(retaddr)
 	}
@@ -251,7 +251,7 @@ func (lex *Lexer) __objectBuild(list, k, v Node) Node {
 		return jsonValue(o.ToValue())
 	}
 	if list.Valid() {
-		return list.append(k, v)
+		return list.append(k).append(v)
 	}
 	return Nodes(k, v)
 }

@@ -26,6 +26,8 @@ const (
 	OpSet
 	OpStore
 	OpLoad
+	OpLinearABC
+	OpCompareABC
 	OpAdd
 	OpSub
 	OpMul

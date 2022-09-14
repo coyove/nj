@@ -1,11 +1,9 @@
 package nj
 
 import (
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
-	"sync/atomic"
 	"unsafe"
 
 	"github.com/coyove/nj/bas"
@@ -21,8 +19,6 @@ type LoadOptions struct {
 	Stdin        io.Reader
 }
 
-var loadIndex int64
-
 func LoadFile(path string, opt *LoadOptions) (*bas.Program, error) {
 	code, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -32,7 +28,7 @@ func LoadFile(path string, opt *LoadOptions) (*bas.Program, error) {
 }
 
 func LoadString(code string, opt *LoadOptions) (*bas.Program, error) {
-	return loadCode(code, fmt.Sprintf("<memory-%d>", atomic.AddInt64(&loadIndex, 1)), opt)
+	return loadCode(code, internal.UnnamedLoadString(), opt)
 }
 
 func loadCode(code, name string, opt *LoadOptions) (*bas.Program, error) {

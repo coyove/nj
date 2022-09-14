@@ -5,7 +5,6 @@ local abc = "abc"
 assert( "abc吱吱吱" == abc + "吱吱" + "吱")
 assert( "abc吱吱吱" == "abc\u5431\u5431\u5431")
 
-assert(1 + "2" == "12")
 
 local a, b = re([["(\d+)"]]).findall("a\"12\" \"2\"3")
 assert(a[0] == [["12"]] and a[1] == "12" and b[0] == [["2"]] and b[1] == "2")
