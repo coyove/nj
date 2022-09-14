@@ -254,17 +254,12 @@ func (obj *Object) printAll(w io.Writer) {
 					internal.WriteString(w, "copyclosure "+readAddr(a, true))
 				}
 				internal.WriteString(w, " -> "+readAddr(c, false))
-			case typ.OpTailCall, typ.OpCall, typ.OpTryCall:
+			case typ.OpTailCall, typ.OpCall:
 				if b != typ.RegPhantom {
 					internal.WriteString(w, "push "+readAddr(b, false)+" -> ")
 				}
-				switch bop {
-				case typ.OpTailCall:
-					internal.WriteString(w, "tail")
-				case typ.OpTryCall:
-					internal.WriteString(w, "try")
-				}
-				internal.WriteString(w, "call "+readAddr(a, true))
+				internal.WriteString(w, internal.IfStr(bop == typ.OpTailCall, "tailcall ", "call "))
+				internal.WriteString(w, readAddr(a, true))
 			case typ.OpIfNot, typ.OpJmp:
 				dest := inst.D()
 				pos2 := uint32(int32(cursor) + dest)

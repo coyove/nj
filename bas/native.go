@@ -264,7 +264,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 		a.SetKey = func(a *Native, k, v Value) {
 			defer func() {
 				if r := recover(); r != nil {
-					panic(fmt.Errorf("%s.SetKey(%v, %v): %v", a.meta.Name, detail(k), detail(v), r))
+					internal.Panic("%s.SetKey(%v, %v): %v", a.meta.Name, detail(k), detail(v), r)
 				}
 			}()
 			rv := reflect.ValueOf(a.any)

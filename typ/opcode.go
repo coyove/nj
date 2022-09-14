@@ -52,7 +52,6 @@ const (
 	OpCreateObject
 	OpCall
 	OpTailCall
-	OpTryCall
 	OpIsProto
 	OpSlice
 	OpRet

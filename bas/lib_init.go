@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"reflect"
 	"runtime"
 	"sort"
@@ -186,8 +185,7 @@ func init() {
 			e.A = Int64(v.Int64())
 		} else {
 			v, err := strconv.ParseInt(v.String(), e.IntDefault(1, 0), 64)
-			internal.PanicErr(err)
-			e.A = Int64(v)
+			_ = err == nil && e.SetA(Int64(v)) || e.SetA(Error(e, err))
 		}
 	}).Object()
 	AddGlobal("int", Proto.Int.ToValue())
@@ -196,9 +194,11 @@ func init() {
 		if v := e.Get(0); v.Type() == typ.Number {
 			e.A = v
 		} else {
-			f, i, isInt, err := internal.ParseNumber(v.String())
-			internal.PanicErr(err)
-			_ = isInt && e.SetA(Int64(i)) || e.SetA(Float64(f))
+			if f, i, isInt, err := internal.ParseNumber(v.String()); err != nil {
+				e.A = Error(e, err)
+			} else {
+				_ = isInt && e.SetA(Int64(i)) || e.SetA(Float64(f))
+			}
 		}
 	}).Object()
 	AddGlobal("float", Proto.Float.ToValue())
@@ -599,11 +599,6 @@ func init() {
 		SetMethod("replace", func(e *Env) {
 			e.A = Str(strings.Replace(e.Str(-1), e.Str(0), e.Str(1), e.IntDefault(2, -1)))
 		}).
-		SetMethod("glob", func(e *Env) {
-			m, err := filepath.Match(e.Str(-1), e.Str(0))
-			internal.PanicErr(err)
-			e.A = Bool(m)
-		}).
 		SetMethod("find", func(e *Env) {
 			start, end := e.IntDefault(1, 0), e.IntDefault(2, Len(e.A))
 			e.A = Int(strings.Index(e.Str(-1)[start:end], e.Str(0)))
@@ -752,6 +747,8 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 
 		wg.Wait()
 	}
-	internal.PanicErr(outError)
+	if outError != nil {
+		return Error(e, outError)
+	}
 	return t
 }

@@ -40,9 +40,7 @@ func init() {
 			if e.Get(1).IsTrue() {
 				f = ParseStrictJSON
 			}
-			v, err := f(s)
-			internal.PanicErr(err)
-			e.A = v
+			e.A = (*env)(e).valueOrError(f(s))
 		}).
 		ToValue())
 	bas.AddGlobalMethod("loadfile", func(e *bas.Env) {
@@ -59,11 +57,14 @@ func init() {
 		p, err := LoadString(e.Str(0), &LoadOptions{
 			Globals: e.Shape(1, "No").Object(),
 		})
-		internal.PanicErr(err)
-		e.A = valueOrPanic(p.Run())
+		if err != nil {
+			e.A = bas.Error(e, err)
+		} else {
+			e.A = (*env)(e).valueOrError(p.Run())
+		}
 	}).Object().
 		SetProp("parse", bas.Func("parse", func(e *bas.Env) {
-			e.A = valueOrPanic(parser.Parse(e.Str(0), "eval.parse"))
+			e.A = (*env)(e).valueOrError(parser.Parse(e.Str(0), "eval.parse"))
 		})).
 		ToValue())
 
@@ -124,18 +125,21 @@ func init() {
 			e.A = bas.Str(e.A.Interface().(*os.File).Name())
 		}).
 		SetMethod("seek", func(e *bas.Env) {
-			e.A = valueOrPanic(e.A.Interface().(*os.File).Seek(e.Int64(0), e.Int(1)))
+			e.A = (*env)(e).valueOrError(e.A.Interface().(*os.File).Seek(e.Int64(0), e.Int(1)))
 		}).
 		SetMethod("sync", func(e *bas.Env) {
-			internal.PanicErr(e.A.Interface().(*os.File).Sync())
+			e.A = bas.Error(e, e.A.Interface().(*os.File).Sync())
 		}).
 		SetMethod("stat", func(e *bas.Env) {
-			e.A = valueOrPanic(e.A.Interface().(*os.File).Stat())
+			e.A = (*env)(e).valueOrError(e.A.Interface().(*os.File).Stat())
 		}).
 		SetMethod("truncate", func(e *bas.Env) {
 			f := e.A.Interface().(*os.File)
-			internal.PanicErr(f.Truncate(e.Int64(1)))
-			e.A = valueOrPanic(f.Seek(0, 2))
+			if err := f.Truncate(e.Int64(1)); err != nil {
+				e.A = bas.Error(e, err)
+			} else {
+				e.A = (*env)(e).valueOrError(f.Seek(0, 2))
+			}
 		}).
 		SetPrototype(bas.Proto.ReadWriteCloser.Proto))
 
@@ -160,16 +164,19 @@ func init() {
 			}
 		}
 		f, err := os.OpenFile(path, opt, fs.FileMode(perm))
-		internal.PanicErr(err)
+		if err != nil {
+			e.A = bas.Error(e, err)
+			return
+		}
 		e.Object(-1).Set(bas.Zero, bas.ValueOf(f))
 
 		e.A = bas.NewNativeWithMeta(f, fileMeta).ToValue()
 	}).Object().
 		SetMethod("close", func(e *bas.Env) {
 			if f, _ := e.Object(-1).Get(bas.Zero).Interface().(*os.File); f != nil {
-				internal.PanicErr(f.Close())
+				e.A = bas.Error(e, f.Close())
 			} else {
-				internal.Panic("no opened file yet")
+				panic("no opened file yet")
 			}
 		}).ToValue(),
 	)
@@ -269,22 +276,29 @@ func init() {
 			go func() { out <- p.Run() }()
 			select {
 			case r := <-out:
-				internal.PanicErr(r)
+				if r != nil {
+					e.A = bas.Error(e, r)
+					return
+				}
 			case <-time.After(to):
 				p.Process.Kill()
-				panic("timeout")
+				e.A = bas.Error(e, fmt.Errorf("os.shell timeout: %v", e.Get(0)))
+				return
 			}
 			e.A = bas.Bytes(stdout.Bytes())
 		})).
-		SetProp("readdir", bas.Func("readdir", func(e *bas.Env) { e.A = valueOrPanic(ioutil.ReadDir(e.Str(0))) })).
+		SetProp("readdir", bas.Func("readdir", func(e *bas.Env) {
+			e.A = (*env)(e).valueOrError(ioutil.ReadDir(e.Str(0)))
+		})).
 		SetProp("remove", bas.Func("remove", func(e *bas.Env) {
 			path := e.Str(0)
 			fi, err := os.Stat(path)
-			internal.PanicErr(err)
-			if fi.IsDir() {
-				internal.PanicErr(os.RemoveAll(path))
+			if err != nil {
+				e.A = bas.Error(e, err)
+			} else if fi.IsDir() {
+				e.A = bas.Error(e, os.RemoveAll(path))
 			} else {
-				internal.PanicErr(os.Remove(path))
+				e.A = bas.Error(e, os.Remove(path))
 			}
 		})).
 		SetProp("pstat", bas.Func("pstat", func(e *bas.Env) {
@@ -378,7 +392,9 @@ func init() {
 		})).
 		SetProp("now", bas.Func("now", func(e *bas.Env) { e.A = bas.ValueOf(time.Now()) })).
 		SetProp("after", bas.Func("after", func(e *bas.Env) { e.A = bas.ValueOf(time.After(time.Duration(e.Float64(0)*1e6) * 1e3)) })).
-		SetProp("parse", bas.Func("parse", func(e *bas.Env) { e.A = valueOrPanic(time.Parse(getTimeFormat(e.Str(0)), e.Str(1))) })).
+		SetProp("parse", bas.Func("parse", func(e *bas.Env) {
+			e.A = (*env)(e).valueOrError(time.Parse(getTimeFormat(e.Str(0)), e.Str(1)))
+		})).
 		SetProp("format", bas.Func("format", func(e *bas.Env) {
 			tt, ok := e.Get(1).Interface().(time.Time)
 			if !ok {
@@ -397,7 +413,10 @@ func init() {
 		method := strings.ToUpper(args.GetDefault(bas.Str("method"), bas.Str("GET")).Str())
 
 		u, err := url.Parse(args.Get(bas.Str("url")).AssertString("http URL"))
-		internal.PanicErr(err)
+		if err != nil {
+			e.A = bas.Error(e, err)
+			return
+		}
 
 		addKV := func(k string, add func(k, v string)) {
 			x := args.Get(bas.Str(k)).AssertShape("No", k)
@@ -432,25 +451,39 @@ func init() {
 			// Check form-data
 			payload := bytes.Buffer{}
 			writer := multipart.NewWriter(&payload)
-			if x := args.Get(bas.Str("multipart")); x.Type() == typ.Object {
-				x.Object().Foreach(func(k bas.Value, v *bas.Value) bool {
+			outError := (error)(nil)
+			args.Get(bas.Str("multipart")).AssertShape("No", "multipart").Object().
+				Foreach(func(k bas.Value, v *bas.Value) bool {
 					key, rd := k.String(), *v
-					rd.AssertShape("<s,(s,R)>", "http form data format")
+					rd.AssertShape("<s,(s,R)>", "http multipart form data format")
 					if rd.Type() == typ.Native && bas.Len(rd) == 2 { // [filename, reader]
-						part, err := writer.CreateFormFile(key, rd.Native().Get(0).Str())
-						internal.PanicErr(err)
-						_, err = io.Copy(part, rd.Native().Get(1).Reader())
-						internal.PanicErr(err)
+						fn := rd.Native().Get(0).Str()
+						if part, err := writer.CreateFormFile(key, fn); err != nil {
+							outError = fmt.Errorf("%s: %v", fn, err)
+							return false
+						} else if _, err = io.Copy(part, rd.Native().Get(1).Reader()); err != nil {
+							outError = fmt.Errorf("%s: %v", fn, err)
+							return false
+						}
 					} else {
-						part, err := writer.CreateFormField(key)
-						internal.PanicErr(err)
-						_, err = io.Copy(part, rd.Reader())
-						internal.PanicErr(err)
+						if part, err := writer.CreateFormField(key); err != nil {
+							outError = fmt.Errorf("%s: %v", key, err)
+							return false
+						} else if _, err = io.Copy(part, rd.Reader()); err != nil {
+							outError = fmt.Errorf("%s: %v", key, err)
+							return false
+						}
 					}
 					return true
 				})
+			if outError != nil {
+				e.A = bas.Error(e, err)
+				return
 			}
-			internal.PanicErr(writer.Close())
+			if err := writer.Close(); err != nil {
+				e.A = bas.Error(e, err)
+				return
+			}
 			if payload.Len() > 0 {
 				bodyReader = &payload
 				dataForm = writer
@@ -458,7 +491,10 @@ func init() {
 		}
 
 		req, err := http.NewRequest(method, u.String(), bodyReader)
-		internal.PanicErr(err)
+		if err != nil {
+			e.A = bas.Error(e, err)
+			return
+		}
 
 		switch {
 		case urlForm:
@@ -487,11 +523,9 @@ func init() {
 				Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(p) },
 			}
 		}
-		send := func(e *bas.Env, panic bool) (code, headers, buf, jar bas.Value) {
+		send := func(e *bas.Env) (code, headers, buf, jar bas.Value) {
 			resp, err := client.Do(req)
-			if panic {
-				internal.PanicErr(err)
-			} else if err != nil {
+			if err != nil {
 				err := bas.Error(e, err)
 				return err, err, err, err
 			}
@@ -505,17 +539,21 @@ func init() {
 		}
 		if f := args.Get(bas.Str("async")); f.IsObject() {
 			go func(e *bas.Env) {
-				code, hdr, buf, jar := send(e, false)
+				code, hdr, buf, jar := send(e)
 				f.Object().Call(e, code, hdr, buf, jar)
 			}(e.Copy())
 			return
 		}
-		e.A = bas.Array(send(e, true))
+		e.A = bas.Array(send(e))
 	}).Object().
 		SetProp("urlescape", bas.Func("urlescape", func(e *bas.Env) { e.A = bas.Str(url.QueryEscape(e.Str(0))) })).
-		SetProp("urlunescape", bas.Func("urlunescape", func(e *bas.Env) { e.A = valueOrPanic(url.QueryUnescape(e.Str(0))) })).
+		SetProp("urlunescape", bas.Func("urlunescape", func(e *bas.Env) {
+			e.A = (*env)(e).valueOrError(url.QueryUnescape(e.Str(0)))
+		})).
 		SetProp("pathescape", bas.Func("pathescape", func(e *bas.Env) { e.A = bas.Str(url.PathEscape(e.Str(0))) })).
-		SetProp("pathunescape", bas.Func("pathunescape", func(e *bas.Env) { e.A = valueOrPanic(url.PathUnescape(e.Str(0))) }))
+		SetProp("pathunescape", bas.Func("pathunescape", func(e *bas.Env) {
+			e.A = (*env)(e).valueOrError(url.PathUnescape(e.Str(0)))
+		}))
 	for _, m := range []string{"get", "post", "put", "delete", "head", "patch"} {
 		m := m
 		httpLib = httpLib.SetMethod(m, func(e *bas.Env) {
@@ -634,7 +672,11 @@ func parseJSON(v interface{}) bas.Value {
 	return bas.ValueOf(v)
 }
 
-func valueOrPanic(v interface{}, err error) bas.Value {
-	internal.PanicErr(err)
+type env bas.Env
+
+func (e *env) valueOrError(v interface{}, err error) bas.Value {
+	if err != nil {
+		return bas.Error((*bas.Env)(e), err)
+	}
 	return bas.ValueOf(v)
 }

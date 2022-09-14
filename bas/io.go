@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
 
@@ -41,28 +40,26 @@ func init() {
 		if er == io.EOF {
 			return Nil
 		}
-		panic(er)
+		return Error(nil, er)
 	}
 
 	Proto.Reader.Proto.
 		SetMethod("read", func(e *Env) {
-			buf := func(e *Env) []byte {
+			buf, err := func(e *Env) ([]byte, error) {
 				f := e.A.Reader()
 				if n := e.Get(0); n.Type() == typ.Number {
 					p := make([]byte, n.Int())
 					rn, err := f.Read(p)
 					if err == nil || rn > 0 {
-						return p[:rn]
+						return p[:rn], nil
 					} else if err == io.EOF {
-						return nil
+						return nil, nil
 					}
-					panic(err)
+					return nil, err
 				}
-				buf, err := ioutil.ReadAll(f)
-				internal.PanicErr(err)
-				return buf
+				return ioutil.ReadAll(f)
 			}(e)
-			_ = buf == nil && e.SetA(Nil) || e.SetA(Bytes(buf))
+			_ = err != nil && e.SetA(Error(e, err)) || e.SetA(Bytes(buf))
 		}).
 		SetMethod("read2", func(e *Env) {
 			rn, err := e.A.Reader().Read(e.Shape(0, "B").Native().Unwrap().([]byte))
@@ -80,8 +77,7 @@ func init() {
 	Proto.Writer.Proto.
 		SetMethod("write", func(e *Env) {
 			wn, err := Write(e.A.Writer(), e.Get(0))
-			internal.PanicErr(err)
-			e.A = Int(wn)
+			_ = err == nil && e.SetA(Int(wn)) || e.SetA(Error(e, err))
 		}).
 		SetMethod("write2", func(e *Env) {
 			wn, err := Write(e.A.Writer(), e.Get(0))
@@ -95,14 +91,13 @@ func init() {
 			} else {
 				wn, err = io.Copy(e.Get(-1).Writer(), e.Get(0).Reader())
 			}
-			internal.PanicErr(err)
-			e.A = Int64(wn)
+			_ = err == nil && e.SetA(Int64(wn)) || e.SetA(Error(e, err))
 		}).
 		SetPrototype(Proto.Native)
 
 	Proto.Closer.Proto.
 		SetMethod("close", func(e *Env) {
-			internal.PanicErr(e.A.Closer().Close())
+			e.A = Error(e, e.A.Closer().Close())
 		}).
 		SetPrototype(Proto.Native)
 

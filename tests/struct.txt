@@ -125,8 +125,8 @@ end
 assert(addcls(1)(2)(3), 8)
 
 print.try("native try call")
-assert(function(x) assert(x, 1) x end?(1) is (1))
-assert(function(x) assert(x, 1) x end?(2) is error)
+assert(function(x) assert(x, 1) x end.try(1) is (1))
+assert(function(x) assert(x, 1) x end.try(2) is error)
 
 -- syntax test
 m = {}

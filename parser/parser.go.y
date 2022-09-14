@@ -36,7 +36,7 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 /* Literals */
 %token<token> TOr TAnd TEqeq TNeq TLte TGte TIdent TNumber TString TIDiv TInv
 %token<token> TAddEq TSubEq TMulEq TDivEq TIDivEq TModEq TBitAndEq TBitOrEq TBitXorEq TBitLshEq TBitRshEq TBitURshEq
-%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' ':' '?' ')' ','
+%token<token> '{' '[' '(' '=' '>' '<' '+' '-' '*' '/' '%' '^' '#' '.' '&' '|' '~' ':' ')' ','
 
 /* Operators */
 %right 'T'
@@ -250,7 +250,6 @@ prefix_expr:
     prefix_expr TLBracket expr ':' expr ']'            { $$ = Nodes(SSlice, $1, $3, $5).At($2) } |
     prefix_expr TLBracket ':' expr ']'                 { $$ = Nodes(SSlice, $1, zero, $4).At($2) } |
     prefix_expr TLBracket expr ':' ']'                 { $$ = Nodes(SSlice, $1, $3, Int(-1)).At($2) } |
-    prefix_expr '?' TLParen prefix_expr_call_arguments { $$ = __tryCall($1, $4.At($3)).At($3) } |
     prefix_expr TLParen prefix_expr_call_arguments     { $$ = __call($1, $3.At($2)).At($2) }
 
 prefix_expr_call_arguments:

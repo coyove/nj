@@ -414,7 +414,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				}
 				env._set(v.C, o.ToValue())
 			}
-		case typ.OpCall, typ.OpTryCall, typ.OpTailCall:
+		case typ.OpCall, typ.OpTailCall:
 			a := env._get(opa)
 			if a.Type() != typ.Object {
 				internal.Panic("can't call %v", detail(a))
@@ -443,18 +443,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				stackOffsetFlag: env.stackOffsetFlag,
 			}
 
-			if v.Opcode == typ.OpTryCall {
-				stackEnv.top = env.top
-				stackEnv.runtime.stack0 = last
-				if len(retStack) > 0 {
-					stackEnv.runtime.stack1 = retStack[len(retStack)-1]
-					stackEnv.runtime.stackN = retStack[:len(retStack)-1]
-				}
-				a, err := obj.TryCall(&stackEnv, stackEnv.Stack()...)
-				_ = err == nil && env.SetA(a) || env.SetA(Error(&stackEnv, err))
-				stackEnv.runtime = stacktraces{}
-				stackEnv.clear()
-			} else if cls.native != nil {
+			if cls.native != nil {
 				stackEnv.top = env.top
 				stackEnv.runtime.stack0 = Stacktrace{Callable: obj, stackOffsetFlag: internal.FlagNativeCall}
 				stackEnv.runtime.stack1 = last

@@ -246,6 +246,11 @@ func (env *Env) SetA(a Value) bool {
 	return true
 }
 
+func (env *Env) SetError(err error) bool {
+	env.A = Error(env, err)
+	return true
+}
+
 func (e *Env) MustProgram() *Program {
 	if e.top != nil {
 		return e.top
