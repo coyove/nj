@@ -68,8 +68,8 @@ end
 
 rows = renderRow.map(array.make(size), os.numcpus)
 
-f = open("1.pbm", "w")
-io.write(f, "P4\n" + (size) + " " + (size) + "\n") 
+f = open("1.pbm", "w+")
+io.write(f, "P4\n" + str(size) + " " + str(size) + "\n") 
 for i = 0, #(rows) do
     io.write(f, rows[i]) 
 end
