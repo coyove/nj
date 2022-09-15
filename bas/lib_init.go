@@ -27,6 +27,10 @@ var globals struct {
 	stack []Value
 }
 
+func GetGlobalName(v Value) int {
+	return int(globals.sym.Get(v).UnsafeInt64())
+}
+
 func Globals() *Object {
 	return globals.store.Copy(true)
 }
@@ -71,7 +75,8 @@ func init() {
 		return obj
 	}
 	internal.NewProgram = func(coreStack, top, symbols, funcs interface{}) interface{} {
-		cls := &Program{main: top.(*Object)}
+		cls := &Program{}
+		cls.main = top.(*Object)
 		cls.stack = coreStack.(*[]Value)
 		cls.symbols = symbols.(*Object)
 		cls.functions = funcs.(*Object)

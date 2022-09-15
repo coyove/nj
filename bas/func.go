@@ -273,7 +273,7 @@ func (obj *Object) printAll(w io.Writer) {
 					internal.WriteString(w, fmt.Sprintf(" jmp %d to %d", int16(c), int32(cursor)+int32(int16(c))))
 				}
 			case typ.OpBitOp:
-				internal.WriteString(w, "bitop ")
+				internal.WriteString(w, "bit")
 				internal.WriteString(w, [...]string{"and ", "or ", "xor ", "lsh ", "rsh ", "ursh "}[c])
 				internal.WriteString(w, readAddr(a, false)+" "+readAddr(b, false))
 			case typ.OpLoad:

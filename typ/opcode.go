@@ -55,6 +55,7 @@ const (
 	OpIsProto
 	OpSlice
 	OpRet
+	OpLoadGlobal
 )
 
 func JmpInst(op byte, distance int) Inst {

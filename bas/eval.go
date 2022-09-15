@@ -476,6 +476,11 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			if env.A.IsFalse() {
 				cursor = uint32(int32(cursor) + v.D())
 			}
+		case typ.OpLoadGlobal:
+			env.A = globals.stack[opa]
+			if opb != typ.RegPhantom {
+				env.A = env.A.AssertObject("load global").Get(env._get(opb))
+			}
 		}
 	}
 }
