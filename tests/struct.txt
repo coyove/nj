@@ -214,3 +214,12 @@ assert(rv, 2)
 assert(flag)
 
 loadfile("tests/array.txt")
+
+assert(goVarg(10, function(a, b...)
+    for _, b in b do
+        a *= b
+    end
+    println(a, b)
+    return a 
+end), 10 * 11 * 12)
+

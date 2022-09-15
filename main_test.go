@@ -78,6 +78,9 @@ func runFile(t *testing.T, path string) {
 			SetProp("intAlias", bas.ValueOf(func(d time.Duration) time.Time {
 				return time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).Add(d)
 			})).
+			SetProp("goVarg", bas.ValueOf(func(a int, f func(a int, b ...int) int) int {
+				return f(a, a+1, a+2)
+			})).
 			SetProp("boolConvert", bas.ValueOf(func(v bool) {
 				if !v {
 					panic("bad")

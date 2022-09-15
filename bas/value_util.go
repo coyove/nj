@@ -152,7 +152,14 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 			return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
 				var a []Value
 				for i := range args {
-					a = append(a, ValueOf(args[i].Interface()))
+					if i == len(args)-1 && t.IsVariadic() {
+						// TODO: performance
+						for j := 0; j < args[i].Len(); j++ {
+							a = append(a, ValueOf(args[i].Index(j).Interface()))
+						}
+					} else {
+						a = append(a, ValueOf(args[i].Interface()))
+					}
 				}
 				out := v.Object().Call(nil, a...)
 				if to := t.NumOut(); to == 1 {
