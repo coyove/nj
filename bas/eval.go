@@ -134,16 +134,17 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 		case typ.OpSet:
 			env._set(opa, env._get(opb))
 		case typ.OpInc:
-			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {
-				env.A = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
+			va := env._getRef(opa)
+			if vb := env._get(opb); va.IsInt64() && vb.IsInt64() {
+				*va = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
 			} else if va.IsNumber() && vb.IsNumber() {
-				env.A = Float64(va.Float64() + vb.Float64())
+				*va = Float64(va.Float64() + vb.Float64())
 			} else if va.Type() == typ.String && vb.Type() == typ.String {
-				env.A = Str(va.Str() + vb.Str())
+				*va = Str(va.Str() + vb.Str())
 			} else {
-				internal.Panic("inc "+errNeedNumbersOrStrings, detail(va), detail(vb))
+				internal.Panic("inc "+errNeedNumbersOrStrings, detail(*va), detail(vb))
 			}
-			env._set(opa, env.A)
+			env.A = *va
 			cursor = uint32(int32(cursor) + int32(int16(v.C)))
 		case typ.OpNext:
 			va, vb := env._get(opa), env._get(opb)
@@ -430,7 +431,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				if len(s) > w {
 					s[w] = newArray(append([]Value{}, s[w:]...)...).ToValue()
 				} else {
-					stackEnv.grow(w + 1)
+					stackEnv.resize(w + 1)
 					stackEnv._set(uint16(w), Nil)
 				}
 			}
@@ -452,10 +453,9 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				stackEnv.runtime = stacktraces{}
 				env.A = stackEnv.A
 				stackEnv.clear()
-			} else {
-				stackEnv.growZero(int(cls.stackSize), int(cls.numParams))
-
-				// Switch 'env' to 'stackEnv' and clear 'stackEnv'
+			} else if v.Opcode == typ.OpCall {
+				// Switch 'env' to 'stackEnv' and move up 'stackEnv'.
+				stackEnv.resizeZero(int(cls.stackSize), int(cls.numParams))
 				cursor = 0
 				K = obj
 				code = obj.fun.codeSeg.Code
@@ -463,11 +463,20 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				env.top = cls.top
 				env.A = stackEnv.A
 
-				if v.Opcode == typ.OpCall {
-					retStack = append(retStack, last)
-				} else {
-					env.stackOffsetFlag |= internal.FlagTailCall
-				}
+				retStack = append(retStack, last)
+				stackEnv.stackOffsetFlag = uint32(len(*env.stack))
+			} else {
+				// Move arguments from 'stackEnv' to 'env'.
+				*env.stack = append((*env.stack)[:env.stackOffset()], stackEnv.Stack()...)
+
+				// Resize 'env' to allocate enough space for the next function and move up 'stackEnv'.
+				env.resizeZero(int(cls.stackSize), int(cls.numParams))
+				cursor = 0
+				K = obj
+				code = obj.fun.codeSeg.Code
+				env.top = cls.top
+				env.stackOffsetFlag |= internal.FlagTailCall
+				env.A = stackEnv.A
 				stackEnv.stackOffsetFlag = uint32(len(*env.stack))
 			}
 		case typ.OpJmp:
@@ -477,9 +486,10 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				cursor = uint32(int32(cursor) + v.D())
 			}
 		case typ.OpLoadGlobal:
-			env.A = globals.stack[opa]
-			if opb != typ.RegPhantom {
-				env.A = env.A.AssertObject("load global").Get(env._get(opb))
+			if a := globals.stack[opa]; opb != typ.RegPhantom {
+				env._set(v.C, a.AssertObject("load global").Get(env._get(opb)))
+			} else {
+				env._set(v.C, a)
 			}
 		}
 	}

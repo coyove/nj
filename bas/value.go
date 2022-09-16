@@ -7,6 +7,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 	"unsafe"
@@ -419,13 +420,13 @@ func (v Value) String() string {
 func (v Value) JSONString() string {
 	p := &bytes.Buffer{}
 	v.Stringify(p, typ.MarshalToJSON)
-	return p.String()
+	return strings.TrimSpace(p.String())
 }
 
 func (v Value) MarshalJSON() ([]byte, error) {
 	p := &bytes.Buffer{}
 	v.Stringify(p, typ.MarshalToJSON)
-	return p.Bytes(), nil
+	return bytes.TrimSpace(p.Bytes()), nil
 }
 
 func (v Value) Stringify(p io.Writer, j typ.MarshalType) {
@@ -444,7 +445,7 @@ func (v Value) Stringify(p io.Writer, j typ.MarshalType) {
 		if j == typ.MarshalToJSON || j == typ.MarshalToString {
 			v.Object().rawPrint(p, j)
 		} else {
-			internal.WriteString(p, "@"+v.Object().Name())
+			internal.WriteString(p, v.Object().Name())
 		}
 	case typ.Native:
 		if j == typ.MarshalToJSON || j == typ.MarshalToString {

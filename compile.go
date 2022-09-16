@@ -39,7 +39,7 @@ func compileProgBlock(table *symTable, nodes []parser.Node) uint16 {
 func compileSetMove(table *symTable, nodes []parser.Node) uint16 {
 	dest := nodes[1].Value
 	if bas.GetGlobalName(dest) > 0 || dest == staticTrue || dest == staticFalse || dest == staticThis || dest == staticSelf {
-		table.panicnode(nodes[1], "this is a global static name")
+		table.panicnode(nodes[1], "can't bound to a global static name")
 	}
 	destAddr, declared := table.get(dest)
 	if nodes[0].Value == parser.SMove.Value {

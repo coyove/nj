@@ -159,11 +159,11 @@ func callobj(m *Object, r stacktraces, g *Program, outErr *error, this Value, ar
 		if len(s) > int(c.numParams)-1 {
 			s[c.numParams-1] = newArray(append([]Value{}, s[c.numParams-1:]...)...).ToValue()
 		} else {
-			newEnv.grow(int(c.numParams))
+			newEnv.resize(int(c.numParams))
 			newEnv._set(uint16(c.numParams)-1, newArray().ToValue())
 		}
 	}
-	newEnv.growZero(int(c.stackSize), int(c.numParams))
+	newEnv.resizeZero(int(c.stackSize), int(c.numParams))
 
 	return internalExecCursorLoop(newEnv, m, r.Stacktrace(false))
 }
@@ -280,6 +280,12 @@ func (obj *Object) printAll(w io.Writer) {
 				internal.WriteString(w, "load "+readAddr(a, false)+" "+readAddr(b, false)+" -> "+readAddr(c, false))
 			case typ.OpStore:
 				internal.WriteString(w, "store "+readAddr(c, false)+" -> "+readAddr(a, false)+" "+readAddr(b, false))
+			case typ.OpLoadGlobal:
+				internal.WriteString(w, "loadglobal "+detail(globals.stack[a]))
+				if b != typ.RegPhantom {
+					internal.WriteString(w, " "+readAddr(b, true))
+				}
+				internal.WriteString(w, " -> "+readAddr(c, false))
 			case typ.OpLinearABC:
 				if b == 1 {
 					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" + %d", int16(c)))

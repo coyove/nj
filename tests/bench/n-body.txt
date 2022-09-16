@@ -103,7 +103,7 @@ function advance(dt)
             mag = dt / (dSquared * distance) 
 
             mi = sysVi[3] * mag 
-            m = (-sysVj[3]) * mag 
+            m = -sysVj[3] * mag 
 
             _vx = _vx + dx * m 
             _vy = _vy + dy * m 

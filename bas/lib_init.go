@@ -35,10 +35,6 @@ func Globals() *Object {
 	return globals.store.Copy(true)
 }
 
-func GetGlobalsStack() (*Object, []Value) {
-	return globals.sym.Copy(true), append([]Value{}, globals.stack...)
-}
-
 func AddGlobal(k string, v Value) {
 	if len(globals.stack) == 0 {
 		globals.stack = append(globals.stack, Nil)
@@ -103,7 +99,7 @@ func init() {
 	})
 	AddGlobalMethod("createprototype", func(e *Env) {
 		e.A = Func(e.Str(0), func(e *Env) {
-			o := e.runtime.stack0.Callable
+			o := e.Self()
 			init := o.Get(Str("_init")).Object()
 			n := o.Copy(true).SetPrototype(o)
 			callobj(init, e.runtime, e.top, nil, n.ToValue(), e.Stack()...)
@@ -116,10 +112,10 @@ func init() {
 
 	// Debug libraries
 	AddGlobal("debug", NewNamedObject("debug", 0).
-		SetProp("self", Func("self", func(e *Env) { e.A = e.runtime.stack1.Callable.ToValue() })).
+		SetProp("self", Func("self", func(e *Env) { e.A = e.Caller().ToValue() })).
 		SetProp("locals", Func("locals", func(e *Env) {
-			locals := e.runtime.stack1.Callable.fun.locals
-			start := e.stackOffset() - uint32(e.runtime.stack1.Callable.fun.stackSize)
+			locals := e.Caller().fun.locals
+			start := e.stackOffset() - uint32(e.Caller().fun.stackSize)
 			if e.Get(0).IsTrue() {
 				r := NewObject(0)
 				for i, name := range locals {

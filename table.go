@@ -353,6 +353,11 @@ func (table *symTable) compileStaticNode(node parser.Node) (uint16, bool) {
 	case parser.SYM:
 		idx, ok := table.get(node.Value)
 		if !ok {
+			if idx := bas.GetGlobalName(node.Value); idx > 0 {
+				c := table.borrowAddress()
+				table.codeSeg.WriteInst3(typ.OpLoadGlobal, uint16(idx), typ.RegPhantom, c)
+				return c, true
+			}
 			table.panicnode(node, "symbol not defined")
 		}
 		return idx, true
@@ -407,7 +412,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 	// Load nil first to ensure its address == 0
 	table.borrowAddress()
 
-	obj, coreStack := bas.GetGlobalsStack()
+	coreStack := []bas.Value{bas.Nil}
 
 	push := func(k, v bas.Value) uint16 {
 		idx, ok := table.get(k)
@@ -421,14 +426,11 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 		return idx
 	}
 
-	table.sym = *obj
-
 	if opt != nil && opt.Globals != nil {
 		opt.Globals.Foreach(func(k bas.Value, v *bas.Value) bool { push(k, *v); return true })
 	}
 
-	gi := push(bas.Str("PROGRAM"), bas.Nil)
-	push(bas.Str("SOURCE_CODE"), bas.Str(source))
+	gi := push(bas.Str("Program"), bas.Nil)
 
 	table.vp = uint16(len(coreStack))
 

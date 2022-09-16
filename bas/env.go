@@ -53,15 +53,15 @@ func (env *Env) stackOffset() uint32 {
 	return env.stackOffsetFlag & internal.MaxStackSize
 }
 
-func (env *Env) growZero(newSize, zeroSize int) {
+func (env *Env) resizeZero(newSize, zeroSize int) {
 	old := len(*env.stack)
-	env.grow(newSize)
+	env.resize(newSize)
 	for i := old; i < zeroSize; i++ {
 		(*env.stack)[i] = Value{}
 	}
 }
 
-func (env *Env) grow(newSize int) {
+func (env *Env) resize(newSize int) {
 	s := *env.stack
 	sz := int(env.stackOffset()) + newSize
 	if sz > cap(s) {
@@ -103,18 +103,22 @@ func (env *Env) Size() int {
 	return len(*env.stack) - int(env.stackOffset())
 }
 
-func (env *Env) _get(yx uint16) Value {
+func (env *Env) _getRef(yx uint16) *Value {
 	if yx == typ.RegA {
-		return env.A
+		return &env.A
 	}
 	if yx > typ.RegLocalMask {
 		offset := uintptr(yx&typ.RegLocalMask) * ValueSize
-		return *(*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.top.stack)) + offset))
+		return (*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.top.stack)) + offset))
 		// return (*env.global.stack)[yx&typ.RegLocalMask]
 	}
 	offset := uintptr(uint32(yx)+env.stackOffset()) * ValueSize
-	return *(*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.stack)) + offset))
+	return (*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.stack)) + offset))
 	// return (*env.stack)[uint32(yx)+env.stackOffset()]
+}
+
+func (env *Env) _get(yx uint16) Value {
+	return *env._getRef(yx)
 }
 
 func (env *Env) _set(yx uint16, v Value) {
@@ -225,6 +229,12 @@ func (env *Env) Shape(idx int, s string) Value {
 func (env *Env) ThisProp(k string) Value {
 	return env.Object(-1).Get(Str(k))
 }
+
+func (env *Env) This() Value { return env.A }
+
+func (env *Env) Self() *Object { return env.runtime.stack0.Callable }
+
+func (env *Env) Caller() *Object { return env.runtime.stack1.Callable }
 
 func (env *Env) mustBe(t typ.ValueType, idx int) (v Value) {
 	if idx == -1 {

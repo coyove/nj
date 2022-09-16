@@ -177,7 +177,7 @@ func TestTailCallPanic(t *testing.T) {
 x = 0
 function foo()
 x=x+1
-if x == 1e6 then assert(false) end
+if x == 1e5 then assert(false) end
 foo()
 end
 foo()

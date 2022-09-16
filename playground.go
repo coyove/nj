@@ -18,37 +18,27 @@ import (
 
 //go:embed playground.html
 var playgroundHTML []byte
-var playgroundCode = `-- Author: coyove
-_, author = re([[Author: (\S+)]]).find(SOURCE_CODE)
+var playgroundCode = `
+-- Author: coyove
+_, author = re([[Author: (\S+)]]).find(Program.Source)
 println("Author is:", author)
 
--- Print all global values, mainly functions
+-- Print all global values
 local g = debug.globals()
 
-print("version %s, total global values: %d".format(VERSION, #g/3))
+print("version %d, total global values: %d".format(VERSION, #g/3))
 
-function pp(name, f, ident)
-    if f is object then
-        if f is callable then
-            print(ident, name)
-            print()
-        end
-        for k, v in f do pp(name + "." + str(k), v, ident) end
+function pp(idx, f)
+    if f == nil then return end
+    if f is callable then
+        print(idx, ": function ", f)
     else
-        print(ident, name, "=", f)
-        print()
+        print(idx, ": ", json.stringify(f))
     end		
 end
 
 for i=0,#g,3 do
-    if g[i+1] == '' then
-    else
-        local name = g[i + 1]
-        if #name > 32 then
-            name = name.sub(0, 16) + '...' + name.sub(#name-16, #name)
-        end
-        pp(i//3 + ": " + name, g[i + 2], "")
-    end
+    pp(i//3, g[i + 2])
 end`
 
 func PlaygroundHandler(defaultCode string, opt *LoadOptions) func(w http.ResponseWriter, r *http.Request) {
