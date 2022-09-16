@@ -32,9 +32,9 @@ import (
 
 func init() {
 	bas.AddGlobal("json", bas.NewNamedObject("json", 0).
-		SetMethod("stringify", func(e *bas.Env) { e.A = bas.Str(e.Get(0).JSONString()) }).
-		SetMethod("dump", func(e *bas.Env) { e.Get(1).Stringify(e.Get(0).Writer(), typ.MarshalToJSON) }).
-		SetMethod("parse", func(e *bas.Env) {
+		AddMethod("stringify", func(e *bas.Env) { e.A = bas.Str(e.Get(0).JSONString()) }).
+		AddMethod("dump", func(e *bas.Env) { e.Get(1).Stringify(e.Get(0).Writer(), typ.MarshalToJSON) }).
+		AddMethod("parse", func(e *bas.Env) {
 			s := strings.TrimSpace(e.Str(0))
 			f := parser.ParseJSON
 			if e.Get(1).IsTrue() {
@@ -102,38 +102,38 @@ func init() {
 		rx := regexp.MustCompile(e.Str(0))
 		e.A = bas.NewObject(1).SetPrototype(e.A.Object()).SetProp("_rx", bas.ValueOf(rx)).ToValue()
 	}).Object().
-		SetMethod("match", func(e *bas.Env) {
+		AddMethod("match", func(e *bas.Env) {
 			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
 			e.A = bas.Bool(rx.MatchString(e.Str(0)))
 		}).
-		SetMethod("find", func(e *bas.Env) {
+		AddMethod("find", func(e *bas.Env) {
 			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
 			e.A = bas.NewNative(rx.FindStringSubmatch(e.Str(0))).ToValue()
 		}).
-		SetMethod("findall", func(e *bas.Env) {
+		AddMethod("findall", func(e *bas.Env) {
 			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
 			e.A = bas.NewNative(rx.FindAllStringSubmatch(e.Str(0), e.IntDefault(1, -1))).ToValue()
 		}).
-		SetMethod("replace", func(e *bas.Env) {
+		AddMethod("replace", func(e *bas.Env) {
 			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
 			e.A = bas.Str(rx.ReplaceAllString(e.Str(0), e.Str(1)))
 		}).
 		ToValue())
 
 	fileMeta := bas.NewEmptyNativeMeta("File", bas.NewObject(0).
-		SetMethod("name", func(e *bas.Env) {
+		AddMethod("name", func(e *bas.Env) {
 			e.A = bas.Str(e.A.Interface().(*os.File).Name())
 		}).
-		SetMethod("seek", func(e *bas.Env) {
+		AddMethod("seek", func(e *bas.Env) {
 			e.A = (*env)(e).valueOrError(e.A.Interface().(*os.File).Seek(e.Int64(0), e.Int(1)))
 		}).
-		SetMethod("sync", func(e *bas.Env) {
+		AddMethod("sync", func(e *bas.Env) {
 			e.A = bas.Error(e, e.A.Interface().(*os.File).Sync())
 		}).
-		SetMethod("stat", func(e *bas.Env) {
+		AddMethod("stat", func(e *bas.Env) {
 			e.A = (*env)(e).valueOrError(e.A.Interface().(*os.File).Stat())
 		}).
-		SetMethod("truncate", func(e *bas.Env) {
+		AddMethod("truncate", func(e *bas.Env) {
 			f := e.A.Interface().(*os.File)
 			if err := f.Truncate(e.Int64(1)); err != nil {
 				e.A = bas.Error(e, err)
@@ -172,7 +172,7 @@ func init() {
 
 		e.A = bas.NewNativeWithMeta(f, fileMeta).ToValue()
 	}).Object().
-		SetMethod("close", func(e *bas.Env) {
+		AddMethod("close", func(e *bas.Env) {
 			if f, _ := e.Object(-1).Get(bas.Zero).Interface().(*os.File); f != nil {
 				e.A = bas.Error(e, f.Close())
 			} else {
@@ -556,7 +556,7 @@ func init() {
 		}))
 	for _, m := range []string{"get", "post", "put", "delete", "head", "patch"} {
 		m := m
-		httpLib = httpLib.SetMethod(m, func(e *bas.Env) {
+		httpLib = httpLib.AddMethod(m, func(e *bas.Env) {
 			ex := e.Shape(1, "No").Object()
 			e.A = e.Object(-1).Call(e, bas.NewObject(0).SetProp("method", bas.Str(m)).SetProp("url", e.Get(0)).Merge(ex).ToValue())
 		})
@@ -565,9 +565,9 @@ func init() {
 
 	bufferMeta := bas.NewEmptyNativeMeta("Buffer", bas.NewObject(0).
 		SetPrototype(bas.Proto.ReadWriter.Proto).
-		SetMethod("reset", func(e *bas.Env) { e.A.Interface().(*internal.LimitedBuffer).Reset() }).
-		SetMethod("value", func(e *bas.Env) { e.A = bas.UnsafeStr(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }).
-		SetMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }))
+		AddMethod("reset", func(e *bas.Env) { e.A.Interface().(*internal.LimitedBuffer).Reset() }).
+		AddMethod("value", func(e *bas.Env) { e.A = bas.UnsafeStr(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }).
+		AddMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }))
 
 	bas.AddGlobalMethod("buffer", func(e *bas.Env) {
 		b := &internal.LimitedBuffer{Limit: e.IntDefault(1, 0)}

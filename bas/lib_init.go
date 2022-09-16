@@ -91,7 +91,7 @@ func init() {
 
 	AddGlobal("VERSION", Int64(Version))
 	AddGlobalMethod("globals", func(e *Env) {
-		e.A = e.MustProgram().LocalsObject().ToValue()
+		e.A = globals.store.Copy(true).ToValue()
 	})
 	AddGlobalMethod("new", func(e *Env) {
 		m := e.Object(0)
@@ -216,70 +216,70 @@ func init() {
 
 	ObjectProto = *NewNamedObject("object", 0)
 	ObjectProto.
-		SetMethod("new", func(e *Env) { e.A = NewObject(e.IntDefault(0, 0)).ToValue() }).
-		SetMethod("set", func(e *Env) { e.A = e.Object(-1).Set(e.Get(0), e.Get(1)) }).
-		SetMethod("get", func(e *Env) { e.A = e.Object(-1).Get(e.Get(0)) }).
-		SetMethod("delete", func(e *Env) { e.A = e.Object(-1).Delete(e.Get(0)) }).
-		SetMethod("clear", func(e *Env) { e.Object(-1).Clear() }).
-		SetMethod("copy", func(e *Env) { e.A = e.Object(-1).Copy(e.Shape(0, "Nb").IsTrue()).ToValue() }).
-		SetMethod("proto", func(e *Env) { e.A = e.Object(-1).Prototype().ToValue() }).
-		SetMethod("setproto", func(e *Env) { e.Object(-1).SetPrototype(e.Object(0)) }).
-		SetMethod("size", func(e *Env) { e.A = Int(e.Object(-1).Size()) }).
-		SetMethod("len", func(e *Env) { e.A = Int(e.Object(-1).Len()) }).
-		SetMethod("name", func(e *Env) { e.A = Str(e.Object(-1).Name()) }).
-		SetMethod("setname", func(e *Env) { e.Object(-1).setName(e.Str(0)) }).
-		SetMethod("keys", func(e *Env) {
+		AddMethod("new", func(e *Env) { e.A = NewObject(e.IntDefault(0, 0)).ToValue() }).
+		AddMethod("set", func(e *Env) { e.A = e.Object(-1).Set(e.Get(0), e.Get(1)) }).
+		AddMethod("get", func(e *Env) { e.A = e.Object(-1).Get(e.Get(0)) }).
+		AddMethod("delete", func(e *Env) { e.A = e.Object(-1).Delete(e.Get(0)) }).
+		AddMethod("clear", func(e *Env) { e.Object(-1).Clear() }).
+		AddMethod("copy", func(e *Env) { e.A = e.Object(-1).Copy(e.Shape(0, "Nb").IsTrue()).ToValue() }).
+		AddMethod("proto", func(e *Env) { e.A = e.Object(-1).Prototype().ToValue() }).
+		AddMethod("setproto", func(e *Env) { e.Object(-1).SetPrototype(e.Object(0)) }).
+		AddMethod("size", func(e *Env) { e.A = Int(e.Object(-1).Size()) }).
+		AddMethod("len", func(e *Env) { e.A = Int(e.Object(-1).Len()) }).
+		AddMethod("name", func(e *Env) { e.A = Str(e.Object(-1).Name()) }).
+		AddMethod("setname", func(e *Env) { e.Object(-1).setName(e.Str(0)) }).
+		AddMethod("keys", func(e *Env) {
 			a := make([]Value, 0)
 			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, k); return true })
 			e.A = newArray(a...).ToValue()
 		}).
-		SetMethod("values", func(e *Env) {
+		AddMethod("values", func(e *Env) {
 			a := make([]Value, 0)
 			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, *v); return true })
 			e.A = newArray(a...).ToValue()
 		}).
-		SetMethod("items", func(e *Env) {
+		AddMethod("items", func(e *Env) {
 			a := make([]Value, 0)
 			e.Object(-1).Foreach(func(k Value, v *Value) bool { a = append(a, newArray(k, *v).ToValue()); return true })
 			e.A = newArray(a...).ToValue()
 		}).
-		SetMethod("foreach", func(e *Env) {
+		AddMethod("foreach", func(e *Env) {
 			f := e.Object(0)
 			e.Object(-1).Foreach(func(k Value, v *Value) bool { return f.Call(e, k, *v) != False })
 		}).
-		SetMethod("contains", func(e *Env) { e.A = Bool(e.Object(-1).Contains(e.Get(0))) }).
-		SetMethod("hasownproperty", func(e *Env) { e.A = Bool(e.Object(-1).HasOwnProperty(e.Get(0))) }).
-		SetMethod("merge", func(e *Env) { e.A = e.Object(-1).Merge(e.Object(0)).ToValue() }).
-		SetMethod("tostring", func(e *Env) {
+		AddMethod("contains", func(e *Env) { e.A = Bool(e.Object(-1).Contains(e.Get(0))) }).
+		AddMethod("hasownproperty", func(e *Env) { e.A = Bool(e.Object(-1).HasOwnProperty(e.Get(0))) }).
+		AddMethod("merge", func(e *Env) { e.A = e.Object(-1).Merge(e.Object(0)).ToValue() }).
+		AddMethod("tostring", func(e *Env) {
 			p := &bytes.Buffer{}
 			e.Object(-1).rawPrint(p, typ.MarshalToJSON)
 			e.A = UnsafeStr(p.Bytes())
 		}).
-		SetMethod("printed", func(e *Env) { e.A = Str(e.Object(-1).GoString()) }).
-		SetMethod("debugprinted", func(e *Env) { e.A = Str(e.Object(-1).DebugString()) }).
-		SetMethod("pure", func(e *Env) { e.A = e.Object(-1).Copy(false).SetPrototype(&ObjectProto).ToValue() }).
-		SetMethod("next", func(e *Env) { e.A = newArray(e.Object(-1).NextKeyValue(e.Get(0))).ToValue() })
+		AddMethod("printed", func(e *Env) { e.A = Str(e.Object(-1).GoString()) }).
+		AddMethod("debugprinted", func(e *Env) { e.A = Str(e.Object(-1).DebugString()) }).
+		AddMethod("pure", func(e *Env) { e.A = e.Object(-1).Copy(false).SetPrototype(&ObjectProto).ToValue() }).
+		AddMethod("next", func(e *Env) { e.A = newArray(e.Object(-1).FindNext(e.Get(0))).ToValue() })
 	ObjectProto.SetPrototype(nil) // object is the topmost 'object', it should not have any prototype
 
 	*Proto.Func = *NewNamedObject("function", 0).
-		SetMethod("ismethod", func(e *Env) { e.A = Bool(e.Object(-1).fun.method) }).
-		SetMethod("isvarg", func(e *Env) { e.A = Bool(e.Object(-1).fun.varg) }).
-		SetMethod("argcount", func(e *Env) { e.A = Int(int(e.Object(-1).fun.numParams)) }).
-		SetMethod("caplist", func(e *Env) { e.A = ValueOf(e.Object(-1).fun.caps) }).
-		SetMethod("apply", func(e *Env) {
+		AddMethod("ismethod", func(e *Env) { e.A = Bool(e.Object(-1).fun.method) }).
+		AddMethod("isvarg", func(e *Env) { e.A = Bool(e.Object(-1).fun.varg) }).
+		AddMethod("argcount", func(e *Env) { e.A = Int(int(e.Object(-1).fun.numParams)) }).
+		AddMethod("caplist", func(e *Env) { e.A = ValueOf(e.Object(-1).fun.caps) }).
+		AddMethod("apply", func(e *Env) {
 			e.A = callobj(e.Object(-1), e.runtime, e.top, nil, e.Get(0), e.Stack()[1:]...)
 		}).
-		SetMethod("call", func(e *Env) { e.A = e.Object(-1).Call(e, e.Stack()...) }).
-		SetMethod("try", func(e *Env) {
+		AddMethod("call", func(e *Env) { e.A = e.Object(-1).Call(e, e.Stack()...) }).
+		AddMethod("try", func(e *Env) {
 			a, err := e.Object(-1).TryCall(e, e.Stack()...)
 			_ = err == nil && e.SetA(a) || e.SetA(Error(e, err))
 		}).
-		SetMethod("after", func(e *Env) {
+		AddMethod("after", func(e *Env) {
 			f, args, e2 := e.Object(-1), e.CopyStack()[1:], e.Copy()
 			t := time.AfterFunc(time.Duration(e.Float64(0)*1e6)*1e3, func() { f.Call(e2, args...) })
 			e.A = NewNative(t).ToValue()
 		}).
-		SetMethod("go", func(e *Env) {
+		AddMethod("go", func(e *Env) {
 			f := e.Object(-1)
 			args := e.CopyStack()
 			w := make(chan Value, 1)
@@ -293,7 +293,7 @@ func init() {
 			}(f, args)
 			e.A = NewNative(w).ToValue()
 		}).
-		SetMethod("map", func(e *Env) {
+		AddMethod("map", func(e *Env) {
 			e.A = multiMap(e, e.Object(-1), e.Shape(0, "<@array,{}>"), e.IntDefault(1, 1))
 		}).
 		// SetMethod("closure", func(e *Env) {
@@ -316,13 +316,13 @@ func init() {
 
 	*Proto.Native = *NewNamedObject("native", 4).
 		SetProp("types", nativeGoObject.ToValue()).
-		SetMethod("name", func(e *Env) {
+		AddMethod("name", func(e *Env) {
 			e.A = Str(e.Get(-1).Native().meta.Name)
 		}).
-		SetMethod("typename", func(e *Env) {
+		AddMethod("typename", func(e *Env) {
 			e.A = Str(reflect.TypeOf(e.Get(-1).Native().Unwrap()).String())
 		}).
-		SetMethod("isnil", func(e *Env) {
+		AddMethod("isnil", func(e *Env) {
 			switch rv := reflect.ValueOf(e.Native(-1).Unwrap()); rv.Kind() {
 			case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
 				e.A = Bool(rv.IsNil())
@@ -330,7 +330,7 @@ func init() {
 				e.A = False
 			}
 		}).
-		SetMethod("natptrat", func(e *Env) {
+		AddMethod("natptrat", func(e *Env) {
 			v := e.Native(-1).Unwrap()
 			rv := reflect.ValueOf(v)
 			e.A = Nil
@@ -341,19 +341,19 @@ func init() {
 				}
 			}
 		}).
-		SetMethod("toreader", func(e *Env) { e.Native(-1).meta = Proto.Reader }).
-		SetMethod("towriter", func(e *Env) { e.Native(-1).meta = Proto.Writer }).
-		SetMethod("tocloser", func(e *Env) { e.Native(-1).meta = Proto.Closer }).
-		SetMethod("toreadwriter", func(e *Env) { e.Native(-1).meta = Proto.ReadWriter }).
-		SetMethod("toreadcloser", func(e *Env) { e.Native(-1).meta = Proto.ReadCloser }).
-		SetMethod("towritecloser", func(e *Env) { e.Native(-1).meta = Proto.WriteCloser }).
-		SetMethod("toreadwritecloser", func(e *Env) { e.Native(-1).meta = Proto.ReadWriteCloser })
+		AddMethod("toreader", func(e *Env) { e.Native(-1).meta = Proto.Reader }).
+		AddMethod("towriter", func(e *Env) { e.Native(-1).meta = Proto.Writer }).
+		AddMethod("tocloser", func(e *Env) { e.Native(-1).meta = Proto.Closer }).
+		AddMethod("toreadwriter", func(e *Env) { e.Native(-1).meta = Proto.ReadWriter }).
+		AddMethod("toreadcloser", func(e *Env) { e.Native(-1).meta = Proto.ReadCloser }).
+		AddMethod("towritecloser", func(e *Env) { e.Native(-1).meta = Proto.WriteCloser }).
+		AddMethod("toreadwritecloser", func(e *Env) { e.Native(-1).meta = Proto.ReadWriteCloser })
 
 	Proto.Native.SetPrototype(nil) // native prototype has no parent
 	AddGlobal("native", Proto.Native.ToValue())
 
 	*Proto.Array = *NewNamedObject("array", 0).
-		SetMethod("make", func(e *Env) {
+		AddMethod("make", func(e *Env) {
 			a := make([]Value, e.Int(0))
 			if v := e.Get(1); v != Nil {
 				for i := range a {
@@ -362,11 +362,11 @@ func init() {
 			}
 			e.A = Array(a...)
 		}).
-		SetMethod("len", func(e *Env) { e.A = Int(e.Native(-1).Len()) }).
-		SetMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
-		SetMethod("clear", func(e *Env) { e.Native(-1).Clear() }).
-		SetMethod("append", func(e *Env) { e.Native(-1).Append(e.Stack()...) }).
-		SetMethod("find", func(e *Env) {
+		AddMethod("len", func(e *Env) { e.A = Int(e.Native(-1).Len()) }).
+		AddMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
+		AddMethod("clear", func(e *Env) { e.Native(-1).Clear() }).
+		AddMethod("append", func(e *Env) { e.Native(-1).Append(e.Stack()...) }).
+		AddMethod("find", func(e *Env) {
 			a, src, ff := -1, e.Native(-1), e.Get(0)
 			for i := 0; i < src.Len(); i++ {
 				if src.Get(i).Equal(ff) {
@@ -376,7 +376,7 @@ func init() {
 			}
 			e.A = Int(a)
 		}).
-		SetMethod("filter", func(e *Env) {
+		AddMethod("filter", func(e *Env) {
 			src, ff := e.Native(-1), e.Object(0)
 			dest := make([]Value, 0, src.Len())
 			for i := 0; i < src.Len(); i++ {
@@ -386,7 +386,7 @@ func init() {
 			}
 			e.A = newArray(dest...).ToValue()
 		}).
-		SetMethod("removeat", func(e *Env) {
+		AddMethod("removeat", func(e *Env) {
 			ma, idx := e.Native(-1), e.Int(0)
 			if idx < 0 || idx >= ma.Len() {
 				e.A = Nil
@@ -397,7 +397,7 @@ func init() {
 				e.A = old
 			}
 		}).
-		SetMethod("last", func(e *Env) {
+		AddMethod("last", func(e *Env) {
 			if arr, n := e.Native(-1), e.Int(0); n < 0 {
 				e.A = Nil
 			} else if n >= arr.Len() {
@@ -406,9 +406,9 @@ func init() {
 				e.A = arr.Slice(arr.Len()-n, arr.Len()).ToValue()
 			}
 		}).
-		SetMethod("copy", func(e *Env) { e.Native(-1).Copy(e.Int(0), e.Int(1), e.Native(2)) }).
-		SetMethod("concat", func(e *Env) { e.Native(-1).Concat(e.Shape(0, "<N,@native>").Native()) }).
-		SetMethod("sort", func(e *Env) {
+		AddMethod("copy", func(e *Env) { e.Native(-1).Copy(e.Int(0), e.Int(1), e.Native(2)) }).
+		AddMethod("concat", func(e *Env) { e.Native(-1).Concat(e.Shape(0, "<N,@native>").Native()) }).
+		AddMethod("sort", func(e *Env) {
 			a, rev := e.Native(-1), e.Shape(0, "Nb").IsTrue()
 			if kf := e.Shape(1, "No").Object(); kf != nil {
 				sort.Slice(a.Unwrap(), func(i, j int) bool {
@@ -418,10 +418,10 @@ func init() {
 				sort.Slice(a.Unwrap(), func(i, j int) bool { return Less(a.Get(i), a.Get(j)) != rev })
 			}
 		}).
-		SetMethod("istyped", func(e *Env) { e.A = Bool(!e.Native(-1).IsInternalArray()) }).
-		SetMethod("typename", func(e *Env) { e.A = Str(e.Native(-1).meta.Name) }).
-		SetMethod("untype", func(e *Env) { e.A = newArray(e.Native(-1).Values()...).ToValue() }).
-		SetMethod("natptrat", func(e *Env) {
+		AddMethod("istyped", func(e *Env) { e.A = Bool(!e.Native(-1).IsInternalArray()) }).
+		AddMethod("typename", func(e *Env) { e.A = Str(e.Native(-1).meta.Name) }).
+		AddMethod("untype", func(e *Env) { e.A = newArray(e.Native(-1).Values()...).ToValue() }).
+		AddMethod("natptrat", func(e *Env) {
 			e.A = ValueOf(reflect.ValueOf(e.Native(-1).Unwrap()).Index(e.Int(0)).Addr().Interface())
 		}).
 		SetPrototype(Proto.Native)
@@ -430,21 +430,21 @@ func init() {
 	*Proto.Bytes = *Func("bytes", func(e *Env) {
 		_ = e.Get(0).IsInt64() && e.SetA(ValueOf(make([]byte, e.Int(0)))) || e.SetA(ValueOf([]byte(e.Str(0))))
 	}).Object().
-		SetMethod("unsafestr", func(e *Env) { e.A = UnsafeStr(e.A.Native().Unwrap().([]byte)) }).
+		AddMethod("unsafestr", func(e *Env) { e.A = UnsafeStr(e.A.Native().Unwrap().([]byte)) }).
 		SetPrototype(Proto.Array)
 	AddGlobal("bytes", Proto.Bytes.ToValue())
 
 	*Proto.Error = *Func("error", func(e *Env) {
 		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.runtime.Stacktrace(true)})
 	}).Object().
-		SetMethod("error", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).root) }).
-		SetMethod("getcause", func(e *Env) { e.A = NewNative(e.Native(-1).Unwrap().(*ExecError).root).ToValue() }).
-		SetMethod("trace", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).stacks) }).
+		AddMethod("error", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).root) }).
+		AddMethod("getcause", func(e *Env) { e.A = NewNative(e.Native(-1).Unwrap().(*ExecError).root).ToValue() }).
+		AddMethod("trace", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).stacks) }).
 		SetPrototype(Proto.Native)
 	AddGlobal("error", Proto.Error.ToValue())
 
 	*Proto.NativeMap = *NewNamedObject("nativemap", 4).
-		SetMethod("toobject", func(e *Env) {
+		AddMethod("toobject", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap())
 			o := NewObject(rv.Len())
 			for iter := rv.MapRange(); iter.Next(); {
@@ -452,25 +452,25 @@ func init() {
 			}
 			e.A = o.ToValue()
 		}).
-		SetMethod("delete", func(e *Env) {
+		AddMethod("delete", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap())
 			rv.SetMapIndex(ToType(e.Get(0), rv.Type().Key()), reflect.Value{})
 		}).
-		SetMethod("clear", func(e *Env) {
+		AddMethod("clear", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap())
 			for i := rv.MapRange(); i.Next(); {
 				rv.SetMapIndex(i.Key(), reflect.Value{})
 			}
 		}).
-		SetMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
-		SetMethod("keys", func(e *Env) {
+		AddMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
+		AddMethod("keys", func(e *Env) {
 			e.A = NewNative(reflect.ValueOf(e.Native(-1).Unwrap()).MapKeys()).ToValue()
 		}).
-		SetMethod("contains", func(e *Env) {
+		AddMethod("contains", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap())
 			e.A = Bool(rv.MapIndex(ToType(e.Get(0), rv.Type().Key())).IsValid())
 		}).
-		SetMethod("merge", func(e *Env) {
+		AddMethod("merge", func(e *Env) {
 			rv, src := reflect.ValueOf(e.Native(-1).Unwrap()), e.Get(0)
 			if src.Type() == typ.Object {
 				rtk, rtv := rv.Type().Key(), rv.Type().Elem()
@@ -490,11 +490,11 @@ func init() {
 	AddGlobal("nativemap", Proto.NativeMap.ToValue())
 
 	*Proto.NativePtr = *NewNamedObject("nativeptr", 1).
-		SetMethod("set", func(e *Env) {
+		AddMethod("set", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap()).Elem()
 			rv.Set(ToType(e.Get(0), rv.Type()))
 		}).
-		SetMethod("deref", func(e *Env) {
+		AddMethod("deref", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap())
 			_ = rv.IsNil() && e.SetA(Nil) || e.SetA(ValueOf(rv.Elem().Interface()))
 		}).
@@ -510,19 +510,19 @@ func init() {
 		rv := reflect.ValueOf(e.Interface(0))
 		_ = rv.Kind() == reflect.Chan && e.SetA(ValueOf(rv.Interface())) || e.SetA(ValueOf(make(chan Value, e.IntDefault(0, 0))))
 	}).Object().
-		SetMethod("len", func(e *Env) { e.A = Int(e.Native(-1).Len()) }).
-		SetMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
-		SetMethod("close", func(e *Env) { reflect.ValueOf(e.Native(-1).Unwrap()).Close() }).
-		SetMethod("send", func(e *Env) {
+		AddMethod("len", func(e *Env) { e.A = Int(e.Native(-1).Len()) }).
+		AddMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
+		AddMethod("close", func(e *Env) { reflect.ValueOf(e.Native(-1).Unwrap()).Close() }).
+		AddMethod("send", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap())
 			rv.Send(ToType(e.Get(0), rv.Type().Elem()))
 		}).
-		SetMethod("recv", func(e *Env) {
+		AddMethod("recv", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap())
 			v, ok := rv.Recv()
 			e.A = newArray(ValueOf(v), Bool(ok)).ToValue()
 		}).
-		SetMethod("sendmulti", func(e *Env) {
+		AddMethod("sendmulti", func(e *Env) {
 			var cases []reflect.SelectCase
 			var channels []Value
 			if e.Shape(1, "Nb").IsTrue() {
@@ -542,7 +542,7 @@ func init() {
 			chosen, _, _ := reflect.Select(cases)
 			e.A = channels[chosen]
 		}).
-		SetMethod("recvmulti", func(e *Env) {
+		AddMethod("recvmulti", func(e *Env) {
 			var cases []reflect.SelectCase
 			var channels []Value
 			if e.Shape(1, "Nb").IsTrue() {
@@ -572,20 +572,20 @@ func init() {
 		i := e.Get(0)
 		_ = IsBytes(i) && e.SetA(UnsafeStr(i.Native().Unwrap().([]byte))) || e.SetA(Str(i.String()))
 	}).Object().
-		SetMethod("from", func(e *Env) { e.A = Str(fmt.Sprint(e.Interface(0))) }).
-		SetMethod("size", func(e *Env) { e.A = Int(Len(e.Get(-1))) }).
-		SetMethod("len", func(e *Env) { e.A = Int(Len(e.Get(-1))) }).
-		SetMethod("count", func(e *Env) { e.A = Int(utf8.RuneCountInString(e.Str(-1))) }).
-		SetMethod("iequals", func(e *Env) { e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0))) }).
-		SetMethod("contains", func(e *Env) { e.A = Bool(strings.Contains(e.Str(-1), e.Str(0))) }).
-		SetMethod("split", func(e *Env) {
+		AddMethod("from", func(e *Env) { e.A = Str(fmt.Sprint(e.Interface(0))) }).
+		AddMethod("size", func(e *Env) { e.A = Int(Len(e.Get(-1))) }).
+		AddMethod("len", func(e *Env) { e.A = Int(Len(e.Get(-1))) }).
+		AddMethod("count", func(e *Env) { e.A = Int(utf8.RuneCountInString(e.Str(-1))) }).
+		AddMethod("iequals", func(e *Env) { e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0))) }).
+		AddMethod("contains", func(e *Env) { e.A = Bool(strings.Contains(e.Str(-1), e.Str(0))) }).
+		AddMethod("split", func(e *Env) {
 			if n := e.IntDefault(1, 0); n == 0 {
 				e.A = NewNativeWithMeta(strings.Split(e.Str(-1), e.Str(0)), stringsArrayMeta).ToValue()
 			} else {
 				e.A = NewNativeWithMeta(strings.SplitN(e.Str(-1), e.Str(0), n), stringsArrayMeta).ToValue()
 			}
 		}).
-		SetMethod("join", func(e *Env) {
+		AddMethod("join", func(e *Env) {
 			d := e.Str(-1)
 			buf := &bytes.Buffer{}
 			for x, i := e.Shape(0, "@array").Native(), 0; i < x.Len(); i++ {
@@ -597,20 +597,20 @@ func init() {
 			}
 			e.A = UnsafeStr(buf.Bytes())
 		}).
-		SetMethod("replace", func(e *Env) {
+		AddMethod("replace", func(e *Env) {
 			e.A = Str(strings.Replace(e.Str(-1), e.Str(0), e.Str(1), e.IntDefault(2, -1)))
 		}).
-		SetMethod("find", func(e *Env) {
+		AddMethod("find", func(e *Env) {
 			start, end := e.IntDefault(1, 0), e.IntDefault(2, Len(e.A))
 			e.A = Int(strings.Index(e.Str(-1)[start:end], e.Str(0)))
 		}).
-		SetMethod("findsub", func(e *Env) {
+		AddMethod("findsub", func(e *Env) {
 			s := e.Str(-1)
 			idx := strings.Index(s, e.Str(0))
 			_ = idx > -1 && e.SetA(Str(s[:idx])) || e.SetA(Str(""))
 		}).
-		SetMethod("findlast", func(e *Env) { e.A = Int(strings.LastIndex(e.Str(-1), e.Str(0))) }).
-		SetMethod("sub", func(e *Env) {
+		AddMethod("findlast", func(e *Env) { e.A = Int(strings.LastIndex(e.Str(-1), e.Str(0))) }).
+		AddMethod("sub", func(e *Env) {
 			s := e.Str(-1)
 			st, en := e.Int(0), e.IntDefault(1, len(s))
 			for ; st < 0 && len(s) > 0; st += len(s) {
@@ -619,23 +619,23 @@ func init() {
 			}
 			e.A = Str(s[st:en])
 		}).
-		SetMethod("trim", func(e *Env) {
+		AddMethod("trim", func(e *Env) {
 			cutset := e.StrDefault(0, "", 0)
 			_ = cutset == "" && e.SetA(Str(strings.TrimSpace(e.Str(-1)))) || e.SetA(Str(strings.Trim(e.Str(-1), e.Str(0))))
 		}).
-		SetMethod("trimprefix", func(e *Env) { e.A = Str(strings.TrimPrefix(e.Str(-1), e.Str(0))) }).
-		SetMethod("trimsuffix", func(e *Env) { e.A = Str(strings.TrimSuffix(e.Str(-1), e.Str(0))) }).
-		SetMethod("trimleft", func(e *Env) { e.A = Str(strings.TrimLeft(e.Str(-1), e.Str(0))) }).
-		SetMethod("trimright", func(e *Env) { e.A = Str(strings.TrimRight(e.Str(-1), e.Str(0))) }).
-		SetMethod("ord", func(e *Env) {
+		AddMethod("trimprefix", func(e *Env) { e.A = Str(strings.TrimPrefix(e.Str(-1), e.Str(0))) }).
+		AddMethod("trimsuffix", func(e *Env) { e.A = Str(strings.TrimSuffix(e.Str(-1), e.Str(0))) }).
+		AddMethod("trimleft", func(e *Env) { e.A = Str(strings.TrimLeft(e.Str(-1), e.Str(0))) }).
+		AddMethod("trimright", func(e *Env) { e.A = Str(strings.TrimRight(e.Str(-1), e.Str(0))) }).
+		AddMethod("ord", func(e *Env) {
 			r, sz := utf8.DecodeRuneInString(e.Str(-1))
 			e.A = Array(Int64(int64(r)), Int(sz))
 		}).
-		SetMethod("startswith", func(e *Env) { e.A = Bool(strings.HasPrefix(e.Str(-1), e.Str(0))) }).
-		SetMethod("endswith", func(e *Env) { e.A = Bool(strings.HasSuffix(e.Str(-1), e.Str(0))) }).
-		SetMethod("upper", func(e *Env) { e.A = Str(strings.ToUpper(e.Str(-1))) }).
-		SetMethod("lower", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }).
-		SetMethod("chars", func(e *Env) {
+		AddMethod("startswith", func(e *Env) { e.A = Bool(strings.HasPrefix(e.Str(-1), e.Str(0))) }).
+		AddMethod("endswith", func(e *Env) { e.A = Bool(strings.HasSuffix(e.Str(-1), e.Str(0))) }).
+		AddMethod("upper", func(e *Env) { e.A = Str(strings.ToUpper(e.Str(-1))) }).
+		AddMethod("lower", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }).
+		AddMethod("chars", func(e *Env) {
 			var r []Value
 			for s, code := e.Str(-1), e.Shape(0, "Nb").IsTrue(); len(s) > 0; {
 				rn, sz := utf8.DecodeRuneInString(s)
@@ -651,7 +651,7 @@ func init() {
 			}
 			e.A = newArray(r...).ToValue()
 		}).
-		SetMethod("format", func(e *Env) {
+		AddMethod("format", func(e *Env) {
 			buf := &bytes.Buffer{}
 			Fprintf(buf, e.Str(-1), e.Stack()...)
 			e.A = UnsafeStr(buf.Bytes())
@@ -724,7 +724,12 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 		wg.Add(n)
 		for i := 0; i < n; i++ {
 			go func(e *Env) {
-				defer wg.Done()
+				defer func() {
+					wg.Done()
+					if r := recover(); r != nil {
+						outError = fmt.Errorf("map fatal error: %v", r)
+					}
+				}()
 				for p := range in {
 					if outError != nil {
 						return

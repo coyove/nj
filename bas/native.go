@@ -447,7 +447,7 @@ func (a *Native) Marshal(w io.Writer, mt typ.MarshalType) {
 	a.meta.Marshal(a, w, mt)
 }
 
-func (a *Native) Next(k Value) Value {
+func (a *Native) internalNext(k Value) Value {
 	if a.meta == internalArrayMeta {
 		return sgArrayNext(a, k)
 	}

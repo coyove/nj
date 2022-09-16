@@ -79,7 +79,7 @@ func (m *Object) Size() int {
 	return len(m.items)
 }
 
-// Len returns the count of items in the object.
+// Len returns the count of local properties in the object.
 func (m *Object) Len() int {
 	if m == nil {
 		return 0
@@ -87,7 +87,7 @@ func (m *Object) Len() int {
 	return int(m.count)
 }
 
-// Clear clears all keys in the object, where already allocated memory will be reused.
+// Clear clears all local properties in the object, where already allocated memory will be reused.
 func (m *Object) Clear() {
 	for i := range m.items {
 		m.items[i] = hashItem{}
@@ -95,36 +95,37 @@ func (m *Object) Clear() {
 	m.count = 0
 }
 
-// SetProp sets property 'k', which is short for Set(Str(k), v).
-func (m *Object) SetProp(k string, v Value) *Object {
-	m.Set(Str(k), v)
+// SetProp sets property by string 'name', which is short for Set(Str(name), v).
+func (m *Object) SetProp(name string, v Value) *Object {
+	m.Set(Str(name), v)
 	return m
 }
 
-// SetMethod binds method 'fun' to property 'k' in the object, and this object will probably serve as others' prototype.
-// This differs from 'Set(k, Func(fun))' because the latter one can't see and use 'this' parameter legally.
-func (m *Object) SetMethod(k string, fun func(*Env)) *Object {
-	f := Func(m.Name()+"."+k, fun)
+// AddMethod binds function 'fun' to property 'name' in the object, making 'fun' a method of the object.
+// This differs from 'Set(name, Func(name, fun))' because the latter one,
+// as not being a method, can't use 'this' argument when called.
+func (m *Object) AddMethod(name string, fun func(*Env)) *Object {
+	f := Func(m.Name()+"."+name, fun)
 	f.Object().fun.method = true
-	m.Set(Str(k), f)
+	m.Set(Str(name), f)
 	return m
 }
 
-// Get retrieves the value for a given key.
-func (m *Object) Get(k Value) (v Value) {
-	if m == nil || k == Nil {
+// Get retrieves the property by 'name'.
+func (m *Object) Get(name Value) (v Value) {
+	if m == nil || name == Nil {
 		return Nil
 	}
-	v, _ = m.find(k, true)
+	v, _ = m.find(name, true)
 	return v
 }
 
-// Get retrieves the value for a given key, 'defaultValue' will be returned if not found.
-func (m *Object) GetDefault(k, defaultValue Value) (v Value) {
-	if m == nil || k == Nil {
+// GetDefault retrieves the property by 'name', returns 'defaultValue' if not found.
+func (m *Object) GetDefault(name, defaultValue Value) (v Value) {
+	if m == nil || name == Nil {
 		return defaultValue
 	}
-	if v, ok := m.find(k, true); ok {
+	if v, ok := m.find(name, true); ok {
 		return v
 	}
 	return defaultValue
@@ -173,31 +174,30 @@ func (m *Object) findValue(k Value) int {
 	}
 }
 
-// Contains returns true if object contains 'k'.
-func (m *Object) Contains(k Value) bool {
-	if m == nil || k == Nil {
+// Contains returns true if object contains 'name', inherited properties will also be checked.
+func (m *Object) Contains(name Value) bool {
+	if m == nil || name == Nil {
 		return false
 	}
-	found := m.findValue(k) >= 0
+	found := m.findValue(name) >= 0
 	if !found {
-		found = m.parent.Contains(k)
+		found = m.parent.Contains(name)
 	}
 	return found
 }
 
-// HasOwnProperty returns true if 'k' is a local property in the object.
-func (m *Object) HasOwnProperty(k Value) bool {
-	if m == nil || k == Nil {
+// HasOwnProperty returns true if 'name' is a local property in the object.
+func (m *Object) HasOwnProperty(name Value) bool {
+	if m == nil || name == Nil {
 		return false
 	}
-	return m.findValue(k) >= 0
+	return m.findValue(name) >= 0
 }
 
-// Set upserts a key-value pair into the object, inherited key from prototypes will be
-// overwritten during this call.
-func (m *Object) Set(k, v Value) (prev Value) {
-	if k == Nil {
-		internal.Panic("object set with nil key")
+// Set sets a local property in the object. Inherited property with the same name will be shadowed.
+func (m *Object) Set(name, v Value) (prev Value) {
+	if name == Nil {
+		internal.Panic("property name can't be nil")
 	}
 	if len(m.items) <= 0 {
 		m.items = make([]hashItem, 8)
@@ -205,15 +205,15 @@ func (m *Object) Set(k, v Value) (prev Value) {
 	if int(m.count) >= len(m.items)*3/4 {
 		resizeHash(m, len(m.items)*2)
 	}
-	return m.setHash(hashItem{key: k, val: v})
+	return m.setHash(hashItem{key: name, val: v})
 }
 
-// Delete deletes a key-value pair from the object. Keys in prototypes are omitted and never deleted.
-func (m *Object) Delete(k Value) (prev Value) {
-	if k == Nil {
-		internal.Panic("object delete with nil key")
+// Delete deletes a local property from the object. Inherited properties are omitted and never deleted.
+func (m *Object) Delete(name Value) (prev Value) {
+	if name == Nil {
+		return Nil
 	}
-	idx := m.findValue(k)
+	idx := m.findValue(name)
 	if idx < 0 {
 		return Nil
 	}
@@ -278,7 +278,9 @@ func (m *Object) setHash(incoming hashItem) (prev Value) {
 	}
 }
 
-func (m *Object) Foreach(f func(k Value, v *Value) bool) {
+// Foreach iterates all local properties in the object, for each of them, 'f(name, &value)' will be
+// called. Values are passed by pointers and it is legal to manipulate them directly in 'f'.
+func (m *Object) Foreach(f func(Value, *Value) bool) {
 	if m == nil {
 		return
 	}
@@ -301,11 +303,11 @@ func (m *Object) nextHashPair(start int) (Value, Value) {
 	return Nil, Nil
 }
 
-func (m *Object) Next(kv Value) Value {
+func (m *Object) internalNext(kv Value) Value {
 	if kv == Nil {
 		kv = Array(Nil, Nil)
 	}
-	nk, nv := m.NextKeyValue(kv.Native().Get(0))
+	nk, nv := m.FindNext(kv.Native().Get(0))
 	if nk == Nil {
 		return Nil
 	}
@@ -314,14 +316,15 @@ func (m *Object) Next(kv Value) Value {
 	return kv
 }
 
-func (m *Object) NextKeyValue(k Value) (Value, Value) {
+// FindNext finds the next property after 'name', the output will be stable between object changes, e.g. Delete()
+func (m *Object) FindNext(name Value) (Value, Value) {
 	if m == nil {
 		return Nil, Nil
 	}
-	if k == Nil {
+	if name == Nil {
 		return m.nextHashPair(0)
 	}
-	idx := m.findValue(k)
+	idx := m.findValue(name)
 	if idx < 0 {
 		return Nil, Nil
 	}
@@ -343,14 +346,14 @@ func (m *Object) rawPrint(p io.Writer, j typ.MarshalType) {
 	if j == typ.MarshalToJSON {
 		if m.fun == objEmptyFunc {
 			internal.WriteString(p, `{`)
-		} else {
+		} else if m.fun != nil {
 			internal.WriteString(p, `{"<f>":"`)
 			internal.WriteString(p, m.funcSig())
 			internal.WriteString(p, `"`)
 			needComma = true
 		}
 	} else {
-		if m.fun != objEmptyFunc {
+		if m.fun != objEmptyFunc && m.fun != nil {
 			internal.WriteString(p, m.funcSig())
 		}
 		internal.WriteString(p, "{")
@@ -377,7 +380,7 @@ func (m *Object) Name() string {
 	if m == &ObjectProto {
 		return objEmptyFunc.name
 	}
-	if m != nil {
+	if m != nil && m.fun != nil {
 		if m.fun.name == objEmptyFunc.name {
 			return m.parent.Name()
 		}
@@ -393,6 +396,12 @@ func (m *Object) Copy(copyData bool) *Object {
 	m2 := *m
 	if copyData {
 		m2.items = append([]hashItem{}, m.items...)
+	}
+	if m2.fun == nil {
+		// Some empty Objects don't have proper structures,
+		// normally they are declared directly instead of using NewObject.
+		m2.fun = objEmptyFunc
+		m2.parent = &ObjectProto
 	}
 	return &m2
 }

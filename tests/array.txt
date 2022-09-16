@@ -6,7 +6,7 @@ print(a)
 
 
 a = bytes(16)
-function(i) i end.map(a, os.numcpus)
+function(i) return i end.map(a, os.numcpus)
 
 function foo() return a end
 

@@ -44,7 +44,7 @@ func init() {
 	}
 
 	Proto.Reader.Proto.
-		SetMethod("read", func(e *Env) {
+		AddMethod("read", func(e *Env) {
 			buf, err := func(e *Env) ([]byte, error) {
 				f := e.A.Reader()
 				if n := e.Get(0); n.Type() == typ.Number {
@@ -61,11 +61,11 @@ func init() {
 			}(e)
 			_ = err != nil && e.SetA(Error(e, err)) || e.SetA(Bytes(buf))
 		}).
-		SetMethod("read2", func(e *Env) {
+		AddMethod("read2", func(e *Env) {
 			rn, err := e.A.Reader().Read(e.Shape(0, "B").Native().Unwrap().([]byte))
 			e.A = Array(Int(rn), Error(e, err)) // return in Go style
 		}).
-		SetMethod("readlines", func(e *Env) {
+		AddMethod("readlines", func(e *Env) {
 			e.A = NewNativeWithMeta(&ioReadlinesStruct{
 				rd:    bufio.NewReader(e.A.Reader()),
 				delim: e.StrDefault(0, "\n", 1)[0],
@@ -75,15 +75,15 @@ func init() {
 		SetPrototype(Proto.Native)
 
 	Proto.Writer.Proto.
-		SetMethod("write", func(e *Env) {
+		AddMethod("write", func(e *Env) {
 			wn, err := Write(e.A.Writer(), e.Get(0))
 			_ = err == nil && e.SetA(Int(wn)) || e.SetA(Error(e, err))
 		}).
-		SetMethod("write2", func(e *Env) {
+		AddMethod("write2", func(e *Env) {
 			wn, err := Write(e.A.Writer(), e.Get(0))
 			e.A = Array(Int(wn), Error(e, err))
 		}).
-		SetMethod("pipe", func(e *Env) {
+		AddMethod("pipe", func(e *Env) {
 			var wn int64
 			var err error
 			if n := e.IntDefault(1, 0); n > 0 {
@@ -96,7 +96,7 @@ func init() {
 		SetPrototype(Proto.Native)
 
 	Proto.Closer.Proto.
-		SetMethod("close", func(e *Env) {
+		AddMethod("close", func(e *Env) {
 			e.A = Error(e, e.A.Closer().Close())
 		}).
 		SetPrototype(Proto.Native)

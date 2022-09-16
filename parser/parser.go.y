@@ -240,7 +240,7 @@ expr:
 prefix_expr:
     declarator                                         { $$ = $1 } |
     TIf TLParen expr ',' expr ',' expr ')'             { $$ = __if($3, __move(Sa, $5).At($1), __move(Sa, $7).At($1)).At($1) } |
-    TFunc func_params stats TEnd                       { $$ = __lambda(__markupLambdaName($1), $2, $3) } | 
+    TFunc func_params stats TEnd                       { $$ = __func(__markupLambdaName($1), $2, $3) } | 
     TString                                            { $$ = Str($1.Str) } |
     '(' expr ')'                                       { $$ = $2 } |
     '[' ']'                                            { $$ = ss(yylex).__array($1, emptyNode) } |

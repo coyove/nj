@@ -1359,7 +1359,7 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line parser.go.y:243
 		{
-			yyVAL.expr = __lambda(__markupLambdaName(yyDollar[1].token), yyDollar[2].expr, yyDollar[3].expr)
+			yyVAL.expr = __func(__markupLambdaName(yyDollar[1].token), yyDollar[2].expr, yyDollar[3].expr)
 		}
 	case 75:
 		yyDollar = yyS[yypt-1 : yypt+1]

@@ -67,7 +67,7 @@ func (e *ExecError) Error() string {
 	for i := len(e.stacks) - 1; i >= 0; i-- {
 		r := e.stacks[i]
 		if r.IsNativeCall() {
-			msg.WriteString(fmt.Sprintf("%s at native\n\t<native code>\n", r.Callable.fun.name))
+			msg.WriteString(fmt.Sprintf("%s (native function)\n\t<native code>\n", r.Callable.fun.name))
 		} else {
 			ln := r.sourceLine()
 			msg.WriteString(fmt.Sprintf("%s at %s:%d (i%d)",
@@ -152,9 +152,9 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			case typ.Nil:
 				env.A = Array(Nil, Nil)
 			case typ.Native:
-				env.A = va.Native().Next(vb)
+				env.A = va.Native().internalNext(vb)
 			case typ.Object:
-				env.A = va.Object().Next(vb)
+				env.A = va.Object().internalNext(vb)
 			case typ.String:
 				idx := 0
 				if vb != Nil {

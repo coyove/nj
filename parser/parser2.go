@@ -119,14 +119,6 @@ func __method(name Token, paramList Node, stats Node) Node {
 	return Nodes(SFunc, Sym(name), paramList, stats).At(name)
 }
 
-func __lambda(name Token, pp Node, stats Node) Node {
-	nodes := stats.Nodes()
-	if len(nodes) > 1 && nodes[0].Value == SBegin.Value {
-		nodes[len(nodes)-1] = Nodes(SReturn, nodes[len(nodes)-1])
-	}
-	return __func(name, pp, stats)
-}
-
 func __markupFuncName(recv, name Token) Token {
 	name.Str = recv.Str + "." + name.Str
 	return name

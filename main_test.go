@@ -410,8 +410,8 @@ func TestNumberLexer(t *testing.T) {
 	assert("[[%d]]['format'](1)", bas.Str("1"))
 	assert("function()end (1)", bas.Int(1))
 	assert("function()end [1][0]", bas.Int(1))
-	assert("function()1 end()", bas.Int(1))
-	assert("function() -1 end()", bas.Int(-1))
+	assert("function() return 1 end()", bas.Int(1))
+	assert("function() return-1 end()", bas.Int(-1))
 }
 
 func TestSmallString(t *testing.T) {
@@ -471,7 +471,7 @@ func TestACall(t *testing.T) {
 		Globals: bas.NewObject(0).
 			SetProp("m", bas.NewObject(0).SetPrototype(bas.NewObject(0).
 				SetProp("a", bas.Int64(0)).
-				SetMethod("pow2", func(e *bas.Env) {
+				AddMethod("pow2", func(e *bas.Env) {
 					i := e.Object(-1).Get(bas.Str("a")).Int64()
 					e.A = bas.Int64(i * i)
 				})).ToValue()),

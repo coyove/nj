@@ -90,7 +90,7 @@ func TestObjectForeachDelete(t *testing.T) {
 	if loopCount != 2 {
 		t.Fatal(loopCount, o.items)
 	}
-	for k, _ := o.NextKeyValue(Nil); k != Nil; k, _ = o.NextKeyValue(k) {
+	for k, _ := o.FindNext(Nil); k != Nil; k, _ = o.FindNext(k) {
 		loopCount--
 	}
 	if loopCount != 0 {
@@ -250,7 +250,7 @@ func TestRHMap(t *testing.T) {
 		t.Fatal(m.Len(), len(m2))
 	}
 
-	for k, v := m.NextKeyValue(Nil); k != Nil; k, v = m.NextKeyValue(k) {
+	for k, v := m.FindNext(Nil); k != Nil; k, v = m.FindNext(k) {
 		if _, ok := m2[k.Int64()]; !ok {
 			t.Fatal(k, v, len(m2))
 		}
@@ -269,7 +269,7 @@ func TestRHMap(t *testing.T) {
 		m.Set(Int64(int64(i*i)), Int64(0))
 	}
 
-	for k, v := m.NextKeyValue(Nil); k != Nil; k, v = m.NextKeyValue(k) {
+	for k, v := m.FindNext(Nil); k != Nil; k, v = m.FindNext(k) {
 		fmt.Println(k, v)
 	}
 }
@@ -681,7 +681,7 @@ func BenchmarkShapeType(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		switch v.Type() {
 		case typ.Number, typ.String:
-			v.AssertType(typ.Number, "")
+			v.AssertNumber("")
 		}
 	}
 }
