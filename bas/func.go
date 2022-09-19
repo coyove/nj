@@ -267,8 +267,12 @@ func (obj *Object) printAll(w io.Writer) {
 					internal.WriteString(w, "if not a ")
 				}
 				internal.WriteString(w, fmt.Sprintf("jmp %d to %d", dest, pos2))
-			case typ.OpInc:
-				internal.WriteString(w, "inc "+readAddr(a, false)+" "+readAddr(b, false))
+			case typ.OpInc, typ.OpInc16:
+				if bop == typ.OpInc16 {
+					internal.WriteString(w, "inc16 "+readAddr(a, false)+" "+strconv.Itoa(int(int16(b))))
+				} else {
+					internal.WriteString(w, "inc "+readAddr(a, false)+" "+readAddr(b, false))
+				}
 				if c != 0 {
 					internal.WriteString(w, fmt.Sprintf(" jmp %d to %d", int16(c), int32(cursor)+int32(int16(c))))
 				}
@@ -286,7 +290,7 @@ func (obj *Object) printAll(w io.Writer) {
 					internal.WriteString(w, " "+readAddr(b, true))
 				}
 				internal.WriteString(w, " -> "+readAddr(c, false))
-			case typ.OpLinearABC:
+			case typ.OpLinear16:
 				if b == 1 {
 					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" + %d", int16(c)))
 				} else if b == 65535 {
@@ -296,8 +300,10 @@ func (obj *Object) printAll(w io.Writer) {
 				} else {
 					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" * %d + %d", int16(b), int16(c)))
 				}
-			case typ.OpCompareABC:
+			case typ.OpCmp16:
 				internal.WriteString(w, "a = "+readAddr(a, false)+internal.IfStr(b == 1, " < ", " > ")+strconv.Itoa(int(int16(c))))
+			case typ.OpEq16:
+				internal.WriteString(w, "a = "+readAddr(a, false)+internal.IfStr(c == typ.OpEq, " == ", " != ")+strconv.Itoa(int(int16(b))))
 			default:
 				if us, ok := typ.UnaryOpcode[bop]; ok {
 					internal.WriteString(w, us+" "+readAddr(a, false))

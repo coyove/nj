@@ -146,6 +146,17 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 			env.A = *va
 			cursor = uint32(int32(cursor) + int32(int16(v.C)))
+		case typ.OpInc16:
+			va := env._getRef(opa)
+			if va.IsInt64() {
+				*va = Int64(va.UnsafeInt64() + int64(int16(opb)))
+			} else if va.IsNumber() {
+				*va = Float64(va.Float64() + float64(int16(opb)))
+			} else {
+				internal.Panic("inc16 "+errNeedNumber, detail(*va))
+			}
+			env.A = *va
+			cursor = uint32(int32(cursor) + int32(int16(v.C)))
 		case typ.OpNext:
 			va, vb := env._get(opa), env._get(opb)
 			switch va.Type() {
@@ -175,21 +186,29 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 		case typ.OpLen:
 			env.A = Int(Len(env._get(opa)))
-		case typ.OpLinearABC:
+		case typ.OpLinear16:
 			if va := env._get(opa); va.IsInt64() {
 				env.A = Int64(va.UnsafeInt64()*int64(int16(opb)) + int64(int16(v.C)))
 			} else if va.IsNumber() {
 				env.A = Float64(va.UnsafeFloat64()*float64(int16(opb)) + float64(int16(v.C)))
 			} else {
-				internal.Panic(errNeedNumber, detail(va))
+				internal.Panic("arithmetic "+errNeedNumber, detail(va))
 			}
-		case typ.OpCompareABC:
+		case typ.OpCmp16:
 			if va := env._get(opa); va.IsInt64() {
 				env.A = Bool(va.UnsafeInt64()*int64(int16(opb)) < int64(int16(v.C)))
 			} else if va.IsNumber() {
 				env.A = Bool(va.UnsafeFloat64()*float64(int16(opb)) < float64(int16(v.C)))
 			} else {
-				internal.Panic(errNeedNumber, detail(va))
+				internal.Panic("comparison "+errNeedNumber, detail(va))
+			}
+		case typ.OpEq16:
+			if va := env._get(opa); va.IsInt64() {
+				env.A = Bool((va.UnsafeInt64() == int64(int16(opb))) == (v.C == typ.OpEq))
+			} else if va.IsNumber() {
+				env.A = Bool((va.UnsafeFloat64() == float64(int16(opb))) == (v.C == typ.OpEq))
+			} else {
+				internal.Panic("equality "+errNeedNumber, detail(va))
 			}
 		case typ.OpAdd:
 			if va, vb := env._get(opa), env._get(opb); va.IsInt64() && vb.IsInt64() {

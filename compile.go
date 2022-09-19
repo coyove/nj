@@ -389,7 +389,7 @@ func (table *symTable) patchGoto() {
 			}
 			code[i] = code[i].SetD(dest - int32(i) - 1)
 		}
-		if code[i].Opcode == typ.OpJmp && i > 0 && code[i-1].Opcode == typ.OpInc {
+		if code[i].Opcode == typ.OpJmp && i > 0 && (code[i-1].Opcode == typ.OpInc || code[i-1].Opcode == typ.OpInc16) {
 			// Inc-then-small-jump, see OpInc in eval.go
 			if d := code[i].D() + 1; d >= math.MinInt16 && d <= math.MaxInt16 {
 				code[i-1].C = uint16(int16(d))

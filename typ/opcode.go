@@ -26,8 +26,10 @@ const (
 	OpSet
 	OpStore
 	OpLoad
-	OpLinearABC
-	OpCompareABC
+	OpLinear16
+	OpCmp16
+	OpEq16
+	OpInc16
 	OpAdd
 	OpSub
 	OpMul

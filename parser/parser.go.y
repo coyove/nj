@@ -136,20 +136,26 @@ for_stat:
         )
     } |
     TFor TIdent '=' expr ',' expr ',' expr TDo stats TEnd {
-        forVar, forEnd, forStep := Sym($2), randomVarname(), randomVarname()
-        body := __chain($10, __inc(forVar, forStep))
-        $$ = __do(
-            __set(forVar, $4).At($1),
-            __set(forEnd, $6).At($1),
-            __set(forStep, $8).At($1),
-        )
+        forVar, forEnd := Sym($2), randomVarname()
         if isNum, isNeg := $8.numSign(); isNum { // step is a static number, easy case
+            $$ = __do(
+                __set(forVar, $4).At($1),
+                __set(forEnd, $6).At($1),
+            )
+            body := __chain($10, __inc(forVar, $8))
             if isNeg {
-                $$ = $$.append(__loop(__inc(forVar, forStep), __if(__less(forEnd, forVar), body, breakNode).At($1)).At($1))
+                $$ = $$.append(__loop(__inc(forVar, $8), __if(__less(forEnd, forVar), body, breakNode).At($1)).At($1))
             } else {
-                $$ = $$.append(__loop(__inc(forVar, forStep), __if(__less(forVar, forEnd), body, breakNode).At($1)).At($1))
+                $$ = $$.append(__loop(__inc(forVar, $8), __if(__less(forVar, forEnd), body, breakNode).At($1)).At($1))
             }
         } else { 
+            forStep := randomVarname()
+            $$ = __do(
+                __set(forVar, $4).At($1),
+                __set(forEnd, $6).At($1),
+                __set(forStep, $8).At($1),
+            )
+            body := __chain($10, __inc(forVar, forStep))
             $$ = $$.append(__loop(
                 __inc(forVar, forStep),
                 __if(

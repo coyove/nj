@@ -74,6 +74,13 @@ func Int(v int64) (n Node) {
 	return Node{NodeType: INT, Value: bas.Int64(v)}
 }
 
+func IntBool(b bool) (n Node) {
+	if b {
+		return Node{NodeType: INT, Value: bas.Int64(1)}
+	}
+	return Node{NodeType: INT, Value: bas.Int64(0)}
+}
+
 func Float(v float64) (n Node) {
 	return Node{NodeType: FLOAT, Value: bas.Float64(v)}
 }
@@ -159,6 +166,20 @@ func Nodes(args ...Node) Node {
 				return Int(a.Int64() / b.Int64())
 			case SMod.Value:
 				return Int(a.Int64() % b.Int64())
+			case SLessEq.Value:
+				if a.Value.Equal(b.Value) {
+					return IntBool(true)
+				}
+				fallthrough
+			case SLess.Value:
+				if a.IsInt64() && b.IsInt64() {
+					return IntBool(a.Int64() < b.Int64())
+				}
+				return IntBool(a.Float64() < b.Float64())
+			case SEq.Value:
+				return IntBool(a.Value.Equal(b.Value))
+			case SNeq.Value:
+				return IntBool(!a.Value.Equal(b.Value))
 			}
 		}
 		if a.Type() == INT && b.Type() == INT {

@@ -271,6 +271,15 @@ func detail(v Value) string {
 			return fmt.Sprintf("array(%d)", a.Len())
 		}
 		return fmt.Sprintf("native(%s)", a.meta.Name)
+	case typ.Number:
+		if v.IsInt64() {
+			return fmt.Sprintf("int64(%d)", v.Int64())
+		}
+		return fmt.Sprintf("float64(%f)", v.Float64())
+	case typ.Bool:
+		return internal.IfStr(v.Bool(), "true", "false")
+	case typ.String:
+		return fmt.Sprintf("string(%d)", Len(v))
 	default:
 		return v.Type().String()
 	}
