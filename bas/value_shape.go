@@ -13,7 +13,7 @@ import (
 )
 
 type shape interface {
-	assert(Value, string) error
+	assert(Value) error
 	add(shape)
 	String() string
 }
@@ -27,17 +27,17 @@ func (sa *shaperArray) add(s shape) {
 	sa.shapes = append(sa.shapes, s)
 }
 
-func (sa *shaperArray) assert(v Value, msg string) error {
-	arr, ok := v.Interface().([]Value)
-	if !ok {
-		return fmt.Errorf("pattern %q expects array, got %v", msg, detail(v))
+func (sa *shaperArray) assert(v Value) error {
+	if !v.IsArray() {
+		return fmt.Errorf("%v expects array, got %v", sa, detail(v))
 	}
+	arr := v.Native()
 	if sa.fixed {
-		if len(arr) != len(sa.shapes) {
-			return fmt.Errorf("pattern %q expects array with %d elements, got %d", msg, len(sa.shapes), len(arr))
+		if arr.Len() != len(sa.shapes) {
+			return fmt.Errorf("%v expects array with %d elements, got %d", sa, len(sa.shapes), arr.Len())
 		}
 		for i, s := range sa.shapes {
-			if err := s.assert(arr[i], msg); err != nil {
+			if err := s.assert(arr.Get(i)); err != nil {
 				return err
 			}
 		}
@@ -45,13 +45,13 @@ func (sa *shaperArray) assert(v Value, msg string) error {
 		if len(sa.shapes) == 0 {
 			return nil
 		}
-		if len(arr)%len(sa.shapes) != 0 {
-			return fmt.Errorf("pattern %q expects array with %d*N elements, got %d", msg, len(sa.shapes), len(arr))
+		if arr.Len()%len(sa.shapes) != 0 {
+			return fmt.Errorf("%v expects array with a multiple of %d elements, got %d", sa, len(sa.shapes), arr.Len())
 		}
-		for i := 0; i < len(arr); i += len(sa.shapes) {
+		for i := 0; i < arr.Len(); i += len(sa.shapes) {
 			for j, s := range sa.shapes {
-				if err := s.assert(arr[i+j], msg); err != nil {
-					return err
+				if err := s.assert(arr.Get(i + j)); err != nil {
+					return fmt.Errorf("array shape %v, value at index %d: %v", sa, i+j, err)
 				}
 			}
 		}
@@ -60,21 +60,12 @@ func (sa *shaperArray) assert(v Value, msg string) error {
 }
 
 func (sa *shaperArray) String() string {
-	buf := &bytes.Buffer{}
-	if sa.fixed {
-		buf.WriteByte('(')
-	} else {
-		buf.WriteByte('[')
-	}
+	buf := bytes.NewBufferString(internal.IfStr(sa.fixed, "(", "["))
 	for _, s := range sa.shapes {
 		buf.WriteString(s.String())
-		buf.WriteByte(' ')
+		buf.WriteByte(',')
 	}
-	if sa.fixed {
-		internal.CloseBuffer(buf, ")")
-	} else {
-		internal.CloseBuffer(buf, "]")
-	}
+	internal.CloseBuffer(buf, internal.IfStr(sa.fixed, ")", "]"))
 	return buf.String()
 }
 
@@ -93,20 +84,22 @@ func (sa *shaperObject) add(s shape) {
 	}
 }
 
-func (sa *shaperObject) assert(v Value, msg string) error {
+func (sa *shaperObject) assert(v Value) error {
 	if !v.IsObject() {
-		return fmt.Errorf("pattern %q expects object, got %v", msg, detail(v))
+		return fmt.Errorf("%v expects object, got %v", sa, detail(v))
 	}
 	if sa.key == nil && sa.value == nil {
 		return nil
 	}
 	var err error
 	v.Object().Foreach(func(k Value, v *Value) bool {
-		if err = sa.key.assert(k, msg); err != nil {
+		if err = sa.key.assert(k); err != nil {
+			err = fmt.Errorf("object shape %v key error: %v", sa, err)
 			return false
 		}
 		if sa.value != nil {
-			if err = sa.value.assert(*v, msg); err != nil {
+			if err = sa.value.assert(*v); err != nil {
+				err = fmt.Errorf("object shape %v value error: %v", sa, err)
 				return false
 			}
 		}
@@ -139,11 +132,11 @@ type shaperPrototype struct {
 func (sa *shaperPrototype) add(s shape) {
 }
 
-func (sa *shaperPrototype) assert(v Value, msg string) error {
-	return assertShapePrototype(v, sa.name, msg)
+func (sa *shaperPrototype) assert(v Value) error {
+	return assertShapePrototype(v, sa.name)
 }
 
-func assertShapePrototype(v Value, name, msg string) error {
+func assertShapePrototype(v Value, name string) error {
 	switch v.Type() {
 	case typ.Native:
 		if v.Native().meta.Name == name {
@@ -154,16 +147,16 @@ func assertShapePrototype(v Value, name, msg string) error {
 				return nil
 			}
 		}
-		return fmt.Errorf("pattern %q expects native of prototype/name %v", msg, name)
+		return fmt.Errorf("expects native of prototype/name %v, got %v", name, v.Native().meta.Name)
 	case typ.Object:
 		for p := v.Object(); p != nil; p = p.parent {
 			if p.Name() == name {
 				return nil
 			}
 		}
-		return fmt.Errorf("pattern %q expects object of prototype %v", msg, name)
+		return fmt.Errorf("expects object of prototype %v, got %v", name, v.Object().Name())
 	default:
-		return fmt.Errorf("pattern %q expects native or object, got %v", msg, detail(v))
+		return fmt.Errorf("expects native or object, got %v", detail(v))
 	}
 }
 
@@ -178,11 +171,11 @@ type shaperPrimitive struct {
 func (sa *shaperPrimitive) add(s shape) {
 }
 
-func (sa *shaperPrimitive) assert(v Value, msg string) error {
-	return assertShapePrimitive(v, sa.verbs, msg)
+func (sa *shaperPrimitive) assert(v Value) error {
+	return assertShapePrimitive(v, sa.verbs)
 }
 
-func assertShapePrimitive(v Value, verbs, msg string) error {
+func assertShapePrimitive(v Value, verbs string) error {
 	if verbs == "" || verbs == "_" || verbs == "v" {
 		return nil
 	}
@@ -226,7 +219,7 @@ func assertShapePrimitive(v Value, verbs, msg string) error {
 		}
 	}
 	if !ok {
-		return fmt.Errorf("pattern %q expects %v, got %v", msg, verbs, detail(v))
+		return fmt.Errorf("%v can't match %v", &shaperPrimitive{verbs}, detail(v))
 	}
 	return nil
 }
@@ -261,6 +254,9 @@ func (sa *shaperPrimitive) String() string {
 			buf = append(buf, "any")
 		}
 	}
+	if len(buf) == 1 {
+		return buf[0]
+	}
 	return "<" + strings.Join(buf, ",") + ">"
 }
 
@@ -272,13 +268,13 @@ func (sa *shaperOr) add(s shape) {
 	sa.shapes = append(sa.shapes, s)
 }
 
-func (sa *shaperOr) assert(v Value, msg string) error {
+func (sa *shaperOr) assert(v Value) error {
 	for _, s := range sa.shapes {
-		if s.assert(v, msg) == nil {
+		if s.assert(v) == nil {
 			return nil
 		}
 	}
-	return fmt.Errorf("pattern %q expects %v, got %v", msg, sa, detail(v))
+	return fmt.Errorf("%v can't match %v", sa, detail(v))
 }
 
 func (sa *shaperOr) String() string {
@@ -311,10 +307,31 @@ func shapeNextToken(s string) (token, rest string) {
 var shapeCache sync.Map
 
 func NewShape(s string) func(v Value) error {
+	s = strings.TrimSpace(s)
+	if f, ok := shapeCache.Load(s); ok {
+		return f.(func(Value) error)
+	}
+
+	x := buildShape(s)
+	if x == nil {
+		return func(Value) error { return nil }
+	}
+
+	f := func(v Value) error {
+		if err := x.assert(v); err != nil {
+			return fmt.Errorf("%q: %v", s, err)
+		}
+		return nil
+	}
+	shapeCache.Store(s, f)
+	return f
+}
+
+func buildShape(s string) shape {
 	var until byte
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
-		return func(Value) error { return nil }
+		return nil
 	}
 
 	old := s
@@ -328,21 +345,7 @@ func NewShape(s string) func(v Value) error {
 	case '<':
 		until, s = '>', s[1:]
 	}
-
-	if f, ok := shapeCache.Load(old); ok {
-		return f.(func(Value) error)
-	}
-
-	x := shapeScan(old, &s, until)
-	if x == nil {
-		return func(Value) error { return nil }
-	}
-
-	f := func(v Value) error {
-		return x.assert(v, old)
-	}
-	shapeCache.Store(old, f)
-	return f
+	return shapeScan(old, &s, until)
 }
 
 func shapeScan(p string, s *string, until byte) shape {
@@ -399,18 +402,15 @@ func TestShapeFast(v Value, shape string) (err error) {
 	case '(', '[', '{', '<':
 		err = NewShape(shape)(v)
 	case '@':
-		err = assertShapePrototype(v, shape[1:], shape)
+		err = assertShapePrototype(v, shape[1:])
 	default:
-		err = assertShapePrimitive(v, shape, shape)
+		err = assertShapePrimitive(v, shape)
 	}
 	return
 }
 
 func (v Value) AssertShape(shape, msg string) Value {
 	if err := TestShapeFast(v, shape); err != nil {
-		if msg == "" {
-			panic(err)
-		}
 		panic(fmt.Errorf("%s: %v", msg, err))
 	}
 	return v

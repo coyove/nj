@@ -175,7 +175,12 @@ func init() {
 			internal.Panic("%s: %v and %v", e.Get(2).String(), v, e.Get(1))
 		}
 	}).Object().
-		SetProp("shape", Func("shape", func(e *Env) { e.Get(0).AssertShape(e.Str(1), "") })).
+		SetProp("shape", Func("shape", func(e *Env) { e.Get(0).AssertShape(e.Str(1), "assert.shape") }).
+			Object().
+			SetProp("describe", Func("describe", func(e *Env) {
+				e.A = Str(buildShape(e.Str(0)).String())
+			})).
+			ToValue()).
 		ToValue())
 
 	*Proto.Bool = *Func("bool", func(e *Env) { e.A = Bool(e.Get(0).IsTrue()) }).Object()
@@ -341,13 +346,13 @@ func init() {
 				}
 			}
 		}).
-		AddMethod("toreader", func(e *Env) { e.Native(-1).meta = Proto.Reader }).
-		AddMethod("towriter", func(e *Env) { e.Native(-1).meta = Proto.Writer }).
-		AddMethod("tocloser", func(e *Env) { e.Native(-1).meta = Proto.Closer }).
-		AddMethod("toreadwriter", func(e *Env) { e.Native(-1).meta = Proto.ReadWriter }).
-		AddMethod("toreadcloser", func(e *Env) { e.Native(-1).meta = Proto.ReadCloser }).
-		AddMethod("towritecloser", func(e *Env) { e.Native(-1).meta = Proto.WriteCloser }).
-		AddMethod("toreadwritecloser", func(e *Env) { e.Native(-1).meta = Proto.ReadWriteCloser })
+		AddMethod("toreader", func(e *Env) { e.Native(-1).meta = NativeMetaProto.Reader }).
+		AddMethod("towriter", func(e *Env) { e.Native(-1).meta = NativeMetaProto.Writer }).
+		AddMethod("tocloser", func(e *Env) { e.Native(-1).meta = NativeMetaProto.Closer }).
+		AddMethod("toreadwriter", func(e *Env) { e.Native(-1).meta = NativeMetaProto.ReadWriter }).
+		AddMethod("toreadcloser", func(e *Env) { e.Native(-1).meta = NativeMetaProto.ReadCloser }).
+		AddMethod("towritecloser", func(e *Env) { e.Native(-1).meta = NativeMetaProto.WriteCloser }).
+		AddMethod("toreadwritecloser", func(e *Env) { e.Native(-1).meta = NativeMetaProto.ReadWriteCloser })
 
 	Proto.Native.SetPrototype(nil) // native prototype has no parent
 	AddGlobal("native", Proto.Native.ToValue())
@@ -428,7 +433,20 @@ func init() {
 	AddGlobal("array", Proto.Array.ToValue())
 
 	*Proto.Bytes = *Func("bytes", func(e *Env) {
-		_ = e.Get(0).IsInt64() && e.SetA(ValueOf(make([]byte, e.Int(0)))) || e.SetA(ValueOf([]byte(e.Str(0))))
+		switch v := e.Get(0); v.Type() {
+		case typ.Number:
+			e.A = Bytes(make([]byte, v.Int()))
+		case typ.String:
+			e.A = Bytes([]byte(v.Str()))
+		case typ.Native:
+			buf := make([]byte, v.Native().Len())
+			for i := 0; i < v.Native().Len(); i++ {
+				buf[i] = byte(v.Native().Get(i).AssertNumber("bytes").Int())
+			}
+			e.A = Bytes(buf)
+		default:
+			v.AssertShape("<n,s,@array>", "bytes")
+		}
 	}).Object().
 		AddMethod("unsafestr", func(e *Env) { e.A = UnsafeStr(e.A.Native().Unwrap().([]byte)) }).
 		SetPrototype(Proto.Array)

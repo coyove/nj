@@ -303,6 +303,9 @@ func getNativeMeta(v interface{}) *NativeMeta {
 				}
 			}
 			rv, ok := reflect.ValueOf(a.any).Recv()
+			if !ok {
+				return Nil
+			}
 			kv.Native().Set(0, ValueOf(rv.Interface()))
 			kv.Native().Set(1, Bool(ok))
 			return kv

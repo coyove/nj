@@ -43,7 +43,7 @@ func init() {
 		return Error(nil, er)
 	}
 
-	Proto.Reader.Proto.
+	NativeMetaProto.Reader.Proto.
 		AddMethod("read", func(e *Env) {
 			buf, err := func(e *Env) ([]byte, error) {
 				f := e.A.Reader()
@@ -74,7 +74,7 @@ func init() {
 		}).
 		SetPrototype(Proto.Native)
 
-	Proto.Writer.Proto.
+	NativeMetaProto.Writer.Proto.
 		AddMethod("write", func(e *Env) {
 			wn, err := Write(e.A.Writer(), e.Get(0))
 			_ = err == nil && e.SetA(Int(wn)) || e.SetA(Error(e, err))
@@ -95,19 +95,27 @@ func init() {
 		}).
 		SetPrototype(Proto.Native)
 
-	Proto.Closer.Proto.
+	NativeMetaProto.Closer.Proto.
 		AddMethod("close", func(e *Env) {
 			e.A = Error(e, e.A.Closer().Close())
 		}).
 		SetPrototype(Proto.Native)
 
-	Proto.ReadWriter.Proto.Merge(Proto.Reader.Proto).Merge(Proto.Writer.Proto).SetPrototype(Proto.Native)
+	NativeMetaProto.ReadWriter.Proto.
+		Merge(NativeMetaProto.Reader.Proto).
+		Merge(NativeMetaProto.Writer.Proto).SetPrototype(Proto.Native)
 
-	Proto.ReadCloser.Proto.Merge(Proto.Reader.Proto).Merge(Proto.Closer.Proto).SetPrototype(Proto.Native)
+	NativeMetaProto.ReadCloser.Proto.
+		Merge(NativeMetaProto.Reader.Proto).
+		Merge(NativeMetaProto.Closer.Proto).SetPrototype(Proto.Native)
 
-	Proto.WriteCloser.Proto.Merge(Proto.Writer.Proto).Merge(Proto.Closer.Proto).SetPrototype(Proto.Native)
+	NativeMetaProto.WriteCloser.Proto.
+		Merge(NativeMetaProto.Writer.Proto).
+		Merge(NativeMetaProto.Closer.Proto).SetPrototype(Proto.Native)
 
-	Proto.ReadWriteCloser.Proto.Merge(Proto.ReadWriter.Proto).Merge(Proto.Closer.Proto).SetPrototype(Proto.Native)
+	NativeMetaProto.ReadWriteCloser.Proto.
+		Merge(NativeMetaProto.ReadWriter.Proto).
+		Merge(NativeMetaProto.Closer.Proto).SetPrototype(Proto.Native)
 }
 
 // Reader creates an io.Reader from value, Read() may fail if value doesn't support reading.

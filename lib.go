@@ -141,7 +141,7 @@ func init() {
 				e.A = (*env)(e).valueOrError(f.Seek(0, 2))
 			}
 		}).
-		SetPrototype(bas.Proto.ReadWriteCloser.Proto))
+		SetPrototype(bas.NativeMetaProto.ReadWriteCloser.Proto))
 
 	bas.AddGlobal("open", bas.Func("open", func(e *bas.Env) {
 		path, flag, perm := e.Str(0), e.StrDefault(1, "r", 1), e.IntDefault(2, 0644)
@@ -533,7 +533,7 @@ func init() {
 			if args.Get(bas.Str("br")).IsFalse() {
 				resp.Body.Close()
 			} else {
-				buf = bas.NewNativeWithMeta(resp.Body, bas.Proto.ReadCloser).ToValue()
+				buf = bas.NewNativeWithMeta(resp.Body, bas.NativeMetaProto.ReadCloser).ToValue()
 			}
 			return bas.Int(resp.StatusCode), bas.ValueOf(resp.Header), buf, bas.ValueOf(client.Jar)
 		}
@@ -564,7 +564,7 @@ func init() {
 	bas.AddGlobal("http", httpLib.ToValue())
 
 	bufferMeta := bas.NewEmptyNativeMeta("Buffer", bas.NewObject(0).
-		SetPrototype(bas.Proto.ReadWriter.Proto).
+		SetPrototype(bas.NativeMetaProto.ReadWriter.Proto).
 		AddMethod("reset", func(e *bas.Env) { e.A.Interface().(*internal.LimitedBuffer).Reset() }).
 		AddMethod("value", func(e *bas.Env) { e.A = bas.UnsafeStr(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }).
 		AddMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }))
