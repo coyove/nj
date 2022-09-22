@@ -2,11 +2,10 @@ package parser
 
 import (
 	"fmt"
-	"math/rand"
-	"strconv"
 	"sync/atomic"
 
 	"github.com/coyove/nj/bas"
+	"github.com/coyove/nj/internal"
 )
 
 const (
@@ -198,6 +197,36 @@ func __dotdotdot(expr Node) Node {
 	return expr
 }
 
+func __forRange(v Token, start, end, step, body Node, pos Token) Node {
+	forVar := Sym(v)
+	if isNum, isNeg := step.numSign(); isNum { // step is a static number, easy case
+		var cmp Node
+		if isNeg {
+			cmp = __less(end, forVar)
+		} else {
+			cmp = __less(forVar, end)
+		}
+		return __do(
+			__set(forVar, start).At(pos),
+			__loop(
+				__inc(forVar, step),
+				__if(cmp, __chain(body, __inc(forVar, step)), breakNode).At(pos),
+			).At(pos),
+		)
+	}
+	return __do(
+		__set(forVar, start).At(pos),
+		__loop(
+			__inc(forVar, step),
+			__if(
+				__less(zero, step).At(pos),
+				__if(__less(forVar, end), __chain(body, __inc(forVar, step)), breakNode).At(pos), // +step
+				__if(__less(end, forVar), __chain(body, __inc(forVar, step)), breakNode).At(pos), // -step
+			).At(pos),
+		).At(pos),
+	)
+}
+
 func __forIn(key, value Token, expr, body Node, pos Token) Node {
 	k, v, subject, kv := Sym(key), Sym(value), randomVarname(), randomVarname()
 	moveNext := __chain(
@@ -269,5 +298,5 @@ func (lex *Lexer) __object(tok Token, args Node) Node {
 }
 
 func randomVarname() Node {
-	return staticSym("v" + strconv.FormatInt(rand.Int63(), 10)[:6])
+	return staticSym(internal.Unnamed())
 }

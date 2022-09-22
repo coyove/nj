@@ -36,11 +36,6 @@ type Node struct {
 	SymLine  uint32
 }
 
-type TokenNode struct {
-	Token
-	Node
-}
-
 func staticSym(s string) Node {
 	return Node{NodeType: SYM, Value: bas.Str(s)}
 }

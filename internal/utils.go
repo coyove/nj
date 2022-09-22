@@ -31,6 +31,10 @@ func UnnamedLoadString() string {
 	return fmt.Sprintf("<memory-%d>", atomic.AddInt64(&unnamedCounter, 1))
 }
 
+func Unnamed() string {
+	return "v!" + strconv.FormatInt(atomic.AddInt64(&unnamedCounter, 1), 10)
+}
+
 func ShouldNotHappen(args ...interface{}) {
 	if len(args) > 0 {
 		panic(fmt.Errorf("fatal: should not happen, bad values: %v", args...))

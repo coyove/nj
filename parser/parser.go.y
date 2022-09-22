@@ -22,12 +22,11 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 %type<expr> func_stat
 %type<expr> func_params
 %type<token> comma
-%type<token2> op_assign
+%type<expr> op_assign
 
 %union {
     token  Token
     expr   Node
-    token2 *TokenNode
 }
 
 /* Reserved words */
@@ -109,7 +108,7 @@ assign_stat:
         }
     } |
     declarator op_assign expr {
-        $$ = $1.moveLoadStore(Nodes($2.Node, $1, $3).At($2.Token)).At($2.Token)
+        $$ = $1.moveLoadStore(Nodes($2, $1, $3)).At(Token{Pos:Position{Line:$2.SymLine}})
     }
 
 for_stat:
@@ -120,64 +119,33 @@ for_stat:
         $$ = __loop(emptyNode, $2, __if($4, breakNode, emptyNode).At($1)).At($1)
     } |
     TFor TIdent '=' expr ',' expr TDo stats TEnd {
-        forVar, forEnd := Sym($2), randomVarname()
-        cont := __inc(forVar, one).At($1)
-        $$ = __do(
-            __set(forVar, $4).At($1),
-            __set(forEnd, $6).At($1),
-            __loop(
-                cont,
-                __if(
-                    __less(forVar, forEnd),
-                    __chain($8, cont),
-                    breakNode,
-                ).At($1),
-            ).At($1),
-        )
+        $$ = __forRange($2, $4, $6, one, $8, $1)
     } |
     TFor TIdent '=' expr ',' expr ',' expr TDo stats TEnd {
-        forVar, forEnd := Sym($2), randomVarname()
-        if isNum, isNeg := $8.numSign(); isNum { // step is a static number, easy case
-            $$ = __do(
-                __set(forVar, $4).At($1),
-                __set(forEnd, $6).At($1),
-            )
-            body := __chain($10, __inc(forVar, $8))
-            if isNeg {
-                $$ = $$.append(__loop(__inc(forVar, $8), __if(__less(forEnd, forVar), body, breakNode).At($1)).At($1))
-            } else {
-                $$ = $$.append(__loop(__inc(forVar, $8), __if(__less(forVar, forEnd), body, breakNode).At($1)).At($1))
-            }
-        } else { 
-            forStep := randomVarname()
-            $$ = __do(
-                __set(forVar, $4).At($1),
-                __set(forEnd, $6).At($1),
-                __set(forStep, $8).At($1),
-            )
-            body := __chain($10, __inc(forVar, forStep))
-            $$ = $$.append(__loop(
-                __inc(forVar, forStep),
-                __if(
-                    __less(zero, forStep).At($1),
-                    __if(__lessEq(forEnd, forVar), breakNode, body).At($1), // +step
-                    __if(__lessEq(forVar, forEnd), breakNode, body).At($1), // -step
-                ).At($1),
-            ).At($1))
-        }
+        $$ = __forRange($2, $4, $6, $8, $10, $1)
     } |
-    TFor TIdent ',' TIdent TIn expr TDo stats TEnd          { $$ = __forIn($2, $4, $6, $8, $1) } |
-    TFor TIdent TIn expr TDo stats TEnd                     { $$ = __forIn($2, $1, $4, $6, $1) }
+    TFor TIdent ',' TIdent TIn expr TDo stats TEnd {
+        $$ = __forIn($2, $4, $6, $8, $1)
+    } |
+    TFor TIdent TIn expr TDo stats TEnd {
+        $$ = __forIn($2, $1, $4, $6, $1)
+    }
 
 if_stat:
     TIf expr TThen stats elseif_stat TEnd %prec 'T' { $$ = __if($2, $4, $5).At($1) }
 
 elseif_stat:
-    { $$ = Nodes() } | TElse stats { $$ = $2 } | TElseIf expr TThen stats elseif_stat { $$ = __if($2, $4, $5).At($1) }
+    { $$ = Nodes() } |
+    TElse stats { $$ = $2 } |
+    TElseIf expr TThen stats elseif_stat { $$ = __if($2, $4, $5).At($1) }
 
 func_stat:
-    TFunc TIdent func_params stats TEnd            { $$ = __func($2, $3, $4) } | 
-    TFunc TIdent '.' TIdent func_params stats TEnd { $$ = __store(Sym($2), Str($4.Str), __method(__markupFuncName($2, $4), $5, $6)) }
+    TFunc TIdent func_params stats TEnd {
+        $$ = __func($2, $3, $4)
+    } | 
+    TFunc TIdent '.' TIdent func_params stats TEnd {
+        $$ = __store(Sym($2), Str($4.Str), __method(__markupFuncName($2, $4), $5, $6))
+    }
 
 func_params:
     TLParen ')'                        { $$ = emptyNode } | 
@@ -281,17 +249,17 @@ expr_assign_list:
 comma: {} | ',' {}
 
 op_assign: 
-    TAddEq     { $$ = &TokenNode{$1, SAdd} } |
-    TSubEq     { $$ = &TokenNode{$1, SSub} } |
-    TMulEq     { $$ = &TokenNode{$1, SMul} } |
-    TDivEq     { $$ = &TokenNode{$1, SDiv} } |
-    TIDivEq    { $$ = &TokenNode{$1, SIDiv} } |
-    TModEq     { $$ = &TokenNode{$1, SMod} } |
-    TBitAndEq  { $$ = &TokenNode{$1, SBitAnd} } |
-    TBitOrEq   { $$ = &TokenNode{$1, SBitOr} } |
-    TBitXorEq  { $$ = &TokenNode{$1, SBitXor} } |
-    TBitLshEq  { $$ = &TokenNode{$1, SBitLsh} } |
-    TBitRshEq  { $$ = &TokenNode{$1, SBitRsh} } |
-    TBitURshEq { $$ = &TokenNode{$1, SBitURsh} }
+    TAddEq     { $$ = SAdd.At($1) } |
+    TSubEq     { $$ = SSub.At($1) } |
+    TMulEq     { $$ = SMul.At($1) } |
+    TDivEq     { $$ = SDiv.At($1) } |
+    TIDivEq    { $$ = SIDiv.At($1) } |
+    TModEq     { $$ = SMod.At($1) } |
+    TBitAndEq  { $$ = SBitAnd.At($1) } |
+    TBitOrEq   { $$ = SBitOr.At($1) } |
+    TBitXorEq  { $$ = SBitXor.At($1) } |
+    TBitLshEq  { $$ = SBitLsh.At($1) } |
+    TBitRshEq  { $$ = SBitRsh.At($1) } |
+    TBitURshEq { $$ = SBitURsh.At($1) }
 
 %%
