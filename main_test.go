@@ -380,6 +380,8 @@ func TestNumberLexer(t *testing.T) {
 		_, fn, ln, _ := runtime.Caller(1)
 		r := MustRun(LoadString(src, nil))
 		if r != v {
+			n, _ := _parser.Parse(src, "")
+			n.Dump(os.Stdout)
 			t.Fatal(fn, ln, r, v)
 		}
 	}

@@ -87,12 +87,20 @@ type Scanner struct {
 	offset    int64
 	text      string
 	lastToken Token
+	constants bas.Object
+	functions bas.Object
 }
 
 func NewScanner(text string, source string) *Scanner {
+	o := bas.NewObject(2)
+	o.Set(bas.True, bas.Nil)
+	o.Set(bas.False, bas.Nil)
+	o.Set(bas.Int(0), bas.Nil)
+	o.Set(bas.Int(1), bas.Nil)
 	return &Scanner{
-		Pos:  Position{Source: source, Line: 1, Column: 0},
-		text: text,
+		constants: *o,
+		Pos:       Position{Source: source, Line: 1, Column: 0},
+		text:      text,
 	}
 }
 
@@ -308,38 +316,38 @@ skipspaces:
 		if typ, ok := reservedWords[tok.Str]; ok {
 			tok.Type = typ
 			if typ == TReturn {
-				crlf := false
-				if tail := strings.TrimLeft(sc.text[sc.offset:], " \t\r"); strings.HasPrefix(tail, "\n") {
-					// return \n
-					crlf = true
-				} else if tail = strings.TrimLeftFunc(tail, unicode.IsSpace); tail == "" {
-					// return <EOF>
-					crlf = true
-				} else if strings.HasPrefix(tail, ";") {
-					// return ;
-					crlf = true
-				} else if strings.HasPrefix(tail, "--") {
-					// return --comments
-					crlf = true
-				} else {
-					for k := range reservedWords {
-						if k == "function" || k == "if" {
-							// return function() end / return if(a, b, c)
-							continue
-						}
-						if strings.HasPrefix(tail, k) {
-							tmp := tail[len(k):]
-							r, _ := utf8.DecodeRuneInString(tmp)
-							crlf = tmp == "" || unicode.IsSpace(r)
-						}
-						if crlf {
-							// return <spaces> <keyword> (<spaces>|<EOF>)
-							break
-						}
-					}
-				}
-				if crlf {
+				tail := strings.TrimLeft(sc.text[sc.offset:], " \t\r")
+				if strings.HasPrefix(tail, "\n") { // return \n
 					tok.Type = TReturnVoid
+				} else if tail = strings.TrimLeft(tail, "\n"); tail == "" { // return <EOF>
+					tok.Type = TReturnVoid
+				} else if strings.HasPrefix(tail, ";") { // return ;
+					tok.Type = TReturnVoid
+				} else if strings.HasPrefix(tail, "--") { // return --comments
+					tok.Type = TReturnVoid
+				} else if strings.HasPrefix(tail, "end") { // return end
+					tmp := tail[3:]
+					r, _ := utf8.DecodeRuneInString(tmp)
+					if tmp == "" || unicode.IsSpace(r) {
+						// return <spaces> <keyword> (<spaces>|<EOF>)
+						tok.Type = TReturnVoid
+					}
+				} else {
+					// for k := range reservedWords {
+					// 	if k == "function" || k == "if" {
+					// 		// return function() end / return if(a, b, c)
+					// 		continue
+					// 	}
+					// 	if strings.HasPrefix(tail, k) {
+					// 		tmp := tail[len(k):]
+					// 		r, _ := utf8.DecodeRuneInString(tmp)
+					// 		if tmp == "" || unicode.IsSpace(r) {
+					// 			// return <spaces> <keyword> (<spaces>|<EOF>)
+					// 			tok.Type = TReturnVoid
+					// 			break
+					// 		}
+					// 	}
+					// }
 				}
 			}
 		}
@@ -362,15 +370,15 @@ skipspaces:
 					sc.skipComments()
 				}
 				goto redo
+			} else if p == '=' {
+				sc.Next()
+				tok.Type = TSubEq
+				tok.Str = "-="
+				goto finally
 			} else if metSpaces || !sc.isLastTokenSymbolOrNumberClosed() {
 				if p == '.' || (p >= '0' && p <= '9') {
 					tok.Type = TNumber
 					tok.Str = sc.scanNumber()
-					goto finally
-				} else if p == '=' {
-					sc.Next()
-					tok.Type = TSubEq
-					tok.Str = "-="
 					goto finally
 				} else if !unicode.IsSpace(rune(p)) {
 					tok.Type = TInv
@@ -499,7 +507,7 @@ func (sc *Scanner) opAssign(tok Token) Token {
 
 type Lexer struct {
 	scanner *Scanner
-	Stmts   Node
+	Stmts   Node2
 	Token   Token
 }
 
@@ -525,10 +533,10 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 	panic(lx.scanner.TokenError(tok, message))
 }
 
-func parse(reader, name string, jsonMode bool) (chunk Node, lexer *Lexer, err error) {
+func parse(reader, name string, jsonMode bool) (chunk Node2, lexer *Lexer, err error) {
 	lexer = &Lexer{
 		scanner: NewScanner(reader, name),
-		Stmts:   Node{},
+		Stmts:   nil,
 		Token:   Token{Str: ""},
 	}
 	lexer.scanner.jsonMode = jsonMode
@@ -538,12 +546,17 @@ func parse(reader, name string, jsonMode bool) (chunk Node, lexer *Lexer, err er
 	return
 }
 
-func Parse(text, name string) (chunk Node, err error) {
+func Parse(text, name string) (chunk Node2, err error) {
 	yyErrorVerbose = true
 	yyDebug = 1
-	chunk, _, err = parse(text, name, false)
-	if !chunk.Valid() && err == nil {
+	var lexer *Lexer
+	chunk, lexer, err = parse(text, name, false)
+	if chunk == nil && err == nil {
 		err = fmt.Errorf("invalid chunk")
+	}
+	if chunk != nil {
+		lc := &LoadConst{Table: lexer.scanner.constants, Funcs: lexer.scanner.functions}
+		chunk.(*Prog).Stats = append([]Node2{lc}, chunk.(*Prog).Stats...)
 	}
 	return
 }
@@ -555,19 +568,18 @@ func ParseJSON(text string) (bas.Value, error) {
 	if err != nil {
 		return bas.Nil, err
 	}
-	if !chunk.Valid() {
+	p, ok := chunk.(*Prog)
+	if !ok {
 		return bas.Nil, fmt.Errorf("invalid json chunk")
 	}
-	if chunk.Type() != NODES || len(chunk.Nodes()) < 1 || chunk.Nodes()[0].Value != SBegin.Value {
-		return bas.Nil, fmt.Errorf("invalid json chunk: %v", chunk)
+
+	switch j := p.Stats[0].(type) {
+	case JValue:
+		return bas.Value(j), nil
+	case Primitive:
+		return bas.Value(j), nil
 	}
-	j := chunk.Nodes()[1]
-	switch j.Type() {
-	case JSON, STR, INT, FLOAT:
-		return j.Value, nil
-	default:
-		return bas.Nil, fmt.Errorf("invalid json chunk: %v", chunk)
-	}
+	return bas.Nil, fmt.Errorf("invalid json chunk: %v", chunk)
 }
 
 // }}}

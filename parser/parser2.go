@@ -6,6 +6,7 @@ import (
 
 	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
+	"github.com/coyove/nj/typ"
 )
 
 const (
@@ -20,102 +21,37 @@ const (
 )
 
 var (
-	breakNode = Nodes((SBreak))
-	zero      = Int(0)
-	one       = Int(1)
-	emptyNode = Nodes()
+	emptyBreak = &BreakContinue{Break: true}
+	emptyProg  = &Prog{}
+	zero       = Primitive(bas.Int(0))
+	one        = Primitive(bas.Int(1))
 )
 
 var (
-	Sa        = staticSym("$a")
-	SDoBlock  = staticSym("doblock")
-	SNil      = staticSym("nil")
-	SSet      = staticSym("set")
-	SInc      = staticSym("inc")
-	SMove     = staticSym("move")
-	SIf       = staticSym("if")
-	SWhile    = staticSym("loop")
-	SFunc     = staticSym("func")
-	SBreak    = staticSym("break")
-	SContinue = staticSym("continue")
-	SBegin    = staticSym("begin")
-	SLoad     = staticSym("load")
-	SStore    = staticSym("store")
-	SSlice    = staticSym("slice")
-	SArray    = staticSym("array")
-	SObject   = staticSym("object")
-	SCall     = staticSym("call")
-	STailCall = staticSym("tailcall")
-	STryCall  = staticSym("trycall")
-	SReturn   = staticSym("return")
-	SLen      = staticSym("len")
-	SNext     = staticSym("next")
-	SAdd      = staticSym("add")
-	SSub      = staticSym("sub")
-	SMul      = staticSym("mul")
-	SDiv      = staticSym("div")
-	SIDiv     = staticSym("idiv")
-	SMod      = staticSym("mod")
-	SBitAnd   = staticSym("bitand")
-	SBitOr    = staticSym("bitor")
-	SBitXor   = staticSym("bitxor")
-	SBitLsh   = staticSym("bitlsh")
-	SBitRsh   = staticSym("bitrsh")
-	SBitURsh  = staticSym("bitursh")
-	SEq       = staticSym("eq")
-	SNeq      = staticSym("neq")
-	SAnd      = staticSym("and")
-	SOr       = staticSym("or")
-	SNot      = staticSym("not")
-	SLess     = staticSym("less")
-	SLessEq   = staticSym("lesseq")
-	SFreeAddr = staticSym("freeaddr")
-	SLabel    = staticSym("label")
-	SGoto     = staticSym("goto")
-	SUnpack   = staticSym("unpack")
-	SIs       = staticSym("isproto")
+	Sa   = &Symbol{Name: "a!"}
+	SNil = &Symbol{Name: "nil"}
 )
 
-func __chain(args ...Node) Node { return Nodes(append([]Node{SBegin}, args...)...) }
+func (lex *Lexer) pFunc(method bool, name Token, args Node2, stats Node2, pos Token) Node2 {
+	namev := bas.Str(name.Str)
+	if lex.scanner.functions.Contains(namev) {
+		lex.Error(fmt.Sprintf("function %q already existed", name.Str))
+	}
+	lex.scanner.functions.Set(namev, bas.Nil)
 
-func __do(args ...Node) Node { return Nodes(append([]Node{SDoBlock}, args...)...) }
-
-func __move(dest, src Node) Node { return Nodes(SMove, dest, src) }
-
-func __set(dest, src Node) Node { return Nodes(SSet, dest, src) }
-
-func __less(lhs, rhs Node) Node { return Nodes(SLess, lhs, rhs) }
-
-func __lessEq(lhs, rhs Node) Node { return Nodes(SLessEq, lhs, rhs) }
-
-func __inc(subject, step Node) Node { return Nodes((SInc), subject, step) }
-
-func __load(subject, key Node) Node { return Nodes((SLoad), subject, key) }
-
-func __store(subject, key, value Node) Node { return Nodes(SStore, subject, key, value) }
-
-func __if(cond, t, f Node) Node { return Nodes((SIf), cond, t, f) }
-
-func __loop(cont Node, body ...Node) Node { return Nodes(SWhile, __chain(body...), cont) }
-
-func __goto(label Node) Node { return Nodes(SGoto, label) }
-
-func __label(name Node) Node { return Nodes(SLabel, name) }
-
-func __ret(v Node) Node { return Nodes(SReturn, v) }
-
-func __func(name Token, paramList Node, stats Node) Node {
-	__findTailCall(stats.Nodes())
 	funcname := Sym(name)
-	return __chain(
-		__set(funcname, SNil).At(name),
-		__move(funcname, Nodes(SFunc, funcname, paramList, stats).At(name)).At(name),
-	)
-}
+	lex.pFindTailCall(stats)
 
-func __method(name Token, paramList Node, stats Node) Node {
-	__findTailCall(stats.Nodes())
-	return Nodes(SFunc, Sym(name), paramList, stats).At(name)
+	f := &Function{Name: name.Str, Body: stats, Line: pos.Line()}
+	if vargs, ok := args.(IdentVarargList); ok {
+		f.Args, f.Vararg = vargs.IdentList, true
+	} else {
+		f.Args = args.(IdentList)
+	}
+	if method {
+		return f
+	}
+	return lex.pProg(false, &Declare{funcname, SNil, pos.Line()}, &Assign{funcname, f, pos.Line()})
 }
 
 func __markupFuncName(recv, name Token) Token {
@@ -130,173 +66,181 @@ func __markupLambdaName(lambda Token) Token {
 	return lambda
 }
 
-func __call(cls, args Node) Node { return Nodes(SCall, cls, args) }
-
-func __tryCall(cls, args Node) Node { return Nodes(STryCall, cls, args) }
-
-func __findTailCall(stats []Node) {
-	if len(stats) > 0 {
-		x := stats[len(stats)-1]
-		c := x.Nodes()
-		if len(c) == 3 && c[0].Value == SCall.Value {
-			old := c[0].SymLine
-			c[0] = STailCall
-			c[0].SymLine = old
-			return
-		}
-
-		if len(c) > 0 {
-			if c[0].Value == SBegin.Value {
-				__findTailCall(c)
-				return
+func (lex *Lexer) pFindTailCall(stat Node2) {
+	switch v := stat.(type) {
+	case *Call:
+		v.Op = typ.OpTailCall
+	case *Prog:
+		for i, stat := range v.Stats {
+			if i == len(v.Stats)-1 {
+				lex.pFindTailCall(stat)
+			} else if b, ok := v.Stats[i+1].(*Unary); ok && b.Op == typ.OpRet && b.A == SNil {
+				lex.pFindTailCall(stat)
 			}
-
 		}
 	}
 }
 
-func __local(dest, src []Node, pos Token) Node {
-	m, n := len(dest), len(src)
-	for i, count := 0, m-n; i < count; i++ {
-		src = append(src, SNil)
-	}
-	res := __chain()
-	for i, v := range dest {
-		res = res.append(__set(v, src[i]).At(pos))
-	}
-	return res
+func (lex *Lexer) pLoop(body ...Node2) Node2 {
+	return &Loop{emptyProg, lex.pProg(false, body...)}
 }
 
-func __moveMulti(nodes, src []Node, pos Token) Node {
-	m, n := len(nodes), len(src)
-	for i, count := 0, m-n; i < count; i++ {
-		src = append(src, SNil)
-	}
-
-	res := __chain()
-	if head := nodes[0]; len(nodes) == 1 {
-		res = head.moveLoadStore(src[0]).At(pos)
-	} else {
-		// a0, ..., an = b0, ..., bn
-		names, retaddr := []Node{}, Nodes((SFreeAddr))
-		for i := range nodes {
-			names = append(names, randomVarname())
-			retaddr = retaddr.append(names[i])
-			res = res.append(__set(names[i], src[i]).At(pos))
-		}
-		for i, v := range nodes {
-			res = res.append(v.moveLoadStore(names[i]).At(pos))
-		}
-		res = res.append(retaddr)
-	}
-	return res
-}
-
-func __dotdotdot(expr Node) Node {
-	expr.Nodes()[len(expr.Nodes())-1] = Nodes((SUnpack), expr.Nodes()[len(expr.Nodes())-1])
-	return expr
-}
-
-func __forRange(v Token, start, end, step, body Node, pos Token) Node {
+func (lex *Lexer) pForRange(v Token, start, end, step, body Node2, pos Token) Node2 {
 	forVar := Sym(v)
-	if isNum, isNeg := step.numSign(); isNum { // step is a static number, easy case
-		var cmp Node
-		if isNeg {
-			cmp = __less(end, forVar)
+	if v, ok := step.(Primitive); ok && bas.Value(v).IsNumber() { // step is a static number, easy case
+		var cmp Node2
+		if bas.Less(bas.Value(v), bas.Int(0)) {
+			cmp = lex.pBinary(typ.OpLess, end, forVar, pos)
 		} else {
-			cmp = __less(forVar, end)
+			cmp = lex.pBinary(typ.OpLess, forVar, end, pos)
 		}
-		return __do(
-			__set(forVar, start).At(pos),
-			__loop(
-				__inc(forVar, step),
-				__if(cmp, __chain(body, __inc(forVar, step)), breakNode).At(pos),
-			).At(pos),
+		return lex.pProg(true,
+			&Declare{forVar, start, pos.Line()},
+			&Loop{
+				lex.pBinary(typ.OpInc, forVar, step, pos),
+				&If{cmp,
+					lex.pProg(false, body, lex.pBinary(typ.OpInc, forVar, step, pos)),
+					emptyBreak,
+				},
+			},
 		)
 	}
-	return __do(
-		__set(forVar, start).At(pos),
-		__loop(
-			__inc(forVar, step),
-			__if(
-				__less(zero, step).At(pos),
-				__if(__less(forVar, end), __chain(body, __inc(forVar, step)), breakNode).At(pos), // +step
-				__if(__less(end, forVar), __chain(body, __inc(forVar, step)), breakNode).At(pos), // -step
-			).At(pos),
-		).At(pos),
+	return lex.pProg(true,
+		&Declare{forVar, start, pos.Line()},
+		&Loop{
+			lex.pBinary(typ.OpInc, forVar, step, pos),
+			&If{
+				lex.pBinary(typ.OpLess, lex.Int(0), step, pos),
+				&If{
+					lex.pBinary(typ.OpLess, forVar, end, pos), // +step
+					lex.pProg(false, body, lex.pBinary(typ.OpInc, forVar, step, pos)),
+					emptyBreak,
+				},
+				&If{
+					lex.pBinary(typ.OpLess, end, forVar, pos), // -step
+					lex.pProg(false, body, lex.pBinary(typ.OpInc, forVar, step, pos)),
+					emptyBreak,
+				},
+			},
+		},
 	)
 }
 
-func __forIn(key, value Token, expr, body Node, pos Token) Node {
+func (lex *Lexer) pForIn(key, value Token, expr, body Node2, pos Token) Node2 {
 	k, v, subject, kv := Sym(key), Sym(value), randomVarname(), randomVarname()
-	moveNext := __chain(
-		__move(kv, Nodes(SNext, subject, kv).At(pos)).At(pos),
-		__move(k, __load(kv, zero).At(pos)).At(pos),
-		__move(v, __load(kv, one).At(pos)).At(pos),
-	)
-	return __do(
-		__set(subject, expr).At(pos),
-		__set(k, SNil).At(pos),
-		__set(v, SNil).At(pos),
-		__set(kv, SNil).At(pos),
-		__loop(
-			one,
-			moveNext,
-			__if(Nodes(SEq, kv, SNil).At(pos), breakNode, body).At(pos),
-		),
+	return lex.pProg(true,
+		&Declare{subject, expr, pos.Line()},
+		&Declare{k, SNil, pos.Line()},
+		&Declare{v, SNil, pos.Line()},
+		&Declare{kv, SNil, pos.Line()},
+		&Loop{
+			emptyProg,
+			lex.pProg(false,
+				&Assign{kv, lex.pBinary(typ.OpNext, subject, kv, pos), pos.Line()},
+				&Tenary{typ.OpLoad, kv, lex.Int(0), k, pos.Line()},
+				&Tenary{typ.OpLoad, kv, lex.Int(1), v, pos.Line()},
+				&If{
+					lex.pBinary(typ.OpEq, kv, SNil, pos),
+					emptyBreak,
+					body,
+				},
+			),
+		},
 	)
 }
 
-func (lex *Lexer) __arrayBuild(list, arg Node) Node {
+func (lex *Lexer) pDeclareAssign(dest []Node2, src ExprList, assign bool, pos Token) Node2 {
+	if len(src) == 1 && len(dest) > 1 {
+		tmp := randomVarname()
+		p := (&Prog{}).Append(&Declare{tmp, src[0], pos.Line()})
+		for i, ident := range dest {
+			op := &Tenary{typ.OpLoad, tmp, lex.Int(int64(i)), Address(typ.RegA), pos.Line()}
+			if assign {
+				p.Append(assignLoadStore(ident, op, pos))
+			} else {
+				p.Append(&Declare{ident.(*Symbol), op, pos.Line()})
+			}
+		}
+		return p
+	}
+	if len(dest) == 1 && len(src) == 1 {
+		if assign {
+			return assignLoadStore(dest[0], src[0], pos)
+		}
+		return &Declare{dest[0].(*Symbol), src[0], pos.Line()}
+	}
+	res := &Prog{}
+	if !assign {
+		for i, v := range dest {
+			if i >= len(src) {
+				res.Append(&Declare{v.(*Symbol), SNil, pos.Line()})
+			} else {
+				res.Append(&Declare{v.(*Symbol), src[i], pos.Line()})
+			}
+		}
+	} else {
+		if len(dest) != len(src) {
+			lex.Error(fmt.Sprintf("unmatched number of assignments"))
+		}
+		// a0, ..., an = b0, ..., bn
+		var tmp Release
+		for i := range dest {
+			x := randomVarname()
+			tmp = append(tmp, x)
+			res.Append(&Assign{x, src[i], pos.Line()})
+		}
+		for i, v := range dest {
+			res.Append(assignLoadStore(v, tmp[i], pos))
+		}
+		res.Append(tmp)
+	}
+	return res
+}
+
+func (lex *Lexer) pArray(list, arg Node2) Node2 {
 	if lex.scanner.jsonMode {
-		if list.Valid() {
-			list.simpleJSON(lex).Native().Append(arg.simpleJSON(lex))
+		if list != nil {
+			lex.pSimpleJSON(list).Native().Append(lex.pSimpleJSON(arg))
 			return list
 		}
-		return jsonValue(bas.Array(arg.simpleJSON(lex)))
+		return JValue(bas.Array(lex.pSimpleJSON(arg)))
 	}
-	if list.Valid() {
-		return list.append(arg)
+	if list != nil {
+		return append(list.(ExprList), arg)
 	}
-	return Nodes(arg)
+	return ExprList([]Node2{arg})
 }
 
-func (lex *Lexer) __objectBuild(list, k, v Node) Node {
+func (lex *Lexer) pObject(list, k, v Node2) Node2 {
 	if lex.scanner.jsonMode {
-		if list.Valid() {
-			list.simpleJSON(lex).Object().Set(k.simpleJSON(lex), v.simpleJSON(lex))
+		if list != nil {
+			lex.pSimpleJSON(list).Object().Set(lex.pSimpleJSON(k), lex.pSimpleJSON(v))
 			return list
 		}
 		o := bas.NewObject(0)
-		o.Set(k.simpleJSON(lex), v.simpleJSON(lex))
-		return jsonValue(o.ToValue())
+		o.Set(lex.pSimpleJSON(k), lex.pSimpleJSON(v))
+		return JValue(o.ToValue())
 	}
-	if list.Valid() {
-		return list.append(k).append(v)
+	if list != nil {
+		return append(list.(ExprAssignList), [2]Node2{k, v})
 	}
-	return Nodes(k, v)
+	return append((ExprAssignList)(nil), [2]Node2{k, v})
 }
 
-func (lex *Lexer) __array(tok Token, args Node) Node {
+func (lex *Lexer) pEmptyArray() Node2 {
 	if lex.scanner.jsonMode {
-		if args == emptyNode {
-			return Node{NodeType: JSON, Value: bas.Array()}
-		}
-		return args
+		return JValue(bas.Array())
 	}
-	return Nodes(SArray, args).At(tok)
+	return ExprList(nil)
 }
 
-func (lex *Lexer) __object(tok Token, args Node) Node {
+func (lex *Lexer) pEmptyObject() Node2 {
 	if lex.scanner.jsonMode {
-		if args == emptyNode {
-			return jsonValue(bas.NewObject(0).ToValue())
-		}
-		return args
+		return JValue(bas.NewObject(0).ToValue())
 	}
-	return Nodes(SObject, args).At(tok)
+	return ExprAssignList(nil)
 }
 
-func randomVarname() Node {
-	return staticSym(internal.Unnamed())
+func randomVarname() *Symbol {
+	return &Symbol{Name: internal.Unnamed()}
 }

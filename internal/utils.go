@@ -32,7 +32,7 @@ func UnnamedLoadString() string {
 }
 
 func Unnamed() string {
-	return "v!" + strconv.FormatInt(atomic.AddInt64(&unnamedCounter, 1), 10)
+	return "tmp." + strconv.FormatInt(atomic.AddInt64(&unnamedCounter, 1), 10)
 }
 
 func ShouldNotHappen(args ...interface{}) {
@@ -96,12 +96,12 @@ func IfInt(v bool, t, f int) int {
 }
 
 func WriteString(w io.Writer, s string) (int, error) {
-	type a struct {
+	a := struct {
 		b string
 		c int
-	}
+	}{s, len(s)}
 	var x []byte
-	*(*a)(unsafe.Pointer(&x)) = a{s, len(s)}
+	*(*[3]int)(unsafe.Pointer(&x)) = *(*[3]int)(unsafe.Pointer(&a))
 	return w.Write(x)
 }
 

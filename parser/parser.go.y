@@ -1,11 +1,12 @@
 %{
 package parser
 
+import "github.com/coyove/nj/typ"
+
 func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 %}
 %type<expr> prog
 %type<expr> stats
-%type<expr> stat
 %type<expr> declarator
 %type<expr> declarator_list
 %type<expr> ident_list
@@ -13,7 +14,6 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 %type<expr> expr_list
 %type<expr> expr_assign_list
 %type<expr> prefix_expr
-%type<expr> prefix_expr_call_arguments
 %type<expr> assign_stat
 %type<expr> for_stat
 %type<expr> if_stat
@@ -22,11 +22,10 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 %type<expr> func_stat
 %type<expr> func_params
 %type<token> comma
-%type<expr> op_assign
 
 %union {
     token  Token
-    expr   Node
+    expr   Node2
 }
 
 /* Reserved words */
@@ -52,214 +51,164 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 
 %% 
 
-prog: 
-    {
-        $$ = __chain()
-        ss(yylex).Stmts = $$
-    } |
-    prog stat {
-        $$ = $1.append($2)
-        ss(yylex).Stmts = $$
-    }
+prog: stats { ss(yylex).Stmts = $1 }
 
 stats: 
-    { $$ = __chain() } | stats stat { $$ = $1.append($2) }
-
-stat:
-    func_stat      { $$ = $1 } |
-    TDo stats TEnd { $$ = __do($2) } |
-    jmp_stat       { $$ = $1 } |
-    assign_stat    { $$ = $1 } |
-    for_stat       { $$ = $1 } |
-    if_stat        { $$ = $1 } |
-    ';'            { $$ = emptyNode }
+                                    { $$ = &Prog{} } |
+    stats func_stat                 { $$ = $1.(*Prog).Append($2) } |
+    stats TDo stats TEnd            { $3.(*Prog).DoBlock = true; $$ = $1.(*Prog).Append($3) } |
+    stats jmp_stat                  { $$ = $1.(*Prog).Append($2) } |
+    stats assign_stat               { $$ = $1.(*Prog).Append($2) } |
+    stats for_stat                  { $$ = $1.(*Prog).Append($2) } |
+    stats if_stat                   { $$ = $1.(*Prog).Append($2) } |
+    stats ';'                       { $$ = $1 }
 
 assign_stat:
-    expr {
-        $$ = $1
-    } | 
-    TLocal ident_list {
-        $$ = __chain()
-        for _, v := range $2.Nodes() {
-            $$ = $$.append(__set(v, SNil).At($1))
-        }
-    } |
-    TLocal ident_list '=' expr_list {
-        if len($4.Nodes()) == 1 && len($2.Nodes()) > 1 {
-            tmp := randomVarname()
-            $$ = __chain(__set(tmp, $4.Nodes()[0]).At($1))
-            for i, ident := range $2.Nodes() {
-                $$ = $$.append(__set(ident, __load(tmp, Int(int64(i))).At($1)).At($1))
-            }
-        } else {
-            $$ = __local($2.Nodes(), $4.Nodes(), $1)
-        }
-    } |
-    declarator_list '=' expr_list {
-        if len($3.Nodes()) == 1 && len($1.Nodes()) > 1 {
-            tmp := randomVarname()
-            $$ = __chain(__set(tmp, $3.Nodes()[0]).At($2))
-            for i, decl := range $1.Nodes() {
-                x := decl.moveLoadStore(__load(tmp, Int(int64(i))).At($2)).At($2)
-                $$ = $$.append(x)
-            }
-        } else {
-            $$ = __moveMulti($1.Nodes(), $3.Nodes(), $2)
-        }
-    } |
-    declarator op_assign expr {
-        $$ = $1.moveLoadStore(Nodes($2, $1, $3)).At(Token{Pos:Position{Line:$2.SymLine}})
-    }
+    expr                            { $$ = $1 } | 
+    TLocal ident_list               { $$ = ss(yylex).pDeclareAssign([]Node2($2.(IdentList)), nil, false, $1) } |
+    TLocal ident_list '=' expr_list { $$ = ss(yylex).pDeclareAssign([]Node2($2.(IdentList)), $4.(ExprList), false, $1) } |
+    declarator_list '=' expr_list   { $$ = ss(yylex).pDeclareAssign([]Node2($1.(DeclList)), $3.(ExprList), true, $2) } |
+    declarator TAddEq expr          { $$ = assignLoadStore($1, ss(yylex).pBinary(typ.OpAdd, $1, $3, $2), $2) } |
+    declarator TSubEq expr          { $$ = assignLoadStore($1, ss(yylex).pBinary(typ.OpSub, $1, $3, $2), $2) } |
+    declarator TMulEq expr          { $$ = assignLoadStore($1, ss(yylex).pBinary(typ.OpMul, $1, $3, $2), $2) } |
+    declarator TDivEq expr          { $$ = assignLoadStore($1, ss(yylex).pBinary(typ.OpDiv, $1, $3, $2), $2) } |
+    declarator TIDivEq expr         { $$ = assignLoadStore($1, ss(yylex).pBinary(typ.OpIDiv, $1, $3, $2), $2) } |
+    declarator TModEq expr          { $$ = assignLoadStore($1, ss(yylex).pBinary(typ.OpMod, $1, $3, $2), $2) } |
+    declarator TBitAndEq expr       { $$ = assignLoadStore($1, ss(yylex).pBitwise("and", $1, $3, $2), $2) } |
+    declarator TBitOrEq expr        { $$ = assignLoadStore($1, ss(yylex).pBitwise("or", $1, $3, $2), $2) } |
+    declarator TBitXorEq expr       { $$ = assignLoadStore($1, ss(yylex).pBitwise("xor", $1, $3, $2), $2) } |
+    declarator TBitLshEq expr       { $$ = assignLoadStore($1, ss(yylex).pBitwise("lsh", $1, $3, $2), $2) } |
+    declarator TBitRshEq expr       { $$ = assignLoadStore($1, ss(yylex).pBitwise("rsh", $1, $3, $2), $2) } |
+    declarator TBitURshEq expr      { $$ = assignLoadStore($1, ss(yylex).pBitwise("ursh", $1, $3, $2), $2) }
 
 for_stat:
-    TWhile expr TDo stats TEnd {
-        $$ = __loop(emptyNode, __if($2, $4, breakNode).At($1)).At($1)
-    } |
-    TRepeat stats TUntil expr {
-        $$ = __loop(emptyNode, $2, __if($4, breakNode, emptyNode).At($1)).At($1)
-    } |
-    TFor TIdent '=' expr ',' expr TDo stats TEnd {
-        $$ = __forRange($2, $4, $6, one, $8, $1)
-    } |
-    TFor TIdent '=' expr ',' expr ',' expr TDo stats TEnd {
-        $$ = __forRange($2, $4, $6, $8, $10, $1)
-    } |
-    TFor TIdent ',' TIdent TIn expr TDo stats TEnd {
-        $$ = __forIn($2, $4, $6, $8, $1)
-    } |
-    TFor TIdent TIn expr TDo stats TEnd {
-        $$ = __forIn($2, $1, $4, $6, $1)
-    }
+    TWhile expr TDo stats TEnd                            { $$ = ss(yylex).pLoop(&If{$2, $4, emptyBreak}) } |
+    TRepeat stats TUntil expr                             { $$ = ss(yylex).pLoop($2, &If{$4, emptyBreak, emptyProg}) } |
+    TFor TIdent '=' expr ',' expr TDo stats TEnd          { $$ = ss(yylex).pForRange($2, $4, $6, one, $8, $1) } |
+    TFor TIdent '=' expr ',' expr ',' expr TDo stats TEnd { $$ = ss(yylex).pForRange($2, $4, $6, $8, $10, $1) } |
+    TFor TIdent ',' TIdent TIn expr TDo stats TEnd        { $$ = ss(yylex).pForIn($2, $4, $6, $8, $1) } |
+    TFor TIdent TIn expr TDo stats TEnd                   { $$ = ss(yylex).pForIn($2, $1, $4, $6, $1) }
 
 if_stat:
-    TIf expr TThen stats elseif_stat TEnd %prec 'T' { $$ = __if($2, $4, $5).At($1) }
+    TIf expr TThen stats elseif_stat TEnd %prec 'T' { $$ = &If{$2, $4, $5} }
 
 elseif_stat:
-    { $$ = Nodes() } |
-    TElse stats { $$ = $2 } |
-    TElseIf expr TThen stats elseif_stat { $$ = __if($2, $4, $5).At($1) }
+                                                    { $$ = nil } |
+    TElse stats                                     { $$ = $2 } |
+    TElseIf expr TThen stats elseif_stat            { $$ = &If{$2, $4, $5} }
 
 func_stat:
     TFunc TIdent func_params stats TEnd {
-        $$ = __func($2, $3, $4)
+        $$ = ss(yylex).pFunc(false, $2, $3, $4, $1)
     } | 
     TFunc TIdent '.' TIdent func_params stats TEnd {
-        $$ = __store(Sym($2), Str($4.Str), __method(__markupFuncName($2, $4), $5, $6))
+        m := ss(yylex).pFunc(true, __markupFuncName($2, $4), $5, $6, $1)
+        $$ = &Tenary{typ.OpStore, Sym($2), ss(yylex).Str($4.Str), m, $1.Line()}
     }
 
 func_params:
-    TLParen ')'                        { $$ = emptyNode } | 
+    TLParen ')'                        { $$ = (IdentList)(nil) } | 
     TLParen ident_list ')'             { $$ = $2 } |
-    TLParen ident_list TDotDotDot ')'  { $$ = __dotdotdot($2) } |
-    '(' ')'                            { $$ = emptyNode } | 
+    TLParen ident_list TDotDotDot ')'  { $$ = IdentVarargList{$2.(IdentList)} } |
+    '(' ')'                            { $$ = (IdentList)(nil) } | 
     '(' ident_list ')'                 { $$ = $2 } |
-    '(' ident_list TDotDotDot ')'      { $$ = __dotdotdot($2) }
+    '(' ident_list TDotDotDot ')'      { $$ = IdentVarargList{$2.(IdentList)} }
 
 jmp_stat:
-    TBreak               { $$ = Nodes(SBreak).At($1) } |
-    TContinue            { $$ = Nodes(SContinue).At($1) } |
-    TGoto TIdent         { $$ = __goto(Sym($2)).At($1) } |
-    TLabel TIdent TLabel { $$ = __label(Sym($2)) } |
-    TReturnVoid          { $$ = __ret(SNil).At($1) } |
+    TBreak               { $$ = &BreakContinue{true, $1.Line()} } |
+    TContinue            { $$ = &BreakContinue{false, $1.Line()} } |
+    TGoto TIdent         { $$ = &GotoLabel{$2.Str, true, $1.Line()} } |
+    TLabel TIdent TLabel { $$ = &GotoLabel{$2.Str, false, $1.Line()} } |
+    TReturnVoid          { $$ = &Unary{typ.OpRet, SNil, $1.Line()} } |
     TReturn expr_list {
-        if len($2.Nodes()) == 1 {
-            __findTailCall($2.Nodes())
-            $$ = __ret($2.Nodes()[0]).At($1) 
+        if el := $2.(ExprList); len(el) == 1 {
+            ss(yylex).pFindTailCall(el[0])
+            $$ = &Unary{typ.OpRet, el[0], $1.Line()}
         } else {
-            $$ = __ret(Nodes(SArray, $2)).At($1) 
+            $$ = &Unary{typ.OpRet, $2, $1.Line()}
         }
     }
 
 declarator:
     TIdent {
         if ss(yylex).scanner.jsonMode {
-            $$ = jsonValue(Sym($1).simpleJSON(ss(yylex)))
+            $$ = JValue(ss(yylex).pSimpleJSON(Sym($1)))
         } else {
             $$ = Sym($1)
         }
     } |
-    prefix_expr TLBracket expr ']' { $$ = __load($1, $3).At($2) } |
-    prefix_expr '.' TIdent         { $$ = __load($1, Str($3.Str)).At($2) } 
+    prefix_expr TLBracket expr ']' {
+        $$ = &Tenary{typ.OpLoad, $1, $3, Address(typ.RegA), $2.Line()}
+    } |
+    prefix_expr '.' TIdent {
+        $$ = &Tenary{typ.OpLoad, $1, ss(yylex).Str($3.Str), Address(typ.RegA), $2.Line()}
+    } 
 
 expr:
     prefix_expr                       { $$ = $1 } |
-    TNumber                           { $$ = Num($1.Str) } |
-    expr TOr expr                     { $$ = Nodes((SOr), $1,$3).At($2) } |
-    expr TAnd expr                    { $$ = Nodes((SAnd), $1,$3).At($2) } |
-    expr '>' expr                     { $$ = Nodes((SLess), $3,$1).At($2) } |
-    expr '<' expr                     { $$ = Nodes((SLess), $1,$3).At($2) } |
-    expr TGte expr                    { $$ = Nodes((SLessEq), $3,$1).At($2) } |
-    expr TLte expr                    { $$ = Nodes((SLessEq), $1,$3).At($2) } |
-    expr TEqeq expr                   { $$ = Nodes((SEq), $1,$3).At($2) } |
-    expr TNeq expr                    { $$ = Nodes((SNeq), $1,$3).At($2) } |
-    expr '+' expr                     { $$ = Nodes((SAdd), $1,$3).At($2) } |
-    expr '-' expr                     { $$ = Nodes((SSub), $1,$3).At($2) } |
-    expr '*' expr                     { $$ = Nodes((SMul), $1,$3).At($2) } |
-    expr '/' expr                     { $$ = Nodes((SDiv), $1,$3).At($2) } |
-    expr TIDiv expr                   { $$ = Nodes((SIDiv), $1,$3).At($2) } |
-    expr '%' expr                     { $$ = Nodes((SMod), $1,$3).At($2) } |
-    expr '&' expr                     { $$ = Nodes((SBitAnd), $1,$3).At($2) } |
-    expr '|' expr                     { $$ = Nodes((SBitOr), $1,$3).At($2) } |
-    expr '^' expr                     { $$ = Nodes((SBitXor), $1,$3).At($2) } |
-    expr TLsh expr                    { $$ = Nodes((SBitLsh), $1,$3).At($2) } |
-    expr TRsh expr                    { $$ = Nodes((SBitRsh), $1,$3).At($2) } |
-    expr TURsh expr                   { $$ = Nodes((SBitURsh), $1,$3).At($2) } |
-    expr TIs prefix_expr              { $$ = Nodes(SIs, $1, $3).At($2) } |
-    expr TIs TNot prefix_expr         { $$ = Nodes(SNot, Nodes(SIs, $1, $4).At($2)).At($2) } |
-    '~' expr %prec UNARY              { $$ = Nodes(SBitXor, Int(-1), $2).At($1) } |
-    '#' expr %prec UNARY              { $$ = Nodes((SLen), $2).At($1) } |
-    TInv expr %prec UNARY             { $$ = Nodes(SSub, zero, $2).At($1) } |
-    TNot expr %prec UNARY             { $$ = Nodes((SNot), $2).At($1) }
+    TNumber                           { $$ = ss(yylex).Num($1.Str) } |
+    expr TOr expr                     { $$ = &Or{$1, $3} } |
+    expr TAnd expr                    { $$ = &And{$1, $3} } |
+    expr '>' expr                     { $$ = ss(yylex).pBinary(typ.OpLess, $3, $1, $2) } |
+    expr '<' expr                     { $$ = ss(yylex).pBinary(typ.OpLess, $1, $3, $2) } |
+    expr TGte expr                    { $$ = ss(yylex).pBinary(typ.OpLessEq, $3, $1, $2) } |
+    expr TLte expr                    { $$ = ss(yylex).pBinary(typ.OpLessEq, $1, $3, $2) } |
+    expr TEqeq expr                   { $$ = ss(yylex).pBinary(typ.OpEq, $1, $3, $2) } |
+    expr TNeq expr                    { $$ = ss(yylex).pBinary(typ.OpNeq, $1, $3, $2) } |
+    expr '+' expr                     { $$ = ss(yylex).pBinary(typ.OpAdd, $1, $3, $2) } |
+    expr '-' expr                     { $$ = ss(yylex).pBinary(typ.OpSub, $1, $3, $2) } |
+    expr '*' expr                     { $$ = ss(yylex).pBinary(typ.OpMul, $1, $3, $2) } |
+    expr '/' expr                     { $$ = ss(yylex).pBinary(typ.OpDiv, $1, $3, $2) } |
+    expr TIDiv expr                   { $$ = ss(yylex).pBinary(typ.OpIDiv, $1, $3, $2) } |
+    expr '%' expr                     { $$ = ss(yylex).pBinary(typ.OpMod, $1, $3, $2) } |
+    expr '&' expr                     { $$ = ss(yylex).pBitwise("and", $1, $3 ,$2) } |
+    expr '|' expr                     { $$ = ss(yylex).pBitwise("or", $1, $3, $2) } |
+    expr '^' expr                     { $$ = ss(yylex).pBitwise("xor", $1, $3, $2) } |
+    expr TLsh expr                    { $$ = ss(yylex).pBitwise("lsh", $1, $3, $2) } |
+    expr TRsh expr                    { $$ = ss(yylex).pBitwise("rsh", $1, $3, $2) } |
+    expr TURsh expr                   { $$ = ss(yylex).pBitwise("ursh", $1, $3, $2) } |
+    expr TIs prefix_expr              { $$ = ss(yylex).pBinary(typ.OpIsProto, $1, $3, $2) } |
+    expr TIs TNot prefix_expr         { $$ = pUnary(typ.OpNot, ss(yylex).pBinary(typ.OpIsProto, $1, $4, $2), $2) } |
+    '~' expr %prec UNARY              { $$ = ss(yylex).pBitwise("xor", ss(yylex).Int(-1), $2, $1) } |
+    '#' expr %prec UNARY              { $$ = pUnary(typ.OpLen, $2, $1) } |
+    TInv expr %prec UNARY             { $$ = ss(yylex).pBinary(typ.OpSub, zero, $2, $1) } |
+    TNot expr %prec UNARY             { $$ = pUnary(typ.OpNot, $2, $1) }
 
 prefix_expr:
     declarator                                         { $$ = $1 } |
-    TIf TLParen expr ',' expr ',' expr ')'             { $$ = __if($3, __move(Sa, $5).At($1), __move(Sa, $7).At($1)).At($1) } |
-    TFunc func_params stats TEnd                       { $$ = __func(__markupLambdaName($1), $2, $3) } | 
-    TString                                            { $$ = Str($1.Str) } |
+    TIf TLParen expr ',' expr ',' expr ')'             { $$ = &If{$3, &Assign{Sa, $5, $1.Line()}, &Assign{Sa, $7, $1.Line()}} } |
+    TFunc func_params stats TEnd                       { $$ = ss(yylex).pFunc(false, __markupLambdaName($1), $2, $3, $1) } | 
+    TString                                            { $$ = ss(yylex).Str($1.Str) } |
     '(' expr ')'                                       { $$ = $2 } |
-    '[' ']'                                            { $$ = ss(yylex).__array($1, emptyNode) } |
-    '{' '}'                                            { $$ = ss(yylex).__object($1, emptyNode) } |
-    '[' expr_list comma ']'                            { $$ = ss(yylex).__array($1, $2) } |
-    '{' expr_assign_list comma'}'                      { $$ = ss(yylex).__object($1, $2) } |
-    prefix_expr TLBracket expr ':' expr ']'            { $$ = Nodes(SSlice, $1, $3, $5).At($2) } |
-    prefix_expr TLBracket ':' expr ']'                 { $$ = Nodes(SSlice, $1, zero, $4).At($2) } |
-    prefix_expr TLBracket expr ':' ']'                 { $$ = Nodes(SSlice, $1, $3, Int(-1)).At($2) } |
-    prefix_expr TLParen prefix_expr_call_arguments     { $$ = __call($1, $3.At($2)).At($2) }
-
-prefix_expr_call_arguments:
-    ')'                                      { $$ = emptyNode } |
-    expr_list comma ')'                      { $$ = $1 } |
-    expr_list TDotDotDot comma ')'           { $$ = __dotdotdot($1) }
+    '[' ']'                                            { $$ = ss(yylex).pEmptyArray() } |
+    '{' '}'                                            { $$ = ss(yylex).pEmptyObject() } |
+    '[' expr_list comma ']'                            { $$ = $2 } |
+    '{' expr_assign_list comma'}'                      { $$ = $2 } |
+    prefix_expr TLBracket expr ':' expr ']'            { $$ = &Tenary{typ.OpSlice, $1, $3, $5, $2.Line()} } |
+    prefix_expr TLBracket ':' expr ']'                 { $$ = &Tenary{typ.OpSlice, $1, zero, $4, $2.Line()} } |
+    prefix_expr TLBracket expr ':' ']'                 { $$ = &Tenary{typ.OpSlice, $1, $3, ss(yylex).Int(-1), $2.Line()} } |
+    prefix_expr TLParen ')'                            { $$ = &Call{typ.OpCall, $1, ExprList(nil), false, $2.Line() } } |
+    prefix_expr TLParen expr_list comma ')'            { $$ = &Call{typ.OpCall, $1, $3.(ExprList), false, $2.Line() } } |
+    prefix_expr TLParen expr_list TDotDotDot comma ')' { $$ = &Call{typ.OpCall, $1, $3.(ExprList), true, $2.Line() } }
 
 declarator_list:
-    declarator { $$ = Nodes($1) } | declarator_list ',' declarator { $$ = $1.append($3) }
+    declarator                     { $$ = DeclList{$1} } |
+    declarator_list ',' declarator { $$ = append($1.(DeclList), $3) }
 
 ident_list:
-    TIdent { $$ = Nodes(Sym($1)) } | ident_list ',' TIdent { $$ = $1.append(Sym($3)) }
+    TIdent                         { $$ = IdentList{Sym($1)} } |
+    ident_list ',' TIdent          { $$ = append($1.(IdentList), Sym($3)) }
 
 expr_list:
-    expr { $$ = ss(yylex).__arrayBuild(Node{}, $1) } | expr_list ',' expr { $$ = ss(yylex).__arrayBuild($1, $3) }
+    expr                           { $$ = ss(yylex).pArray(nil, $1) } |
+    expr_list ',' expr             { $$ = ss(yylex).pArray($1, $3) }
 
 expr_assign_list:
-    TIdent '=' expr                       { $$ = ss(yylex).__objectBuild(Node{}, Str($1.Str), $3) } |
-    expr ':' expr                         { $$ = ss(yylex).__objectBuild(Node{}, $1, $3) } |
-    expr_assign_list ',' TIdent '=' expr  { $$ = ss(yylex).__objectBuild($1, Str($3.Str), $5) } |
-    expr_assign_list ',' expr ':' expr    { $$ = ss(yylex).__objectBuild($1, $3, $5) }
+    TIdent '=' expr                       { $$ = ss(yylex).pObject(nil, ss(yylex).Str($1.Str), $3) } |
+    expr ':' expr                         { $$ = ss(yylex).pObject(nil, $1, $3) } |
+    expr_assign_list ',' TIdent '=' expr  { $$ = ss(yylex).pObject($1, ss(yylex).Str($3.Str), $5) } |
+    expr_assign_list ',' expr ':' expr    { $$ = ss(yylex).pObject($1, $3, $5) }
 
 comma: {} | ',' {}
-
-op_assign: 
-    TAddEq     { $$ = SAdd.At($1) } |
-    TSubEq     { $$ = SSub.At($1) } |
-    TMulEq     { $$ = SMul.At($1) } |
-    TDivEq     { $$ = SDiv.At($1) } |
-    TIDivEq    { $$ = SIDiv.At($1) } |
-    TModEq     { $$ = SMod.At($1) } |
-    TBitAndEq  { $$ = SBitAnd.At($1) } |
-    TBitOrEq   { $$ = SBitOr.At($1) } |
-    TBitXorEq  { $$ = SBitXor.At($1) } |
-    TBitLshEq  { $$ = SBitLsh.At($1) } |
-    TBitRshEq  { $$ = SBitRsh.At($1) } |
-    TBitURshEq { $$ = SBitURsh.At($1) }
 
 %%

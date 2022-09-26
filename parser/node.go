@@ -1,19 +1,25 @@
 package parser
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"math"
-	"strconv"
+	"unsafe"
 
 	"github.com/coyove/nj/bas"
 	"github.com/coyove/nj/internal"
+	"github.com/coyove/nj/typ"
 )
 
 type Token struct {
 	Type uint32
 	Str  string
 	Pos  Position
+}
+
+func (t *Token) Line() uint32 {
+	return t.Pos.Line
 }
 
 func (t *Token) String() string {
@@ -30,54 +36,432 @@ func (pos *Position) String() string {
 	return fmt.Sprintf("%s:%d:%d", pos.Source, pos.Line, pos.Column)
 }
 
+type Node2 interface {
+	Dump(io.Writer)
+}
+
+type GetLine interface {
+	Node2
+	GetLine() int
+}
+
 type Node struct {
 	bas.Value
 	NodeType byte
 	SymLine  uint32
 }
 
-func staticSym(s string) Node {
-	return Node{NodeType: SYM, Value: bas.Str(s)}
+type Symbol struct {
+	Name string
+	Line uint32
 }
 
-func jsonValue(v bas.Value) Node {
-	return Node{NodeType: JSON, Value: v}
+func (s *Symbol) Dump(w io.Writer) {
+	if s.Line == 0 {
+		internal.WriteString(w, s.Name)
+	} else {
+		internal.WriteString(w, fmt.Sprintf("%s/%d", s.Name, s.Line))
+	}
 }
 
-func Sym(tok Token) Node {
-	return Node{NodeType: SYM, SymLine: tok.Pos.Line, Value: bas.Str(tok.Str)}
+func (s *Symbol) GetLine() int {
+	return int(s.Line)
 }
 
-func Addr(yx uint16) Node {
-	return Node{NodeType: ADDR, Value: bas.Int(int(yx))}
+type Address uint16
+
+func (s Address) Dump(w io.Writer) {
+	fmt.Fprintf(w, "@%08x", s)
 }
 
-func Str(s string) Node {
-	return Node{NodeType: STR, Value: bas.Str(s)}
+type Prog struct {
+	DoBlock bool
+	Stats   []Node2
 }
 
-func Num(v string) Node {
+func (p *Prog) Append(stat Node2) *Prog {
+	if p2, ok := stat.(*Prog); ok && !p2.DoBlock {
+		p.Stats = append(p.Stats, p2.Stats...)
+	} else {
+		p.Stats = append(p.Stats, stat)
+	}
+	return p
+}
+
+func (p *Prog) Dump(w io.Writer) {
+	if p == nil {
+		internal.WriteString(w, "(prog)")
+		return
+	}
+	internal.WriteString(w, internal.IfStr(p.DoBlock, "(do", "(prog"))
+	for _, stat := range p.Stats {
+		if stat != nil {
+			internal.WriteString(w, " ")
+			stat.Dump(w)
+		}
+	}
+	internal.WriteString(w, ")")
+}
+
+type LoadConst struct {
+	Table bas.Object
+	Funcs bas.Object
+}
+
+func (p *LoadConst) Dump(w io.Writer) {
+	internal.WriteString(w, "(loadconst")
+	p.Table.Foreach(func(k bas.Value, v *bas.Value) bool {
+		internal.WriteString(w, " ")
+		k.Stringify(w, typ.MarshalToJSON)
+		return true
+	})
+	p.Funcs.Foreach(func(k bas.Value, v *bas.Value) bool {
+		internal.WriteString(w, " f:")
+		k.Stringify(w, typ.MarshalToString)
+		return true
+	})
+	internal.WriteString(w, ")")
+}
+
+type Primitive bas.Value
+
+func (p Primitive) Dump(w io.Writer) {
+	bas.Value(p).Stringify(w, typ.MarshalToJSON)
+}
+
+type JValue bas.Value
+
+func (p JValue) Dump(w io.Writer) {
+	bas.Value(p).Stringify(w, typ.MarshalToJSON)
+}
+
+type If struct {
+	Cond        Node2
+	True, False Node2
+}
+
+func (p *If) Dump(w io.Writer) {
+	internal.WriteString(w, "(if ")
+	p.Cond.Dump(w)
+	internal.WriteString(w, " ")
+	p.True.Dump(w)
+	if p.False != nil {
+		internal.WriteString(w, " ")
+		p.False.Dump(w)
+	}
+	internal.WriteString(w, ")")
+}
+
+type Unary struct {
+	Op   byte
+	A    Node2
+	Line uint32
+}
+
+func (b *Unary) Dump(w io.Writer) {
+	fmt.Fprintf(w, "(%s/%d ", typ.UnaryOpcode[b.Op], b.Line)
+	b.A.Dump(w)
+	internal.WriteString(w, ")")
+}
+
+func (b *Unary) GetLine() int {
+	return int(b.Line)
+}
+
+type Binary struct {
+	A, B Node2
+	Op   byte
+	Line uint32
+}
+
+func (b *Binary) Dump(w io.Writer) {
+	fmt.Fprintf(w, "(%s/%d ", typ.BinaryOpcode[b.Op], b.Line)
+	b.A.Dump(w)
+	internal.WriteString(w, " ")
+	b.B.Dump(w)
+	internal.WriteString(w, ")")
+}
+
+func (b *Binary) GetLine() int {
+	return int(b.Line)
+}
+
+type Bitwise struct {
+	A, B Node2
+	Op   string
+	Line uint32
+}
+
+func (b *Bitwise) Dump(w io.Writer) {
+	fmt.Fprintf(w, "(bit%s/%d ", b.Op, b.Line)
+	b.A.Dump(w)
+	internal.WriteString(w, " ")
+	b.B.Dump(w)
+	internal.WriteString(w, ")")
+}
+
+func (b *Bitwise) GetLine() int {
+	return int(b.Line)
+}
+
+type Declare struct {
+	Name  *Symbol
+	Value Node2
+	Line  uint32
+}
+
+func (p *Declare) Dump(w io.Writer) {
+	fmt.Fprintf(w, "(declare/%d %s ", p.Line, p.Name.Name)
+	p.Value.Dump(w)
+	internal.WriteString(w, ")")
+}
+
+func (b *Declare) GetLine() int {
+	return int(b.Line)
+}
+
+type Assign Declare
+
+func (p *Assign) Dump(w io.Writer) {
+	fmt.Fprintf(w, "(assign/%d %s ", p.Line, p.Name.Name)
+	p.Value.Dump(w)
+	internal.WriteString(w, ")")
+}
+
+func (b *Assign) GetLine() int {
+	return int(b.Line)
+}
+
+type Release []*Symbol
+
+func (p Release) Dump(w io.Writer) {
+	internal.WriteString(w, "(release")
+	for _, name := range p {
+		internal.WriteString(w, " ")
+		name.Dump(w)
+	}
+	internal.WriteString(w, ")")
+}
+
+type Tenary struct {
+	Op      byte
+	A, B, C Node2
+	Line    uint32
+}
+
+func (p *Tenary) Dump(w io.Writer) {
+	fmt.Fprintf(w, "(%s/%d ", typ.TenaryOpcode[p.Op], p.Line)
+	p.A.Dump(w)
+	internal.WriteString(w, " ")
+	p.B.Dump(w)
+	internal.WriteString(w, " ")
+	p.C.Dump(w)
+	internal.WriteString(w, ")")
+}
+
+func (b *Tenary) GetLine() int {
+	return int(b.Line)
+}
+
+type IdentList []Node2
+
+func (p IdentList) Dump(w io.Writer) {
+	internal.WriteString(w, "(identlist ")
+	for _, n := range p {
+		internal.WriteString(w, " ")
+		n.Dump(w)
+	}
+	internal.WriteString(w, ")")
+}
+
+type IdentVarargList struct {
+	IdentList
+}
+
+type ExprList []Node2
+
+func (p ExprList) Dump(w io.Writer) {
+	internal.WriteString(w, "(list")
+	for _, n := range p {
+		internal.WriteString(w, " ")
+		n.Dump(w)
+	}
+	internal.WriteString(w, ")")
+}
+
+type DeclList []Node2
+
+func (p DeclList) Dump(w io.Writer) {}
+
+type ExprAssignList [][2]Node2
+
+func (p *ExprAssignList) ExpandAsExprList() (tmp ExprList) {
+	*(*[3]int)(unsafe.Pointer(&tmp)) = *(*[3]int)(unsafe.Pointer(p))
+	(*(*[3]int)(unsafe.Pointer(&tmp)))[1] = len(*p) * 2
+	(*(*[3]int)(unsafe.Pointer(&tmp)))[2] = cap(*p) * 2
+	return
+}
+
+func (p ExprAssignList) Dump(w io.Writer) {
+	internal.WriteString(w, "(assignlist")
+	for _, n2 := range p {
+		internal.WriteString(w, " (")
+		n2[0].Dump(w)
+		internal.WriteString(w, " ")
+		n2[1].Dump(w)
+		internal.WriteString(w, ")")
+	}
+	internal.WriteString(w, ")")
+}
+
+type And struct {
+	A, B Node2
+}
+
+func (p And) Dump(w io.Writer) {
+	internal.WriteString(w, "(and ")
+	p.A.Dump(w)
+	internal.WriteString(w, " ")
+	p.B.Dump(w)
+	internal.WriteString(w, ")")
+}
+
+type Or And
+
+func (p Or) Dump(w io.Writer) {
+	internal.WriteString(w, "(or ")
+	p.A.Dump(w)
+	internal.WriteString(w, " ")
+	p.B.Dump(w)
+	internal.WriteString(w, ")")
+}
+
+type Loop struct {
+	Continue Node2
+	Body     Node2
+}
+
+func (p *Loop) Dump(w io.Writer) {
+	internal.WriteString(w, "(loop ")
+	p.Continue.Dump(w)
+	internal.WriteString(w, " ")
+	p.Body.Dump(w)
+	internal.WriteString(w, ")")
+}
+
+type Call struct {
+	Op     byte
+	Callee Node2
+	Args   ExprList
+	Vararg bool
+	Line   uint32
+}
+
+func (p *Call) Dump(w io.Writer) {
+	internal.WriteString(w, "(")
+	internal.WriteString(w, internal.IfStr(p.Op == typ.OpTailCall, "tail", ""))
+	internal.WriteString(w, "call")
+	internal.WriteString(w, internal.IfStr(p.Vararg, "varg", ""))
+	fmt.Fprintf(w, "/%d ", p.Line)
+	p.Callee.Dump(w)
+	internal.WriteString(w, " ")
+	p.Args.Dump(w)
+	internal.WriteString(w, ")")
+}
+
+func (b *Call) GetLine() int {
+	return int(b.Line)
+}
+
+type Function struct {
+	Name   string
+	Args   IdentList
+	Body   Node2
+	Vararg bool
+	Line   uint32
+}
+
+func (p *Function) Dump(w io.Writer) {
+	fmt.Fprintf(w, "(function/%d %s ", p.Line, p.Name)
+	p.Args.Dump(w)
+	internal.WriteString(w, " ")
+	p.Body.Dump(w)
+	internal.WriteString(w, ")")
+}
+
+func (b *Function) GetLine() int {
+	return int(b.Line)
+}
+
+type GotoLabel struct {
+	Label string
+	Goto  bool
+	Line  uint32
+}
+
+func (p *GotoLabel) Dump(w io.Writer) {
+	fmt.Fprintf(w, "(%s/%d %s)", internal.IfStr(p.Goto, "goto", "label"), p.Line, p.Label)
+}
+
+func (p *GotoLabel) GetLine() int {
+	return int(p.Line)
+}
+
+type BreakContinue struct {
+	Break bool
+	Line  uint32
+}
+
+func (p *BreakContinue) Dump(w io.Writer) {
+	fmt.Fprintf(w, "(%s/%d)", internal.IfStr(p.Break, "break", "continue"), p.Line)
+}
+
+func (p *BreakContinue) GetLine() int {
+	return int(p.Line)
+}
+
+func Sym(tok Token) *Symbol {
+	return &Symbol{tok.Str, tok.Line()}
+}
+
+func (lex *Lexer) Str(s string) Primitive {
+	x := Primitive(bas.Str(s))
+	if !lex.scanner.jsonMode {
+		lex.scanner.constants.Set(bas.Value(x), bas.Nil)
+	}
+	return x
+}
+
+func (lex *Lexer) Num(v string) Primitive {
 	f, i, isInt, err := internal.ParseNumber(v)
 	internal.PanicErr(err)
 	if isInt {
-		return Int(i)
+		return lex.Int(i)
 	}
-	return Float(f)
+	return lex.Float(f)
 }
 
-func Int(v int64) (n Node) {
-	return Node{NodeType: INT, Value: bas.Int64(v)}
+func (lex *Lexer) Int(v int64) Primitive {
+	x := Primitive(bas.Int64(v))
+	if v != 0 && v != 1 && !lex.scanner.jsonMode {
+		lex.scanner.constants.Set(bas.Value(x), bas.Nil)
+	}
+	return x
 }
 
-func IntBool(b bool) (n Node) {
+func (lex *Lexer) IntBool(b bool) (n Node2) {
 	if b {
-		return Node{NodeType: INT, Value: bas.Int64(1)}
+		return lex.Int(1)
 	}
-	return Node{NodeType: INT, Value: bas.Int64(0)}
+	return lex.Int(0)
 }
 
-func Float(v float64) (n Node) {
-	return Node{NodeType: FLOAT, Value: bas.Float64(v)}
+func (lex *Lexer) Float(v float64) Primitive {
+	x := Primitive(bas.Float64(v))
+	if !lex.scanner.jsonMode {
+		lex.scanner.constants.Set(bas.Value(x), bas.Nil)
+	}
+	return x
 }
 
 func (n Node) Type() byte {
@@ -112,9 +496,9 @@ func (n Node) numSign() (isNum bool, isNeg bool) {
 	return false, false
 }
 
-func (n Node) IsInt16() int {
-	if n.Type() == INT {
-		a := n.Value.UnsafeInt64()
+func IsInt16(n Node2) int {
+	if isInt64(n) {
+		a := bas.Value(n.(Primitive)).UnsafeInt64()
 		if a >= math.MinInt16 && a <= math.MaxInt16 {
 			if -a >= math.MinInt16 && -a <= math.MaxInt16 {
 				return 2
@@ -125,184 +509,101 @@ func (n Node) IsInt16() int {
 	return 0
 }
 
-func (n Node) Nodes() []Node {
-	if n.Type() != NODES {
-		return nil
-	}
-	return n.Native().Unwrap().([]Node)
+func pUnary(op byte, a Node2, pos Token) Node2 {
+	return &Unary{Op: op, A: a, Line: pos.Line()}
 }
 
-func Nodes(args ...Node) Node {
-	if len(args) == 3 {
-		op, a, b := args[0].Value, args[1], args[2]
-		if op == SAdd.Value && a.Type() == STR && b.Type() == STR {
-			return Str(a.Str() + b.Str())
-		}
-		if (a.Type() == INT || a.Type() == FLOAT) && (b.Type() == INT || b.Type() == FLOAT) {
-			switch op {
-			case SAdd.Value:
-				if a.IsInt64() && b.IsInt64() {
-					return Int(a.Int64() + b.Int64())
-				}
-				return Float(a.Float64() + b.Float64())
-			case SSub.Value:
-				if a.IsInt64() && b.IsInt64() {
-					return Int(a.Int64() - b.Int64())
-				}
-				return Float(a.Float64() - b.Float64())
-			case SMul.Value:
-				if a.IsInt64() && b.IsInt64() {
-					return Int(a.Int64() * b.Int64())
-				}
-				return Float(a.Float64() * b.Float64())
-			case SDiv.Value:
-				return Float(a.Float64() / b.Float64())
-			case SIDiv.Value:
-				return Int(a.Int64() / b.Int64())
-			case SMod.Value:
-				return Int(a.Int64() % b.Int64())
-			case SLessEq.Value:
-				if a.Value.Equal(b.Value) {
-					return IntBool(true)
-				}
-				fallthrough
-			case SLess.Value:
-				if a.IsInt64() && b.IsInt64() {
-					return IntBool(a.Int64() < b.Int64())
-				}
-				return IntBool(a.Float64() < b.Float64())
-			case SEq.Value:
-				return IntBool(a.Value.Equal(b.Value))
-			case SNeq.Value:
-				return IntBool(!a.Value.Equal(b.Value))
+func (lex *Lexer) pProg(do bool, n ...Node2) Node2 {
+	return &Prog{do, n}
+}
+
+func (lex *Lexer) pBinary(op byte, a, b Node2, pos Token) Node2 {
+	if op == typ.OpAdd && isString(a) && isString(b) {
+		as := bas.Value(a.(Primitive)).Str()
+		bs := bas.Value(b.(Primitive)).Str()
+		return Primitive(lex.Str(as + bs))
+	}
+	if isNumber(a) && isNumber(b) {
+		a := bas.Value(a.(Primitive))
+		b := bas.Value(b.(Primitive))
+		switch op {
+		case typ.OpAdd:
+			if a.IsInt64() && b.IsInt64() {
+				return lex.Int(a.Int64() + b.Int64())
 			}
-		}
-		if a.Type() == INT && b.Type() == INT {
-			switch op {
-			case SBitAnd.Value:
-				return Int(a.Int64() & b.Int64())
-			case SBitOr.Value:
-				return Int(a.Int64() | b.Int64())
-			case SBitXor.Value:
-				return Int(a.Int64() ^ b.Int64())
-			case SBitLsh.Value:
-				return Int(a.Int64() << b.Int64())
-			case SBitRsh.Value:
-				return Int(a.Int64() >> b.Int64())
-			case SBitURsh.Value:
-				return Int(int64(uint64(a.Int64()) >> b.Int64()))
+			return lex.Float(a.Float64() + b.Float64())
+		case typ.OpSub:
+			if a.IsInt64() && b.IsInt64() {
+				return lex.Int(a.Int64() - b.Int64())
 			}
-		}
-	}
-	return Node{NodeType: NODES, Value: bas.ValueOf(args)}
-}
-
-func (n Node) At(tok Token) Node {
-	switch n.Type() {
-	case SYM:
-		n.SymLine = tok.Pos.Line
-	case NODES:
-		c := n.Nodes()
-		if len(c) > 0 {
-			c[0] = c[0].At(tok)
-		}
-	}
-	return n
-}
-
-func (n Node) Line() uint32 {
-	switch n.Type() {
-	case SYM:
-		return n.SymLine
-	case NODES:
-		c := n.Nodes()
-		if len(c) == 0 {
-			internal.ShouldNotHappen()
-		}
-		return c[0].Line()
-	}
-	internal.ShouldNotHappen()
-	return 0
-}
-
-func (n Node) Dump(w io.Writer, indent string) {
-	io.WriteString(w, indent)
-	switch n.Type() {
-	case NODES:
-		nocpl := true
-		for _, a := range n.Nodes() {
-			if a.Type() == NODES {
-				nocpl = false
-				break
+			return lex.Float(a.Float64() - b.Float64())
+		case typ.OpMul:
+			if a.IsInt64() && b.IsInt64() {
+				return lex.Int(a.Int64() * b.Int64())
 			}
-		}
-
-		if !nocpl {
-			io.WriteString(w, "[\n")
-			for _, a := range n.Nodes() {
-				a.Dump(w, "  "+indent)
-				if a.Type() != NODES {
-					io.WriteString(w, "\n")
-				}
+			return lex.Float(a.Float64() * b.Float64())
+		case typ.OpDiv:
+			return lex.Float(a.Float64() / b.Float64())
+		case typ.OpIDiv:
+			return lex.Int(a.Int64() / b.Int64())
+		case typ.OpMod:
+			return lex.Int(a.Int64() % b.Int64())
+		case typ.OpLessEq:
+			if a.Equal(b) {
+				return lex.IntBool(true)
 			}
-			io.WriteString(w, indent)
-		} else {
-			io.WriteString(w, "[")
-			for i, a := range n.Nodes() {
-				a.Dump(w, "")
-				if i < len(n.Nodes())-1 {
-					io.WriteString(w, " ")
-				}
+			fallthrough
+		case typ.OpLess:
+			if a.IsInt64() && b.IsInt64() {
+				return lex.IntBool(a.Int64() < b.Int64())
 			}
-		}
-		io.WriteString(w, "]\n")
-	case SYM:
-		io.WriteString(w, fmt.Sprintf("%s/%d", n.Sym(), n.SymLine))
-	default:
-		io.WriteString(w, n.String())
-	}
-}
-
-func (n Node) String() string {
-	switch n.Type() {
-	case INT, FLOAT, STR, JSON:
-		return n.Value.JSONString()
-	case NODES:
-		return n.Value.String()
-	case SYM:
-		return fmt.Sprintf("%s/%d", n.Sym(), n.SymLine)
-	case ADDR:
-		return "0x" + strconv.FormatInt(n.Int64(), 16)
-	default:
-		return "<invalid node>"
-	}
-}
-
-func (n Node) append(n2 Node) Node {
-	n.Native().UnwrapFunc(func(i interface{}) interface{} {
-		return append(i.([]Node), n2)
-	})
-	return n
-}
-
-func (n Node) moveLoadStore(v Node) Node {
-	if len(n.Nodes()) == 3 {
-		if s := n.Nodes()[0].Value; s == SLoad.Value {
-			return __store(n.Nodes()[1], n.Nodes()[2], v)
+			return lex.IntBool(a.Float64() < b.Float64())
+		case typ.OpEq:
+			return lex.IntBool(a.Equal(b))
+		case typ.OpNeq:
+			return lex.IntBool(!a.Equal(b))
 		}
 	}
-	if n.Type() != SYM {
-		internal.ShouldNotHappen(n)
-	}
-	return __move(n, v)
+	return &Binary{Op: op, A: a, B: b, Line: pos.Line()}
 }
 
-func (n Node) simpleJSON(lex *Lexer) bas.Value {
-	switch n.Type() {
-	case JSON, STR, INT, FLOAT:
-		return n.Value
-	case SYM:
-		switch n.Value.Str() {
+func (lex *Lexer) pBitwise(op string, a, b Node2, pos Token) Node2 {
+	if isInt64(a) && isInt64(b) {
+		a := bas.Value(a.(Primitive))
+		b := bas.Value(b.(Primitive))
+		switch op {
+		case "and":
+			return lex.Int(a.Int64() & b.Int64())
+		case "or":
+			return lex.Int(a.Int64() | b.Int64())
+		case "xor":
+			return lex.Int(a.Int64() ^ b.Int64())
+		case "lsh":
+			return lex.Int(a.Int64() << b.Int64())
+		case "rsh":
+			return lex.Int(a.Int64() >> b.Int64())
+		case "ursh":
+			return lex.Int(int64(uint64(a.Int64()) >> b.Int64()))
+		}
+	}
+	return &Bitwise{Op: op, A: a, B: b, Line: pos.Line()}
+}
+
+func assignLoadStore(n, v Node2, pos Token) Node2 {
+	if load, ok := n.(*Tenary); ok && load.Op == typ.OpLoad {
+		return &Tenary{typ.OpStore, load.A, load.B, v, pos.Line()}
+	}
+	return &Assign{n.(*Symbol), v, pos.Line()}
+}
+
+func (lex *Lexer) pSimpleJSON(n Node2) bas.Value {
+	switch v := n.(type) {
+	case JValue:
+		return bas.Value(v)
+	case Primitive:
+		return bas.Value(v)
+	case *Symbol:
+		switch v.Name {
 		case "true":
 			return bas.True
 		case "false":
@@ -311,6 +612,23 @@ func (n Node) simpleJSON(lex *Lexer) bas.Value {
 			return bas.Nil
 		}
 	}
-	lex.Error("unexpected json symbol: " + n.String())
+	buf := bytes.NewBufferString("unexpected json symbol: ")
+	n.Dump(buf)
+	lex.Error(buf.String())
 	return bas.Nil
+}
+
+func isString(n Node2) bool {
+	n2, ok := n.(Primitive)
+	return ok && bas.Value(n2).IsString()
+}
+
+func isNumber(n Node2) bool {
+	n2, ok := n.(Primitive)
+	return ok && bas.Value(n2).IsNumber()
+}
+
+func isInt64(n Node2) bool {
+	n2, ok := n.(Primitive)
+	return ok && bas.Value(n2).IsInt64()
 }

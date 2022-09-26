@@ -81,6 +81,7 @@ var BinaryOpcode = map[byte]string{
 	OpLoad:    "load",
 	OpNext:    "next",
 	OpIsProto: "isproto",
+	OpInc:     "inc",
 }
 
 var UnaryOpcode = map[byte]string{
@@ -89,4 +90,10 @@ var UnaryOpcode = map[byte]string{
 	OpLen:        "len",
 	OpPush:       "push",
 	OpPushUnpack: "pushvarg",
+}
+
+var TenaryOpcode = map[byte]string{
+	OpLoad:  "load",
+	OpStore: "store",
+	OpSlice: "slice",
 }

@@ -37,7 +37,7 @@ func loadCode(code, name string, opt *LoadOptions) (*bas.Program, error) {
 		return nil, err
 	}
 	if internal.IsDebug() {
-		n.Dump(os.Stderr, "  ")
+		n.Dump(os.Stderr)
 	}
 	return compileNodeTopLevel(name, code, n, opt)
 }
