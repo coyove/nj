@@ -36,19 +36,13 @@ func (pos *Position) String() string {
 	return fmt.Sprintf("%s:%d:%d", pos.Source, pos.Line, pos.Column)
 }
 
-type Node2 interface {
+type Node interface {
 	Dump(io.Writer)
 }
 
 type GetLine interface {
-	Node2
+	Node
 	GetLine() int
-}
-
-type Node struct {
-	bas.Value
-	NodeType byte
-	SymLine  uint32
 }
 
 type Symbol struct {
@@ -76,10 +70,10 @@ func (s Address) Dump(w io.Writer) {
 
 type Prog struct {
 	DoBlock bool
-	Stats   []Node2
+	Stats   []Node
 }
 
-func (p *Prog) Append(stat Node2) *Prog {
+func (p *Prog) Append(stat Node) *Prog {
 	if p2, ok := stat.(*Prog); ok && !p2.DoBlock {
 		p.Stats = append(p.Stats, p2.Stats...)
 	} else {
@@ -101,6 +95,12 @@ func (p *Prog) Dump(w io.Writer) {
 		}
 	}
 	internal.WriteString(w, ")")
+}
+
+func (p *Prog) String() string {
+	buf := &bytes.Buffer{}
+	p.Dump(buf)
+	return buf.String()
 }
 
 type LoadConst struct {
@@ -129,6 +129,10 @@ func (p Primitive) Dump(w io.Writer) {
 	bas.Value(p).Stringify(w, typ.MarshalToJSON)
 }
 
+func (p Primitive) Value() bas.Value {
+	return bas.Value(p)
+}
+
 type JValue bas.Value
 
 func (p JValue) Dump(w io.Writer) {
@@ -136,8 +140,8 @@ func (p JValue) Dump(w io.Writer) {
 }
 
 type If struct {
-	Cond        Node2
-	True, False Node2
+	Cond        Node
+	True, False Node
 }
 
 func (p *If) Dump(w io.Writer) {
@@ -154,7 +158,7 @@ func (p *If) Dump(w io.Writer) {
 
 type Unary struct {
 	Op   byte
-	A    Node2
+	A    Node
 	Line uint32
 }
 
@@ -169,7 +173,7 @@ func (b *Unary) GetLine() int {
 }
 
 type Binary struct {
-	A, B Node2
+	A, B Node
 	Op   byte
 	Line uint32
 }
@@ -187,7 +191,7 @@ func (b *Binary) GetLine() int {
 }
 
 type Bitwise struct {
-	A, B Node2
+	A, B Node
 	Op   string
 	Line uint32
 }
@@ -206,7 +210,7 @@ func (b *Bitwise) GetLine() int {
 
 type Declare struct {
 	Name  *Symbol
-	Value Node2
+	Value Node
 	Line  uint32
 }
 
@@ -245,7 +249,7 @@ func (p Release) Dump(w io.Writer) {
 
 type Tenary struct {
 	Op      byte
-	A, B, C Node2
+	A, B, C Node
 	Line    uint32
 }
 
@@ -263,7 +267,7 @@ func (b *Tenary) GetLine() int {
 	return int(b.Line)
 }
 
-type IdentList []Node2
+type IdentList []Node
 
 func (p IdentList) Dump(w io.Writer) {
 	internal.WriteString(w, "(identlist ")
@@ -278,7 +282,7 @@ type IdentVarargList struct {
 	IdentList
 }
 
-type ExprList []Node2
+type ExprList []Node
 
 func (p ExprList) Dump(w io.Writer) {
 	internal.WriteString(w, "(list")
@@ -289,11 +293,11 @@ func (p ExprList) Dump(w io.Writer) {
 	internal.WriteString(w, ")")
 }
 
-type DeclList []Node2
+type DeclList []Node
 
 func (p DeclList) Dump(w io.Writer) {}
 
-type ExprAssignList [][2]Node2
+type ExprAssignList [][2]Node
 
 func (p *ExprAssignList) ExpandAsExprList() (tmp ExprList) {
 	*(*[3]int)(unsafe.Pointer(&tmp)) = *(*[3]int)(unsafe.Pointer(p))
@@ -315,7 +319,7 @@ func (p ExprAssignList) Dump(w io.Writer) {
 }
 
 type And struct {
-	A, B Node2
+	A, B Node
 }
 
 func (p And) Dump(w io.Writer) {
@@ -337,8 +341,8 @@ func (p Or) Dump(w io.Writer) {
 }
 
 type Loop struct {
-	Continue Node2
-	Body     Node2
+	Continue Node
+	Body     Node
 }
 
 func (p *Loop) Dump(w io.Writer) {
@@ -351,7 +355,7 @@ func (p *Loop) Dump(w io.Writer) {
 
 type Call struct {
 	Op     byte
-	Callee Node2
+	Callee Node
 	Args   ExprList
 	Vararg bool
 	Line   uint32
@@ -376,7 +380,7 @@ func (b *Call) GetLine() int {
 type Function struct {
 	Name   string
 	Args   IdentList
-	Body   Node2
+	Body   Node
 	Vararg bool
 	Line   uint32
 }
@@ -449,7 +453,7 @@ func (lex *Lexer) Int(v int64) Primitive {
 	return x
 }
 
-func (lex *Lexer) IntBool(b bool) (n Node2) {
+func (lex *Lexer) IntBool(b bool) (n Node) {
 	if b {
 		return lex.Int(1)
 	}
@@ -464,39 +468,7 @@ func (lex *Lexer) Float(v float64) Primitive {
 	return x
 }
 
-func (n Node) Type() byte {
-	return n.NodeType
-}
-
-func (n Node) Valid() bool {
-	return n.Type() != INVALID
-}
-
-func (n Node) Str() string {
-	if n.Type() != STR {
-		return ""
-	}
-	return n.Value.Str()
-}
-
-func (n Node) Sym() string {
-	if n.Type() != SYM {
-		return ""
-	}
-	return n.Value.Str()
-}
-
-func (n Node) numSign() (isNum bool, isNeg bool) {
-	switch n.Type() {
-	case FLOAT:
-		return true, n.UnsafeFloat64() < 0
-	case INT:
-		return true, n.UnsafeInt64() < 0
-	}
-	return false, false
-}
-
-func IsInt16(n Node2) int {
+func IsInt16(n Node) int {
 	if isInt64(n) {
 		a := bas.Value(n.(Primitive)).UnsafeInt64()
 		if a >= math.MinInt16 && a <= math.MaxInt16 {
@@ -509,15 +481,15 @@ func IsInt16(n Node2) int {
 	return 0
 }
 
-func pUnary(op byte, a Node2, pos Token) Node2 {
+func pUnary(op byte, a Node, pos Token) Node {
 	return &Unary{Op: op, A: a, Line: pos.Line()}
 }
 
-func (lex *Lexer) pProg(do bool, n ...Node2) Node2 {
+func (lex *Lexer) pProg(do bool, n ...Node) Node {
 	return &Prog{do, n}
 }
 
-func (lex *Lexer) pBinary(op byte, a, b Node2, pos Token) Node2 {
+func (lex *Lexer) pBinary(op byte, a, b Node, pos Token) Node {
 	if op == typ.OpAdd && isString(a) && isString(b) {
 		as := bas.Value(a.(Primitive)).Str()
 		bs := bas.Value(b.(Primitive)).Str()
@@ -567,7 +539,7 @@ func (lex *Lexer) pBinary(op byte, a, b Node2, pos Token) Node2 {
 	return &Binary{Op: op, A: a, B: b, Line: pos.Line()}
 }
 
-func (lex *Lexer) pBitwise(op string, a, b Node2, pos Token) Node2 {
+func (lex *Lexer) pBitwise(op string, a, b Node, pos Token) Node {
 	if isInt64(a) && isInt64(b) {
 		a := bas.Value(a.(Primitive))
 		b := bas.Value(b.(Primitive))
@@ -589,14 +561,14 @@ func (lex *Lexer) pBitwise(op string, a, b Node2, pos Token) Node2 {
 	return &Bitwise{Op: op, A: a, B: b, Line: pos.Line()}
 }
 
-func assignLoadStore(n, v Node2, pos Token) Node2 {
+func assignLoadStore(n, v Node, pos Token) Node {
 	if load, ok := n.(*Tenary); ok && load.Op == typ.OpLoad {
 		return &Tenary{typ.OpStore, load.A, load.B, v, pos.Line()}
 	}
 	return &Assign{n.(*Symbol), v, pos.Line()}
 }
 
-func (lex *Lexer) pSimpleJSON(n Node2) bas.Value {
+func (lex *Lexer) pSimpleJSON(n Node) bas.Value {
 	switch v := n.(type) {
 	case JValue:
 		return bas.Value(v)
@@ -618,17 +590,17 @@ func (lex *Lexer) pSimpleJSON(n Node2) bas.Value {
 	return bas.Nil
 }
 
-func isString(n Node2) bool {
+func isString(n Node) bool {
 	n2, ok := n.(Primitive)
 	return ok && bas.Value(n2).IsString()
 }
 
-func isNumber(n Node2) bool {
+func isNumber(n Node) bool {
 	n2, ok := n.(Primitive)
 	return ok && bas.Value(n2).IsNumber()
 }
 
-func isInt64(n Node2) bool {
+func isInt64(n Node) bool {
 	n2, ok := n.(Primitive)
 	return ok && bas.Value(n2).IsInt64()
 }

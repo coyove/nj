@@ -15,7 +15,7 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 type yySymType struct {
 	yys   int
 	token Token
-	expr  Node2
+	expr  Node
 }
 
 const TDo = 57346
@@ -919,19 +919,19 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line parser.go.y:68
 		{
-			yyVAL.expr = ss(yylex).pDeclareAssign([]Node2(yyDollar[2].expr.(IdentList)), nil, false, yyDollar[1].token)
+			yyVAL.expr = ss(yylex).pDeclareAssign([]Node(yyDollar[2].expr.(IdentList)), nil, false, yyDollar[1].token)
 		}
 	case 12:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line parser.go.y:69
 		{
-			yyVAL.expr = ss(yylex).pDeclareAssign([]Node2(yyDollar[2].expr.(IdentList)), yyDollar[4].expr.(ExprList), false, yyDollar[1].token)
+			yyVAL.expr = ss(yylex).pDeclareAssign([]Node(yyDollar[2].expr.(IdentList)), yyDollar[4].expr.(ExprList), false, yyDollar[1].token)
 		}
 	case 13:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line parser.go.y:70
 		{
-			yyVAL.expr = ss(yylex).pDeclareAssign([]Node2(yyDollar[1].expr.(DeclList)), yyDollar[3].expr.(ExprList), true, yyDollar[2].token)
+			yyVAL.expr = ss(yylex).pDeclareAssign([]Node(yyDollar[1].expr.(DeclList)), yyDollar[3].expr.(ExprList), true, yyDollar[2].token)
 		}
 	case 14:
 		yyDollar = yyS[yypt-3 : yypt+1]

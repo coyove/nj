@@ -700,7 +700,7 @@ func reflectTypeName(t reflect.Type) string {
 	for i := 0; i < len(res); i++ {
 		switch res[i] {
 		case '<', '(', '[', '{', ':', ')', '}', ']', '>', ' ', ',':
-			res[i] = '/'
+			res[i] = '-'
 		}
 	}
 	return string(res)

@@ -25,7 +25,7 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 
 %union {
     token  Token
-    expr   Node2
+    expr   Node
 }
 
 /* Reserved words */
@@ -65,9 +65,9 @@ stats:
 
 assign_stat:
     expr                            { $$ = $1 } | 
-    TLocal ident_list               { $$ = ss(yylex).pDeclareAssign([]Node2($2.(IdentList)), nil, false, $1) } |
-    TLocal ident_list '=' expr_list { $$ = ss(yylex).pDeclareAssign([]Node2($2.(IdentList)), $4.(ExprList), false, $1) } |
-    declarator_list '=' expr_list   { $$ = ss(yylex).pDeclareAssign([]Node2($1.(DeclList)), $3.(ExprList), true, $2) } |
+    TLocal ident_list               { $$ = ss(yylex).pDeclareAssign([]Node($2.(IdentList)), nil, false, $1) } |
+    TLocal ident_list '=' expr_list { $$ = ss(yylex).pDeclareAssign([]Node($2.(IdentList)), $4.(ExprList), false, $1) } |
+    declarator_list '=' expr_list   { $$ = ss(yylex).pDeclareAssign([]Node($1.(DeclList)), $3.(ExprList), true, $2) } |
     declarator TAddEq expr          { $$ = assignLoadStore($1, ss(yylex).pBinary(typ.OpAdd, $1, $3, $2), $2) } |
     declarator TSubEq expr          { $$ = assignLoadStore($1, ss(yylex).pBinary(typ.OpSub, $1, $3, $2), $2) } |
     declarator TMulEq expr          { $$ = assignLoadStore($1, ss(yylex).pBinary(typ.OpMul, $1, $3, $2), $2) } |

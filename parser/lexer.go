@@ -55,6 +55,7 @@ func init() {
 	update(TBitLshEq, "<<=")
 	update(TBitRshEq, ">>=")
 	update(TBitURshEq, ">>>=")
+	yyToknames[0] = "<EOF>"
 }
 
 type Error struct {
@@ -507,7 +508,7 @@ func (sc *Scanner) opAssign(tok Token) Token {
 
 type Lexer struct {
 	scanner *Scanner
-	Stmts   Node2
+	Stmts   Node
 	Token   Token
 }
 
@@ -533,7 +534,7 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 	panic(lx.scanner.TokenError(tok, message))
 }
 
-func parse(reader, name string, jsonMode bool) (chunk Node2, lexer *Lexer, err error) {
+func parse(reader, name string, jsonMode bool) (chunk Node, lexer *Lexer, err error) {
 	lexer = &Lexer{
 		scanner: NewScanner(reader, name),
 		Stmts:   nil,
@@ -546,7 +547,7 @@ func parse(reader, name string, jsonMode bool) (chunk Node2, lexer *Lexer, err e
 	return
 }
 
-func Parse(text, name string) (chunk Node2, err error) {
+func Parse(text, name string) (chunk Node, err error) {
 	yyErrorVerbose = true
 	yyDebug = 1
 	var lexer *Lexer
@@ -556,7 +557,7 @@ func Parse(text, name string) (chunk Node2, err error) {
 	}
 	if chunk != nil {
 		lc := &LoadConst{Table: lexer.scanner.constants, Funcs: lexer.scanner.functions}
-		chunk.(*Prog).Stats = append([]Node2{lc}, chunk.(*Prog).Stats...)
+		chunk.(*Prog).Stats = append([]Node{lc}, chunk.(*Prog).Stats...)
 	}
 	return
 }

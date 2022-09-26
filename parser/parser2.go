@@ -32,7 +32,7 @@ var (
 	SNil = &Symbol{Name: "nil"}
 )
 
-func (lex *Lexer) pFunc(method bool, name Token, args Node2, stats Node2, pos Token) Node2 {
+func (lex *Lexer) pFunc(method bool, name Token, args Node, stats Node, pos Token) Node {
 	namev := bas.Str(name.Str)
 	if lex.scanner.functions.Contains(namev) {
 		lex.Error(fmt.Sprintf("function %q already existed", name.Str))
@@ -66,7 +66,7 @@ func __markupLambdaName(lambda Token) Token {
 	return lambda
 }
 
-func (lex *Lexer) pFindTailCall(stat Node2) {
+func (lex *Lexer) pFindTailCall(stat Node) {
 	switch v := stat.(type) {
 	case *Call:
 		v.Op = typ.OpTailCall
@@ -81,14 +81,14 @@ func (lex *Lexer) pFindTailCall(stat Node2) {
 	}
 }
 
-func (lex *Lexer) pLoop(body ...Node2) Node2 {
+func (lex *Lexer) pLoop(body ...Node) Node {
 	return &Loop{emptyProg, lex.pProg(false, body...)}
 }
 
-func (lex *Lexer) pForRange(v Token, start, end, step, body Node2, pos Token) Node2 {
+func (lex *Lexer) pForRange(v Token, start, end, step, body Node, pos Token) Node {
 	forVar := Sym(v)
 	if v, ok := step.(Primitive); ok && bas.Value(v).IsNumber() { // step is a static number, easy case
-		var cmp Node2
+		var cmp Node
 		if bas.Less(bas.Value(v), bas.Int(0)) {
 			cmp = lex.pBinary(typ.OpLess, end, forVar, pos)
 		} else {
@@ -126,7 +126,7 @@ func (lex *Lexer) pForRange(v Token, start, end, step, body Node2, pos Token) No
 	)
 }
 
-func (lex *Lexer) pForIn(key, value Token, expr, body Node2, pos Token) Node2 {
+func (lex *Lexer) pForIn(key, value Token, expr, body Node, pos Token) Node {
 	k, v, subject, kv := Sym(key), Sym(value), randomVarname(), randomVarname()
 	return lex.pProg(true,
 		&Declare{subject, expr, pos.Line()},
@@ -149,7 +149,7 @@ func (lex *Lexer) pForIn(key, value Token, expr, body Node2, pos Token) Node2 {
 	)
 }
 
-func (lex *Lexer) pDeclareAssign(dest []Node2, src ExprList, assign bool, pos Token) Node2 {
+func (lex *Lexer) pDeclareAssign(dest []Node, src ExprList, assign bool, pos Token) Node {
 	if len(src) == 1 && len(dest) > 1 {
 		tmp := randomVarname()
 		p := (&Prog{}).Append(&Declare{tmp, src[0], pos.Line()})
@@ -197,7 +197,7 @@ func (lex *Lexer) pDeclareAssign(dest []Node2, src ExprList, assign bool, pos To
 	return res
 }
 
-func (lex *Lexer) pArray(list, arg Node2) Node2 {
+func (lex *Lexer) pArray(list, arg Node) Node {
 	if lex.scanner.jsonMode {
 		if list != nil {
 			lex.pSimpleJSON(list).Native().Append(lex.pSimpleJSON(arg))
@@ -208,10 +208,10 @@ func (lex *Lexer) pArray(list, arg Node2) Node2 {
 	if list != nil {
 		return append(list.(ExprList), arg)
 	}
-	return ExprList([]Node2{arg})
+	return ExprList([]Node{arg})
 }
 
-func (lex *Lexer) pObject(list, k, v Node2) Node2 {
+func (lex *Lexer) pObject(list, k, v Node) Node {
 	if lex.scanner.jsonMode {
 		if list != nil {
 			lex.pSimpleJSON(list).Object().Set(lex.pSimpleJSON(k), lex.pSimpleJSON(v))
@@ -222,19 +222,19 @@ func (lex *Lexer) pObject(list, k, v Node2) Node2 {
 		return JValue(o.ToValue())
 	}
 	if list != nil {
-		return append(list.(ExprAssignList), [2]Node2{k, v})
+		return append(list.(ExprAssignList), [2]Node{k, v})
 	}
-	return append((ExprAssignList)(nil), [2]Node2{k, v})
+	return append((ExprAssignList)(nil), [2]Node{k, v})
 }
 
-func (lex *Lexer) pEmptyArray() Node2 {
+func (lex *Lexer) pEmptyArray() Node {
 	if lex.scanner.jsonMode {
 		return JValue(bas.Array())
 	}
 	return ExprList(nil)
 }
 
-func (lex *Lexer) pEmptyObject() Node2 {
+func (lex *Lexer) pEmptyObject() Node {
 	if lex.scanner.jsonMode {
 		return JValue(bas.NewObject(0).ToValue())
 	}

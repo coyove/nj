@@ -392,8 +392,8 @@ func compileRelease(table *symTable, node parser.Release) uint16 {
 
 // collapse will accept a list of expressions, each of them will be collapsed into a temporal variable
 // and become an Address node. If optLast is true, the last expression will be directly using regA.
-func (table *symTable) collapse(optLast bool, nodes ...parser.Node2) []parser.Node2 {
-	var lastNode parser.Node2
+func (table *symTable) collapse(optLast bool, nodes ...parser.Node) []parser.Node {
+	var lastNode parser.Node
 	var lastNodeIndex int
 
 	for i, n := range nodes {

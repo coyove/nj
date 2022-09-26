@@ -1,0 +1,92 @@
+local env = createprototype("env", function(p)
+    this.store = {}
+    this.parent = p
+end)
+
+env._break = []
+env._continue = []
+
+function env.set(k, v)
+    this.store[k] = v
+end
+
+function env.setp(k, v)
+    if this.store.hasownproperty(k) then
+        this.store[k] = v
+        return true
+    end
+    if this.parent then
+        if this.parent.setp(k, v) then
+            return false
+        end
+    end
+    this.store[k] = v
+    return true
+end
+
+function env.get(k)
+    if k == "nil" then return nil, true end
+    if k == "true" then return true, true end
+    if k == "false" then return false, true end
+    if this.store.hasownproperty(k) then
+        return this.store[k], true
+    end
+    if this.parent then
+        return this.parent.get(k)
+    end
+    return nil, false
+end
+
+function runBinary(run, node, e)
+    if node.Op == eval.op.add then
+        return run(node.A, e) + run(node.B, e)
+    end
+end
+
+function run(node, e)
+    if node is "@*parser.Prog" then
+        local e2 = if(node.DoBlock, env(e), e)
+        local last
+        for _, stat in node.Stats do
+            last = run(stat, e2) 
+        end
+        return last
+    elseif node is "@*parser.If" then
+        if run(node.Cond) then
+            run(node.True, env(e))
+        else
+            run(node.False, env(e))
+        end
+    elseif node is "@*parser.Loop" then
+        while true do
+            local res = run(node.Body, e)
+            if res == env._break then break end
+        end
+    elseif node is "@*parser.And" then
+        return run(node.A, e) and run(node.B, e)
+    elseif node is "@*parser.Or" then
+        return run(node.A, e) or run(node.B, e)
+    elseif node is "@*parser.Declare" then
+        e.set(node.Name.Name, run(node.Value, e))
+    elseif node is "@*parser.Assign" then
+        e.setp(node.Name.Name, run(node.Value, e))
+    elseif node is "<@*parser.LoadConst, @*parser.Release>" then
+        -- omit
+    elseif node is "@parser.Primitive" then
+        return node.Value()
+    elseif node is "@*parser.Binary" then
+        return runBinary(run, node, e)
+    elseif node is "@*parser.BreakContinue" then
+        return if(node.Break, env._break, env._continue)
+    elseif node is "@*parser.Symbol" then
+        local v, ok = e.get(node.Name)
+        assert(ok, true, "unknown symbol: %v".format(node.Name))
+        return v
+    else
+        local tmp = buffer()
+        node.Dump(tmp)
+        panic("unknown node: %v".format(tmp.value()))
+    end
+end
+
+run(eval.parse(" a=0 do a =1 a=2 end a"), env())

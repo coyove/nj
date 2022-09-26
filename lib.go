@@ -66,6 +66,10 @@ func init() {
 		SetProp("parse", bas.Func("parse", func(e *bas.Env) {
 			e.A = (*env)(e).valueOrError(parser.Parse(e.Str(0), "eval.parse"))
 		})).
+		SetProp("op", bas.NewObject(0).
+			SetProp("add", bas.Int(typ.OpAdd)).
+			ToValue(),
+		).
 		ToValue())
 
 	bas.AddGlobal("printf", bas.Func("printf", func(e *bas.Env) {

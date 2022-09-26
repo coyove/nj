@@ -13,7 +13,7 @@ import (
 )
 
 type breakLabel struct {
-	continueNode     parser.Node2
+	continueNode     parser.Node
 	continueGoto     int
 	breakContinuePos []int
 }
@@ -98,7 +98,7 @@ func (table *symTable) borrowAddressNoReuse() uint16 {
 
 func (table *symTable) freeAddr(a interface{}) {
 	switch a := a.(type) {
-	case []parser.Node2:
+	case []parser.Node:
 		for _, n := range a {
 			if a, ok := n.(parser.Address); ok {
 				table.freeAddr(uint16(a))
@@ -127,13 +127,12 @@ func (table *symTable) freeAddr(a interface{}) {
 }
 
 var (
-	staticNil    = bas.Str("nil")
-	staticTrue   = bas.Str("true")
-	staticFalse  = bas.Str("false")
-	staticThis   = bas.Str("this")
-	staticSelf   = bas.Str("self")
-	staticA      = bas.Str("a!")
-	nodeCompiler = map[bas.Value]func(*symTable, []parser.Node) uint16{}
+	staticNil   = bas.Str("nil")
+	staticTrue  = bas.Str("true")
+	staticFalse = bas.Str("false")
+	staticThis  = bas.Str("this")
+	staticSelf  = bas.Str("self")
+	staticA     = bas.Str("a!")
 )
 
 func (table *symTable) get(name bas.Value) (uint16, bool) {
@@ -219,7 +218,7 @@ func (table *symTable) loadConst(v bas.Value) uint16 {
 	panic("loadConst: shouldn't happen")
 }
 
-func (table *symTable) writeInst1(op byte, n parser.Node2) {
+func (table *symTable) writeInst1(op byte, n parser.Node) {
 	addr, ok := table.compileStaticNode(n)
 	if !ok {
 		table.codeSeg.WriteInst(op, table.compileNode(n), 0)
@@ -228,7 +227,7 @@ func (table *symTable) writeInst1(op byte, n parser.Node2) {
 	}
 }
 
-func (table *symTable) compileAtom(n parser.Node2, tmp *[]uint16) uint16 {
+func (table *symTable) compileAtom(n parser.Node, tmp *[]uint16) uint16 {
 	addr, ok := table.compileStaticNode(n)
 	if !ok {
 		addr := table.borrowAddress()
@@ -239,10 +238,10 @@ func (table *symTable) compileAtom(n parser.Node2, tmp *[]uint16) uint16 {
 	return addr
 }
 
-func (table *symTable) writeInst2(op byte, n0, n1 parser.Node2) {
+func (table *symTable) writeInst2(op byte, n0, n1 parser.Node) {
 	var tmp []uint16
-	i := func(n parser.Node2) int16 { return int16(bas.Value(n.(parser.Primitive)).Int64()) }
-	i64 := func(n parser.Node2) int64 { return bas.Value(n.(parser.Primitive)).Int64() }
+	i := func(n parser.Node) int16 { return int16(bas.Value(n.(parser.Primitive)).Int64()) }
+	i64 := func(n parser.Node) int64 { return bas.Value(n.(parser.Primitive)).Int64() }
 	switch {
 	case op == typ.OpAdd && parser.IsInt16(n1) > 0:
 		table.codeSeg.WriteInst3(typ.OpLinear16, table.compileAtom(n0, &tmp), 1, uint16(i(n1)))
@@ -276,13 +275,13 @@ func (table *symTable) writeInst2(op byte, n0, n1 parser.Node2) {
 	table.freeAddr(tmp)
 }
 
-func (table *symTable) writeInst3(op byte, n0, n1, n2 parser.Node2) {
+func (table *symTable) writeInst3(op byte, n0, n1, n2 parser.Node) {
 	var tmp []uint16
 	table.codeSeg.WriteInst3(op, table.compileAtom(n0, &tmp), table.compileAtom(n1, &tmp), table.compileAtom(n2, &tmp))
 	table.freeAddr(tmp)
 }
 
-func (table *symTable) compileStaticNode(node parser.Node2) (uint16, bool) {
+func (table *symTable) compileStaticNode(node parser.Node) (uint16, bool) {
 	switch v := node.(type) {
 	case parser.Address:
 		return uint16(v), true
@@ -303,7 +302,7 @@ func (table *symTable) compileStaticNode(node parser.Node2) (uint16, bool) {
 	return 0, false
 }
 
-func (table *symTable) compileNode(node parser.Node2) uint16 {
+func (table *symTable) compileNode(node parser.Node) uint16 {
 	if addr, ok := table.compileStaticNode(node); ok {
 		return addr
 	}
@@ -368,7 +367,7 @@ func (table *symTable) getGlobal() *symTable {
 	return table
 }
 
-func compileNodeTopLevel(name, source string, n parser.Node2, opt *LoadOptions) (cls *bas.Program, err error) {
+func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (cls *bas.Program, err error) {
 	defer internal.CatchError(&err)
 
 	table := newSymTable(opt)
