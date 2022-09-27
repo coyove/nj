@@ -237,19 +237,19 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 	newtable.compileNode(node.Body)
 	newtable.patchGoto()
 
-	if a := newtable.sym.Get(staticThis); a != bas.Nil {
-		newtable.codeSeg.Code = append([]typ.Inst{
-			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: typ.RegA},
-		}, newtable.codeSeg.Code...)
-		newtable.codeSeg.Pos.Offset = 1
-	}
-
 	if a := newtable.sym.Get(staticSelf); a != bas.Nil {
 		newtable.codeSeg.Code = append([]typ.Inst{
 			{Opcode: typ.OpFunction, A: typ.RegA},
 			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: typ.RegA},
 		}, newtable.codeSeg.Code...)
-		newtable.codeSeg.Pos.Offset = 2
+		newtable.codeSeg.Pos.Offset += 2
+	}
+
+	if a := newtable.sym.Get(staticThis); a != bas.Nil {
+		newtable.codeSeg.Code = append([]typ.Inst{
+			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: typ.RegA},
+		}, newtable.codeSeg.Code...)
+		newtable.codeSeg.Pos.Offset += 1
 	}
 
 	code := newtable.codeSeg
@@ -272,8 +272,6 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 
 	fm := &table.getGlobal().funcsMap
 	fidx := fm.Get(bas.Str(node.Name))
-	fm.Set(fidx, obj.ToValue())
-	fm.Delete(bas.Str(node.Name))
 	table.getGlobal().constMap.Set(obj.ToValue(), fidx)
 
 	table.codeSeg.WriteInst3(typ.OpFunction, uint16(fidx.Int()),
@@ -400,6 +398,14 @@ func (table *symTable) collapse(optLast bool, nodes ...parser.Node) []parser.Nod
 		switch n.(type) {
 		case parser.Address, parser.Primitive, *parser.Symbol:
 			// No need to collapse
+		case *parser.If:
+			// 'if' is special because it can be used as an expresison, we can't optimize just one branch.
+			// e.g.: if(cond, a[0], a[1])
+			tmp := table.borrowAddress()
+			res := compileIf(table, n.(*parser.If))
+			table.codeSeg.Code = append(table.codeSeg.Code, typ.Inst{Opcode: typ.OpSet, A: tmp, B: res})
+			nodes[i] = parser.Address(tmp)
+			lastNode, lastNodeIndex = n, i
 		default:
 			tmp := table.borrowAddress()
 			table.codeSeg.WriteInst(typ.OpSet, tmp, table.compileNode(n))

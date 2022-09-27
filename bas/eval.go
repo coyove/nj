@@ -362,22 +362,27 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			env._set(v.C, env.A)
 		case typ.OpSlice:
 			a, start, end := env._get(opa), env._get(opb), env._get(v.C)
-			if start.Type()+end.Type() != typ.Number+typ.Number {
-				internal.Panic("slice "+errNeedNumbers, detail(start), detail(end))
-			}
 			switch a.Type() {
 			case typ.Native:
+				if !start.IsInt64() || !end.IsInt64() {
+					internal.Panic("slice "+errNeedNumbers, detail(start), detail(end))
+				}
 				if end := end.Int(); end == -1 {
 					env.A = a.Native().Slice(start.Int(), a.Native().Len()).ToValue()
 				} else {
 					env.A = a.Native().Slice(start.Int(), end).ToValue()
 				}
 			case typ.String:
+				if !start.IsInt64() || !end.IsInt64() {
+					internal.Panic("slice "+errNeedNumbers, detail(start), detail(end))
+				}
 				if end := end.Int(); end == -1 {
 					env.A = Str(a.Str()[start.Int():Len(a)])
 				} else {
 					env.A = Str(a.Str()[start.Int():end])
 				}
+			case typ.Object:
+				env.A = a.Object().GetDefault(start, end)
 			default:
 				internal.Panic("can't slice %v", detail(a))
 			}
@@ -473,6 +478,9 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				env.A = stackEnv.A
 				stackEnv.clear()
 			} else if v.Opcode == typ.OpCall {
+				if stackEnv.Size() < int(cls.numParams) {
+					internal.PanicNotEnoughArgs(detail(a))
+				}
 				// Switch 'env' to 'stackEnv' and move up 'stackEnv'.
 				stackEnv.resizeZero(int(cls.stackSize), int(cls.numParams))
 				cursor = 0
@@ -485,6 +493,9 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				retStack = append(retStack, last)
 				stackEnv.stackOffsetFlag = uint32(len(*env.stack))
 			} else {
+				if stackEnv.Size() < int(cls.numParams) {
+					internal.PanicNotEnoughArgs(detail(a))
+				}
 				// Move arguments from 'stackEnv' to 'env'.
 				*env.stack = append((*env.stack)[:env.stackOffset()], stackEnv.Stack()...)
 

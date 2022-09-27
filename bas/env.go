@@ -54,11 +54,11 @@ func (env *Env) stackOffset() uint32 {
 }
 
 func (env *Env) resizeZero(newSize, zeroSize int) {
-	old := len(*env.stack)
+	// old := len(*env.stack)
 	env.resize(newSize)
-	for i := old; i < zeroSize; i++ {
-		(*env.stack)[i] = Value{}
-	}
+	// for i := old; i < int(env.stackOffset())+zeroSize; i++ {
+	// 	(*env.stack)[i] = Value{}
+	// }
 }
 
 func (env *Env) resize(newSize int) {

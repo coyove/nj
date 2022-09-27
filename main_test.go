@@ -125,6 +125,8 @@ func TestFileStringIndex(t *testing.T) { runFile(t, "tests/indexstr.txt") }
 
 func TestFileCurry(t *testing.T) { runFile(t, "tests/curry.txt") }
 
+func TestFileEvaluator(t *testing.T) { runFile(t, "tests/eval.txt") }
+
 func TestReturnFunction(t *testing.T) {
 	{
 		cls, _ := LoadString(`
@@ -163,10 +165,6 @@ return foo
 		}
 
 		if v := v.Object().Call(nil, bas.Array(bas.Int64(10), bas.Int64(20))); v.Int64() != 41 {
-			t.Fatal(v)
-		}
-
-		if v := v.Object().Call(nil); v.Int64() != 41 {
 			t.Fatal(v)
 		}
 	}

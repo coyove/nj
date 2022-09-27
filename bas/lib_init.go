@@ -81,8 +81,8 @@ func init() {
 		cls.Stderr = os.Stderr
 
 		cls.main.fun.top = cls
-		cls.functions.Foreach(func(_ Value, f *Value) bool {
-			f.Object().fun.top = cls
+		cls.functions.Foreach(func(f Value, idx *Value) bool {
+			(*cls.stack)[idx.Int()&typ.RegLocalMask].Object().fun.top = cls
 			return true
 		})
 		return cls
@@ -254,7 +254,7 @@ func init() {
 		}).
 		AddMethod("contains", func(e *Env) { e.A = Bool(e.Object(-1).Contains(e.Get(0))) }).
 		AddMethod("hasownproperty", func(e *Env) { e.A = Bool(e.Object(-1).HasOwnProperty(e.Get(0))) }).
-		AddMethod("merge", func(e *Env) { e.A = e.Object(-1).Merge(e.Object(0)).ToValue() }).
+		AddMethod("merge", func(e *Env) { e.A = e.Object(-1).Merge(e.Shape(0, "No").Object()).ToValue() }).
 		AddMethod("tostring", func(e *Env) {
 			p := &bytes.Buffer{}
 			e.Object(-1).rawPrint(p, typ.MarshalToJSON)
@@ -319,7 +319,7 @@ func init() {
 	AddGlobal("func", Proto.Func.ToValue())
 	AddGlobal("callable", Proto.Func.ToValue())
 
-	*Proto.Native = *NewNamedObject("native", 4).
+	*Proto.Native = *NewNamedObject("native", 0).
 		SetProp("types", nativeGoObject.ToValue()).
 		AddMethod("name", func(e *Env) {
 			e.A = Str(e.Get(-1).Native().meta.Name)

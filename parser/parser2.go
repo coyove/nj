@@ -35,7 +35,7 @@ var (
 func (lex *Lexer) pFunc(method bool, name Token, args Node, stats Node, pos Token) Node {
 	namev := bas.Str(name.Str)
 	if lex.scanner.functions.Contains(namev) {
-		lex.Error(fmt.Sprintf("function %q already existed", name.Str))
+		lex.Error(fmt.Sprintf("function %s already existed", name.Str))
 	}
 	lex.scanner.functions.Set(namev, bas.Nil)
 
@@ -51,7 +51,7 @@ func (lex *Lexer) pFunc(method bool, name Token, args Node, stats Node, pos Toke
 	if method {
 		return f
 	}
-	return lex.pProg(false, &Declare{funcname, SNil, pos.Line()}, &Assign{funcname, f, pos.Line()})
+	return &Assign{funcname, f, pos.Line()}
 }
 
 func __markupFuncName(recv, name Token) Token {

@@ -79,9 +79,9 @@ func (p *Program) Stop() {
 func (p *Program) GoString() string {
 	x := &bytes.Buffer{}
 	p.main.printAll(x)
-	p.functions.Foreach(func(_ Value, f *Value) bool {
+	p.functions.Foreach(func(f Value, idx *Value) bool {
 		x.WriteByte('\n')
-		f.Object().printAll(x)
+		(*p.stack)[idx.Int()&typ.RegLocalMask].Object().printAll(x)
 		return true
 	})
 	return x.String()
@@ -162,6 +162,9 @@ func callobj(m *Object, r stacktraces, g *Program, outErr *error, this Value, ar
 			newEnv.resize(int(c.numParams))
 			newEnv._set(uint16(c.numParams)-1, newArray().ToValue())
 		}
+	}
+	if newEnv.Size() < int(c.numParams) {
+		internal.Panic("not enough arguments to call %s", detail(m.ToValue()))
 	}
 	newEnv.resizeZero(int(c.stackSize), int(c.numParams))
 
@@ -250,10 +253,11 @@ func (obj *Object) printAll(w io.Writer) {
 					internal.WriteString(w, "moveself")
 				} else if b == 0 {
 					internal.WriteString(w, "copyfunction "+readAddr(a, true))
+					internal.WriteString(w, " -> "+readAddr(c, false))
 				} else if b == 1 {
 					internal.WriteString(w, "copyclosure "+readAddr(a, true))
+					internal.WriteString(w, " -> "+readAddr(c, false))
 				}
-				internal.WriteString(w, " -> "+readAddr(c, false))
 			case typ.OpTailCall, typ.OpCall:
 				if b != typ.RegPhantom {
 					internal.WriteString(w, "push "+readAddr(b, false)+" -> ")
@@ -283,7 +287,9 @@ func (obj *Object) printAll(w io.Writer) {
 			case typ.OpLoad:
 				internal.WriteString(w, "load "+readAddr(a, false)+" "+readAddr(b, false)+" -> "+readAddr(c, false))
 			case typ.OpStore:
-				internal.WriteString(w, "store "+readAddr(c, false)+" -> "+readAddr(a, false)+" "+readAddr(b, false))
+				internal.WriteString(w, "store "+readAddr(a, false)+" "+readAddr(b, false)+" <- "+readAddr(c, false))
+			case typ.OpSlice:
+				internal.WriteString(w, "sliceload "+readAddr(a, false)+" "+readAddr(b, false)+" : "+readAddr(c, false))
 			case typ.OpLoadGlobal:
 				internal.WriteString(w, "loadglobal "+detail(globals.stack[a]))
 				if b != typ.RegPhantom {

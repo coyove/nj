@@ -68,6 +68,10 @@ func init() {
 		})).
 		SetProp("op", bas.NewObject(0).
 			SetProp("add", bas.Int(typ.OpAdd)).
+			SetProp("sub", bas.Int(typ.OpSub)).
+			SetProp("inc", bas.Int(typ.OpInc)).
+			SetProp("less", bas.Int(typ.OpLess)).
+			SetProp("ret", bas.Int(typ.OpRet)).
 			ToValue(),
 		).
 		ToValue())
