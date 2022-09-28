@@ -66,6 +66,7 @@ func compileAssign(table *symTable, node *parser.Assign) uint16 {
 		// Do not use t.put() because it may put the symbol into masked tables
 		// e.g.: do a = 1 end
 		table.sym.Set(dest, bas.Int64(int64(destAddr)))
+	} else {
 	}
 	table.codeSeg.WriteInst(typ.OpSet, destAddr, table.compileNode(node.Value))
 	table.codeSeg.WriteLineNum(node.Line)
@@ -255,6 +256,9 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 	code := newtable.codeSeg
 	code.WriteInst(typ.OpRet, typ.RegGlobalFlag, 0) // return nil
 
+	localDeclare := table.borrowAddress()
+	table.put(bas.Str(node.Name), localDeclare)
+
 	var captureList []string
 	if table.global != nil {
 		captureList = table.symbolsToDebugLocals()
@@ -278,6 +282,7 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 		uint16(internal.IfInt(table.global == nil, 0, 1)),
 		typ.RegA,
 	)
+	table.codeSeg.WriteInst(typ.OpSet, localDeclare, typ.RegA)
 	table.codeSeg.WriteLineNum(node.Line)
 	return typ.RegA
 }

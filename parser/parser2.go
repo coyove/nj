@@ -9,17 +9,6 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
-const (
-	INVALID = iota
-	FLOAT
-	INT
-	STR
-	SYM
-	NODES
-	ADDR
-	JSON
-)
-
 var (
 	emptyBreak = &BreakContinue{Break: true}
 	emptyProg  = &Prog{}
@@ -39,7 +28,7 @@ func (lex *Lexer) pFunc(method bool, name Token, args Node, stats Node, pos Toke
 	}
 	lex.scanner.functions.Set(namev, bas.Nil)
 
-	funcname := Sym(name)
+	// funcname := Sym(name)
 	lex.pFindTailCall(stats)
 
 	f := &Function{Name: name.Str, Body: stats, Line: pos.Line()}
@@ -51,7 +40,7 @@ func (lex *Lexer) pFunc(method bool, name Token, args Node, stats Node, pos Toke
 	if method {
 		return f
 	}
-	return &Assign{funcname, f, pos.Line()}
+	return f //  &Assign{funcname, f, pos.Line()}
 }
 
 func __markupFuncName(recv, name Token) Token {
@@ -62,7 +51,7 @@ func __markupFuncName(recv, name Token) Token {
 var lambdaIndex int64
 
 func __markupLambdaName(lambda Token) Token {
-	lambda.Str = fmt.Sprintf("<lambda-%d-%d>", lambda.Pos.Line, atomic.AddInt64(&lambdaIndex, 1))
+	lambda.Str = fmt.Sprintf("lambda.%d.%d", lambda.Pos.Line, atomic.AddInt64(&lambdaIndex, 1))
 	return lambda
 }
 

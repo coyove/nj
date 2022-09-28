@@ -1,5 +1,6 @@
 local env = createprototype("env", function(p)
     this.store = {}
+    this.funcs = {}
     this.top = if(p, p.top, this)
     this.parent = p
 end)
@@ -37,16 +38,22 @@ function env.get(k)
     if this.parent then
         return this.parent.get(k)
     end
+    if this.top == this then
+        local v = this.funcs[k:self]
+        if v != self then
+            return v, true
+        end
+    end
     return nil, false
 end
 
-function runUnary(run, node, e)
+function runUnary(node, e)
     if node.Op == eval.op.ret then
         panic(new(env._return, {result=run(node.A, e)}))
     end
 end
 
-function runBinary(run, node, e)
+function runBinary(node, e)
     if node.Op == eval.op.add then
         return run(node.A, e) + run(node.B, e)
     elseif node.Op == eval.op.sub then
@@ -60,85 +67,110 @@ function runBinary(run, node, e)
     end
 end
 
+runners = {}
+
 function run(node, e)
-    if node is "@*parser.Prog" then
-        local e2 = if(node.DoBlock, env(e), e)
-        local last
-        for _, stat in node.Stats do
-            last = run(stat, e2) 
-            if last == env._break or last == env._continue then return last end
-        end
-        return last
-    elseif node is "@*parser.If" then
-        if run(node.Cond, e) then
-            res = run(node.True, env(e))
-        elseif node.False then
-            res = run(node.False, env(e))
-        end
-        return res
-    elseif node is "@*parser.Loop" then
-        while true do
-            local res = run(node.Body, e)
-            if res == env._break then break end
-            if res == env._continue then 
-                run(node.Continue, e)
-            end
-        end
-    elseif node is "@*parser.And" then
-        return run(node.A, e) and run(node.B, e)
-    elseif node is "@*parser.Or" then
-        return run(node.A, e) or run(node.B, e)
-    elseif node is "@*parser.Declare" then
-        e.set(node.Name.Name, run(node.Value, e))
-    elseif node is "@*parser.Assign" then
-        e.setp(node.Name.Name, run(node.Value, e))
-    elseif node is "<@*parser.LoadConst, @*parser.Release>" then
-        -- omit
-    elseif node is "@parser.Primitive" then
-        return node.Value()
-    elseif node is "@*parser.Binary" then
-        return runBinary(run, node, e)
-    elseif node is "@*parser.Unary" then
-        return runUnary(run, node, e)
-    elseif node is "@*parser.BreakContinue" then
-        return if(node.Break, env._break, env._continue)
-    elseif node is "@*parser.Symbol" then
-        local v, ok = e.get(node.Name)
-        assert(ok, true, "unknown symbol: %v".format(node.Name))
-        return v
-    elseif node is "@parser.ExprList" then
-        lst = []
-        for _, n in node do
-            lst[#lst] = run(n, e)
-        end
-        return lst
-    elseif node is "@parser.ExprAssignList" then
-        lst = {}
-        for _, n in node do
-            lst[run(n[0], e)] = run(n[1], e)
-        end
-        return lst
-    elseif node is "@*parser.Call" then
-        local callee = run(node.Callee, e)
-        if callee is callable then
-            return callee(run(node.Args, e)...)
-        end
-        local e2 = env(e.top)
-        for i, name in callee.Args do
-            e2.set(name.Name, if(i < #node.Args, run(node.Args[i], e), nil))
-        end
-        local res = run.try(callee.Body, e2)
-        if res is error and res.error() is env._return then
-            return res.error().result
-        end
-        return res
-    elseif node is "@*parser.Function" then
-        return node
-    else
-        local tmp = buffer()
-        node.Dump(tmp)
-        panic("unknown node: %v".format(tmp.value()))
+    local run = runners[node.typename()]
+    if run then return run(node, e) end
+    local tmp = buffer()
+    node.Dump(tmp)
+    panic("unknown node: %v".format(tmp.value()))
+end
+
+runners["*parser.Prog"] = function(node, e)
+    local e2 = if(node.DoBlock, env(e), e)
+    local last
+    for _, stat in node.Stats do
+        last = run(stat, e2) 
+        if last == env._break or last == env._continue then return last end
     end
+    return last
+end
+runners["*parser.If"] = function(node, e)
+    if run(node.Cond, e) then
+        res = run(node.True, env(e))
+    elseif node.False then
+        res = run(node.False, env(e))
+    end
+    return res
+end
+runners["*parser.Loop"] = function(node, e)
+    while true do
+        local res = run(node.Body, e)
+        if res == env._break then break end
+        if res == env._continue then 
+            run(node.Continue, e)
+        end
+    end
+end
+runners["*parser.And"] = function(node, e)
+    return run(node.A, e) and run(node.B, e)
+end
+runners["*parser.Or"] = function(node, e)
+    return run(node.A, e) or run(node.B, e)
+end
+runners["*parser.Declare"] = function(node, e)
+    e.set(node.Name.Name, run(node.Value, e))
+end
+runners["*parser.Assign"] = function(node, e)
+    e.setp(node.Name.Name, run(node.Value, e))
+end
+runners["*parser.Release"] = function(node, e)
+    -- omit
+end
+runners["*parser.LoadConst"] = function(node, e)
+    for f in node.natptrat("Funcs") do e.top.funcs[f] = nil end
+end
+runners["parser.Primitive"] = function(node, e)
+    return node.Value()
+end
+runners["*parser.Binary"] = function(node, e)
+    return runBinary(node, e)
+end
+runners["*parser.Unary"] = function(node, e)
+    return runUnary(node, e)
+end
+runners["*parser.BreakContinue"] = function(node, e)
+    return if(node.Break, env._break, env._continue)
+end
+runners["*parser.Symbol"] = function(node, e)
+    local v, ok = e.get(node.Name)
+    assert(ok, true, "unknown symbol: %v".format(node.Name))
+    return v
+end
+runners["parser.ExprList"] = function(node, e)
+    lst = []
+    for _, n in node do
+        lst[#lst] = run(n, e)
+    end
+    return lst
+end
+runners["parser.ExprAssignList"] = function(node, e)
+    lst = {}
+    for _, n in node do
+        lst[run(n[0], e)] = run(n[1], e)
+    end
+    return lst
+end
+runners["*parser.Call"] = function(node, e)
+    local callee = run(node.Callee, e)
+    if callee is callable then
+        return callee(run(node.Args, e)...)
+    end
+    local e2 = env(e.top)
+    for i, name in callee.Args do
+        e2.set(name.Name, if(i < #node.Args, run(node.Args[i], e), nil))
+    end
+    local res = run.try(callee.Body, e2)
+    if res is error and res.error() is env._return then
+        return res.error().result
+    end
+    return res
+end
+runners["*parser.Function"] = function(node, e)
+    e.top.funcs[node.Name] = node
+    e.store[node.Name] = node
+    return node
 end
 
 function newenv(a)

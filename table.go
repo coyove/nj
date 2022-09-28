@@ -309,15 +309,19 @@ func (table *symTable) compileNode(node parser.Node) uint16 {
 
 	switch v := node.(type) {
 	case *parser.LoadConst:
-		f := func(k bas.Value, v *bas.Value) bool {
+		table.constMap = v.Table
+		table.constMap.Foreach(func(k bas.Value, v *bas.Value) bool {
 			addr := int(typ.RegGlobalFlag | table.borrowAddressNoReuse())
 			*v = bas.Int(addr)
 			return true
-		}
-		table.constMap = v.Table
-		table.constMap.Foreach(f)
+		})
 		table.funcsMap = v.Funcs
-		table.funcsMap.Foreach(f)
+		table.funcsMap.Foreach(func(k bas.Value, v *bas.Value) bool {
+			addr := int(table.borrowAddressNoReuse())
+			*v = bas.Int(typ.RegGlobalFlag | addr)
+			table.sym.Set(k, bas.Int(addr))
+			return true
+		})
 		return typ.RegA
 	case *parser.Prog:
 		return compileProgBlock(table, v)
