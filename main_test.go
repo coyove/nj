@@ -435,7 +435,7 @@ func TestStrLess(t *testing.T) {
 	a := bas.Str("a")
 	b := bas.Str("a\x00")
 	t.Log(a, b)
-	if !bas.Less(a, b) {
+	if !a.Less(b) {
 		t.FailNow()
 	}
 }
@@ -453,7 +453,7 @@ func TestACall(t *testing.T) {
 	assert(a == 1 and #(m) == 0)
     end
     return foo`, nil))
-	foo.Object().Call(nil, bas.Int64(1))
+	foo.Object().Call(nil, bas.Int64(1), bas.Nil)
 
 	foo = MustRun(LoadString(`m = {a=1}
 	function m.pow2()
@@ -504,12 +504,12 @@ func TestACall(t *testing.T) {
 
 func TestReflectedValue(t *testing.T) {
 	v := bas.Array(bas.True, bas.False)
-	x := bas.ToType(v, reflect.TypeOf([2]bool{})).Interface().([2]bool)
+	x := v.ToType(reflect.TypeOf([2]bool{})).Interface().([2]bool)
 	if x[0] != true || x[1] != false {
 		t.Fatal(x)
 	}
 	v = bas.NewObject(2).SetProp("a", bas.Int64(1)).SetProp("b", bas.Int64(2)).ToValue()
-	y := bas.ToType(v, reflect.TypeOf(map[string]byte{})).Interface().(map[string]byte)
+	y := v.ToType(reflect.TypeOf(map[string]byte{})).Interface().(map[string]byte)
 	if y["a"] != 1 || y["b"] != 2 {
 		t.Fatal(x)
 	}

@@ -36,7 +36,7 @@ func NewObject(size int) *Object {
 		obj.items = make([]hashItem, size)
 	}
 	obj.this = obj.ToValue()
-	obj.parent = &ObjectProto
+	obj.parent = &Proto.Object
 	obj.fun = objEmptyFunc
 	return obj
 }
@@ -71,7 +71,7 @@ func (m *Object) HasPrototype(proto *Object) bool {
 	return false
 }
 
-// Size returns the total slots in the object, one slot is 16-bytes on 64bit platform.
+// Size returns the total slots in the object, one slot is 40-bytes on 64bit platform.
 func (m *Object) Size() int {
 	if m == nil {
 		return 0
@@ -377,7 +377,7 @@ func (m *Object) ToValue() Value {
 }
 
 func (m *Object) Name() string {
-	if m == &ObjectProto {
+	if m == &Proto.Object {
 		return objEmptyFunc.name
 	}
 	if m != nil && m.fun != nil {
@@ -401,7 +401,7 @@ func (m *Object) Copy(copyData bool) *Object {
 		// Some empty Objects don't have proper structures,
 		// normally they are declared directly instead of using NewObject.
 		m2.fun = objEmptyFunc
-		m2.parent = &ObjectProto
+		m2.parent = &Proto.Object
 	}
 	return &m2
 }

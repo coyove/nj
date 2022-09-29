@@ -412,9 +412,9 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 		return true
 	})
 
-	cls = internal.NewProgram(
-		&coreStack,
-		internal.NewFunc(
+	cls = bas.NewBareProgram(
+		coreStack,
+		bas.NewBareFunc(
 			"main",
 			false,
 			0,
@@ -424,7 +424,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 			table.codeSeg,
 		),
 		&table.sym,
-		&table.funcsMap).(*bas.Program)
+		&table.funcsMap)
 	cls.File = name
 	cls.Source = source
 	if opt != nil {

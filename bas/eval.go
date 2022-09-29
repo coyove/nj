@@ -161,7 +161,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			va, vb := env._get(opa), env._get(opb)
 			switch va.Type() {
 			case typ.Nil:
-				env.A = Array(Nil, Nil)
+				env.A = Nil
 			case typ.Native:
 				env.A = va.Native().internalNext(vb)
 			case typ.Object:
@@ -185,7 +185,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				internal.Panic("can't iterate over %v", detail(va))
 			}
 		case typ.OpLen:
-			env.A = Int(Len(env._get(opa)))
+			env.A = Int(env._get(opa).Len())
 		case typ.OpLinear16:
 			if va := env._get(opa); va.IsInt64() {
 				env.A = Int64(va.UnsafeInt64()*int64(int16(opb)) + int64(int16(v.C)))
@@ -316,7 +316,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			} else if b.IsString() {
 				env.A = Bool(TestShapeFast(a, b.Str()) == nil)
 			} else {
-				env.A = Bool(HasPrototype(a, b.AssertObject("isprototype")))
+				env.A = Bool(a.HasPrototype(b.AssertObject("isprototype")))
 			}
 		case typ.OpStore:
 			subject, k, v := env._get(opa), env._get(opb), env._get(v.C)
@@ -377,7 +377,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					internal.Panic("slice "+errNeedNumbers, detail(start), detail(end))
 				}
 				if end := end.Int(); end == -1 {
-					env.A = Str(a.Str()[start.Int():Len(a)])
+					env.A = Str(a.Str()[start.Int():a.Len()])
 				} else {
 					env.A = Str(a.Str()[start.Int():end])
 				}
@@ -451,10 +451,13 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 			stackEnv.A = obj.this
 			if cls.varg {
-				s, w := stackEnv.Stack(), int(cls.numParams)-1
+				s, w := stackEnv.Stack(), int(cls.numArgs)-1
 				if len(s) > w {
-					s[w] = newArray(append([]Value{}, s[w:]...)...).ToValue()
+					s[w] = Array(append([]Value{}, s[w:]...)...)
 				} else {
+					if len(s) < w {
+						internal.PanicNotEnoughArgs(detail(a))
+					}
 					stackEnv.resize(w + 1)
 					stackEnv._set(uint16(w), Nil)
 				}
@@ -478,11 +481,11 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				env.A = stackEnv.A
 				stackEnv.clear()
 			} else if v.Opcode == typ.OpCall {
-				if stackEnv.Size() < int(cls.numParams) {
+				if stackEnv.Size() < int(cls.numArgs) {
 					internal.PanicNotEnoughArgs(detail(a))
 				}
 				// Switch 'env' to 'stackEnv' and move up 'stackEnv'.
-				stackEnv.resizeZero(int(cls.stackSize), int(cls.numParams))
+				stackEnv.resizeZero(int(cls.stackSize), int(cls.numArgs))
 				cursor = 0
 				K = obj
 				code = obj.fun.codeSeg.Code
@@ -493,14 +496,14 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				retStack = append(retStack, last)
 				stackEnv.stackOffsetFlag = uint32(len(*env.stack))
 			} else {
-				if stackEnv.Size() < int(cls.numParams) {
+				if stackEnv.Size() < int(cls.numArgs) {
 					internal.PanicNotEnoughArgs(detail(a))
 				}
 				// Move arguments from 'stackEnv' to 'env'.
 				*env.stack = append((*env.stack)[:env.stackOffset()], stackEnv.Stack()...)
 
 				// Resize 'env' to allocate enough space for the next function and move up 'stackEnv'.
-				env.resizeZero(int(cls.stackSize), int(cls.numParams))
+				env.resizeZero(int(cls.stackSize), int(cls.numArgs))
 				cursor = 0
 				K = obj
 				code = obj.fun.codeSeg.Code

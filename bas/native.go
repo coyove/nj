@@ -1,12 +1,10 @@
 package bas
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"reflect"
-	"sync"
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
@@ -33,184 +31,14 @@ type NativeMeta struct {
 	Next         func(*Native, Value) Value
 }
 
-var (
-	internalArrayMeta = &NativeMeta{}
-	bytesArrayMeta    = &NativeMeta{}
-	stringsArrayMeta  = &NativeMeta{}
-	errorNativeMeta   = &NativeMeta{}
-	genericMetaCache  sync.Map
-	nativeGoObject    = NewObject(0)
-)
-
-func init() {
-	*internalArrayMeta = NativeMeta{
-		"internal",
-		Proto.Array,
-		func(a *Native) int { return len(a.internal) },
-		func(a *Native) int { return cap(a.internal) },
-		func(a *Native) { a.internal = a.internal[:0] },
-		func(a *Native) []Value { return a.internal },
-		func(a *Native, idx int) Value { return a.internal[idx] },
-		func(a *Native, idx int, v Value) { a.internal[idx] = v },
-		sgGetKey,
-		sgSetKeyNotSupported,
-		func(a *Native, v ...Value) { a.internal = append(a.internal, v...) },
-		func(a *Native, s, e int) *Native { return &Native{meta: a.meta, internal: a.internal[s:e]} },
-		func(a *Native, s, e int) { a.internal = a.internal[s:e] },
-		func(a *Native, s, e int, from *Native) {
-			if from.meta != a.meta {
-				for i := s; i < e; i++ {
-					a.internal[i] = from.Get(i - s)
-				}
-			} else {
-				copy(a.internal[s:e], from.internal)
-			}
-		},
-		func(a *Native, b *Native) {
-			if a.meta != b.meta {
-				for i := 0; i < b.Len(); i++ {
-					a.internal = append(a.internal, b.Get(i))
-				}
-			} else {
-				a.internal = append(a.internal, b.internal...)
-			}
-		},
-		func(a *Native, w io.Writer, mt typ.MarshalType) {
-			w.Write([]byte("["))
-			for i, v := range a.internal {
-				w.Write([]byte(internal.IfStr(i == 0, "", ",")))
-				v.Stringify(w, mt.NoRec())
-			}
-			w.Write([]byte("]"))
-		},
-		sgArrayNext,
-	}
-	*bytesArrayMeta = NativeMeta{
-		"bytes",
-		Proto.Bytes,
-		func(a *Native) int { return len((a.any).([]byte)) },
-		func(a *Native) int { return cap((a.any).([]byte)) },
-		func(a *Native) { a.any = a.any.([]byte)[:0] },
-		sgValuesNotSupported,
-		func(a *Native, idx int) Value { return Int64(int64(a.any.([]byte)[idx])) },
-		func(a *Native, idx int, v Value) {
-			a.any.([]byte)[idx] = byte(v.AssertNumber("bytes.Set").Int())
-		},
-		sgGetKey,
-		sgSetKeyNotSupported,
-		func(a *Native, v ...Value) {
-			p := a.any.([]byte)
-			for _, b := range v {
-				p = append(p, byte(b.AssertNumber("bytes.Append").Int()))
-			}
-			a.any = p
-		},
-		func(a *Native, start, end int) *Native {
-			return &Native{meta: a.meta, any: a.any.([]byte)[start:end]}
-		},
-		func(a *Native, start, end int) {
-			a.any = a.any.([]byte)[start:end]
-		},
-		func(a *Native, start, end int, from *Native) {
-			if from.meta == internalArrayMeta {
-				buf := a.any.([]byte)
-				for i := start; i < end; i++ {
-					buf[i] = byte(from.Get(i - start).AssertNumber("bytes.Copy").Int())
-				}
-			} else {
-				copy(a.any.([]byte)[start:end], from.any.([]byte))
-			}
-		},
-		func(a *Native, b *Native) {
-			if b.meta == internalArrayMeta {
-				buf := a.any.([]byte)
-				for i := 0; i < b.Len(); i++ {
-					buf[i] = byte(b.Get(i).AssertNumber("bytes.Concat").Int())
-				}
-				a.any = buf
-			} else {
-				a.any = append(a.any.([]byte), b.any.([]byte)...)
-			}
-		},
-		func(a *Native, w io.Writer, mt typ.MarshalType) {
-			if mt != typ.MarshalToJSON {
-				sgMarshal(a, w, mt)
-			} else {
-				enc := base64.NewEncoder(base64.StdEncoding, w)
-				enc.Write(a.any.([]byte))
-				enc.Close()
-			}
-		},
-		sgArrayNext,
-	}
-	*stringsArrayMeta = NativeMeta{
-		"strings",
-		Proto.Array,
-		func(a *Native) int { return len((a.any).([]string)) },
-		func(a *Native) int { return cap((a.any).([]string)) },
-		func(a *Native) { a.any = a.any.([]byte)[:0] },
-		func(a *Native) []Value {
-			res := make([]Value, a.Len())
-			for i := 0; i < a.Len(); i++ {
-				res[i] = a.Get(i)
-			}
-			return res
-		},
-		func(a *Native, idx int) Value { return Str(a.any.([]string)[idx]) },
-		func(a *Native, idx int, v Value) {
-			a.any.([]string)[idx] = v.AssertString("strings.Set")
-		},
-		sgGetKey,
-		sgSetKeyNotSupported,
-		func(a *Native, v ...Value) {
-			p := a.any.([]string)
-			for _, b := range v {
-				p = append(p, b.AssertString("strings.Append"))
-			}
-			a.any = p
-		},
-		func(a *Native, start, end int) *Native {
-			return &Native{meta: a.meta, any: a.any.([]string)[start:end]}
-		},
-		func(a *Native, start, end int) { a.any = a.any.([]string)[start:end] },
-		func(a *Native, start, end int, from *Native) {
-			if from.meta == internalArrayMeta {
-				buf := a.any.([]string)
-				for i := start; i < end; i++ {
-					buf[i] = from.Get(i - start).AssertString("strings.Copy")
-				}
-			} else {
-				copy(a.any.([]byte)[start:end], from.any.([]byte))
-			}
-		},
-		func(a *Native, b *Native) {
-			if b.meta == internalArrayMeta {
-				buf := a.any.([]string)
-				for i := 0; i < b.Len(); i++ {
-					buf[i] = b.Get(i).AssertString("strings.Concat")
-				}
-				a.any = buf
-			} else {
-				a.any = append(a.any.([]byte), b.any.([]byte)...)
-			}
-		},
-		sgMarshal,
-		sgArrayNext,
-	}
-	*errorNativeMeta = *NewEmptyNativeMeta("error", Proto.Error)
-	errorNativeMeta.Marshal = func(a *Native, w io.Writer, mt typ.MarshalType) {
-		w.Write([]byte(internal.IfQuote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error())))
-	}
-}
-
 func NewEmptyNativeMeta(name string, proto *Object) *NativeMeta {
 	if proto == nil {
-		proto = Proto.Native
+		proto = &Proto.Native
 	}
-	return newEmptyNativeMetaInternal(name, proto)
+	return createNativeMeta(name, proto)
 }
 
-func newEmptyNativeMetaInternal(name string, proto *Object) *NativeMeta {
+func createNativeMeta(name string, proto *Object) *NativeMeta {
 	return &NativeMeta{name, proto,
 		sgLenNotSupported,
 		sgSizeNotSupported,
@@ -239,13 +67,13 @@ func newEmptyNativeMetaInternal(name string, proto *Object) *NativeMeta {
 func getNativeMeta(v interface{}) *NativeMeta {
 	switch v.(type) {
 	case []Value:
-		return internalArrayMeta
+		return &Proto.ArrayMeta
 	case []byte:
-		return bytesArrayMeta
+		return &Proto.BytesMeta
 	case []string:
-		return stringsArrayMeta
+		return &Proto.StringsMeta
 	case *ExecError:
-		return errorNativeMeta
+		return &Proto.ErrorMeta
 	}
 	rt := reflect.TypeOf(v)
 	if v, ok := genericMetaCache.Load(rt); ok {
@@ -254,7 +82,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 	var a *NativeMeta
 	switch rt.Kind() {
 	default:
-		a = NewEmptyNativeMeta(reflectTypeName(rt), Proto.Native)
+		a = NewEmptyNativeMeta(reflectTypeName(rt), &Proto.Native)
 		a.GetKey = func(a *Native, k Value) Value {
 			if v, ok := sgReflectLoadSafe(a.any, k); ok {
 				return v
@@ -269,10 +97,10 @@ func getNativeMeta(v interface{}) *NativeMeta {
 			}()
 			rv := reflect.ValueOf(a.any)
 			if rv.Kind() == reflect.Map {
-				rv.SetMapIndex(ToType(k, rv.Type().Key()), ToType(v, rv.Type().Elem()))
+				rv.SetMapIndex(k.ToType(rv.Type().Key()), v.ToType(rv.Type().Elem()))
 			} else {
 				f := reflect.Indirect(rv).FieldByName(k.AssertString("key"))
-				f.Set(ToType(v, f.Type()))
+				f.Set(v.ToType(f.Type()))
 			}
 		}
 		tn := internal.SanitizeName(a.Name)
@@ -283,15 +111,15 @@ func getNativeMeta(v interface{}) *NativeMeta {
 			a.Size = sgSize
 			a.Marshal = sgMarshal
 			a.Next = sgMapNext
-			a.Proto = pt.SetPrototype(Proto.NativeMap)
+			a.Proto = pt.SetPrototype(&Proto.NativeMap)
 		case reflect.Ptr:
-			a.Proto = pt.SetPrototype(Proto.NativePtr)
+			a.Proto = pt.SetPrototype(&Proto.NativePtr)
 		default:
-			a.Proto = pt.SetPrototype(Proto.Native)
+			a.Proto = pt.SetPrototype(&Proto.Native)
 		}
-		nativeGoObject.SetProp(pt.Name(), pt.ToValue())
+		nativeTypes.SetProp(pt.Name(), pt.ToValue())
 	case reflect.Chan:
-		a = NewEmptyNativeMeta(reflectTypeName(rt), Proto.Channel)
+		a = NewEmptyNativeMeta(reflectTypeName(rt), &Proto.Channel)
 		a.Len = sgLen
 		a.Size = sgSize
 		a.Next = func(a *Native, kv Value) Value {
@@ -311,7 +139,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 			return kv
 		}
 	case reflect.Array, reflect.Slice:
-		a = &NativeMeta{reflectTypeName(rt), Proto.Array,
+		a = &NativeMeta{reflectTypeName(rt), &Proto.Array,
 			sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgGetKey, sgSetKeyNotSupported, sgAppend, sgSlice,
 			sgSliceInplace, sgCopy, sgConcat, sgMarshal, sgArrayNext}
 		if rt.Kind() == reflect.Array {
@@ -337,7 +165,7 @@ func NewNative(any interface{}) *Native {
 }
 
 func newArray(m ...Value) *Native {
-	return &Native{meta: internalArrayMeta, internal: m}
+	return &Native{meta: &Proto.ArrayMeta, internal: m}
 }
 
 func NewNativeWithMeta(any interface{}, meta *NativeMeta) *Native {
@@ -349,14 +177,14 @@ func (a *Native) ToValue() Value {
 }
 
 func (a *Native) Unwrap() interface{} {
-	if a.meta == internalArrayMeta {
+	if a.meta == &Proto.ArrayMeta {
 		return a.internal
 	}
 	return a.any
 }
 
 func (a *Native) UnwrapFunc(f func(interface{}) interface{}) {
-	if a.meta == internalArrayMeta {
+	if a.meta == &Proto.ArrayMeta {
 		a.internal = f(a.Unwrap()).([]Value)
 	} else {
 		a.any = f(a.Unwrap())
@@ -364,35 +192,35 @@ func (a *Native) UnwrapFunc(f func(interface{}) interface{}) {
 }
 
 func (a *Native) Len() int {
-	if a.meta == internalArrayMeta {
+	if a.meta == &Proto.ArrayMeta {
 		return len(a.internal)
 	}
 	return a.meta.Len(a)
 }
 
 func (a *Native) Size() int {
-	if a.meta == internalArrayMeta {
+	if a.meta == &Proto.ArrayMeta {
 		return cap(a.internal)
 	}
 	return a.meta.Size(a)
 }
 
 func (a *Native) Values() []Value {
-	if a.meta == internalArrayMeta {
+	if a.meta == &Proto.ArrayMeta {
 		return a.internal
 	}
 	return a.meta.Values(a)
 }
 
 func (a *Native) Get(v int) Value {
-	if a.meta == internalArrayMeta {
+	if a.meta == &Proto.ArrayMeta {
 		return a.internal[v]
 	}
 	return a.meta.Get(a, v)
 }
 
 func (a *Native) Set(idx int, v Value) {
-	if a.meta == internalArrayMeta {
+	if a.meta == &Proto.ArrayMeta {
 		a.internal[idx] = v
 	} else {
 		a.meta.Set(a, idx, v)
@@ -420,7 +248,7 @@ func (a *Native) SliceInplace(start, end int) {
 }
 
 func (a *Native) Clear() {
-	if a.meta == internalArrayMeta {
+	if a.meta == &Proto.ArrayMeta {
 		a.internal = a.internal[:0]
 	} else {
 		a.meta.Clear(a)
@@ -428,7 +256,7 @@ func (a *Native) Clear() {
 }
 
 func (a *Native) Copy(start, end int, from *Native) {
-	if a.meta == internalArrayMeta || from.meta == internalArrayMeta {
+	if a.meta == &Proto.ArrayMeta || from.meta == &Proto.ArrayMeta {
 	} else if a.meta != from.meta {
 		internal.Panic("copy array with different types: from %q to %q", from.meta.Name, a.meta.Name)
 	}
@@ -439,7 +267,7 @@ func (a *Native) Concat(b *Native) {
 	if b == nil {
 		return
 	}
-	if a.meta == internalArrayMeta || b.meta == internalArrayMeta {
+	if a.meta == &Proto.ArrayMeta || b.meta == &Proto.ArrayMeta {
 	} else if a.meta != b.meta {
 		internal.Panic("concat array with different types: from %q to %q", b.meta.Name, a.meta.Name)
 	}
@@ -451,14 +279,18 @@ func (a *Native) Marshal(w io.Writer, mt typ.MarshalType) {
 }
 
 func (a *Native) internalNext(k Value) Value {
-	if a.meta == internalArrayMeta {
+	if a.meta == &Proto.ArrayMeta {
 		return sgArrayNext(a, k)
 	}
 	return a.meta.Next(a, k)
 }
 
-func (a *Native) IsInternalArray() bool {
-	return a.meta == internalArrayMeta
+func (a *Native) IsUntypedArray() bool {
+	return a.meta == &Proto.ArrayMeta
+}
+
+func (a *Native) IsTypedArray() bool {
+	return a.meta.Proto.HasPrototype(&Proto.Array) && a.meta != &Proto.ArrayMeta
 }
 
 func (a *Native) Prototype() *Object {
@@ -509,14 +341,14 @@ func sgGet(a *Native, idx int) Value {
 
 func sgSet(a *Native, idx int, v Value) {
 	rv := reflect.ValueOf(a.any)
-	rv.Index(idx).Set(ToType(v, rv.Type().Elem()))
+	rv.Index(idx).Set(v.ToType(rv.Type().Elem()))
 }
 
 func sgAppend(a *Native, v ...Value) {
 	rv := reflect.ValueOf(a.any)
 	rt := rv.Type().Elem()
 	for _, b := range v {
-		rv = reflect.Append(rv, ToType(b, rt))
+		rv = reflect.Append(rv, b.ToType(rt))
 	}
 	a.any = rv.Interface()
 }
@@ -530,11 +362,11 @@ func sgSliceInplace(a *Native, start, end int) {
 }
 
 func sgCopy(a *Native, start, end int, from *Native) {
-	if from.meta == internalArrayMeta {
+	if from.meta == &Proto.ArrayMeta {
 		rv := reflect.ValueOf(a.any)
 		rt := rv.Type().Elem()
 		for i := start; i < end; i++ {
-			rv.Index(i).Set(ToType(from.Get(i-start), rt))
+			rv.Index(i).Set(from.Get(i - start).ToType(rt))
 		}
 	} else {
 		reflect.Copy(reflect.ValueOf(a.any).Slice(start, end), reflect.ValueOf(from.any))
@@ -542,11 +374,11 @@ func sgCopy(a *Native, start, end int, from *Native) {
 }
 
 func sgConcat(a *Native, b *Native) {
-	if b.meta == internalArrayMeta {
+	if b.meta == &Proto.ArrayMeta {
 		rv := reflect.ValueOf(a.any)
 		rt := rv.Type().Elem()
 		for i := 0; i < b.Len(); i++ {
-			rv = reflect.Append(rv, ToType(b.Get(i), rt))
+			rv = reflect.Append(rv, b.Get(i).ToType(rt))
 		}
 		a.any = rv.Interface()
 	} else {
@@ -669,7 +501,7 @@ func sgReflectLoadSafe(v interface{}, key Value) (value Value, ok bool) {
 
 	if reflect.TypeOf(v).Kind() == reflect.Map {
 		rv := reflect.ValueOf(v)
-		if v := rv.MapIndex(ToType(key, rv.Type().Key())); v.IsValid() {
+		if v := rv.MapIndex(key.ToType(rv.Type().Key())); v.IsValid() {
 			return ValueOf(v.Interface()), true
 		}
 		return Nil, false

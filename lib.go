@@ -149,7 +149,7 @@ func init() {
 				e.A = (*env)(e).valueOrError(f.Seek(0, 2))
 			}
 		}).
-		SetPrototype(bas.NativeMetaProto.ReadWriteCloser.Proto))
+		SetPrototype(bas.Proto.ReadWriteCloser.Proto))
 
 	bas.AddGlobal("open", bas.Func("open", func(e *bas.Env) {
 		path, flag, perm := e.Str(0), e.StrDefault(1, "r", 1), e.IntDefault(2, 0644)
@@ -464,7 +464,7 @@ func init() {
 				Foreach(func(k bas.Value, v *bas.Value) bool {
 					key, rd := k.String(), *v
 					rd.AssertShape("<s,(s,R)>", "http multipart form data format")
-					if rd.Type() == typ.Native && bas.Len(rd) == 2 { // [filename, reader]
+					if rd.Type() == typ.Native && rd.Len() == 2 { // [filename, reader]
 						fn := rd.Native().Get(0).Str()
 						if part, err := writer.CreateFormFile(key, fn); err != nil {
 							outError = fmt.Errorf("%s: %v", fn, err)
@@ -541,7 +541,7 @@ func init() {
 			if args.Get(bas.Str("br")).IsFalse() {
 				resp.Body.Close()
 			} else {
-				buf = bas.NewNativeWithMeta(resp.Body, bas.NativeMetaProto.ReadCloser).ToValue()
+				buf = bas.NewNativeWithMeta(resp.Body, &bas.Proto.ReadCloser).ToValue()
 			}
 			return bas.Int(resp.StatusCode), bas.ValueOf(resp.Header), buf, bas.ValueOf(client.Jar)
 		}
@@ -572,7 +572,7 @@ func init() {
 	bas.AddGlobal("http", httpLib.ToValue())
 
 	bufferMeta := bas.NewEmptyNativeMeta("Buffer", bas.NewObject(0).
-		SetPrototype(bas.NativeMetaProto.ReadWriter.Proto).
+		SetPrototype(bas.Proto.ReadWriter.Proto).
 		AddMethod("reset", func(e *bas.Env) { e.A.Interface().(*internal.LimitedBuffer).Reset() }).
 		AddMethod("value", func(e *bas.Env) { e.A = bas.UnsafeStr(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }).
 		AddMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }))
@@ -587,7 +587,7 @@ func init() {
 func minMax(e *bas.Env, max bool) {
 	v := e.Get(0)
 	for i := 1; i < e.Size(); i++ {
-		if x := e.Get(i); bas.Less(v, x) == max {
+		if x := e.Get(i); v.Less(x) == max {
 			v = x
 		}
 	}

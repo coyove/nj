@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"runtime"
+	"strconv"
+	"sync"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -36,7 +39,7 @@ func Write(w io.Writer, v Value) (int, error) {
 	case typ.Nil:
 		return 0, nil
 	case typ.Native:
-		if v.Native().meta.Proto.HasPrototype(bytesArrayMeta.Proto) {
+		if IsBytes(v) {
 			return w.Write(v.Native().Unwrap().([]byte))
 		}
 	case typ.String:
@@ -47,11 +50,11 @@ func Write(w io.Writer, v Value) (int, error) {
 }
 
 func IsBytes(v Value) bool {
-	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(bytesArrayMeta.Proto)
+	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(&Proto.Bytes)
 }
 
 func IsError(v Value) bool {
-	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(errorNativeMeta.Proto)
+	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(&Proto.Error)
 }
 
 func DeepEqual(a, b Value) bool {
@@ -97,7 +100,7 @@ func lessStr(a, b Value) bool {
 	return a.Str() < b.Str()
 }
 
-func Less(a, b Value) bool {
+func (a Value) Less(b Value) bool {
 	at, bt := a.Type(), b.Type()
 	if at != bt {
 		return at < bt
@@ -114,27 +117,27 @@ func Less(a, b Value) bool {
 	return a.unsafeAddr() < b.unsafeAddr()
 }
 
-func HasPrototype(a Value, p *Object) bool {
+func (a Value) HasPrototype(p *Object) bool {
 	switch a.Type() {
 	case typ.Nil:
 		return p == nil
 	case typ.Object:
 		return a.Object().HasPrototype(p)
 	case typ.Bool:
-		return p == Proto.Bool
+		return p == &Proto.Bool
 	case typ.Number:
-		return p == Proto.Float || (a.IsInt64() && p == Proto.Int)
+		return p == &Proto.Float || (a.IsInt64() && p == &Proto.Int)
 	case typ.String:
-		return p == Proto.Str
+		return p == &Proto.Str
 	case typ.Native:
 		return a.Native().HasPrototype(p)
 	}
 	return false
 }
 
-// ToType converts 'v' to reflect.Value based on reflect.Type.
+// ToType converts value to reflect.Value based on reflect.Type.
 // The result, even not being Zero, may be illegal to use in certain calls.
-func ToType(v Value, t reflect.Type) reflect.Value {
+func (v Value) ToType(t reflect.Type) reflect.Value {
 	if t == valueType {
 		return reflect.ValueOf(v)
 	}
@@ -163,14 +166,14 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 				}
 				out := v.Object().Call(nil, a...)
 				if to := t.NumOut(); to == 1 {
-					results = []reflect.Value{ToType(out, t.Out(0))}
+					results = []reflect.Value{out.ToType(t.Out(0))}
 				} else if to > 1 {
 					if !out.IsArray() {
 						internal.Panic("ToType: function should return %d arguments (sig: %v)", to, t)
 					}
 					results = make([]reflect.Value, t.NumOut())
 					for i := range results {
-						results[i] = ToType(out.Native().Get(i), t.Out(i))
+						results[i] = out.Native().Get(i).ToType(t.Out(i))
 					}
 				}
 				return
@@ -180,7 +183,7 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 			s := reflect.MakeMap(t)
 			kt, vt := t.Key(), t.Elem()
 			v.Object().Foreach(func(k Value, v *Value) bool {
-				s.SetMapIndex(ToType(k, kt), ToType(*v, vt))
+				s.SetMapIndex(k.ToType(kt), v.ToType(vt))
 				return true
 			})
 			return s
@@ -204,13 +207,13 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 			case reflect.Slice:
 				s := reflect.MakeSlice(t, a.Len(), a.Len())
 				for i := 0; i < a.Len(); i++ {
-					s.Index(i).Set(ToType(a.Get(i), t.Elem()))
+					s.Index(i).Set(a.Get(i).ToType(t.Elem()))
 				}
 				return s
 			case reflect.Array:
 				s := reflect.New(t).Elem()
 				for i := 0; i < a.Len(); i++ {
-					s.Index(i).Set(ToType(a.Get(i), t.Elem()))
+					s.Index(i).Set(a.Get(i).ToType(t.Elem()))
 				}
 				return s
 			}
@@ -234,7 +237,7 @@ func ToType(v Value, t reflect.Type) reflect.Value {
 	panic("ToType: failed to convert " + detail(v) + " to " + t.String())
 }
 
-func Len(v Value) int {
+func (v Value) Len() int {
 	switch v.Type() {
 	case typ.String:
 		if v.isSmallString() {
@@ -261,26 +264,125 @@ func setObjectRecv(v, r Value) Value {
 func detail(v Value) string {
 	switch vt := v.Type(); vt {
 	case typ.Object:
-		if v.Object().fun != nil {
+		if f := v.Object().fun; f != nil && f != objEmptyFunc {
 			return v.Object().funcSig()
 		}
 		return v.Object().Name() + "{}"
 	case typ.Native:
 		a := v.Native()
-		if a.IsInternalArray() {
-			return fmt.Sprintf("array(%d)", a.Len())
+		if a.IsUntypedArray() {
+			return fmt.Sprintf("array.%d", a.Len())
 		}
-		return fmt.Sprintf("native(%s)", a.meta.Name)
-	case typ.Number:
-		if v.IsInt64() {
-			return fmt.Sprintf("int64(%d)", v.Int64())
-		}
-		return fmt.Sprintf("float64(%f)", v.Float64())
-	case typ.Bool:
-		return internal.IfStr(v.Bool(), "true", "false")
+		return a.meta.Name
+	case typ.Number, typ.Bool:
+		return v.String()
 	case typ.String:
-		return fmt.Sprintf("string(%d)", Len(v))
+		ln := (v).Len()
+		if ln < 16 {
+			return strconv.Quote(v.Str())
+		}
+		return fmt.Sprintf("string.%d", ln)
 	default:
 		return v.Type().String()
 	}
+}
+
+func Fprintf(w io.Writer, f string, values ...Value) {
+	args := make([]interface{}, 0, len(values))
+	for _, v := range values {
+		if v.Type() == typ.Number {
+			args = append(args, internal.SprintfNumber{Int: v.Int64(), Float: v.Float64(), IsInt: v.IsInt64()})
+		} else {
+			args = append(args, v.Interface())
+		}
+	}
+	internal.Fprintf(w, f, args...)
+}
+
+func Fprint(w io.Writer, values ...Value) {
+	for _, v := range values {
+		v.Stringify(w, typ.MarshalToString)
+	}
+}
+
+func multiMap(e *Env, fun *Object, t Value, n int) Value {
+	if n < 1 || n > runtime.NumCPU()*1e3 {
+		internal.Panic("invalid number of goroutines: %v", n)
+	}
+
+	type payload struct {
+		i int
+		k Value
+		v *Value
+	}
+
+	work := func(e *Env, fun *Object, outError *error, p payload) {
+		if p.i == -1 {
+			res, err := fun.TryCall(e, p.k, *p.v)
+			if err != nil {
+				*outError = err
+			} else {
+				*p.v = res
+			}
+		} else {
+			res, err := fun.TryCall(e, Int(p.i), p.k)
+			if err != nil {
+				*outError = err
+			} else {
+				t.Native().Set(p.i, res)
+			}
+		}
+	}
+
+	var outError error
+	if n == 1 {
+		if t.IsArray() {
+			for i := 0; outError == nil && i < t.Native().Len(); i++ {
+				work(e, fun, &outError, payload{i, t.Native().Get(i), nil})
+			}
+		} else {
+			t.Object().Foreach(func(k Value, v *Value) bool {
+				work(e, fun, &outError, payload{-1, k, v})
+				return outError == nil
+			})
+		}
+	} else {
+		var in = make(chan payload, t.Len())
+		var wg sync.WaitGroup
+		wg.Add(n)
+		for i := 0; i < n; i++ {
+			go func(e *Env) {
+				defer func() {
+					wg.Done()
+					if r := recover(); r != nil {
+						outError = fmt.Errorf("map fatal error: %v", r)
+					}
+				}()
+				for p := range in {
+					if outError != nil {
+						return
+					}
+					work(e, fun, &outError, p)
+				}
+			}(e.Copy())
+		}
+
+		if t.IsArray() {
+			for i := 0; i < t.Native().Len(); i++ {
+				in <- payload{i, t.Native().Get(i), nil}
+			}
+		} else {
+			t.Object().Foreach(func(k Value, v *Value) bool {
+				in <- payload{-1, k, v}
+				return true
+			})
+		}
+		close(in)
+
+		wg.Wait()
+	}
+	if outError != nil {
+		return Error(e, outError)
+	}
+	return t
 }

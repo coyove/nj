@@ -264,7 +264,7 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 		captureList = table.symbolsToDebugLocals()
 	}
 
-	obj := internal.NewFunc(
+	obj := bas.NewBareFunc(
 		node.Name,
 		node.Vararg,
 		byte(len(node.Args)),
@@ -272,7 +272,7 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 		newtable.symbolsToDebugLocals(),
 		captureList,
 		code,
-	).(*bas.Object)
+	)
 
 	fm := &table.getGlobal().funcsMap
 	fidx := fm.Get(bas.Str(node.Name))

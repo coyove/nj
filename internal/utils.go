@@ -16,9 +16,6 @@ import (
 )
 
 var (
-	NewFunc    func(name string, variadic bool, np byte, ss uint16, locals, caps []string, code Packet) interface{}
-	NewProgram func(coreStack, top, symbols, funcs interface{}) interface{}
-
 	unnamedCounter int64
 	debugMode      = os.Getenv("njd") != ""
 )

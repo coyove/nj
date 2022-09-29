@@ -5,24 +5,25 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
 
-var objEmptyFunc = &funcbody{name: "object"}
-
 type funcbody struct {
-	name         string
-	codeSeg      internal.Packet
-	stackSize    uint16
-	numParams    byte
-	varg         bool
-	method       bool
-	native       func(env *Env)
-	top          *Program
-	locals, caps []string
+	name      string
+	codeSeg   internal.Packet
+	stackSize uint16
+	numArgs   byte
+	varg      bool
+	method    bool
+	native    func(env *Env)
+	top       *Program
+	locals    []string
+	caps      []string
 }
 
 type Program struct {
@@ -41,6 +42,40 @@ type Program struct {
 	Stdin        io.Reader
 }
 
+var globals struct {
+	sym   Object
+	store Object
+	stack []Value
+}
+
+func GetGlobalName(v Value) int {
+	return int(globals.sym.Get(v).UnsafeInt64())
+}
+
+func Globals() *Object {
+	return globals.store.Copy(true)
+}
+
+func AddGlobal(k string, v Value) {
+	if len(globals.stack) == 0 {
+		globals.stack = append(globals.stack, Nil)
+	}
+	sk := Str(k)
+	idx := globals.sym.Get(sk)
+	if idx != Nil {
+		globals.stack[idx.Int()] = v
+	} else {
+		idx := len(globals.stack)
+		globals.sym.Set(sk, Int(idx))
+		globals.stack = append(globals.stack, v)
+	}
+	globals.store.Set(sk, v)
+}
+
+func AddGlobalMethod(k string, f func(*Env)) {
+	AddGlobal(k, Func(k, f))
+}
+
 // Func creates a callable object
 func Func(name string, f func(*Env)) Value {
 	if name == "" {
@@ -51,7 +86,7 @@ func Func(name string, f func(*Env)) Value {
 	}
 	obj := NewObject(0)
 	obj.fun = &funcbody{name: name, native: f}
-	obj.SetPrototype(Proto.Func)
+	obj.SetPrototype(&Proto.Func)
 	return obj.ToValue()
 }
 
@@ -156,17 +191,21 @@ func callobj(m *Object, r stacktraces, g *Program, outErr *error, this Value, ar
 
 	if c.varg {
 		s := *newEnv.stack
-		if len(s) > int(c.numParams)-1 {
-			s[c.numParams-1] = newArray(append([]Value{}, s[c.numParams-1:]...)...).ToValue()
+		if len(s) > int(c.numArgs)-1 {
+			s[c.numArgs-1] = Array(append([]Value{}, s[c.numArgs-1:]...)...)
 		} else {
-			newEnv.resize(int(c.numParams))
-			newEnv._set(uint16(c.numParams)-1, newArray().ToValue())
+			if newEnv.Size() < int(c.numArgs)-1 {
+				internal.PanicNotEnoughArgs(detail(m.ToValue()))
+			}
+			newEnv.resize(int(c.numArgs))
+			newEnv._set(uint16(c.numArgs)-1, Nil)
+		}
+	} else {
+		if newEnv.Size() < int(c.numArgs) {
+			internal.PanicNotEnoughArgs(detail(m.ToValue()))
 		}
 	}
-	if newEnv.Size() < int(c.numParams) {
-		internal.Panic("not enough arguments to call %s", detail(m.ToValue()))
-	}
-	newEnv.resizeZero(int(c.stackSize), int(c.numParams))
+	newEnv.resizeZero(int(c.stackSize), int(c.numArgs))
 
 	return internalExecCursorLoop(newEnv, m, r.Stacktrace(false))
 }
@@ -174,11 +213,11 @@ func callobj(m *Object, r stacktraces, g *Program, outErr *error, this Value, ar
 func (o *Object) funcSig() string {
 	c := o.fun
 	p := bytes.NewBufferString(c.name)
-	p.WriteString(internal.IfStr(c.method, "([this],", "("))
+	p.WriteString(internal.IfStr(c.method, "({this},", "("))
 	if c.native != nil {
 		p.WriteString("...")
 	} else {
-		for i := 0; i < int(c.numParams); i++ {
+		for i := 0; i < int(c.numArgs); i++ {
 			fmt.Fprintf(p, "a%d,", i)
 		}
 	}
@@ -330,4 +369,37 @@ func (obj *Object) printAll(w io.Writer) {
 		return true
 	})
 	internal.WriteString(w, "end)\t"+obj.funcSig())
+}
+
+func NewBareFunc(f string, varg bool, np byte, ss uint16, locals, caps []string, code internal.Packet) *Object {
+	obj := NewObject(0)
+	obj.SetPrototype(&Proto.Func)
+	obj.fun = &funcbody{}
+	obj.fun.varg = varg
+	obj.fun.numArgs = np
+	obj.fun.name = f
+	obj.fun.stackSize = ss
+	obj.fun.codeSeg = code
+	obj.fun.locals = locals
+	obj.fun.method = strings.Contains(f, ".")
+	obj.fun.caps = caps
+	return obj
+}
+
+func NewBareProgram(coreStack []Value, top, symbols, funcs *Object) *Program {
+	cls := &Program{}
+	cls.main = top
+	cls.stack = &coreStack
+	cls.symbols = symbols
+	cls.functions = funcs
+	cls.Stdout = os.Stdout
+	cls.Stdin = os.Stdin
+	cls.Stderr = os.Stderr
+
+	cls.main.fun.top = cls
+	cls.functions.Foreach(func(f Value, idx *Value) bool {
+		(*cls.stack)[idx.Int()&typ.RegLocalMask].Object().fun.top = cls
+		return true
+	})
+	return cls
 }

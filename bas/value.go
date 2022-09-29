@@ -99,7 +99,7 @@ func (v Value) IsObject() bool { return v.Type() == typ.Object }
 
 // IsArray returns true if value is an array.
 func (v Value) IsArray() bool {
-	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(Proto.Array)
+	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(&Proto.Array)
 }
 
 // IsNil returns true if value is nil.
@@ -198,7 +198,7 @@ func Rune(r rune) Value {
 
 // Bytes creates a bytes array.
 func Bytes(b []byte) Value {
-	return NewNativeWithMeta(b, bytesArrayMeta).ToValue()
+	return NewNativeWithMeta(b, &Proto.BytesMeta).ToValue()
 }
 
 // Error creates an error, first argument can be nil, indicating that the returned error has no stacktrace.
@@ -207,13 +207,13 @@ func Error(e *Env, err error) Value {
 		return Nil
 	}
 	if _, ok := err.(*ExecError); ok {
-		return NewNativeWithMeta(err, errorNativeMeta).ToValue()
+		return NewNativeWithMeta(err, &Proto.ErrorMeta).ToValue()
 	}
 	ee := &ExecError{root: err}
 	if e != nil {
 		ee.stacks = e.runtime.Stacktrace(true)
 	}
-	return NewNativeWithMeta(ee, errorNativeMeta).ToValue()
+	return NewNativeWithMeta(ee, &Proto.ErrorMeta).ToValue()
 }
 
 func Array(v ...Value) Value {
@@ -279,17 +279,17 @@ func ValueOf(i interface{}) Value {
 					internal.Panic("native function expects %d arguments, got %d", rtNumIn, env.Size())
 				}
 				for i := 0; i < rtNumIn; i++ {
-					ins = append(ins, ToType(env.Get(i), rt.In(i)))
+					ins = append(ins, env.Get(i).ToType(rt.In(i)))
 				}
 			} else {
 				if env.Size() < rtNumIn-1 {
 					internal.Panic("native variadic function expects at least %d arguments, got %d", rtNumIn-1, env.Size())
 				}
 				for i := 0; i < rtNumIn-1; i++ {
-					ins = append(ins, ToType(env.Get(i), rt.In(i)))
+					ins = append(ins, env.Get(i).ToType(rt.In(i)))
 				}
 				for i := rtNumIn - 1; i < env.Size(); i++ {
-					ins = append(ins, ToType(env.Get(i), rt.In(rtNumIn-1).Elem()))
+					ins = append(ins, env.Get(i).ToType(rt.In(rtNumIn-1).Elem()))
 				}
 			}
 			if outs := rv.Call(ins); len(outs) == 0 {

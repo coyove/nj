@@ -158,7 +158,7 @@ func (env *Env) StrDefault(idx int, defaultValue string, minLen int) (res string
 	v := env.Get(idx)
 	switch v.Type() {
 	case typ.String:
-		if Len(v) < minLen {
+		if v.Len() < minLen {
 			return defaultValue
 		}
 		return v.Str()

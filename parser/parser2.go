@@ -78,7 +78,7 @@ func (lex *Lexer) pForRange(v Token, start, end, step, body Node, pos Token) Nod
 	forVar := Sym(v)
 	if v, ok := step.(Primitive); ok && bas.Value(v).IsNumber() { // step is a static number, easy case
 		var cmp Node
-		if bas.Less(bas.Value(v), bas.Int(0)) {
+		if bas.Value(v).Less(bas.Int(0)) {
 			cmp = lex.pBinary(typ.OpLess, end, forVar, pos)
 		} else {
 			cmp = lex.pBinary(typ.OpLess, forVar, end, pos)
@@ -129,7 +129,7 @@ func (lex *Lexer) pForIn(key, value Token, expr, body Node, pos Token) Node {
 				&Tenary{typ.OpLoad, kv, lex.Int(0), k, pos.Line()},
 				&Tenary{typ.OpLoad, kv, lex.Int(1), v, pos.Line()},
 				&If{
-					lex.pBinary(typ.OpEq, kv, SNil, pos),
+					lex.pBinary(typ.OpEq, k, SNil, pos),
 					emptyBreak,
 					body,
 				},
