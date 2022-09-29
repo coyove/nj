@@ -30,12 +30,14 @@ do
 end
 
 function str.reverse()
-	x = buffer()
-	local s = this.chars()
-	for i=#(s)-1,-1,-1 do
-		x.write(s[i])
-	end
-	return x.value()
+	x = ""
+    tmp = this
+    while #tmp > 0 do
+        local r, sz = tmp.decodeutf8()
+        x = chr(r) + x
+        tmp = tmp[sz:]
+    end
+	return x
 end
 assert(("abc")==(("cba").reverse()))
 assert(("あbc")==(("cbあ").reverse()))

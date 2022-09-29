@@ -463,7 +463,7 @@ func init() {
 			e.A = UnsafeStr(p.Bytes())
 		}).
 		AddMethod("printed", func(e *Env) { e.A = Str(e.Object(-1).GoString()) }).
-		AddMethod("debugprinted", func(e *Env) { e.A = Str(e.Object(-1).DebugString()) }).
+		AddMethod("debugprinted", func(e *Env) { e.A = Str(e.Object(-1).local.DebugString()) }).
 		AddMethod("pure", func(e *Env) { e.A = e.Object(-1).Copy(false).SetPrototype(&Proto.Object).ToValue() }).
 		AddMethod("next", func(e *Env) { e.A = newArray(e.Object(-1).FindNext(e.Get(0))).ToValue() })
 	Proto.Object.SetPrototype(nil) // object is the topmost 'object', it should not have any prototype

@@ -23,7 +23,7 @@ if (minDepth + 2 > n) then maxDepth = minDepth + 2 end
 stretchDepth = maxDepth + 1 
 
 check_l = itemCheck(bottomUpTree(stretchDepth)) 
-print(str.from("stretch tree of depth %d\t check: %v").format(stretchDepth, check_l) )
+print(("stretch tree of depth %d\t check: %v").format(stretchDepth, check_l) )
 --return
 
 longLivedTree = bottomUpTree(maxDepth) 
@@ -37,7 +37,7 @@ function worker(k, args)
     for i = 0,iterations do
         check = check + itemCheck(bottomUpTree(depth)) 
     end
-    result[depth] = str.from("%d\t trees of depth %d\t check: %v").format(iterations, depth, check)
+    result[depth] = ("%d\t trees of depth %d\t check: %v").format(iterations, depth, check)
 end
 
 payload = []
@@ -50,4 +50,4 @@ for depth = minDepth,maxDepth,2 do
     print(result[depth]) 
 end
 
-print(str.from("long lived tree of depth %d\t check: %v\n").format(maxDepth, itemCheck(longLivedTree)))
+print(("long lived tree of depth %d\t check: %v\n").format(maxDepth, itemCheck(longLivedTree)))

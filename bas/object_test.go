@@ -32,18 +32,17 @@ func randInt(len, idx int) int {
 	return randInt(len, idx)
 }
 
-func TestObjectForeachDelete(t *testing.T) {
+func TestMapForeachDelete(t *testing.T) {
 	rand.Seed(time.Now().Unix())
-	check := func(o *Object, idx int, k int, dist int32) {
+	check := func(o *Map, idx int, k int, dist int32) {
 		i := o.items[idx]
 		if i.key.Int() != k || i.dist != dist {
 			t.Fatal(o.items, string(debug.Stack()))
 		}
 	}
 
-	old := resizeHash
-	resizeHash = func(*Object, int) {}
-	o := NewObject(1)
+	o := newMap(1)
+	o.noresize = true
 	a := randInt(2, 1)
 	b := randInt(2, 1)
 	c := randInt(2, 1)
@@ -62,7 +61,8 @@ func TestObjectForeachDelete(t *testing.T) {
 	check(o, 0, c, 1)
 	check(o, 1, b, 0)
 
-	o = NewObject(2)
+	o = newMap(2)
+	o.noresize = true
 	a = randInt(4, 1)
 	b = randInt(4, 1)
 	c = randInt(4, 1)
@@ -106,7 +106,8 @@ func TestObjectForeachDelete(t *testing.T) {
 		t.Fatal(o.items)
 	}
 
-	o = NewObject(4)
+	o = newMap(4)
+	o.noresize = true
 	a = randInt(8, 1)
 	b = randInt(8, 1)
 	c = randInt(8, 1)
@@ -143,8 +144,6 @@ func TestObjectForeachDelete(t *testing.T) {
 	check(o, 2, c, 1)
 	check(o, 3, d, 1)
 	check(o, 4, e, 0)
-
-	resizeHash = old
 }
 
 func BenchmarkRHMap10(b *testing.B)      { benchmarkRHMap(b, 10) }
@@ -162,7 +161,7 @@ func BenchmarkGoMapUnc1000(b *testing.B) { benchmarkGoMapUnconstrainted(b, 1000)
 
 func benchmarkRHMap(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
-	m := NewObject(n)
+	m := newMap(n)
 	for i := 0; i < n; i++ {
 		m.Set(Int64(int64(i)), Int64(int64(i)))
 	}
@@ -176,7 +175,7 @@ func benchmarkRHMap(b *testing.B, n int) {
 
 func benchmarkRHMapUnconstrainted(b *testing.B, n int) {
 	rand.Seed(time.Now().Unix())
-	m := NewObject(1)
+	m := newMap(1)
 	for i := 0; i < b.N; i++ {
 		for i := 0; i < n; i++ {
 			x := rand.Intn(n)
@@ -212,7 +211,7 @@ func benchmarkGoMapUnconstrainted(b *testing.B, n int) {
 
 func TestRHMap(t *testing.T) {
 	rand.Seed(time.Now().Unix())
-	m := NewObject(0)
+	m := newMap(0)
 	m2 := map[int64]int64{}
 	counter := int64(0)
 	for i := 0; i < 1e6; i++ {
@@ -274,9 +273,9 @@ func TestRHMap(t *testing.T) {
 	}
 }
 
-func TestObjectDistance(t *testing.T) {
+func TestMapDistance(t *testing.T) {
 	test := func(sz int) {
-		o := NewObject(sz)
+		o := newMap(sz)
 		for i := 0; i < sz; i++ {
 			o.Set(Int(randInt(sz, i)), Int(i))
 		}
@@ -292,7 +291,8 @@ func TestObjectDistance(t *testing.T) {
 		test(i)
 	}
 	test = func(sz int) {
-		o := NewObject(sz / 2)
+		o := newMap(sz / 2)
+		o.noresize = true
 		for i := 0; i < sz; i++ {
 			o.Set(Int(randInt(sz, i)), Int(i))
 		}
@@ -302,12 +302,9 @@ func TestObjectDistance(t *testing.T) {
 			}
 		}
 	}
-	old := resizeHash
-	resizeHash = func(*Object, int) {}
 	for i := 2; i <= 16; i += 2 {
 		test(i)
 	}
-	resizeHash = old
 }
 
 func TestHashcodeDist(t *testing.T) {
@@ -317,7 +314,7 @@ func TestHashcodeDist(t *testing.T) {
 	}
 
 	z := map[uint32]int{}
-	m := NewObject(0)
+	m := newMap(0)
 	rand.Seed(time.Now().Unix())
 	for i := 0; i < 1e6; i++ {
 		v := Int64(int64(i)).HashCode() % 32
@@ -350,7 +347,7 @@ func TestHashcodeDist(t *testing.T) {
 	}
 	fmt.Println(z, m.density(), m.Size())
 
-	m = NewObject(0)
+	m = newMap(0)
 	for i := 0; i < 20; i++ {
 		m.Set(Int(i), Int(i))
 	}
@@ -371,7 +368,7 @@ func BenchmarkStrHashCode(b *testing.B) {
 }
 
 func BenchmarkContains(b *testing.B) {
-	m := NewObject(0)
+	m := newMap(0)
 	k2 := []Value{}
 	for i := 0; i < 1e3; i++ {
 		k := randString()
@@ -429,7 +426,7 @@ func TestFalsyValue(t *testing.T) {
 	assert(Bytes(nil).IsTrue())
 	assert(Bytes([]byte("")).IsTrue())
 	assert(!ValueOf([]byte("")).IsFalse())
-	assert(Less(Str("\x00\x00\x00\x00\x00\x00\x00"), Str("\x00\x00\x00\x00\x00\x00\x00\x00")))
+	assert(Str("\x00\x00\x00\x00\x00\x00\x00").Less(Str("\x00\x00\x00\x00\x00\x00\x00\x00")))
 	assert(newArray().ToValue().IsArray())
 }
 
