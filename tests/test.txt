@@ -310,7 +310,7 @@ assert(if(true, 10, panic("bad")), 10)
 if (false)then end
 if [0][0]then end
 
-assert(if(true, "a", "")[0], "a".ord()[0])
+assert(if(true, "a", "")[0], "a".decodeutf8()[0])
 
 m = gomap({a=1,b=2}, "a", 10)
 assert(m.a , 10)

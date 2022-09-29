@@ -37,7 +37,7 @@ func NewObject(size int) *Object {
 	}
 	obj.this = obj.ToValue()
 	obj.parent = &Proto.Object
-	obj.fun = objEmptyFunc
+	obj.fun = objDefaultFun
 	return obj
 }
 
@@ -109,6 +109,14 @@ func (m *Object) AddMethod(name string, fun func(*Env)) *Object {
 	f.Object().fun.method = true
 	m.Set(Str(name), f)
 	return m
+}
+
+// Find retrieves the property by 'name', returns false as the second argument if not found.
+func (m *Object) Find(name Value) (v Value, exists bool) {
+	if m == nil || name == Nil {
+		return Nil, false
+	}
+	return m.find(name, true)
 }
 
 // Get retrieves the property by 'name'.
@@ -344,7 +352,7 @@ func (m *Object) rawPrint(p io.Writer, j typ.MarshalType) {
 	}
 	needComma := false
 	if j == typ.MarshalToJSON {
-		if m.fun == objEmptyFunc {
+		if m.fun == objDefaultFun {
 			internal.WriteString(p, `{`)
 		} else if m.fun != nil {
 			internal.WriteString(p, `{"<f>":"`)
@@ -353,7 +361,7 @@ func (m *Object) rawPrint(p io.Writer, j typ.MarshalType) {
 			needComma = true
 		}
 	} else {
-		if m.fun != objEmptyFunc && m.fun != nil {
+		if m.fun != objDefaultFun && m.fun != nil {
 			internal.WriteString(p, m.funcSig())
 		}
 		internal.WriteString(p, "{")
@@ -378,15 +386,15 @@ func (m *Object) ToValue() Value {
 
 func (m *Object) Name() string {
 	if m == &Proto.Object {
-		return objEmptyFunc.name
+		return objDefaultFun.name
 	}
 	if m != nil && m.fun != nil {
-		if m.fun.name == objEmptyFunc.name {
+		if m.fun.name == objDefaultFun.name {
 			return m.parent.Name()
 		}
 		return m.fun.name
 	}
-	return objEmptyFunc.name
+	return objDefaultFun.name
 }
 
 func (m *Object) Copy(copyData bool) *Object {
@@ -400,7 +408,7 @@ func (m *Object) Copy(copyData bool) *Object {
 	if m2.fun == nil {
 		// Some empty Objects don't have proper structures,
 		// normally they are declared directly instead of using NewObject.
-		m2.fun = objEmptyFunc
+		m2.fun = objDefaultFun
 		m2.parent = &Proto.Object
 	}
 	return &m2
@@ -472,4 +480,8 @@ func (m *Object) DebugString() string {
 		}
 	}
 	return p.String()
+}
+
+func (m *Object) Proper() bool {
+	return m.fun != nil
 }

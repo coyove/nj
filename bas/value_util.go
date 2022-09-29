@@ -264,7 +264,7 @@ func setObjectRecv(v, r Value) Value {
 func detail(v Value) string {
 	switch vt := v.Type(); vt {
 	case typ.Object:
-		if f := v.Object().fun; f != nil && f != objEmptyFunc {
+		if f := v.Object().fun; f != nil && f != objDefaultFun {
 			return v.Object().funcSig()
 		}
 		return v.Object().Name() + "{}"

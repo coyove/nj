@@ -14,9 +14,9 @@ print("reflectLoad: ", err.error())
 assert(err.error() == "err")
 assert("eerrrr" == re("(e|r)").replace(err.error(), "$1$1"))
 
-assert("x" == str.from("嘻x嘻").trim("嘻"))
-assert("嘻x" == str.from("嘻x嘻").trimright("嘻"))
-assert("x嘻" == str.from("嘻x嘻").trimleft("嘻"))
+assert("x" == ("嘻x嘻").trim("嘻"))
+assert("嘻x" == ("嘻x嘻").trimright("嘻"))
+assert("x嘻" == ("嘻x嘻").trimleft("嘻"))
 
 -- json generator
 do
@@ -37,8 +37,8 @@ function str.reverse()
 	end
 	return x.value()
 end
-assert(("abc")==(str.from("cba").reverse()))
-assert(("あbc")==(str.from("cbあ").reverse()))
+assert(("abc")==(("cba").reverse()))
+assert(("あbc")==(("cbあ").reverse()))
 
 function foo(x)
 	local a= x.split(",").copy(1, 2,["x","y","z"]) 

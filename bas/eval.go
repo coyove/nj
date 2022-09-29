@@ -178,7 +178,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					vb.Native().Set(1, Nil)
 				} else {
 					vb.Native().Set(0, Int(idx+sz))
-					vb.Native().Set(1, Rune(r))
+					vb.Native().Set(1, Int(int(r)))
 				}
 				env.A = vb
 			default:
@@ -345,7 +345,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				if idx.IsInt64() {
 					env.A = a.Native().Get(idx.Int())
 				} else {
-					env.A = a.Native().GetKey(idx)
+					env.A, _ = a.Native().GetKey(idx)
 				}
 			case typ.String:
 				if idx.IsInt64() {
@@ -364,13 +364,21 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			a, start, end := env._get(opa), env._get(opb), env._get(v.C)
 			switch a.Type() {
 			case typ.Native:
-				if !start.IsInt64() || !end.IsInt64() {
-					internal.Panic("slice "+errNeedNumbers, detail(start), detail(end))
-				}
-				if end := end.Int(); end == -1 {
-					env.A = a.Native().Slice(start.Int(), a.Native().Len()).ToValue()
+				if a := a.Native(); a.HasPrototype(&Proto.NativeMap) {
+					if v, ok := a.GetKey(start); ok {
+						env.A = v
+					} else {
+						env.A = end
+					}
 				} else {
-					env.A = a.Native().Slice(start.Int(), end).ToValue()
+					if !start.IsInt64() || !end.IsInt64() {
+						internal.Panic("slice "+errNeedNumbers, detail(start), detail(end))
+					}
+					if end := end.Int(); end == -1 {
+						env.A = a.Slice(start.Int(), a.Len()).ToValue()
+					} else {
+						env.A = a.Slice(start.Int(), end).ToValue()
+					}
 				}
 			case typ.String:
 				if !start.IsInt64() || !end.IsInt64() {

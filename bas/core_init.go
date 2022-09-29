@@ -3,14 +3,12 @@ package bas
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 	"unsafe"
@@ -19,45 +17,21 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
-const Version int64 = 422
+const Version int64 = 481
 
-var (
-	objEmptyFunc     = &funcbody{name: "object"}
-	nativeTypes      = NewObject(0)
-	genericMetaCache sync.Map
+var objDefaultFun = &funcbody{name: "object"}
 
-	Proto struct {
-		Object          Object
-		Bool            Object
-		Str             Object
-		Bytes           Object
-		Int             Object
-		Float           Object
-		Func            Object
-		Array           Object
-		Error           Object
-		Native          Object
-		NativeMap       Object
-		NativePtr       Object
-		NativeIntf      Object
-		Channel         Object
-		Reader          NativeMeta
-		Writer          NativeMeta
-		Closer          NativeMeta
-		ReadWriter      NativeMeta
-		ReadCloser      NativeMeta
-		WriteCloser     NativeMeta
-		ReadWriteCloser NativeMeta
-		ReadlinesIter   NativeMeta
-		ArrayMeta       NativeMeta
-		BytesMeta       NativeMeta
-		StringsMeta     NativeMeta
-		ErrorMeta       NativeMeta
-	}
-)
+var Proto struct {
+	Object, Bool, Str, Int, Float, Func, Native, Bytes, Array, Error             Object
+	NativeMap, NativePtr, NativeIntf, Channel                                    Object
+	Reader, Writer, Closer, ReadWriter, ReadCloser, WriteCloser, ReadWriteCloser NativeMeta
+	ReadlinesMeta, ArrayMeta, BytesMeta, StringsMeta, ErrorMeta                  NativeMeta
+}
 
 func init() {
-	objEmptyFunc.native = func(e *Env) { e.A = e.A.Object().Copy(true).ToValue() }
+	objDefaultFun.native = func(e *Env) { e.A = e.A.Object().Copy(true).ToValue() }
+	metaStore.metaCache = map[reflect.Type]*NativeMeta{}
+	metaStore.nativeTypes = NewObject(0)
 
 	Proto.ArrayMeta = NativeMeta{
 		"internal",
@@ -92,12 +66,12 @@ func init() {
 			}
 		},
 		func(a *Native, w io.Writer, mt typ.MarshalType) {
-			w.Write([]byte("["))
+			internal.WriteString(w, "[")
 			for i, v := range a.internal {
-				w.Write([]byte(internal.IfStr(i == 0, "", ",")))
+				internal.WriteString(w, internal.IfStr(i == 0, "", ","))
 				v.Stringify(w, mt.NoRec())
 			}
-			w.Write([]byte("]"))
+			internal.WriteString(w, "]")
 		},
 		sgArrayNext,
 	}
@@ -210,11 +184,11 @@ func init() {
 
 	Proto.ErrorMeta = *NewEmptyNativeMeta("error", &Proto.Error)
 	Proto.ErrorMeta.Marshal = func(a *Native, w io.Writer, mt typ.MarshalType) {
-		w.Write([]byte(internal.IfQuote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error())))
+		internal.WriteString(w, internal.IfQuote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error()))
 	}
 
-	Proto.ReadlinesIter = *NewEmptyNativeMeta("readlines", &Proto.Native)
-	Proto.ReadlinesIter.Next = func(a *Native, k Value) Value {
+	Proto.ReadlinesMeta = *NewEmptyNativeMeta("readlines", &Proto.Native)
+	Proto.ReadlinesMeta.Next = func(a *Native, k Value) Value {
 		if k.IsNil() {
 			k = Array(Int(-1), Nil)
 		}
@@ -269,7 +243,7 @@ func init() {
 				rd:    bufio.NewReader(e.A.Reader()),
 				delim: e.StrDefault(0, "\n", 1)[0],
 				bytes: e.Shape(1, "Nb").IsTrue(),
-			}, &Proto.ReadlinesIter).ToValue()
+			}, &Proto.ReadlinesMeta).ToValue()
 		}).
 		SetPrototype(&Proto.Native))
 
@@ -316,10 +290,8 @@ func init() {
 		Merge(Proto.ReadWriter.Proto).
 		Merge(Proto.Closer.Proto).SetPrototype(&Proto.Native))
 
-	AddGlobal("VERSION", Int64(Version))
-	AddGlobalMethod("globals", func(e *Env) {
-		e.A = globals.store.Copy(true).ToValue()
-	})
+	AddGlobal("Version", Int64(Version))
+	AddGlobalMethod("globals", func(e *Env) { e.A = globals.store.Copy(true).ToValue() })
 	AddGlobalMethod("new", func(e *Env) {
 		m := e.Object(0)
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
@@ -335,9 +307,6 @@ func init() {
 			Merge(e.Shape(2, "No").Object()).
 			SetProp("_init", e.Object(1).ToValue()).
 			ToValue()
-	})
-	AddGlobalMethod("deepequal", func(e *Env) {
-		e.A = Bool(DeepEqual(e.Get(0), e.Get(1)))
 	})
 
 	// Debug libraries
@@ -382,6 +351,9 @@ func init() {
 		})).
 		SetProp("disfunc", Func("disfunc", func(e *Env) {
 			e.A = Str(e.Object(0).GoString())
+		})).
+		SetProp("deepequal", Func("deepequal", func(e *Env) {
+			e.A = Bool(DeepEqual(e.Get(0), e.Get(1)))
 		})).
 		ToValue())
 
@@ -526,18 +498,6 @@ func init() {
 		AddMethod("map", func(e *Env) {
 			e.A = multiMap(e, e.Object(-1), e.Shape(0, "<@array,{}>"), e.IntDefault(1, 1))
 		}).
-		// SetMethod("closure", func(e *Env) {
-		// 	scope := e.runtime.stack1.Callable
-		// 	lambda := e.Object(-1).Merge(scope).Merge(e.Shape(0, "No").Object())
-		// 	start := e.stackOffset() - uint32(scope.fun.stackSize)
-		// 	for addr, name := range lambda.fun.caps {
-		// 		if name == "" {
-		// 			continue
-		// 		}
-		// 		lambda.Set(Str(name), (*e.stack)[start+uint32(addr)])
-		// 	}
-		// 	e.A = lambda.ToValue()
-		// }).
 		SetPrototype(&Proto.Object)
 
 	AddGlobal("object", Proto.Object.ToValue())
@@ -545,13 +505,9 @@ func init() {
 	AddGlobal("callable", Proto.Func.ToValue())
 
 	Proto.Native = *NewNamedObject("native", 0).
-		SetProp("types", nativeTypes.ToValue()).
-		AddMethod("typename", func(e *Env) {
-			e.A = Str(e.Get(-1).Native().meta.Name)
-		}).
-		AddMethod("nativename", func(e *Env) {
-			e.A = Str(reflect.TypeOf(e.Get(-1).Native().Unwrap()).String())
-		}).
+		SetProp("types", metaStore.nativeTypes.ToValue()).
+		AddMethod("typename", func(e *Env) { e.A = Str(e.Get(-1).Native().meta.Name) }).
+		AddMethod("nativename", func(e *Env) { e.A = Str(reflect.TypeOf(e.Get(-1).Native().Unwrap()).String()) }).
 		AddMethod("isnil", func(e *Env) {
 			switch rv := reflect.ValueOf(e.Native(-1).Unwrap()); rv.Kind() {
 			case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
@@ -559,6 +515,28 @@ func init() {
 			default:
 				e.A = False
 			}
+		}).
+		AddMethod("fields", func(e *Env) {
+			var list []string
+			rt := reflect.Indirect(reflect.ValueOf(e.Native(-1).Unwrap())).Type()
+			for i := 0; i < rt.NumField(); i++ {
+				list = append(list, rt.Field(i).Name)
+			}
+			e.A = NewNative(list).ToValue()
+		}).
+		AddMethod("methods", func(e *Env) {
+			var list []string
+			rv := reflect.ValueOf(e.Native(-1).Unwrap())
+			rt := rv.Type()
+			for i := 0; i < rt.NumMethod(); i++ {
+				list = append(list, rt.Method(i).Name)
+			}
+			if rt.Kind() == reflect.Ptr && rv.CanAddr() {
+				for rt, i := rv.Addr().Type(), 0; i < rt.NumMethod(); i++ {
+					list = append(list, rt.Method(i).Name)
+				}
+			}
+			e.A = NewNative(list).ToValue()
 		}).
 		AddMethod("natptrat", func(e *Env) {
 			v := e.Native(-1).Unwrap()
@@ -679,13 +657,17 @@ func init() {
 	Proto.Error = *Func("error", func(e *Env) {
 		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.runtime.Stacktrace(true)})
 	}).Object().
+		AddMethod("equals", func(e *Env) { e.A = Bool(ToErrorRootCause(e.A) == ToErrorRootCause(e.Shape(0, "E"))) }).
 		AddMethod("error", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).root) }).
 		AddMethod("getcause", func(e *Env) { e.A = NewNative(e.Native(-1).Unwrap().(*ExecError).root).ToValue() }).
 		AddMethod("trace", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).stacks) }).
 		SetPrototype(&Proto.Native)
 	AddGlobal("error", Proto.Error.ToValue())
 
-	Proto.NativeMap = *NewNamedObject("nativemap", 4).
+	Proto.NativeMap = *Func("nativemap", func(e *Env) {
+		m := make(map[Value]Value, e.Int(0))
+		e.A = NewNative(m).ToValue()
+	}).Object().
 		AddMethod("toobject", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap())
 			o := NewObject(rv.Len())
@@ -752,8 +734,7 @@ func init() {
 	AddGlobal("nativeintf", Proto.NativeIntf.ToValue())
 
 	Proto.Channel = *Func("channel", func(e *Env) {
-		rv := reflect.ValueOf(e.Interface(0))
-		_ = rv.Kind() == reflect.Chan && e.SetA(ValueOf(rv.Interface())) || e.SetA(ValueOf(make(chan Value, e.IntDefault(0, 0))))
+		e.A = ValueOf(make(chan Value, e.IntDefault(0, 0)))
 	}).Object().
 		AddMethod("len", func(e *Env) { e.A = Int(e.Native(-1).Len()) }).
 		AddMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
@@ -767,7 +748,7 @@ func init() {
 			v, ok := rv.Recv()
 			e.A = newArray(ValueOf(v), Bool(ok)).ToValue()
 		}).
-		AddMethod("sendmulti", func(e *Env) {
+		SetProp("sendmulti", Func("sendmulti", func(e *Env) {
 			var cases []reflect.SelectCase
 			var channels []Value
 			if e.Shape(1, "Nb").IsTrue() {
@@ -786,8 +767,8 @@ func init() {
 			})
 			chosen, _, _ := reflect.Select(cases)
 			e.A = channels[chosen]
-		}).
-		AddMethod("recvmulti", func(e *Env) {
+		})).
+		SetProp("recvmulti", Func("recvmulti", func(e *Env) {
 			var cases []reflect.SelectCase
 			var channels []Value
 			if e.Shape(1, "Nb").IsTrue() {
@@ -805,7 +786,7 @@ func init() {
 			}
 			chosen, recv, recvOK := reflect.Select(cases)
 			e.A = Array(channels[chosen], ValueOf(recv.Interface()), Bool(recvOK))
-		}).
+		})).
 		SetPrototype(&Proto.Native)
 	AddGlobal("channel", Proto.Channel.ToValue())
 
@@ -817,7 +798,6 @@ func init() {
 		i := e.Get(0)
 		_ = IsBytes(i) && e.SetA(Str(string(i.Native().Unwrap().([]byte)))) || e.SetA(Str(i.String()))
 	}).Object().
-		AddMethod("from", func(e *Env) { e.A = Str(fmt.Sprint(e.Interface(0))) }).
 		AddMethod("size", func(e *Env) { e.A = Int(e.Get(-1).Len()) }).
 		AddMethod("len", func(e *Env) { e.A = Int(e.Get(-1).Len()) }).
 		AddMethod("count", func(e *Env) { e.A = Int(utf8.RuneCountInString(e.Str(-1))) }).
@@ -855,15 +835,6 @@ func init() {
 			_ = idx > -1 && e.SetA(Str(s[:idx])) || e.SetA(Str(""))
 		}).
 		AddMethod("findlast", func(e *Env) { e.A = Int(strings.LastIndex(e.Str(-1), e.Str(0))) }).
-		AddMethod("sub", func(e *Env) {
-			s := e.Str(-1)
-			st, en := e.Int(0), e.IntDefault(1, len(s))
-			for ; st < 0 && len(s) > 0; st += len(s) {
-			}
-			for ; en < 0 && len(s) > 0; en += len(s) {
-			}
-			e.A = Str(s[st:en])
-		}).
 		AddMethod("trim", func(e *Env) {
 			cutset := e.StrDefault(0, "", 0)
 			_ = cutset == "" && e.SetA(Str(strings.TrimSpace(e.Str(-1)))) || e.SetA(Str(strings.Trim(e.Str(-1), e.Str(0))))
@@ -872,7 +843,7 @@ func init() {
 		AddMethod("trimsuffix", func(e *Env) { e.A = Str(strings.TrimSuffix(e.Str(-1), e.Str(0))) }).
 		AddMethod("trimleft", func(e *Env) { e.A = Str(strings.TrimLeft(e.Str(-1), e.Str(0))) }).
 		AddMethod("trimright", func(e *Env) { e.A = Str(strings.TrimRight(e.Str(-1), e.Str(0))) }).
-		AddMethod("ord", func(e *Env) {
+		AddMethod("decodeutf8", func(e *Env) {
 			r, sz := utf8.DecodeRuneInString(e.Str(-1))
 			e.A = Array(Int64(int64(r)), Int(sz))
 		}).
@@ -880,26 +851,12 @@ func init() {
 		AddMethod("endswith", func(e *Env) { e.A = Bool(strings.HasSuffix(e.Str(-1), e.Str(0))) }).
 		AddMethod("upper", func(e *Env) { e.A = Str(strings.ToUpper(e.Str(-1))) }).
 		AddMethod("lower", func(e *Env) { e.A = Str(strings.ToLower(e.Str(-1))) }).
-		AddMethod("chars", func(e *Env) {
-			var r []Value
-			for s, code := e.Str(-1), e.Shape(0, "Nb").IsTrue(); len(s) > 0; {
-				rn, sz := utf8.DecodeRuneInString(s)
-				if sz == 0 {
-					break
-				}
-				if code {
-					r = append(r, Int64(int64(rn)))
-				} else {
-					r = append(r, Str(s[:sz]))
-				}
-				s = s[sz:]
-			}
-			e.A = newArray(r...).ToValue()
-		}).
+		AddMethod("repeat", func(e *Env) { e.A = Str(strings.Repeat(e.Str(-1), e.Int(0))) }).
 		AddMethod("format", func(e *Env) {
 			buf := &bytes.Buffer{}
 			Fprintf(buf, e.Str(-1), e.Stack()...)
 			e.A = UnsafeStr(buf.Bytes())
 		})
+
 	AddGlobal("str", Proto.Str.ToValue())
 }

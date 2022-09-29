@@ -5,11 +5,18 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sync"
 	"unsafe"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
 )
+
+var metaStore struct {
+	sync.Mutex
+	metaCache   map[reflect.Type]*NativeMeta
+	nativeTypes *Object
+}
 
 type NativeMeta struct {
 	Name         string
@@ -20,7 +27,7 @@ type NativeMeta struct {
 	Values       func(*Native) []Value
 	Get          func(*Native, int) Value
 	Set          func(*Native, int, Value)
-	GetKey       func(*Native, Value) Value
+	GetKey       func(*Native, Value) (Value, bool)
 	SetKey       func(*Native, Value, Value)
 	Append       func(*Native, ...Value)
 	Slice        func(*Native, int, int) *Native
@@ -65,6 +72,9 @@ func createNativeMeta(name string, proto *Object) *NativeMeta {
 }
 
 func getNativeMeta(v interface{}) *NativeMeta {
+	metaStore.Lock()
+	defer metaStore.Unlock()
+
 	switch v.(type) {
 	case []Value:
 		return &Proto.ArrayMeta
@@ -76,16 +86,17 @@ func getNativeMeta(v interface{}) *NativeMeta {
 		return &Proto.ErrorMeta
 	}
 	rt := reflect.TypeOf(v)
-	if v, ok := genericMetaCache.Load(rt); ok {
-		return v.(*NativeMeta)
+	if v, ok := metaStore.metaCache[rt]; ok {
+		return v
 	}
+
 	var a *NativeMeta
 	switch rt.Kind() {
 	default:
 		a = NewEmptyNativeMeta(reflectTypeName(rt), &Proto.Native)
-		a.GetKey = func(a *Native, k Value) Value {
+		a.GetKey = func(a *Native, k Value) (Value, bool) {
 			if v, ok := sgReflectLoadSafe(a.any, k); ok {
-				return v
+				return v, true
 			}
 			return sgGetKey(a, k)
 		}
@@ -111,13 +122,21 @@ func getNativeMeta(v interface{}) *NativeMeta {
 			a.Size = sgSize
 			a.Marshal = sgMarshal
 			a.Next = sgMapNext
+			a.Set = func(n *Native, idx int, v Value) {
+				rv := reflect.ValueOf(n.any)
+				rv.SetMapIndex(Int(idx).ToType(rv.Type().Key()), v.ToType(rv.Type().Elem()))
+			}
+			a.Get = func(n *Native, idx int) Value {
+				v, _ := sgReflectLoadSafe(n.any, Int(idx))
+				return v
+			}
 			a.Proto = pt.SetPrototype(&Proto.NativeMap)
 		case reflect.Ptr:
 			a.Proto = pt.SetPrototype(&Proto.NativePtr)
 		default:
 			a.Proto = pt.SetPrototype(&Proto.Native)
 		}
-		nativeTypes.SetProp(pt.Name(), pt.ToValue())
+		metaStore.nativeTypes.SetProp(pt.Name(), pt.ToValue())
 	case reflect.Chan:
 		a = NewEmptyNativeMeta(reflectTypeName(rt), &Proto.Channel)
 		a.Len = sgLen
@@ -150,7 +169,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 			a.Concat = sgConcatNotSupported
 		}
 	}
-	genericMetaCache.Store(rt, a)
+	metaStore.metaCache[rt] = a
 	return a
 }
 
@@ -227,7 +246,7 @@ func (a *Native) Set(idx int, v Value) {
 	}
 }
 
-func (a *Native) GetKey(k Value) Value {
+func (a *Native) GetKey(k Value) (Value, bool) {
 	return a.meta.GetKey(a, k)
 }
 
@@ -299,16 +318,6 @@ func (a *Native) Prototype() *Object {
 
 func (a *Native) HasPrototype(p *Object) bool {
 	return a.meta.Proto.HasPrototype(p)
-}
-
-func (a *Native) AssertPrototype(p *Object, msg string) *Native {
-	if !a.HasPrototype(p) {
-		if msg != "" {
-			internal.Panic("native: %s: expects prototype %v, got %v", msg, p.Name(), a.meta.Proto.Name())
-		}
-		internal.Panic("native: expects prototype %v, got %v", p.Name(), a.meta.Proto.Name())
-	}
-	return a
 }
 
 func (a *Native) notSupported(method string) {
@@ -484,12 +493,12 @@ func sgMapNext(a *Native, kv Value) Value {
 	return kv
 }
 
-func sgGetKey(a *Native, k Value) Value {
-	f := a.meta.Proto.Get(k)
+func sgGetKey(a *Native, k Value) (Value, bool) {
+	f, ok := a.meta.Proto.Find(k)
 	if f != Nil {
 		f = setObjectRecv(f, a.ToValue())
 	}
-	return f
+	return f, ok
 }
 
 func sgReflectLoadSafe(v interface{}, key Value) (value Value, ok bool) {
