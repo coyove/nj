@@ -276,6 +276,7 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 
 	fm := &table.getGlobal().funcsMap
 	fidx := fm.Get(bas.Str(node.Name))
+	// Put function into constMap, it will then be put into coreStack after all compilings are done.
 	table.getGlobal().constMap.Set(obj.ToValue(), fidx)
 
 	table.codeSeg.WriteInst3(typ.OpFunction, uint16(fidx.Int()),
@@ -287,7 +288,6 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 	return typ.RegA
 }
 
-// [break|continue]
 func compileBreakContinue(table *symTable, node *parser.BreakContinue) uint16 {
 	if len(table.forLoops) == 0 {
 		table.panicnode(node, "outside loop")
@@ -303,7 +303,6 @@ func compileBreakContinue(table *symTable, node *parser.BreakContinue) uint16 {
 	return typ.RegA
 }
 
-// [loop body continue]
 func compileLoop(table *symTable, node *parser.Loop) uint16 {
 	init := table.codeSeg.Len()
 	breaks := &breakLabel{

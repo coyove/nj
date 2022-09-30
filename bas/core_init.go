@@ -291,7 +291,7 @@ func init() {
 		Merge(Proto.Closer.Proto).SetPrototype(&Proto.Native))
 
 	AddGlobal("Version", Int64(Version))
-	AddGlobalMethod("globals", func(e *Env) { e.A = globals.store.Copy(true).ToValue() })
+	AddGlobalMethod("globals", func(e *Env) { e.A = newObjectInplace(Globals()).ToValue() })
 	AddGlobalMethod("new", func(e *Env) {
 		m := e.Object(0)
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
@@ -425,13 +425,13 @@ func init() {
 	Proto.Object.
 		AddMethod("new", func(e *Env) { e.A = NewObject(e.IntDefault(0, 0)).ToValue() }).
 		AddMethod("set", func(e *Env) { e.A = e.Object(-1).Set(e.Get(0), e.Get(1)) }).
-		AddMethod("get", func(e *Env) { e.A = e.Object(-1).Get(e.Get(0)) }).
+		AddMethod("get", func(e *Env) { e.A = e.Object(-1).GetDefault(e.Get(0), e.Get(1)) }).
 		AddMethod("delete", func(e *Env) { e.A = e.Object(-1).Delete(e.Get(0)) }).
 		AddMethod("clear", func(e *Env) { e.Object(-1).Clear() }).
 		AddMethod("copy", func(e *Env) { e.A = e.Object(-1).Copy(e.Shape(0, "Nb").IsTrue()).ToValue() }).
 		AddMethod("proto", func(e *Env) { e.A = e.Object(-1).Prototype().ToValue() }).
 		AddMethod("setproto", func(e *Env) { e.Object(-1).SetPrototype(e.Object(0)) }).
-		AddMethod("size", func(e *Env) { e.A = Int(e.Object(-1).Size()) }).
+		AddMethod("cap", func(e *Env) { e.A = Int(e.Object(-1).Cap()) }).
 		AddMethod("len", func(e *Env) { e.A = Int(e.Object(-1).Len()) }).
 		AddMethod("name", func(e *Env) { e.A = Str(e.Object(-1).Name()) }).
 		AddMethod("setname", func(e *Env) { e.Object(-1).setName(e.Str(0)) }).
@@ -465,7 +465,7 @@ func init() {
 		AddMethod("printed", func(e *Env) { e.A = Str(e.Object(-1).GoString()) }).
 		AddMethod("debugprinted", func(e *Env) { e.A = Str(e.Object(-1).local.DebugString()) }).
 		AddMethod("pure", func(e *Env) { e.A = e.Object(-1).Copy(false).SetPrototype(&Proto.Object).ToValue() }).
-		AddMethod("next", func(e *Env) { e.A = newArray(e.Object(-1).FindNext(e.Get(0))).ToValue() })
+		AddMethod("next", func(e *Env) { e.A = Array(e.Object(-1).local.FindNext(e.Get(0))) })
 	Proto.Object.SetPrototype(nil) // object is the topmost 'object', it should not have any prototype
 
 	Proto.Func = *NewNamedObject("function", 0).
@@ -571,7 +571,7 @@ func init() {
 			e.A = Array(a...)
 		}).
 		AddMethod("len", func(e *Env) { e.A = Int(e.Native(-1).Len()) }).
-		AddMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
+		AddMethod("cap", func(e *Env) { e.A = Int(e.Native(-1).Cap()) }).
 		AddMethod("clear", func(e *Env) { e.Native(-1).Clear() }).
 		AddMethod("append", func(e *Env) { e.Native(-1).Append(e.Stack()...) }).
 		AddMethod("find", func(e *Env) {
@@ -616,6 +616,7 @@ func init() {
 		}).
 		AddMethod("copy", func(e *Env) { e.Native(-1).Copy(e.Int(0), e.Int(1), e.Native(2)) }).
 		AddMethod("concat", func(e *Env) { e.Native(-1).Concat(e.Shape(0, "<N,@native>").Native()) }).
+		AddMethod("clone", func(e *Env) { e.A = Array(append([]Value{}, e.Native(-1).Values()...)...) }).
 		AddMethod("sort", func(e *Env) {
 			a, rev := e.Native(-1), e.Shape(0, "Nb").IsTrue()
 			if kf := e.Shape(1, "No").Object(); kf != nil {
@@ -686,7 +687,7 @@ func init() {
 				rv.SetMapIndex(i.Key(), reflect.Value{})
 			}
 		}).
-		AddMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
+		AddMethod("cap", func(e *Env) { e.A = Int(e.Native(-1).Cap()) }).
 		AddMethod("keys", func(e *Env) {
 			e.A = NewNative(reflect.ValueOf(e.Native(-1).Unwrap()).MapKeys()).ToValue()
 		}).
@@ -737,7 +738,7 @@ func init() {
 		e.A = ValueOf(make(chan Value, e.IntDefault(0, 0)))
 	}).Object().
 		AddMethod("len", func(e *Env) { e.A = Int(e.Native(-1).Len()) }).
-		AddMethod("size", func(e *Env) { e.A = Int(e.Native(-1).Size()) }).
+		AddMethod("cap", func(e *Env) { e.A = Int(e.Native(-1).Cap()) }).
 		AddMethod("close", func(e *Env) { reflect.ValueOf(e.Native(-1).Unwrap()).Close() }).
 		AddMethod("send", func(e *Env) {
 			rv := reflect.ValueOf(e.Native(-1).Unwrap())
@@ -798,7 +799,6 @@ func init() {
 		i := e.Get(0)
 		_ = IsBytes(i) && e.SetA(Str(string(i.Native().Unwrap().([]byte)))) || e.SetA(Str(i.String()))
 	}).Object().
-		AddMethod("size", func(e *Env) { e.A = Int(e.Get(-1).Len()) }).
 		AddMethod("len", func(e *Env) { e.A = Int(e.Get(-1).Len()) }).
 		AddMethod("count", func(e *Env) { e.A = Int(utf8.RuneCountInString(e.Str(-1))) }).
 		AddMethod("iequals", func(e *Env) { e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0))) }).

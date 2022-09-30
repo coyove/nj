@@ -55,7 +55,7 @@ func init() {
 	})
 	bas.AddGlobal("eval", bas.Func("eval", func(e *bas.Env) {
 		p, err := LoadString(e.Str(0), &LoadOptions{
-			Globals: e.Shape(1, "No").Object(),
+			Globals: e.Shape(1, "No").Object().ToMap(),
 		})
 		if err != nil {
 			e.A = bas.Error(e, err)

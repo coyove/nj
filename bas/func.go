@@ -29,22 +29,22 @@ type funcbody struct {
 type Program struct {
 	stack     *[]Value
 	main      *Object
-	symbols   *Object
-	functions *Object
+	symbols   *Map
+	functions *Map
 	stopped   bool
 
 	File         string
 	Source       string
 	MaxStackSize int64
-	Globals      *Object
+	Globals      Map
 	Stdout       io.Writer
 	Stderr       io.Writer
 	Stdin        io.Reader
 }
 
 var globals struct {
-	sym   Object
-	store Object
+	sym   Map
+	store Map
 	stack []Value
 }
 
@@ -52,8 +52,8 @@ func GetGlobalName(v Value) int {
 	return int(globals.sym.Get(v).UnsafeInt64())
 }
 
-func Globals() *Object {
-	return globals.store.Copy(true)
+func Globals() Map {
+	return globals.store.Copy()
 }
 
 func AddGlobal(k string, v Value) {
@@ -386,7 +386,7 @@ func NewBareFunc(f string, varg bool, np byte, ss uint16, locals, caps []string,
 	return obj
 }
 
-func NewBareProgram(coreStack []Value, top, symbols, funcs *Object) *Program {
+func NewBareProgram(coreStack []Value, top *Object, symbols, funcs *Map) *Program {
 	cls := &Program{}
 	cls.main = top
 	cls.stack = &coreStack

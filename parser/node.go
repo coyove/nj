@@ -42,7 +42,7 @@ type Node interface {
 
 type GetLine interface {
 	Node
-	GetLine() int
+	GetLine() (string, int)
 }
 
 type Symbol struct {
@@ -58,8 +58,8 @@ func (s *Symbol) Dump(w io.Writer) {
 	}
 }
 
-func (s *Symbol) GetLine() int {
-	return int(s.Line)
+func (s *Symbol) GetLine() (string, int) {
+	return s.Name, int(s.Line)
 }
 
 type Address uint16
@@ -104,8 +104,8 @@ func (p *Prog) String() string {
 }
 
 type LoadConst struct {
-	Table bas.Object
-	Funcs bas.Object
+	Table bas.Map
+	Funcs bas.Map
 }
 
 func (p *LoadConst) Dump(w io.Writer) {
@@ -168,8 +168,8 @@ func (b *Unary) Dump(w io.Writer) {
 	internal.WriteString(w, ")")
 }
 
-func (b *Unary) GetLine() int {
-	return int(b.Line)
+func (b *Unary) GetLine() (string, int) {
+	return typ.UnaryOpcode[b.Op], int(b.Line)
 }
 
 type Binary struct {
@@ -186,8 +186,8 @@ func (b *Binary) Dump(w io.Writer) {
 	internal.WriteString(w, ")")
 }
 
-func (b *Binary) GetLine() int {
-	return int(b.Line)
+func (b *Binary) GetLine() (string, int) {
+	return typ.BinaryOpcode[b.Op], int(b.Line)
 }
 
 type Bitwise struct {
@@ -204,8 +204,8 @@ func (b *Bitwise) Dump(w io.Writer) {
 	internal.WriteString(w, ")")
 }
 
-func (b *Bitwise) GetLine() int {
-	return int(b.Line)
+func (b *Bitwise) GetLine() (string, int) {
+	return "bit" + b.Op, int(b.Line)
 }
 
 type Declare struct {
@@ -220,8 +220,8 @@ func (p *Declare) Dump(w io.Writer) {
 	internal.WriteString(w, ")")
 }
 
-func (b *Declare) GetLine() int {
-	return int(b.Line)
+func (b *Declare) GetLine() (string, int) {
+	return b.Name.Name, int(b.Line)
 }
 
 type Assign Declare
@@ -232,8 +232,8 @@ func (p *Assign) Dump(w io.Writer) {
 	internal.WriteString(w, ")")
 }
 
-func (b *Assign) GetLine() int {
-	return int(b.Line)
+func (b *Assign) GetLine() (string, int) {
+	return b.Name.Name, int(b.Line)
 }
 
 type Release []*Symbol
@@ -263,8 +263,8 @@ func (p *Tenary) Dump(w io.Writer) {
 	internal.WriteString(w, ")")
 }
 
-func (b *Tenary) GetLine() int {
-	return int(b.Line)
+func (b *Tenary) GetLine() (string, int) {
+	return typ.TenaryOpcode[b.Op], int(b.Line)
 }
 
 type IdentList []Node
@@ -373,8 +373,10 @@ func (p *Call) Dump(w io.Writer) {
 	internal.WriteString(w, ")")
 }
 
-func (b *Call) GetLine() int {
-	return int(b.Line)
+func (b *Call) GetLine() (string, int) {
+	buf := &bytes.Buffer{}
+	b.Callee.Dump(buf)
+	return buf.String(), int(b.Line)
 }
 
 type Function struct {
@@ -393,8 +395,8 @@ func (p *Function) Dump(w io.Writer) {
 	internal.WriteString(w, ")")
 }
 
-func (b *Function) GetLine() int {
-	return int(b.Line)
+func (b *Function) GetLine() (string, int) {
+	return b.Name, int(b.Line)
 }
 
 type GotoLabel struct {
@@ -407,8 +409,8 @@ func (p *GotoLabel) Dump(w io.Writer) {
 	fmt.Fprintf(w, "(%s/%d %s)", internal.IfStr(p.Goto, "goto", "label"), p.Line, p.Label)
 }
 
-func (p *GotoLabel) GetLine() int {
-	return int(p.Line)
+func (p *GotoLabel) GetLine() (string, int) {
+	return p.Label, int(p.Line)
 }
 
 type BreakContinue struct {
@@ -420,8 +422,8 @@ func (p *BreakContinue) Dump(w io.Writer) {
 	fmt.Fprintf(w, "(%s/%d)", internal.IfStr(p.Break, "break", "continue"), p.Line)
 }
 
-func (p *BreakContinue) GetLine() int {
-	return int(p.Line)
+func (p *BreakContinue) GetLine() (string, int) {
+	return internal.IfStr(p.Break, "break", "continue"), int(p.Line)
 }
 
 func Sym(tok Token) *Symbol {

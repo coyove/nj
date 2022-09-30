@@ -88,18 +88,18 @@ type Scanner struct {
 	offset    int64
 	text      string
 	lastToken Token
-	constants bas.Object
-	functions bas.Object
+	constants bas.Map
+	functions bas.Map
 }
 
 func NewScanner(text string, source string) *Scanner {
-	o := bas.NewObject(2)
+	o := bas.Map{}
 	o.Set(bas.True, bas.Nil)
 	o.Set(bas.False, bas.Nil)
 	o.Set(bas.Int(0), bas.Nil)
 	o.Set(bas.Int(1), bas.Nil)
 	return &Scanner{
-		constants: *o,
+		constants: o,
 		Pos:       Position{Source: source, Line: 1, Column: 0},
 		text:      text,
 	}

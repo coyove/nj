@@ -89,7 +89,7 @@ func PlaygroundHandler(defaultCode string, opt *LoadOptions) func(w http.Respons
 			}
 			x := bas.Globals()
 			if opt != nil {
-				x.Merge(opt.Globals)
+				x.Merge(&opt.Globals)
 			}
 			x.Foreach(func(k bas.Value, v *bas.Value) bool {
 				add(k.String())

@@ -231,7 +231,7 @@ func TestRHMap(t *testing.T) {
 		}
 	}
 
-	fmt.Println(m.Len(), m.Size(), len(m2))
+	fmt.Println(m.Len(), m.Cap(), len(m2))
 
 	for k, v := range m2 {
 		if m.Get(Int64(k)).Int64() != v {
@@ -321,7 +321,7 @@ func TestHashcodeDist(t *testing.T) {
 		z[v]++
 		m.Set(Int(i), Int(i))
 	}
-	fmt.Println(z, m.density(), m.Size())
+	fmt.Println(z, m.density(), m.Cap())
 
 	z = map[uint32]int{}
 	for i := 0; i < 1e6; i++ {
@@ -345,7 +345,7 @@ func TestHashcodeDist(t *testing.T) {
 		z[v]++
 		m.Set(Str(x), Str(x))
 	}
-	fmt.Println(z, m.density(), m.Size())
+	fmt.Println(z, m.density(), m.Cap())
 
 	m = newMap(0)
 	for i := 0; i < 20; i++ {

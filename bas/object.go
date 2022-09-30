@@ -21,8 +21,14 @@ type Object struct {
 }
 
 func NewObject(size int) *Object {
+	obj := newObjectInplace(Map{})
+	obj.local.Init(size)
+	return obj
+}
+
+func newObjectInplace(m Map) *Object {
 	obj := &Object{}
-	obj.local.InitSize(size)
+	obj.local = m
 	obj.this = obj.ToValue()
 	obj.parent = &Proto.Object
 	obj.fun = objDefaultFun
@@ -59,12 +65,12 @@ func (m *Object) HasPrototype(proto *Object) bool {
 	return false
 }
 
-// Size returns the total slots in the object, one slot is 40-bytes on 64bit platform.
-func (m *Object) Size() int {
+// Cap returns the capacity of the object.
+func (m *Object) Cap() int {
 	if m == nil {
 		return 0
 	}
-	return m.local.Size()
+	return m.local.Cap()
 }
 
 // Len returns the count of local properties in the object.
@@ -75,7 +81,7 @@ func (m *Object) Len() int {
 	return m.local.Len()
 }
 
-// Clear clears all local properties in the object, where already allocated memory will be reused.
+// Clear clears all local properties in the object.
 func (m *Object) Clear() {
 	m.local.Clear()
 }
@@ -139,7 +145,7 @@ func (m *Object) find(k Value, setReceiver bool) (v Value, ok bool) {
 	return
 }
 
-// Contains returns true if object contains 'name', inherited properties will also be checked.
+// Contains returns true if object contains property 'name', inherited properties will also be checked.
 func (m *Object) Contains(name Value) bool {
 	if m == nil {
 		return false
@@ -189,14 +195,6 @@ func (m *Object) internalNext(kv Value) Value {
 	kv.Native().Set(0, nk)
 	kv.Native().Set(1, nv)
 	return kv
-}
-
-// FindNext finds the next property after 'name', the output will be stable between object changes, e.g. Delete()
-func (m *Object) FindNext(name Value) (Value, Value) {
-	if m == nil {
-		return Nil, Nil
-	}
-	return m.local.FindNext(name)
 }
 
 func (m *Object) String() string {
@@ -260,8 +258,11 @@ func (m *Object) Merge(src *Object) *Object {
 	return m
 }
 
-func (m *Object) Map() *Map {
-	return &m.local
+func (m *Object) ToMap() Map {
+	if m == nil {
+		return Map{}
+	}
+	return m.local
 }
 
 type Map struct {
@@ -280,24 +281,26 @@ type hashItem struct {
 
 func newMap(size int) *Map {
 	obj := &Map{}
-	obj.InitSize(size)
+	obj.Init(size)
 	return obj
 }
 
-func (m *Map) InitSize(size int) *Map {
-	if size > 0 {
-		m.items = make([]hashItem, size*2)
+// Init pre-allocates enough memory for 'count' key and clears all old data.
+func (m *Map) Init(count int) *Map {
+	if count > 0 {
+		m.count = 0
+		m.items = make([]hashItem, count*2)
 	}
 	return m
 }
 
-// Size returns the total slots in the map, one slot is 40-bytes on 64bit platform.
-func (m *Map) Size() int {
+// Cap returns the capacity of the map in terms of key-value pairs, one pair is (ValueSize * 2 + 8) bytes.
+func (m Map) Cap() int {
 	return len(m.items)
 }
 
 // Len returns the count of keys in the map.
-func (m *Map) Len() int {
+func (m Map) Len() int {
 	return int(m.count)
 }
 
@@ -309,17 +312,17 @@ func (m *Map) Clear() {
 	m.count = 0
 }
 
-// Find retrieves the key by 'name', returns false as the second argument if not found.
-func (m *Map) Find(name Value) (v Value, exists bool) {
-	if idx := m.findValue(name); idx >= 0 {
+// Find retrieves the value by 'k', returns false as the second argument if not found.
+func (m Map) Find(k Value) (v Value, exists bool) {
+	if idx := m.findValue(k); idx >= 0 {
 		return m.items[idx].val, true
 	}
 	return Nil, false
 }
 
-// Get retrieves the key by 'name'.
-func (m *Map) Get(name Value) (v Value) {
-	if idx := m.findValue(name); idx >= 0 {
+// Get retrieves the value by 'k'.
+func (m Map) Get(k Value) (v Value) {
+	if idx := m.findValue(k); idx >= 0 {
 		return m.items[idx].val
 	}
 	return Nil
@@ -352,15 +355,15 @@ func (m *Map) findValue(k Value) int {
 	}
 }
 
-// Contains returns true if the map contains 'name'.
-func (m *Map) Contains(name Value) bool {
-	return m.findValue(name) >= 0
+// Contains returns true if the map contains 'k'.
+func (m Map) Contains(k Value) bool {
+	return m.findValue(k) >= 0
 }
 
-// Set upserts a key-value pair in the map.
+// Set upserts a key-value pair in the map. Nil key is not allowed.
 func (m *Map) Set(k, v Value) (prev Value) {
 	if k == Nil {
-		internal.Panic("key name can't be nil")
+		internal.Panic("key can't be nil")
 	}
 	if len(m.items) <= 0 {
 		m.items = make([]hashItem, 8)
@@ -371,9 +374,9 @@ func (m *Map) Set(k, v Value) (prev Value) {
 	return m.setHash(hashItem{key: k, val: v})
 }
 
-// Delete deletes a key from the map.
-func (m *Map) Delete(name Value) (prev Value) {
-	idx := m.findValue(name)
+// Delete deletes a key from the map, returns deleted value if existed
+func (m *Map) Delete(k Value) (prev Value) {
+	idx := m.findValue(k)
 	if idx < 0 {
 		return Nil
 	}
@@ -441,7 +444,7 @@ func (m *Map) setHash(incoming hashItem) (prev Value) {
 // Foreach iterates all keys in the map, for each of them, 'f(key, &value)' will be
 // called. Values are passed by pointers and it is legal to manipulate them directly in 'f'.
 // Deletions are allowed during Foreach(), but the iteration may be incomplete therefore.
-func (m *Map) Foreach(f func(Value, *Value) bool) {
+func (m Map) Foreach(f func(Value, *Value) bool) {
 	for i := 0; i < len(m.items); i++ {
 		ip := &m.items[i]
 		if ip.key != Nil && !ip.pDeleted {
@@ -461,25 +464,26 @@ func (m *Map) nextHashPair(start int) (Value, Value) {
 	return Nil, Nil
 }
 
-// FindNext finds the next key after 'name', the output will be stable between changes (e.g. Delete)
-func (m *Map) FindNext(name Value) (Value, Value) {
-	if name == Nil {
+// FindNext finds the next key after 'k', returns nil if not found.
+// The output is stable between map changes (e.g. Delete).
+func (m Map) FindNext(k Value) (Value, Value) {
+	if k == Nil {
 		return m.nextHashPair(0)
 	}
-	idx := m.findValue(name)
+	idx := m.findValue(k)
 	if idx < 0 {
 		return Nil, Nil
 	}
 	return m.nextHashPair(idx + 1)
 }
 
-func (m *Map) String() string {
+func (m Map) String() string {
 	p := &bytes.Buffer{}
 	m.rawPrint(p, typ.MarshalToString)
 	return p.String()
 }
 
-func (m *Map) rawPrint(p io.Writer, j typ.MarshalType) {
+func (m Map) rawPrint(p io.Writer, j typ.MarshalType) {
 	needComma := false
 	internal.WriteString(p, "{")
 	m.Foreach(func(k Value, v *Value) bool {
@@ -493,10 +497,9 @@ func (m *Map) rawPrint(p io.Writer, j typ.MarshalType) {
 	internal.WriteString(p, "}")
 }
 
-func (m *Map) Copy() Map {
-	m2 := *m
-	m2.items = append([]hashItem{}, m.items...)
-	return m2
+func (m Map) Copy() Map {
+	m.items = append([]hashItem{}, m.items...)
+	return m
 }
 
 func (m *Map) Merge(src *Map) *Map {
@@ -524,7 +527,7 @@ func (m *Map) resizeHash(newSize int) {
 	m.items = tmp.items
 }
 
-func (m *Map) density() float64 {
+func (m Map) density() float64 {
 	num := len(m.items)
 	if num <= 0 || m.count <= 0 {
 		return math.NaN()
@@ -551,7 +554,7 @@ func (m *Map) density() float64 {
 	return float64(maxRun) / (float64(num) / float64(m.count))
 }
 
-func (m *Map) DebugString() string {
+func (m Map) DebugString() string {
 	p := bytes.Buffer{}
 	for idx, i := range m.items {
 		p.WriteString(strconv.Itoa(idx) + ":")
@@ -568,4 +571,8 @@ func (m *Map) DebugString() string {
 		}
 	}
 	return p.String()
+}
+
+func (m Map) ToObject() *Object {
+	return newObjectInplace(m)
 }

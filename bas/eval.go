@@ -225,6 +225,8 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				env.A = Int64(va.UnsafeInt64() - vb.UnsafeInt64())
 			} else if va.IsNumber() && vb.IsNumber() {
 				env.A = Float64(va.Float64() - vb.Float64())
+			} else if va.IsObject() {
+				env.A = va.Object().Delete(vb)
 			} else {
 				internal.Panic("sub "+errNeedNumbers, detail(va), detail(vb))
 			}
@@ -470,7 +472,6 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					stackEnv._set(uint16(w), Nil)
 				}
 			}
-
 			env.checkStackOverflow()
 
 			last := Stacktrace{

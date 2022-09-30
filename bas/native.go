@@ -22,7 +22,7 @@ type NativeMeta struct {
 	Name         string
 	Proto        *Object
 	Len          func(*Native) int
-	Size         func(*Native) int
+	Cap          func(*Native) int
 	Clear        func(*Native)
 	Values       func(*Native) []Value
 	Get          func(*Native, int) Value
@@ -48,7 +48,7 @@ func NewEmptyNativeMeta(name string, proto *Object) *NativeMeta {
 func createNativeMeta(name string, proto *Object) *NativeMeta {
 	return &NativeMeta{name, proto,
 		sgLenNotSupported,
-		sgSizeNotSupported,
+		sgCapNotSupported,
 		sgClearNotSupported,
 		sgValuesNotSupported,
 		func(a *Native, idx int) Value { return a.ToValue() },
@@ -119,7 +119,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 		switch rt.Kind() {
 		case reflect.Map:
 			a.Len = sgLen
-			a.Size = sgSize
+			a.Cap = sgCap
 			a.Marshal = sgMarshal
 			a.Next = sgMapNext
 			a.Set = func(n *Native, idx int, v Value) {
@@ -140,7 +140,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 	case reflect.Chan:
 		a = NewEmptyNativeMeta(reflectTypeName(rt), &Proto.Channel)
 		a.Len = sgLen
-		a.Size = sgSize
+		a.Cap = sgCap
 		a.Next = func(a *Native, kv Value) Value {
 			if kv == Nil {
 				kv = Array(Nil, Nil)
@@ -159,7 +159,7 @@ func getNativeMeta(v interface{}) *NativeMeta {
 		}
 	case reflect.Array, reflect.Slice:
 		a = &NativeMeta{reflectTypeName(rt), &Proto.Array,
-			sgLen, sgSize, sgClear, sgValues, sgGet, sgSet, sgGetKey, sgSetKeyNotSupported, sgAppend, sgSlice,
+			sgLen, sgCap, sgClear, sgValues, sgGet, sgSet, sgGetKey, sgSetKeyNotSupported, sgAppend, sgSlice,
 			sgSliceInplace, sgCopy, sgConcat, sgMarshal, sgArrayNext}
 		if rt.Kind() == reflect.Array {
 			a.SliceInplace = sgSliceInplaceNotSupported
@@ -217,11 +217,11 @@ func (a *Native) Len() int {
 	return a.meta.Len(a)
 }
 
-func (a *Native) Size() int {
+func (a *Native) Cap() int {
 	if a.meta == &Proto.ArrayMeta {
 		return cap(a.internal)
 	}
-	return a.meta.Size(a)
+	return a.meta.Cap(a)
 }
 
 func (a *Native) Values() []Value {
@@ -328,7 +328,7 @@ func sgLen(a *Native) int {
 	return reflect.ValueOf(a.any).Len()
 }
 
-func sgSize(a *Native) int {
+func sgCap(a *Native) int {
 	return reflect.ValueOf(a.any).Cap()
 }
 
@@ -408,7 +408,7 @@ func sgLenNotSupported(a *Native) int {
 	return 0
 }
 
-func sgSizeNotSupported(a *Native) int {
+func sgCapNotSupported(a *Native) int {
 	a.notSupported("Size")
 	return 0
 }

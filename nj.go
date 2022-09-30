@@ -12,7 +12,7 @@ import (
 )
 
 type LoadOptions struct {
-	Globals      *bas.Object
+	Globals      bas.Map
 	MaxStackSize int64
 	Stdout       io.Writer
 	Stderr       io.Writer

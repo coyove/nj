@@ -257,6 +257,10 @@ func ValueOf(i interface{}) Value {
 		return Bytes(v)
 	case *Object:
 		return v.ToValue()
+	case *Map:
+		return newObjectInplace(*v).ToValue()
+	case Map:
+		return newObjectInplace(v).ToValue()
 	case []Value:
 		return Array(v...)
 	case Value:

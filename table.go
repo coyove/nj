@@ -1,7 +1,6 @@
 package nj
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"math"
@@ -29,17 +28,17 @@ type symTable struct {
 	codeSeg internal.Packet
 
 	// variable lookup
-	sym       bas.Object   // str -> address: uint16
-	maskedSym []bas.Object // str -> address: uint16
+	sym       bas.Map   // str -> address: uint16
+	maskedSym []bas.Map // str -> address: uint16
 
 	forLoops []*breakLabel
 
 	vp uint16
 
-	constMap bas.Object // value -> address: uint16
-	funcsMap bas.Object // func name -> address: uint16
+	constMap bas.Map // value -> address: uint16
+	funcsMap bas.Map // func name -> address: uint16
 
-	reusableTmps      bas.Object // address: uint16 -> used: bool
+	reusableTmps      bas.Map // address: uint16 -> used: bool
 	reusableTmpsArray []uint16
 
 	forwardGoto map[int]*parser.GotoLabel // position to goto label node
@@ -54,9 +53,8 @@ func newSymTable(opt *LoadOptions) *symTable {
 }
 
 func (table *symTable) panicnode(node parser.GetLine, msg string, args ...interface{}) {
-	x := &bytes.Buffer{}
-	node.Dump(x)
-	panic(fmt.Sprintf("%s at %s:%d\t", x.String(), table.name, node.GetLine()) + fmt.Sprintf(msg, args...))
+	who, line := node.GetLine()
+	panic(fmt.Sprintf("%q at %s:%d\t", who, table.name, line) + fmt.Sprintf(msg, args...))
 }
 
 func (table *symTable) symbolsToDebugLocals() []string {
@@ -120,19 +118,18 @@ func (table *symTable) freeAddr(a interface{}) {
 			table.reusableTmpsArray = append(table.reusableTmpsArray, a)
 			table.reusableTmps.Set(bas.Int64(int64(a)), bas.True)
 		}
-
 	default:
 		internal.ShouldNotHappen()
 	}
 }
 
 var (
-	staticNil   = bas.Str("nil")
+	staticNil   = bas.Str(parser.SNil.Name)
 	staticTrue  = bas.Str("true")
 	staticFalse = bas.Str("false")
 	staticThis  = bas.Str("this")
 	staticSelf  = bas.Str("self")
-	staticA     = bas.Str("a!")
+	staticA     = bas.Str(parser.Sa.Name)
 )
 
 func (table *symTable) get(name bas.Value) (uint16, bool) {
@@ -197,7 +194,7 @@ func (table *symTable) put(name bas.Value, addr uint16) {
 }
 
 func (table *symTable) addMaskedSymTable() {
-	table.maskedSym = append(table.maskedSym, bas.Object{})
+	table.maskedSym = append(table.maskedSym, bas.Map{})
 }
 
 func (table *symTable) removeMaskedSymTable() {
@@ -394,7 +391,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 		return idx
 	}
 
-	if opt != nil && opt.Globals != nil {
+	if opt != nil {
 		opt.Globals.Foreach(func(k bas.Value, v *bas.Value) bool { push(k, *v); return true })
 	}
 

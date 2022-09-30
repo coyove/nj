@@ -160,7 +160,7 @@ func runRepl() {
 		code = append(code, s)
 		if s == "" || strings.HasSuffix(s, ";") {
 			text := strings.TrimSuffix(strings.Join(code, "\n"), ";")
-			p, err := nj.LoadString(text, &nj.LoadOptions{Globals: globals})
+			p, err := nj.LoadString(text, &nj.LoadOptions{Globals: globals.ToMap()})
 			if err != nil {
 				fmt.Println("x", err)
 			} else {

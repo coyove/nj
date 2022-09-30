@@ -247,3 +247,35 @@ end
 assert(andortest([0], [0, 1], true), 1)
 assert(andortest([0], [0, 1], false), 0)
 assert(andortest([2], [0, "1"], false), "1")
+
+function firstK(a, b, k)
+    a.sort()
+    b.sort()
+
+    while k and #a and #b do
+        if a[0] < b[0] then
+            a = a[1:]
+        else
+            b = b[1:]
+        end
+        k -= 1
+    end
+
+    if k >= #a and k >= #b then return "not found" end
+    if #a and #b then return math.min(a[0], b[0]) end
+    if #a then return a[0] end
+    if #b then return b[0] end
+    panic("shouldn't happen")
+end
+
+assert(firstK([1,2,3], [4,5,6], 1), 2)
+assert(firstK([1,2,3], [0.4,1.5,2.6], 2), 1.5)
+
+local tmp = []
+for i=0,1e3 do tmp[i] = math.random() end
+ki = int(math.random() * #tmp)
+k = tmp.clone().sort()[ki]
+a, b = tmp[:#tmp / 2], tmp[#tmp/ 2:]
+assert(firstK(a, b, ki), k)
+
+print(debug.disfunc(firstK))

@@ -95,7 +95,7 @@ func runFile(t *testing.T, path string) {
 				env.MustProgram().Set("G_FLAG", bas.Str("ok"))
 				fmt.Println("find global")
 			})).
-			SetProp("G", bas.Str("test")),
+			SetProp("G", bas.Str("test")).ToMap(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -137,7 +137,7 @@ a=a+n
 return a
 end
 return foo
-`, &LoadOptions{Globals: bas.NewObject(0).SetProp("init", bas.Int(1))})
+`, &LoadOptions{Globals: bas.NewObject(0).SetProp("init", bas.Int(1)).ToMap()})
 		v, _ := cls.Run()
 		if v := v.Object().Call(nil, bas.Int64(10)); v.Int64() != 11 {
 			t.Fatal(v)
@@ -355,7 +355,7 @@ return add`, nil)
 	p2, _ := LoadString(`
 local a = 100
 return [a + add(), a + add(), a + add()]
-`, &LoadOptions{Globals: bas.NewObject(0).SetProp("add", bas.ValueOf(add))})
+`, &LoadOptions{Globals: bas.NewObject(0).SetProp("add", bas.ValueOf(add)).ToMap()})
 	v, err := p2.Run()
 	if err != nil {
 		panic(err)
@@ -474,7 +474,8 @@ func TestACall(t *testing.T) {
 				AddMethod("pow2", func(e *bas.Env) {
 					i := e.Object(-1).Get(bas.Str("a")).Int64()
 					e.A = bas.Int64(i * i)
-				})).ToValue()),
+				})).ToValue()).
+			ToMap(),
 	}))
 	if foo.Int64() != 121 {
 		t.Fatal(foo)
@@ -494,7 +495,8 @@ func TestACall(t *testing.T) {
 			})).
 			SetProp("sum2", bas.ValueOf(func(a, b int) int {
 				return a + b
-			})),
+			})).
+			ToMap(),
 	}))
 	v = foo.Object().Call(nil, bas.Int64(1), bas.Int64(2), bas.Int64(3))
 	if v.Int64() != 15 {
@@ -525,7 +527,7 @@ func TestReflectedValue(t *testing.T) {
 			if a != 10 || b != 11 || buf[0] != 99 {
 				t.Fatal(a, b)
 			}
-		})),
+		})).ToMap(),
 	})
 	_, err := p.Run()
 	if err != nil {
