@@ -463,7 +463,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			if cls.varg {
 				s, w := stackEnv.Stack(), int(cls.numArgs)-1
 				if len(s) > w {
-					s[w] = Array(append([]Value{}, s[w:]...)...)
+					s[w] = newVarargArray(s[w:]).ToValue()
 				} else {
 					if len(s) < w {
 						internal.PanicNotEnoughArgs(detail(a))

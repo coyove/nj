@@ -270,7 +270,7 @@ func (b *Tenary) GetLine() (string, int) {
 type IdentList []Node
 
 func (p IdentList) Dump(w io.Writer) {
-	internal.WriteString(w, "(identlist ")
+	internal.WriteString(w, "(identlist")
 	for _, n := range p {
 		internal.WriteString(w, " ")
 		n.Dump(w)
@@ -280,6 +280,11 @@ func (p IdentList) Dump(w io.Writer) {
 
 type IdentVarargList struct {
 	IdentList
+}
+
+type IdentVarargExpandList struct {
+	IdentList
+	Expand IdentList
 }
 
 type ExprList []Node
@@ -380,16 +385,26 @@ func (b *Call) GetLine() (string, int) {
 }
 
 type Function struct {
-	Name   string
-	Args   IdentList
-	Body   Node
-	Vararg bool
-	Line   uint32
+	Name       string
+	Args       IdentList
+	Body       Node
+	Vararg     bool
+	VargExpand IdentList
+	Line       uint32
 }
 
 func (p *Function) Dump(w io.Writer) {
 	fmt.Fprintf(w, "(function/%d %s ", p.Line, p.Name)
 	p.Args.Dump(w)
+	if p.Vararg {
+		if len(p.VargExpand) > 0 {
+			internal.WriteString(w, " (vargexpand ")
+			p.VargExpand.Dump(w)
+			internal.WriteString(w, ")")
+		} else {
+			internal.WriteString(w, " (varg)")
+		}
+	}
 	internal.WriteString(w, " ")
 	p.Body.Dump(w)
 	internal.WriteString(w, ")")

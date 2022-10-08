@@ -32,9 +32,15 @@ func (lex *Lexer) pFunc(method bool, name Token, args Node, stats Node, pos Toke
 	lex.pFindTailCall(stats)
 
 	f := &Function{Name: name.Str, Body: stats, Line: pos.Line()}
-	if vargs, ok := args.(IdentVarargList); ok {
+	switch vargs := args.(type) {
+	case IdentVarargExpandList:
+		f.Args, f.Vararg, f.VargExpand = append(vargs.IdentList, randomVarname()), true, vargs.Expand
+		for i := range vargs.Expand {
+			lex.scanner.constants.Set(bas.Int(i), bas.Nil)
+		}
+	case IdentVarargList:
 		f.Args, f.Vararg = vargs.IdentList, true
-	} else {
+	default:
 		f.Args = args.(IdentList)
 	}
 	if method {

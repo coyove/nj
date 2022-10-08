@@ -111,21 +111,21 @@ func runFile(t *testing.T, path string) {
 	}
 }
 
-func TestFileTest(t *testing.T) { runFile(t, "tests/test.txt") }
+func TestFileTest(t *testing.T) { runFile(t, "tests/test.nj.lua") }
 
-func TestFileStruct(t *testing.T) { runFile(t, "tests/struct.txt") }
+func TestFileStruct(t *testing.T) { runFile(t, "tests/struct.nj.lua") }
 
-func TestFileString(t *testing.T) { runFile(t, "tests/string.txt") }
+func TestFileString(t *testing.T) { runFile(t, "tests/string.nj.lua") }
 
-func TestFileGoto(t *testing.T) { runFile(t, "tests/goto.txt") }
+func TestFileGoto(t *testing.T) { runFile(t, "tests/goto.nj.lua") }
 
-func TestFileR2(t *testing.T) { runFile(t, "tests/r2.txt") }
+func TestFileR2(t *testing.T) { runFile(t, "tests/r2.nj.lua") }
 
-func TestFileStringIndex(t *testing.T) { runFile(t, "tests/indexstr.txt") }
+func TestFileStringIndex(t *testing.T) { runFile(t, "tests/indexstr.nj.lua") }
 
-func TestFileCurry(t *testing.T) { runFile(t, "tests/curry.txt") }
+func TestFileCurry(t *testing.T) { runFile(t, "tests/curry.nj.lua") }
 
-func TestFileEvaluator(t *testing.T) { runFile(t, "tests/eval.txt") }
+func TestFileEvaluator(t *testing.T) { runFile(t, "tests/eval.nj.lua") }
 
 func TestReturnFunction(t *testing.T) {
 	{

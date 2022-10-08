@@ -256,7 +256,9 @@ func (v Value) Len() int {
 
 func setObjectRecv(v, r Value) Value {
 	if v.IsObject() {
-		v.Object().this = r
+		o := v.Object().Copy(false)
+		o.this = r
+		v = o.ToValue()
 	}
 	return v
 }

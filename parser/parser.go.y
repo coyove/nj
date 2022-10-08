@@ -107,12 +107,16 @@ func_stat:
     }
 
 func_params:
-    TLParen ')'                        { $$ = (IdentList)(nil) } | 
-    TLParen ident_list ')'             { $$ = $2 } |
-    TLParen ident_list TDotDotDot ')'  { $$ = IdentVarargList{$2.(IdentList)} } |
-    '(' ')'                            { $$ = (IdentList)(nil) } | 
-    '(' ident_list ')'                 { $$ = $2 } |
-    '(' ident_list TDotDotDot ')'      { $$ = IdentVarargList{$2.(IdentList)} }
+    TLParen ')'                                   { $$ = (IdentList)(nil) } | 
+    TLParen ident_list ')'                        { $$ = $2 } |
+    TLParen ident_list TDotDotDot ')'             { $$ = IdentVarargList{$2.(IdentList)} } |
+    TLParen TDotDotDot ident_list ')'             { $$ = IdentVarargExpandList{nil, $3.(IdentList)} } |
+    TLParen ident_list TDotDotDot ident_list ')'  { $$ = IdentVarargExpandList{$2.(IdentList), $4.(IdentList)} } |
+    '(' ')'                                       { $$ = (IdentList)(nil) } | 
+    '(' ident_list ')'                            { $$ = $2 } |
+    '(' ident_list TDotDotDot ')'                 { $$ = IdentVarargList{$2.(IdentList)} } |
+    '(' TDotDotDot ident_list ')'                 { $$ = IdentVarargExpandList{nil, $3.(IdentList)} } |
+    '(' ident_list TDotDotDot ident_list ')'      { $$ = IdentVarargExpandList{$2.(IdentList), $4.(IdentList)} }
 
 jmp_stat:
     TBreak               { $$ = &BreakContinue{true, $1.Line()} } |

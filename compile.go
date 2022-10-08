@@ -235,10 +235,19 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 	}
 
 	newtable.vp = uint16(newtable.sym.Len())
+
+	if len(node.VargExpand) > 0 {
+		src := uint16(len(node.Args) - 1)
+		for i, dest := range node.VargExpand {
+			idx := newtable.borrowAddress()
+			newtable.put(bas.Str(dest.(*parser.Symbol).Name), idx)
+			newtable.codeSeg.WriteInst3(typ.OpLoad, src, table.loadConst(bas.Int(i)), idx)
+		}
+	}
 	newtable.compileNode(node.Body)
 	newtable.patchGoto()
 
-	if a := newtable.sym.Get(staticSelf); a != bas.Nil {
+	if a, ok := newtable.sym.Get(staticSelf); ok {
 		newtable.codeSeg.Code = append([]typ.Inst{
 			{Opcode: typ.OpFunction, A: typ.RegA},
 			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: typ.RegA},
@@ -246,7 +255,7 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 		newtable.codeSeg.Pos.Offset += 2
 	}
 
-	if a := newtable.sym.Get(staticThis); a != bas.Nil {
+	if a, ok := newtable.sym.Get(staticThis); ok {
 		newtable.codeSeg.Code = append([]typ.Inst{
 			{Opcode: typ.OpSet, A: uint16(a.Int64()), B: typ.RegA},
 		}, newtable.codeSeg.Code...)
@@ -275,7 +284,7 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 	)
 
 	fm := &table.getGlobal().funcsMap
-	fidx := fm.Get(bas.Str(node.Name))
+	fidx, _ := fm.Get(bas.Str(node.Name))
 	// Put function into constMap, it will then be put into coreStack after all compilings are done.
 	table.getGlobal().constMap.Set(obj.ToValue(), fidx)
 

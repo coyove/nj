@@ -131,7 +131,7 @@ func (m *Object) GetDefault(name, defaultValue Value) (v Value) {
 }
 
 func (m *Object) find(k Value, setReceiver bool) (v Value, ok bool) {
-	v, ok = m.local.Find(k)
+	v, ok = m.local.Get(k)
 	if !ok && m.parent != nil {
 		v, ok = m.parent.find(k, false)
 	}
@@ -312,20 +312,12 @@ func (m *Map) Clear() {
 	m.count = 0
 }
 
-// Find retrieves the value by 'k', returns false as the second argument if not found.
-func (m Map) Find(k Value) (v Value, exists bool) {
+// Get retrieves the value by 'k', returns false as the second argument if not found.
+func (m Map) Get(k Value) (v Value, exists bool) {
 	if idx := m.findValue(k); idx >= 0 {
 		return m.items[idx].val, true
 	}
 	return Nil, false
-}
-
-// Get retrieves the value by 'k'.
-func (m Map) Get(k Value) (v Value) {
-	if idx := m.findValue(k); idx >= 0 {
-		return m.items[idx].val
-	}
-	return Nil
 }
 
 func (m *Map) findValue(k Value) int {

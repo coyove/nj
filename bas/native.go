@@ -187,6 +187,10 @@ func newArray(m ...Value) *Native {
 	return &Native{meta: &Proto.ArrayMeta, internal: m}
 }
 
+func newVarargArray(m []Value) *Native {
+	return &Native{meta: &Proto.VarargMeta, internal: append([]Value{}, m...)}
+}
+
 func NewNativeWithMeta(any interface{}, meta *NativeMeta) *Native {
 	return &Native{meta: meta, any: any}
 }
@@ -545,4 +549,14 @@ func reflectTypeName(t reflect.Type) string {
 		}
 	}
 	return string(res)
+}
+
+func (a *Native) wrapCall(k string, args ...Value) Value {
+	o := a.meta.Proto.Get(Str(k)).AssertShape("No", "wrapper."+k).Object()
+	if o == nil {
+		internal.Panic("wrapper.%s not implemented", k)
+	}
+	o = o.Copy(false)
+	o.this = a.ToValue()
+	return o.Call(nil, args...)
 }

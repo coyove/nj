@@ -364,3 +364,22 @@ tailcallobj2 = new(tailcallobj, {val=1})
 -- 1+1+3+8+21+55...
 -- 1+2+5+13+34+89...
 assert(tailcallobj1.foo(tailcallobj2), 144)
+
+function vargdefault(a... b0,b1)
+    if b1 then return (a + b0) * b1 end
+    if b0 then return a + b0 end
+    return a * 2
+end
+
+assert(vargdefault(1), 2)
+assert(vargdefault(1, 2), 3)
+assert(vargdefault(1, 2, 3), 9)
+assert(vargdefault(1, 2, 3, 4), 9)
+
+function vargdefault2(... b0,b1,b2)
+if not b0 and not b1 and not b2 then return 777 end
+return b0 or b1 or b2
+end
+assert(vargdefault2(), 777)
+assert(vargdefault2(10), 10)
+assert(vargdefault2(false, 11), 11)

@@ -213,7 +213,7 @@ assert(rch, ch2)
 assert(rv, 2)
 assert(flag)
 
-loadfile("tests/array.txt")
+loadfile("tests/array.nj.lua")
 
 assert(goVarg(10, function(a, b...)
     for _, b in b do

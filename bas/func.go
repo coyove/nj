@@ -49,7 +49,12 @@ var globals struct {
 }
 
 func GetGlobalName(v Value) int {
-	return int(globals.sym.Get(v).UnsafeInt64())
+	x, ok := globals.sym.Get(v)
+	if !ok {
+		return 0
+	}
+	return int(x.UnsafeInt64())
+
 }
 
 func Globals() Map {
@@ -61,8 +66,8 @@ func AddGlobal(k string, v Value) {
 		globals.stack = append(globals.stack, Nil)
 	}
 	sk := Str(k)
-	idx := globals.sym.Get(sk)
-	if idx != Nil {
+	idx, ok := globals.sym.Get(sk)
+	if ok {
 		globals.stack[idx.Int()] = v
 	} else {
 		idx := len(globals.stack)
@@ -123,16 +128,16 @@ func (p *Program) GoString() string {
 }
 
 func (p *Program) Get(k string) (v Value, ok bool) {
-	addr := p.symbols.Get(Str(k))
-	if addr == Nil {
+	addr, ok := p.symbols.Get(Str(k))
+	if !ok {
 		return Nil, false
 	}
 	return (*p.stack)[addr.Int64()], true
 }
 
 func (p *Program) Set(k string, v Value) (ok bool) {
-	addr := p.symbols.Get(Str(k))
-	if addr == Nil {
+	addr, ok := p.symbols.Get(Str(k))
+	if !ok {
 		return false
 	}
 	(*p.stack)[addr.Int64()] = v
@@ -192,7 +197,7 @@ func callobj(m *Object, r stacktraces, g *Program, outErr *error, this Value, ar
 	if c.varg {
 		s := *newEnv.stack
 		if len(s) > int(c.numArgs)-1 {
-			s[c.numArgs-1] = Array(append([]Value{}, s[c.numArgs-1:]...)...)
+			s[c.numArgs-1] = newVarargArray(s[c.numArgs-1:]).ToValue()
 		} else {
 			if newEnv.Size() < int(c.numArgs)-1 {
 				internal.PanicNotEnoughArgs(detail(m.ToValue()))

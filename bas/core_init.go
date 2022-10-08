@@ -22,10 +22,10 @@ const Version int64 = 481
 var objDefaultFun = &funcbody{name: "object"}
 
 var Proto struct {
-	Object, Bool, Str, Int, Float, Func, Native, Bytes, Array, Error             Object
-	NativeMap, NativePtr, NativeIntf, Channel                                    Object
-	Reader, Writer, Closer, ReadWriter, ReadCloser, WriteCloser, ReadWriteCloser NativeMeta
-	ReadlinesMeta, ArrayMeta, BytesMeta, StringsMeta, ErrorMeta                  NativeMeta
+	Object, Bool, Str, Int, Float, Func, Native, Bytes, Array, Error                     Object
+	NativeMap, NativePtr, NativeIntf, Channel                                            Object
+	Reader, Writer, Closer, ReadWriter, ReadCloser, WriteCloser, ReadWriteCloser         NativeMeta
+	WrapperMeta, ReadlinesMeta, ArrayMeta, VarargMeta, BytesMeta, StringsMeta, ErrorMeta NativeMeta
 }
 
 func init() {
@@ -75,6 +75,66 @@ func init() {
 		},
 		sgArrayNext,
 	}
+
+	Proto.VarargMeta = Proto.ArrayMeta
+	Proto.VarargMeta.Name = "vararg"
+	Proto.VarargMeta.Proto = NewNamedObject("vararg", 0).SetPrototype(&Proto.Array)
+	Proto.VarargMeta.Get = func(n *Native, idx int) Value {
+		if idx < len(n.internal) {
+			return n.internal[idx]
+		}
+		return Nil
+	}
+
+	// Proto.WrapperMeta = NativeMeta{
+	// 	"wrapper",
+	// 	&Proto.Native,
+	// 	func(a *Native) int { return a.wrapCall("len").AssertNumber("wrapper.len").Int() },
+	// 	func(a *Native) int { return a.wrapCall("cap").AssertNumber("wrapper.cap").Int() },
+	// 	func(a *Native) { a.wrapCall("clear") },
+	// 	func(a *Native) []Value {
+	// 		return a.wrapCall("values").AssertShape("@internal", "wrapper.values").Native().Values()
+	// 	},
+	// 	func(a *Native, idx int) Value { return a.wrapCall("get", Int(idx)) },
+	// 	func(a *Native, idx int, v Value) { a.wrapCall("set", Int(idx), v) },
+	// 	func(a *Native, k Value) (Value, bool) {
+	// 		tmp := a.wrapCall("getkey", k).AssertShape("(v,b)", "wrapper.getkey").Native()
+	// 		return tmp.Get(0), tmp.Get(1).IsTrue()
+	// 	},
+	// 	func(a *Native, k, v Value) { a.wrapCall("setkey", k, v) },
+	// 	func(a *Native, v ...Value) {
+	// 		a.wrapCall()
+	// 	},
+	// 	func(a *Native, s, e int) *Native { return &Native{meta: a.meta, internal: a.internal[s:e]} },
+	// 	func(a *Native, s, e int) { a.internal = a.internal[s:e] },
+	// 	func(a *Native, s, e int, from *Native) {
+	// 		if from.meta != a.meta {
+	// 			for i := s; i < e; i++ {
+	// 				a.internal[i] = from.Get(i - s)
+	// 			}
+	// 		} else {
+	// 			copy(a.internal[s:e], from.internal)
+	// 		}
+	// 	},
+	// 	func(a *Native, b *Native) {
+	// 		if a.meta != b.meta {
+	// 			for i := 0; i < b.Len(); i++ {
+	// 				a.internal = append(a.internal, b.Get(i))
+	// 			}
+	// 		} else {
+	// 			a.internal = append(a.internal, b.internal...)
+	// 		}
+	// 	},
+	// 	func(a *Native, w io.Writer, mt typ.MarshalType) {
+	// 		internal.WriteString(w, "[")
+	// 		for i, v := range a.internal {
+	// 			internal.WriteString(w, internal.IfStr(i == 0, "", ","))
+	// 			v.Stringify(w, mt.NoRec())
+	// 		}
+	// 		internal.WriteString(w, "]")
+	// 	},
+	// 	sgArrayNext,
+	// }
 
 	Proto.BytesMeta = NativeMeta{
 		"bytes",
@@ -297,6 +357,18 @@ func init() {
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
 	})
 	AddGlobalMethod("createprototype", func(e *Env) {
+		e.A = Func(e.Str(0), func(e *Env) {
+			o := e.Self()
+			init := o.Get(Str("_init")).Object()
+			n := o.Copy(true).SetPrototype(o)
+			callobj(init, e.runtime, e.top, nil, n.ToValue(), e.Stack()...)
+			e.A = n.ToValue()
+		}).Object().
+			Merge(e.Shape(2, "No").Object()).
+			SetProp("_init", e.Object(1).ToValue()).
+			ToValue()
+	})
+	AddGlobalMethod("createiterator", func(e *Env) {
 		e.A = Func(e.Str(0), func(e *Env) {
 			o := e.Self()
 			init := o.Get(Str("_init")).Object()

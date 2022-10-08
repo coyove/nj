@@ -76,7 +76,7 @@ func (table *symTable) borrowAddress() uint16 {
 	if len(table.reusableTmpsArray) > 0 {
 		tmp := bas.Int64(int64(table.reusableTmpsArray[0]))
 		table.reusableTmpsArray = table.reusableTmpsArray[1:]
-		if table.reusableTmps.Get(tmp).IsFalse() {
+		if v, _ := table.reusableTmps.Get(tmp); v.IsFalse() {
 			internal.ShouldNotHappen()
 		}
 		table.reusableTmps.Set(tmp, bas.False)
@@ -114,7 +114,7 @@ func (table *symTable) freeAddr(a interface{}) {
 			// We don't free global variables
 			return
 		}
-		if available := table.reusableTmps.Get(bas.Int64(int64(a))); available != bas.Nil && available.IsFalse() {
+		if available, ok := table.reusableTmps.Get(bas.Int64(int64(a))); ok && available.IsFalse() {
 			table.reusableTmpsArray = append(table.reusableTmpsArray, a)
 			table.reusableTmps.Set(bas.Int64(int64(a)), bas.True)
 		}
@@ -141,7 +141,7 @@ func (table *symTable) get(name bas.Value) (uint16, bool) {
 	case staticFalse:
 		return table.loadConst(bas.False), true
 	case staticThis, staticSelf:
-		k := table.sym.Get(name)
+		k, _ := table.sym.Get(name)
 		if k.Type() == typ.Number {
 			return uint16(k.Int64()), true
 		}
@@ -161,19 +161,19 @@ func (table *symTable) get(name bas.Value) (uint16, bool) {
 	// which are local variables inside do-blocks, like "if then .. end" and "do ... end".
 	// The rightmost map of this slice is the innermost do-block
 	for i := len(table.maskedSym) - 1; i >= 0; i-- {
-		if k := table.maskedSym[i].Get(name); k != bas.Nil {
+		if k, ok := table.maskedSym[i].Get(name); ok {
 			return calc(uint16(k.Int64()), 0)
 		}
 	}
 
 	// Then local variables
-	if k := table.sym.Get(name); k != bas.Nil {
+	if k, ok := table.sym.Get(name); ok {
 		return calc(uint16(k.Int64()), 0)
 	}
 
 	// Finally global variables
 	if table.global != nil {
-		if k := table.global.sym.Get(name); k != bas.Nil {
+		if k, ok := table.global.sym.Get(name); ok {
 			return calc(uint16(k.Int64()), 1)
 		}
 	}
@@ -209,7 +209,7 @@ func (table *symTable) loadConst(v bas.Value) uint16 {
 	if table.global != nil {
 		return table.global.loadConst(v)
 	}
-	if i := table.constMap.Get(v); i != bas.Nil {
+	if i, ok := table.constMap.Get(v); ok {
 		return uint16(i.Int64())
 	}
 	panic("loadConst: shouldn't happen")
