@@ -1,11 +1,13 @@
 package bas
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"reflect"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/coyove/nj/internal"
@@ -24,14 +26,14 @@ func ToError(v Value) error {
 	if IsError(v) {
 		return v.Native().Unwrap().(*ExecError)
 	}
-	panic("ToError: not error: " + detail(v))
+	panic("ToError: not error: " + v.simple())
 }
 
 func ToErrorRootCause(v Value) interface{} {
 	if IsError(v) {
 		return v.Native().Unwrap().(*ExecError).root
 	}
-	panic("ToErrorRootCause: not error: " + detail(v))
+	panic("ToErrorRootCause: not error: " + v.simple())
 }
 
 func Write(w io.Writer, v Value) (int, error) {
@@ -169,7 +171,7 @@ func (v Value) ToType(t reflect.Type) reflect.Value {
 					results = []reflect.Value{out.ToType(t.Out(0))}
 				} else if to > 1 {
 					if !out.IsArray() {
-						internal.Panic("ToType: function should return %d arguments (sig: %v)", to, t)
+						internal.Panic("ToType: function should return %d values (sig: %v)", to, t)
 					}
 					results = make([]reflect.Value, t.NumOut())
 					for i := range results {
@@ -234,7 +236,7 @@ func (v Value) ToType(t reflect.Type) reflect.Value {
 	if t.Kind() == reflect.Interface {
 		return reflect.ValueOf(v.Interface())
 	}
-	panic("ToType: failed to convert " + detail(v) + " to " + t.String())
+	panic("ToType: failed to convert " + v.simple() + " to " + t.String())
 }
 
 func (v Value) Len() int {
@@ -251,29 +253,29 @@ func (v Value) Len() int {
 	case typ.Nil:
 		return 0
 	}
-	panic("can't measure length of " + detail(v))
+	panic("can't measure length of " + v.simple())
 }
 
 func setObjectRecv(v, r Value) Value {
 	if v.IsObject() {
-		o := v.Object().Copy(false)
+		o := v.Object().Copy()
 		o.this = r
 		v = o.ToValue()
 	}
 	return v
 }
 
-func detail(v Value) string {
+func (v Value) simple() string {
 	switch vt := v.Type(); vt {
 	case typ.Object:
 		if f := v.Object().fun; f != nil && f != objDefaultFun {
 			return v.Object().funcSig()
 		}
-		return v.Object().Name() + "{}"
+		return fmt.Sprintf("%s{%d}", v.Object().Name(), v.Object().Len())
 	case typ.Native:
 		a := v.Native()
-		if a.IsUntypedArray() {
-			return fmt.Sprintf("array.%d", a.Len())
+		if v.IsArray() {
+			return fmt.Sprintf("%s[%d]", a.meta.Name, a.Len())
 		}
 		return a.meta.Name
 	case typ.Number, typ.Bool:
@@ -283,27 +285,9 @@ func detail(v Value) string {
 		if ln < 16 {
 			return strconv.Quote(v.Str())
 		}
-		return fmt.Sprintf("string.%d", ln)
+		return fmt.Sprintf("string(%db)", ln)
 	default:
 		return v.Type().String()
-	}
-}
-
-func Fprintf(w io.Writer, f string, values ...Value) {
-	args := make([]interface{}, 0, len(values))
-	for _, v := range values {
-		if v.Type() == typ.Number {
-			args = append(args, internal.SprintfNumber{Int: v.Int64(), Float: v.Float64(), IsInt: v.IsInt64()})
-		} else {
-			args = append(args, v.Interface())
-		}
-	}
-	internal.Fprintf(w, f, args...)
-}
-
-func Fprint(w io.Writer, values ...Value) {
-	for _, v := range values {
-		v.Stringify(w, typ.MarshalToString)
 	}
 }
 
@@ -387,4 +371,84 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 		return Error(e, outError)
 	}
 	return t
+}
+
+func Fprintf(w io.Writer, format string, args ...Value) {
+	tmp := bytes.Buffer{}
+	ai := 0
+NEXT:
+	for len(format) > 0 {
+		idx := strings.Index(format, "%")
+		if idx == -1 {
+			internal.WriteString(w, format)
+			break
+		}
+		if idx == len(format)-1 {
+			internal.WriteString(w, "%?(NOVERB)")
+			break
+		}
+		internal.WriteString(w, format[:idx])
+		if format[idx+1] == '%' {
+			internal.WriteString(w, "%")
+			format = format[idx+2:]
+			continue
+		}
+
+		tmp.Reset()
+		tmp.WriteByte('%')
+		format = format[idx+1:]
+
+		preferNumber := ' '
+		for found := false; len(format) > 0 && !found; {
+			head := format[0]
+			tmp.WriteByte(head)
+			format = format[1:]
+			switch head {
+			case 'b', 'd', 'o', 'O', 'c', 'U':
+				preferNumber = 'i'
+				found = true
+			case 'f', 'F', 'g', 'G', 'e', 'E':
+				preferNumber = 'f'
+				found = true
+			case 's', 'q', 'x', 'X', 'v', 't', 'p':
+				found = true
+			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+', '#', ' ':
+			default:
+				internal.WriteString(w, tmp.String()+"(BAD)")
+				goto NEXT
+			}
+		}
+		if ai >= len(args) {
+			internal.WriteString(w, tmp.String()+"(MISSING)")
+		} else {
+			v := args[ai].Interface()
+			if a := args[ai]; a.IsNumber() {
+				if preferNumber == 'i' {
+					v = a.Int64()
+				} else if preferNumber == 'f' {
+					v = a.Float64()
+				} else if a.IsInt64() {
+					v = a.Int64()
+				} else {
+					v = a.Float64()
+				}
+			}
+			fmt.Fprintf(w, tmp.String(), v)
+		}
+		ai++
+	}
+}
+
+func Fprint(w io.Writer, values ...Value) {
+	for _, v := range values {
+		v.Stringify(w, typ.MarshalToString)
+	}
+}
+
+func Fprintln(w io.Writer, values ...Value) {
+	for _, v := range values {
+		v.Stringify(w, typ.MarshalToString)
+		internal.WriteString(w, " ")
+	}
+	internal.WriteString(w, "\n")
 }

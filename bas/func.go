@@ -152,6 +152,13 @@ func (p *Program) LocalsObject() *Object {
 	return r
 }
 
+func (m *Object) Apply(e *Env, this Value, args ...Value) Value {
+	if e != nil {
+		return callobj(m, e.runtime, e.top, nil, this, args...)
+	}
+	return callobj(m, stacktraces{}, nil, nil, this, args...)
+}
+
 func (m *Object) Call(e *Env, args ...Value) (res Value) {
 	if e != nil {
 		return callobj(m, e.runtime, e.top, nil, m.this, args...)
@@ -200,14 +207,14 @@ func callobj(m *Object, r stacktraces, g *Program, outErr *error, this Value, ar
 			s[c.numArgs-1] = newVarargArray(s[c.numArgs-1:]).ToValue()
 		} else {
 			if newEnv.Size() < int(c.numArgs)-1 {
-				internal.PanicNotEnoughArgs(detail(m.ToValue()))
+				internal.PanicNotEnoughArgs(m.ToValue().simple())
 			}
 			newEnv.resize(int(c.numArgs))
 			newEnv._set(uint16(c.numArgs)-1, Nil)
 		}
 	} else {
 		if newEnv.Size() < int(c.numArgs) {
-			internal.PanicNotEnoughArgs(detail(m.ToValue()))
+			internal.PanicNotEnoughArgs(m.ToValue().simple())
 		}
 	}
 	newEnv.resizeZero(int(c.stackSize), int(c.numArgs))
@@ -258,7 +265,7 @@ func (obj *Object) printAll(w io.Writer) {
 			if addr := a & typ.RegLocalMask; a != addr && rValue && int(addr) < len(*p.stack) {
 				x := (*p.stack)[addr]
 				if x != Nil {
-					suffix = ":" + detail(x)
+					suffix = ":" + x.simple()
 				}
 			}
 
@@ -335,7 +342,7 @@ func (obj *Object) printAll(w io.Writer) {
 			case typ.OpSlice:
 				internal.WriteString(w, "sliceload "+readAddr(a, false)+" "+readAddr(b, false)+" : "+readAddr(c, false))
 			case typ.OpLoadGlobal:
-				internal.WriteString(w, "loadglobal "+detail(globals.stack[a]))
+				internal.WriteString(w, "loadglobal "+globals.stack[a].simple())
 				if b != typ.RegPhantom {
 					internal.WriteString(w, " "+readAddr(b, true))
 				}
@@ -351,7 +358,7 @@ func (obj *Object) printAll(w io.Writer) {
 					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" * %d + %d", int16(b), int16(c)))
 				}
 			case typ.OpCmp16:
-				internal.WriteString(w, "a = "+readAddr(a, false)+internal.IfStr(b == 1, " < ", " > ")+strconv.Itoa(int(int16(c))))
+				internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" * %d < %d", int16(b), int16(c)))
 			case typ.OpEq16:
 				internal.WriteString(w, "a = "+readAddr(a, false)+internal.IfStr(c == typ.OpEq, " == ", " != ")+strconv.Itoa(int(int16(b))))
 			default:

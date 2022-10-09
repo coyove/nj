@@ -174,9 +174,9 @@ func (env *Env) StrDefault(idx int, defaultValue string, minLen int) (res string
 		}
 	}
 	if minLen > 0 {
-		internal.Panic("expects argument #%d to be string and at least %db long, got %v", idx+1, minLen, detail(v))
+		internal.Panic("expects argument #%d to be string and at least %db long, got %v", idx+1, minLen, v.simple())
 	}
-	internal.Panic("expects argument #%d to be string, bytes or nil, got %v", idx+1, detail(v))
+	internal.Panic("expects argument #%d to be string, bytes or nil, got %v", idx+1, v.simple())
 	return
 }
 
@@ -195,7 +195,7 @@ func (env *Env) IntDefault(idx int, defaultValue int) int {
 	if v := env.Get(idx); v.pType() == typ.Number {
 		return v.Int()
 	} else if v != Nil {
-		internal.Panic("expects argument #%d to be number or nil, got %v", idx+1, detail(v))
+		internal.Panic("expects argument #%d to be number or nil, got %v", idx+1, v.simple())
 	}
 	return defaultValue
 }
@@ -225,11 +225,6 @@ func (env *Env) Shape(idx int, s string) Value {
 	return v
 }
 
-// ThisProp returns value by property 'k' of 'this'.
-func (env *Env) ThisProp(k string) Value {
-	return env.Object(-1).Get(Str(k))
-}
-
 func (env *Env) This() Value { return env.A }
 
 func (env *Env) Self() *Object { return env.runtime.stack0.Callable }
@@ -240,12 +235,12 @@ func (env *Env) mustBe(t typ.ValueType, idx int) (v Value) {
 	if idx == -1 {
 		v = env.A
 		if v.Type() != t {
-			internal.Panic("expects 'this' to be %v, got %v", t, detail(v))
+			internal.Panic("expects 'this' to be %v, got %v", t, v.simple())
 		}
 	} else {
 		v = env.Get(idx)
 		if v.Type() != t {
-			internal.Panic("expects argument #%d to be %v, got %v", idx+1, t, detail(v))
+			internal.Panic("expects argument #%d to be %v, got %v", idx+1, t, v.simple())
 		}
 	}
 	return v

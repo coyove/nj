@@ -137,7 +137,7 @@ func (m *Object) find(k Value, setReceiver bool) (v Value, ok bool) {
 	}
 	if setReceiver && v.IsObject() {
 		if obj := v.Object(); obj.fun.method {
-			f := obj.Copy(false)
+			f := obj.Copy()
 			f.this = m.ToValue()
 			v = f.ToValue()
 		}
@@ -175,8 +175,7 @@ func (m *Object) Delete(name Value) (prev Value) {
 	return m.local.Delete(name)
 }
 
-// Foreach iterates all local properties in the object, for each of them, 'f(name, &value)' will be
-// called. Values are passed by pointers and it is legal to manipulate them directly in 'f'.
+// Foreach iterates all local properties in the object, refer to 'Map.Foreach' for more helps.
 func (m *Object) Foreach(f func(Value, *Value) bool) {
 	if m == nil {
 		return
@@ -234,12 +233,12 @@ func (m *Object) Name() string {
 	return objDefaultFun.name
 }
 
-func (m *Object) Copy(copyData bool) *Object {
+func (m *Object) Copy() *Object {
 	if m == nil {
 		return NewObject(0)
 	}
 	m2 := *m
-	if copyData {
+	if m.local.count > 0 {
 		m2.local = m.local.Copy()
 	}
 	if m2.fun == nil {

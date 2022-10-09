@@ -53,7 +53,7 @@ func createNativeMeta(name string, proto *Object) *NativeMeta {
 		sgValuesNotSupported,
 		func(a *Native, idx int) Value { return a.ToValue() },
 		sgSetNotSupported,
-		sgGetKey,
+		sgGetKeyWithReflection,
 		sgSetKeyNotSupported,
 		sgAppendNotSupported,
 		sgSliceNotSupported,
@@ -94,16 +94,11 @@ func getNativeMeta(v interface{}) *NativeMeta {
 	switch rt.Kind() {
 	default:
 		a = NewEmptyNativeMeta(reflectTypeName(rt), &Proto.Native)
-		a.GetKey = func(a *Native, k Value) (Value, bool) {
-			if v, ok := sgReflectLoadSafe(a.any, k); ok {
-				return v, true
-			}
-			return sgGetKey(a, k)
-		}
+		a.GetKey = sgGetKeyWithReflection
 		a.SetKey = func(a *Native, k, v Value) {
 			defer func() {
 				if r := recover(); r != nil {
-					internal.Panic("%s.SetKey(%v, %v): %v", a.meta.Name, detail(k), detail(v), r)
+					internal.Panic("%s.SetKey(%v, %v): %v", a.meta.Name, k.simple(), v.simple(), r)
 				}
 			}()
 			rv := reflect.ValueOf(a.any)
@@ -505,6 +500,13 @@ func sgGetKey(a *Native, k Value) (Value, bool) {
 	return f, ok
 }
 
+func sgGetKeyWithReflection(a *Native, k Value) (Value, bool) {
+	if v, ok := sgReflectLoadSafe(a.any, k); ok {
+		return v, true
+	}
+	return sgGetKey(a, k)
+}
+
 func sgReflectLoadSafe(v interface{}, key Value) (value Value, ok bool) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -556,7 +558,7 @@ func (a *Native) wrapCall(k string, args ...Value) Value {
 	if o == nil {
 		internal.Panic("wrapper.%s not implemented", k)
 	}
-	o = o.Copy(false)
-	o.this = a.ToValue()
+	o = o.Copy()
+	o.this = a.any.(*Object).ToValue()
 	return o.Call(nil, args...)
 }

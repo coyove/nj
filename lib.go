@@ -2,6 +2,8 @@ package nj
 
 import (
 	"bytes"
+	"encoding/base32"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,6 +33,13 @@ import (
 )
 
 func init() {
+	bas.AddGlobalMethod("chr", func(e *bas.Env) { e.A = bas.Rune(rune(e.Int(0))) })
+	bas.AddGlobalMethod("byte", func(e *bas.Env) { e.A = bas.Byte(byte(e.Int(0))) })
+	bas.AddGlobalMethod("ord", func(e *bas.Env) {
+		r, _ := utf8.DecodeRuneInString(e.Str(0))
+		e.A = bas.Int64(int64(r))
+	})
+
 	bas.AddGlobal("json", bas.NewNamedObject("json", 0).
 		AddMethod("stringify", func(e *bas.Env) { e.A = bas.Str(e.Get(0).JSONString()) }).
 		AddMethod("dump", func(e *bas.Env) { e.Get(1).Stringify(e.Get(0).Writer(), typ.MarshalToJSON) }).
@@ -67,11 +76,41 @@ func init() {
 			e.A = (*env)(e).valueOrError(parser.Parse(e.Str(0), "eval.parse"))
 		})).
 		SetProp("op", bas.NewObject(0).
+			SetProp("set", bas.Int(typ.OpSet)).
+			SetProp("store", bas.Int(typ.OpStore)).
+			SetProp("load", bas.Int(typ.OpLoad)).
+			SetProp("linear16", bas.Int(typ.OpLinear16)).
+			SetProp("cmp16", bas.Int(typ.OpCmp16)).
+			SetProp("eq16", bas.Int(typ.OpEq16)).
+			SetProp("inc16", bas.Int(typ.OpInc16)).
 			SetProp("add", bas.Int(typ.OpAdd)).
 			SetProp("sub", bas.Int(typ.OpSub)).
+			SetProp("mul", bas.Int(typ.OpMul)).
+			SetProp("div", bas.Int(typ.OpDiv)).
+			SetProp("idiv", bas.Int(typ.OpIDiv)).
 			SetProp("inc", bas.Int(typ.OpInc)).
+			SetProp("mod", bas.Int(typ.OpMod)).
+			SetProp("len", bas.Int(typ.OpLen)).
+			SetProp("next", bas.Int(typ.OpNext)).
+			SetProp("not", bas.Int(typ.OpNot)).
+			SetProp("eq", bas.Int(typ.OpEq)).
+			SetProp("neq", bas.Int(typ.OpNeq)).
 			SetProp("less", bas.Int(typ.OpLess)).
+			SetProp("lesseq", bas.Int(typ.OpLessEq)).
+			SetProp("bitop", bas.Int(typ.OpBitOp)).
+			SetProp("ifnot", bas.Int(typ.OpIfNot)).
+			SetProp("jmp", bas.Int(typ.OpJmp)).
+			SetProp("function", bas.Int(typ.OpFunction)).
+			SetProp("push", bas.Int(typ.OpPush)).
+			SetProp("pushunpack", bas.Int(typ.OpPushUnpack)).
+			SetProp("createarray", bas.Int(typ.OpCreateArray)).
+			SetProp("createobject", bas.Int(typ.OpCreateObject)).
+			SetProp("call", bas.Int(typ.OpCall)).
+			SetProp("tailcall", bas.Int(typ.OpTailCall)).
+			SetProp("isproto", bas.Int(typ.OpIsProto)).
+			SetProp("slice", bas.Int(typ.OpSlice)).
 			SetProp("ret", bas.Int(typ.OpRet)).
+			SetProp("loadglobal", bas.Int(typ.OpLoadGlobal)).
 			ToValue(),
 		).
 		ToValue())
@@ -106,27 +145,32 @@ func init() {
 		env.A = bas.Array(results...)
 	})
 
-	bas.AddGlobal("re", bas.Func("RegExp", func(e *bas.Env) {
-		rx := regexp.MustCompile(e.Str(0))
-		e.A = bas.NewObject(1).SetPrototype(e.A.Object()).SetProp("_rx", bas.ValueOf(rx)).ToValue()
-	}).Object().
+	rxMeta := bas.NewEmptyNativeMeta("RegExp", bas.NewObject(0).
 		AddMethod("match", func(e *bas.Env) {
-			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
+			rx := e.This().Interface().(*regexp.Regexp)
 			e.A = bas.Bool(rx.MatchString(e.Str(0)))
 		}).
 		AddMethod("find", func(e *bas.Env) {
-			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
+			rx := e.This().Interface().(*regexp.Regexp)
 			e.A = bas.NewNative(rx.FindStringSubmatch(e.Str(0))).ToValue()
 		}).
 		AddMethod("findall", func(e *bas.Env) {
-			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
+			rx := e.This().Interface().(*regexp.Regexp)
 			e.A = bas.NewNative(rx.FindAllStringSubmatch(e.Str(0), e.IntDefault(1, -1))).ToValue()
 		}).
 		AddMethod("replace", func(e *bas.Env) {
-			rx := e.ThisProp("_rx").AssertShape("@*regexp.Regexp", "regexp").Interface().(*regexp.Regexp)
+			rx := e.This().Interface().(*regexp.Regexp)
 			e.A = bas.Str(rx.ReplaceAllString(e.Str(0), e.Str(1)))
 		}).
-		ToValue())
+		SetPrototype(&bas.Proto.Native))
+
+	bas.AddGlobalMethod("re", func(e *bas.Env) {
+		if rx, err := regexp.Compile(e.Str(0)); err != nil {
+			e.SetError(err)
+		} else {
+			e.A = bas.NewNativeWithMeta(rx, rxMeta).ToValue()
+		}
+	})
 
 	fileMeta := bas.NewEmptyNativeMeta("File", bas.NewObject(0).
 		AddMethod("name", func(e *bas.Env) {
@@ -321,69 +365,15 @@ func init() {
 		SetProp("waitgroup", bas.Func("waitgroup", func(e *bas.Env) { e.A = bas.ValueOf(&sync.WaitGroup{}) })).
 		ToValue())
 
-	// encDecProto := bas.NewNamedObject("EncodeDecode", 0).
-	// 	SetMethod("encode", func(e *bas.Env) {
-	// 		i := e.ThisProp("_e")
-	// 		e.A = bas.Str(i.(interface{ EncodeToString([]byte) string }).EncodeToString(bas.ToReadonlyBytes(e.Get(0))))
-	// 	}).
-	// 	SetMethod("decode", func(e *bas.Env) {
-	// 		i := e.ThisProp("_e")
-	// 		v, err := i.(interface{ DecodeString(string) ([]byte, error) }).DecodeString(e.Str(0))
-	// 		internal.PanicErr(err)
-	// 		e.A = bas.Bytes(v)
-	// 	}).
-	// 	SetPrototype(bas.NewNamedObject("EncoderDecoder", 0).
-	// 		SetMethod("encoder", func(e *bas.Env) {
-	// 			enc := bas.Nil
-	// 			buf := &bytes.Buffer{}
-	// 			switch encoding := e.ThisProp("_e").(type) {
-	// 			default:
-	// 				enc = bas.ValueOf(hex.NewEncoder(buf))
-	// 			case *base32.Encoding:
-	// 				enc = bas.ValueOf(base32.NewEncoder(encoding, buf))
-	// 			case *base64.Encoding:
-	// 				enc = bas.ValueOf(base64.NewEncoder(encoding, buf))
-	// 			}
-	// 			e.A = bas.NewNamedObject("Encoder", 0).
-	// 				SetProp("_f", bas.ValueOf(enc)).
-	// 				SetProp("_b", bas.ValueOf(buf)).
-	// 				SetMethod("value", func(e *bas.Env) { e.A = bas.Str(e.ThisProp("_b").(*bytes.Buffer).String()) }).
-	// 				SetMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.ThisProp("_b").(*bytes.Buffer).Bytes()) }).
-	// 				SetPrototype(bas.Proto.WriteCloser).
-	// 				ToValue()
-	// 		}).
-	// 		SetMethod("decoder", func(e *bas.Env) {
-	// 			src := bas.NewReader(e.Get(0))
-	// 			dec := bas.Nil
-	// 			switch encoding := e.ThisProp("_e").(type) {
-	// 			case *base64.Encoding:
-	// 				dec = bas.ValueOf(base64.NewDecoder(encoding, src))
-	// 			case *base32.Encoding:
-	// 				dec = bas.ValueOf(base32.NewDecoder(encoding, src))
-	// 			default:
-	// 				dec = bas.ValueOf(hex.NewDecoder(src))
-	// 			}
-	// 			e.A = bas.NewNamedObject("Decoder", 0).
-	// 				SetProp("_f", bas.ValueOf(dec)).
-	// 				SetPrototype(bas.Proto.Reader).
-	// 				ToValue()
-	// 		}))
+	bas.AddGlobal("base64", bas.NewObject(0).
+		SetProp("std", bas.ValueOf(base64.StdEncoding)).SetProp("rawstd", bas.ValueOf(base64.RawStdEncoding)).
+		SetProp("url", bas.ValueOf(base64.URLEncoding)).SetProp("rawurl", bas.ValueOf(base64.RawURLEncoding)).
+		ToValue())
 
-	// bas.AddGlobal("hex", bas.NewNamedObject("hex", 0).SetPrototype(encDecProto.Prototype()).ToValue())
-	// bas.AddGlobal("base64", bas.NewNamedObject("base64", 0).
-	// 	SetProp("std", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base64.StdEncoding)).ToValue()).
-	// 	SetProp("url", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base64.URLEncoding)).ToValue()).
-	// 	SetProp("std2", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base64.StdEncoding.WithPadding(-1))).ToValue()).
-	// 	SetProp("url2", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base64.URLEncoding.WithPadding(-1))).ToValue()).
-	// 	SetPrototype(encDecProto).
-	// 	ToValue())
-	// bas.AddGlobal("base32", bas.NewNamedObject("base32", 0).
-	// 	SetProp("std", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base32.StdEncoding)).ToValue()).
-	// 	SetProp("hex", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base32.HexEncoding)).ToValue()).
-	// 	SetProp("std2", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base32.StdEncoding.WithPadding(-1))).ToValue()).
-	// 	SetProp("hex2", bas.NewObject(1).SetPrototype(encDecProto).SetProp("_e", bas.ValueOf(base32.HexEncoding.WithPadding(-1))).ToValue()).
-	// 	SetPrototype(encDecProto).
-	// 	ToValue())
+	bas.AddGlobal("base32", bas.NewObject(0).
+		SetProp("std", bas.ValueOf(base32.StdEncoding)).SetProp("rawstd", bas.ValueOf(base32.StdEncoding.WithPadding(-1))).
+		SetProp("hex", bas.ValueOf(base32.HexEncoding)).SetProp("rawhex", bas.ValueOf(base32.HexEncoding.WithPadding(-1))).
+		ToValue())
 
 	bas.AddGlobal("time", bas.Func("time", func(e *bas.Env) {
 		e.A = bas.Float64(float64(time.Now().UnixNano()) / 1e9)

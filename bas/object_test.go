@@ -102,7 +102,7 @@ func TestMapForeachDelete(t *testing.T) {
 	check(o, 2, d, 1)
 	check(o, 3, b, 2)
 
-	if o.Get(Int(a)).Int() != a {
+	if x, _ := o.Get(Int(a)); x.Int() != a {
 		t.Fatal(o.items)
 	}
 
@@ -126,10 +126,10 @@ func TestMapForeachDelete(t *testing.T) {
 
 	o.Delete(Int(b))
 	o.Delete(Int(d)) // [nil, a+0, deleted+1, c+2, deleted+2, e+1, nil, nil]
-	if o.Get(Int(b)) != Nil {
+	if x, _ := o.Get(Int(b)); x != Nil {
 		t.Fatal(o.items)
 	}
-	if o.Get(Int(c)) != Int(c) {
+	if x, _ := o.Get(Int(c)); x != Int(c) {
 		t.Fatal(o.items)
 	}
 	o.Set(Int(d), Int(d)) // [nil, a+0, c+1, d+1, e+0, nil, nil, nil]
@@ -167,7 +167,7 @@ func benchmarkRHMap(b *testing.B, n int) {
 	}
 	for i := 0; i < b.N; i++ {
 		idx := rand.Intn(n)
-		if m.Get(Int64(int64(idx))) != Int64(int64(idx)) {
+		if x, _ := m.Get(Int64(int64(idx))); x != Int64(int64(idx)) {
 			b.Fatal(idx, m)
 		}
 	}
@@ -234,14 +234,14 @@ func TestRHMap(t *testing.T) {
 	fmt.Println(m.Len(), m.Cap(), len(m2))
 
 	for k, v := range m2 {
-		if m.Get(Int64(k)).Int64() != v {
+		if x, _ := m.Get(Int64(k)); x.Int64() != v {
 			m.Foreach(func(mk Value, mv *Value) bool {
 				if mk.Int64() == k {
 					t.Log(mk, *mv)
 				}
 				return true
 			})
-			t.Fatal(m.Get(Int64(k)), k, v)
+			t.Fatal(x, k, v)
 		}
 	}
 

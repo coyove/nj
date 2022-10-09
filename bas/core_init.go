@@ -29,12 +29,12 @@ var Proto struct {
 }
 
 func init() {
-	objDefaultFun.native = func(e *Env) { e.A = e.A.Object().Copy(true).ToValue() }
+	objDefaultFun.native = func(e *Env) { e.A = e.A.Object().Copy().ToValue() }
 	metaStore.metaCache = map[reflect.Type]*NativeMeta{}
 	metaStore.nativeTypes = NewObject(0)
 
 	Proto.ArrayMeta = NativeMeta{
-		"internal",
+		"array",
 		&Proto.Array,
 		func(a *Native) int { return len(a.internal) },
 		func(a *Native) int { return cap(a.internal) },
@@ -86,55 +86,37 @@ func init() {
 		return Nil
 	}
 
-	// Proto.WrapperMeta = NativeMeta{
-	// 	"wrapper",
-	// 	&Proto.Native,
-	// 	func(a *Native) int { return a.wrapCall("len").AssertNumber("wrapper.len").Int() },
-	// 	func(a *Native) int { return a.wrapCall("cap").AssertNumber("wrapper.cap").Int() },
-	// 	func(a *Native) { a.wrapCall("clear") },
-	// 	func(a *Native) []Value {
-	// 		return a.wrapCall("values").AssertShape("@internal", "wrapper.values").Native().Values()
-	// 	},
-	// 	func(a *Native, idx int) Value { return a.wrapCall("get", Int(idx)) },
-	// 	func(a *Native, idx int, v Value) { a.wrapCall("set", Int(idx), v) },
-	// 	func(a *Native, k Value) (Value, bool) {
-	// 		tmp := a.wrapCall("getkey", k).AssertShape("(v,b)", "wrapper.getkey").Native()
-	// 		return tmp.Get(0), tmp.Get(1).IsTrue()
-	// 	},
-	// 	func(a *Native, k, v Value) { a.wrapCall("setkey", k, v) },
-	// 	func(a *Native, v ...Value) {
-	// 		a.wrapCall()
-	// 	},
-	// 	func(a *Native, s, e int) *Native { return &Native{meta: a.meta, internal: a.internal[s:e]} },
-	// 	func(a *Native, s, e int) { a.internal = a.internal[s:e] },
-	// 	func(a *Native, s, e int, from *Native) {
-	// 		if from.meta != a.meta {
-	// 			for i := s; i < e; i++ {
-	// 				a.internal[i] = from.Get(i - s)
-	// 			}
-	// 		} else {
-	// 			copy(a.internal[s:e], from.internal)
-	// 		}
-	// 	},
-	// 	func(a *Native, b *Native) {
-	// 		if a.meta != b.meta {
-	// 			for i := 0; i < b.Len(); i++ {
-	// 				a.internal = append(a.internal, b.Get(i))
-	// 			}
-	// 		} else {
-	// 			a.internal = append(a.internal, b.internal...)
-	// 		}
-	// 	},
-	// 	func(a *Native, w io.Writer, mt typ.MarshalType) {
-	// 		internal.WriteString(w, "[")
-	// 		for i, v := range a.internal {
-	// 			internal.WriteString(w, internal.IfStr(i == 0, "", ","))
-	// 			v.Stringify(w, mt.NoRec())
-	// 		}
-	// 		internal.WriteString(w, "]")
-	// 	},
-	// 	sgArrayNext,
-	// }
+	Proto.WrapperMeta = NativeMeta{
+		"wrapper",
+		&Proto.Native,
+		func(a *Native) int { return a.wrapCall("len").AssertNumber("wrapper.len").Int() },
+		func(a *Native) int { return a.wrapCall("cap").AssertNumber("wrapper.cap").Int() },
+		func(a *Native) { a.wrapCall("clear") },
+		func(a *Native) []Value {
+			return a.wrapCall("values").AssertShape("@array", "wrapper.values").Native().Values()
+		},
+		func(a *Native, idx int) Value { return a.wrapCall("get", Int(idx)) },
+		func(a *Native, idx int, v Value) { a.wrapCall("set", Int(idx), v) },
+		func(a *Native, k Value) (Value, bool) {
+			tmp := a.wrapCall("getkey", k).AssertShape("(v,b)", "wrapper.getkey").Native()
+			return tmp.Get(0), tmp.Get(1).IsTrue()
+		},
+		func(a *Native, k, v Value) { a.wrapCall("setkey", k, v) },
+		func(a *Native, v ...Value) { a.wrapCall("append", v...) },
+		func(a *Native, s, e int) *Native {
+			return a.wrapCall("slice", Int(s), Int(e)).AssertShape("@"+a.meta.Name, "wrapper.slice").Native()
+		},
+		func(a *Native, s, e int) { a.wrapCall("sliceinplace", Int(s), Int(e)) },
+		func(a *Native, s, e int, from *Native) { a.wrapCall("copy", Int(s), Int(e), from.ToValue()) },
+		func(a *Native, b *Native) { a.wrapCall("concat", b.ToValue()) },
+		func(a *Native, w io.Writer, mt typ.MarshalType) { a.wrapCall("marshal", ValueOf(w), Str(mt.String())) },
+		func(a *Native, kv Value) Value {
+			if kv == Nil {
+				kv = Array(Nil, Nil)
+			}
+			return a.wrapCall("next", kv)
+		},
+	}
 
 	Proto.BytesMeta = NativeMeta{
 		"bytes",
@@ -360,7 +342,7 @@ func init() {
 		e.A = Func(e.Str(0), func(e *Env) {
 			o := e.Self()
 			init := o.Get(Str("_init")).Object()
-			n := o.Copy(true).SetPrototype(o)
+			n := o.Copy().SetPrototype(o)
 			callobj(init, e.runtime, e.top, nil, n.ToValue(), e.Stack()...)
 			e.A = n.ToValue()
 		}).Object().
@@ -368,17 +350,15 @@ func init() {
 			SetProp("_init", e.Object(1).ToValue()).
 			ToValue()
 	})
-	AddGlobalMethod("createiterator", func(e *Env) {
-		e.A = Func(e.Str(0), func(e *Env) {
-			o := e.Self()
-			init := o.Get(Str("_init")).Object()
-			n := o.Copy(true).SetPrototype(o)
-			callobj(init, e.runtime, e.top, nil, n.ToValue(), e.Stack()...)
-			e.A = n.ToValue()
-		}).Object().
-			Merge(e.Shape(2, "No").Object()).
-			SetProp("_init", e.Object(1).ToValue()).
-			ToValue()
+	AddGlobalMethod("createnativewrapper", func(e *Env) {
+		o := e.Object(0)
+		meta := Proto.WrapperMeta
+		meta.Name = o.Name()
+		meta.Proto = o
+		e.A = Func(o.Name(), func(e *Env) {
+			meta := e.Self().Get(Str("_meta")).Interface().(*NativeMeta)
+			e.A = NewNativeWithMeta(e.Object(0), meta).ToValue()
+		}).Object().SetProp("_meta", ValueOf(&meta)).ToValue()
 	})
 
 	// Debug libraries
@@ -500,7 +480,7 @@ func init() {
 		AddMethod("get", func(e *Env) { e.A = e.Object(-1).GetDefault(e.Get(0), e.Get(1)) }).
 		AddMethod("delete", func(e *Env) { e.A = e.Object(-1).Delete(e.Get(0)) }).
 		AddMethod("clear", func(e *Env) { e.Object(-1).Clear() }).
-		AddMethod("copy", func(e *Env) { e.A = e.Object(-1).Copy(e.Shape(0, "Nb").IsTrue()).ToValue() }).
+		AddMethod("copy", func(e *Env) { e.A = e.Object(-1).Copy().ToValue() }).
 		AddMethod("proto", func(e *Env) { e.A = e.Object(-1).Prototype().ToValue() }).
 		AddMethod("setproto", func(e *Env) { e.Object(-1).SetPrototype(e.Object(0)) }).
 		AddMethod("cap", func(e *Env) { e.A = Int(e.Object(-1).Cap()) }).
@@ -536,7 +516,6 @@ func init() {
 		}).
 		AddMethod("printed", func(e *Env) { e.A = Str(e.Object(-1).GoString()) }).
 		AddMethod("debugprinted", func(e *Env) { e.A = Str(e.Object(-1).local.DebugString()) }).
-		AddMethod("pure", func(e *Env) { e.A = e.Object(-1).Copy(false).SetPrototype(&Proto.Object).ToValue() }).
 		AddMethod("next", func(e *Env) { e.A = Array(e.Object(-1).local.FindNext(e.Get(0))) })
 	Proto.Object.SetPrototype(nil) // object is the topmost 'object', it should not have any prototype
 
@@ -580,6 +559,7 @@ func init() {
 		SetProp("types", metaStore.nativeTypes.ToValue()).
 		AddMethod("typename", func(e *Env) { e.A = Str(e.Get(-1).Native().meta.Name) }).
 		AddMethod("nativename", func(e *Env) { e.A = Str(reflect.TypeOf(e.Get(-1).Native().Unwrap()).String()) }).
+		AddMethod("shapename", func(e *Env) { e.A = Str(reflectTypeName(reflect.TypeOf(e.Get(-1).Native().Unwrap()))) }).
 		AddMethod("isnil", func(e *Env) {
 			switch rv := reflect.ValueOf(e.Native(-1).Unwrap()); rv.Kind() {
 			case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
@@ -862,10 +842,6 @@ func init() {
 		})).
 		SetPrototype(&Proto.Native)
 	AddGlobal("channel", Proto.Channel.ToValue())
-
-	AddGlobalMethod("chr", func(e *Env) { e.A = Rune(rune(e.Int(0))) })
-	AddGlobalMethod("byte", func(e *Env) { e.A = Byte(byte(e.Int(0))) })
-	AddGlobalMethod("ord", func(e *Env) { r, _ := utf8.DecodeRuneInString(e.Str(0)); e.A = Int64(int64(r)) })
 
 	Proto.Str = *Func("str", func(e *Env) {
 		i := e.Get(0)

@@ -14,3 +14,15 @@ func (m MarshalType) NoRec() MarshalType {
 	}
 	return MarshalToStringNonRec
 }
+
+func (m MarshalType) String() string {
+	switch m {
+	case MarshalToString:
+		return "str"
+	case MarshalToStringNonRec:
+		return "strnorec"
+	case MarshalToJSON:
+		return "json"
+	}
+	return "unknown"
+}

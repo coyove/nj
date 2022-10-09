@@ -29,7 +29,7 @@ func (sa *shaperArray) add(s shape) {
 
 func (sa *shaperArray) assert(v Value) error {
 	if !v.IsArray() {
-		return fmt.Errorf("%v expects array, got %v", sa, detail(v))
+		return fmt.Errorf("%v expects array, got %v", sa, v.simple())
 	}
 	arr := v.Native()
 	if sa.fixed {
@@ -86,7 +86,7 @@ func (sa *shaperObject) add(s shape) {
 
 func (sa *shaperObject) assert(v Value) error {
 	if !v.IsObject() {
-		return fmt.Errorf("%v expects object, got %v", sa, detail(v))
+		return fmt.Errorf("%v expects object, got %v", sa, v.simple())
 	}
 	if sa.key == nil && sa.value == nil {
 		return nil
@@ -156,7 +156,7 @@ func assertShapePrototype(v Value, name string) error {
 		}
 		return fmt.Errorf("expects object of prototype %v, got %v", name, v.Object().Name())
 	default:
-		return fmt.Errorf("expects native or object, got %v", detail(v))
+		return fmt.Errorf("expects native or object, got %v", v.simple())
 	}
 }
 
@@ -219,7 +219,7 @@ func assertShapePrimitive(v Value, verbs string) error {
 		}
 	}
 	if !ok {
-		return fmt.Errorf("%v can't match %v", &shaperPrimitive{verbs}, detail(v))
+		return fmt.Errorf("%v can't match %v", &shaperPrimitive{verbs}, v.simple())
 	}
 	return nil
 }
@@ -274,7 +274,7 @@ func (sa *shaperOr) assert(v Value) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("%v can't match %v", sa, detail(v))
+	return fmt.Errorf("%v can't match %v", sa, v.simple())
 }
 
 func (sa *shaperOr) String() string {
@@ -418,21 +418,21 @@ func (v Value) AssertShape(shape, msg string) Value {
 
 func (v Value) AssertNumber(msg string) Value {
 	if v.Type() != typ.Number {
-		internal.Panic("%s: expects number, got %v", msg, detail(v))
+		internal.Panic("%s: expects number, got %v", msg, v.simple())
 	}
 	return v
 }
 
 func (v Value) AssertString(msg string) string {
 	if v.Type() != typ.String {
-		internal.Panic("%s: expects string, got %v", msg, detail(v))
+		internal.Panic("%s: expects string, got %v", msg, v.simple())
 	}
 	return v.Str()
 }
 
 func (v Value) AssertObject(msg string) *Object {
 	if v.Type() != typ.Object {
-		internal.Panic("%s: expects object, got %v", msg, detail(v))
+		internal.Panic("%s: expects object, got %v", msg, v.simple())
 	}
 	return v.Object()
 }

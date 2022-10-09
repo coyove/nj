@@ -252,8 +252,13 @@ function firstK(a, b, k)
     a.sort()
     b.sort()
 
-    while k and #a and #b do
-        if a[0] < b[0] then
+    while k do
+        if #a == 0 and #b == 0 then break end
+        if #a == 0 then
+            b = b[1:]
+        elseif #b == 0 then
+            a = a[1:]
+        elseif a[0] < b[0] then
             a = a[1:]
         else
             b = b[1:]
@@ -270,6 +275,7 @@ end
 
 assert(firstK([1,2,3], [4,5,6], 1), 2)
 assert(firstK([1,2,3], [0.4,1.5,2.6], 2), 1.5)
+assert(firstK([1,2,3], [0.7], 2), 2)
 
 local tmp = []
 for i=0,1e3 do tmp[i] = math.random() end
@@ -278,4 +284,21 @@ k = tmp.clone().sort()[ki]
 a, b = tmp[:#tmp / 2], tmp[#tmp/ 2:]
 assert(firstK(a, b, ki), k)
 
-print(debug.disfunc(firstK))
+function fibwrapper() end
+function fibwrapper.next(ab)
+    if ab[0] == nil then
+        this.v = 1
+        return 1, this.v
+    end
+    this.v = ab[0] + ab[1]
+    ab[0], ab[1] = ab[1], this.v
+    return ab
+end
+
+local nw = createnativewrapper(fibwrapper)
+res = []
+for k, v in nw({}) do 
+    res.append(v)
+    if #res > 35 then break end
+end
+assert(res[35], 24157817)
