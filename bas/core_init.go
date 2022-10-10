@@ -17,7 +17,7 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
-const Version int64 = 481
+const Version int64 = 486
 
 var objDefaultFun = &funcbody{name: "object"}
 

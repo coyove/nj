@@ -1,19 +1,11 @@
 # Performance Tests
 
-This folder contains some performance tests based on [benchmarksgame](https://benchmarksgame-team.pages.debian.net/benchmarksgame/).
+This folder contains some performance scripts based on [benchmarksgame](https://benchmarksgame-team.pages.debian.net/benchmarksgame/). All tests are done on an M1 Macbook Pro.
 
-Here are some single-threaded results by the 'real' output of `time ./prog`:
+|       | nj | python | lua5.3 | perl5 |
+| ----- | ----- | ----- | ----- | ----- |
+|fib (n=35) | 0.87 | 1.77 | 0.71 | 3.74 |
+|nbody (iteration=500000) | 1.89 | TODO | 1.83 | 0.59 |
+|binarytree (depth=21)    | 2.12 | TODO | 1.28 | 2.20 |
+|spectralnorms (size=550, cores=1) | 0.85 | TODO | 0.40 | 0.56 |
 
-|       | potatolang | tengo | lua5.3 | perl5 |
-| ----- | ---------- | ----- | ------ | ----- |
-|fib (n=35) | 1.5 | 2.9 | 1.6 | 3.4 |
-|nbody (iteration=500000) | 18.0 | 9.1 | 1.8 | 4.3 |
-|binarytree (depth=23)    | 10.0 | 23.4 | 13.4 | 19.1 |
-|spectralnorms (size=2000, cores=8) | 5.0 | TODO | TODO | 2.9 |
-|spectralnorms (size=2000, cores=1) | 24.9 | 51.1 | 14.8 | 11.5 |
-
-Basically speaking, potatolang is very slow, 10x ~ 50x slower than a native Go program, 2x slower (sometimes faster) than normal interpreted languages. Without JIT it is also impossible to compete with other implementations like luajit or v8.
-
-However it is relatively faster than other script languages written in Go.
-
-All tests are done on a 2018 15-inch Macbook Pro.
