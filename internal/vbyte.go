@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/coyove/nj/typ"
 )
@@ -60,6 +61,10 @@ func (p *VByte32) Read(i int) (next int, idx, line uint32) {
 type Packet struct {
 	Code []typ.Inst
 	Pos  VByte32
+}
+
+func (b *Packet) CodePtr() uintptr {
+	return uintptr(*(*unsafe.Pointer)(unsafe.Pointer(&b.Code)))
 }
 
 func (b *Packet) check() {

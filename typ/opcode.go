@@ -9,6 +9,8 @@ type Inst struct {
 	C      uint16
 }
 
+const InstSize = unsafe.Sizeof(Inst{})
+
 func (i Inst) D() int32 {
 	// return int32(uint32(i.B)<<16 | uint32(i.C))
 	return *(*int32)(unsafe.Pointer(&i.B))
