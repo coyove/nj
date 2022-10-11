@@ -135,11 +135,7 @@ jmp_stat:
 
 declarator:
     TIdent {
-        if ss(yylex).scanner.jsonMode {
-            $$ = JValue(ss(yylex).pSimpleJSON(Sym($1)))
-        } else {
-            $$ = Sym($1)
-        }
+        $$ = Sym($1)
     } |
     prefix_expr TLBracket expr ']' {
         $$ = &Tenary{typ.OpLoad, $1, $3, Address(typ.RegA), $2.Line()}

@@ -161,7 +161,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line parser.go.y:218
+//line parser.go.y:214
 
 //line yacctab:1
 var yyExca = [...]int{
@@ -1194,350 +1194,346 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line parser.go.y:137
 		{
-			if ss(yylex).scanner.jsonMode {
-				yyVAL.expr = JValue(ss(yylex).pSimpleJSON(Sym(yyDollar[1].token)))
-			} else {
-				yyVAL.expr = Sym(yyDollar[1].token)
-			}
+			yyVAL.expr = Sym(yyDollar[1].token)
 		}
 	case 55:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line parser.go.y:144
+//line parser.go.y:140
 		{
 			yyVAL.expr = &Tenary{typ.OpLoad, yyDollar[1].expr, yyDollar[3].expr, Address(typ.RegA), yyDollar[2].token.Line()}
 		}
 	case 56:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:147
+//line parser.go.y:143
 		{
 			yyVAL.expr = &Tenary{typ.OpLoad, yyDollar[1].expr, ss(yylex).Str(yyDollar[3].token.Str), Address(typ.RegA), yyDollar[2].token.Line()}
 		}
 	case 57:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:152
+//line parser.go.y:148
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 58:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:153
+//line parser.go.y:149
 		{
 			yyVAL.expr = ss(yylex).Num(yyDollar[1].token.Str)
 		}
 	case 59:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:154
+//line parser.go.y:150
 		{
 			yyVAL.expr = &Or{yyDollar[1].expr, yyDollar[3].expr}
 		}
 	case 60:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:155
+//line parser.go.y:151
 		{
 			yyVAL.expr = &And{yyDollar[1].expr, yyDollar[3].expr}
 		}
 	case 61:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:156
+//line parser.go.y:152
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpLess, yyDollar[3].expr, yyDollar[1].expr, yyDollar[2].token)
 		}
 	case 62:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:157
+//line parser.go.y:153
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpLess, yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 63:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:158
+//line parser.go.y:154
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpLessEq, yyDollar[3].expr, yyDollar[1].expr, yyDollar[2].token)
 		}
 	case 64:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:159
+//line parser.go.y:155
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpLessEq, yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 65:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:160
+//line parser.go.y:156
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpEq, yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 66:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:161
+//line parser.go.y:157
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpNeq, yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 67:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:162
+//line parser.go.y:158
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpAdd, yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 68:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:163
+//line parser.go.y:159
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpSub, yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 69:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:164
+//line parser.go.y:160
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpMul, yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 70:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:165
+//line parser.go.y:161
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpDiv, yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 71:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:166
+//line parser.go.y:162
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpIDiv, yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 72:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:167
+//line parser.go.y:163
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpMod, yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 73:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:168
+//line parser.go.y:164
 		{
 			yyVAL.expr = ss(yylex).pBitwise("and", yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 74:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:169
+//line parser.go.y:165
 		{
 			yyVAL.expr = ss(yylex).pBitwise("or", yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 75:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:170
+//line parser.go.y:166
 		{
 			yyVAL.expr = ss(yylex).pBitwise("xor", yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 76:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:171
+//line parser.go.y:167
 		{
 			yyVAL.expr = ss(yylex).pBitwise("lsh", yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 77:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:172
+//line parser.go.y:168
 		{
 			yyVAL.expr = ss(yylex).pBitwise("rsh", yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 78:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:173
+//line parser.go.y:169
 		{
 			yyVAL.expr = ss(yylex).pBitwise("ursh", yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 79:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:174
+//line parser.go.y:170
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpIsProto, yyDollar[1].expr, yyDollar[3].expr, yyDollar[2].token)
 		}
 	case 80:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line parser.go.y:175
+//line parser.go.y:171
 		{
 			yyVAL.expr = pUnary(typ.OpNot, ss(yylex).pBinary(typ.OpIsProto, yyDollar[1].expr, yyDollar[4].expr, yyDollar[2].token), yyDollar[2].token)
 		}
 	case 81:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:176
+//line parser.go.y:172
 		{
 			yyVAL.expr = ss(yylex).pBitwise("xor", ss(yylex).Int(-1), yyDollar[2].expr, yyDollar[1].token)
 		}
 	case 82:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:177
+//line parser.go.y:173
 		{
 			yyVAL.expr = pUnary(typ.OpLen, yyDollar[2].expr, yyDollar[1].token)
 		}
 	case 83:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:178
+//line parser.go.y:174
 		{
 			yyVAL.expr = ss(yylex).pBinary(typ.OpSub, zero, yyDollar[2].expr, yyDollar[1].token)
 		}
 	case 84:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:179
+//line parser.go.y:175
 		{
 			yyVAL.expr = pUnary(typ.OpNot, yyDollar[2].expr, yyDollar[1].token)
 		}
 	case 85:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:182
+//line parser.go.y:178
 		{
 			yyVAL.expr = yyDollar[1].expr
 		}
 	case 86:
 		yyDollar = yyS[yypt-8 : yypt+1]
-//line parser.go.y:183
+//line parser.go.y:179
 		{
 			yyVAL.expr = &If{yyDollar[3].expr, &Assign{Sa, yyDollar[5].expr, yyDollar[1].token.Line()}, &Assign{Sa, yyDollar[7].expr, yyDollar[1].token.Line()}}
 		}
 	case 87:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line parser.go.y:184
+//line parser.go.y:180
 		{
 			yyVAL.expr = ss(yylex).pFunc(false, __markupLambdaName(yyDollar[1].token), yyDollar[2].expr, yyDollar[3].expr, yyDollar[1].token)
 		}
 	case 88:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:185
+//line parser.go.y:181
 		{
 			yyVAL.expr = ss(yylex).Str(yyDollar[1].token.Str)
 		}
 	case 89:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:186
+//line parser.go.y:182
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 90:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:187
+//line parser.go.y:183
 		{
 			yyVAL.expr = ss(yylex).pEmptyArray()
 		}
 	case 91:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line parser.go.y:188
+//line parser.go.y:184
 		{
 			yyVAL.expr = ss(yylex).pEmptyObject()
 		}
 	case 92:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line parser.go.y:189
+//line parser.go.y:185
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 93:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line parser.go.y:190
+//line parser.go.y:186
 		{
 			yyVAL.expr = yyDollar[2].expr
 		}
 	case 94:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line parser.go.y:191
+//line parser.go.y:187
 		{
 			yyVAL.expr = &Tenary{typ.OpSlice, yyDollar[1].expr, yyDollar[3].expr, yyDollar[5].expr, yyDollar[2].token.Line()}
 		}
 	case 95:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:192
+//line parser.go.y:188
 		{
 			yyVAL.expr = &Tenary{typ.OpSlice, yyDollar[1].expr, zero, yyDollar[4].expr, yyDollar[2].token.Line()}
 		}
 	case 96:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:193
+//line parser.go.y:189
 		{
 			yyVAL.expr = &Tenary{typ.OpSlice, yyDollar[1].expr, yyDollar[3].expr, ss(yylex).Int(-1), yyDollar[2].token.Line()}
 		}
 	case 97:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:194
+//line parser.go.y:190
 		{
 			yyVAL.expr = &Call{typ.OpCall, yyDollar[1].expr, ExprList(nil), false, yyDollar[2].token.Line()}
 		}
 	case 98:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:195
+//line parser.go.y:191
 		{
 			yyVAL.expr = &Call{typ.OpCall, yyDollar[1].expr, yyDollar[3].expr.(ExprList), false, yyDollar[2].token.Line()}
 		}
 	case 99:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line parser.go.y:196
+//line parser.go.y:192
 		{
 			yyVAL.expr = &Call{typ.OpCall, yyDollar[1].expr, yyDollar[3].expr.(ExprList), true, yyDollar[2].token.Line()}
 		}
 	case 100:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:199
+//line parser.go.y:195
 		{
 			yyVAL.expr = DeclList{yyDollar[1].expr}
 		}
 	case 101:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:200
+//line parser.go.y:196
 		{
 			yyVAL.expr = append(yyDollar[1].expr.(DeclList), yyDollar[3].expr)
 		}
 	case 102:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:203
+//line parser.go.y:199
 		{
 			yyVAL.expr = IdentList{Sym(yyDollar[1].token)}
 		}
 	case 103:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:204
+//line parser.go.y:200
 		{
 			yyVAL.expr = append(yyDollar[1].expr.(IdentList), Sym(yyDollar[3].token))
 		}
 	case 104:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:207
+//line parser.go.y:203
 		{
 			yyVAL.expr = ss(yylex).pArray(nil, yyDollar[1].expr)
 		}
 	case 105:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:208
+//line parser.go.y:204
 		{
 			yyVAL.expr = ss(yylex).pArray(yyDollar[1].expr, yyDollar[3].expr)
 		}
 	case 106:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:211
+//line parser.go.y:207
 		{
 			yyVAL.expr = ss(yylex).pObject(nil, ss(yylex).Str(yyDollar[1].token.Str), yyDollar[3].expr)
 		}
 	case 107:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line parser.go.y:212
+//line parser.go.y:208
 		{
 			yyVAL.expr = ss(yylex).pObject(nil, yyDollar[1].expr, yyDollar[3].expr)
 		}
 	case 108:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:213
+//line parser.go.y:209
 		{
 			yyVAL.expr = ss(yylex).pObject(yyDollar[1].expr, ss(yylex).Str(yyDollar[3].token.Str), yyDollar[5].expr)
 		}
 	case 109:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line parser.go.y:214
+//line parser.go.y:210
 		{
 			yyVAL.expr = ss(yylex).pObject(yyDollar[1].expr, yyDollar[3].expr, yyDollar[5].expr)
 		}
 	case 110:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line parser.go.y:216
+//line parser.go.y:212
 		{
 		}
 	case 111:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line parser.go.y:216
+//line parser.go.y:212
 		{
 		}
 	}

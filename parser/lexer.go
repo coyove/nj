@@ -83,7 +83,6 @@ func isIdent(ch uint32, pos int) bool {
 
 type Scanner struct {
 	Pos       Position
-	jsonMode  bool
 	buffer    bytes.Buffer
 	offset    int64
 	text      string
@@ -393,7 +392,7 @@ skipspaces:
 			tok.Type = TString
 			tok.Str, err = sc.scanString(ch)
 		case '[':
-			if sc.Peek() == '[' && !sc.jsonMode {
+			if sc.Peek() == '[' {
 				sc.Next()
 				tok.Type = TString
 				tok.Str, err = sc.scanBlockString()
@@ -534,13 +533,12 @@ func (lx *Lexer) TokenError(tok Token, message string) {
 	panic(lx.scanner.TokenError(tok, message))
 }
 
-func parse(reader, name string, jsonMode bool) (chunk Node, lexer *Lexer, err error) {
+func parse(reader, name string) (chunk Node, lexer *Lexer, err error) {
 	lexer = &Lexer{
 		scanner: NewScanner(reader, name),
 		Stmts:   nil,
 		Token:   Token{Str: ""},
 	}
-	lexer.scanner.jsonMode = jsonMode
 	defer internal.CatchError(&err)
 	yyParse(lexer)
 	chunk = lexer.Stmts
@@ -551,7 +549,7 @@ func Parse(text, name string) (chunk Node, err error) {
 	yyErrorVerbose = true
 	yyDebug = 1
 	var lexer *Lexer
-	chunk, lexer, err = parse(text, name, false)
+	chunk, lexer, err = parse(text, name)
 	if chunk == nil && err == nil {
 		err = fmt.Errorf("invalid chunk")
 	}
@@ -560,27 +558,6 @@ func Parse(text, name string) (chunk Node, err error) {
 		chunk.(*Prog).Stats = append([]Node{lc}, chunk.(*Prog).Stats...)
 	}
 	return
-}
-
-func ParseJSON(text string) (bas.Value, error) {
-	yyErrorVerbose = true
-	yyDebug = 1
-	chunk, _, err := parse(text, "<json>", true)
-	if err != nil {
-		return bas.Nil, err
-	}
-	p, ok := chunk.(*Prog)
-	if !ok {
-		return bas.Nil, fmt.Errorf("invalid json chunk")
-	}
-
-	switch j := p.Stats[0].(type) {
-	case JValue:
-		return bas.Value(j), nil
-	case Primitive:
-		return bas.Value(j), nil
-	}
-	return bas.Nil, fmt.Errorf("invalid json chunk: %v", chunk)
 }
 
 // }}}

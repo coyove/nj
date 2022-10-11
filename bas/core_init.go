@@ -333,12 +333,12 @@ func init() {
 		Merge(Proto.Closer.Proto).SetPrototype(&Proto.Native))
 
 	AddGlobal("Version", Int64(Version))
-	AddGlobalMethod("globals", func(e *Env) { e.A = newObjectInplace(Globals()).ToValue() })
-	AddGlobalMethod("new", func(e *Env) {
+	AddGlobalFunc("globals", func(e *Env) { e.A = newObjectInplace(Globals()).ToValue() })
+	AddGlobalFunc("new", func(e *Env) {
 		m := e.Object(0)
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
 	})
-	AddGlobalMethod("createprototype", func(e *Env) {
+	AddGlobalFunc("createprototype", func(e *Env) {
 		e.A = Func(e.Str(0), func(e *Env) {
 			o := e.Self()
 			init := o.Get(Str("_init")).Object()
@@ -350,7 +350,7 @@ func init() {
 			SetProp("_init", e.Object(1).ToValue()).
 			ToValue()
 	})
-	AddGlobalMethod("createnativewrapper", func(e *Env) {
+	AddGlobalFunc("createnativewrapper", func(e *Env) {
 		o := e.Object(0)
 		meta := Proto.WrapperMeta
 		meta.Name = o.Name()
@@ -409,11 +409,11 @@ func init() {
 		})).
 		ToValue())
 
-	AddGlobalMethod("type", func(e *Env) { e.A = Str(e.Get(0).Type().String()) })
-	AddGlobalMethod("apply", func(e *Env) {
+	AddGlobalFunc("type", func(e *Env) { e.A = Str(e.Get(0).Type().String()) })
+	AddGlobalFunc("apply", func(e *Env) {
 		e.A = callobj(e.Object(0), e.runtime, e.top, nil, e.Get(1), e.Stack()[2:]...)
 	})
-	AddGlobalMethod("panic", func(e *Env) {
+	AddGlobalFunc("panic", func(e *Env) {
 		v := e.Get(0)
 		if v.HasPrototype(&Proto.Error) {
 			panic(v.Native().Unwrap().(*ExecError).root)

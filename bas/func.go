@@ -77,7 +77,7 @@ func AddGlobal(k string, v Value) {
 	globals.store.Set(sk, v)
 }
 
-func AddGlobalMethod(k string, f func(*Env)) {
+func AddGlobalFunc(k string, f func(*Env)) {
 	AddGlobal(k, Func(k, f))
 }
 

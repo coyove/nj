@@ -20,7 +20,7 @@ assert("x嘻" == ("嘻x嘻").trimleft("嘻"))
 
 -- json generator
 do
-	function str.json_get(p) return json.parse(this).get(p) end
+	function str.json_get(p) return json.parse(this)[p] end
 	local j = json.stringify({
 	      a = 'A',
 	      "b-2": true,

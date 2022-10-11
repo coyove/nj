@@ -14,8 +14,6 @@ do
 	assert(j.b == 2)
     j = json.parse("{\"a\":[[1]]}")
     assert(j.a[0][0], 1)
-    j = json.parse("{\"a\":--[[1]]1}")
-    assert(j.a, 1)
 end
 
 

@@ -33,26 +33,41 @@ import (
 )
 
 func init() {
-	bas.AddGlobalMethod("chr", func(e *bas.Env) { e.A = bas.Rune(rune(e.Int(0))) })
-	bas.AddGlobalMethod("byte", func(e *bas.Env) { e.A = bas.Byte(byte(e.Int(0))) })
-	bas.AddGlobalMethod("ord", func(e *bas.Env) {
+	bas.AddGlobalFunc("chr", func(e *bas.Env) { e.A = bas.Rune(rune(e.Int(0))) })
+	bas.AddGlobalFunc("byte", func(e *bas.Env) { e.A = bas.Byte(byte(e.Int(0))) })
+	bas.AddGlobalFunc("ord", func(e *bas.Env) {
 		r, _ := utf8.DecodeRuneInString(e.Str(0))
 		e.A = bas.Int64(int64(r))
 	})
 
 	bas.AddGlobal("json", bas.NewNamedObject("json", 0).
-		AddMethod("stringify", func(e *bas.Env) { e.A = bas.Str(e.Get(0).JSONString()) }).
-		AddMethod("dump", func(e *bas.Env) { e.Get(1).Stringify(e.Get(0).Writer(), typ.MarshalToJSON) }).
-		AddMethod("parse", func(e *bas.Env) {
+		SetProp("stringify", bas.Func("stringify", func(e *bas.Env) { e.A = bas.Str(e.Get(0).JSONString()) })).
+		SetProp("dump", bas.Func("dump", func(e *bas.Env) { e.Get(1).Stringify(e.Get(0).Writer(), typ.MarshalToJSON) })).
+		SetProp("parse", bas.Func("parse", func(e *bas.Env) {
 			s := strings.TrimSpace(e.Str(0))
-			f := parser.ParseJSON
-			if e.Get(1).IsTrue() {
-				f = ParseStrictJSON
+			if s == "" {
+				e.SetError(fmt.Errorf("empty value"))
+				return
 			}
-			e.A = (*env)(e).valueOrError(f(s))
-		}).
+			switch s[0] {
+			case 'n':
+				_ = s == "null" && e.SetA(bas.Nil) || e.SetError(fmt.Errorf("invalid value"))
+			case 't', 'f':
+				e.A = (*env)(e).valueOrError(strconv.ParseBool(s))
+			case '[':
+				a := []interface{}{}
+				err := json.Unmarshal([]byte(s), &a)
+				e.A = (*env)(e).valueOrError(bas.ValueOf(a), err)
+			case '{':
+				a := map[string]interface{}{}
+				err := json.Unmarshal([]byte(s), &a)
+				e.A = (*env)(e).valueOrError(bas.ValueOf(a), err)
+			default:
+				e.SetError(fmt.Errorf("invalid value"))
+			}
+		})).
 		ToValue())
-	bas.AddGlobalMethod("loadfile", func(e *bas.Env) {
+	bas.AddGlobalFunc("loadfile", func(e *bas.Env) {
 		path := e.Str(0)
 		if e.Shape(1, "Nb").IsTrue() && e.MustProgram().File != "" {
 			path = filepath.Join(filepath.Dir(e.MustProgram().File), path)
@@ -130,7 +145,7 @@ func init() {
 		}
 		fmt.Fprintln(e.MustProgram().Stdout)
 	}))
-	bas.AddGlobalMethod("scanln", func(env *bas.Env) {
+	bas.AddGlobalFunc("scanln", func(env *bas.Env) {
 		prompt, n := env.StrDefault(0, "", 0), env.IntDefault(1, 1)
 		fmt.Fprint(env.MustProgram().Stdout, prompt)
 		var results []bas.Value
@@ -164,7 +179,7 @@ func init() {
 		}).
 		SetPrototype(&bas.Proto.Native))
 
-	bas.AddGlobalMethod("re", func(e *bas.Env) {
+	bas.AddGlobalFunc("re", func(e *bas.Env) {
 		if rx, err := regexp.Compile(e.Str(0)); err != nil {
 			e.SetError(err)
 		} else {
@@ -567,7 +582,7 @@ func init() {
 		AddMethod("value", func(e *bas.Env) { e.A = bas.UnsafeStr(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }).
 		AddMethod("bytes", func(e *bas.Env) { e.A = bas.Bytes(e.A.Interface().(*internal.LimitedBuffer).Bytes()) }))
 
-	bas.AddGlobalMethod("buffer", func(e *bas.Env) {
+	bas.AddGlobalFunc("buffer", func(e *bas.Env) {
 		b := &internal.LimitedBuffer{Limit: e.IntDefault(1, 0)}
 		bas.Write(b, e.Get(0))
 		e.A = bas.NewNativeWithMeta(b, bufferMeta).ToValue()
@@ -626,48 +641,6 @@ func getTimeFormat(f string) string {
 		f = f[sz:]
 	}
 	return buf.String()
-}
-
-func ParseStrictJSON(s string) (bas.Value, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return bas.Nil, fmt.Errorf("empty value")
-	}
-	switch s[0] {
-	case 'n':
-		return bas.Nil, nil
-	case 't', 'f':
-		v, err := strconv.ParseBool(s)
-		return bas.Bool(v), err
-	case '[':
-		a := []interface{}{}
-		err := json.Unmarshal([]byte(s), &a)
-		return parseJSON(a), err
-	case '{':
-		a := map[string]interface{}{}
-		err := json.Unmarshal([]byte(s), &a)
-		return parseJSON(a), err
-	default:
-		return bas.Nil, fmt.Errorf("invalid value")
-	}
-}
-
-func parseJSON(v interface{}) bas.Value {
-	switch v := v.(type) {
-	case []interface{}:
-		a := make([]bas.Value, len(v))
-		for i := range a {
-			a[i] = parseJSON(v[i])
-		}
-		return bas.Array(a...)
-	case map[string]interface{}:
-		a := bas.NewObject(len(v))
-		for k, v := range v {
-			a.SetProp(k, parseJSON(v))
-		}
-		return a.ToValue()
-	}
-	return bas.ValueOf(v)
 }
 
 type env bas.Env

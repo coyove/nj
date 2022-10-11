@@ -133,12 +133,6 @@ func (p Primitive) Value() bas.Value {
 	return bas.Value(p)
 }
 
-type JValue bas.Value
-
-func (p JValue) Dump(w io.Writer) {
-	bas.Value(p).Stringify(w, typ.MarshalToJSON)
-}
-
 type If struct {
 	Cond        Node
 	True, False Node
@@ -447,9 +441,7 @@ func Sym(tok Token) *Symbol {
 
 func (lex *Lexer) Str(s string) Primitive {
 	x := Primitive(bas.Str(s))
-	if !lex.scanner.jsonMode {
-		lex.scanner.constants.Set(bas.Value(x), bas.Nil)
-	}
+	lex.scanner.constants.Set(bas.Value(x), bas.Nil)
 	return x
 }
 
@@ -464,7 +456,7 @@ func (lex *Lexer) Num(v string) Primitive {
 
 func (lex *Lexer) Int(v int64) Primitive {
 	x := Primitive(bas.Int64(v))
-	if v != 0 && v != 1 && !lex.scanner.jsonMode {
+	if v != 0 && v != 1 {
 		lex.scanner.constants.Set(bas.Value(x), bas.Nil)
 	}
 	return x
@@ -479,9 +471,7 @@ func (lex *Lexer) IntBool(b bool) (n Node) {
 
 func (lex *Lexer) Float(v float64) Primitive {
 	x := Primitive(bas.Float64(v))
-	if !lex.scanner.jsonMode {
-		lex.scanner.constants.Set(bas.Value(x), bas.Nil)
-	}
+	lex.scanner.constants.Set(bas.Value(x), bas.Nil)
 	return x
 }
 
@@ -583,28 +573,6 @@ func assignLoadStore(n, v Node, pos Token) Node {
 		return &Tenary{typ.OpStore, load.A, load.B, v, pos.Line()}
 	}
 	return &Assign{n.(*Symbol), v, pos.Line()}
-}
-
-func (lex *Lexer) pSimpleJSON(n Node) bas.Value {
-	switch v := n.(type) {
-	case JValue:
-		return bas.Value(v)
-	case Primitive:
-		return bas.Value(v)
-	case *Symbol:
-		switch v.Name {
-		case "true":
-			return bas.True
-		case "false":
-			return bas.False
-		case "null":
-			return bas.Nil
-		}
-	}
-	buf := bytes.NewBufferString("unexpected json symbol: ")
-	n.Dump(buf)
-	lex.Error(buf.String())
-	return bas.Nil
 }
 
 func isString(n Node) bool {

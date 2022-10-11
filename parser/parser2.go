@@ -193,13 +193,6 @@ func (lex *Lexer) pDeclareAssign(dest []Node, src ExprList, assign bool, pos Tok
 }
 
 func (lex *Lexer) pArray(list, arg Node) Node {
-	if lex.scanner.jsonMode {
-		if list != nil {
-			lex.pSimpleJSON(list).Native().Append(lex.pSimpleJSON(arg))
-			return list
-		}
-		return JValue(bas.Array(lex.pSimpleJSON(arg)))
-	}
 	if list != nil {
 		return append(list.(ExprList), arg)
 	}
@@ -207,15 +200,6 @@ func (lex *Lexer) pArray(list, arg Node) Node {
 }
 
 func (lex *Lexer) pObject(list, k, v Node) Node {
-	if lex.scanner.jsonMode {
-		if list != nil {
-			lex.pSimpleJSON(list).Object().Set(lex.pSimpleJSON(k), lex.pSimpleJSON(v))
-			return list
-		}
-		o := bas.NewObject(0)
-		o.Set(lex.pSimpleJSON(k), lex.pSimpleJSON(v))
-		return JValue(o.ToValue())
-	}
 	if list != nil {
 		return append(list.(ExprAssignList), [2]Node{k, v})
 	}
@@ -223,16 +207,10 @@ func (lex *Lexer) pObject(list, k, v Node) Node {
 }
 
 func (lex *Lexer) pEmptyArray() Node {
-	if lex.scanner.jsonMode {
-		return JValue(bas.Array())
-	}
 	return ExprList(nil)
 }
 
 func (lex *Lexer) pEmptyObject() Node {
-	if lex.scanner.jsonMode {
-		return JValue(bas.NewObject(0).ToValue())
-	}
 	return ExprAssignList(nil)
 }
 
