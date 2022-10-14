@@ -94,10 +94,6 @@ func init() {
 			SetProp("set", bas.Int(typ.OpSet)).
 			SetProp("store", bas.Int(typ.OpStore)).
 			SetProp("load", bas.Int(typ.OpLoad)).
-			SetProp("linear16", bas.Int(typ.OpLinear16)).
-			SetProp("cmp16", bas.Int(typ.OpCmp16)).
-			SetProp("eq16", bas.Int(typ.OpEq16)).
-			SetProp("inc16", bas.Int(typ.OpInc16)).
 			SetProp("add", bas.Int(typ.OpAdd)).
 			SetProp("sub", bas.Int(typ.OpSub)).
 			SetProp("mul", bas.Int(typ.OpMul)).
@@ -112,7 +108,6 @@ func init() {
 			SetProp("neq", bas.Int(typ.OpNeq)).
 			SetProp("less", bas.Int(typ.OpLess)).
 			SetProp("lesseq", bas.Int(typ.OpLessEq)).
-			SetProp("bitop", bas.Int(typ.OpBitOp)).
 			SetProp("ifnot", bas.Int(typ.OpIfNot)).
 			SetProp("jmp", bas.Int(typ.OpJmp)).
 			SetProp("function", bas.Int(typ.OpFunction)).

@@ -237,35 +237,35 @@ func (table *symTable) compileAtom(n parser.Node, tmp *[]uint16) uint16 {
 
 func (table *symTable) writeInst2(op byte, n0, n1 parser.Node) {
 	var tmp []uint16
-	i := func(n parser.Node) int16 { return int16(bas.Value(n.(parser.Primitive)).Int64()) }
+	i := toi16
 	i64 := func(n parser.Node) int64 { return bas.Value(n.(parser.Primitive)).Int64() }
 	switch {
 	case op == typ.OpAdd && parser.IsInt16(n1) > 0:
-		table.codeSeg.WriteInst3(typ.OpLinear16, table.compileAtom(n0, &tmp), 1, uint16(i(n1)))
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtAdd16, table.compileAtom(n0, &tmp), uint16(i(n1)))
 	case op == typ.OpAdd && parser.IsInt16(n0) > 0:
-		table.codeSeg.WriteInst3(typ.OpLinear16, table.compileAtom(n1, &tmp), 1, uint16(i(n0)))
-	case op == typ.OpMul && parser.IsInt16(n1) > 0:
-		table.codeSeg.WriteInst3(typ.OpLinear16, table.compileAtom(n0, &tmp), uint16(i(n1)), 0)
-	case op == typ.OpMul && parser.IsInt16(n0) > 0:
-		table.codeSeg.WriteInst3(typ.OpLinear16, table.compileAtom(n1, &tmp), uint16(i(n0)), 0)
-	case op == typ.OpSub && parser.IsInt16(n1) == 2:
-		table.codeSeg.WriteInst3(typ.OpLinear16, table.compileAtom(n0, &tmp), 1, uint16(-i(n1)))
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtAdd16, table.compileAtom(n1, &tmp), uint16(i(n0)))
 	case op == typ.OpSub && parser.IsInt16(n0) > 0:
-		table.codeSeg.WriteInst3(typ.OpLinear16, table.compileAtom(n1, &tmp), 65535 /* -1 */, uint16(i(n0)))
-	case (op == typ.OpEq || op == typ.OpNeq) && parser.IsInt16(n1) > 0:
-		table.codeSeg.WriteInst3(typ.OpEq16, table.compileAtom(n0, &tmp), uint16(i(n1)), uint16(op))
-	case (op == typ.OpEq || op == typ.OpNeq) && parser.IsInt16(n0) > 0:
-		table.codeSeg.WriteInst3(typ.OpEq16, table.compileAtom(n1, &tmp), uint16(i(n0)), uint16(op))
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtRSub16, table.compileAtom(n1, &tmp), uint16(i(n0)))
+	case op == typ.OpSub && parser.IsInt16(n1) > 1:
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtAdd16, table.compileAtom(n0, &tmp), uint16(-i(n1)))
+	case op == typ.OpEq && parser.IsInt16(n1) > 0:
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtEq16, table.compileAtom(n0, &tmp), uint16(i(n1)))
+	case op == typ.OpEq && parser.IsInt16(n0) > 0:
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtEq16, table.compileAtom(n1, &tmp), uint16(i(n0)))
+	case op == typ.OpNeq && parser.IsInt16(n1) > 0:
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtNeq16, table.compileAtom(n0, &tmp), uint16(i(n1)))
+	case op == typ.OpNeq && parser.IsInt16(n0) > 0:
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtNeq16, table.compileAtom(n1, &tmp), uint16(i(n0)))
 	case op == typ.OpLess && parser.IsInt16(n1) > 0:
-		table.codeSeg.WriteInst3(typ.OpCmp16, table.compileAtom(n0, &tmp), 1, uint16(i(n1)))
-	case op == typ.OpLess && parser.IsInt16(n0) == 2:
-		table.codeSeg.WriteInst3(typ.OpCmp16, table.compileAtom(n1, &tmp), 65535, uint16(-i(n0)))
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtLess16, table.compileAtom(n0, &tmp), uint16(i(n1)))
+	case op == typ.OpLess && parser.IsInt16(n0) > 0:
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtGreat16, table.compileAtom(n1, &tmp), uint16(i(n0)))
 	case op == typ.OpLessEq && parser.IsInt16(n1) > 0 && i64(n1)+1 <= math.MaxInt16:
-		table.codeSeg.WriteInst3(typ.OpCmp16, table.compileAtom(n0, &tmp), 1, uint16(int16(i64(n1)+1)))
-	case op == typ.OpLessEq && parser.IsInt16(n0) > 0 && -i64(n0)+1 >= math.MinInt16:
-		table.codeSeg.WriteInst3(typ.OpCmp16, table.compileAtom(n1, &tmp), 65535, uint16(int16(-i64(n0)+1)))
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtLess16, table.compileAtom(n0, &tmp), uint16(int16(i64(n1)+1)))
+	case op == typ.OpLessEq && parser.IsInt16(n0) > 0 && i64(n0)-1 >= math.MinInt16:
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtGreat16, table.compileAtom(n1, &tmp), uint16(int16(i64(n0)-1)))
 	case op == typ.OpInc && parser.IsInt16(n1) > 0:
-		table.codeSeg.WriteInst(typ.OpInc16, table.compileAtom(n0, &tmp), uint16(i(n1)))
+		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtInc16, table.compileAtom(n0, &tmp), uint16(i(n1)))
 	default:
 		table.codeSeg.WriteInst(op, table.compileAtom(n0, &tmp), table.compileAtom(n1, &tmp))
 	}
@@ -274,7 +274,14 @@ func (table *symTable) writeInst2(op byte, n0, n1 parser.Node) {
 
 func (table *symTable) writeInst3(op byte, n0, n1, n2 parser.Node) {
 	var tmp []uint16
-	table.codeSeg.WriteInst3(op, table.compileAtom(n0, &tmp), table.compileAtom(n1, &tmp), table.compileAtom(n2, &tmp))
+	switch {
+	case op == typ.OpLoad && parser.IsInt16(n1) > 0:
+		table.codeSeg.WriteInst3Sub(typ.OpExt, typ.OpExtLoad16, table.compileAtom(n0, &tmp), uint16(toi16(n1)), table.compileAtom(n2, &tmp))
+	case op == typ.OpStore && parser.IsInt16(n1) > 0:
+		table.codeSeg.WriteInst3Sub(typ.OpExt, typ.OpExtStore16, table.compileAtom(n0, &tmp), uint16(toi16(n1)), table.compileAtom(n2, &tmp))
+	default:
+		table.codeSeg.WriteInst3(op, table.compileAtom(n0, &tmp), table.compileAtom(n1, &tmp), table.compileAtom(n2, &tmp))
+	}
 	table.freeAddr(tmp)
 }
 
@@ -435,3 +442,5 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 	coreStack[gi] = bas.ValueOf(cls)
 	return cls, err
 }
+
+func toi16(n parser.Node) int16 { return int16(bas.Value(n.(parser.Primitive)).Int64()) }

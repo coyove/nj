@@ -89,7 +89,7 @@ func (b *Packet) WriteInst(op byte, opa, opb uint16) {
 					load subject key dest
 			*/
 			x := &b.Code[len(b.Code)-1]
-			if x.Opcode == typ.OpLoad && x.C == typ.RegA {
+			if (x.Opcode == typ.OpLoad || x.OpcodeExt == typ.OpExtLoad16) && x.C == typ.RegA {
 				x.C = opa
 				return
 			}
@@ -144,6 +144,16 @@ func (b *Packet) WriteInst3(op byte, opa, opb, opc uint16) {
 		}
 	}
 	b.Code = append(b.Code, typ.Inst{Opcode: op, A: opa, B: opb, C: opc})
+	b.check()
+}
+
+func (b *Packet) WriteInst3Sub(op, sub byte, opa, opb, opc uint16) {
+	b.Code = append(b.Code, typ.Inst{Opcode: op, OpcodeExt: sub, A: opa, B: opb, C: opc})
+	b.check()
+}
+
+func (b *Packet) WriteInst2Sub(op, sub byte, opa, opb uint16) {
+	b.Code = append(b.Code, typ.Inst{Opcode: op, OpcodeExt: sub, A: opa, B: opb})
 	b.check()
 }
 

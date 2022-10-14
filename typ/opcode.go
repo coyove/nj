@@ -3,10 +3,11 @@ package typ
 import "unsafe"
 
 type Inst struct {
-	Opcode byte
-	A      uint16
-	B      uint16
-	C      uint16
+	Opcode    byte
+	OpcodeExt byte
+	A         uint16
+	B         uint16
+	C         uint16
 }
 
 const InstSize = unsafe.Sizeof(Inst{})
@@ -28,10 +29,7 @@ const (
 	OpSet
 	OpStore
 	OpLoad
-	OpLinear16
-	OpCmp16
-	OpEq16
-	OpInc16
+	OpExt
 	OpAdd
 	OpSub
 	OpMul
@@ -46,7 +44,6 @@ const (
 	OpNeq
 	OpLess
 	OpLessEq
-	OpBitOp
 	OpIfNot
 	OpJmp
 	OpFunction
@@ -60,6 +57,29 @@ const (
 	OpSlice
 	OpRet
 	OpLoadGlobal
+
+	_ = iota
+	OpExtAdd16
+	OpExtRSub16
+	OpExtLess16
+	OpExtGreat16
+	OpExtEq16
+	OpExtNeq16
+	OpExtInc16
+	OpExtLoad16
+	OpExtStore16
+	OpExtBitAnd
+	OpExtBitOr
+	OpExtBitXor
+	OpExtBitLsh
+	OpExtBitRsh
+	OpExtBitURsh
+	OpExtBitAnd16
+	OpExtBitOr16
+	OpExtBitXor16
+	OpExtBitLsh16
+	OpExtBitRsh16
+	OpExtBitURsh16
 )
 
 func JmpInst(op byte, distance int) Inst {

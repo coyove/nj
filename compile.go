@@ -99,11 +99,33 @@ func compileTenary(table *symTable, node *parser.Tenary) uint16 {
 
 func compileBitwise(table *symTable, node *parser.Bitwise) uint16 {
 	nodes := table.collapse(true, node.A, node.B)
-	// Lookup table:     And,  c, d, e, f, g, h, i, j, k, Lsh,  n, Or,p, q, Rsh,  t, Ursh, w, Xor,  z
-	lookup := [26]uint16{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 1, 0, 0, 4, 0, 0, 5, 0, 0, 2, 0, 0}
-	table.writeInst3(typ.OpBitOp, nodes[0], nodes[1], parser.Address(lookup[node.Op[0]-'a']))
+	op := byte(typ.OpExtBitAnd)
+	a, b := nodes[0], nodes[1]
+	switch node.Op {
+	case "and", "or", "xor":
+		if parser.IsInt16(a) > 0 {
+			table.writeInst2(typ.OpExt, b, parser.Address(uint16(toi16(a))))
+			op = typ.OpExtBitAnd16
+		} else if parser.IsInt16(b) > 0 {
+			table.writeInst2(typ.OpExt, a, parser.Address(uint16(toi16(b))))
+			op = typ.OpExtBitAnd16
+		} else {
+			table.writeInst2(typ.OpExt, a, b)
+		}
+	case "rsh", "lsh", "ursh":
+		if parser.IsInt16(b) > 0 {
+			table.writeInst2(typ.OpExt, a, parser.Address(uint16(toi16(b))))
+			op = typ.OpExtBitAnd16
+		} else {
+			table.writeInst2(typ.OpExt, a, b)
+		}
+	}
 	table.freeAddr(nodes[1:])
 	table.codeSeg.WriteLineNum(node.Line)
+
+	// Lookup table:     And,  c, d, e, f, g, h, i, j, k, Lsh,  n, Or,p, q, Rsh,  t, Ursh, w, Xor,  z
+	lookup := [26]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 1, 0, 0, 4, 0, 0, 5, 0, 0, 2, 0, 0}
+	table.codeSeg.Code[len(table.codeSeg.Code)-1].OpcodeExt = op + lookup[node.Op[0]-'a']
 	return typ.RegA
 }
 
@@ -375,7 +397,7 @@ func (table *symTable) patchGoto() {
 			}
 			code[i] = code[i].SetD(dest - int32(i) - 1)
 		}
-		if code[i].Opcode == typ.OpJmp && i > 0 && (code[i-1].Opcode == typ.OpInc || code[i-1].Opcode == typ.OpInc16) {
+		if code[i].Opcode == typ.OpJmp && i > 0 && (code[i-1].Opcode == typ.OpInc || code[i-1].OpcodeExt == typ.OpExtInc16) {
 			// Inc-then-small-jump, see OpInc in eval.go
 			if d := code[i].D() + 1; d >= math.MinInt16 && d <= math.MaxInt16 {
 				code[i-1].C = uint16(int16(d))

@@ -132,17 +132,6 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 			env.A = *va
 			cursor = uint32(int32(cursor) + int32(int16(v.C)))
-		case typ.OpInc16:
-			va := env._ref(opa)
-			if va.IsInt64() {
-				*va = Int64(va.UnsafeInt64() + int64(int16(opb)))
-			} else if va.IsNumber() {
-				*va = Float64(va.Float64() + float64(int16(opb)))
-			} else {
-				internal.Panic("inc16 "+errNeedNumber, va.simple())
-			}
-			env.A = *va
-			cursor = uint32(int32(cursor) + int32(int16(v.C)))
 		case typ.OpNext:
 			va, vb := env._get(opa), env._get(opb)
 			switch va.Type() {
@@ -172,29 +161,138 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 		case typ.OpLen:
 			env.A = Int(env._get(opa).Len())
-		case typ.OpLinear16:
-			if va := env._ref(opa); va.IsInt64() {
-				env.A = Int64(va.UnsafeInt64()*int64(int16(opb)) + int64(int16(v.C)))
-			} else if va.IsNumber() {
-				env.A = Float64(va.UnsafeFloat64()*float64(int16(opb)) + float64(int16(v.C)))
-			} else {
-				internal.Panic("arithmetic "+errNeedNumber, va.simple())
-			}
-		case typ.OpCmp16:
-			if va := env._ref(opa); va.IsInt64() {
-				env.A = Bool(va.UnsafeInt64()*int64(int16(opb)) < int64(int16(v.C)))
-			} else if va.IsNumber() {
-				env.A = Bool(va.UnsafeFloat64()*float64(int16(opb)) < float64(int16(v.C)))
-			} else {
-				internal.Panic("comparison "+errNeedNumber, va.simple())
-			}
-		case typ.OpEq16:
-			if va := env._ref(opa); va.IsInt64() {
-				env.A = Bool((va.UnsafeInt64() == int64(int16(opb))) == (v.C == typ.OpEq))
-			} else if va.IsNumber() {
-				env.A = Bool((va.UnsafeFloat64() == float64(int16(opb))) == (v.C == typ.OpEq))
-			} else {
-				internal.Panic("equality "+errNeedNumber, va.simple())
+		case typ.OpExt:
+			switch v.OpcodeExt {
+			case typ.OpExtInc16:
+				va := env._ref(opa)
+				if va.IsInt64() {
+					*va = Int64(va.UnsafeInt64() + int64(int16(opb)))
+				} else if va.IsNumber() {
+					*va = Float64(va.Float64() + float64(int16(opb)))
+				} else {
+					internal.Panic("inc16 "+errNeedNumber, va.simple())
+				}
+				env.A = *va
+				cursor = uint32(int32(cursor) + int32(int16(v.C)))
+			case typ.OpExtLess16:
+				if va := env._ref(opa); va.IsInt64() {
+					env.A = Bool(va.UnsafeInt64() < int64(int16(opb)))
+				} else if va.IsNumber() {
+					env.A = Bool(va.UnsafeFloat64() < float64(int16(opb)))
+				} else {
+					internal.Panic("less "+errNeedNumber, va.simple())
+				}
+			case typ.OpExtAdd16:
+				if va := env._ref(opa); va.IsInt64() {
+					env.A = Int64(va.UnsafeInt64() + int64(int16(opb)))
+				} else if va.IsNumber() {
+					env.A = Float64(va.UnsafeFloat64() + float64(int16(opb)))
+				} else {
+					internal.Panic("add "+errNeedNumber, va.simple())
+				}
+			case typ.OpExtRSub16:
+				if va := env._ref(opa); va.IsInt64() {
+					env.A = Int64(int64(int16(opb)) - va.UnsafeInt64())
+				} else if va.IsNumber() {
+					env.A = Float64(float64(int16(opb)) - va.UnsafeFloat64())
+				} else {
+					internal.Panic("sub "+errNeedNumber, va.simple())
+				}
+			case typ.OpExtGreat16:
+				if va := env._ref(opa); va.IsInt64() {
+					env.A = Bool(va.UnsafeInt64() > int64(int16(opb)))
+				} else if va.IsNumber() {
+					env.A = Bool(va.UnsafeFloat64() > float64(int16(opb)))
+				} else {
+					internal.Panic("great "+errNeedNumber, va.simple())
+				}
+			case typ.OpExtNeq16:
+				if va := env._ref(opa); va.IsInt64() {
+					env.A = Bool(va.UnsafeInt64() != int64(int16(opb)))
+				} else {
+					env.A = True
+				}
+			case typ.OpExtEq16:
+				if va := env._ref(opa); va.IsInt64() {
+					env.A = Bool(va.UnsafeInt64() == int64(int16(opb)))
+				} else {
+					env.A = False
+				}
+			case typ.OpExtStore16:
+				subject, v := env._ref(opa), env._get(v.C)
+				switch subject.Type() {
+				case typ.Object:
+					subject.Object().Set(Int(int(opb)), v)
+				case typ.Native:
+					if a := subject.Native(); int(opb) == a.Len() {
+						a.Append(v)
+					} else {
+						a.Set(int(opb), v)
+					}
+				default:
+					internal.Panic("invalid store: %v, key: %v", subject.simple(), opb)
+				}
+				env.A = v
+			case typ.OpExtLoad16:
+				switch a := env._ref(opa); a.Type() {
+				case typ.Object:
+					env.A = a.Object().Get(Int(int(opb)))
+				case typ.Native:
+					env.A = a.Native().Get(int(opb))
+				case typ.String:
+					env.A = Int64(int64(a.Str()[opb]))
+				default:
+					env.A = Nil
+				}
+				env._set(v.C, env.A)
+			case typ.OpExtBitAnd:
+				va, vb := env._get(opa), env._get(opb)
+				assertTwoInts("and", va, vb)
+				env.A = Int64(va.Int64() & vb.Int64())
+			case typ.OpExtBitOr:
+				va, vb := env._get(opa), env._get(opb)
+				assertTwoInts("or", va, vb)
+				env.A = Int64(va.Int64() | vb.Int64())
+			case typ.OpExtBitXor:
+				va, vb := env._get(opa), env._get(opb)
+				assertTwoInts("xor", va, vb)
+				env.A = Int64(va.Int64() ^ vb.Int64())
+			case typ.OpExtBitLsh:
+				va, vb := env._get(opa), env._get(opb)
+				assertTwoInts("lsh", va, vb)
+				env.A = Int64(va.Int64() << vb.Int64())
+			case typ.OpExtBitRsh:
+				va, vb := env._get(opa), env._get(opb)
+				assertTwoInts("rsh", va, vb)
+				env.A = Int64(va.Int64() >> vb.Int64())
+			case typ.OpExtBitURsh:
+				va, vb := env._get(opa), env._get(opb)
+				assertTwoInts("ursh", va, vb)
+				env.A = Int64(int64(uint64(va.Int64()) >> vb.Int64()))
+			case typ.OpExtBitAnd16:
+				va := env._get(opa)
+				assertOneInt("and", va)
+				env.A = Int64(va.Int64() & int64(int16(opb)))
+			case typ.OpExtBitOr16:
+				va := env._get(opa)
+				assertOneInt("or", va)
+				env.A = Int64(va.Int64() | int64(int16(opb)))
+			case typ.OpExtBitXor16:
+				va := env._get(opa)
+				assertOneInt("xor", va)
+				env.A = Int64(va.Int64() ^ int64(int16(opb)))
+			case typ.OpExtBitLsh16:
+				va := env._get(opa)
+				assertOneInt("lsh", va)
+				env.A = Int64(va.Int64() << int64(int16(opb)))
+			case typ.OpExtBitRsh16:
+				va := env._get(opa)
+				assertOneInt("rsh", va)
+				env.A = Int64(va.Int64() >> int64(int16(opb)))
+			case typ.OpExtBitURsh16:
+				va := env._get(opa)
+				assertOneInt("uRsh", va)
+				env.A = Int64(int64(uint64(va.Int64()) >> int64(int16(opb))))
 			}
 		case typ.OpAdd:
 			if va, vb := env._ref(opa), env._ref(opb); va.IsInt64() && vb.IsInt64() {
@@ -268,25 +366,6 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 		case typ.OpNot:
 			env.A = Bool(env._get(opa).IsFalse())
-		case typ.OpBitOp:
-			va, vb := env._get(opa), env._get(opb)
-			if !va.IsInt64() || !vb.IsInt64() {
-				internal.Panic("bitwise operation requires integer numbers, got %v and %v", va.simple(), vb.simple())
-			}
-			switch v.C {
-			case 0:
-				env.A = Int64(va.Int64() & vb.Int64())
-			case 1:
-				env.A = Int64(va.Int64() | vb.Int64())
-			case 2:
-				env.A = Int64(va.Int64() ^ vb.Int64())
-			case 3:
-				env.A = Int64(va.Int64() << vb.Int64())
-			case 4:
-				env.A = Int64(va.Int64() >> vb.Int64())
-			case 5:
-				env.A = Int64(int64(uint64(va.Int64()) >> vb.Int64()))
-			}
 		case typ.OpCreateArray:
 			env.A = newArray(append([]Value{}, stackEnv.Stack()...)...).ToValue()
 			stackEnv.clear()

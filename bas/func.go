@@ -321,19 +321,11 @@ func (obj *Object) printAll(w io.Writer) {
 					internal.WriteString(w, "if not a ")
 				}
 				internal.WriteString(w, fmt.Sprintf("jmp %d to %d", dest, pos2))
-			case typ.OpInc, typ.OpInc16:
-				if bop == typ.OpInc16 {
-					internal.WriteString(w, "inc16 "+readAddr(a, false)+" "+strconv.Itoa(int(int16(b))))
-				} else {
-					internal.WriteString(w, "inc "+readAddr(a, false)+" "+readAddr(b, false))
-				}
+			case typ.OpInc:
+				internal.WriteString(w, "inc "+readAddr(a, false)+" "+readAddr(b, false))
 				if c != 0 {
 					internal.WriteString(w, fmt.Sprintf(" jmp %d to %d", int16(c), int32(cursor)+int32(int16(c))))
 				}
-			case typ.OpBitOp:
-				internal.WriteString(w, "bit")
-				internal.WriteString(w, [...]string{"and ", "or ", "xor ", "lsh ", "rsh ", "ursh "}[c])
-				internal.WriteString(w, readAddr(a, false)+" "+readAddr(b, false))
 			case typ.OpLoad:
 				internal.WriteString(w, "load "+readAddr(a, false)+" "+readAddr(b, false)+" -> "+readAddr(c, false))
 			case typ.OpStore:
@@ -346,20 +338,56 @@ func (obj *Object) printAll(w io.Writer) {
 					internal.WriteString(w, " "+readAddr(b, true))
 				}
 				internal.WriteString(w, " -> "+readAddr(c, false))
-			case typ.OpLinear16:
-				if b == 1 {
-					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" + %d", int16(c)))
-				} else if b == 65535 {
-					internal.WriteString(w, "a = -"+readAddr(a, false)+fmt.Sprintf(" + %d", int16(c)))
-				} else if c == 0 {
-					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" * %d", int16(b)))
-				} else {
-					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" * %d + %d", int16(b), int16(c)))
+			case typ.OpExt:
+				switch inst.OpcodeExt {
+				case typ.OpExtAdd16:
+					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" + %d", int16(b)))
+				case typ.OpExtRSub16:
+					internal.WriteString(w, "a = "+fmt.Sprintf("%d - ", int16(b))+readAddr(a, false))
+				case typ.OpExtLess16:
+					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" < %d", int16(b)))
+				case typ.OpExtGreat16:
+					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" > %d", int16(b)))
+				case typ.OpExtEq16:
+					internal.WriteString(w, "a = "+readAddr(a, false)+" == "+strconv.Itoa(int(int16(b))))
+				case typ.OpExtNeq16:
+					internal.WriteString(w, "a = "+readAddr(a, false)+" != "+strconv.Itoa(int(int16(b))))
+				case typ.OpExtInc16:
+					internal.WriteString(w, "inc16 "+readAddr(a, false)+" "+strconv.Itoa(int(int16(b))))
+					if c != 0 {
+						internal.WriteString(w, fmt.Sprintf(" jmp %d to %d", int16(c), int32(cursor)+int32(int16(c))))
+					}
+				case typ.OpExtLoad16:
+					internal.WriteString(w, "load16 "+readAddr(a, false)+" "+strconv.Itoa(int(b))+" -> "+readAddr(c, false))
+				case typ.OpExtStore16:
+					internal.WriteString(w, "store16 "+readAddr(a, false)+" "+strconv.Itoa(int(b))+" <- "+readAddr(c, false))
+				case typ.OpExtBitAnd:
+					internal.WriteString(w, "bitand "+readAddr(a, false)+" "+readAddr(b, false))
+				case typ.OpExtBitOr:
+					internal.WriteString(w, "bitor "+readAddr(a, false)+" "+readAddr(b, false))
+				case typ.OpExtBitXor:
+					internal.WriteString(w, "bitxor "+readAddr(a, false)+" "+readAddr(b, false))
+				case typ.OpExtBitLsh:
+					internal.WriteString(w, "bitlsh "+readAddr(a, false)+" "+readAddr(b, false))
+				case typ.OpExtBitRsh:
+					internal.WriteString(w, "bitrsh "+readAddr(a, false)+" "+readAddr(b, false))
+				case typ.OpExtBitURsh:
+					internal.WriteString(w, "bitursh "+readAddr(a, false)+" "+readAddr(b, false))
+				case typ.OpExtBitAnd16:
+					internal.WriteString(w, "a = "+readAddr(a, false)+" & "+strconv.Itoa(int(int16(b))))
+				case typ.OpExtBitOr16:
+					internal.WriteString(w, "a = "+readAddr(a, false)+" | "+strconv.Itoa(int(int16(b))))
+				case typ.OpExtBitXor16:
+					internal.WriteString(w, "a = "+readAddr(a, false)+" ^ "+strconv.Itoa(int(int16(b))))
+				case typ.OpExtBitLsh16:
+					internal.WriteString(w, "a = "+readAddr(a, false)+" << "+strconv.Itoa(int(int16(b))))
+				case typ.OpExtBitRsh16:
+					internal.WriteString(w, "a = "+readAddr(a, false)+" >> "+strconv.Itoa(int(int16(b))))
+				case typ.OpExtBitURsh16:
+					internal.WriteString(w, "a = "+readAddr(a, false)+" >>> "+strconv.Itoa(int(int16(b))))
+				default:
+					internal.WriteString(w, fmt.Sprintf("? %02x", inst.OpcodeExt))
 				}
-			case typ.OpCmp16:
-				internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" * %d < %d", int16(b), int16(c)))
-			case typ.OpEq16:
-				internal.WriteString(w, "a = "+readAddr(a, false)+internal.IfStr(c == typ.OpEq, " == ", " != ")+strconv.Itoa(int(int16(b))))
 			default:
 				if us, ok := typ.UnaryOpcode[bop]; ok {
 					internal.WriteString(w, us+" "+readAddr(a, false))

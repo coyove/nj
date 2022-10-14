@@ -53,7 +53,7 @@ function renderRow(y0)
     return row 
 end
 
-size = 16000
+size = 1600
 bytesPerRow = size >> 3 
 
 initial_r = array.make(size) 
