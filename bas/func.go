@@ -6,7 +6,6 @@ import (
 	"io"
 	"math"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/coyove/nj/internal"
@@ -293,7 +292,7 @@ func (obj *Object) printAll(w io.Writer) {
 
 			switch bop {
 			case typ.OpSet:
-				internal.WriteString(w, readAddr(a, false)+" = "+readAddr(b, false))
+				fmt.Fprintf(w, "%s = %s", readAddr(a, false), readAddr(b, false))
 			case typ.OpCreateArray:
 				internal.WriteString(w, "createarray")
 			case typ.OpCreateObject:
@@ -302,11 +301,9 @@ func (obj *Object) printAll(w io.Writer) {
 				if a == typ.RegA {
 					internal.WriteString(w, "moveself")
 				} else if b == 0 {
-					internal.WriteString(w, "copyfunction "+readAddr(a, true))
-					internal.WriteString(w, " -> "+readAddr(c, false))
+					fmt.Fprintf(w, "%s = copyfunction %s", readAddr(c, false), readAddr(a, true))
 				} else if b == 1 {
-					internal.WriteString(w, "copyclosure "+readAddr(a, true))
-					internal.WriteString(w, " -> "+readAddr(c, false))
+					fmt.Fprintf(w, "%s = copyclosure %s", readAddr(c, false), readAddr(a, true))
 				}
 			case typ.OpTailCall, typ.OpCall:
 				if b != typ.RegPhantom {
@@ -320,71 +317,71 @@ func (obj *Object) printAll(w io.Writer) {
 				if bop == typ.OpIfNot {
 					internal.WriteString(w, "if not a ")
 				}
-				internal.WriteString(w, fmt.Sprintf("jmp %d to %d", dest, pos2))
+				fmt.Fprintf(w, "jmp %d to %d", dest, pos2)
 			case typ.OpInc:
-				internal.WriteString(w, "inc "+readAddr(a, false)+" "+readAddr(b, false))
+				fmt.Fprintf(w, "inc %s %s", readAddr(a, false), readAddr(b, false))
 				if c != 0 {
-					internal.WriteString(w, fmt.Sprintf(" jmp %d to %d", int16(c), int32(cursor)+int32(int16(c))))
+					fmt.Fprintf(w, " jmp %d to %d", int16(c), int32(cursor)+int32(int16(c)))
 				}
 			case typ.OpLoad:
-				internal.WriteString(w, "load "+readAddr(a, false)+" "+readAddr(b, false)+" -> "+readAddr(c, false))
+				fmt.Fprintf(w, "%s = load %s [%s]", readAddr(c, false), readAddr(a, false), readAddr(b, false))
 			case typ.OpStore:
-				internal.WriteString(w, "store "+readAddr(a, false)+" "+readAddr(b, false)+" <- "+readAddr(c, false))
+				fmt.Fprintf(w, "store %s -> %s [%s]", readAddr(c, false), readAddr(a, false), readAddr(b, false))
 			case typ.OpSlice:
-				internal.WriteString(w, "sliceload "+readAddr(a, false)+" "+readAddr(b, false)+" : "+readAddr(c, false))
+				fmt.Fprintf(w, "sliceload %s [%s %s]", readAddr(a, false), readAddr(b, false), readAddr(c, false))
 			case typ.OpLoadGlobal:
-				internal.WriteString(w, "loadglobal "+globals.stack[a].simple())
 				if b != typ.RegPhantom {
-					internal.WriteString(w, " "+readAddr(b, true))
+					fmt.Fprintf(w, "%s = loadglobal %s [%s]", readAddr(c, false), globals.stack[a].simple(), readAddr(b, true))
+				} else {
+					fmt.Fprintf(w, "%s = loadglobal %s", readAddr(c, false), globals.stack[a].simple())
 				}
-				internal.WriteString(w, " -> "+readAddr(c, false))
 			case typ.OpExt:
 				switch inst.OpcodeExt {
 				case typ.OpExtAdd16:
-					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" + %d", int16(b)))
+					fmt.Fprintf(w, "add %s $%d", readAddr(a, false), int16(b))
 				case typ.OpExtRSub16:
-					internal.WriteString(w, "a = "+fmt.Sprintf("%d - ", int16(b))+readAddr(a, false))
+					fmt.Fprintf(w, "sub $%d %s", int16(b), readAddr(a, false))
 				case typ.OpExtLess16:
-					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" < %d", int16(b)))
+					fmt.Fprintf(w, "less %s $%d", readAddr(a, false), int16(b))
 				case typ.OpExtGreat16:
-					internal.WriteString(w, "a = "+readAddr(a, false)+fmt.Sprintf(" > %d", int16(b)))
+					fmt.Fprintf(w, "less $%d %s", int16(b), readAddr(a, false))
 				case typ.OpExtEq16:
-					internal.WriteString(w, "a = "+readAddr(a, false)+" == "+strconv.Itoa(int(int16(b))))
+					fmt.Fprintf(w, "eq %s $%d", readAddr(a, false), int16(b))
 				case typ.OpExtNeq16:
-					internal.WriteString(w, "a = "+readAddr(a, false)+" != "+strconv.Itoa(int(int16(b))))
+					fmt.Fprintf(w, "neq %s $%d", readAddr(a, false), int16(b))
 				case typ.OpExtInc16:
-					internal.WriteString(w, "inc16 "+readAddr(a, false)+" "+strconv.Itoa(int(int16(b))))
+					fmt.Fprintf(w, "inc16 %s $%d", readAddr(a, false), int16(b))
 					if c != 0 {
-						internal.WriteString(w, fmt.Sprintf(" jmp %d to %d", int16(c), int32(cursor)+int32(int16(c))))
+						fmt.Fprintf(w, " jmp %d to %d", int16(c), int32(cursor)+int32(int16(c)))
 					}
 				case typ.OpExtLoad16:
-					internal.WriteString(w, "load16 "+readAddr(a, false)+" "+strconv.Itoa(int(b))+" -> "+readAddr(c, false))
+					fmt.Fprintf(w, "%s = load16 %s [$%d]", readAddr(c, false), readAddr(a, false), int16(b))
 				case typ.OpExtStore16:
-					internal.WriteString(w, "store16 "+readAddr(a, false)+" "+strconv.Itoa(int(b))+" <- "+readAddr(c, false))
+					fmt.Fprintf(w, "store16 %s -> %s [$%d]", readAddr(c, false), readAddr(a, false), int16(b))
 				case typ.OpExtBitAnd:
-					internal.WriteString(w, "bitand "+readAddr(a, false)+" "+readAddr(b, false))
+					fmt.Fprintf(w, "bitand %s %s", readAddr(a, false), readAddr(b, false))
 				case typ.OpExtBitOr:
-					internal.WriteString(w, "bitor "+readAddr(a, false)+" "+readAddr(b, false))
+					fmt.Fprintf(w, "bitor %s %s", readAddr(a, false), readAddr(b, false))
 				case typ.OpExtBitXor:
-					internal.WriteString(w, "bitxor "+readAddr(a, false)+" "+readAddr(b, false))
+					fmt.Fprintf(w, "bitxor %s %s", readAddr(a, false), readAddr(b, false))
 				case typ.OpExtBitLsh:
-					internal.WriteString(w, "bitlsh "+readAddr(a, false)+" "+readAddr(b, false))
+					fmt.Fprintf(w, "bitlsh %s %s", readAddr(a, false), readAddr(b, false))
 				case typ.OpExtBitRsh:
-					internal.WriteString(w, "bitrsh "+readAddr(a, false)+" "+readAddr(b, false))
+					fmt.Fprintf(w, "bitrsh %s %s", readAddr(a, false), readAddr(b, false))
 				case typ.OpExtBitURsh:
-					internal.WriteString(w, "bitursh "+readAddr(a, false)+" "+readAddr(b, false))
+					fmt.Fprintf(w, "bitursh %s %s", readAddr(a, false), readAddr(b, false))
 				case typ.OpExtBitAnd16:
-					internal.WriteString(w, "a = "+readAddr(a, false)+" & "+strconv.Itoa(int(int16(b))))
+					fmt.Fprintf(w, "bitand %s $%d", readAddr(a, false), int16(b))
 				case typ.OpExtBitOr16:
-					internal.WriteString(w, "a = "+readAddr(a, false)+" | "+strconv.Itoa(int(int16(b))))
+					fmt.Fprintf(w, "bitor %s $%d", readAddr(a, false), int16(b))
 				case typ.OpExtBitXor16:
-					internal.WriteString(w, "a = "+readAddr(a, false)+" ^ "+strconv.Itoa(int(int16(b))))
+					fmt.Fprintf(w, "bitxor %s $%d", readAddr(a, false), int16(b))
 				case typ.OpExtBitLsh16:
-					internal.WriteString(w, "a = "+readAddr(a, false)+" << "+strconv.Itoa(int(int16(b))))
+					fmt.Fprintf(w, "bitlsh %s $%d", readAddr(a, false), int16(b))
 				case typ.OpExtBitRsh16:
-					internal.WriteString(w, "a = "+readAddr(a, false)+" >> "+strconv.Itoa(int(int16(b))))
+					fmt.Fprintf(w, "bitrsh %s $%d", readAddr(a, false), int16(b))
 				case typ.OpExtBitURsh16:
-					internal.WriteString(w, "a = "+readAddr(a, false)+" >>> "+strconv.Itoa(int(int16(b))))
+					fmt.Fprintf(w, "bitursh %s $%d", readAddr(a, false), int16(b))
 				default:
 					internal.WriteString(w, fmt.Sprintf("? %02x", inst.OpcodeExt))
 				}
