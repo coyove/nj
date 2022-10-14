@@ -12,11 +12,11 @@ import (
 // 'stack' represents the global stack, a running function use 'stack[stackOffset:]' as its local stack.
 // 'A' stores the result of the execution. 'global' is the topmost function scope, a.k.a. Program.
 type Env struct {
-	stack           *[]Value
-	top             *Program
-	A               Value
-	stackOffsetFlag uint32
-	runtime         stacktraces
+	stack       *[]Value
+	top         *Program
+	A           Value
+	stackOffset uint32
+	runtime     stacktraces
 }
 
 type stacktraces struct {
@@ -49,10 +49,6 @@ func (r stacktraces) push(k Stacktrace) stacktraces {
 	return r
 }
 
-func (env *Env) stackOffset() uint32 {
-	return env.stackOffsetFlag & internal.MaxStackSize
-}
-
 func (env *Env) resizeZero(newSize, zeroSize int) {
 	// old := len(*env.stack)
 	env.resize(newSize)
@@ -63,7 +59,7 @@ func (env *Env) resizeZero(newSize, zeroSize int) {
 
 func (env *Env) resize(newSize int) {
 	s := *env.stack
-	sz := int(env.stackOffset()) + newSize
+	sz := int(env.stackOffset) + newSize
 	if sz > cap(s) {
 		old := s
 		s = make([]Value, sz+newSize)
@@ -78,7 +74,7 @@ func (env *Env) Get(index int) Value {
 		return env.A
 	}
 	s := *env.stack
-	index += int(env.stackOffset())
+	index += int(env.stackOffset)
 	if index < len(s) {
 		return s[index]
 	}
@@ -91,7 +87,7 @@ func (env *Env) Set(index int, value Value) {
 }
 
 func (env *Env) clear() {
-	*env.stack = (*env.stack)[:env.stackOffset()]
+	*env.stack = (*env.stack)[:env.stackOffset]
 	env.A = Value{}
 }
 
@@ -100,43 +96,47 @@ func (env *Env) push(v Value) {
 }
 
 func (env *Env) Size() int {
-	return len(*env.stack) - int(env.stackOffset())
+	return len(*env.stack) - int(env.stackOffset)
 }
 
-func (env *Env) _getRef(yx uint16) *Value {
+func (env *Env) _ref(yx uint16) *Value {
 	if yx == typ.RegA {
 		return &env.A
 	}
-	if yx > typ.RegLocalMask {
+	if yx <= typ.RegLocalMask {
+		offset := uintptr(uint32(yx)+env.stackOffset) * ValueSize
+		return (*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.stack)) + offset))
+		// return &(*env.stack)[uint32(yx)+env.stackOffset]
+	}
+	offset := uintptr(yx&typ.RegLocalMask) * ValueSize
+	return (*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.top.stack)) + offset))
+	// return (*env.global.stack)[yx&typ.RegLocalMask]
+}
+
+func (env *Env) _refgp(yx uint16) *Value {
+	if yx > typ.RegA {
 		offset := uintptr(yx&typ.RegLocalMask) * ValueSize
 		return (*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.top.stack)) + offset))
 		// return (*env.global.stack)[yx&typ.RegLocalMask]
 	}
-	offset := uintptr(uint32(yx)+env.stackOffset()) * ValueSize
+	if yx == typ.RegA {
+		return &env.A
+	}
+	offset := uintptr(uint32(yx)+env.stackOffset) * ValueSize
 	return (*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.stack)) + offset))
-	// return (*env.stack)[uint32(yx)+env.stackOffset()]
+	// return &(*env.stack)[uint32(yx)+env.stackOffset]
 }
 
 func (env *Env) _get(yx uint16) Value {
-	return *env._getRef(yx)
+	return *env._ref(yx)
 }
 
 func (env *Env) _set(yx uint16, v Value) {
-	if yx == typ.RegA {
-		env.A = v
-	} else if yx > typ.RegLocalMask {
-		offset := uintptr(yx&typ.RegLocalMask) * ValueSize
-		*(*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.top.stack)) + offset)) = v
-		// (*env.global.stack)[yx&typ.RegLocalMask] = v
-	} else {
-		offset := uintptr(uint32(yx)+env.stackOffset()) * ValueSize
-		*(*Value)(unsafe.Pointer(*(*uintptr)(unsafe.Pointer(env.stack)) + offset)) = v
-		//(*env.stack)[uint32(yx)+env.stackOffset()] = v
-	}
+	*env._ref(yx) = v
 }
 
 // Stack returns current stack as a reference.
-func (env *Env) Stack() []Value { return (*env.stack)[env.stackOffset():] }
+func (env *Env) Stack() []Value { return (*env.stack)[env.stackOffset:] }
 
 // CopyStack returns a copy of current stack.
 func (env *Env) CopyStack() []Value { return append([]Value{}, env.Stack()...) }
@@ -269,7 +269,6 @@ func (e *Env) Copy() *Env {
 	e2.A = e.A
 	e2.top = e.top
 	e2.stack = &stk
-	e2.stackOffsetFlag = e.stackOffsetFlag - e.stackOffset()
 	e2.runtime = e.runtime
 	e2.runtime.stackN = append([]Stacktrace{}, e2.runtime.stackN...)
 	return e2

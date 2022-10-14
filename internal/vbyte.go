@@ -10,9 +10,7 @@ import (
 )
 
 const (
-	MaxStackSize   = 0x0fffffff
-	FlagTailCall   = 0x80000000
-	FlagNativeCall = 0x40000000
+	MaxStackSize = 0x0fffffff
 )
 
 type VByte32 struct {

@@ -17,7 +17,7 @@ func compileProgBlock(table *symTable, node *parser.Prog) uint16 {
 		table.addMaskedSymTable()
 	}
 
-	yx := typ.RegA
+	yx := uint16(typ.RegA)
 	for _, a := range node.Stats {
 		if a == nil {
 			continue
@@ -263,7 +263,7 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 	}
 
 	code := newtable.codeSeg
-	code.WriteInst(typ.OpRet, typ.RegGlobalFlag, 0) // return nil
+	code.WriteInst(typ.OpRet, typ.RegNil, 0) // return nil
 
 	localDeclare := table.borrowAddress()
 	table.put(bas.Str(node.Name), localDeclare)

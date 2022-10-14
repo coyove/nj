@@ -27,9 +27,9 @@ func (t ValueType) String() string {
 }
 
 const (
-	RegA          uint16 = 0xffff
-	RegPhantom    uint16 = 0xfffe
-	RegLocalMask         = 0x7fff
-	RegGlobalFlag        = 0x8000
-	RegMaxAddress        = 0x7f00
+	RegA          = 0x8000
+	RegPhantom    = 0xffff
+	RegLocalMask  = 0x7fff
+	RegNil        = 0x8001
+	RegMaxAddress = 0x7ff0
 )

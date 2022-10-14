@@ -135,7 +135,7 @@ var (
 func (table *symTable) get(name bas.Value) (uint16, bool) {
 	switch name {
 	case staticNil:
-		return typ.RegGlobalFlag, true
+		return typ.RegNil, true
 	case staticTrue:
 		return table.loadConst(bas.True), true
 	case staticFalse:
@@ -178,7 +178,7 @@ func (table *symTable) get(name bas.Value) (uint16, bool) {
 		}
 	}
 
-	return typ.RegGlobalFlag, false
+	return typ.RegNil, false
 }
 
 func (table *symTable) put(name bas.Value, addr uint16) {
@@ -308,14 +308,14 @@ func (table *symTable) compileNode(node parser.Node) uint16 {
 	case *parser.LoadConst:
 		table.constMap = v.Table
 		table.constMap.Foreach(func(k bas.Value, v *bas.Value) bool {
-			addr := int(typ.RegGlobalFlag | table.borrowAddressNoReuse())
+			addr := int(typ.RegA | table.borrowAddressNoReuse())
 			*v = bas.Int(addr)
 			return true
 		})
 		table.funcsMap = v.Funcs
 		table.funcsMap.Foreach(func(k bas.Value, v *bas.Value) bool {
 			addr := int(table.borrowAddressNoReuse())
-			*v = bas.Int(typ.RegGlobalFlag | addr)
+			*v = bas.Int(typ.RegA | addr)
 			table.sym.Set(k, bas.Int(addr))
 			return true
 		})
@@ -377,7 +377,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 	// Load nil first to ensure its address == 0
 	table.borrowAddress()
 
-	coreStack := []bas.Value{bas.Nil}
+	coreStack := []bas.Value{bas.Nil, bas.Nil}
 
 	push := func(k, v bas.Value) uint16 {
 		idx, ok := table.get(k)

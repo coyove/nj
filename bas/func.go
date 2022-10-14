@@ -194,8 +194,7 @@ func callobj(m *Object, r stacktraces, g *Program, outErr *error, this Value, ar
 	if c.native != nil {
 		defer relayPanic(func() []Stacktrace { return newEnv.runtime.Stacktrace(false) })
 		newEnv.runtime = r.push(Stacktrace{
-			Callable:        m,
-			stackOffsetFlag: internal.FlagNativeCall,
+			Callable: m,
 		})
 		c.native(&newEnv)
 		return newEnv.A

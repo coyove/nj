@@ -366,7 +366,7 @@ func init() {
 		SetProp("self", Func("self", func(e *Env) { e.A = e.Caller().ToValue() })).
 		SetProp("locals", Func("locals", func(e *Env) {
 			locals := e.Caller().fun.locals
-			start := e.stackOffset() - uint32(e.Caller().fun.stackSize)
+			start := e.stackOffset - uint32(e.Caller().fun.stackSize)
 			if e.Get(0).IsTrue() {
 				r := NewObject(0)
 				for i, name := range locals {
