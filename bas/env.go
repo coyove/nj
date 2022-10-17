@@ -49,6 +49,20 @@ func (r stacktraces) push(k Stacktrace) stacktraces {
 	return r
 }
 
+func (env *Env) getTop() *Program {
+	if env == nil {
+		return nil
+	}
+	return env.top
+}
+
+func (env *Env) getStacktraces() stacktraces {
+	if env == nil {
+		return stacktraces{}
+	}
+	return env.runtime
+}
+
 func (env *Env) resizeZero(newSize, zeroSize int) {
 	// old := len(*env.stack)
 	env.resize(newSize)

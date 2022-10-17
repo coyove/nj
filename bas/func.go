@@ -61,9 +61,6 @@ func Globals() Map {
 }
 
 func AddGlobal(k string, v Value) {
-	if len(globals.stack) == 0 {
-		globals.stack = append(globals.stack, Nil)
-	}
 	sk := Str(k)
 	idx, ok := globals.sym.Get(sk)
 	if ok {
@@ -151,26 +148,26 @@ func (p *Program) LocalsObject() *Object {
 	return r
 }
 
+// Apply calls the object with provided 'this' value, 'e' is for stacktracing and is optional.
 func (m *Object) Apply(e *Env, this Value, args ...Value) Value {
-	if e != nil {
-		return callobj(m, e.runtime, e.top, nil, this, args...)
-	}
-	return callobj(m, stacktraces{}, nil, nil, this, args...)
+	return callobj(m, e.getStacktraces(), e.getTop(), nil, this, args...)
 }
 
+// TryApply calls the object with provided 'this' value, 'e' is for stacktracing and is optional.
+// Panic will be recovered and returned as an error.
+func (m *Object) TryApply(e *Env, this Value, args ...Value) (res Value, err error) {
+	res = callobj(m, e.getStacktraces(), e.getTop(), &err, this, args...)
+	return
+}
+
+// Call calls the object, 'e' is for stacktracing and is optional.
 func (m *Object) Call(e *Env, args ...Value) (res Value) {
-	if e != nil {
-		return callobj(m, e.runtime, e.top, nil, m.this, args...)
-	}
-	return callobj(m, stacktraces{}, nil, nil, m.this, args...)
+	return callobj(m, e.getStacktraces(), e.getTop(), nil, m.this, args...)
 }
 
+// TryCall calls the object, 'e' is for stacktracing and is optional. Panic will be recovered and returned as an error.
 func (m *Object) TryCall(e *Env, args ...Value) (res Value, err error) {
-	if e != nil {
-		res = callobj(m, e.runtime, e.top, &err, m.this, args...)
-	} else {
-		res = callobj(m, stacktraces{}, nil, &err, m.this, args...)
-	}
+	res = callobj(m, e.getStacktraces(), e.getTop(), &err, m.this, args...)
 	return
 }
 
@@ -205,14 +202,14 @@ func callobj(m *Object, r stacktraces, g *Program, outErr *error, this Value, ar
 			s[c.numArgs-1] = newVarargArray(s[c.numArgs-1:]).ToValue()
 		} else {
 			if newEnv.Size() < int(c.numArgs)-1 {
-				internal.PanicNotEnoughArgs(m.ToValue().simple())
+				panicNotEnoughArgs(m)
 			}
 			newEnv.resize(int(c.numArgs))
 			newEnv._set(uint16(c.numArgs)-1, Nil)
 		}
 	} else {
 		if newEnv.Size() < int(c.numArgs) {
-			internal.PanicNotEnoughArgs(m.ToValue().simple())
+			panicNotEnoughArgs(m)
 		}
 	}
 	newEnv.resizeZero(int(c.stackSize), int(c.numArgs))
@@ -299,39 +296,33 @@ func (obj *Object) printAll(w io.Writer) {
 				internal.WriteString(w, "createobject")
 			case typ.OpFunction:
 				if a == typ.RegA {
-					internal.WriteString(w, "moveself")
+					internal.WriteString(w, "loadself")
 				} else if b == 0 {
-					fmt.Fprintf(w, "%s = copyfunction %s", readAddr(c, false), readAddr(a, true))
+					fmt.Fprintf(w, "%s = loadfunction %s", readAddr(c, false), readAddr(a, true))
 				} else if b == 1 {
-					fmt.Fprintf(w, "%s = copyclosure %s", readAddr(c, false), readAddr(a, true))
+					fmt.Fprintf(w, "%s = loadclosure %s", readAddr(c, false), readAddr(a, true))
 				}
 			case typ.OpTailCall, typ.OpCall:
 				if b != typ.RegPhantom {
-					internal.WriteString(w, "push "+readAddr(b, false)+" -> ")
+					internal.WriteString(w, "push "+readAddr(b, false)+"; ")
 				}
 				internal.WriteString(w, internal.IfStr(bop == typ.OpTailCall, "tailcall ", "call "))
 				internal.WriteString(w, readAddr(a, true))
-			case typ.OpIfNot, typ.OpJmp:
-				dest := inst.D()
-				pos2 := uint32(int32(cursor) + dest)
-				if bop == typ.OpIfNot {
-					internal.WriteString(w, "if not a ")
-				}
-				fmt.Fprintf(w, "jmp %d to %d", dest, pos2)
+			case typ.OpJmpFalse:
+				fmt.Fprintf(w, "jmpfalse %d", uint32(int32(cursor)+inst.D()))
+			case typ.OpJmp:
+				fmt.Fprintf(w, "jmp %d", uint32(int32(cursor)+inst.D()))
 			case typ.OpInc:
-				fmt.Fprintf(w, "inc %s %s", readAddr(a, false), readAddr(b, false))
-				if c != 0 {
-					fmt.Fprintf(w, " jmp %d to %d", int16(c), int32(cursor)+int32(int16(c)))
-				}
+				fmt.Fprintf(w, "inc %s %s jmp %d", readAddr(a, false), readAddr(b, false), int32(cursor)+int32(int16(c)))
 			case typ.OpLoad:
-				fmt.Fprintf(w, "%s = load %s [%s]", readAddr(c, false), readAddr(a, false), readAddr(b, false))
+				fmt.Fprintf(w, "%s = %s[%s]", readAddr(c, false), readAddr(a, false), readAddr(b, false))
 			case typ.OpStore:
-				fmt.Fprintf(w, "store %s -> %s [%s]", readAddr(c, false), readAddr(a, false), readAddr(b, false))
+				fmt.Fprintf(w, "%s[%s] = %s", readAddr(a, false), readAddr(b, false), readAddr(c, false))
 			case typ.OpSlice:
-				fmt.Fprintf(w, "sliceload %s [%s %s]", readAddr(a, false), readAddr(b, false), readAddr(c, false))
+				fmt.Fprintf(w, "sliceload %s %s %s", readAddr(a, false), readAddr(b, false), readAddr(c, false))
 			case typ.OpLoadGlobal:
 				if b != typ.RegPhantom {
-					fmt.Fprintf(w, "%s = loadglobal %s [%s]", readAddr(c, false), globals.stack[a].simple(), readAddr(b, true))
+					fmt.Fprintf(w, "%s = loadglobal %s[%s]", readAddr(c, false), globals.stack[a].simple(), readAddr(b, true))
 				} else {
 					fmt.Fprintf(w, "%s = loadglobal %s", readAddr(c, false), globals.stack[a].simple())
 				}
@@ -350,14 +341,11 @@ func (obj *Object) printAll(w io.Writer) {
 				case typ.OpExtNeq16:
 					fmt.Fprintf(w, "neq %s $%d", readAddr(a, false), int16(b))
 				case typ.OpExtInc16:
-					fmt.Fprintf(w, "inc16 %s $%d", readAddr(a, false), int16(b))
-					if c != 0 {
-						fmt.Fprintf(w, " jmp %d to %d", int16(c), int32(cursor)+int32(int16(c)))
-					}
+					fmt.Fprintf(w, "inc %s $%d jmp %d", readAddr(a, false), int16(b), int32(cursor)+int32(int16(c)))
 				case typ.OpExtLoad16:
-					fmt.Fprintf(w, "%s = load16 %s [$%d]", readAddr(c, false), readAddr(a, false), int16(b))
+					fmt.Fprintf(w, "%s = %s[$%d]", readAddr(c, false), readAddr(a, false), int16(b))
 				case typ.OpExtStore16:
-					fmt.Fprintf(w, "store16 %s -> %s [$%d]", readAddr(c, false), readAddr(a, false), int16(b))
+					fmt.Fprintf(w, "%s[$%d] = %s", readAddr(a, false), int16(b), readAddr(c, false))
 				case typ.OpExtBitAnd:
 					fmt.Fprintf(w, "bitand %s %s", readAddr(a, false), readAddr(b, false))
 				case typ.OpExtBitOr:

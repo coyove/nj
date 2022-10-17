@@ -108,7 +108,7 @@ func init() {
 			SetProp("neq", bas.Int(typ.OpNeq)).
 			SetProp("less", bas.Int(typ.OpLess)).
 			SetProp("lesseq", bas.Int(typ.OpLessEq)).
-			SetProp("ifnot", bas.Int(typ.OpIfNot)).
+			SetProp("ifnot", bas.Int(typ.OpJmpFalse)).
 			SetProp("jmp", bas.Int(typ.OpJmp)).
 			SetProp("function", bas.Int(typ.OpFunction)).
 			SetProp("push", bas.Int(typ.OpPush)).
@@ -121,6 +121,7 @@ func init() {
 			SetProp("slice", bas.Int(typ.OpSlice)).
 			SetProp("ret", bas.Int(typ.OpRet)).
 			SetProp("loadglobal", bas.Int(typ.OpLoadGlobal)).
+			SetProp("ext", bas.Int(typ.OpExt)).
 			ToValue(),
 		).
 		ToValue())
@@ -140,20 +141,26 @@ func init() {
 		}
 		fmt.Fprintln(e.MustProgram().Stdout)
 	}))
-	bas.AddGlobalFunc("scanln", func(env *bas.Env) {
-		prompt, n := env.StrDefault(0, "", 0), env.IntDefault(1, 1)
-		fmt.Fprint(env.MustProgram().Stdout, prompt)
-		var results []bas.Value
-		var r io.Reader = env.MustProgram().Stdin
-		for i := n; i > 0; i-- {
-			var s string
-			if _, err := fmt.Fscan(r, &s); err != nil {
-				break
-			}
-			results = append(results, bas.Str(s))
-		}
-		env.A = bas.Array(results...)
-	})
+	bas.AddGlobal("input", bas.NewObject(0).
+		SetProp("int", bas.Func("int", func(e *bas.Env) {
+			fmt.Fprint(e.MustProgram().Stdout, e.StrDefault(0, "", 0))
+			var v int64
+			fmt.Fscanf(e.MustProgram().Stdin, "%d", &v)
+			e.A = bas.Int64(v)
+		})).
+		SetProp("num", bas.Func("num", func(e *bas.Env) {
+			fmt.Fprint(e.MustProgram().Stdout, e.StrDefault(0, "", 0))
+			var v float64
+			fmt.Fscanf(e.MustProgram().Stdin, "%f", &v)
+			e.A = bas.Float64(v)
+		})).
+		SetProp("str", bas.Func("str", func(e *bas.Env) {
+			fmt.Fprint(e.MustProgram().Stdout, e.StrDefault(0, "", 0))
+			var v string
+			fmt.Fscanln(e.MustProgram().Stdin, &v)
+			e.A = bas.Str(v)
+		})).
+		ToValue())
 
 	rxMeta := bas.NewEmptyNativeMeta("RegExp", bas.NewObject(0).
 		AddMethod("match", func(e *bas.Env) {

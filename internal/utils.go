@@ -43,10 +43,6 @@ func Panic(msg string, args ...interface{}) {
 	panic(fmt.Errorf(msg, args...))
 }
 
-func PanicNotEnoughArgs(a string) {
-	panic("not enough arguments to call " + a)
-}
-
 func PanicErr(err error) {
 	if err != nil {
 		panic(err)

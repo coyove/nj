@@ -133,13 +133,13 @@ func compileBitwise(table *symTable, node *parser.Bitwise) uint16 {
 func compileAnd(table *symTable, node *parser.And) uint16 {
 	table.writeInst2(typ.OpSet, nodeRegA, node.A)
 
-	table.codeSeg.WriteJmpInst(typ.OpIfNot, 0)
+	table.codeSeg.WriteJmpInst(typ.OpJmpFalse, 0)
 	part1 := table.codeSeg.Len()
 
 	table.writeInst2(typ.OpSet, nodeRegA, node.B)
 	part2 := table.codeSeg.Len()
 
-	table.codeSeg.Code[part1-1] = typ.JmpInst(typ.OpIfNot, part2-part1)
+	table.codeSeg.Code[part1-1] = typ.JmpInst(typ.OpJmpFalse, part2-part1)
 	return typ.RegA
 }
 
@@ -147,7 +147,7 @@ func compileAnd(table *symTable, node *parser.And) uint16 {
 func compileOr(table *symTable, node *parser.Or) uint16 {
 	table.writeInst2(typ.OpSet, nodeRegA, node.A)
 
-	table.codeSeg.WriteJmpInst(typ.OpIfNot, 1)
+	table.codeSeg.WriteJmpInst(typ.OpJmpFalse, 1)
 	table.codeSeg.WriteJmpInst(typ.OpJmp, 0)
 	part1 := table.codeSeg.Len()
 
@@ -168,7 +168,7 @@ func compileIf(table *symTable, node *parser.If) uint16 {
 		table.codeSeg.WriteInst(typ.OpSet, typ.RegA, condyx)
 	}
 
-	table.codeSeg.WriteJmpInst(typ.OpIfNot, 0)
+	table.codeSeg.WriteJmpInst(typ.OpJmpFalse, 0)
 	init := table.codeSeg.Len()
 
 	table.compileNode(node.True)
@@ -182,14 +182,14 @@ func compileIf(table *symTable, node *parser.If) uint16 {
 
 		table.removeMaskedSymTable()
 
-		table.codeSeg.Code[init-1] = typ.JmpInst(typ.OpIfNot, part1-init+1)
+		table.codeSeg.Code[init-1] = typ.JmpInst(typ.OpJmpFalse, part1-init+1)
 		table.codeSeg.Code[part1] = typ.JmpInst(typ.OpJmp, part2-part1-1)
 	} else {
 		table.removeMaskedSymTable()
 
 		// The last inst is used to skip the false branch, since we don't have one, we don't need this jmp
 		table.codeSeg.TruncLast()
-		table.codeSeg.Code[init-1] = typ.JmpInst(typ.OpIfNot, part1-init)
+		table.codeSeg.Code[init-1] = typ.JmpInst(typ.OpJmpFalse, part1-init)
 	}
 	return typ.RegA
 }

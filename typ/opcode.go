@@ -44,7 +44,7 @@ const (
 	OpNeq
 	OpLess
 	OpLessEq
-	OpIfNot
+	OpJmpFalse
 	OpJmp
 	OpFunction
 	OpPush

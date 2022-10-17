@@ -247,51 +247,51 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				env._set(v.C, env.A)
 			case typ.OpExtBitAnd:
 				va, vb := env._get(opa), env._get(opb)
-				assertTwoInts("and", va, vb)
+				bassertTwoInts("and", va, vb)
 				env.A = Int64(va.Int64() & vb.Int64())
 			case typ.OpExtBitOr:
 				va, vb := env._get(opa), env._get(opb)
-				assertTwoInts("or", va, vb)
+				bassertTwoInts("or", va, vb)
 				env.A = Int64(va.Int64() | vb.Int64())
 			case typ.OpExtBitXor:
 				va, vb := env._get(opa), env._get(opb)
-				assertTwoInts("xor", va, vb)
+				bassertTwoInts("xor", va, vb)
 				env.A = Int64(va.Int64() ^ vb.Int64())
 			case typ.OpExtBitLsh:
 				va, vb := env._get(opa), env._get(opb)
-				assertTwoInts("lsh", va, vb)
+				bassertTwoInts("lsh", va, vb)
 				env.A = Int64(va.Int64() << vb.Int64())
 			case typ.OpExtBitRsh:
 				va, vb := env._get(opa), env._get(opb)
-				assertTwoInts("rsh", va, vb)
+				bassertTwoInts("rsh", va, vb)
 				env.A = Int64(va.Int64() >> vb.Int64())
 			case typ.OpExtBitURsh:
 				va, vb := env._get(opa), env._get(opb)
-				assertTwoInts("ursh", va, vb)
+				bassertTwoInts("ursh", va, vb)
 				env.A = Int64(int64(uint64(va.Int64()) >> vb.Int64()))
 			case typ.OpExtBitAnd16:
 				va := env._get(opa)
-				assertOneInt("and", va)
+				bassertOneInt("and", va)
 				env.A = Int64(va.Int64() & int64(int16(opb)))
 			case typ.OpExtBitOr16:
 				va := env._get(opa)
-				assertOneInt("or", va)
+				bassertOneInt("or", va)
 				env.A = Int64(va.Int64() | int64(int16(opb)))
 			case typ.OpExtBitXor16:
 				va := env._get(opa)
-				assertOneInt("xor", va)
+				bassertOneInt("xor", va)
 				env.A = Int64(va.Int64() ^ int64(int16(opb)))
 			case typ.OpExtBitLsh16:
 				va := env._get(opa)
-				assertOneInt("lsh", va)
+				bassertOneInt("lsh", va)
 				env.A = Int64(va.Int64() << int64(int16(opb)))
 			case typ.OpExtBitRsh16:
 				va := env._get(opa)
-				assertOneInt("rsh", va)
+				bassertOneInt("rsh", va)
 				env.A = Int64(va.Int64() >> int64(int16(opb)))
 			case typ.OpExtBitURsh16:
 				va := env._get(opa)
-				assertOneInt("uRsh", va)
+				bassertOneInt("uRsh", va)
 				env.A = Int64(int64(uint64(va.Int64()) >> int64(int16(opb))))
 			}
 		case typ.OpAdd:
@@ -530,7 +530,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					s[w] = newVarargArray(s[w:]).ToValue()
 				} else {
 					if len(s) < w {
-						internal.PanicNotEnoughArgs(a.simple())
+						panicNotEnoughArgs(obj)
 					}
 					stackEnv.resize(w + 1)
 					stackEnv._set(uint16(w), Nil)
@@ -555,7 +555,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				stackEnv.clear()
 			} else if v.Opcode == typ.OpCall {
 				if stackEnv.Size() < int(cls.numArgs) {
-					internal.PanicNotEnoughArgs(a.simple())
+					panicNotEnoughArgs(obj)
 				}
 				// Switch 'env' to 'stackEnv' and move up 'stackEnv'.
 				stackEnv.resizeZero(int(cls.stackSize), int(cls.numArgs))
@@ -570,7 +570,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				stackEnv.stackOffset = uint32(len(*env.stack))
 			} else {
 				if stackEnv.Size() < int(cls.numArgs) {
-					internal.PanicNotEnoughArgs(a.simple())
+					panicNotEnoughArgs(obj)
 				}
 				// Move arguments from 'stackEnv' to 'env'.
 				*env.stack = append((*env.stack)[:env.stackOffset], stackEnv.Stack()...)
@@ -586,7 +586,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 		case typ.OpJmp:
 			cursor = uint32(int32(cursor) + v.D())
-		case typ.OpIfNot:
+		case typ.OpJmpFalse:
 			if env.A.IsFalse() {
 				cursor = uint32(int32(cursor) + v.D())
 			}

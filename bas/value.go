@@ -201,7 +201,7 @@ func Bytes(b []byte) Value {
 	return NewNativeWithMeta(b, &Proto.BytesMeta).ToValue()
 }
 
-// Error creates an error, first argument can be nil, indicating that the returned error has no stacktrace.
+// Error creates an error, the first argument can be nil, indicating that the returned error has no stacktrace.
 func Error(e *Env, err error) Value {
 	if err == nil {
 		return Nil
@@ -216,6 +216,7 @@ func Error(e *Env, err error) Value {
 	return NewNativeWithMeta(ee, &Proto.ErrorMeta).ToValue()
 }
 
+// Array creates an untyped array from values.
 func Array(v ...Value) Value {
 	return newArray(v...).ToValue()
 }
@@ -347,6 +348,8 @@ func (v Value) Float64() float64 {
 	return math.Float64frombits(v.v)
 }
 
+// Duration returns the number value as a time.Duration,
+// it assumes the number represents the Unix timestamp in seconds.
 func (v Value) Duration() time.Duration {
 	return time.Duration(v.Float64()*1e6) * 1e3
 }

@@ -453,14 +453,18 @@ func Fprintln(w io.Writer, values ...Value) {
 	internal.WriteString(w, "\n")
 }
 
-func assertTwoInts(op string, va, vb Value) {
+func bassertTwoInts(op string, va, vb Value) {
 	if !va.IsInt64() || !vb.IsInt64() {
 		internal.Panic("bitwise "+op+" requires integer numbers, got %v and %v", va.simple(), vb.simple())
 	}
 }
 
-func assertOneInt(op string, va Value) {
+func bassertOneInt(op string, va Value) {
 	if !va.IsInt64() {
 		internal.Panic("bitwise "+op+" requires integer numbers, got %v", va.simple())
 	}
+}
+
+func panicNotEnoughArgs(a *Object) {
+	panic("not enough arguments to call " + a.Name())
 }
