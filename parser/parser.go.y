@@ -74,12 +74,12 @@ assign_stat:
     declarator TDivEq expr          { $$ = assignLoadStore($1, ss(yylex).pBinary(typ.OpDiv, $1, $3, $2), $2) } |
     declarator TIDivEq expr         { $$ = assignLoadStore($1, ss(yylex).pBinary(typ.OpIDiv, $1, $3, $2), $2) } |
     declarator TModEq expr          { $$ = assignLoadStore($1, ss(yylex).pBinary(typ.OpMod, $1, $3, $2), $2) } |
-    declarator TBitAndEq expr       { $$ = assignLoadStore($1, ss(yylex).pBitwise("and", $1, $3, $2), $2) } |
-    declarator TBitOrEq expr        { $$ = assignLoadStore($1, ss(yylex).pBitwise("or", $1, $3, $2), $2) } |
-    declarator TBitXorEq expr       { $$ = assignLoadStore($1, ss(yylex).pBitwise("xor", $1, $3, $2), $2) } |
-    declarator TBitLshEq expr       { $$ = assignLoadStore($1, ss(yylex).pBitwise("lsh", $1, $3, $2), $2) } |
-    declarator TBitRshEq expr       { $$ = assignLoadStore($1, ss(yylex).pBitwise("rsh", $1, $3, $2), $2) } |
-    declarator TBitURshEq expr      { $$ = assignLoadStore($1, ss(yylex).pBitwise("ursh", $1, $3, $2), $2) }
+    declarator TBitAndEq expr       { $$ = assignLoadStore($1, ss(yylex).pBitwise(typ.OpExtBitAnd, $1, $3, $2), $2) } |
+    declarator TBitOrEq expr        { $$ = assignLoadStore($1, ss(yylex).pBitwise(typ.OpExtBitOr, $1, $3, $2), $2) } |
+    declarator TBitXorEq expr       { $$ = assignLoadStore($1, ss(yylex).pBitwise(typ.OpExtBitXor, $1, $3, $2), $2) } |
+    declarator TBitLshEq expr       { $$ = assignLoadStore($1, ss(yylex).pBitwise(typ.OpExtBitLsh, $1, $3, $2), $2) } |
+    declarator TBitRshEq expr       { $$ = assignLoadStore($1, ss(yylex).pBitwise(typ.OpExtBitRsh, $1, $3, $2), $2) } |
+    declarator TBitURshEq expr      { $$ = assignLoadStore($1, ss(yylex).pBitwise(typ.OpExtBitURsh, $1, $3, $2), $2) }
 
 for_stat:
     TWhile expr TDo stats TEnd                            { $$ = ss(yylex).pLoop(&If{$2, $4, emptyBreak}) } |
@@ -161,15 +161,15 @@ expr:
     expr '/' expr                     { $$ = ss(yylex).pBinary(typ.OpDiv, $1, $3, $2) } |
     expr TIDiv expr                   { $$ = ss(yylex).pBinary(typ.OpIDiv, $1, $3, $2) } |
     expr '%' expr                     { $$ = ss(yylex).pBinary(typ.OpMod, $1, $3, $2) } |
-    expr '&' expr                     { $$ = ss(yylex).pBitwise("and", $1, $3 ,$2) } |
-    expr '|' expr                     { $$ = ss(yylex).pBitwise("or", $1, $3, $2) } |
-    expr '^' expr                     { $$ = ss(yylex).pBitwise("xor", $1, $3, $2) } |
-    expr TLsh expr                    { $$ = ss(yylex).pBitwise("lsh", $1, $3, $2) } |
-    expr TRsh expr                    { $$ = ss(yylex).pBitwise("rsh", $1, $3, $2) } |
-    expr TURsh expr                   { $$ = ss(yylex).pBitwise("ursh", $1, $3, $2) } |
+    expr '&' expr                     { $$ = ss(yylex).pBitwise(typ.OpExtBitAnd, $1, $3 ,$2) } |
+    expr '|' expr                     { $$ = ss(yylex).pBitwise(typ.OpExtBitOr, $1, $3, $2) } |
+    expr '^' expr                     { $$ = ss(yylex).pBitwise(typ.OpExtBitXor, $1, $3, $2) } |
+    expr TLsh expr                    { $$ = ss(yylex).pBitwise(typ.OpExtBitLsh, $1, $3, $2) } |
+    expr TRsh expr                    { $$ = ss(yylex).pBitwise(typ.OpExtBitRsh, $1, $3, $2) } |
+    expr TURsh expr                   { $$ = ss(yylex).pBitwise(typ.OpExtBitURsh, $1, $3, $2) } |
     expr TIs prefix_expr              { $$ = ss(yylex).pBinary(typ.OpIsProto, $1, $3, $2) } |
     expr TIs TNot prefix_expr         { $$ = pUnary(typ.OpNot, ss(yylex).pBinary(typ.OpIsProto, $1, $4, $2), $2) } |
-    '~' expr %prec UNARY              { $$ = ss(yylex).pBitwise("xor", ss(yylex).Int(-1), $2, $1) } |
+    '~' expr %prec UNARY              { $$ = ss(yylex).pBitwise(typ.OpExtBitXor, ss(yylex).Int(-1), $2, $1) } |
     '#' expr %prec UNARY              { $$ = pUnary(typ.OpLen, $2, $1) } |
     TInv expr %prec UNARY             { $$ = ss(yylex).pBinary(typ.OpSub, zero, $2, $1) } |
     TNot expr %prec UNARY             { $$ = pUnary(typ.OpNot, $2, $1) }
@@ -204,10 +204,12 @@ expr_list:
     expr_list ',' expr             { $$ = ss(yylex).pArray($1, $3) }
 
 expr_assign_list:
-    TIdent '=' expr                       { $$ = ss(yylex).pObject(nil, ss(yylex).Str($1.Str), $3) } |
-    expr ':' expr                         { $$ = ss(yylex).pObject(nil, $1, $3) } |
-    expr_assign_list ',' TIdent '=' expr  { $$ = ss(yylex).pObject($1, ss(yylex).Str($3.Str), $5) } |
-    expr_assign_list ',' expr ':' expr    { $$ = ss(yylex).pObject($1, $3, $5) }
+    TIdent '=' expr                             { $$ = ss(yylex).pObject(nil, ss(yylex).Str($1.Str), $3) } |
+    expr ':' expr                               { $$ = ss(yylex).pObject(nil, $1, $3) } |
+    expr ':' TGoto TIdent                       { $$ = ss(yylex).pObject(nil, $1, ss(yylex).Str($4.Str)) } |
+    expr_assign_list ',' TIdent '=' expr        { $$ = ss(yylex).pObject($1, ss(yylex).Str($3.Str), $5) } |
+    expr_assign_list ',' expr ':' expr          { $$ = ss(yylex).pObject($1, $3, $5) } |
+    expr_assign_list ',' expr ':' TGoto TIdent  { $$ = ss(yylex).pObject($1, $3, ss(yylex).Str($6.Str)) }
 
 comma: {} | ',' {}
 

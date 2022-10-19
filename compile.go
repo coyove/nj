@@ -40,7 +40,7 @@ func compileProgBlock(table *symTable, node *parser.Prog) uint16 {
 
 // local a = b
 func compileDeclare(table *symTable, node *parser.Declare) uint16 {
-	dest := bas.Str(node.Name.Name)
+	dest := node.Name.Name
 	if bas.GetGlobalName(dest) > 0 || dest == staticTrue || dest == staticFalse || dest == staticThis || dest == staticSelf {
 		table.panicnode(node.Name, "can't bound to a global static name")
 	}
@@ -54,7 +54,7 @@ func compileDeclare(table *symTable, node *parser.Declare) uint16 {
 
 // a = b
 func compileAssign(table *symTable, node *parser.Assign) uint16 {
-	dest := bas.Str(node.Name.Name)
+	dest := node.Name.Name
 	if bas.GetGlobalName(dest) > 0 || dest == staticTrue || dest == staticFalse || dest == staticThis || dest == staticSelf {
 		table.panicnode(node.Name, "can't assign to a global static name")
 	}
@@ -75,68 +75,67 @@ func compileAssign(table *symTable, node *parser.Assign) uint16 {
 
 func compileUnary(table *symTable, node *parser.Unary) uint16 {
 	nodes := table.collapse(true, node.A)
-	table.writeInst1(node.Op, nodes[0])
-	table.freeAddr(nodes)
+	table.compileOpcode1Node(node.Op, nodes[0])
+	table.releaseAddr(nodes)
 	table.codeSeg.WriteLineNum(node.Line)
 	return typ.RegA
 }
 
 func compileBinary(table *symTable, node *parser.Binary) uint16 {
+	if node.Op >= typ.OpExtBitAnd && node.Op <= typ.OpExtBitURsh {
+		return compileBitwise(table, node)
+	}
 	nodes := table.collapse(true, node.A, node.B)
-	table.writeInst2(node.Op, nodes[0], nodes[1])
-	table.freeAddr(nodes)
+	table.compileOpcode2Node(node.Op, nodes[0], nodes[1])
+	table.releaseAddr(nodes)
 	table.codeSeg.WriteLineNum(node.Line)
 	return typ.RegA
 }
 
 func compileTenary(table *symTable, node *parser.Tenary) uint16 {
 	nodes := table.collapse(true, node.A, node.B, node.C)
-	table.writeInst3(node.Op, nodes[0], nodes[1], nodes[2])
-	table.freeAddr(nodes)
+	table.compileOpcode3Node(node.Op, nodes[0], nodes[1], nodes[2])
+	table.releaseAddr(nodes)
 	table.codeSeg.WriteLineNum(node.Line)
 	return typ.RegA
 }
 
-func compileBitwise(table *symTable, node *parser.Bitwise) uint16 {
+func compileBitwise(table *symTable, node *parser.Binary) uint16 {
 	nodes := table.collapse(true, node.A, node.B)
-	op := byte(typ.OpExtBitAnd)
 	a, b := nodes[0], nodes[1]
 	switch node.Op {
-	case "and", "or", "xor":
-		if parser.IsInt16(a) > 0 {
-			table.writeInst2(typ.OpExt, b, parser.Address(uint16(toi16(a))))
-			op = typ.OpExtBitAnd16
-		} else if parser.IsInt16(b) > 0 {
-			table.writeInst2(typ.OpExt, a, parser.Address(uint16(toi16(b))))
-			op = typ.OpExtBitAnd16
+	case typ.OpExtBitAnd, typ.OpExtBitOr, typ.OpExtBitXor:
+		if a16, ok := toInt16(a); ok {
+			table.compileOpcode2Node(typ.OpExt, b, parser.Address(a16))
+			node.Op = typ.OpExtBitAnd16 + node.Op - typ.OpExtBitAnd
+		} else if b16, ok := toInt16(b); ok {
+			table.compileOpcode2Node(typ.OpExt, a, parser.Address(b16))
+			node.Op = typ.OpExtBitAnd16 + node.Op - typ.OpExtBitAnd
 		} else {
-			table.writeInst2(typ.OpExt, a, b)
+			table.compileOpcode2Node(typ.OpExt, a, b)
 		}
-	case "rsh", "lsh", "ursh":
-		if parser.IsInt16(b) > 0 {
-			table.writeInst2(typ.OpExt, a, parser.Address(uint16(toi16(b))))
-			op = typ.OpExtBitAnd16
+	case typ.OpExtBitRsh, typ.OpExtBitLsh, typ.OpExtBitURsh:
+		if b16, ok := toInt16(b); ok {
+			table.compileOpcode2Node(typ.OpExt, a, parser.Address(b16))
+			node.Op = typ.OpExtBitAnd16 + node.Op - typ.OpExtBitAnd
 		} else {
-			table.writeInst2(typ.OpExt, a, b)
+			table.compileOpcode2Node(typ.OpExt, a, b)
 		}
 	}
-	table.freeAddr(nodes[1:])
+	table.releaseAddr(nodes)
 	table.codeSeg.WriteLineNum(node.Line)
-
-	// Lookup table:     And,  c, d, e, f, g, h, i, j, k, Lsh,  n, Or,p, q, Rsh,  t, Ursh, w, Xor,  z
-	lookup := [26]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 1, 0, 0, 4, 0, 0, 5, 0, 0, 2, 0, 0}
-	table.codeSeg.Code[len(table.codeSeg.Code)-1].OpcodeExt = op + lookup[node.Op[0]-'a']
+	table.codeSeg.Code[len(table.codeSeg.Code)-1].OpcodeExt = node.Op
 	return typ.RegA
 }
 
 // [and a b] => $a = a if not a then goto out else $a = b end ::out::
 func compileAnd(table *symTable, node *parser.And) uint16 {
-	table.writeInst2(typ.OpSet, nodeRegA, node.A)
+	table.compileOpcode2Node(typ.OpSet, nodeRegA, node.A)
 
 	table.codeSeg.WriteJmpInst(typ.OpJmpFalse, 0)
 	part1 := table.codeSeg.Len()
 
-	table.writeInst2(typ.OpSet, nodeRegA, node.B)
+	table.compileOpcode2Node(typ.OpSet, nodeRegA, node.B)
 	part2 := table.codeSeg.Len()
 
 	table.codeSeg.Code[part1-1] = typ.JmpInst(typ.OpJmpFalse, part2-part1)
@@ -145,13 +144,13 @@ func compileAnd(table *symTable, node *parser.And) uint16 {
 
 // [or a b]  => $a = a if not a then $a = b end
 func compileOr(table *symTable, node *parser.Or) uint16 {
-	table.writeInst2(typ.OpSet, nodeRegA, node.A)
+	table.compileOpcode2Node(typ.OpSet, nodeRegA, node.A)
 
 	table.codeSeg.WriteJmpInst(typ.OpJmpFalse, 1)
 	table.codeSeg.WriteJmpInst(typ.OpJmp, 0)
 	part1 := table.codeSeg.Len()
 
-	table.writeInst2(typ.OpSet, nodeRegA, node.B)
+	table.compileOpcode2Node(typ.OpSet, nodeRegA, node.B)
 	part2 := table.codeSeg.Len()
 
 	table.codeSeg.Code[part1-1] = typ.JmpInst(typ.OpJmp, part2-part1)
@@ -198,8 +197,8 @@ func compileIf(table *symTable, node *parser.If) uint16 {
 func compileObject(table *symTable, node parser.ExprAssignList) uint16 {
 	tmp := table.collapse(true, node.ExpandAsExprList()...)
 	for i := 0; i < len(tmp); i += 2 {
-		table.writeInst1(typ.OpPush, tmp[i])
-		table.writeInst1(typ.OpPush, tmp[i+1])
+		table.compileOpcode1Node(typ.OpPush, tmp[i])
+		table.compileOpcode1Node(typ.OpPush, tmp[i+1])
 	}
 	table.codeSeg.WriteInst(typ.OpCreateObject, 0, 0)
 	return typ.RegA
@@ -209,7 +208,7 @@ func compileObject(table *symTable, node parser.ExprAssignList) uint16 {
 func compileArray(table *symTable, node parser.ExprList) uint16 {
 	nodes := table.collapse(true, node...)
 	for _, x := range nodes {
-		table.writeInst1(typ.OpPush, x)
+		table.compileOpcode1Node(typ.OpPush, x)
 	}
 	table.codeSeg.WriteInst(typ.OpCreateArray, 0, 0)
 	return typ.RegA
@@ -221,20 +220,20 @@ func compileCall(table *symTable, node *parser.Call) uint16 {
 	callee := tmp[len(tmp)-1]
 	args := tmp[:len(tmp)-1]
 	for i := 0; i < len(args)-1; i++ {
-		table.writeInst1(typ.OpPush, args[i])
+		table.compileOpcode1Node(typ.OpPush, args[i])
 	}
 
 	if node.Vararg {
-		table.writeInst1(typ.OpPushUnpack, args[len(args)-1])
-		table.writeInst2(node.Op, callee, parser.Address(typ.RegPhantom))
+		table.compileOpcode1Node(typ.OpPushUnpack, args[len(args)-1])
+		table.compileOpcode2Node(node.Op, callee, parser.Address(typ.RegPhantom))
 	} else if len(args) == 0 {
-		table.writeInst2(node.Op, callee, parser.Address(typ.RegPhantom))
+		table.compileOpcode2Node(node.Op, callee, parser.Address(typ.RegPhantom))
 	} else {
-		table.writeInst2(node.Op, callee, args[len(args)-1])
+		table.compileOpcode2Node(node.Op, callee, args[len(args)-1])
 	}
 
 	table.codeSeg.WriteLineNum(node.Line)
-	table.freeAddr(tmp)
+	table.releaseAddr(tmp)
 	return typ.RegA
 }
 
@@ -246,10 +245,10 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 
 	for i, p := range node.Args {
 		name := p.(*parser.Symbol).Name
-		if newtable.sym.Contains(bas.Str(name)) {
+		if newtable.sym.Contains(name) {
 			table.panicnode(node, "duplicated parameter %q", name)
 		}
-		newtable.put(bas.Str(name), uint16(i))
+		newtable.put(name, uint16(i))
 	}
 
 	if ln := newtable.sym.Len(); ln > 255 {
@@ -262,7 +261,7 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 		src := uint16(len(node.Args) - 1)
 		for i, dest := range node.VargExpand {
 			idx := newtable.borrowAddress()
-			newtable.put(bas.Str(dest.(*parser.Symbol).Name), idx)
+			newtable.put(dest.(*parser.Symbol).Name, idx)
 			newtable.codeSeg.WriteInst3(typ.OpLoad, src, table.loadConst(bas.Int(i)), idx)
 		}
 	}
@@ -412,9 +411,9 @@ func (table *symTable) patchGoto() {
 
 func compileRelease(table *symTable, node parser.Release) uint16 {
 	for _, s := range node {
-		s := bas.Str(s.Name)
+		s := s.Name
 		yx, _ := table.get(s)
-		table.freeAddr(yx)
+		table.releaseAddr(yx)
 		t := table.sym
 		if len(table.maskedSym) > 0 {
 			t = table.maskedSym[len(table.maskedSym)-1]
@@ -457,7 +456,7 @@ func (table *symTable) collapse(optLast bool, nodes ...parser.Node) []parser.Nod
 		if i := table.codeSeg.LastInst(); i.Opcode == typ.OpSet && i.B == typ.RegA {
 			// [set something $a]
 			table.codeSeg.TruncLast()
-			table.freeAddr(i.A)
+			table.releaseAddr(i.A)
 			nodes[lastNodeIndex] = parser.Address(uint16(i.B))
 		}
 	}

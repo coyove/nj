@@ -94,17 +94,17 @@ func (table *symTable) borrowAddressNoReuse() uint16 {
 	return table.vp - 1
 }
 
-func (table *symTable) freeAddr(a interface{}) {
+func (table *symTable) releaseAddr(a interface{}) {
 	switch a := a.(type) {
 	case []parser.Node:
 		for _, n := range a {
 			if a, ok := n.(parser.Address); ok {
-				table.freeAddr(uint16(a))
+				table.releaseAddr(uint16(a))
 			}
 		}
 	case []uint16:
 		for _, n := range a {
-			table.freeAddr(n)
+			table.releaseAddr(n)
 		}
 	case uint16:
 		if a == typ.RegA {
@@ -124,12 +124,12 @@ func (table *symTable) freeAddr(a interface{}) {
 }
 
 var (
-	staticNil   = bas.Str(parser.SNil.Name)
+	staticNil   = parser.SNil.Name
 	staticTrue  = bas.Str("true")
 	staticFalse = bas.Str("false")
 	staticThis  = bas.Str("this")
 	staticSelf  = bas.Str("self")
-	staticA     = bas.Str(parser.Sa.Name)
+	staticA     = parser.Sa.Name
 )
 
 func (table *symTable) get(name bas.Value) (uint16, bool) {
@@ -199,7 +199,7 @@ func (table *symTable) addMaskedSymTable() {
 
 func (table *symTable) removeMaskedSymTable() {
 	table.maskedSym[len(table.maskedSym)-1].Foreach(func(sym bas.Value, addr *bas.Value) bool {
-		table.freeAddr(uint16(addr.Int64()))
+		table.releaseAddr(uint16(addr.Int64()))
 		return true
 	})
 	table.maskedSym = table.maskedSym[:len(table.maskedSym)-1]
@@ -215,7 +215,7 @@ func (table *symTable) loadConst(v bas.Value) uint16 {
 	panic("loadConst: shouldn't happen")
 }
 
-func (table *symTable) writeInst1(op byte, n parser.Node) {
+func (table *symTable) compileOpcode1Node(op byte, n parser.Node) {
 	addr, ok := table.compileStaticNode(n)
 	if !ok {
 		table.codeSeg.WriteInst(op, table.compileNode(n), 0)
@@ -224,65 +224,66 @@ func (table *symTable) writeInst1(op byte, n parser.Node) {
 	}
 }
 
-func (table *symTable) compileAtom(n parser.Node, tmp *[]uint16) uint16 {
+func (table *symTable) compileAtom(n parser.Node, releases *[]uint16) uint16 {
 	addr, ok := table.compileStaticNode(n)
 	if !ok {
 		addr := table.borrowAddress()
 		table.codeSeg.WriteInst(typ.OpSet, addr, table.compileNode(n))
-		*tmp = append(*tmp, addr)
+		*releases = append(*releases, addr)
 		return addr
 	}
 	return addr
 }
 
-func (table *symTable) writeInst2(op byte, n0, n1 parser.Node) {
-	var tmp []uint16
-	i := toi16
-	i64 := func(n parser.Node) int64 { return bas.Value(n.(parser.Primitive)).Int64() }
+func (table *symTable) compileOpcode2Node(op byte, n0, n1 parser.Node) {
+	var r []uint16
+	var __n0__16, __n0__ = toInt16(n0)
+	var __n1__16, __n1__ = toInt16(n1)
 	switch {
-	case op == typ.OpAdd && parser.IsInt16(n1) > 0:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtAdd16, table.compileAtom(n0, &tmp), uint16(i(n1)))
-	case op == typ.OpAdd && parser.IsInt16(n0) > 0:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtAdd16, table.compileAtom(n1, &tmp), uint16(i(n0)))
-	case op == typ.OpSub && parser.IsInt16(n0) > 0:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtRSub16, table.compileAtom(n1, &tmp), uint16(i(n0)))
-	case op == typ.OpSub && parser.IsInt16(n1) > 1:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtAdd16, table.compileAtom(n0, &tmp), uint16(-i(n1)))
-	case op == typ.OpEq && parser.IsInt16(n1) > 0:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtEq16, table.compileAtom(n0, &tmp), uint16(i(n1)))
-	case op == typ.OpEq && parser.IsInt16(n0) > 0:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtEq16, table.compileAtom(n1, &tmp), uint16(i(n0)))
-	case op == typ.OpNeq && parser.IsInt16(n1) > 0:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtNeq16, table.compileAtom(n0, &tmp), uint16(i(n1)))
-	case op == typ.OpNeq && parser.IsInt16(n0) > 0:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtNeq16, table.compileAtom(n1, &tmp), uint16(i(n0)))
-	case op == typ.OpLess && parser.IsInt16(n1) > 0:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtLess16, table.compileAtom(n0, &tmp), uint16(i(n1)))
-	case op == typ.OpLess && parser.IsInt16(n0) > 0:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtGreat16, table.compileAtom(n1, &tmp), uint16(i(n0)))
-	case op == typ.OpLessEq && parser.IsInt16(n1) > 0 && i64(n1)+1 <= math.MaxInt16:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtLess16, table.compileAtom(n0, &tmp), uint16(int16(i64(n1)+1)))
-	case op == typ.OpLessEq && parser.IsInt16(n0) > 0 && i64(n0)-1 >= math.MinInt16:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtGreat16, table.compileAtom(n1, &tmp), uint16(int16(i64(n0)-1)))
-	case op == typ.OpInc && parser.IsInt16(n1) > 0:
-		table.codeSeg.WriteInst2Sub(typ.OpExt, typ.OpExtInc16, table.compileAtom(n0, &tmp), uint16(i(n1)))
+	case op == typ.OpAdd && __n1__:
+		table.codeSeg.WriteInst2Ext(typ.OpExtAdd16, table.compileAtom(n0, &r), __n1__16)
+	case op == typ.OpAdd && __n0__:
+		table.codeSeg.WriteInst2Ext(typ.OpExtAdd16, table.compileAtom(n1, &r), __n0__16)
+	case op == typ.OpSub && __n0__:
+		table.codeSeg.WriteInst2Ext(typ.OpExtRSub16, table.compileAtom(n1, &r), __n0__16)
+	case op == typ.OpSub && __n1__:
+		table.codeSeg.WriteInst2Ext(typ.OpExtAdd16, table.compileAtom(n0, &r), uint16(-int16(__n1__16)))
+	case op == typ.OpEq && __n1__:
+		table.codeSeg.WriteInst2Ext(typ.OpExtEq16, table.compileAtom(n0, &r), __n1__16)
+	case op == typ.OpEq && __n0__:
+		table.codeSeg.WriteInst2Ext(typ.OpExtEq16, table.compileAtom(n1, &r), __n0__16)
+	case op == typ.OpNeq && __n1__:
+		table.codeSeg.WriteInst2Ext(typ.OpExtNeq16, table.compileAtom(n0, &r), __n1__16)
+	case op == typ.OpNeq && __n0__:
+		table.codeSeg.WriteInst2Ext(typ.OpExtNeq16, table.compileAtom(n1, &r), __n0__16)
+	case op == typ.OpLess && __n1__:
+		table.codeSeg.WriteInst2Ext(typ.OpExtLess16, table.compileAtom(n0, &r), __n1__16)
+	case op == typ.OpLess && __n0__:
+		table.codeSeg.WriteInst2Ext(typ.OpExtGreat16, table.compileAtom(n1, &r), __n0__16)
+	case op == typ.OpLessEq && __n1__ && int16(__n1__16) <= math.MaxInt16-1:
+		table.codeSeg.WriteInst2Ext(typ.OpExtLess16, table.compileAtom(n0, &r), uint16(int16(__n1__16+1)))
+	case op == typ.OpLessEq && __n0__ && int16(__n0__16) >= math.MinInt16+1:
+		table.codeSeg.WriteInst2Ext(typ.OpExtGreat16, table.compileAtom(n1, &r), uint16(int16(__n0__16-1)))
+	case op == typ.OpInc && __n1__:
+		table.codeSeg.WriteInst2Ext(typ.OpExtInc16, table.compileAtom(n0, &r), __n1__16)
 	default:
-		table.codeSeg.WriteInst(op, table.compileAtom(n0, &tmp), table.compileAtom(n1, &tmp))
+		table.codeSeg.WriteInst(op, table.compileAtom(n0, &r), table.compileAtom(n1, &r))
 	}
-	table.freeAddr(tmp)
+	table.releaseAddr(r)
 }
 
-func (table *symTable) writeInst3(op byte, n0, n1, n2 parser.Node) {
-	var tmp []uint16
+func (table *symTable) compileOpcode3Node(op byte, n0, n1, n2 parser.Node) {
+	var r []uint16
+	var __n1__16, __n1__ = toInt16(n1)
 	switch {
-	case op == typ.OpLoad && parser.IsInt16(n1) > 0:
-		table.codeSeg.WriteInst3Sub(typ.OpExt, typ.OpExtLoad16, table.compileAtom(n0, &tmp), uint16(toi16(n1)), table.compileAtom(n2, &tmp))
-	case op == typ.OpStore && parser.IsInt16(n1) > 0:
-		table.codeSeg.WriteInst3Sub(typ.OpExt, typ.OpExtStore16, table.compileAtom(n0, &tmp), uint16(toi16(n1)), table.compileAtom(n2, &tmp))
+	case op == typ.OpLoad && __n1__:
+		table.codeSeg.WriteInst3Ext(typ.OpExtLoad16, table.compileAtom(n0, &r), __n1__16, table.compileAtom(n2, &r))
+	case op == typ.OpStore && __n1__:
+		table.codeSeg.WriteInst3Ext(typ.OpExtStore16, table.compileAtom(n0, &r), __n1__16, table.compileAtom(n2, &r))
 	default:
-		table.codeSeg.WriteInst3(op, table.compileAtom(n0, &tmp), table.compileAtom(n1, &tmp), table.compileAtom(n2, &tmp))
+		table.codeSeg.WriteInst3(op, table.compileAtom(n0, &r), table.compileAtom(n1, &r), table.compileAtom(n2, &r))
 	}
-	table.freeAddr(tmp)
+	table.releaseAddr(r)
 }
 
 func (table *symTable) compileStaticNode(node parser.Node) (uint16, bool) {
@@ -292,9 +293,9 @@ func (table *symTable) compileStaticNode(node parser.Node) (uint16, bool) {
 	case parser.Primitive:
 		return table.loadConst(bas.Value(v)), true
 	case *parser.Symbol:
-		idx, ok := table.get(bas.Str(v.Name))
+		idx, ok := table.get(v.Name)
 		if !ok {
-			if idx := bas.GetGlobalName(bas.Str(v.Name)); idx > 0 {
+			if idx := bas.GetGlobalName(v.Name); idx > 0 {
 				c := table.borrowAddress()
 				table.codeSeg.WriteInst3(typ.OpLoadGlobal, uint16(idx), typ.RegPhantom, c)
 				return c, true
@@ -339,8 +340,6 @@ func (table *symTable) compileNode(node parser.Node) uint16 {
 		return compileUnary(table, v)
 	case *parser.Binary:
 		return compileBinary(table, v)
-	case *parser.Bitwise:
-		return compileBitwise(table, v)
 	case *parser.Tenary:
 		return compileTenary(table, v)
 	case *parser.And:
@@ -444,4 +443,12 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 	return cls, err
 }
 
-func toi16(n parser.Node) int16 { return int16(bas.Value(n.(parser.Primitive)).Int64()) }
+func toInt16(n parser.Node) (uint16, bool) {
+	if a, ok := n.(parser.Primitive); ok && bas.Value(a).IsInt64() {
+		a := bas.Value(a).UnsafeInt64()
+		if a >= math.MinInt16+1 && a <= math.MaxInt16 {
+			return uint16(int16(a)), true // don't take -1<<15 into consideration because we may negate n.
+		}
+	}
+	return 0, false
+}

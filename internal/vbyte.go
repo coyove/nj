@@ -147,13 +147,13 @@ func (b *Packet) WriteInst3(op byte, opa, opb, opc uint16) {
 	b.check()
 }
 
-func (b *Packet) WriteInst3Sub(op, sub byte, opa, opb, opc uint16) {
-	b.Code = append(b.Code, typ.Inst{Opcode: op, OpcodeExt: sub, A: opa, B: opb, C: opc})
+func (b *Packet) WriteInst3Ext(sub byte, opa, opb, opc uint16) {
+	b.Code = append(b.Code, typ.Inst{Opcode: typ.OpExt, OpcodeExt: sub, A: opa, B: opb, C: opc})
 	b.check()
 }
 
-func (b *Packet) WriteInst2Sub(op, sub byte, opa, opb uint16) {
-	b.Code = append(b.Code, typ.Inst{Opcode: op, OpcodeExt: sub, A: opa, B: opb})
+func (b *Packet) WriteInst2Ext(sub byte, opa, opb uint16) {
+	b.Code = append(b.Code, typ.Inst{Opcode: typ.OpExt, OpcodeExt: sub, A: opa, B: opb})
 	b.check()
 }
 

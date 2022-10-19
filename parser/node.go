@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math"
 	"unsafe"
 
 	"github.com/coyove/nj/bas"
@@ -46,20 +45,20 @@ type GetLine interface {
 }
 
 type Symbol struct {
-	Name string
+	Name bas.Value
 	Line uint32
 }
 
 func (s *Symbol) Dump(w io.Writer) {
 	if s.Line == 0 {
-		internal.WriteString(w, s.Name)
+		s.Name.Stringify(w, typ.MarshalToString)
 	} else {
-		internal.WriteString(w, fmt.Sprintf("%s/%d", s.Name, s.Line))
+		internal.WriteString(w, fmt.Sprintf("%v/%d", s.Name, s.Line))
 	}
 }
 
 func (s *Symbol) GetLine() (string, int) {
-	return s.Name, int(s.Line)
+	return s.Name.Str(), int(s.Line)
 }
 
 type Address uint16
@@ -184,24 +183,6 @@ func (b *Binary) GetLine() (string, int) {
 	return typ.BinaryOpcode[b.Op], int(b.Line)
 }
 
-type Bitwise struct {
-	A, B Node
-	Op   string
-	Line uint32
-}
-
-func (b *Bitwise) Dump(w io.Writer) {
-	fmt.Fprintf(w, "(bit%s/%d ", b.Op, b.Line)
-	b.A.Dump(w)
-	internal.WriteString(w, " ")
-	b.B.Dump(w)
-	internal.WriteString(w, ")")
-}
-
-func (b *Bitwise) GetLine() (string, int) {
-	return "bit" + b.Op, int(b.Line)
-}
-
 type Declare struct {
 	Name  *Symbol
 	Value Node
@@ -215,7 +196,7 @@ func (p *Declare) Dump(w io.Writer) {
 }
 
 func (b *Declare) GetLine() (string, int) {
-	return b.Name.Name, int(b.Line)
+	return b.Name.Name.Str(), int(b.Line)
 }
 
 type Assign Declare
@@ -227,7 +208,7 @@ func (p *Assign) Dump(w io.Writer) {
 }
 
 func (b *Assign) GetLine() (string, int) {
-	return b.Name.Name, int(b.Line)
+	return b.Name.Name.Str(), int(b.Line)
 }
 
 type Release []*Symbol
@@ -436,7 +417,7 @@ func (p *BreakContinue) GetLine() (string, int) {
 }
 
 func Sym(tok Token) *Symbol {
-	return &Symbol{tok.Str, tok.Line()}
+	return &Symbol{bas.Str(tok.Str), tok.Line()}
 }
 
 func (lex *Lexer) Str(s string) Primitive {
@@ -473,19 +454,6 @@ func (lex *Lexer) Float(v float64) Primitive {
 	x := Primitive(bas.Float64(v))
 	lex.scanner.constants.Set(bas.Value(x), bas.Nil)
 	return x
-}
-
-func IsInt16(n Node) int {
-	if isInt64(n) {
-		a := bas.Value(n.(Primitive)).UnsafeInt64()
-		if a >= math.MinInt16 && a <= math.MaxInt16 {
-			if -a >= math.MinInt16 && -a <= math.MaxInt16 {
-				return 2
-			}
-			return 1
-		}
-	}
-	return 0
 }
 
 func pUnary(op byte, a Node, pos Token) Node {
@@ -546,26 +514,26 @@ func (lex *Lexer) pBinary(op byte, a, b Node, pos Token) Node {
 	return &Binary{Op: op, A: a, B: b, Line: pos.Line()}
 }
 
-func (lex *Lexer) pBitwise(op string, a, b Node, pos Token) Node {
+func (lex *Lexer) pBitwise(op byte, a, b Node, pos Token) Node {
 	if isInt64(a) && isInt64(b) {
 		a := bas.Value(a.(Primitive))
 		b := bas.Value(b.(Primitive))
 		switch op {
-		case "and":
+		case typ.OpExtBitAnd:
 			return lex.Int(a.Int64() & b.Int64())
-		case "or":
+		case typ.OpExtBitOr:
 			return lex.Int(a.Int64() | b.Int64())
-		case "xor":
+		case typ.OpExtBitXor:
 			return lex.Int(a.Int64() ^ b.Int64())
-		case "lsh":
+		case typ.OpExtBitLsh:
 			return lex.Int(a.Int64() << b.Int64())
-		case "rsh":
+		case typ.OpExtBitRsh:
 			return lex.Int(a.Int64() >> b.Int64())
-		case "ursh":
+		case typ.OpExtBitURsh:
 			return lex.Int(int64(uint64(a.Int64()) >> b.Int64()))
 		}
 	}
-	return &Bitwise{Op: op, A: a, B: b, Line: pos.Line()}
+	return &Binary{Op: op, A: a, B: b, Line: pos.Line()}
 }
 
 func assignLoadStore(n, v Node, pos Token) Node {

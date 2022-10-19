@@ -17,8 +17,8 @@ var (
 )
 
 var (
-	Sa   = &Symbol{Name: "a!"}
-	SNil = &Symbol{Name: "nil"}
+	Sa   = &Symbol{Name: bas.Str("a!")}
+	SNil = &Symbol{Name: bas.Str("nil")}
 )
 
 func (lex *Lexer) pFunc(method bool, name Token, args Node, stats Node, pos Token) Node {
@@ -215,5 +215,5 @@ func (lex *Lexer) pEmptyObject() Node {
 }
 
 func randomVarname() *Symbol {
-	return &Symbol{Name: internal.Unnamed()}
+	return &Symbol{Name: bas.Str(internal.Unnamed())}
 }
