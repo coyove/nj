@@ -550,8 +550,9 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				stackEnv.runtime.stack1 = last
 				stackEnv.runtime.stackN = retStack
 				cls.native(&stackEnv)
-				stackEnv.runtime = stacktraces{}
+				cursor = stackEnv.runtime.stack1.Cursor
 				env.A = stackEnv.A
+				stackEnv.runtime = stacktraces{}
 				stackEnv.clear()
 			} else if v.Opcode == typ.OpCall {
 				if stackEnv.Size() < int(cls.numArgs) {

@@ -302,6 +302,7 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 		newtable.vp,
 		newtable.symbolsToDebugLocals(),
 		captureList,
+		newtable.labelPos,
 		code,
 	)
 
@@ -358,6 +359,9 @@ func compileGotoLabel(table *symTable, node *parser.GotoLabel) uint16 {
 	if !node.Goto {
 		if table.labelPos == nil {
 			table.labelPos = map[string]int{}
+		}
+		if _, ok := table.labelPos[node.Label]; ok {
+			table.panicnode(node, "duplicated label")
 		}
 		table.labelPos[node.Label] = table.codeSeg.Len()
 		return typ.RegA

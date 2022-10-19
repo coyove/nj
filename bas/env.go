@@ -298,3 +298,11 @@ func (e *Env) checkStackOverflow() {
 		}
 	}
 }
+
+func (e *Env) Jump(label string) {
+	pos, ok := e.Caller().fun.jumps[label]
+	if !ok {
+		internal.Panic("runtime jump: label %s not found", label)
+	}
+	e.runtime.stack1.Cursor = uint32(pos)
+}

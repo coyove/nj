@@ -302,3 +302,14 @@ for k, v in nw({}) do
     if #res > 35 then break end
 end
 assert(res[35], 24157817)
+
+function runtimejump(v)
+    if v == 1 then return jump("label1") end
+    if v == 2 then return jump("label2") end
+    return jump("labeldefault")
+end
+
+runtimejump(3)
+::label1:: assert(false)
+::label2:: assert(false)
+::labeldefault:: assert(true) print("runetimejump 3")

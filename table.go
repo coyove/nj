@@ -425,6 +425,7 @@ func compileNodeTopLevel(name, source string, n parser.Node, opt *LoadOptions) (
 			table.vp,
 			table.symbolsToDebugLocals(),
 			nil,
+			table.labelPos,
 			table.codeSeg,
 		),
 		&table.sym,

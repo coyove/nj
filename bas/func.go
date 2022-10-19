@@ -23,6 +23,7 @@ type funcbody struct {
 	top       *Program
 	locals    []string
 	caps      []string
+	jumps     map[string]int
 }
 
 type Program struct {
@@ -395,7 +396,8 @@ func (obj *Object) printAll(w io.Writer) {
 	internal.WriteString(w, "end)\t"+obj.funcSig())
 }
 
-func NewBareFunc(f string, varg bool, np byte, ss uint16, locals, caps []string, code internal.Packet) *Object {
+func NewBareFunc(f string, varg bool, np byte, ss uint16,
+	locals, caps []string, jt map[string]int, code internal.Packet) *Object {
 	obj := NewObject(0)
 	obj.SetPrototype(&Proto.Func)
 	obj.fun = &funcbody{}
@@ -407,6 +409,7 @@ func NewBareFunc(f string, varg bool, np byte, ss uint16, locals, caps []string,
 	obj.fun.locals = locals
 	obj.fun.method = strings.Contains(f, ".")
 	obj.fun.caps = caps
+	obj.fun.jumps = jt
 	return obj
 }
 
