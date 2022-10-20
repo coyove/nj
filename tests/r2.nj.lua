@@ -313,3 +313,19 @@ runtimejump(3)
 ::label1:: assert(false)
 ::label2:: assert(false)
 ::labeldefault:: assert(true) print("runetimejump 3")
+
+function test_jump()
+    local ch1 = channel()
+    local ch2 = channel()
+
+    function() time.sleep(0.2) self.ch1.send("ch1") end.go()
+
+    channel.recvmulti2(local out[2], {ch1: goto ch1, ch2: goto ch2})
+    ::ch2::
+    assert(false)
+    if::ch1::then
+    assert(out[0], "ch1")
+    print(out)
+    end
+end
+test_jump()

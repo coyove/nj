@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/coyove/nj/bas"
@@ -197,6 +198,15 @@ func (lex *Lexer) pArray(list, arg Node) Node {
 		return append(list.(ExprList), arg)
 	}
 	return ExprList([]Node{arg})
+}
+
+func (lex *Lexer) pArrayN(s string) Node {
+	var args []Node
+	n, _ := strconv.Atoi(s)
+	for i := 0; i < n; i++ {
+		args = append(args, SNil)
+	}
+	return ExprList(args)
 }
 
 func (lex *Lexer) pObject(list, k, v Node) Node {

@@ -334,14 +334,15 @@ func init() {
 
 	AddGlobal("Version", Int64(Version))
 	AddGlobalFunc("globals", func(e *Env) { e.A = newObjectInplace(Globals()).ToValue() })
-	AddGlobalFunc("zzz", func(e *Env) {
-		e.Jump(e.Str(0))
-	})
 	AddGlobalFunc("jump", func(e *Env) {
 		x := &e.runtime.stackN[len(e.runtime.stackN)-1]
-		pos, ok := x.Callable.fun.jumps[e.Str(0)]
+		lbl := e.Str(0)
+		if lbl == "" {
+			return
+		}
+		pos, ok := x.Callable.fun.jumps[lbl]
 		if !ok {
-			internal.Panic("runtime jump: label %s not found", e.Str(0))
+			internal.Panic("runtime jump: label %s not found", lbl)
 		}
 		x.Cursor = uint32(pos)
 	})
@@ -847,6 +848,28 @@ func init() {
 			}
 			chosen, recv, recvOK := reflect.Select(cases)
 			e.A = Array(channels[chosen], ValueOf(recv.Interface()), Bool(recvOK))
+		})).
+		SetProp("recvmulti2", Func("recvmulti2", func(e *Env) {
+			var cases []reflect.SelectCase
+			var gotos []string
+			out := e.Shape(0, "(v,v)").Native().Values()
+			e.Shape(1, "{<@channel,N>:G}").Object().Foreach(func(k Value, v *Value) bool {
+				if k.IsNil() {
+					cases = append(cases, reflect.SelectCase{
+						Dir: reflect.SelectDefault,
+					})
+				} else {
+					cases = append(cases, reflect.SelectCase{
+						Dir:  reflect.SelectRecv,
+						Chan: reflect.ValueOf(k.Native().Unwrap()),
+					})
+				}
+				gotos = append(gotos, v.Str())
+				return true
+			})
+			chosen, recv, recvOK := reflect.Select(cases)
+			out[0], out[1] = ValueOf(recv), Bool(recvOK)
+			e.Jump(gotos[chosen])
 		})).
 		SetPrototype(&Proto.Native)
 	AddGlobal("channel", Proto.Channel.ToValue())

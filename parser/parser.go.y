@@ -11,6 +11,7 @@ func ss(yylex yyLexer) *Lexer { return yylex.(*Lexer) }
 %type<expr> declarator_list
 %type<expr> ident_list
 %type<expr> expr
+%type<expr> expr_declarator
 %type<expr> expr_list
 %type<expr> expr_assign_list
 %type<expr> prefix_expr
@@ -90,7 +91,10 @@ for_stat:
     TFor TIdent TIn expr TDo stats TEnd                   { $$ = ss(yylex).pForIn($2, $1, $4, $6, $1) }
 
 if_stat:
-    TIf expr TThen stats elseif_stat TEnd %prec 'T' { $$ = &If{$2, $4, $5} }
+    TIf expr TThen stats elseif_stat TEnd %prec 'T'       { $$ = &If{$2, $4, $5} } |
+    TIf TLabel TIdent TLabel TThen stats TEnd %prec 'T'   {
+        $$ = &If{ss(yylex).Int(0), ss(yylex).pProg(false, &GotoLabel{$3.Str, false, $1.Line()}, $6), emptyProg}
+    }
 
 elseif_stat:
                                                     { $$ = nil } |
@@ -143,6 +147,12 @@ declarator:
     prefix_expr '.' TIdent {
         $$ = &Tenary{typ.OpLoad, $1, ss(yylex).Str($3.Str), Address(typ.RegA), $2.Line()}
     } 
+
+expr_declarator:
+    expr                              { $$ = $1 } |
+    TGoto TIdent                      { $$ = ss(yylex).Str($2.Str) } |
+    TLocal TIdent '=' expr            { $$ = ss(yylex).pDeclareAssign([]Node{Sym($2)}, ExprList{$4}, false, $1) } |
+    TLocal TIdent TLBracket TNumber']'{ $$ = &Declare{Sym($2), ss(yylex).pArrayN($4.Str), $1.Line()} }
 
 expr:
     prefix_expr                       { $$ = $1 } |
@@ -200,16 +210,14 @@ ident_list:
     ident_list ',' TIdent          { $$ = append($1.(IdentList), Sym($3)) }
 
 expr_list:
-    expr                           { $$ = ss(yylex).pArray(nil, $1) } |
-    expr_list ',' expr             { $$ = ss(yylex).pArray($1, $3) }
+    expr_declarator                { $$ = ss(yylex).pArray(nil, $1) } |
+    expr_list ',' expr_declarator  { $$ = ss(yylex).pArray($1, $3) }
 
 expr_assign_list:
-    TIdent '=' expr                             { $$ = ss(yylex).pObject(nil, ss(yylex).Str($1.Str), $3) } |
-    expr ':' expr                               { $$ = ss(yylex).pObject(nil, $1, $3) } |
-    expr ':' TGoto TIdent                       { $$ = ss(yylex).pObject(nil, $1, ss(yylex).Str($4.Str)) } |
-    expr_assign_list ',' TIdent '=' expr        { $$ = ss(yylex).pObject($1, ss(yylex).Str($3.Str), $5) } |
-    expr_assign_list ',' expr ':' expr          { $$ = ss(yylex).pObject($1, $3, $5) } |
-    expr_assign_list ',' expr ':' TGoto TIdent  { $$ = ss(yylex).pObject($1, $3, ss(yylex).Str($6.Str)) }
+    TIdent '=' expr_declarator                      { $$ = ss(yylex).pObject(nil, ss(yylex).Str($1.Str), $3) } |
+    expr ':' expr_declarator                        { $$ = ss(yylex).pObject(nil, $1, $3) } |
+    expr_assign_list ',' TIdent '=' expr_declarator { $$ = ss(yylex).pObject($1, ss(yylex).Str($3.Str), $5) } |
+    expr_assign_list ',' expr ':' expr_declarator   { $$ = ss(yylex).pObject($1, $3, $5) }
 
 comma: {} | ',' {}
 

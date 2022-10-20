@@ -198,7 +198,7 @@ func assertShapePrimitive(v Value, verbs string) error {
 			ok = bm['n']
 		}
 	case typ.String:
-		ok = bm['s'] || bm['R']
+		ok = bm['s'] || bm['R'] || bm['G']
 	case typ.Object:
 		ok = bm['o'] || bm['R'] || bm['W'] || bm['C']
 	case typ.Native:
@@ -250,6 +250,8 @@ func (sa *shaperPrimitive) String() string {
 			buf = append(buf, "Writer")
 		case 'C':
 			buf = append(buf, "Closer")
+		case 'G':
+			buf = append(buf, "goto")
 		default:
 			buf = append(buf, "any")
 		}

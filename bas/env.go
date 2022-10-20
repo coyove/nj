@@ -300,6 +300,9 @@ func (e *Env) checkStackOverflow() {
 }
 
 func (e *Env) Jump(label string) {
+	if label == "" {
+		return
+	}
 	pos, ok := e.Caller().fun.jumps[label]
 	if !ok {
 		internal.Panic("runtime jump: label %s not found", label)
