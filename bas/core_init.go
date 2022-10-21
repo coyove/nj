@@ -332,9 +332,9 @@ func init() {
 		Merge(Proto.ReadWriter.Proto).
 		Merge(Proto.Closer.Proto).SetPrototype(&Proto.Native))
 
-	AddGlobal("Version", Int64(Version))
-	AddGlobalFunc("globals", func(e *Env) { e.A = newObjectInplace(Globals()).ToValue() })
-	AddGlobalFunc("jump", func(e *Env) {
+	AddTopValue("Version", Int64(Version))
+	AddTopFunc("globals", func(e *Env) { e.A = newObjectInplace(TopSymbols()).ToValue() })
+	AddTopFunc("jump", func(e *Env) {
 		x := &e.runtime.stackN[len(e.runtime.stackN)-1]
 		lbl := e.Str(0)
 		if lbl == "" {
@@ -346,11 +346,11 @@ func init() {
 		}
 		x.Cursor = uint32(pos)
 	})
-	AddGlobalFunc("new", func(e *Env) {
+	AddTopFunc("new", func(e *Env) {
 		m := e.Object(0)
 		_ = e.Get(1).IsObject() && e.SetA(e.Object(1).SetPrototype(m).ToValue()) || e.SetA(NewObject(0).SetPrototype(m).ToValue())
 	})
-	AddGlobalFunc("createprototype", func(e *Env) {
+	AddTopFunc("createprototype", func(e *Env) {
 		e.A = Func(e.Str(0), func(e *Env) {
 			o := e.Self()
 			init := o.Get(Str("_init")).Object()
@@ -362,7 +362,7 @@ func init() {
 			SetProp("_init", e.Object(1).ToValue()).
 			ToValue()
 	})
-	AddGlobalFunc("createnativewrapper", func(e *Env) {
+	AddTopFunc("createnativewrapper", func(e *Env) {
 		o := e.Object(0)
 		meta := Proto.WrapperMeta
 		meta.Name = o.Name()
@@ -374,7 +374,7 @@ func init() {
 	})
 
 	// Debug libraries
-	AddGlobal("debug", NewNamedObject("debug", 0).
+	AddTopValue("debug", NewNamedObject("debug", 0).
 		SetProp("self", Func("self", func(e *Env) { e.A = e.Caller().ToValue() })).
 		SetProp("locals", Func("locals", func(e *Env) {
 			locals := e.Caller().fun.locals
@@ -421,18 +421,18 @@ func init() {
 		})).
 		ToValue())
 
-	AddGlobalFunc("type", func(e *Env) { e.A = Str(e.Get(0).Type().String()) })
-	AddGlobalFunc("apply", func(e *Env) {
+	AddTopFunc("type", func(e *Env) { e.A = Str(e.Get(0).Type().String()) })
+	AddTopFunc("apply", func(e *Env) {
 		e.A = callobj(e.Object(0), e.runtime, e.top, nil, e.Get(1), e.Stack()[2:]...)
 	})
-	AddGlobalFunc("panic", func(e *Env) {
+	AddTopFunc("panic", func(e *Env) {
 		v := e.Get(0)
 		if v.HasPrototype(&Proto.Error) {
 			panic(v.Native().Unwrap().(*ExecError).root)
 		}
 		panic(v)
 	})
-	AddGlobal("assert", Func("assert", func(e *Env) {
+	AddTopValue("assert", Func("assert", func(e *Env) {
 		if v := e.Get(0); e.Size() <= 1 && v.IsFalse() {
 			internal.Panic("assertion failed")
 		} else if e.Size() == 2 && !v.Equal(e.Get(1)) {
@@ -450,7 +450,7 @@ func init() {
 		ToValue())
 
 	Proto.Bool = *Func("bool", func(e *Env) { e.A = Bool(e.Get(0).IsTrue()) }).Object()
-	AddGlobal("bool", Proto.Bool.ToValue())
+	AddTopValue("bool", Proto.Bool.ToValue())
 
 	Proto.Int = *Func("int", func(e *Env) {
 		if v := e.Get(0); v.Type() == typ.Number {
@@ -460,7 +460,7 @@ func init() {
 			_ = err == nil && e.SetA(Int64(v)) || e.SetA(Error(e, err))
 		}
 	}).Object()
-	AddGlobal("int", Proto.Int.ToValue())
+	AddTopValue("int", Proto.Int.ToValue())
 
 	Proto.Float = *Func("float", func(e *Env) {
 		if v := e.Get(0); v.Type() == typ.Number {
@@ -473,9 +473,9 @@ func init() {
 			}
 		}
 	}).Object()
-	AddGlobal("float", Proto.Float.ToValue())
+	AddTopValue("float", Proto.Float.ToValue())
 
-	AddGlobal("io", NewNamedObject("io", 0).
+	AddTopValue("io", NewNamedObject("io", 0).
 		SetProp("write", Func("write", func(e *Env) {
 			w := e.Get(0).Writer()
 			for _, a := range e.Stack()[1:] {
@@ -562,9 +562,9 @@ func init() {
 		}).
 		SetPrototype(&Proto.Object)
 
-	AddGlobal("object", Proto.Object.ToValue())
-	AddGlobal("func", Proto.Func.ToValue())
-	AddGlobal("callable", Proto.Func.ToValue())
+	AddTopValue("object", Proto.Object.ToValue())
+	AddTopValue("func", Proto.Func.ToValue())
+	AddTopValue("callable", Proto.Func.ToValue())
 
 	Proto.Native = *NewNamedObject("native", 0).
 		SetProp("types", metaStore.nativeTypes.ToValue()).
@@ -621,7 +621,7 @@ func init() {
 		AddMethod("toreadwritecloser", func(e *Env) { e.Native(-1).meta = &Proto.ReadWriteCloser })
 
 	Proto.Native.SetPrototype(nil) // native prototype has no parent
-	AddGlobal("native", Proto.Native.ToValue())
+	AddTopValue("native", Proto.Native.ToValue())
 
 	Proto.Array = *NewNamedObject("array", 0).
 		AddMethod("make", func(e *Env) {
@@ -695,7 +695,7 @@ func init() {
 			e.A = ValueOf(reflect.ValueOf(e.Native(-1).Unwrap()).Index(e.Int(0)).Addr().Interface())
 		}).
 		SetPrototype(&Proto.Native)
-	AddGlobal("array", Proto.Array.ToValue())
+	AddTopValue("array", Proto.Array.ToValue())
 
 	Proto.Bytes = *Func("bytes", func(e *Env) {
 		switch v := e.Get(0); v.Type() {
@@ -715,7 +715,7 @@ func init() {
 	}).Object().
 		AddMethod("unsafestr", func(e *Env) { e.A = UnsafeStr(e.A.Native().Unwrap().([]byte)) }).
 		SetPrototype(&Proto.Array)
-	AddGlobal("bytes", Proto.Bytes.ToValue())
+	AddTopValue("bytes", Proto.Bytes.ToValue())
 
 	Proto.Error = *Func("error", func(e *Env) {
 		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.runtime.Stacktrace(true)})
@@ -725,7 +725,7 @@ func init() {
 		AddMethod("getcause", func(e *Env) { e.A = NewNative(e.Native(-1).Unwrap().(*ExecError).root).ToValue() }).
 		AddMethod("trace", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).stacks) }).
 		SetPrototype(&Proto.Native)
-	AddGlobal("error", Proto.Error.ToValue())
+	AddTopValue("error", Proto.Error.ToValue())
 
 	Proto.NativeMap = *Func("nativemap", func(e *Env) {
 		m := make(map[Value]Value, e.Int(0))
@@ -774,7 +774,7 @@ func init() {
 			}
 		}).
 		SetPrototype(&Proto.Native)
-	AddGlobal("nativemap", Proto.NativeMap.ToValue())
+	AddTopValue("nativemap", Proto.NativeMap.ToValue())
 
 	Proto.NativePtr = *NewNamedObject("nativeptr", 1).
 		AddMethod("set", func(e *Env) {
@@ -786,7 +786,7 @@ func init() {
 			_ = rv.IsNil() && e.SetA(Nil) || e.SetA(ValueOf(rv.Elem().Interface()))
 		}).
 		SetPrototype(&Proto.Native)
-	AddGlobal("nativeptr", Proto.NativePtr.ToValue())
+	AddTopValue("nativeptr", Proto.NativePtr.ToValue())
 
 	Proto.NativeIntf = *NewNamedObject("nativeintf", 1).
 		AddMethod("deref", func(e *Env) {
@@ -794,7 +794,7 @@ func init() {
 			_ = rv.IsNil() && e.SetA(Nil) || e.SetA(ValueOf(rv.Elem().Interface()))
 		}).
 		SetPrototype(&Proto.Native)
-	AddGlobal("nativeintf", Proto.NativeIntf.ToValue())
+	AddTopValue("nativeintf", Proto.NativeIntf.ToValue())
 
 	Proto.Channel = *Func("channel", func(e *Env) {
 		e.A = ValueOf(make(chan Value, e.IntDefault(0, 0)))
@@ -872,7 +872,7 @@ func init() {
 			e.Jump(gotos[chosen])
 		})).
 		SetPrototype(&Proto.Native)
-	AddGlobal("channel", Proto.Channel.ToValue())
+	AddTopValue("channel", Proto.Channel.ToValue())
 
 	Proto.Str = *Func("str", func(e *Env) {
 		i := e.Get(0)
@@ -936,5 +936,5 @@ func init() {
 			e.A = UnsafeStr(buf.Bytes())
 		})
 
-	AddGlobal("str", Proto.Str.ToValue())
+	AddTopValue("str", Proto.Str.ToValue())
 }

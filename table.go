@@ -33,6 +33,8 @@ type symTable struct {
 
 	forLoops []*breakLabel
 
+	pendingReleases []uint16
+
 	vp uint16
 
 	constMap bas.Map // value -> address: uint16
@@ -295,9 +297,10 @@ func (table *symTable) compileStaticNode(node parser.Node) (uint16, bool) {
 	case *parser.Symbol:
 		idx, ok := table.get(v.Name)
 		if !ok {
-			if idx := bas.GetGlobalName(v.Name); idx > 0 {
+			if idx := bas.GetTopIndex(v.Name); idx > 0 {
 				c := table.borrowAddress()
-				table.codeSeg.WriteInst3(typ.OpLoadGlobal, uint16(idx), typ.RegPhantom, c)
+				table.codeSeg.WriteInst3(typ.OpLoadTop, uint16(idx), typ.RegPhantom, c)
+				table.pendingReleases = append(table.pendingReleases, c)
 				return c, true
 			}
 			table.panicnode(v, "symbol not defined")

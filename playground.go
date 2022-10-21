@@ -87,7 +87,7 @@ func PlaygroundHandler(defaultCode string, opt *LoadOptions) func(w http.Respons
 					}
 				}
 			}
-			x := bas.Globals()
+			x := bas.TopSymbols()
 			if opt != nil {
 				x.Merge(&opt.Globals)
 			}

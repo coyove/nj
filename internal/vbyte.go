@@ -132,13 +132,13 @@ func (b *Packet) WriteInst3(op byte, opa, opb, opc uint16) {
 	if op == typ.OpLoad && len(b.Code) > 0 {
 		/*
 			    form:
-				    loadglobal idx phantom -> dest
+				    loadtop idx phantom -> dest
 				    load dest key -> dest2
 				into:
-				    loadglobal idx key -> dest2
+				    loadtop idx key -> dest2
 		*/
 		x := &b.Code[len(b.Code)-1]
-		if x.Opcode == typ.OpLoadGlobal && x.B == typ.RegPhantom && opa == x.C {
+		if x.Opcode == typ.OpLoadTop && x.B == typ.RegPhantom && opa == x.C {
 			x.B, x.C = opb, opc
 			return
 		}

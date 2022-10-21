@@ -30,6 +30,9 @@ func compileProgBlock(table *symTable, node *parser.Prog) uint16 {
 		default:
 			yx = table.compileNode(a)
 		}
+
+		table.releaseAddr(table.pendingReleases)
+		table.pendingReleases = table.pendingReleases[:0]
 	}
 
 	if node.DoBlock {
@@ -41,7 +44,7 @@ func compileProgBlock(table *symTable, node *parser.Prog) uint16 {
 // local a = b
 func compileDeclare(table *symTable, node *parser.Declare) uint16 {
 	dest := node.Name.Name
-	if bas.GetGlobalName(dest) > 0 || dest == staticTrue || dest == staticFalse || dest == staticThis || dest == staticSelf {
+	if bas.GetTopIndex(dest) > 0 || dest == staticTrue || dest == staticFalse || dest == staticThis || dest == staticSelf {
 		table.panicnode(node.Name, "can't bound to a global static name")
 	}
 
@@ -55,7 +58,7 @@ func compileDeclare(table *symTable, node *parser.Declare) uint16 {
 // a = b
 func compileAssign(table *symTable, node *parser.Assign) uint16 {
 	dest := node.Name.Name
-	if bas.GetGlobalName(dest) > 0 || dest == staticTrue || dest == staticFalse || dest == staticThis || dest == staticSelf {
+	if bas.GetTopIndex(dest) > 0 || dest == staticTrue || dest == staticFalse || dest == staticThis || dest == staticSelf {
 		table.panicnode(node.Name, "can't assign to a global static name")
 	}
 	destAddr, declared := table.get(dest)

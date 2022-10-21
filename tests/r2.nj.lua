@@ -312,7 +312,7 @@ end
 runtimejump(3)
 ::label1:: assert(false)
 ::label2:: assert(false)
-::labeldefault:: assert(true) print("runetimejump 3")
+::labeldefault:: assert(true) print("runtimejump 3")
 
 function test_jump()
     local ch1 = channel()

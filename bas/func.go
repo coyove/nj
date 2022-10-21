@@ -42,14 +42,14 @@ type Program struct {
 	Stdin        io.Reader
 }
 
-var globals struct {
+var topSymbols struct {
 	sym   Map
 	store Map
 	stack []Value
 }
 
-func GetGlobalName(v Value) int {
-	x, ok := globals.sym.Get(v)
+func GetTopIndex(v Value) int {
+	x, ok := topSymbols.sym.Get(v)
 	if !ok {
 		return 0
 	}
@@ -57,25 +57,25 @@ func GetGlobalName(v Value) int {
 
 }
 
-func Globals() Map {
-	return globals.store.Copy()
+func TopSymbols() Map {
+	return topSymbols.store.Copy()
 }
 
-func AddGlobal(k string, v Value) {
+func AddTopValue(k string, v Value) {
 	sk := Str(k)
-	idx, ok := globals.sym.Get(sk)
+	idx, ok := topSymbols.sym.Get(sk)
 	if ok {
-		globals.stack[idx.Int()] = v
+		topSymbols.stack[idx.Int()] = v
 	} else {
-		idx := len(globals.stack)
-		globals.sym.Set(sk, Int(idx))
-		globals.stack = append(globals.stack, v)
+		idx := len(topSymbols.stack)
+		topSymbols.sym.Set(sk, Int(idx))
+		topSymbols.stack = append(topSymbols.stack, v)
 	}
-	globals.store.Set(sk, v)
+	topSymbols.store.Set(sk, v)
 }
 
-func AddGlobalFunc(k string, f func(*Env)) {
-	AddGlobal(k, Func(k, f))
+func AddTopFunc(k string, f func(*Env)) {
+	AddTopValue(k, Func(k, f))
 }
 
 // Func creates a callable object
@@ -321,11 +321,11 @@ func (obj *Object) printAll(w io.Writer) {
 				fmt.Fprintf(w, "%s[%s] = %s", readAddr(a, false), readAddr(b, false), readAddr(c, false))
 			case typ.OpSlice:
 				fmt.Fprintf(w, "sliceload %s %s %s", readAddr(a, false), readAddr(b, false), readAddr(c, false))
-			case typ.OpLoadGlobal:
+			case typ.OpLoadTop:
 				if b != typ.RegPhantom {
-					fmt.Fprintf(w, "%s = loadglobal %s[%s]", readAddr(c, false), globals.stack[a].simple(), readAddr(b, true))
+					fmt.Fprintf(w, "%s = loadtop %s[%s]", readAddr(c, false), topSymbols.stack[a].simple(), readAddr(b, true))
 				} else {
-					fmt.Fprintf(w, "%s = loadglobal %s", readAddr(c, false), globals.stack[a].simple())
+					fmt.Fprintf(w, "%s = loadtop %s", readAddr(c, false), topSymbols.stack[a].simple())
 				}
 			case typ.OpExt:
 				switch inst.OpcodeExt {

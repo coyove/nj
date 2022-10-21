@@ -220,31 +220,32 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				}
 			case typ.OpExtStore16:
 				subject, v := env._ref(opa), env._get(v.C)
-				switch subject.Type() {
-				case typ.Object:
-					subject.Object().Set(Int(int(opb)), v)
-				case typ.Native:
+				if st := subject.Type(); st == typ.Native {
 					if a := subject.Native(); int(opb) == a.Len() {
 						a.Append(v)
 					} else {
 						a.Set(int(opb), v)
 					}
-				default:
+				} else if st == typ.Object {
+					subject.Object().Set(Int(int(opb)), v)
+				} else {
 					internal.Panic("invalid store: %v, key: %v", subject.simple(), opb)
 				}
 				env.A = v
 			case typ.OpExtLoad16:
-				switch a := env._ref(opa); a.Type() {
-				case typ.Object:
-					env.A = a.Object().Get(Int(int(opb)))
-				case typ.Native:
+				a := env._ref(opa)
+				if at := a.Type(); at == typ.Native {
 					env.A = a.Native().Get(int(opb))
-				case typ.String:
+				} else if at == typ.String {
 					env.A = Int64(int64(a.Str()[opb]))
-				default:
+				} else if at == typ.Object {
+					env.A = a.Object().Get(Int(int(opb)))
+				} else {
 					env.A = Nil
 				}
-				env._set(v.C, env.A)
+				if v.C != typ.RegA {
+					env._set(v.C, env.A)
+				}
 			case typ.OpExtBitAnd:
 				va, vb := env._get(opa), env._get(opb)
 				bassertTwoInts("and", va, vb)
@@ -591,9 +592,9 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			if env.A.IsFalse() {
 				cursor = uint32(int32(cursor) + v.D())
 			}
-		case typ.OpLoadGlobal:
-			if a := globals.stack[opa]; opb != typ.RegPhantom {
-				env._set(v.C, a.AssertObject("load global").Get(env._get(opb)))
+		case typ.OpLoadTop:
+			if a := topSymbols.stack[opa]; opb != typ.RegPhantom {
+				env._set(v.C, a.AssertObject("load top").Get(env._get(opb)))
 			} else {
 				env._set(v.C, a)
 			}

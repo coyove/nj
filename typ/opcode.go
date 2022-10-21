@@ -56,7 +56,7 @@ const (
 	OpIsProto
 	OpSlice
 	OpRet
-	OpLoadGlobal
+	OpLoadTop
 
 	_ = iota
 	OpExtAdd16
