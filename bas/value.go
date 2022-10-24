@@ -65,8 +65,6 @@ type Value struct {
 	p unsafe.Pointer
 }
 
-func (v Value) IsValue() {}
-
 // Type returns the type of value.
 func (v Value) Type() typ.ValueType {
 	if uintptr(v.p)&0xffffffffffffff00 == baseStart {

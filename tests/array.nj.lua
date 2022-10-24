@@ -1,6 +1,6 @@
 a = [1,2,3,4]
 b = a[:2]
-b[#b] = "a"
+b += "a"
 assert(a[2], 'a')
 print(a)
 
@@ -11,11 +11,11 @@ function(i) return i end.map(a, os.numcpus)
 function foo() return a end
 
 b = foo()[:10]
-b[#b] = 100
+b += 100
 assert(a[10], 100)
 
 b = [foo()][(0)][:10]
-b[#b] = 100
+b += 100
 assert(a[10], 100)
 
 

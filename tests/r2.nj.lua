@@ -278,7 +278,7 @@ assert(firstK([1,2,3], [0.4,1.5,2.6], 2), 1.5)
 assert(firstK([1,2,3], [0.7], 2), 2)
 
 local tmp = []
-for i=0,1e3 do tmp[i] = math.random() end
+for i=0,1e3 do tmp += math.random() end
 ki = int(math.random() * #tmp)
 k = tmp.clone().sort()[ki]
 a, b = tmp[:#tmp / 2], tmp[#tmp/ 2:]

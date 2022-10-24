@@ -160,12 +160,8 @@ func compileOr(table *symTable, node *parser.Or) uint16 {
 	return typ.RegA
 }
 
-// [if condition [true-chain ...] [false-chain ...]]
 func compileIf(table *symTable, node *parser.If) uint16 {
 	condyx := table.compileNode(node.Cond)
-
-	table.addMaskedSymTable()
-
 	if condyx != typ.RegA {
 		table.codeSeg.WriteInst(typ.OpSet, typ.RegA, condyx)
 	}
@@ -173,6 +169,7 @@ func compileIf(table *symTable, node *parser.If) uint16 {
 	table.codeSeg.WriteJmpInst(typ.OpJmpFalse, 0)
 	init := table.codeSeg.Len()
 
+	table.addMaskedSymTable()
 	table.compileNode(node.True)
 	part1 := table.codeSeg.Len()
 

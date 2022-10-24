@@ -125,8 +125,10 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				*va = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
 			} else if va.IsNumber() && vb.IsNumber() {
 				*va = Float64(va.Float64() + vb.Float64())
-			} else if va.Type() == typ.String && vb.Type() == typ.String {
+			} else if vat := va.Type(); vat == typ.String && vb.Type() == typ.String {
 				*va = Str(va.Str() + vb.Str())
+			} else if vat == typ.Native {
+				va.Native().Append(vb)
 			} else {
 				internal.Panic("inc "+errNeedNumbersOrStrings, va.simple(), vb.simple())
 			}
@@ -169,6 +171,8 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					*va = Int64(va.UnsafeInt64() + int64(int16(opb)))
 				} else if va.IsNumber() {
 					*va = Float64(va.Float64() + float64(int16(opb)))
+				} else if va.Type() == typ.Native {
+					va.Native().Append(Int(int(int16(opb))))
 				} else {
 					internal.Panic("inc16 "+errNeedNumber, va.simple())
 				}
@@ -187,6 +191,9 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					env.A = Int64(va.UnsafeInt64() + int64(int16(opb)))
 				} else if va.IsNumber() {
 					env.A = Float64(va.UnsafeFloat64() + float64(int16(opb)))
+				} else if va.Type() == typ.Native {
+					va.Native().Append(Int(int(int16(opb))))
+					env.A = *va
 				} else {
 					internal.Panic("add "+errNeedNumber, va.simple())
 				}
@@ -221,11 +228,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			case typ.OpExtStore16:
 				subject, v := env._ref(opa), env._get(v.C)
 				if st := subject.Type(); st == typ.Native {
-					if a := subject.Native(); int(opb) == a.Len() {
-						a.Append(v)
-					} else {
-						a.Set(int(opb), v)
-					}
+					subject.Native().Set(int(opb), v)
 				} else if st == typ.Object {
 					subject.Object().Set(Int(int(opb)), v)
 				} else {
@@ -247,27 +250,32 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					env._set(v.C, env.A)
 				}
 			case typ.OpExtBitAnd:
-				va, vb := env._get(opa), env._get(opb)
-				bassertTwoInts("and", va, vb)
-				env.A = Int64(va.Int64() & vb.Int64())
+				va, vb := env._ref(opa), env._ref(opb)
+				if va.Type() == typ.Native && vb.Type() == typ.Native {
+					va.Native().Concat(vb.Native())
+					env.A = *va
+				} else {
+					bassertTwoInts("and", va, vb)
+					env.A = Int64(va.Int64() & vb.Int64())
+				}
 			case typ.OpExtBitOr:
-				va, vb := env._get(opa), env._get(opb)
+				va, vb := env._ref(opa), env._ref(opb)
 				bassertTwoInts("or", va, vb)
 				env.A = Int64(va.Int64() | vb.Int64())
 			case typ.OpExtBitXor:
-				va, vb := env._get(opa), env._get(opb)
+				va, vb := env._ref(opa), env._ref(opb)
 				bassertTwoInts("xor", va, vb)
 				env.A = Int64(va.Int64() ^ vb.Int64())
 			case typ.OpExtBitLsh:
-				va, vb := env._get(opa), env._get(opb)
+				va, vb := env._ref(opa), env._ref(opb)
 				bassertTwoInts("lsh", va, vb)
 				env.A = Int64(va.Int64() << vb.Int64())
 			case typ.OpExtBitRsh:
-				va, vb := env._get(opa), env._get(opb)
+				va, vb := env._ref(opa), env._ref(opb)
 				bassertTwoInts("rsh", va, vb)
 				env.A = Int64(va.Int64() >> vb.Int64())
 			case typ.OpExtBitURsh:
-				va, vb := env._get(opa), env._get(opb)
+				va, vb := env._ref(opa), env._ref(opb)
 				bassertTwoInts("ursh", va, vb)
 				env.A = Int64(int64(uint64(va.Int64()) >> vb.Int64()))
 			case typ.OpExtBitAnd16:
@@ -300,8 +308,11 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				env.A = Int64(va.UnsafeInt64() + vb.UnsafeInt64())
 			} else if va.IsNumber() && vb.IsNumber() {
 				env.A = Float64(va.Float64() + vb.Float64())
-			} else if x := va.Type() + vb.Type(); x == typ.String*2 {
+			} else if vat, vbt := va.Type(), vb.Type(); vat == typ.String && vbt == typ.String {
 				env.A = Str(va.Str() + vb.Str())
+			} else if vat == typ.Native {
+				va.Native().Append(*vb)
+				env.A = *va
 			} else {
 				internal.Panic("add "+errNeedNumbersOrStrings, va.simple(), vb.simple())
 			}
@@ -395,11 +406,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				subject.Object().Set(k, v)
 			case typ.Native:
 				if k.IsInt64() {
-					if a, idx := subject.Native(), k.Int(); idx == a.Len() {
-						a.Append(v)
-					} else {
-						a.Set(idx, v)
-					}
+					subject.Native().Set(k.Int(), v)
 				} else {
 					subject.Native().SetKey(k, v)
 				}
