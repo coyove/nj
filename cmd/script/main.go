@@ -138,10 +138,9 @@ func main() {
 		}()
 	}
 
-	i, err := b.Run()
+	i := b.Run()
 	if _ret {
-		fmt.Print(i)
-		fmt.Print(" ", err, "\n")
+		fmt.Println(i)
 	}
 }
 
@@ -164,12 +163,8 @@ func runRepl() {
 			if err != nil {
 				fmt.Println("x", err)
 			} else {
-				res, err := p.Run()
-				if err != nil {
-					fmt.Println("x", err)
-				} else {
-					fmt.Println("=>", res)
-				}
+				res := p.Run()
+				fmt.Println("=>", res)
 				globals = p.LocalsObject()
 			}
 			code = code[:0]

@@ -92,17 +92,17 @@ func Func(name string, f func(*Env)) Value {
 	return obj.ToValue()
 }
 
-func (p *Program) Run() (v1 Value, err error) {
+func (p *Program) Run() (v1 Value) {
 	p.stopped = false
 	if p.MaxStackSize <= 0 {
 		p.MaxStackSize = math.MaxInt64
 	}
 
-	defer internal.CatchError(&err)
 	newEnv := Env{
 		top:   p,
 		stack: p.stack,
 	}
+	defer catchPanicError(&newEnv, &v1)
 	v1 = internalExecCursorLoop(newEnv, p.main, nil)
 	return
 }
@@ -151,28 +151,26 @@ func (p *Program) LocalsObject() *Object {
 
 // Apply calls the object with provided 'this' value, 'e' is for stacktracing and is optional.
 func (m *Object) Apply(e *Env, this Value, args ...Value) Value {
-	return callobj(m, e.getStacktraces(), e.getTop(), nil, this, args...)
+	return callobj(m, e.getStacktraces(), e.getTop(), false, this, args...)
 }
 
 // TryApply calls the object with provided 'this' value, 'e' is for stacktracing and is optional.
 // Panic will be recovered and returned as an error.
-func (m *Object) TryApply(e *Env, this Value, args ...Value) (res Value, err error) {
-	res = callobj(m, e.getStacktraces(), e.getTop(), &err, this, args...)
-	return
+func (m *Object) TryApply(e *Env, this Value, args ...Value) (res Value) {
+	return callobj(m, e.getStacktraces(), e.getTop(), true, this, args...)
 }
 
 // Call calls the object, 'e' is for stacktracing and is optional.
 func (m *Object) Call(e *Env, args ...Value) (res Value) {
-	return callobj(m, e.getStacktraces(), e.getTop(), nil, m.this, args...)
+	return callobj(m, e.getStacktraces(), e.getTop(), false, m.this, args...)
 }
 
 // TryCall calls the object, 'e' is for stacktracing and is optional. Panic will be recovered and returned as an error.
-func (m *Object) TryCall(e *Env, args ...Value) (res Value, err error) {
-	res = callobj(m, e.getStacktraces(), e.getTop(), &err, m.this, args...)
-	return
+func (m *Object) TryCall(e *Env, args ...Value) (res Value) {
+	return callobj(m, e.getStacktraces(), e.getTop(), true, m.this, args...)
 }
 
-func callobj(m *Object, r stacktraces, g *Program, outErr *error, this Value, args ...Value) (res Value) {
+func callobj(m *Object, r stacktraces, g *Program, outErr bool, this Value, args ...Value) (res Value) {
 	c := m.fun
 	newEnv := Env{
 		A:     this,
@@ -184,8 +182,8 @@ func callobj(m *Object, r stacktraces, g *Program, outErr *error, this Value, ar
 		newEnv.top = g
 	}
 
-	if outErr != nil {
-		defer internal.CatchError(outErr)
+	if outErr {
+		defer catchPanicError(&newEnv, &res)
 	}
 
 	if c.native != nil {

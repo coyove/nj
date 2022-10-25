@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,6 +59,10 @@ func IsBytes(v Value) bool {
 
 func IsError(v Value) bool {
 	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(&Proto.Error)
+}
+
+func IsPanicError(v Value) bool {
+	return IsError(v) && v.Native().Unwrap().(*ExecError).fatal
 }
 
 func DeepEqual(a, b Value) bool {
@@ -302,34 +308,25 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 		v *Value
 	}
 
-	work := func(e *Env, fun *Object, outError *error, p payload) {
+	var outError Value
+	work := func(e *Env, fun *Object, p payload) {
+		defer catchPanicError(e, &outError)
 		if p.i == -1 {
-			res, err := fun.TryCall(e, p.k, *p.v)
-			if err != nil {
-				*outError = err
-			} else {
-				*p.v = res
-			}
+			*p.v = fun.Call(e, p.k, *p.v)
 		} else {
-			res, err := fun.TryCall(e, Int(p.i), p.k)
-			if err != nil {
-				*outError = err
-			} else {
-				t.Native().Set(p.i, res)
-			}
+			t.Native().Set(p.i, fun.Call(e, Int(p.i), p.k))
 		}
 	}
 
-	var outError error
 	if n == 1 {
 		if t.IsArray() {
-			for i := 0; outError == nil && i < t.Native().Len(); i++ {
-				work(e, fun, &outError, payload{i, t.Native().Get(i), nil})
+			for i := 0; outError != Nil && i < t.Native().Len(); i++ {
+				work(e, fun, payload{i, t.Native().Get(i), nil})
 			}
 		} else {
 			t.Object().Foreach(func(k Value, v *Value) bool {
-				work(e, fun, &outError, payload{-1, k, v})
-				return outError == nil
+				work(e, fun, payload{-1, k, v})
+				return outError != Nil
 			})
 		}
 	} else {
@@ -338,17 +335,12 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 		wg.Add(n)
 		for i := 0; i < n; i++ {
 			go func(e *Env) {
-				defer func() {
-					wg.Done()
-					if r := recover(); r != nil {
-						outError = fmt.Errorf("map fatal error: %v", r)
-					}
-				}()
+				defer wg.Done()
 				for p := range in {
-					if outError != nil {
-						return
+					if outError != Nil {
+						break
 					}
-					work(e, fun, &outError, p)
+					work(e, fun, p)
 				}
 			}(e.Copy())
 		}
@@ -367,8 +359,8 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 
 		wg.Wait()
 	}
-	if outError != nil {
-		return Error(e, outError)
+	if outError != Nil {
+		return outError
 	}
 	return t
 }
@@ -467,4 +459,33 @@ func bassertOneInt(op string, va Value) {
 
 func panicNotEnoughArgs(a *Object) {
 	panic("not enough arguments to call " + a.Name())
+}
+
+func catchPanicError(e *Env, err *Value) {
+	if r := recover(); r != nil {
+		if internal.IsDebug() {
+			log.Println(string(debug.Stack()))
+		}
+		rv, ok := r.(Value)
+		if ok {
+			r = rv.Interface()
+		}
+		er, _ := r.(*ExecError)
+		if er != nil {
+			er.fatal = true
+			*err = NewNativeWithMeta(er, &Proto.PanicMeta).ToValue()
+		} else {
+			er, _ := r.(error)
+			if er == nil {
+				er = fmt.Errorf("%v", r)
+			}
+
+			ee := &ExecError{
+				root:   er,
+				stacks: e.runtime.Stacktrace(true),
+				fatal:  true,
+			}
+			*err = NewNativeWithMeta(ee, &Proto.PanicMeta).ToValue()
+		}
+	}
 }

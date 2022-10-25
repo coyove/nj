@@ -104,9 +104,9 @@ func runFile(t *testing.T, path string) {
 		fmt.Println(b.GoString())
 	}
 
-	_, err = b.Run()
-	if err != nil {
-		t.Fatal(err)
+	out := b.Run()
+	if bas.IsError(out) {
+		t.Fatal(out)
 	}
 }
 
@@ -137,7 +137,7 @@ return a
 end
 return foo
 `, &LoadOptions{Globals: bas.NewObject(0).SetProp("init", bas.Int(1)).ToMap()})
-		v, _ := cls.Run()
+		v := cls.Run()
 		if v := v.Object().Call(nil, bas.Int64(10)); v.Int64() != 11 {
 			t.Fatal(v)
 		}
@@ -158,7 +158,7 @@ return a
 end
 return foo
 `, nil)
-		v, _ := cls.Run()
+		v := cls.Run()
 		if v := v.Object().Call(nil, bas.Array(bas.Int64(1), bas.Int64(2), bas.Int64(3), bas.Int64(4))); v.Int64() != 11 {
 			t.Fatal(v)
 		}
@@ -184,11 +184,11 @@ foo()
 		t.Fatal(s)
 	}
 
-	_, err = cls.Run()
-	if err == nil {
+	outErr := cls.Run()
+	if !bas.IsError(outErr) {
 		t.FailNow()
 	}
-	if len(err.Error()) > 1e6 { // error too long, which means tail call is not effective
+	if len(outErr.String()) > 1e6 { // error too long, which means tail call is not effective
 		t.Fatal(len(err.Error()))
 	}
 }
@@ -201,35 +201,8 @@ func TestArithmeticUnfold(t *testing.T) {
 		t.Error(err)
 	}
 
-	if v, _ := cls.Run(); v.Float64() != 2.5 {
+	if v := cls.Run(); v.Float64() != 2.5 {
 		t.Error("exec failed")
-	}
-}
-
-func TestRegisterOptimzation(t *testing.T) {
-	cls, err := LoadString(`
-		a = 1
-		b = 2
-		c = 0
-		if (0) then
-			a = 2
-			b = 3
-			c = a + b
-	end
-		c = a + b
-		return c
-`, nil)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// At the end of the if block, the splitInst Code will be like:
-	// R0 = a, R1 = b -> Add
-	// But after the if block, there is another c = a + b, we can't re-use the registers R0 and R1
-	// because they will not contain the value we want as the if block was not executed at all.
-
-	if n, _ := cls.Run(); n.Int64() != 3 {
-		t.Error("exec failed:", n, cls)
 	}
 }
 
@@ -242,7 +215,7 @@ a = 0
 		t.Error(err)
 	}
 
-	if v, _ := cls.Run(); !math.IsNaN(v.Float64()) {
+	if v := cls.Run(); !math.IsNaN(v.Float64()) {
 		t.Error("wrong answer")
 	}
 }
@@ -299,9 +272,9 @@ func TestBigList(t *testing.T) {
 
 	f, _ := LoadString(makeCode(n), nil)
 	// fmt.Println(f.GoString())
-	v2, err := f.Run()
-	if err != nil {
-		t.Fatal(err)
+	v2 := f.Run()
+	if bas.IsError(v2) {
+		t.Fatal(v2)
 	}
 
 	for i := 0; i < n; i++ {
@@ -311,7 +284,7 @@ func TestBigList(t *testing.T) {
 	}
 
 	start := time.Now()
-	_, err = LoadString(makeCode(typ.RegMaxAddress), nil)
+	_, err := LoadString(makeCode(typ.RegMaxAddress), nil)
 	fmt.Println("load", time.Since(start))
 	if !strings.Contains(err.Error(), "too many") {
 		t.Fatal(err)
@@ -349,27 +322,26 @@ a=a+1
 return a
 end
 return add`, nil)
-	add, _ := p.Run()
+	add := p.Run()
 
 	p2, _ := LoadString(`
 local a = 100
 return [a + add(), a + add(), a + add()]
 `, &LoadOptions{Globals: bas.NewObject(0).SetProp("add", bas.ValueOf(add)).ToMap()})
-	v, err := p2.Run()
-	if err != nil {
-		panic(err)
+	v := p2.Run()
+	if bas.IsError(v) {
+		panic(v)
 	}
 	fmt.Println(p2.GoString())
 	if v1 := v.Native().Values(); v1[0].Int64() != 101 || v1[1].Int64() != 102 || v1[2].Int64() != 103 {
-		t.Fatal(v, v1, err, p2.GoString())
+		t.Fatal(v, v1, p2.GoString())
 	}
 
 	add = MustRun(LoadString("function foo(a) panic(a) end return function(b) foo(b) + 1 end", nil))
-	_, err = add.Object().TryCall(nil, bas.Int(10))
-	if err.(*bas.ExecError).GetCause() != bas.Int(10) {
-		t.Fatal(err)
+	outErr := add.Object().TryCall(nil, bas.Int(10))
+	if outErr.Native().Unwrap().(*bas.ExecError).GetCause() != bas.Int(10) {
+		t.Fatal(outErr)
 	}
-	fmt.Println(err)
 }
 
 func TestNumberLexer(t *testing.T) {
@@ -528,8 +500,8 @@ func TestReflectedValue(t *testing.T) {
 			}
 		})).ToMap(),
 	})
-	_, err := p.Run()
-	if err != nil {
+	err := p.Run()
+	if bas.IsError(err) {
 		t.Fatal(err)
 	}
 }

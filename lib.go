@@ -84,7 +84,7 @@ func init() {
 		if err != nil {
 			e.A = bas.Error(e, err)
 		} else {
-			e.A = (*env)(e).valueOrError(p.Run())
+			e.A = p.Run()
 		}
 	}).Object().
 		SetProp("parse", bas.Func("parse", func(e *bas.Env) {

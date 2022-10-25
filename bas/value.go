@@ -199,13 +199,10 @@ func Bytes(b []byte) Value {
 	return NewNativeWithMeta(b, &Proto.BytesMeta).ToValue()
 }
 
-// Error creates an error, the first argument can be nil, indicating that the returned error has no stacktrace.
-func Error(e *Env, err error) Value {
+// Error creates an error, 'e' can be nil, indicating that the returned error has no stacktrace.
+func Error(e *Env, err interface{}) Value {
 	if err == nil {
 		return Nil
-	}
-	if _, ok := err.(*ExecError); ok {
-		return NewNativeWithMeta(err, &Proto.ErrorMeta).ToValue()
 	}
 	ee := &ExecError{root: err}
 	if e != nil {

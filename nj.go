@@ -42,16 +42,14 @@ func loadCode(code, name string, opt *LoadOptions) (*bas.Program, error) {
 	return compileNodeTopLevel(name, code, n, opt)
 }
 
-func Run(p *bas.Program, err error) (bas.Value, error) {
+func Run(p *bas.Program, err error) bas.Value {
 	if err != nil {
-		return bas.Nil, err
+		return bas.Error(nil, err)
 	}
 	return p.Run()
 }
 
 func MustRun(p *bas.Program, err error) bas.Value {
 	internal.PanicErr(err)
-	v, err := p.Run()
-	internal.PanicErr(err)
-	return v
+	return p.Run()
 }

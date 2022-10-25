@@ -127,16 +127,7 @@ func PlaygroundHandler(defaultCode string, opt *LoadOptions) func(w http.Respons
 		p.Stdout = bufOut
 		p.Stderr = bufOut
 		code := p.GoString()
-		v, err := p.Run()
-		if err != nil {
-			writeJSON(w, map[string]interface{}{
-				"error":   err.Error(),
-				"elapsed": time.Since(start).Seconds(),
-				"stdout":  bufOut.String(),
-				"opcode":  code,
-			})
-			return
-		}
+		v := p.Run()
 		switch outf := r.URL.Query().Get("output"); outf {
 		case "stdout":
 			writeJSON(w, map[string]interface{}{"stdout": bufOut.String()})

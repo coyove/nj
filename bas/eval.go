@@ -36,10 +36,15 @@ func (r *Stacktrace) sourceLine() (src uint32) {
 	return lastLine
 }
 
-// ExecError represents the runtime error
+// ExecError represents the runtime error/panic.
 type ExecError struct {
+	fatal  bool
 	root   interface{}
 	stacks []Stacktrace
+}
+
+func (e *ExecError) IsPanic() bool {
+	return e.fatal
 }
 
 func (e *ExecError) GetCause() interface{} {
@@ -51,31 +56,57 @@ func (e *ExecError) GetCause() interface{} {
 
 func (e *ExecError) Error() string {
 	msg := bytes.Buffer{}
-	msg.WriteString(fmt.Sprintf("%v\n", e.root))
-	msg.WriteString("stacktrace:\n")
-	for i := len(e.stacks) - 1; i >= 0; i-- {
-		r := e.stacks[i]
-		if r.Callable.fun.native != nil {
-			msg.WriteString(fmt.Sprintf("%s (native function)\n\t<native code>\n", r.Callable.fun.name))
-		} else {
-			ln := r.sourceLine()
-			msg.WriteString(fmt.Sprintf("%s at %s:%d (i%d)",
-				r.Callable.fun.name,
-				r.Callable.fun.codeSeg.Pos.Name,
-				ln,
-				r.Cursor-1, // the recorded cursor was advanced by 1 already
-			))
-			msg.WriteString("\n\t")
-			line, ok := internal.LineOf(r.Callable.fun.top.Source, int(ln))
-			if ok {
-				msg.WriteString(strings.TrimSpace(line))
+	e.printError(&msg, 0)
+	return msg.String()
+}
+
+func (e *ExecError) printError(msg *bytes.Buffer, idx int) {
+	if ee, ok := e.root.(*ExecError); ok {
+		ee.printError(msg, idx+1)
+	} else if ee, ok := e.root.(Value); ok && IsError(ee) {
+		ee.Native().Unwrap().(*ExecError).printError(msg, idx+1)
+	} else {
+		internal.StringifyTo(msg, e.root)
+	}
+	msg.WriteByte('\n')
+
+	if e.fatal {
+		msg.WriteString("fatal ")
+	}
+
+	if idx == 0 {
+		msg.WriteString("stacktrace:\n")
+	} else {
+		msg.WriteString(fmt.Sprintf("stacktrace %d:\n", idx))
+	}
+
+	if len(e.stacks) == 0 {
+		msg.WriteString("none\n")
+	} else {
+		for i := len(e.stacks) - 1; i >= 0; i-- {
+			r := e.stacks[i]
+			if r.Callable.fun.native != nil {
+				msg.WriteString(fmt.Sprintf("%s (native function)\n\t<native code>\n", r.Callable.fun.name))
 			} else {
-				msg.WriteString("<unknown source>")
+				ln := r.sourceLine()
+				msg.WriteString(fmt.Sprintf("%s at %s:%d (i%d)",
+					r.Callable.fun.name,
+					r.Callable.fun.codeSeg.Pos.Name,
+					ln,
+					r.Cursor-1, // the recorded cursor was advanced by 1 already
+				))
+				msg.WriteString("\n\t")
+				line, ok := internal.LineOf(r.Callable.fun.top.Source, int(ln))
+				if ok {
+					msg.WriteString(strings.TrimSpace(line))
+				} else {
+					msg.WriteString("<unknown source>")
+				}
+				msg.WriteString("\n")
 			}
-			msg.WriteString("\n")
 		}
 	}
-	return msg.String()
+	msg.Truncate(msg.Len() - 1)
 }
 
 func relayPanic(onPanic func() []Stacktrace) {
@@ -85,6 +116,7 @@ func relayPanic(onPanic func() []Stacktrace) {
 		}
 
 		e := &ExecError{}
+		e.fatal = true
 		e.root = r
 		e.stacks = append([]Stacktrace{}, onPanic()...)
 		panic(e)

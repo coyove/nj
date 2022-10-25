@@ -22,10 +22,11 @@ const Version int64 = 486
 var objDefaultFun = &funcbody{name: "object"}
 
 var Proto struct {
-	Object, Bool, Str, Int, Float, Func, Native, Bytes, Array, Error                     Object
-	NativeMap, NativePtr, NativeIntf, Channel                                            Object
-	Reader, Writer, Closer, ReadWriter, ReadCloser, WriteCloser, ReadWriteCloser         NativeMeta
-	WrapperMeta, ReadlinesMeta, ArrayMeta, VarargMeta, BytesMeta, StringsMeta, ErrorMeta NativeMeta
+	Object, Bool, Str, Int, Float, Func, Native, Bytes, Array, Error, Panic      Object
+	NativeMap, NativePtr, NativeIntf, Channel                                    Object
+	Reader, Writer, Closer, ReadWriter, ReadCloser, WriteCloser, ReadWriteCloser NativeMeta
+	WrapperMeta, ReadlinesMeta, ArrayMeta, VarargMeta, BytesMeta, StringsMeta    NativeMeta
+	ErrorMeta, PanicMeta                                                         NativeMeta
 }
 
 func init() {
@@ -229,6 +230,9 @@ func init() {
 		internal.WriteString(w, internal.IfQuote(mt == typ.MarshalToJSON, a.any.(*ExecError).Error()))
 	}
 
+	Proto.PanicMeta = *NewEmptyNativeMeta("panic", &Proto.Panic)
+	Proto.PanicMeta.Marshal = Proto.ErrorMeta.Marshal
+
 	Proto.ReadlinesMeta = *NewEmptyNativeMeta("readlines", &Proto.Native)
 	Proto.ReadlinesMeta.Next = func(a *Native, k Value) Value {
 		if k.IsNil() {
@@ -355,7 +359,7 @@ func init() {
 			o := e.Self()
 			init := o.Get(Str("_init")).Object()
 			n := o.Copy().SetPrototype(o)
-			callobj(init, e.runtime, e.top, nil, n.ToValue(), e.Stack()...)
+			callobj(init, e.runtime, e.top, false, n.ToValue(), e.Stack()...)
 			e.A = n.ToValue()
 		}).Object().
 			Merge(e.Shape(2, "No").Object()).
@@ -423,14 +427,7 @@ func init() {
 
 	AddTopFunc("type", func(e *Env) { e.A = Str(e.Get(0).Type().String()) })
 	AddTopFunc("apply", func(e *Env) {
-		e.A = callobj(e.Object(0), e.runtime, e.top, nil, e.Get(1), e.Stack()[2:]...)
-	})
-	AddTopFunc("panic", func(e *Env) {
-		v := e.Get(0)
-		if v.HasPrototype(&Proto.Error) {
-			panic(v.Native().Unwrap().(*ExecError).root)
-		}
-		panic(v)
+		e.A = callobj(e.Object(0), e.runtime, e.top, false, e.Get(1), e.Stack()[2:]...)
 	})
 	AddTopValue("assert", Func("assert", func(e *Env) {
 		if v := e.Get(0); e.Size() <= 1 && v.IsFalse() {
@@ -537,13 +534,10 @@ func init() {
 		AddMethod("argcount", func(e *Env) { e.A = Int(int(e.Object(-1).fun.numArgs)) }).
 		AddMethod("caplist", func(e *Env) { e.A = ValueOf(e.Object(-1).fun.caps) }).
 		AddMethod("apply", func(e *Env) {
-			e.A = callobj(e.Object(-1), e.runtime, e.top, nil, e.Get(0), e.Stack()[1:]...)
+			e.A = callobj(e.Object(-1), e.runtime, e.top, false, e.Get(0), e.Stack()[1:]...)
 		}).
 		AddMethod("call", func(e *Env) { e.A = e.Object(-1).Call(e, e.Stack()...) }).
-		AddMethod("try", func(e *Env) {
-			a, err := e.Object(-1).TryCall(e, e.Stack()...)
-			_ = err == nil && e.SetA(a) || e.SetA(Error(e, err))
-		}).
+		AddMethod("try", func(e *Env) { e.A = e.Object(-1).TryCall(e, e.Stack()...) }).
 		AddMethod("after", func(e *Env) {
 			f, args, e2 := e.Object(-1), e.CopyStack()[1:], e.Copy()
 			t := time.AfterFunc(e.Num(0).Duration(), func() { f.Call(e2, args...) })
@@ -718,7 +712,7 @@ func init() {
 	AddTopValue("bytes", Proto.Bytes.ToValue())
 
 	Proto.Error = *Func("error", func(e *Env) {
-		e.A = Error(nil, &ExecError{root: e.Get(0), stacks: e.runtime.Stacktrace(true)})
+		e.A = Error(e, e.Get(0))
 	}).Object().
 		AddMethod("equals", func(e *Env) { e.A = Bool(ToErrorRootCause(e.A) == ToErrorRootCause(e.Shape(0, "E"))) }).
 		AddMethod("error", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).root) }).
@@ -726,6 +720,15 @@ func init() {
 		AddMethod("trace", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).stacks) }).
 		SetPrototype(&Proto.Native)
 	AddTopValue("error", Proto.Error.ToValue())
+
+	Proto.Panic = *Func("panic", func(e *Env) {
+		panic(&ExecError{
+			root:   e.Get(0),
+			stacks: e.runtime.Stacktrace(true),
+			fatal:  true,
+		})
+	}).Object().SetPrototype(&Proto.Error)
+	AddTopValue("panic", Proto.Panic.ToValue())
 
 	Proto.NativeMap = *Func("nativemap", func(e *Env) {
 		m := make(map[Value]Value, e.Int(0))
