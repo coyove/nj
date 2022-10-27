@@ -1,4 +1,4 @@
-assert(G == "test")
+a={-10000:2} a[-10000]assert(G == "test")
 
 assert(-1, -1)
 assert(([1,0,2])[1]-1, -1)
@@ -381,3 +381,6 @@ end
 assert(vargdefault2(), 777)
 assert(vargdefault2(10), 10)
 assert(vargdefault2(false, 11), 11)
+
+a={-10000:2}
+assert(a[-10000], 2)

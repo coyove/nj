@@ -37,13 +37,13 @@ function ATimesTransp(v, u)
     for i = 0, nCPU do
         payload.append([x, i* #(v)/nCPU, (i+1)*#(v)/nCPU, u])
     end
-    TimesVec.map(payload, os.numcpus)
+    TimesVec.map(payload, nCPU)
 
     payload.clear()
     for i = 0, nCPU do
         payload.append([v, i*#(v)/nCPU, (i+1)*#(v)/nCPU, x])
     end
-     TimesTranspVec.map(payload, os.numcpus)
+    TimesTranspVec.map(payload, nCPU)
 end
 
 n = 550

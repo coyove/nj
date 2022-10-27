@@ -63,8 +63,8 @@ func (e *ExecError) Error() string {
 func (e *ExecError) printError(msg *bytes.Buffer, idx int) {
 	if ee, ok := e.root.(*ExecError); ok {
 		ee.printError(msg, idx+1)
-	} else if ee, ok := e.root.(Value); ok && IsError(ee) {
-		ee.Native().Unwrap().(*ExecError).printError(msg, idx+1)
+	} else if ee, ok := e.root.(Value); ok && ee.IsError() {
+		ee.Error().printError(msg, idx+1)
 	} else {
 		internal.StringifyTo(msg, e.root)
 	}
@@ -206,7 +206,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				} else if va.Type() == typ.Native {
 					va.Native().Append(Int(int(int16(opb))))
 				} else {
-					internal.Panic("inc16 "+errNeedNumber, va.simple())
+					internal.Panic("inc "+errNeedNumbers, va.simple(), int16(opb))
 				}
 				env.A = *va
 				cursor = uint32(int32(cursor) + int32(int16(v.C)))
@@ -216,7 +216,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				} else if va.IsNumber() {
 					env.A = Bool(va.UnsafeFloat64() < float64(int16(opb)))
 				} else {
-					internal.Panic("less "+errNeedNumber, va.simple())
+					internal.Panic("comparison "+errNeedNumbers, va.simple(), int16(opb))
 				}
 			case typ.OpExtAdd16:
 				if va := env._ref(opa); va.IsInt64() {
@@ -227,7 +227,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					va.Native().Append(Int(int(int16(opb))))
 					env.A = *va
 				} else {
-					internal.Panic("add "+errNeedNumber, va.simple())
+					internal.Panic("add "+errNeedNumbers, va.simple(), int16(opb))
 				}
 			case typ.OpExtRSub16:
 				if va := env._ref(opa); va.IsInt64() {
@@ -235,7 +235,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				} else if va.IsNumber() {
 					env.A = Float64(float64(int16(opb)) - va.UnsafeFloat64())
 				} else {
-					internal.Panic("sub "+errNeedNumber, va.simple())
+					internal.Panic("sub "+errNeedNumbers, va.simple(), int16(opb))
 				}
 			case typ.OpExtGreat16:
 				if va := env._ref(opa); va.IsInt64() {
@@ -243,38 +243,30 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				} else if va.IsNumber() {
 					env.A = Bool(va.UnsafeFloat64() > float64(int16(opb)))
 				} else {
-					internal.Panic("great "+errNeedNumber, va.simple())
+					internal.Panic("comparison "+errNeedNumbers, va.simple(), int16(opb))
 				}
 			case typ.OpExtNeq16:
-				if va := env._ref(opa); va.IsInt64() {
-					env.A = Bool(va.UnsafeInt64() != int64(int16(opb)))
-				} else {
-					env.A = True
-				}
+				env.A = Bool(env._get(opa) != Int64(int64(int16(opb))))
 			case typ.OpExtEq16:
-				if va := env._ref(opa); va.IsInt64() {
-					env.A = Bool(va.UnsafeInt64() == int64(int16(opb)))
-				} else {
-					env.A = False
-				}
+				env.A = Bool(env._get(opa) == Int64(int64(int16(opb))))
 			case typ.OpExtStore16:
 				subject, v := env._ref(opa), env._get(v.C)
 				if st := subject.Type(); st == typ.Native {
-					subject.Native().Set(int(opb), v)
+					subject.Native().Set(int(int16(opb)), v)
 				} else if st == typ.Object {
-					subject.Object().Set(Int(int(opb)), v)
+					subject.Object().Set(Int(int(int16(opb))), v)
 				} else {
-					internal.Panic("invalid store: %v, key: %v", subject.simple(), opb)
+					internal.Panic("can't index %v using %v", subject.simple(), int16(opb))
 				}
 				env.A = v
 			case typ.OpExtLoad16:
 				a := env._ref(opa)
 				if at := a.Type(); at == typ.Native {
-					env.A = a.Native().Get(int(opb))
+					env.A = a.Native().Get(int(int16(opb)))
 				} else if at == typ.String {
-					env.A = Int64(int64(a.Str()[opb]))
+					env.A = Int64(int64(a.Str()[int16(opb)]))
 				} else if at == typ.Object {
-					env.A = a.Object().Get(Int(int(opb)))
+					env.A = a.Object().Get(Int(int(int16(opb))))
 				} else {
 					env.A = Nil
 				}
@@ -443,7 +435,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					subject.Native().SetKey(k, v)
 				}
 			default:
-				internal.Panic("invalid store: %v, key: %v", subject.simple(), k.simple())
+				internal.Panic("can't index %v using %v", subject.simple(), k.simple())
 			}
 			env.A = v
 		case typ.OpLoad:
@@ -478,7 +470,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 					}
 				} else {
 					if !start.IsInt64() || !end.IsInt64() {
-						internal.Panic("slice "+errNeedNumbers, start.simple(), end.simple())
+						internal.Panic("can't slice %v using %v and %v", a.ToValue().simple(), start.simple(), end.simple())
 					}
 					if end := end.Int(); end == -1 {
 						env.A = a.Slice(start.Int(), a.Len()).ToValue()
@@ -488,7 +480,7 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				}
 			case typ.String:
 				if !start.IsInt64() || !end.IsInt64() {
-					internal.Panic("slice "+errNeedNumbers, start.simple(), end.simple())
+					internal.Panic("can't slice %v using %v and %v", a.simple(), start.simple(), end.simple())
 				}
 				if end := end.Int(); end == -1 {
 					env.A = Str(a.Str()[start.Int():a.Len()])

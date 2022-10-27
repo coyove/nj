@@ -203,9 +203,9 @@ func assertShapePrimitive(v Value, verbs string) error {
 		ok = bm['o'] || bm['R'] || bm['W'] || bm['C']
 	case typ.Native:
 		if bm['E'] {
-			ok = IsError(v)
+			ok = v.IsError()
 		} else if bm['B'] {
-			ok = IsBytes(v)
+			ok = v.IsBytes()
 		} else if bm['C'] {
 			_, ok = v.Native().Unwrap().(io.Closer)
 		} else if bm['W'] {

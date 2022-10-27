@@ -479,22 +479,30 @@ func (lex *Lexer) pBinary(op byte, a, b Node, pos Token) Node {
 				return lex.Int(a.Int64() + b.Int64())
 			}
 			return lex.Float(a.Float64() + b.Float64())
+
 		case typ.OpSub:
 			if a.IsInt64() && b.IsInt64() {
 				return lex.Int(a.Int64() - b.Int64())
 			}
 			return lex.Float(a.Float64() - b.Float64())
 		case typ.OpMul:
-			if a.IsInt64() && b.IsInt64() {
-				return lex.Int(a.Int64() * b.Int64())
+			// Special rules: a*1 and 1*a are omitted
+			if a != bas.Int(1) && b != bas.Int(1) {
+				if a.IsInt64() && b.IsInt64() {
+					return lex.Int(a.Int64() * b.Int64())
+				}
+				return lex.Float(a.Float64() * b.Float64())
 			}
-			return lex.Float(a.Float64() * b.Float64())
 		case typ.OpDiv:
 			return lex.Float(a.Float64() / b.Float64())
 		case typ.OpIDiv:
-			return lex.Int(a.Int64() / b.Int64())
+			if b != bas.Int(0) {
+				return lex.Int(a.Int64() / b.Int64())
+			}
 		case typ.OpMod:
-			return lex.Int(a.Int64() % b.Int64())
+			if b != bas.Int(0) {
+				return lex.Int(a.Int64() % b.Int64())
+			}
 		case typ.OpLessEq:
 			if a.Equal(b) {
 				return lex.IntBool(true)

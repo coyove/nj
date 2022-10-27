@@ -17,7 +17,7 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
-const Version int64 = 486
+const Version int64 = 499
 
 var objDefaultFun = &funcbody{name: "object"}
 
@@ -714,10 +714,10 @@ func init() {
 	Proto.Error = *Func("error", func(e *Env) {
 		e.A = Error(e, e.Get(0))
 	}).Object().
-		AddMethod("equals", func(e *Env) { e.A = Bool(ToErrorRootCause(e.A) == ToErrorRootCause(e.Shape(0, "E"))) }).
-		AddMethod("error", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).root) }).
-		AddMethod("getcause", func(e *Env) { e.A = NewNative(e.Native(-1).Unwrap().(*ExecError).root).ToValue() }).
-		AddMethod("trace", func(e *Env) { e.A = ValueOf(e.Native(-1).Unwrap().(*ExecError).stacks) }).
+		AddMethod("equals", func(e *Env) { e.A = Bool(e.A.Error().root == e.Shape(0, "E").Error().root) }).
+		AddMethod("error", func(e *Env) { e.A = ValueOf(e.A.Error().root) }).
+		AddMethod("getcause", func(e *Env) { e.A = NewNative(e.A.Error().root).ToValue() }).
+		AddMethod("trace", func(e *Env) { e.A = ValueOf(e.A.Error().stacks) }).
 		SetPrototype(&Proto.Native)
 	AddTopValue("error", Proto.Error.ToValue())
 
@@ -879,7 +879,7 @@ func init() {
 
 	Proto.Str = *Func("str", func(e *Env) {
 		i := e.Get(0)
-		_ = IsBytes(i) && e.SetA(Str(string(i.Native().Unwrap().([]byte)))) || e.SetA(Str(i.String()))
+		_ = i.IsBytes() && e.SetA(Str(string(i.Bytes()))) || e.SetA(Str(i.String()))
 	}).Object().
 		AddMethod("count", func(e *Env) { e.A = Int(utf8.RuneCountInString(e.Str(-1))) }).
 		AddMethod("iequals", func(e *Env) { e.A = Bool(strings.EqualFold(e.Str(-1), e.Str(0))) }).

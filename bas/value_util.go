@@ -24,18 +24,12 @@ var (
 	valueType    = reflect.TypeOf(Value{})
 )
 
-func ToError(v Value) error {
-	if IsError(v) {
-		return v.Native().Unwrap().(*ExecError)
-	}
-	panic("ToError: not error: " + v.simple())
+func (v Value) Error() *ExecError {
+	return v.Native().Unwrap().(*ExecError)
 }
 
-func ToErrorRootCause(v Value) interface{} {
-	if IsError(v) {
-		return v.Native().Unwrap().(*ExecError).root
-	}
-	panic("ToErrorRootCause: not error: " + v.simple())
+func (v Value) Bytes() []byte {
+	return v.Native().Unwrap().([]byte)
 }
 
 func Write(w io.Writer, v Value) (int, error) {
@@ -43,8 +37,8 @@ func Write(w io.Writer, v Value) (int, error) {
 	case typ.Nil:
 		return 0, nil
 	case typ.Native:
-		if IsBytes(v) {
-			return w.Write(v.Native().Unwrap().([]byte))
+		if v.IsBytes() {
+			return w.Write(v.Bytes())
 		}
 	case typ.String:
 		return internal.WriteString(w, v.Str())
@@ -53,16 +47,16 @@ func Write(w io.Writer, v Value) (int, error) {
 	return 1, nil
 }
 
-func IsBytes(v Value) bool {
+func (v Value) IsBytes() bool {
 	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(&Proto.Bytes)
 }
 
-func IsError(v Value) bool {
+func (v Value) IsError() bool {
 	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(&Proto.Error)
 }
 
-func IsPanicError(v Value) bool {
-	return IsError(v) && v.Native().Unwrap().(*ExecError).fatal
+func (v Value) IsPanic() bool {
+	return v.Type() == typ.Native && v.Native().meta.Proto.HasPrototype(&Proto.Panic)
 }
 
 func DeepEqual(a, b Value) bool {
@@ -205,7 +199,7 @@ func (v Value) ToType(t reflect.Type) reflect.Value {
 			return reflect.ValueOf(a)
 		}
 		if t.Implements(errType) {
-			return reflect.ValueOf(ToError(v))
+			return reflect.ValueOf(v.Error())
 		}
 		if t == reflect.TypeOf(a) {
 			return reflect.ValueOf(a)
@@ -320,13 +314,13 @@ func multiMap(e *Env, fun *Object, t Value, n int) Value {
 
 	if n == 1 {
 		if t.IsArray() {
-			for i := 0; outError != Nil && i < t.Native().Len(); i++ {
+			for i := 0; outError == Nil && i < t.Native().Len(); i++ {
 				work(e, fun, payload{i, t.Native().Get(i), nil})
 			}
 		} else {
 			t.Object().Foreach(func(k Value, v *Value) bool {
 				work(e, fun, payload{-1, k, v})
-				return outError != Nil
+				return outError == Nil
 			})
 		}
 	} else {

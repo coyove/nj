@@ -105,7 +105,7 @@ func runFile(t *testing.T, path string) {
 	}
 
 	out := b.Run()
-	if bas.IsError(out) {
+	if out.IsError() {
 		t.Fatal(out)
 	}
 }
@@ -185,7 +185,7 @@ foo()
 	}
 
 	outErr := cls.Run()
-	if !bas.IsError(outErr) {
+	if !outErr.IsError() {
 		t.FailNow()
 	}
 	if len(outErr.String()) > 1e6 { // error too long, which means tail call is not effective
@@ -273,7 +273,7 @@ func TestBigList(t *testing.T) {
 	f, _ := LoadString(makeCode(n), nil)
 	// fmt.Println(f.GoString())
 	v2 := f.Run()
-	if bas.IsError(v2) {
+	if v2.IsError() {
 		t.Fatal(v2)
 	}
 
@@ -329,7 +329,7 @@ local a = 100
 return [a + add(), a + add(), a + add()]
 `, &LoadOptions{Globals: bas.NewObject(0).SetProp("add", bas.ValueOf(add)).ToMap()})
 	v := p2.Run()
-	if bas.IsError(v) {
+	if v.IsError() {
 		panic(v)
 	}
 	fmt.Println(p2.GoString())
@@ -339,7 +339,7 @@ return [a + add(), a + add(), a + add()]
 
 	add = MustRun(LoadString("function foo(a) panic(a) end return function(b) foo(b) + 1 end", nil))
 	outErr := add.Object().TryCall(nil, bas.Int(10))
-	if outErr.Native().Unwrap().(*bas.ExecError).GetCause() != bas.Int(10) {
+	if outErr.Error().GetCause() != bas.Int(10) {
 		t.Fatal(outErr)
 	}
 }
@@ -501,7 +501,7 @@ func TestReflectedValue(t *testing.T) {
 		})).ToMap(),
 	})
 	err := p.Run()
-	if bas.IsError(err) {
+	if err.IsError() {
 		t.Fatal(err)
 	}
 }
