@@ -66,7 +66,7 @@ func (e *ExecError) printError(msg *bytes.Buffer, idx int) {
 	} else if ee, ok := e.root.(Value); ok && ee.IsError() {
 		ee.Error().printError(msg, idx+1)
 	} else {
-		internal.StringifyTo(msg, e.root)
+		fmt.Fprint(msg, e.root)
 	}
 	msg.WriteByte('\n')
 
