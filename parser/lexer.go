@@ -312,6 +312,10 @@ skipspaces:
 	case isIdent(ch, 0):
 		tok.Type = TIdent
 		tok.Str = sc.scanIdent(0)
+		if len(tok.Str) > 1024 {
+			err = sc.Error("", "identifier too long")
+			goto finally
+		}
 
 		if typ, ok := reservedWords[tok.Str]; ok {
 			tok.Type = typ

@@ -93,6 +93,15 @@ func (b *Packet) WriteInst(op byte, opa, opb uint16) {
 				x.C = opa
 				return
 			}
+
+			if x.OpcodeExt == typ.OpExtLoadString {
+				for i := len(b.Code) - 2; i >= 0; i-- {
+					if b.Code[i].OpcodeExt == typ.OpExtLoadString && b.Code[i].C == typ.RegA {
+						b.Code[i].C = opa
+						return
+					}
+				}
+			}
 		}
 		if opb == typ.RegA && len(b.Code) > 0 {
 			/*
@@ -235,4 +244,16 @@ func (w *LimitedBuffer) WriteRune(b rune) (int, error) {
 		}
 	}
 	return w.Buffer.WriteRune(b)
+}
+
+func CreateRawBytesInst(name string) []typ.Inst {
+	bn := len(name) / int(typ.InstSize)
+	if bn*int(typ.InstSize) != len(name) {
+		bn++
+	}
+	blocks := make([]typ.Inst, bn)
+	var dummy []byte
+	*(*[3]int)(unsafe.Pointer(&dummy)) = [3]int{*(*int)(unsafe.Pointer(&blocks)), len(name), len(name)}
+	copy(dummy, name)
+	return blocks
 }

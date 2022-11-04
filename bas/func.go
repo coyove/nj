@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"unsafe"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -271,8 +272,10 @@ func (obj *Object) printAll(w io.Writer) {
 
 		oldpos := cls.codeSeg.Pos
 
-		for i, inst := range cls.codeSeg.Code {
-			cursor := uint32(i) + 1
+		var cursor uint32
+		for cursor < uint32(len(cls.codeSeg.Code)) {
+			inst := cls.codeSeg.Code[cursor]
+			cursor++
 			bop, a, b, c := inst.Opcode, inst.A, inst.B, inst.C
 
 			if oldpos.Len() > 0 {
@@ -356,6 +359,19 @@ func (obj *Object) printAll(w io.Writer) {
 					fmt.Fprintf(w, "%s = %s[$%d]", readAddr(c, false), readAddr(a, false), int16(b))
 				case typ.OpExtStore16:
 					fmt.Fprintf(w, "%s[$%d] = %s", readAddr(a, false), int16(b), readAddr(c, false))
+				case typ.OpExtLoadString:
+					bn := int(b) / int(typ.InstSize)
+					if bn*int(typ.InstSize) != int(b) {
+						bn++
+					}
+					var dummy []byte
+					*(*[3]uintptr)(unsafe.Pointer(&dummy)) = [3]uintptr{
+						uintptr(unsafe.Pointer(&cls.codeSeg.Code[cursor])),
+						uintptr(b),
+						uintptr(b),
+					}
+					fmt.Fprintf(w, "%s = %s[%q]", readAddr(c, false), readAddr(a, false), dummy)
+					cursor += uint32(bn) + 1
 				case typ.OpExtBitAnd:
 					fmt.Fprintf(w, "bitand %s %s", readAddr(a, false), readAddr(b, false))
 				case typ.OpExtBitOr:

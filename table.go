@@ -135,6 +135,16 @@ var (
 )
 
 func (table *symTable) get(name bas.Value) (uint16, bool) {
+	stubLoad := func(name bas.Value) uint16 {
+		k, _ := table.sym.Get(name)
+		if k.Type() == typ.Number {
+			return uint16(k.Int64())
+		}
+		k = bas.Int64(int64(table.borrowAddressNoReuse()))
+		table.sym.Set(name, k)
+		return uint16(k.Int64())
+	}
+
 	switch name {
 	case staticNil:
 		return typ.RegNil, true
@@ -143,13 +153,7 @@ func (table *symTable) get(name bas.Value) (uint16, bool) {
 	case staticFalse:
 		return table.loadConst(bas.False), true
 	case staticThis, staticSelf:
-		k, _ := table.sym.Get(name)
-		if k.Type() == typ.Number {
-			return uint16(k.Int64()), true
-		}
-		k = bas.Int64(int64(table.borrowAddressNoReuse()))
-		table.sym.Set(name, k)
-		return uint16(k.Int64()), true
+		return stubLoad(name), true
 	case staticA:
 		return typ.RegA, true
 	}
@@ -161,19 +165,27 @@ func (table *symTable) get(name bas.Value) (uint16, bool) {
 
 	// Firstly we will iterate local masked symbols,
 	// which are local variables inside do-blocks, like "if then .. end" and "do ... end".
-	// The rightmost map of this slice is the innermost do-block
+	// The rightmost map of this slice is the innermost do-block.
 	for i := len(table.maskedSym) - 1; i >= 0; i-- {
 		if k, ok := table.maskedSym[i].Get(name); ok {
 			return calc(uint16(k.Int64()), 0)
 		}
 	}
 
-	// Then local variables
+	// Then local variables.
 	if k, ok := table.sym.Get(name); ok {
 		return calc(uint16(k.Int64()), 0)
 	}
 
-	// Finally top variables
+	// // If parent exists and parent != top, it means we are inside a closure.
+	// for p := table.parent; p != nil && p != table.top; p = p.parent {
+	// 	if _, ok := p.sym.Get(name); ok {
+	// 		// self := stubLoad(staticSelf)
+	// 		table.codeSeg.WriteInst3(typ.OpLoad, self)
+	// 	}
+	// }
+
+	// Finally top variables.
 	if table.top != nil {
 		if k, ok := table.top.sym.Get(name); ok {
 			return calc(uint16(k.Int64()), 1)
@@ -280,6 +292,12 @@ func (table *symTable) compileOpcode3Node(op byte, n0, n1, n2 parser.Node) {
 	switch {
 	case op == typ.OpLoad && __n1__:
 		table.codeSeg.WriteInst3Ext(typ.OpExtLoad16, table.compileAtom(n0, &r), __n1__16, table.compileAtom(n2, &r))
+	case op == typ.OpLoad && isStrNode(n1):
+		name := bas.Value(n1.(parser.Primitive)).Str()
+		a := table.compileAtom(n0, &r)
+		table.codeSeg.WriteInst3Ext(typ.OpExtLoadString, a, uint16(len(name)), table.compileAtom(n2, &r))
+		table.codeSeg.Code = append(table.codeSeg.Code, internal.CreateRawBytesInst(name)...)
+		table.codeSeg.Code = append(table.codeSeg.Code, typ.Inst{Opcode: typ.OpExt, OpcodeExt: typ.OpExtLoadString})
 	case op == typ.OpStore && __n1__:
 		table.codeSeg.WriteInst3Ext(typ.OpExtStore16, table.compileAtom(n0, &r), __n1__16, table.compileAtom(n2, &r))
 	default:
@@ -454,4 +472,9 @@ func toInt16(n parser.Node) (uint16, bool) {
 		}
 	}
 	return 0, false
+}
+
+func isStrNode(n parser.Node) bool {
+	a, ok := n.(parser.Primitive)
+	return ok && bas.Value(a).IsString()
 }
