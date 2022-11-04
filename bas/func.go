@@ -302,8 +302,11 @@ func (obj *Object) printAll(w io.Writer) {
 					fmt.Fprintf(w, "%s = loadclosure %s", readAddr(c, false), readAddr(a, true))
 				}
 			case typ.OpTailCall, typ.OpCall:
-				if b != typ.RegPhantom {
+				if inst.OpcodeExt == 1 {
 					internal.WriteString(w, "push "+readAddr(b, false)+"; ")
+				} else if inst.OpcodeExt == 2 {
+					internal.WriteString(w, "push "+readAddr(b, false)+"; ")
+					internal.WriteString(w, "push "+readAddr(c, false)+"; ")
 				}
 				internal.WriteString(w, internal.IfStr(bop == typ.OpTailCall, "tailcall ", "call "))
 				internal.WriteString(w, readAddr(a, true))
@@ -312,7 +315,11 @@ func (obj *Object) printAll(w io.Writer) {
 			case typ.OpJmp:
 				fmt.Fprintf(w, "jmp %d", uint32(int32(cursor)+inst.D()))
 			case typ.OpInc:
-				fmt.Fprintf(w, "inc %s %s jmp %d", readAddr(a, false), readAddr(b, false), int32(cursor)+int32(int16(c)))
+				if c != 0 {
+					fmt.Fprintf(w, "inc %s %s jmp %d", readAddr(a, false), readAddr(b, false), int32(cursor)+int32(int16(c)))
+				} else {
+					fmt.Fprintf(w, "inc %s %s", readAddr(a, false), readAddr(b, false))
+				}
 			case typ.OpLoad:
 				fmt.Fprintf(w, "%s = %s[%s]", readAddr(c, false), readAddr(a, false), readAddr(b, false))
 			case typ.OpStore:
@@ -340,7 +347,11 @@ func (obj *Object) printAll(w io.Writer) {
 				case typ.OpExtNeq16:
 					fmt.Fprintf(w, "neq %s $%d", readAddr(a, false), int16(b))
 				case typ.OpExtInc16:
-					fmt.Fprintf(w, "inc %s $%d jmp %d", readAddr(a, false), int16(b), int32(cursor)+int32(int16(c)))
+					if c != 0 {
+						fmt.Fprintf(w, "inc %s $%d jmp %d", readAddr(a, false), int16(b), int32(cursor)+int32(int16(c)))
+					} else {
+						fmt.Fprintf(w, "inc %s $%d", readAddr(a, false), int16(b))
+					}
 				case typ.OpExtLoad16:
 					fmt.Fprintf(w, "%s = %s[$%d]", readAddr(c, false), readAddr(a, false), int16(b))
 				case typ.OpExtStore16:

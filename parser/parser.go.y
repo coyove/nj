@@ -146,7 +146,7 @@ declarator:
     } |
     prefix_expr '.' TIdent {
         $$ = &Tenary{typ.OpLoad, $1, ss(yylex).Str($3.Str), Address(typ.RegA), $2.Line()}
-    } 
+    }
 
 expr_declarator:
     expr                              { $$ = $1 } |

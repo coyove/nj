@@ -414,14 +414,12 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			env.A = o.ToValue()
 			stackEnv.clear()
 		case typ.OpIsProto:
-			if a, b := env._get(opa), env._get(opb); a.Equal(b) {
-				env.A = True
-			} else if b.IsString() {
+			if a, b := env._get(opa), env._get(opb); b.IsString() {
 				env.A = Bool(TestShapeFast(a, b.Str()) == nil)
 			} else if b.IsObject() {
 				env.A = Bool(a.HasPrototype(b.Object()))
 			} else {
-				env.A = False
+				env.A = Bool(a.Equal(b))
 			}
 		case typ.OpStore:
 			subject, k, v := env._ref(opa), env._get(opb), env._get(v.C)
@@ -552,8 +550,11 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 			}
 			obj := a.Object()
 			cls := obj.fun
-			if opb != typ.RegPhantom {
+			if v.OpcodeExt == 1 {
 				stackEnv.push(env._get(opb))
+			} else if v.OpcodeExt == 2 {
+				stackEnv.push(env._get(opb))
+				stackEnv.push(env._get(v.C))
 			}
 			stackEnv.A = obj.this
 			if cls.varg {

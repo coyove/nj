@@ -214,22 +214,34 @@ func compileArray(table *symTable, node parser.ExprList) uint16 {
 	return typ.RegA
 }
 
-// [call callee [args ...]]
 func compileCall(table *symTable, node *parser.Call) uint16 {
 	tmp := table.collapse(true, append(node.Args, node.Callee)...)
 	callee := tmp[len(tmp)-1]
 	args := tmp[:len(tmp)-1]
-	for i := 0; i < len(args)-1; i++ {
-		table.compileOpcode1Node(typ.OpPush, args[i])
-	}
 
-	if node.Vararg {
-		table.compileOpcode1Node(typ.OpPushUnpack, args[len(args)-1])
-		table.compileOpcode2Node(node.Op, callee, parser.Address(typ.RegPhantom))
-	} else if len(args) == 0 {
-		table.compileOpcode2Node(node.Op, callee, parser.Address(typ.RegPhantom))
-	} else {
-		table.compileOpcode2Node(node.Op, callee, args[len(args)-1])
+	switch len(args) {
+	case 0:
+		table.compileOpcode1Node(node.Op, callee)
+	case 1:
+		if node.Vararg {
+			table.compileOpcode1Node(typ.OpPushUnpack, args[0])
+			table.compileOpcode1Node(node.Op, callee)
+		} else {
+			table.compileOpcode2Node(node.Op, callee, args[0])
+			table.codeSeg.Code[len(table.codeSeg.Code)-1].OpcodeExt = 1
+		}
+	default:
+		for i := 0; i < len(args)-2; i++ {
+			table.compileOpcode1Node(typ.OpPush, args[i])
+		}
+		if node.Vararg {
+			table.compileOpcode1Node(typ.OpPush, args[len(args)-2])
+			table.compileOpcode1Node(typ.OpPushUnpack, args[len(args)-1])
+			table.compileOpcode1Node(node.Op, callee)
+		} else {
+			table.compileOpcode3Node(node.Op, callee, args[len(args)-2], args[len(args)-1])
+			table.codeSeg.Code[len(table.codeSeg.Code)-1].OpcodeExt = 2
+		}
 	}
 
 	table.codeSeg.WriteLineNum(node.Line)
@@ -241,7 +253,8 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 	newtable := newSymTable(table.options)
 	newtable.name = table.name
 	newtable.codeSeg.Pos.Name = table.name
-	newtable.global = table.getGlobal()
+	newtable.top = table.getTopTable()
+	newtable.parent = table
 
 	for i, p := range node.Args {
 		name := p.(*parser.Symbol).Name
@@ -290,7 +303,7 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 	table.put(bas.Str(node.Name), localDeclare)
 
 	var captureList []string
-	if table.global != nil {
+	if table.top != nil {
 		captureList = table.symbolsToDebugLocals()
 	}
 
@@ -305,13 +318,13 @@ func compileFunction(table *symTable, node *parser.Function) uint16 {
 		code,
 	)
 
-	fm := &table.getGlobal().funcsMap
+	fm := &table.getTopTable().funcsMap
 	fidx, _ := fm.Get(bas.Str(node.Name))
 	// Put function into constMap, it will then be put into coreStack after all compilings are done.
-	table.getGlobal().constMap.Set(obj.ToValue(), fidx)
+	table.getTopTable().constMap.Set(obj.ToValue(), fidx)
 
 	table.codeSeg.WriteInst3(typ.OpFunction, uint16(fidx.Int()),
-		uint16(internal.IfInt(table.global == nil, 0, 1)),
+		uint16(internal.IfInt(table.top == nil, 0, 1)),
 		typ.RegA,
 	)
 	table.codeSeg.WriteInst(typ.OpSet, localDeclare, typ.RegA)

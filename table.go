@@ -23,7 +23,7 @@ type symTable struct {
 	options *LoadOptions
 
 	// toplevel symtable
-	global *symTable
+	top, parent *symTable
 
 	codeSeg internal.Packet
 
@@ -173,9 +173,9 @@ func (table *symTable) get(name bas.Value) (uint16, bool) {
 		return calc(uint16(k.Int64()), 0)
 	}
 
-	// Finally global variables
-	if table.global != nil {
-		if k, ok := table.global.sym.Get(name); ok {
+	// Finally top variables
+	if table.top != nil {
+		if k, ok := table.top.sym.Get(name); ok {
 			return calc(uint16(k.Int64()), 1)
 		}
 	}
@@ -208,8 +208,8 @@ func (table *symTable) removeMaskedSymTable() {
 }
 
 func (table *symTable) loadConst(v bas.Value) uint16 {
-	if table.global != nil {
-		return table.global.loadConst(v)
+	if table.top != nil {
+		return table.top.loadConst(v)
 	}
 	if i, ok := table.constMap.Get(v); ok {
 		return uint16(i.Int64())
@@ -370,9 +370,9 @@ func (table *symTable) compileNode(node parser.Node) uint16 {
 	panic("compileNode: shouldn't happen")
 }
 
-func (table *symTable) getGlobal() *symTable {
-	if table.global != nil {
-		return table.global
+func (table *symTable) getTopTable() *symTable {
+	if table.top != nil {
+		return table.top
 	}
 	return table
 }
