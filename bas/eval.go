@@ -273,32 +273,6 @@ func internalExecCursorLoop(env Env, K *Object, retStack []Stacktrace) Value {
 				if v.C != typ.RegA {
 					env._set(v.C, env.A)
 				}
-			case typ.OpExtLoadString:
-				bn := int(opb) / int(typ.InstSize)
-				if bn*int(typ.InstSize) != int(opb) {
-					bn++
-				}
-				var dummy []byte
-				*(*[3]uintptr)(unsafe.Pointer(&dummy)) = [3]uintptr{
-					uintptr(unsafe.Pointer(code + typ.InstSize*uintptr(cursor))),
-					uintptr(opb),
-					uintptr(opb),
-				}
-				a := env._ref(opa)
-				k := UnsafeStr(dummy)
-				if at := a.Type(); at == typ.Native {
-					env.A, _ = a.Native().GetKey(k)
-				} else if at == typ.String {
-					env.A = setObjectRecv(Proto.Str.Get(k), *a)
-				} else if at == typ.Object {
-					env.A = a.Object().Get(k)
-				} else {
-					env.A = Nil
-				}
-				if v.C != typ.RegA {
-					env._set(v.C, env.A)
-				}
-				cursor += uint32(bn) + 1
 			case typ.OpExtBitAnd:
 				va, vb := env._ref(opa), env._ref(opb)
 				if va.Type() == typ.Native && vb.Type() == typ.Native {

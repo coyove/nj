@@ -68,7 +68,6 @@ const (
 	OpExtInc16
 	OpExtLoad16
 	OpExtStore16
-	OpExtLoadString
 	OpExtBitAnd
 	OpExtBitOr
 	OpExtBitXor

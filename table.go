@@ -292,12 +292,6 @@ func (table *symTable) compileOpcode3Node(op byte, n0, n1, n2 parser.Node) {
 	switch {
 	case op == typ.OpLoad && __n1__:
 		table.codeSeg.WriteInst3Ext(typ.OpExtLoad16, table.compileAtom(n0, &r), __n1__16, table.compileAtom(n2, &r))
-	case op == typ.OpLoad && isStrNode(n1):
-		name := bas.Value(n1.(parser.Primitive)).Str()
-		a := table.compileAtom(n0, &r)
-		table.codeSeg.WriteInst3Ext(typ.OpExtLoadString, a, uint16(len(name)), table.compileAtom(n2, &r))
-		table.codeSeg.Code = append(table.codeSeg.Code, internal.CreateRawBytesInst(name)...)
-		table.codeSeg.Code = append(table.codeSeg.Code, typ.Inst{Opcode: typ.OpExt, OpcodeExt: typ.OpExtLoadString})
 	case op == typ.OpStore && __n1__:
 		table.codeSeg.WriteInst3Ext(typ.OpExtStore16, table.compileAtom(n0, &r), __n1__16, table.compileAtom(n2, &r))
 	default:

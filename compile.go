@@ -9,8 +9,6 @@ import (
 	"github.com/coyove/nj/typ"
 )
 
-var nodeRegA = parser.Address(typ.RegA)
-
 // [prog expr1 expr2 ...]
 func compileProgBlock(table *symTable, node *parser.Prog) uint16 {
 	if node.DoBlock {
@@ -133,12 +131,12 @@ func compileBitwise(table *symTable, node *parser.Binary) uint16 {
 
 // [and a b] => $a = a if not a then goto out else $a = b end ::out::
 func compileAnd(table *symTable, node *parser.And) uint16 {
-	table.compileOpcode2Node(typ.OpSet, nodeRegA, node.A)
+	table.compileOpcode2Node(typ.OpSet, parser.Address(typ.RegA), node.A)
 
 	table.codeSeg.WriteJmpInst(typ.OpJmpFalse, 0)
 	part1 := table.codeSeg.Len()
 
-	table.compileOpcode2Node(typ.OpSet, nodeRegA, node.B)
+	table.compileOpcode2Node(typ.OpSet, parser.Address(typ.RegA), node.B)
 	part2 := table.codeSeg.Len()
 
 	table.codeSeg.Code[part1-1] = typ.JmpInst(typ.OpJmpFalse, part2-part1)
@@ -147,13 +145,13 @@ func compileAnd(table *symTable, node *parser.And) uint16 {
 
 // [or a b]  => $a = a if not a then $a = b end
 func compileOr(table *symTable, node *parser.Or) uint16 {
-	table.compileOpcode2Node(typ.OpSet, nodeRegA, node.A)
+	table.compileOpcode2Node(typ.OpSet, parser.Address(typ.RegA), node.A)
 
 	table.codeSeg.WriteJmpInst(typ.OpJmpFalse, 1)
 	table.codeSeg.WriteJmpInst(typ.OpJmp, 0)
 	part1 := table.codeSeg.Len()
 
-	table.compileOpcode2Node(typ.OpSet, nodeRegA, node.B)
+	table.compileOpcode2Node(typ.OpSet, parser.Address(typ.RegA), node.B)
 	part2 := table.codeSeg.Len()
 
 	table.codeSeg.Code[part1-1] = typ.JmpInst(typ.OpJmp, part2-part1)

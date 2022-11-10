@@ -88,19 +88,10 @@ func (b *Packet) WriteInst(op byte, opa, opb uint16) {
 				into:
 					load subject key dest
 			*/
-			x := &b.Code[len(b.Code)-1]
+			x := b.LastInst()
 			if (x.Opcode == typ.OpLoad || x.OpcodeExt == typ.OpExtLoad16) && x.C == typ.RegA {
 				x.C = opa
 				return
-			}
-
-			if x.OpcodeExt == typ.OpExtLoadString {
-				for i := len(b.Code) - 2; i >= 0; i-- {
-					if b.Code[i].OpcodeExt == typ.OpExtLoadString && b.Code[i].C == typ.RegA {
-						b.Code[i].C = opa
-						return
-					}
-				}
 			}
 		}
 		if opb == typ.RegA && len(b.Code) > 0 {
@@ -112,7 +103,7 @@ func (b *Packet) WriteInst(op byte, opa, opb uint16) {
 					inc v num
 				note that 'add num v' is not optimizable because 'add' also applies on strings
 			*/
-			x := &b.Code[len(b.Code)-1]
+			x := b.LastInst()
 			if x.Opcode == typ.OpAdd && x.A == opa {
 				x.Opcode = typ.OpInc
 				return
@@ -126,7 +117,7 @@ func (b *Packet) WriteInst(op byte, opa, opb uint16) {
 				into:
 					copyclosure idx 1 v
 			*/
-			x := &b.Code[len(b.Code)-1]
+			x := b.LastInst()
 			if x.Opcode == typ.OpFunction && x.B == 1 {
 				x.C = opa
 				return
@@ -146,7 +137,7 @@ func (b *Packet) WriteInst3(op byte, opa, opb, opc uint16) {
 				into:
 				    loadtop idx key -> dest2
 		*/
-		x := &b.Code[len(b.Code)-1]
+		x := b.LastInst()
 		if x.Opcode == typ.OpLoadTop && x.B == typ.RegPhantom && opa == x.C {
 			x.B, x.C = opb, opc
 			return
@@ -188,8 +179,11 @@ func (b *Packet) Len() int {
 	return len(b.Code)
 }
 
-func (b *Packet) LastInst() typ.Inst {
-	return b.Code[len(b.Code)-1]
+func (b *Packet) LastInst() *typ.Inst {
+	if len(b.Code) == 0 {
+		return nil
+	}
+	return &b.Code[len(b.Code)-1]
 }
 
 func (b *Packet) Copy() *Packet {

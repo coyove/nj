@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"strings"
-	"unsafe"
 
 	"github.com/coyove/nj/internal"
 	"github.com/coyove/nj/typ"
@@ -304,15 +303,22 @@ func (obj *Object) printAll(w io.Writer) {
 				} else if b == 1 {
 					fmt.Fprintf(w, "%s = loadclosure %s", readAddr(c, false), readAddr(a, true))
 				}
-			case typ.OpTailCall, typ.OpCall:
+			case typ.OpTailCall:
 				if inst.OpcodeExt == 1 {
-					internal.WriteString(w, "push "+readAddr(b, false)+"; ")
+					fmt.Fprintf(w, "tailfastcall %v %v", readAddr(a, true), readAddr(b, false))
 				} else if inst.OpcodeExt == 2 {
-					internal.WriteString(w, "push "+readAddr(b, false)+"; ")
-					internal.WriteString(w, "push "+readAddr(c, false)+"; ")
+					fmt.Fprintf(w, "tailfastcall %v %v %v", readAddr(a, true), readAddr(b, false), readAddr(c, false))
+				} else {
+					fmt.Fprintf(w, "tailcall %v", readAddr(a, true))
 				}
-				internal.WriteString(w, internal.IfStr(bop == typ.OpTailCall, "tailcall ", "call "))
-				internal.WriteString(w, readAddr(a, true))
+			case typ.OpCall:
+				if inst.OpcodeExt == 1 {
+					fmt.Fprintf(w, "fastcall %v %v", readAddr(a, true), readAddr(b, false))
+				} else if inst.OpcodeExt == 2 {
+					fmt.Fprintf(w, "fastcall %v %v %v", readAddr(a, true), readAddr(b, false), readAddr(c, false))
+				} else {
+					fmt.Fprintf(w, "call %v", readAddr(a, true))
+				}
 			case typ.OpJmpFalse:
 				fmt.Fprintf(w, "jmpfalse %d", uint32(int32(cursor)+inst.D()))
 			case typ.OpJmp:
@@ -359,19 +365,6 @@ func (obj *Object) printAll(w io.Writer) {
 					fmt.Fprintf(w, "%s = %s[$%d]", readAddr(c, false), readAddr(a, false), int16(b))
 				case typ.OpExtStore16:
 					fmt.Fprintf(w, "%s[$%d] = %s", readAddr(a, false), int16(b), readAddr(c, false))
-				case typ.OpExtLoadString:
-					bn := int(b) / int(typ.InstSize)
-					if bn*int(typ.InstSize) != int(b) {
-						bn++
-					}
-					var dummy []byte
-					*(*[3]uintptr)(unsafe.Pointer(&dummy)) = [3]uintptr{
-						uintptr(unsafe.Pointer(&cls.codeSeg.Code[cursor])),
-						uintptr(b),
-						uintptr(b),
-					}
-					fmt.Fprintf(w, "%s = %s[%q]", readAddr(c, false), readAddr(a, false), dummy)
-					cursor += uint32(bn) + 1
 				case typ.OpExtBitAnd:
 					fmt.Fprintf(w, "bitand %s %s", readAddr(a, false), readAddr(b, false))
 				case typ.OpExtBitOr:
@@ -397,15 +390,15 @@ func (obj *Object) printAll(w io.Writer) {
 				case typ.OpExtBitURsh16:
 					fmt.Fprintf(w, "bitursh %s $%d", readAddr(a, false), int16(b))
 				default:
-					internal.WriteString(w, fmt.Sprintf("? %02x", inst.OpcodeExt))
+					fmt.Fprintf(w, "? %02x", inst.OpcodeExt)
 				}
 			default:
 				if us, ok := typ.UnaryOpcode[bop]; ok {
-					internal.WriteString(w, us+" "+readAddr(a, false))
+					fmt.Fprintf(w, "%v %v", us, readAddr(a, false))
 				} else if bs, ok := typ.BinaryOpcode[bop]; ok {
-					internal.WriteString(w, bs+" "+readAddr(a, false)+" "+readAddr(b, false))
+					fmt.Fprintf(w, "%v %v %v", bs, readAddr(a, false), readAddr(b, false))
 				} else {
-					internal.WriteString(w, fmt.Sprintf("? %02x", bop))
+					fmt.Fprintf(w, "? %02x", bop)
 				}
 			}
 
